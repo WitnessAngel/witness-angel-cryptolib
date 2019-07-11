@@ -71,6 +71,7 @@ var/
 .installed.cfg
 *.egg
 build/
+.venv
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

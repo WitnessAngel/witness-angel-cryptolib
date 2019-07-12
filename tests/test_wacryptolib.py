@@ -1,72 +1,79 @@
-import binascii
 import uuid
+import itertools
+import wacryptolib
 
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Protocol.SecretSharing import Shamir
 from Crypto.PublicKey import RSA
-from Crypto.Random import get_random_bytes
 
-import wacryptolib
 
 def test_generate_keypair():
-    """Generate a (public_key, private_key) pair for a user ID,
-    cipher then decipher a message (msg in parameters)."""
+    """Cipher then decipher a message using RSA keypair"""
 
     uid = None
     binary_content = "Mon hât èst joli".encode('utf-8')
 
-    keys = wacryptolib.generate_keypair(uid)
+    keys = wacryptolib.generate_RSA_keypair(uid)
     public_key = keys["public_key"]
     private_key = keys["private_key"]
 
+    # Cipher the binary content with the public key
     cipher = PKCS1_OAEP.new(public_key)
     ciphertext = cipher.encrypt(binary_content)
 
+    # Decipher it with the private key
     decipher = PKCS1_OAEP.new(private_key)
     deciphertext = decipher.decrypt(ciphertext)
 
-    assert deciphertext == binary_content
+    try:  # FIXME
+        assert deciphertext == binary_content
+        print("Successfuly done")
+    except AssertionError:
+        print("Problem cccured in the deciphering")
 
 
 def test_generate_shared_secret():
-    """Generate a shared secret of `keys_count` keys, where `threshold_count`
-    of them are required to recompute the private key corresponding to the public key.
-    Result has fields "public_key" as bytes, and "shares" as a sequence of bytes."""
+    """Cipher then decipher a message using shared secret and RSA"""
+
+    uid = uuid.uuid4()
+    keys_count = 3
+    threshold_count = 2
+    combined_shares_list = []
+
+    binary_content = "Mon hât èst joli".encode("utf-8")
+    public_key_shares = wacryptolib.generate_private_key_shared_secret(uid, keys_count, threshold_count=threshold_count)
+    shares_list = public_key_shares.get("shares")
+
+    # Cipher the binary content
+    cipher = PKCS1_OAEP.new(RSA.import_key(public_key_shares["public_key"]))
+    ciphertext = cipher.encrypt(binary_content)
+
+    # Combine all the shares to make a list of bytes corresponding to the private key
+    for slices in range(0, len(shares_list)):
+        shares_tuple = [shares_list[slices][0], shares_list[slices][1], shares_list[slices][2]]
+        combined_share = Shamir.combine(shares_tuple)
+        combined_shares_list.append(combined_share)
+
+    # Delete the values 0 we added at the end of the last tuple
+    combined_shares_list[104] = bytes(iter(itertools.takewhile(lambda x: x != 0, combined_shares_list[104])))
+    # padder avec des libs (bytes pad unpad)
+
+    # Reconstruct the private key in type bytes
+    chain = itertools.chain(combined_shares_list)
+    private_key_reconstructed = b''.join(chain)
+
+    # decipher the binary content
+    decipher = PKCS1_OAEP.new(RSA.import_key(private_key_reconstructed))
+    deciphertext = decipher.decrypt(ciphertext)
 
     try:
-        assert threshold_count < keys_count  # Check if we have enough shares
-        public_key_shares = {}  # Initialize the dict
-        keypair = generate_keypair("oui", uid)
-        public_key = keypair.get("public_key")
-        key = get_random_bytes(16)  # Random key of 16 bytes
-        # private_key = base64.b64decode(str(keypair.get("private_key"))) bytes; 21
-        # private_key = int(binascii.rlecode_hqx(binascii.a2b_base64(str(keypair.get("private_key")))))
-        private_key = binascii.a2b_base64(str(keypair.get("private_key")))
-        private_key = int(private_key)
-        print(len(private_key))
-
-        shares = Shamir.split(threshold_count, keys_count, private_key)  # Spliting the key
-        combined_key = Shamir.combine(shares)
-        combined_key = str(combined_key)
-        cipher = PKCS1_OAEP.new(combined_key)
-        print("Initial message :", msg)
-        ciphertext = cipher.encrypt(msg.encode())
-        print("ciphered text :", ciphertext)
-
-        decipher = PKCS1_OAEP.new(private_key)
-        result = decipher.decrypt(ciphertext)
-        print("result :", result.decode())
-
-        # fi = open("clear_file.txt", "rb")
-        # fo = open("enc_file.txt", "wb")
-        # cipher = AES.new(key, AES.MODE_EAX)
-        # ct, tag = cipher.encrypt(fi.read()), cipher.digest()
-        # fo.write(tag + ct)
-
-        public_key_shares["public_key"] = public_key
-        public_key_shares["shares"] = shares
-        return public_key_shares
-
+        assert binary_content == deciphertext
+        print("Successfuly done")
     except AssertionError:
-        print("Not enough keys count")
+        print("Problem cccured in the deciphering")
+
+
+if __name__ == '__main__':
+    test_generate_shared_secret()
+    test_generate_keypair()
 

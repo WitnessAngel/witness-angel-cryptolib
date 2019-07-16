@@ -1,19 +1,19 @@
 import uuid
-import itertools
 import wacryptolib
 
 from Crypto.Cipher import PKCS1_OAEP
-from Crypto.Protocol.SecretSharing import Shamir
 from Crypto.PublicKey import RSA
+from Crypto.PublicKey import ECC
+from Crypto.PublicKey import DSA
 
 
-def test_generate_keypair():
+def test_generate_rsa_keypair():
     """Cipher then decipher a message using RSA keypair"""
 
     uid = None
     binary_content = "Mon hât èst joli".encode('utf-8')
 
-    keys = wacryptolib.generate_RSA_keypair(uid)
+    keys = wacryptolib.generate_rsa_keypair(uid)
     public_key = keys["public_key"]
     private_key = keys["private_key"]
 
@@ -27,9 +27,33 @@ def test_generate_keypair():
 
     try:  # FIXME
         assert deciphertext == binary_content
-        print("Successfuly done")
+        print("Generating keypair : successfuly done")
     except AssertionError:
         print("Problem cccured in the deciphering")
+
+
+def test_generate_dsa_keypair():
+    """Check if the function generate_dsa_keypair returns
+    a pair of DSA keys"""
+
+    uid = None
+    keypair = wacryptolib.generate_dsa_keypair(uid)
+    public_key = keypair["public_key"]
+    private_key = keypair["private_key"]
+    assert isinstance(public_key, DSA.DsaKey), type(public_key)
+    assert isinstance(private_key, DSA.DsaKey), type(private_key)
+
+
+def test_generate_ecc_keypair():
+    """Check if the function generate_ecc_keypair returns
+    a pair of ECC keys"""
+
+    uid = None
+    keypair = wacryptolib.generate_ecc_keypair(uid)
+    public_key = keypair["public_key"]
+    private_key = keypair["private_key"]
+    assert isinstance(public_key, ECC.EccKey), type(public_key)
+    assert isinstance(private_key, ECC.EccKey), type(private_key)
 
 
 def test_generate_shared_secret():
@@ -38,29 +62,25 @@ def test_generate_shared_secret():
     uid = uuid.uuid4()
     keys_count = 3
     threshold_count = 2
-    combined_shares_list = []
 
     binary_content = "Mon hât èst joli".encode("utf-8")
-    public_key_shares = wacryptolib.generate_private_key_shared_secret(uid, keys_count, threshold_count=threshold_count)
-    shares_list = public_key_shares.get("shares")
+    keys_info = wacryptolib.generate_shared_secret_key(uid, keys_count, threshold_count=threshold_count)
+    shares = keys_info["shares"]
+    public_key = keys_info["public_key"]
+    shares = wacryptolib.grouper(shares, 3)
 
     # Cipher the binary content
-    cipher = PKCS1_OAEP.new(RSA.import_key(public_key_shares["public_key"]))
+    cipher = PKCS1_OAEP.new(public_key)
     ciphertext = cipher.encrypt(binary_content)
 
     # Combine all the shares to make a list of bytes corresponding to the private key
-    for slices in range(0, len(shares_list)):
-        shares_tuple = [shares_list[slices][0], shares_list[slices][1], shares_list[slices][2]]
-        combined_share = Shamir.combine(shares_tuple)
-        combined_shares_list.append(combined_share)
+    combined_shares_list = wacryptolib.recombine_shares_into_bytestring(shares)
 
-    # Delete the values 0 we added at the end of the last tuple
-    combined_shares_list[104] = bytes(iter(itertools.takewhile(lambda x: x != 0, combined_shares_list[104])))
-    # padder avec des libs (bytes pad unpad)
+    # Unpad the last tuple
+    combined_shares_list = wacryptolib.unpad_last_element(combined_shares_list)
 
     # Reconstruct the private key in type bytes
-    chain = itertools.chain(combined_shares_list)
-    private_key_reconstructed = b''.join(chain)
+    private_key_reconstructed = b''.join(combined_shares_list)
 
     # decipher the binary content
     decipher = PKCS1_OAEP.new(RSA.import_key(private_key_reconstructed))
@@ -68,12 +88,14 @@ def test_generate_shared_secret():
 
     try:
         assert binary_content == deciphertext
-        print("Successfuly done")
+        print("Shared secret : successfuly done")
     except AssertionError:
         print("Problem cccured in the deciphering")
 
 
 if __name__ == '__main__':
-    test_generate_shared_secret()
-    test_generate_keypair()
+    # test_generate_shared_secret()
+    # test_generate_rsa_keypair()
+    # test_generate_dsa_keypair()
+    test_generate_ecc_keypair()
 

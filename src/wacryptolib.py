@@ -12,8 +12,11 @@ from typing import List
 
 
 def generate_rsa_keypair(uid: uuid.UUID, key_length: int = 2048) -> dict:
-    """Generate a RSA (public_key, private_key) pair for a user ID.
-    Result has fields "public_key" and "private_key" as bytes."""
+    """Generate a RSA (public_key, private_key) pair for a user ID of a
+        length in bits `key_length`.
+
+        Result: "public_key" and "private_key" as bytes."""
+
     del uid
     if key_length < 1024:
         raise ValueError("The key lenght must be superior to 1024 bits")
@@ -27,9 +30,12 @@ def generate_rsa_keypair(uid: uuid.UUID, key_length: int = 2048) -> dict:
 
 def generate_dsa_keypair(uid: uuid.UUID, key_length: int = 2048) -> dict:
     """Generate a DSA (public_key, private_key) pair for a user ID.
-    Result has fields "public_key" and "private_key" as bytes.
-    DSA keypair is not used for encryption/decryption, it is only
-    for signing."""
+        Result has fields "public_key" and "private_key" as bytes.
+        DSA keypair is not used for encryption/decryption, it is only
+        for signing.
+
+        Result: "public_key" and "private_key" as bytes."""
+
     del uid
     if key_length != 1024 and key_length != 2048 and key_length != 3072:
         raise ValueError("The key length must 1024, 2048 or 3072")
@@ -42,11 +48,14 @@ def generate_dsa_keypair(uid: uuid.UUID, key_length: int = 2048) -> dict:
 
 
 # Quick-test and forget for now
-def generate_ecc_keypair(uid: uuid.UUID) -> dict:
-    """Generate an ECC (public_key, private_key) pair for a user ID.
-        Result has fields "public_key" and "private_key" as bytes."""
+def generate_ecc_keypair(uid: uuid.UUID, curve: str) -> dict:
+    """Generate an ECC (public_key, private_key) pair for a user ID according
+        to a curve `curve` that can be chosen between "p256", "p384" and "p521".
+
+        Result: "public_key" and "private_key" as bytes."""
+
     del uid
-    keys = ECC.generate(curve="p256")  # Generate private key pair
+    keys = ECC.generate(curve=curve)  # Generate private key pair
     private_key = keys
     public_key = keys.public_key()  # Generate the corresponding public key
 
@@ -54,31 +63,51 @@ def generate_ecc_keypair(uid: uuid.UUID) -> dict:
     return keypair
 
 
-def split_bytestring_into_shares(key: bytes, shares_count: int, threshold_count: int):
+def split_bytestring_into_shares(key: bytes, shares_count: int, threshold_count: int) -> List[tuple]:
+    """Split a bytestring corresponding to a `key` into `shares_count` shares and which
+        can be recombined with a threshold of `threshold_count`
+
+        Result: list with the `shares_count` tuples of shares.
+
+        :param key:
+        :param shares_count:
+        :param threshold_count:
+        :return: """
+
     shares = Shamir.split(threshold_count, shares_count, secret=key)  # Spliting the key
     assert len(shares) == shares_count, shares
-    return shares
+    return shares  # List of tuples of int
 
 
-def recombine_shares_into_bytestring(shares: List[bytes]):
+def recombine_shares_into_bytestring(shares: List[bytes]) -> List[bytes]:
+    """Recombine a bytestring from a list of bytes corresponding
+        to the `shares` of a key. In the `shares` list, it is possible
+        to have shares which doesn't come from the same initial message.
+
+        Result: list of bytes with all the shares recombined."""
+
     combined_shares_list = []
     for slices in range(0, len(shares)):
         combined_share = Shamir.combine(shares[slices])
         combined_shares_list.append(combined_share)
-    pass
     return combined_shares_list
 
 
-def unpad_last_element(list: List[bytes]):
-    last_element = len(list)-1
-    list[last_element] = unpad(list[last_element], 16)
-    return list
+def unpad_last_element(list_to_unpad: List[bytes]) -> List[bytes]:
+    """Permits to unpad the last element of a `List` of bytes.
+
+        Result: list_to_unpad with the last element unpadded."""
+
+    last_element = len(list_to_unpad)-1
+    list_to_unpad[last_element] = unpad(list_to_unpad[last_element], 16)
+    return list_to_unpad
 
 
 def generate_shared_secret_key(uid: uuid.UUID, shares_count: int, threshold_count: int) -> dict:
-    """Generate a shared secret of `keys_count` keys, where `threshold_count`
+    """Generate a shared secret of `shares_count` keys, where `threshold_count`
         of them are required to recompute the private key corresponding to the public key.
-        Result has fields "public_key" as bytes, and "shares" as a list of bytes."""
+
+        Result: "public_key" as bytes, and "shares" as a list of bytes."""
 
     # FOR testing: use 'with pytest.raises(ValueError, match="the threshold .* must be strictly...."):'
     assert threshold_count < shares_count, (threshold_count, shares_count)
@@ -107,9 +136,11 @@ def generate_shared_secret_key(uid: uuid.UUID, shares_count: int, threshold_coun
     return keys_info
 
 
-def split_as_padded_chunks(bytestring, chunk_size):
-    """Collect data into fixed-length chunks or blocks and pad the last chunk
-    when there isn't enough values initially"""
+def split_as_padded_chunks(bytestring: bytes, chunk_size: int) -> List[bytes]:
+    """Collect a `bytestring`into chunks or blocks of size defined by `chunk_size` and
+        pad the last chunk when there isn't enough values initially
+
+        Result: list of padded chunks in bytes"""
 
     chunks = []
     for i in range((len(bytestring) + chunk_size - 1) // chunk_size):

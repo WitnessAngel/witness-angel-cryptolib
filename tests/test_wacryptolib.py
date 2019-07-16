@@ -49,7 +49,7 @@ def test_generate_ecc_keypair():
     a pair of ECC keys"""
 
     uid = None
-    keypair = wacryptolib.generate_ecc_keypair(uid)
+    keypair = wacryptolib.generate_ecc_keypair(uid, curve="p256")
     public_key = keypair["public_key"]
     private_key = keypair["private_key"]
     assert isinstance(public_key, ECC.EccKey), type(public_key)

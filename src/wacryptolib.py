@@ -10,14 +10,14 @@ from Crypto.PublicKey.RSA import RsaKey
 from Crypto.Util.Padding import pad, unpad
 from typing import List
 
-# TODO: take length as optional param, and ensure it is validated properly
 
-
-def generate_rsa_keypair(uid: uuid.UUID) -> dict:
+def generate_rsa_keypair(uid: uuid.UUID, key_length: int = 2048) -> dict:
     """Generate a RSA (public_key, private_key) pair for a user ID.
     Result has fields "public_key" and "private_key" as bytes."""
     del uid
-    keys = RSA.generate(2048)  # Generate private key pair
+    if key_length < 1024:
+        raise ValueError("The key lenght must be superior to 1024 bits")
+    keys = RSA.generate(key_length)  # Generate private key pair
     private_key = keys
     public_key = keys.publickey()  # Generate the corresponding public key
 
@@ -25,12 +25,14 @@ def generate_rsa_keypair(uid: uuid.UUID) -> dict:
     return keypair
 
 
-def generate_dsa_keypair(uid: uuid.UUID) -> dict:
+def generate_dsa_keypair(uid: uuid.UUID, key_length: int = 2048) -> dict:
     """Generate a DSA (public_key, private_key) pair for a user ID.
     Result has fields "public_key" and "private_key" as bytes.
     DSA keypair is not used for encryption/decryption, it is only
     for signing."""
     del uid
+    if key_length != 1024 and key_length != 2048 and key_length != 3072:
+        raise ValueError("The key length must 1024, 2048 or 3072")
     keys = DSA.generate(2048)  # Generate private key pair
     private_key = keys
     public_key = keys.publickey()  # Generate the corresponding public key

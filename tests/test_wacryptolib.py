@@ -67,7 +67,7 @@ def test_generate_shared_secret():
     keys_info = wacryptolib.generate_shared_secret_key(uid, keys_count, threshold_count=threshold_count)
     shares = keys_info["shares"]
     public_key = keys_info["public_key"]
-    shares = wacryptolib.grouper(shares, 3)
+    shares = wacryptolib.split_as_padded_chunks(shares, 3)
 
     # Cipher the binary content
     cipher = PKCS1_OAEP.new(public_key)
@@ -94,8 +94,8 @@ def test_generate_shared_secret():
 
 
 if __name__ == '__main__':
-    # test_generate_shared_secret()
+    test_generate_shared_secret()
     # test_generate_rsa_keypair()
     # test_generate_dsa_keypair()
-    test_generate_ecc_keypair()
+    # test_generate_ecc_keypair()
 

@@ -97,6 +97,16 @@ def test_generate_shared_secret():
         print("Problem cccured in the deciphering")
 
 
+def test_sign_and_verify_rsa():
+    keypair = wacryptolib.generate_rsa_keypair(None)
+    data_hash, signature = wacryptolib.sign_with_rsa(private_key=RSA.RsaKey.export_key(keypair["private_key"]),
+                                                     data=b'Hello')
+
+    wacryptolib.verify_authenticity_rsa_signature(public_key=RSA.RsaKey.export_key(keypair["public_key"]),
+                                                  data_hash=data_hash, signature=signature)
+
+
+
 def test_aes_cbc():
     key = get_random_bytes(16)
 

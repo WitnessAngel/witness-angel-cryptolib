@@ -10,6 +10,8 @@ from Crypto.Cipher import AES
 from Crypto.Signature import DSS
 from Crypto.Hash import SHA256
 
+from Crypto.Signature import pss
+from Crypto.Hash import SHA256
 from Crypto.Protocol.SecretSharing import Shamir
 from Crypto.Random import get_random_bytes
 
@@ -205,3 +207,31 @@ def split_as_padded_chunks(bytestring: bytes, chunk_size: int) -> List[bytes]:
         else:
             chunks.append(chunk[0])
     return chunks
+
+
+def sign_with_rsa(private_key: bytes, data: bytes):
+    """Permits to sign a message with a private RSA key as bytes.
+
+    :param private_key:
+    :param data:
+    :return:The hash of the data and the signature"""
+
+    private_key = RSA.import_key(private_key)
+    data_hash = SHA256.new(data)
+    signature = pss.new(private_key).sign(data_hash)
+    return data_hash, signature
+
+
+def verify_authenticity_rsa_signature(public_key: bytes, data_hash: str, signature: bytes):
+    """Permits to verify the authenticity of a RSA signature
+    :param public_key:
+    :param data_hash:
+    :param signature: """
+
+    public_key = RSA.import_key(public_key)
+    verifier = pss.new(public_key)
+    try:
+        verifier.verify(data_hash, signature)
+        print("Authentic")
+    except (ValueError, TypeError):
+        print("Not authentic")

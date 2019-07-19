@@ -8,8 +8,10 @@ from Crypto.Util.Padding import pad, unpad
 # ---- AES/CBC ----
 def encrypt_via_aes_cbc(key: bytes, plaintext: bytes) -> bytes:
     """Permits to encrypt a `plaintext `thanks to a `key` with the CBC mode
-    :param key:
-    :param plaintext:
+
+    :param key: the cryptographic key which will serve to decipher the cipher text
+    :param plaintext: the text to cipher
+
     :return: The initialization vector and the cipher text encoded in bytes encoded in base 64"""
 
     iv = get_random_bytes(AES.block_size)
@@ -20,8 +22,10 @@ def encrypt_via_aes_cbc(key: bytes, plaintext: bytes) -> bytes:
 
 def decrypt_via_aes_cbc(key: bytes, ciphertext: bytes) -> bytes:
     """Permits to decrypt a `ciphertext` in base 64 thanks to a `key`
-    :param key:
-    :param ciphertext:
+
+    :param key: the cryptographic key which will serve to cipher the plain text
+    :param ciphertext: the text to decipher
+
     :return: The decrypted text as bytes"""
 
     raw = b64decode(ciphertext)
@@ -33,8 +37,10 @@ def decrypt_via_aes_cbc(key: bytes, ciphertext: bytes) -> bytes:
 # ---- AES/EAX ----
 def encrypt_via_aes_eax(key: bytes, plaintext: bytes) -> bytes:
     """Permits to encrypt a `plaintext `thanks to a `key` with the EAX mode
-    :param key:
-    :param plaintext:
+
+    :param key: the cryptographic key which will serve to cipher the plain text
+    :param plaintext: the text to cipher
+
     :return: the ciphertext as bytes, the tag and the nonce"""
 
     cipher = AES.new(key, AES.MODE_EAX)
@@ -45,10 +51,12 @@ def encrypt_via_aes_eax(key: bytes, plaintext: bytes) -> bytes:
 
 def decrypt_via_aes_eax(key: bytes, ciphertext: bytes, tag, nonce) -> bytes:
     """Permits to decrypt a `ciphertext` in base 64 thanks to a `key`
-    :param key:
-    :param ciphertext:
-    :param tag:
-    :param nonce:
+
+    :param key: the cryptographic key which will serve to decipher the cipher text
+    :param ciphertext: the text to decipher
+    :param tag: authentification tag which permit to verify the decryption
+    :param nonce: the value of the fixed nonce. It must be unique for the combination message/key
+
     :return: the text deciphered"""
 
     decipher = AES.new(key, AES.MODE_EAX, nonce=nonce)

@@ -394,13 +394,13 @@ description = "An autocompletion tool for Python that can be used for text edito
 name = "jedi"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
-version = "0.14.0"
+version = "0.14.1"
 
 [package.dependencies]
-parso = ">=0.3.0"
+parso = ">=0.5.0"
 
 [[package]]
-category = "main"
+category = "dev"
 description = "A small but fast and easy to use stand-alone template engine written in pure python."
 name = "jinja2"
 optional = false
@@ -438,7 +438,7 @@ version = "0.6.4"
 six = "*"
 
 [[package]]
-category = "main"
+category = "dev"
 description = "Safely add untrusted strings to HTML/XML markup."
 name = "markupsafe"
 optional = false
@@ -495,20 +495,12 @@ pyparsing = ">=2.0.2"
 six = "*"
 
 [[package]]
-category = "main"
-description = "Padding methods for password based encryption"
-name = "padding"
-optional = false
-python-versions = "*"
-version = "0.5"
-
-[[package]]
 category = "dev"
 description = "A Python Parser"
 name = "parso"
 optional = false
 python-versions = "*"
-version = "0.5.0"
+version = "0.5.1"
 
 [[package]]
 category = "dev"
@@ -524,7 +516,7 @@ description = "Python Build Reasonableness"
 name = "pbr"
 optional = false
 python-versions = "*"
-version = "5.4.0"
+version = "5.4.1"
 
 [[package]]
 category = "dev"
@@ -1067,7 +1059,7 @@ python-versions = ">=2.7"
 version = "0.5.2"
 
 [metadata]
-content-hash = "33811f445ec8de76e3fe14d7d3dcea802af95d4a2319e7ff11e5fe404efed688"
+content-hash = "81d6fe679b32469074b5587d2195797098ff8b37a996fc7f45d32090fd6b4b9f"
 python-versions = "^3.7.2"
 
 [metadata.hashes]
@@ -1109,7 +1101,7 @@ importlib-metadata = ["6dfd58dfe281e8d240937776065dd3624ad5469c835248219bd16cf2e
 ipython = ["11067ab11d98b1e6c7f0993506f7a5f8a91af420f7e82be6575fcb7a6ca372a0", "60bc55c2c1d287161191cc2469e73c116d9b634cff25fe214a43cba7cec94c79"]
 ipython-genutils = ["72dd37233799e619666c9f639a9da83c34013a73e8bbc79a7a6348d93c61fab8", "eb2e116e75ecef9d4d228fdc66af54269afa26ab4463042e33785b887c628ba8"]
 isort = ["54da7e92468955c4fceacd0c86bd0ec997b0e1ee80d97f67c35a78b719dccab1", "6e811fcb295968434526407adb8796944f1988c5b65e8139058f2014cbe100fd"]
-jedi = ["49ccb782651bb6f7009810d17a3316f8867dde31654c750506970742e18b553d", "79d0f6595f3846dffcbe667cc6dc821b96e5baa8add125176c31a3917eb19d58"]
+jedi = ["53c850f1a7d3cfcd306cc513e2450a54bdf5cacd7604b74e42dd1f0758eaaf36", "e07457174ef7cb2342ff94fa56484fe41cec7ef69b0059f01d3f812379cb6f7c"]
 jinja2 = ["065c4f02ebe7f7cf559e49ee5a95fb800a9e4528727aec6f24402a5374c65013", "14dd6caf1527abb21f08f86c784eac40853ba93edb79552aa1e4b8aef1b61c7b"]
 lazy-object-proxy = ["159a745e61422217881c4de71f9eafd9d703b93af95618635849fe469a283661", "23f63c0821cc96a23332e45dfaa83266feff8adc72b9bcaef86c202af765244f", "3b11be575475db2e8a6e11215f5aa95b9ec14de658628776e10d96fa0b4dac13", "3f447aff8bc61ca8b42b73304f6a44fa0d915487de144652816f950a3f1ab821", "4ba73f6089cd9b9478bc0a4fa807b47dbdb8fad1d8f31a0f0a5dbf26a4527a71", "4f53eadd9932055eac465bd3ca1bd610e4d7141e1278012bd1f28646aebc1d0e", "64483bd7154580158ea90de5b8e5e6fc29a16a9b4db24f10193f0c1ae3f9d1ea", "6f72d42b0d04bfee2397aa1862262654b56922c20a9bb66bb76b6f0e5e4f9229", "7c7f1ec07b227bdc561299fa2328e85000f90179a2f44ea30579d38e037cb3d4", "7c8b1ba1e15c10b13cad4171cfa77f5bb5ec2580abc5a353907780805ebe158e", "8559b94b823f85342e10d3d9ca4ba5478168e1ac5658a8a2f18c991ba9c52c20", "a262c7dfb046f00e12a2bdd1bafaed2408114a89ac414b0af8755c696eb3fc16", "acce4e3267610c4fdb6632b3886fe3f2f7dd641158a843cf6b6a68e4ce81477b", "be089bb6b83fac7f29d357b2dc4cf2b8eb8d98fe9d9ff89f9ea6012970a853c7", "bfab710d859c779f273cc48fb86af38d6e9210f38287df0069a63e40b45a2f5c", "c10d29019927301d524a22ced72706380de7cfc50f767217485a912b4c8bd82a", "dd6e2b598849b3d7aee2295ac765a578879830fb8966f70be8cd472e6069932e", "e408f1eacc0a68fed0c08da45f31d0ebb38079f043328dce69ff133b95c29dc1"]
 logging-tree = ["668c5c364f4623e81784e6042e82fb87d9423bd291a68933c7a3c03e72f4f343", "dc6cf63f2f8e7805dad32b3400fb9685c9d3cf83bd0f0e99267e426b9cf72694"]
@@ -1120,10 +1112,9 @@ more-itertools = ["3ad685ff8512bf6dc5a8b82ebf73543999b657eded8c11803d9ba6b648986
 mypy = ["2afe51527b1f6cdc4a5f34fc90473109b22bf7f21086ba3e9451857cf11489e6", "56a16df3e0abb145d8accd5dbb70eba6c4bd26e2f89042b491faa78c9635d1e2", "5764f10d27b2e93c84f70af5778941b8f4aa1379b2430f85c827e0f5464e8714", "5bbc86374f04a3aa817622f98e40375ccb28c4836f36b66706cf3c6ccce86eda", "6a9343089f6377e71e20ca734cd8e7ac25d36478a9df580efabfe9059819bf82", "6c9851bc4a23dc1d854d3f5dfd5f20a016f8da86bcdbb42687879bb5f86434b0", "b8e85956af3fcf043d6f87c91cbe8705073fc67029ba6e22d3468bfee42c4823", "b9a0af8fae490306bc112229000aa0c2ccc837b49d29a5c42e088c132a2334dd", "bbf643528e2a55df2c1587008d6e3bda5c0445f1240dfa85129af22ae16d7a9a", "c46ab3438bd21511db0f2c612d89d8344154c0c9494afc7fbc932de514cf8d15", "f7a83d6bd805855ef83ec605eb01ab4fa42bcef254b13631e451cbb44914a9b0"]
 mypy-extensions = ["37e0e956f41369209a3d5f34580150bcacfabaa57b33a15c0b25f4b5725e0812", "b16cabe759f55e3409a7d231ebd2841378fb0c27a5d1994719e340e4f429ac3e"]
 packaging = ["0c98a5d0be38ed775798ece1b9727178c4469d9c3b4ada66e8e6b7849f8732af", "9e1cbf8c12b1f1ce0bb5344b8d7ecf66a6f8a6e91bcb0c84593ed6d3ab5c4ab3"]
-padding = ["8994b4d8720b733ddf697bc27ce17b672220c48c4a37eef1e7eaa30a4ad90308"]
-parso = ["5052bb33be034cba784193e74b1cde6ebf29ae8b8c1e4ad94df0c4209bfc4826", "db5881df1643bf3e66c097bfd8935cf03eae73f4cb61ae4433c9ea4fb6613446"]
+parso = ["63854233e1fadb5da97f2744b6b24346d2750b85965e7e399bec1620232797dc", "666b0ee4a7a1220f65d367617f2cd3ffddff3e205f3f16a0284df30e774c2a9c"]
 pathspec = ["54a5eab895d89f342b52ba2bffe70930ef9f8d96e398cccf530d21fa0516a873"]
-pbr = ["36ebd78196e8c9588c972f5571230a059ff83783fabbbbedecc07be263ccd7e6", "5a03f59455ad54f01a94c15829b8b70065462b7bd8d5d7e983306b59127fc841"]
+pbr = ["0ca44dc9fd3b04a22297c2a91082d8df2894862e8f4c86a49dac69eae9e85ca0", "4aed6c1b1fa5020def0f22aed663d87b81bb3235f112490b07d2643d7a98c5b5"]
 pexpect = ["2094eefdfcf37a1fdbfb9aa090862c1a4878e5c7e0e7e7088bdb511c558e5cd1", "9e2c1fd0e6ee3a49b28f95d4b33bc389c89b20af6a1255906e90ff1262ce62eb"]
 pickleshare = ["87683d47965c1da65cdacaf31c8441d12b8044cdec9aca500cd78fc2c683afca", "9649af414d74d4df115d5d718f82acb59c9d418196b7b4290ed47a12ce62df56"]
 pluggy = ["0825a152ac059776623854c1543d65a4ad408eb3d33ee114dff91e57ec6ae6fc", "b9817417e95936bf75d85d3f8767f7df6cdde751fc40aed3bb3074cbcb77757c"]

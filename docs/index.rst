@@ -11,6 +11,10 @@ Welcome to witness_angel's documentation!
    :caption: Contents:
    
    api
+   signature
+   cipher
+   shared_secret
+   utilities
 
    containers
    algorithms_overview

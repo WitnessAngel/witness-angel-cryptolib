@@ -1,1 +1,1 @@
-__all__ = ["key_generation", "utilities", "sharedsecret", "signature", "cipher"]
+__all__ = ["key_generation", "utilities", "shared_secret", "signature", "cipher"]

@@ -6,7 +6,8 @@ from Crypto.Util.Padding import pad, unpad
 def unpad_last_element(list_to_unpad: List[bytes]) -> List[bytes]:
     """Permits to unpad the last element of a `List` of bytes.
 
-        :param list_to_unpad:
+        :param list_to_unpad: list of bytes which has its last element which need to be padded
+
         :return: list_to_unpad with the last element unpadded."""
 
     last_element = len(list_to_unpad) - 1
@@ -18,8 +19,9 @@ def split_as_padded_chunks(bytestring: bytes, chunk_size: int) -> List[bytes]:
     """Collect a `bytestring`into chunks or blocks of size defined by `chunk_size` and
         pad the last chunk when there isn't enough values initially
 
-        :param bytestring:
-        :param chunk_size:
+        :param bytestring: bytestring which have to be split into chunks
+        :param chunk_size: size of a chunk
+
         :return: list of padded chunks in bytes"""
 
     chunks = []

@@ -1,46 +1,24 @@
+Key generation
+--------------
 
-
-API
--------------
-
-	Welcome on the documentation for the module WACryptoLib which permits to generate
-	different types of assymetric keys, and encrypt/decrypt/sign data.
+    Here is the documentation about the assymetric key generation. 
+    Available types : RSA, ECC, DSA.
 
 ____
 
-.. autofunction:: wacryptolib.generate_rsa_keypair
+**RSA**
+
+.. autofunction:: wacryptolib.key_generation.generate_rsa_keypair
 
 _____
 
+**DSA**
 
-.. autofunction:: wacryptolib.generate_dsa_keypair
-
-_____
-
-
-.. autofunction:: wacryptolib.generate_ecc_keypair
+.. autofunction:: wacryptolib.key_generation.generate_dsa_keypair
 
 _____
 
+**ECC**
 
-.. autofunction:: wacryptolib.split_bytestring_into_shares
+.. autofunction:: wacryptolib.key_generation.generate_ecc_keypair
 
-_____
-
-
-.. autofunction:: wacryptolib.recombine_shares_into_bytestring
-
-_____
-
-
-.. autofunction:: wacryptolib.unpad_last_element
-
-_____
-
-
-.. autofunction:: wacryptolib.generate_shared_secret_key
-
-_____
-
-
-.. autofunction:: wacryptolib.split_as_padded_chunks

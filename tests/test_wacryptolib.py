@@ -10,14 +10,14 @@ def test_generate_shared_secret():
     keypair = wacryptolib.key_generation.generate_rsa_keypair(None)
     public_key, private_key = wacryptolib.key_generation.rsakey_to_bytes(keypair)
 
-    keys_info = wacryptolib.sharedsecret.generate_shared_secret_key(
+    keys_info = wacryptolib.shared_secret.generate_shared_secret_key(
         public_key=public_key,
         private_key=private_key,
         shares_count=3,
         threshold_count=2,
     )
 
-    private_key_reconstructed = wacryptolib.sharedsecret.reconstruct_shared_secret_key(
+    private_key_reconstructed = wacryptolib.shared_secret.reconstruct_shared_secret_key(
         keys_info["shares"], shares_count=3
     )
 

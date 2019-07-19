@@ -79,7 +79,9 @@ def generate_ecc_keypair(uid: uuid.UUID, curve: str) -> dict:
     return keypair
 
 
-def split_bytestring_into_shares(key: bytes, shares_count: int, threshold_count: int) -> List[tuple]:
+def split_bytestring_into_shares(
+    key: bytes, shares_count: int, threshold_count: int
+) -> List[tuple]:
     """Split a bytestring corresponding to a `key` into `shares_count` shares and which
         can be recombined with a threshold of `threshold_count`
 
@@ -114,7 +116,7 @@ def unpad_last_element(list_to_unpad: List[bytes]) -> List[bytes]:
         :param list_to_unpad:
         :return: list_to_unpad with the last element unpadded."""
 
-    last_element = len(list_to_unpad)-1
+    last_element = len(list_to_unpad) - 1
     list_to_unpad[last_element] = unpad(list_to_unpad[last_element], 16)
     return list_to_unpad
 
@@ -128,14 +130,14 @@ def encrypt_via_aes_cbc(key: bytes, data: bytes):
 
 def decrypt_via_aes_cbc(key: bytes, data: bytes):
     raw = b64decode(data)
-    decipher = AES.new(key, AES.MODE_CBC, raw[:AES.block_size])
-    decrypted_text = unpad(decipher.decrypt(raw[AES.block_size:]), AES.block_size)
+    decipher = AES.new(key, AES.MODE_CBC, raw[: AES.block_size])
+    decrypted_text = unpad(decipher.decrypt(raw[AES.block_size :]), AES.block_size)
     return decrypted_text
 
 
 def sign_data_dsa(private_key: DSA.DsaKey, data: bytes):
     hash_obj = SHA256.new(data)
-    signer = DSS.new(private_key, 'fips-186-3')
+    signer = DSS.new(private_key, "fips-186-3")
     signature = signer.sign(hash_obj)
     timestamp = int(datetime.timestamp(datetime.now()))
     return signature, timestamp
@@ -143,7 +145,7 @@ def sign_data_dsa(private_key: DSA.DsaKey, data: bytes):
 
 def generate_verifier(public_key: DSA.DsaKey, data: bytes):
     hash_obj = SHA256.new(data)
-    verifier = DSS.new(public_key, 'fips-186-3')
+    verifier = DSS.new(public_key, "fips-186-3")
     return verifier, hash_obj
 
 
@@ -155,7 +157,9 @@ def verify_authenticity(hash_obj, signature, verifier):
         print("the message is not authentic")
 
 
-def generate_shared_secret_key(uid: uuid.UUID, shares_count: int, threshold_count: int) -> dict:
+def generate_shared_secret_key(
+    uid: uuid.UUID, shares_count: int, threshold_count: int
+) -> dict:
     """Generate a shared secret of `shares_count` keys, where `threshold_count`
         of them are required to recompute the private key corresponding to the public key.
 
@@ -201,7 +205,7 @@ def split_as_padded_chunks(bytestring: bytes, chunk_size: int) -> List[bytes]:
 
     chunks = []
     for i in range((len(bytestring) + chunk_size - 1) // chunk_size):
-        chunk = [bytestring[i * chunk_size:(i + 1) * chunk_size]]
+        chunk = [bytestring[i * chunk_size : (i + 1) * chunk_size]]
         if len(chunk[0]) != chunk_size:
             chunks.append(pad(chunk[0], chunk_size))
         else:
@@ -222,7 +226,9 @@ def sign_with_rsa(private_key: bytes, data: bytes):
     return data_hash, signature
 
 
-def verify_authenticity_rsa_signature(public_key: bytes, data_hash: str, signature: bytes):
+def verify_authenticity_rsa_signature(
+    public_key: bytes, data_hash: str, signature: bytes
+):
     """Permits to verify the authenticity of a RSA signature
     :param public_key:
     :param data_hash:

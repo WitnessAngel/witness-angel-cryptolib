@@ -1,5 +1,5 @@
 import uuid
-from src import wacryptolib
+import wacryptolib
 
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
@@ -15,7 +15,7 @@ def test_generate_rsa_keypair():
     """Cipher then decipher a message using RSA keypair"""
 
     uid = None
-    binary_content = "Mon hât èst joli".encode('utf-8')
+    binary_content = "Mon hât èst joli".encode("utf-8")
 
     keys = wacryptolib.generate_rsa_keypair(uid)
     public_key = keys["public_key"]
@@ -68,7 +68,9 @@ def test_generate_shared_secret():
     threshold_count = 2
 
     binary_content = "Mon hât èst joli".encode("utf-8")
-    keys_info = wacryptolib.generate_shared_secret_key(uid, keys_count, threshold_count=threshold_count)
+    keys_info = wacryptolib.generate_shared_secret_key(
+        uid, keys_count, threshold_count=threshold_count
+    )
     shares = keys_info["shares"]
     public_key = keys_info["public_key"]
     shares = wacryptolib.split_as_padded_chunks(shares, 3)
@@ -84,7 +86,7 @@ def test_generate_shared_secret():
     combined_shares_list = wacryptolib.unpad_last_element(combined_shares_list)
 
     # Reconstruct the private key in type bytes
-    private_key_reconstructed = b''.join(combined_shares_list)
+    private_key_reconstructed = b"".join(combined_shares_list)
 
     # decipher the binary content
     decipher = PKCS1_OAEP.new(RSA.import_key(private_key_reconstructed))
@@ -99,18 +101,21 @@ def test_generate_shared_secret():
 
 def test_sign_and_verify_rsa():
     keypair = wacryptolib.generate_rsa_keypair(None)
-    data_hash, signature = wacryptolib.sign_with_rsa(private_key=RSA.RsaKey.export_key(keypair["private_key"]),
-                                                     data=b'Hello')
+    data_hash, signature = wacryptolib.sign_with_rsa(
+        private_key=RSA.RsaKey.export_key(keypair["private_key"]), data=b"Hello"
+    )
 
-    wacryptolib.verify_authenticity_rsa_signature(public_key=RSA.RsaKey.export_key(keypair["public_key"]),
-                                                  data_hash=data_hash, signature=signature)
-
+    wacryptolib.verify_authenticity_rsa_signature(
+        public_key=RSA.RsaKey.export_key(keypair["public_key"]),
+        data_hash=data_hash,
+        signature=signature,
+    )
 
 
 def test_aes_cbc():
     key = get_random_bytes(16)
 
-    binary_content = "Mon hât èst joli".encode('utf-8')
+    binary_content = "Mon hât èst joli".encode("utf-8")
 
     cipher_text = wacryptolib.encrypt_via_aes_cbc(key=key, data=binary_content)
 
@@ -127,20 +132,23 @@ def test_sign_dsa():
     keypair = wacryptolib.generate_dsa_keypair(None)
     public_key = keypair["public_key"]
     private_key = keypair["private_key"]
-    binary_content = "Mon hât èst joli".encode('utf-8')
+    binary_content = "Mon hât èst joli".encode("utf-8")
     timestamp_verifier = int(datetime.timestamp(datetime.now()))
 
-    signature, timestamp = wacryptolib.sign_data_dsa(private_key=private_key, data=binary_content)
-    verifier, hash_obj = wacryptolib.generate_verifier(public_key=public_key, data=binary_content)
+    signature, timestamp = wacryptolib.sign_data_dsa(
+        private_key=private_key, data=binary_content
+    )
+    verifier, hash_obj = wacryptolib.generate_verifier(
+        public_key=public_key, data=binary_content
+    )
     wacryptolib.verify_authenticity(hash_obj, signature, verifier)
     assert timestamp == timestamp_verifier, "modification détectée"
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # test_generate_shared_secret()
     # test_generate_rsa_keypair()
     # test_generate_dsa_keypair()
     # test_generate_ecc_keypair()
     # test_aes_cbc()
     test_sign_dsa()
-

@@ -1,8 +1,6 @@
-========================
-Witness Angel cryptoblib
-========================
 
-Documentation
+
+API
 -------------
 
 	Welcome on the documentation for the module WACryptoLib which permits to generate

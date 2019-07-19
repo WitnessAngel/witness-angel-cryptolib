@@ -10,7 +10,7 @@ Welcome to witness_angel's documentation!
    :maxdepth: 2
    :caption: Contents:
    
-   documentation
+   api
 
 
 

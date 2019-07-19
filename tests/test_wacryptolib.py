@@ -1,14 +1,11 @@
 import uuid
-import wacryptolib
-
-from Crypto.Cipher import PKCS1_OAEP
-from Crypto.PublicKey import RSA
-from Crypto.PublicKey import ECC
-from Crypto.PublicKey import DSA
-
 from datetime import datetime
 
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.PublicKey import DSA, ECC, RSA
 from Crypto.Random import get_random_bytes
+
+import wacryptolib
 
 
 def test_generate_rsa_keypair():

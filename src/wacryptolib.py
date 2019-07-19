@@ -2,20 +2,31 @@ import uuid
 import itertools
 
 from Crypto.PublicKey import RSA
+from Crypto.PublicKey.RSA import RsaKey
 from Crypto.PublicKey import DSA
 from Crypto.PublicKey import ECC
+from Crypto.Cipher import AES
+
+from Crypto.Signature import DSS
+from Crypto.Hash import SHA256
 
 from Crypto.Protocol.SecretSharing import Shamir
-from Crypto.PublicKey.RSA import RsaKey
+from Crypto.Random import get_random_bytes
+
+from base64 import b64decode, b64encode
 from Crypto.Util.Padding import pad, unpad
 from typing import List
+
+from datetime import datetime
 
 
 def generate_rsa_keypair(uid: uuid.UUID, key_length: int = 2048) -> dict:
     """Generate a RSA (public_key, private_key) pair for a user ID of a
         length in bits `key_length`.
 
-        Result: "public_key" and "private_key" as bytes."""
+        :param uid:
+        :param key_length:
+        :return: "public_key" and "private_key" as bytes."""
 
     del uid
     if key_length < 1024:
@@ -34,7 +45,9 @@ def generate_dsa_keypair(uid: uuid.UUID, key_length: int = 2048) -> dict:
         DSA keypair is not used for encryption/decryption, it is only
         for signing.
 
-        Result: "public_key" and "private_key" as bytes."""
+        :param uid:
+        :param key_length:
+        :return: "public_key" and "private_key" as bytes."""
 
     del uid
     if key_length != 1024 and key_length != 2048 and key_length != 3072:
@@ -47,12 +60,13 @@ def generate_dsa_keypair(uid: uuid.UUID, key_length: int = 2048) -> dict:
     return keypair
 
 
-# Quick-test and forget for now
 def generate_ecc_keypair(uid: uuid.UUID, curve: str) -> dict:
     """Generate an ECC (public_key, private_key) pair for a user ID according
         to a curve `curve` that can be chosen between "p256", "p384" and "p521".
 
-        Result: "public_key" and "private_key" as bytes."""
+        :param uid:
+        :param curve:
+        :return: "public_key" and "private_key" as bytes."""
 
     del uid
     keys = ECC.generate(curve=curve)  # Generate private key pair
@@ -67,12 +81,10 @@ def split_bytestring_into_shares(key: bytes, shares_count: int, threshold_count:
     """Split a bytestring corresponding to a `key` into `shares_count` shares and which
         can be recombined with a threshold of `threshold_count`
 
-        Result: list with the `shares_count` tuples of shares.
-
         :param key:
         :param shares_count:
         :param threshold_count:
-        :return: """
+        :return: list with the `shares_count` tuples of shares."""
 
     shares = Shamir.split(threshold_count, shares_count, secret=key)  # Spliting the key
     assert len(shares) == shares_count, shares
@@ -84,7 +96,8 @@ def recombine_shares_into_bytestring(shares: List[bytes]) -> List[bytes]:
         to the `shares` of a key. In the `shares` list, it is possible
         to have shares which doesn't come from the same initial message.
 
-        Result: list of bytes with all the shares recombined."""
+        :param shares:
+        :return: list of bytes with all the shares recombined."""
 
     combined_shares_list = []
     for slices in range(0, len(shares)):
@@ -96,18 +109,58 @@ def recombine_shares_into_bytestring(shares: List[bytes]) -> List[bytes]:
 def unpad_last_element(list_to_unpad: List[bytes]) -> List[bytes]:
     """Permits to unpad the last element of a `List` of bytes.
 
-        Result: list_to_unpad with the last element unpadded."""
+        :param list_to_unpad:
+        :return: list_to_unpad with the last element unpadded."""
 
     last_element = len(list_to_unpad)-1
     list_to_unpad[last_element] = unpad(list_to_unpad[last_element], 16)
     return list_to_unpad
 
 
+def encrypt_via_aes_cbc(key: bytes, data: bytes):
+    iv = get_random_bytes(AES.block_size)
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    ciphertext = cipher.encrypt(pad(data, AES.block_size))
+    return b64encode(iv + ciphertext)
+
+
+def decrypt_via_aes_cbc(key: bytes, data: bytes):
+    raw = b64decode(data)
+    decipher = AES.new(key, AES.MODE_CBC, raw[:AES.block_size])
+    decrypted_text = unpad(decipher.decrypt(raw[AES.block_size:]), AES.block_size)
+    return decrypted_text
+
+
+def sign_data_dsa(private_key: DSA.DsaKey, data: bytes):
+    hash_obj = SHA256.new(data)
+    signer = DSS.new(private_key, 'fips-186-3')
+    signature = signer.sign(hash_obj)
+    timestamp = int(datetime.timestamp(datetime.now()))
+    return signature, timestamp
+
+
+def generate_verifier(public_key: DSA.DsaKey, data: bytes):
+    hash_obj = SHA256.new(data)
+    verifier = DSS.new(public_key, 'fips-186-3')
+    return verifier, hash_obj
+
+
+def verify_authenticity(hash_obj, signature, verifier):
+    try:
+        verifier.verify(hash_obj, signature)
+        print("the message is authentic")
+    except ValueError:
+        print("the message is not authentic")
+
+
 def generate_shared_secret_key(uid: uuid.UUID, shares_count: int, threshold_count: int) -> dict:
     """Generate a shared secret of `shares_count` keys, where `threshold_count`
         of them are required to recompute the private key corresponding to the public key.
 
-        Result: "public_key" as bytes, and "shares" as a list of bytes."""
+        :param uid:
+        :param shares_count:
+        :param threshold_count:
+        :return: "public_key" as bytes, and "shares" as a list of bytes."""
 
     # FOR testing: use 'with pytest.raises(ValueError, match="the threshold .* must be strictly...."):'
     assert threshold_count < shares_count, (threshold_count, shares_count)
@@ -140,7 +193,9 @@ def split_as_padded_chunks(bytestring: bytes, chunk_size: int) -> List[bytes]:
     """Collect a `bytestring`into chunks or blocks of size defined by `chunk_size` and
         pad the last chunk when there isn't enough values initially
 
-        Result: list of padded chunks in bytes"""
+        :param bytestring:
+        :param chunk_size:
+        :return: list of padded chunks in bytes"""
 
     chunks = []
     for i in range((len(bytestring) + chunk_size - 1) // chunk_size):

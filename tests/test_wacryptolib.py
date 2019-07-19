@@ -1,10 +1,14 @@
 import uuid
-import wacryptolib
+from src import wacryptolib
 
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
 from Crypto.PublicKey import ECC
 from Crypto.PublicKey import DSA
+
+from datetime import datetime
+
+from Crypto.Random import get_random_bytes
 
 
 def test_generate_rsa_keypair():
@@ -93,9 +97,40 @@ def test_generate_shared_secret():
         print("Problem cccured in the deciphering")
 
 
+def test_aes_cbc():
+    key = get_random_bytes(16)
+
+    binary_content = "Mon hât èst joli".encode('utf-8')
+
+    cipher_text = wacryptolib.encrypt_via_aes_cbc(key=key, data=binary_content)
+
+    decipher_text = wacryptolib.decrypt_via_aes_cbc(key=key, data=cipher_text)
+
+    try:
+        assert decipher_text == binary_content
+        print("Ciphering and deciphering with CBC mode : successfuly done")
+    except AssertionError:
+        print("Problem cccured in the deciphering")
+
+
+def test_sign_dsa():
+    keypair = wacryptolib.generate_dsa_keypair(None)
+    public_key = keypair["public_key"]
+    private_key = keypair["private_key"]
+    binary_content = "Mon hât èst joli".encode('utf-8')
+    timestamp_verifier = int(datetime.timestamp(datetime.now()))
+
+    signature, timestamp = wacryptolib.sign_data_dsa(private_key=private_key, data=binary_content)
+    verifier, hash_obj = wacryptolib.generate_verifier(public_key=public_key, data=binary_content)
+    wacryptolib.verify_authenticity(hash_obj, signature, verifier)
+    assert timestamp == timestamp_verifier, "modification détectée"
+
+
 if __name__ == '__main__':
-    test_generate_shared_secret()
+    # test_generate_shared_secret()
     # test_generate_rsa_keypair()
     # test_generate_dsa_keypair()
     # test_generate_ecc_keypair()
+    # test_aes_cbc()
+    test_sign_dsa()
 

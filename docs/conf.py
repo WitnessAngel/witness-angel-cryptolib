@@ -12,7 +12,10 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('C:\Users\Dev\Desktop\witness-angel-cryptolib\src'))
+import pathlib
+
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
 
 # -- Project information -----------------------------------------------------

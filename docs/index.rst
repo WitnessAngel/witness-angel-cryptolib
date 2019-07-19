@@ -12,6 +12,8 @@ Welcome to witness_angel's documentation!
    
    api
 
+   containers
+   algorithms_overview
 
 
 Indices and tables

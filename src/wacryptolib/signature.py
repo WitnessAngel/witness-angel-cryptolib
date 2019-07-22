@@ -59,7 +59,6 @@ def verify_dsa_signature(
 
     :return: the timestamp"""
 
-
     hash_obj = SHA256.new(plaintext)
     verifier = DSS.new(public_key, "fips-186-3")
     verifier.verify(hash_obj, signature)

@@ -1,27 +1,40 @@
 from datetime import datetime
 
-from Crypto.PublicKey import RSA
+from Crypto.PublicKey import RSA, ECC
 from Crypto.Random import get_random_bytes
 
 import wacryptolib
 
 
-def test_generate_shared_secret():
+def test_split_bytestring_as_shamir_shares():
     keypair = wacryptolib.key_generation.generate_rsa_keypair(None)
-    public_key, private_key = wacryptolib.key_generation.rsakey_to_bytes(keypair)
+    private_key = RSA.RsaKey.export_key(keypair["private_key"])
 
-    keys_info = wacryptolib.shared_secret.generate_shared_secret_key(
-        public_key=public_key,
-        private_key=private_key,
+    shares = wacryptolib.shared_secret.split_bytestring_as_shamir_shares(
+        bytestring=private_key,
         shares_count=3,
         threshold_count=2,
     )
 
-    private_key_reconstructed = wacryptolib.shared_secret.reconstruct_shared_secret_key(
-        keys_info["shares"], shares_count=3
+    private_key_reconstructed = wacryptolib.shared_secret.reconstruct_bytestring(
+        shares, shares_count=3, length=len(private_key)
     )
 
     assert private_key_reconstructed == private_key
+
+
+def test_remove_share():
+    key = b'\xe7i`.2{k\xf2\xe92\x04c;U[\x96'
+    shares = [(1, b'u\x87\xff"\xc3\xeb\x8a\xd5y\xa4\x99\x83\xa9y\x01\xd3'),
+              (2, b'\xc2\xb4^7\xd1Z\xa9\xbd\xc8\x1f?\xa2\x1f\r\xef\x9b'),
+              (3, b'PZ\xc1; \xcaH\x9aX\x89\xa2B\x8d!\xb5\xde'),
+              (4, b'\xac\xd3\x1c\x1d\xf48\xefl\xabhs\xe1s\xe43\x8c')]
+
+    key_reconstructed = wacryptolib.shared_secret.reconstruct_bytestring(
+        shares, shares_count=4, length=len(key)
+    )
+
+    assert key_reconstructed == key
 
 
 def test_sign_and_verify_rsa():
@@ -67,8 +80,9 @@ def test_aes_eax():
     )
 
 
-def test_sign_dsa():
-    keypair = wacryptolib.key_generation.generate_dsa_keypair(None)
+def test_sign_ecdsa():
+    # keypair = wacryptolib.key_generation.generate_dsa_keypair(None)
+    keypair = wacryptolib.key_generation.generate_ecc_keypair(None, curve="p256")
     public_key = keypair["public_key"]
     private_key = keypair["private_key"]
     binary_content = "Mon hât èst joli".encode("utf-8")
@@ -85,3 +99,31 @@ def test_sign_dsa():
     )
 
     assert timestamp == timestamp_verifier, "timestamps don't correspond"
+
+
+def test_generate_ecc_keypair():
+    keypair = wacryptolib.key_generation.generate_ecc_keypair(None, "p256")
+    assert isinstance(keypair["public_key"], ECC.EccKey), isinstance(keypair["private_key"], ECC.EccKey)
+
+
+def test_chacha20():
+    key = get_random_bytes(32)
+    binary_content = "Mon hât èst joli".encode("utf-8")
+
+    ciphertext, tag, nonce, header = wacryptolib.cipher.encrypt_via_chacha20_poly1305(key, binary_content)
+
+    deciphertext = wacryptolib.cipher.decrypt_via_chacha20_poly1305(key=key, ciphertext=ciphertext, nonce=nonce,
+                                                                    tag=tag, header=header)
+
+    assert deciphertext == binary_content
+
+
+def test_oaep():
+    keypair = wacryptolib.key_generation.generate_rsa_keypair(None)
+    binary_content = "Mon hât èst joli".encode("utf-8")
+
+    ciphertext = wacryptolib.cipher.encrypt_via_oaep(key=keypair["public_key"], plaintext=binary_content)
+
+    deciphertext = wacryptolib.cipher.decrypt_via_oaep(key=keypair["private_key"], ciphertext=ciphertext)
+
+    assert deciphertext == binary_content

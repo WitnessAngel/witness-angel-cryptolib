@@ -7,7 +7,7 @@ from Crypto.Util.Padding import pad, unpad
 
 # ---- AES/CBC ----
 def encrypt_via_aes_cbc(key: bytes, plaintext: bytes) -> bytes:
-    """Permits to encrypt a `plaintext `thanks to a `key` with the CBC mode
+    """Permits to encrypt a `plaintext` thanks to a `key` with the CBC mode
 
     :param key: the cryptographic key which will serve to decipher the cipher text
     :param plaintext: the text to cipher
@@ -36,7 +36,7 @@ def decrypt_via_aes_cbc(key: bytes, ciphertext: bytes) -> bytes:
 
 # ---- AES/EAX ----
 def encrypt_via_aes_eax(key: bytes, plaintext: bytes) -> bytes:
-    """Permits to encrypt a `plaintext `thanks to a `key` with the EAX mode
+    """Permits to encrypt a `plaintext` thanks to a `key` with the EAX mode
 
     :param key: the cryptographic key which will serve to cipher the plain text
     :param plaintext: the text to cipher
@@ -67,7 +67,7 @@ def decrypt_via_aes_eax(key: bytes, ciphertext: bytes, tag: bytes, nonce: bytes)
 
 # ---- ChaCha20 ----
 def encrypt_via_chacha20_poly1305(key: bytes, plaintext: bytes) -> bytes:
-    """Permits to encrypt a `plaintext `thanks to a `key` of 32 bytes long
+    """Permits to encrypt a `plaintext` thanks to a `key` of 32 bytes long
     with ChaCha20 which is a stream cipher.
 
     :param key: the cryptographic key which will serve to cipher the plain text
@@ -101,8 +101,8 @@ def decrypt_via_chacha20_poly1305(key: bytes, ciphertext: bytes, nonce: bytes, t
 
 
 # ---- PKCS#1 OAEP ----
-def encrypt_via_oaep(key: bytes, plaintext: bytes) -> bytes:
-    """Permits to encrypt a `plaintext `thanks to a public RSA key
+def encrypt_via_rsa_oaep(key: bytes, plaintext: bytes) -> bytes:
+    """Permits to encrypt a `plaintext` thanks to a public RSA key
 
     :param key: the cryptographic key which will serve to cipher the plain text
     :param plaintext: the text to cipher
@@ -114,7 +114,7 @@ def encrypt_via_oaep(key: bytes, plaintext: bytes) -> bytes:
     return ciphertext
 
 
-def decrypt_via_oaep(key: bytes, ciphertext: bytes) -> bytes:
+def decrypt_via_rsa_oaep(key: bytes, ciphertext: bytes) -> bytes:
     """Permits to decrypt a `ciphertext` thanks to a private RSA key
 
     :param key: the cryptographic key which will serve to decipher the cipher text

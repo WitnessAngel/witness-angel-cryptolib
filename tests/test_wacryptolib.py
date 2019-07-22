@@ -122,8 +122,8 @@ def test_oaep():
     keypair = wacryptolib.key_generation.generate_rsa_keypair(None)
     binary_content = "Mon hât èst joli".encode("utf-8")
 
-    ciphertext = wacryptolib.cipher.encrypt_via_oaep(key=keypair["public_key"], plaintext=binary_content)
+    ciphertext = wacryptolib.cipher.encrypt_via_rsa_oaep(key=keypair["public_key"], plaintext=binary_content)
 
-    deciphertext = wacryptolib.cipher.decrypt_via_oaep(key=keypair["private_key"], ciphertext=ciphertext)
+    deciphertext = wacryptolib.cipher.decrypt_via_rsa_oaep(key=keypair["private_key"], ciphertext=ciphertext)
 
     assert deciphertext == binary_content

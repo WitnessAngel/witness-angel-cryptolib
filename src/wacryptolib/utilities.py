@@ -3,18 +3,6 @@ from typing import List
 from Crypto.Util.Padding import pad, unpad
 
 
-def unpad_last_element(list_to_unpad: List[bytes]) -> List[bytes]:  #TODO -> recombine_padded_chunks()
-    """Permits to unpad the last element of a `List` of bytes.
-
-        :param list_to_unpad: list of bytes which has its last element which need to be padded
-
-        :return: list_to_unpad with the last element unpadded."""
-
-    last_element = len(list_to_unpad) - 1
-    list_to_unpad[last_element] = unpad(list_to_unpad[last_element], 16)
-    return list_to_unpad
-
-
 def split_as_padded_chunks(bytestring: bytes, chunk_size: int) -> List[bytes]:
     """Collect a `bytestring` into chunks or blocks of size defined by `chunk_size` and
         pad the last chunk when there isn't enough values initially

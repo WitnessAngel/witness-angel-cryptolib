@@ -2,41 +2,9 @@ from typing import List
 import itertools
 
 from Crypto.Protocol.SecretSharing import Shamir
+from Crypto.Util.Padding import unpad
 
-from wacryptolib.utilities import split_as_padded_chunks, unpad_last_element
-
-
-def split_128b_bytestring_into_shares(
-    bytestring: bytes, shares_count: int, threshold_count: int
-) -> List[tuple]:
-    """Split a bytestring with a maximum length of 128 bits into `shares_count`
-        shares and which can be recombined with a threshold of `threshold_count`
-
-        :param bytestring: bytestring to split
-        :param shares_count: number of shares
-        :param threshold_count: threshold of shares needed to recombine them
-
-        :return: list with the `shares_count` tuples of shares."""
-
-    shares = Shamir.split(threshold_count, shares_count, secret=bytestring)  # Splitting the key
-    assert len(shares) == shares_count, shares
-    return shares
-
-
-def recombine_shares_into_bytestring(shares: List[bytes]) -> List[bytes]:
-    """Recombine a bytestring from a list of bytes corresponding
-        to the `shares` of a key. In the `shares` list, it is possible
-        to have shares which doesn't come from the same initial message.
-
-        :param shares: list of tuples composed of the share and its corresponding number
-
-        :return: list of bytes with all the shares recombined."""
-
-    combined_shares_list = []
-    for slices in range(0, len(shares)):
-        combined_share = Shamir.combine(shares[slices])
-        combined_shares_list.append(combined_share)
-    return combined_shares_list
+from wacryptolib.utilities import split_as_padded_chunks
 
 
 def split_bytestring_as_shamir_shares(
@@ -62,7 +30,7 @@ def split_bytestring_as_shamir_shares(
 
     # Split the chunks into share
     for chunk in chunks:
-        shares = split_128b_bytestring_into_shares(chunk, shares_count, threshold_count)
+        shares = _split_128b_bytestring_into_shares(chunk, shares_count, threshold_count)
         all_shares.append(shares)
 
     all_shares = list(itertools.chain(*all_shares))
@@ -80,8 +48,41 @@ def reconstruct_bytestring(shares: List, shares_count: int, length: int) -> byte
     :return: the key reconstructed as bytes"""
 
     shares = split_as_padded_chunks(shares, shares_count)
-    combined_shares = recombine_shares_into_bytestring(shares)
+    combined_shares = _recombine_shares_into_bytestring(shares)
     if length % 16 != 0:
-        combined_shares = unpad_last_element(combined_shares)
+        combined_shares[-1] = unpad(combined_shares[-1], 16)
     key_reconstructed = b"".join(combined_shares)
     return key_reconstructed
+
+
+def _split_128b_bytestring_into_shares(
+    bytestring: bytes, shares_count: int, threshold_count: int
+) -> List[tuple]:
+    """Split a bytestring with a maximum length of 128 bits into `shares_count`
+        shares and which can be recombined with a threshold of `threshold_count`
+
+        :param bytestring: bytestring to split
+        :param shares_count: number of shares
+        :param threshold_count: threshold of shares needed to recombine them
+
+        :return: list with the `shares_count` tuples of shares."""
+
+    shares = Shamir.split(threshold_count, shares_count, secret=bytestring)  # Splitting the key
+    assert len(shares) == shares_count, shares
+    return shares
+
+
+def _recombine_shares_into_bytestring(shares: List[bytes]) -> List[bytes]:
+    """Recombine a bytestring from a list of bytes corresponding
+        to the `shares` of a key. In the `shares` list, it is possible
+        to have shares which doesn't come from the same initial message.
+
+        :param shares: list of tuples composed of the share and its corresponding number
+
+        :return: list of bytes with all the shares recombined."""
+
+    combined_shares_list = []
+    for slices in range(0, len(shares)):
+        combined_share = Shamir.combine(shares[slices])
+        combined_shares_list.append(combined_share)
+    return combined_shares_list

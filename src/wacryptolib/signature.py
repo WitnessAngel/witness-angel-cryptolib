@@ -47,9 +47,7 @@ def sign_dsa(private_key: bytes, plaintext: bytes):
     return signature, timestamp
 
 
-def verify_dsa_signature(
-    public_key: bytes, plaintext: bytes, signature: bytes, timestamp: int
-):
+def verify_dsa_signature(public_key: bytes, plaintext: bytes, signature: bytes, timestamp: int):
     """Permits to verify the authenticity of a DSA signature
 
     :param timestamp: timestamp corresponding to the signature of the plain text

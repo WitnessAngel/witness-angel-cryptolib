@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to witness_angel's documentation!
+Welcome to Witness Angel's documentation!
 =========================================
 
 .. toctree::
@@ -11,11 +11,6 @@ Welcome to witness_angel's documentation!
    :caption: Contents:
    
    api
-   signature
-   cipher
-   shared_secret
-   utilities
-
    containers
    algorithms_overview
 

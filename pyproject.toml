@@ -13,14 +13,12 @@ authors = []
 [tool.poetry.dependencies]
 python = "^3.7.2"
 
-# Cryptography
-# todo CLEANUP ALL BUT PYCROPTODOME
-bcrypt = "^3.1"
-argon2-cffi = "^19.1"
-cryptography = "^2.7"
-pycryptodome = "^3.8"
-ecdsa = "^0.13.2"
+# Django
+Django = "^2.2"
+json-rpc-django = "^1.0"
 
+# Cryptography
+pycryptodome = "^3.8"
 
 [tool.poetry.dev-dependencies]
 

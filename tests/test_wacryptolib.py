@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from Crypto.PublicKey import RSA, ECC
 from Crypto.Random import get_random_bytes
 
@@ -86,19 +84,15 @@ def test_sign_ecdsa():
     public_key = keypair["public_key"]
     private_key = keypair["private_key"]
     binary_content = "Mon hât èst joli".encode("utf-8")
-    timestamp_verifier = datetime.timestamp(datetime.now())
 
-    signature, timestamp = wacryptolib.signature.sign_dsa(
+    signature = wacryptolib.signature.sign_dsa(
         private_key=private_key, plaintext=binary_content
     )
     wacryptolib.signature.verify_dsa_signature(
         public_key=public_key,
         plaintext=binary_content,
         signature=signature,
-        timestamp=timestamp,
     )
-
-    assert timestamp == timestamp_verifier, "timestamps don't correspond"
 
 
 def test_generate_ecc_keypair():

@@ -19,6 +19,8 @@ from django.conf.urls import url
 import jsonrpc.views
 from jsonrpc import jsonrpc_site
 
+from . import views
+
 urlpatterns = [
     url(r'^json/browse/', jsonrpc.views.browse, name="jsonrpc_browser"),
     url(r'^json/', jsonrpc_site.dispatch, name="jsonrpc_mountpoint"),

@@ -20,6 +20,8 @@ json-rpc-django = "^1.0"
 # Cryptography
 pycryptodome = "^3.8"
 django-json-rpc = "^0.7.2"
+schema = "^0.7.0"
+click = "^7.0"
 
 [tool.poetry.dev-dependencies]
 

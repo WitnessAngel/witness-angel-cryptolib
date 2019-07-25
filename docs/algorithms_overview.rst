@@ -5,6 +5,15 @@ Overview of Algorithms
 
 This document describes he different technologies available in modern cryptography, in particular the selected algorithms and their worthy or obsolete alternatives.
 
+
+Invariants
+----------------
+
+Unless specified otherwise, UTF-8 is assumed as the encoding of all text data.
+
+When a serialization format doesn't natively support binary strings (e.g. Json), binary strings must be encoded with Base-64 by default.
+
+
 Safety and performance rules
 --------------------------------
 

@@ -1,7 +1,21 @@
-from Crypto.PublicKey import RSA, ECC
+from Crypto.PublicKey import RSA, ECC, DSA
 from Crypto.Random import get_random_bytes
 
+import uuid
+
 import wacryptolib
+
+
+# def test_generate_keypair_uid():
+#     uid1 = uuid.UUID('12345678-1234-5678-1234-567812345678')
+#     uid2 = uuid.uuid4()
+#     keypair1 = wacryptolib.key_generation.generate_rsa_keypair(uid=uid1)
+#     keypair2 = wacryptolib.key_generation.generate_rsa_keypair(uid=uid1)
+#     keypair3 = wacryptolib.key_generation.generate_rsa_keypair(uid=uid2)
+#
+#     cond1 = keypair1["private_key"] == keypair2["private_key"]
+#     cond2 = keypair3["private_key"] != keypair1["private_key"]
+#     assert cond1 and cond2
 
 
 def test_split_bytestring_as_shamir_shares():
@@ -15,7 +29,7 @@ def test_split_bytestring_as_shamir_shares():
     )
 
     private_key_reconstructed = wacryptolib.shared_secret.reconstruct_bytestring(
-        shares, shares_count=3, length=len(private_key)
+        shares, shares_count=3, bytestring_length=len(private_key)
     )
 
     assert private_key_reconstructed == private_key
@@ -29,7 +43,7 @@ def test_remove_share():
               (4, b'\xac\xd3\x1c\x1d\xf48\xefl\xabhs\xe1s\xe43\x8c')]
 
     key_reconstructed = wacryptolib.shared_secret.reconstruct_bytestring(
-        shares, shares_count=4, length=len(key)
+        shares, shares_count=4, bytestring_length=len(key)
     )
 
     assert key_reconstructed == key
@@ -37,61 +51,70 @@ def test_remove_share():
 
 def test_sign_and_verify_rsa():
     keypair = wacryptolib.key_generation.generate_rsa_keypair(None)
-    data_hash, signature = wacryptolib.signature.sign_rsa(
-        private_key=RSA.RsaKey.export_key(keypair["private_key"]), plaintext=b"Hello"
+    signature = wacryptolib.signature.sign_rsa(
+        private_key=keypair["private_key"], plaintext=b"Hello"
     )
 
-    wacryptolib.signature.verify_rsa_signature(
-        public_key=RSA.RsaKey.export_key(keypair["public_key"]),
-        data_hash=data_hash,
+    wacryptolib.signature.verify_signature(
+        public_key=keypair["public_key"],
+        plaintext=b"Hello",
         signature=signature,
     )
 
 
-def test_aes_cbc():
+def test_sign_and_verify_ecdsa():
+    keypair = wacryptolib.key_generation.generate_ecc_keypair(None, curve="p256")
+    signature = wacryptolib.signature.sign_dsa(
+        private_key=keypair["private_key"], plaintext="Mon hât èst joli".encode("utf-8")
+    )
+
+    wacryptolib.signature.verify_signature(
+        public_key=keypair["public_key"],
+        plaintext="Mon hât èst joli".encode("utf-8"),
+        signature=signature,
+    )
+
+
+def test_sign_and_verify_dsa():
+    keypair = wacryptolib.key_generation.generate_dsa_keypair(None)
+    signature = wacryptolib.signature.sign_dsa(
+        private_key=keypair["private_key"], plaintext="Mon hât èst joli".encode("utf-8")
+    )
+
+    wacryptolib.signature.verify_signature(
+        public_key=keypair["public_key"],
+        plaintext="Mon hât èst joli".encode("utf-8"),
+        signature=signature,
+    )
+
+
+def test_aes_cbc_encryption_and_decryption():
     key = get_random_bytes(16)
 
     binary_content = "Mon hât èst joli".encode("utf-8")
 
-    cipher_text = wacryptolib.cipher.encrypt_via_aes_cbc(
+    iv_and_ciphertext = wacryptolib.cipher.encrypt_via_aes_cbc(
         key=key, plaintext=binary_content
     )
 
     decipher_text = wacryptolib.cipher.decrypt_via_aes_cbc(
-        key=key, ciphertext=cipher_text
+        key=key, iv_and_ciphertext=iv_and_ciphertext
     )
 
     assert decipher_text == binary_content
 
 
-def test_aes_eax():
+def test_aes_eax_encryption_and_decryption():
     key = get_random_bytes(16)
 
     binary_content = "Mon hât èst joli".encode("utf-8")
 
-    ciphertext, tag, nonce = wacryptolib.cipher.encrypt_via_aes_eax(
+    encryption = wacryptolib.cipher.encrypt_via_aes_eax(
         key=key, plaintext=binary_content
     )
 
     wacryptolib.cipher.decrypt_via_aes_eax(
-        key=key, ciphertext=ciphertext, tag=tag, nonce=nonce
-    )
-
-
-def test_sign_ecdsa():
-    # keypair = wacryptolib.key_generation.generate_dsa_keypair(None)
-    keypair = wacryptolib.key_generation.generate_ecc_keypair(None, curve="p256")
-    public_key = keypair["public_key"]
-    private_key = keypair["private_key"]
-    binary_content = "Mon hât èst joli".encode("utf-8")
-
-    signature = wacryptolib.signature.sign_dsa(
-        private_key=private_key, plaintext=binary_content
-    )
-    wacryptolib.signature.verify_dsa_signature(
-        public_key=public_key,
-        plaintext=binary_content,
-        signature=signature,
+        key=key, encryption=encryption
     )
 
 
@@ -100,19 +123,18 @@ def test_generate_ecc_keypair():
     assert isinstance(keypair["public_key"], ECC.EccKey), isinstance(keypair["private_key"], ECC.EccKey)
 
 
-def test_chacha20():
+def test_chacha20_symetric_encryption_and_decryption():
     key = get_random_bytes(32)
     binary_content = "Mon hât èst joli".encode("utf-8")
 
-    ciphertext, tag, nonce, header = wacryptolib.cipher.encrypt_via_chacha20_poly1305(key, binary_content)
+    encryption = wacryptolib.cipher.encrypt_via_chacha20_poly1305(key, binary_content, header=b"header")
 
-    deciphertext = wacryptolib.cipher.decrypt_via_chacha20_poly1305(key=key, ciphertext=ciphertext, nonce=nonce,
-                                                                    tag=tag, header=header)
+    deciphertext = wacryptolib.cipher.decrypt_via_chacha20_poly1305(key=key, encryption=encryption)
 
     assert deciphertext == binary_content
 
 
-def test_oaep():
+def test_rsa_oaep_encryption_and_decryption():
     keypair = wacryptolib.key_generation.generate_rsa_keypair(None)
     binary_content = "Mon hât èst joli".encode("utf-8")
 
@@ -121,3 +143,21 @@ def test_oaep():
     deciphertext = wacryptolib.cipher.decrypt_via_rsa_oaep(key=keypair["private_key"], ciphertext=ciphertext)
 
     assert deciphertext == binary_content
+
+
+def test_publickey_generation_with_optional_parameters():
+    keypair_rsa = wacryptolib.key_generation.generate_public_key(None, "RSA", 1024)
+    assert isinstance(keypair_rsa["public_key"], RSA.RsaKey)
+    keypair_dsa = wacryptolib.key_generation.generate_public_key(None, "DSA", 1024)
+    assert isinstance(keypair_dsa["public_key"], DSA.DsaKey)
+    keypair_ecc = wacryptolib.key_generation.generate_public_key(None, "ECC", "p384")
+    assert isinstance(keypair_ecc["public_key"], ECC.EccKey)
+
+
+def test_publickey_generation_without_optional_parameters():
+    keypair_rsa = wacryptolib.key_generation.generate_public_key(None, "RSA")
+    assert isinstance(keypair_rsa["public_key"], RSA.RsaKey)
+    keypair_dsa = wacryptolib.key_generation.generate_public_key(None, "DSA")
+    assert isinstance(keypair_dsa["public_key"], DSA.DsaKey)
+    keypair_ecc = wacryptolib.key_generation.generate_public_key(None, "ECC")
+    assert isinstance(keypair_ecc["public_key"], ECC.EccKey)

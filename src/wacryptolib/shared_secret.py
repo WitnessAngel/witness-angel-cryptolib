@@ -25,8 +25,7 @@ def split_bytestring_as_shamir_shares(
 
     # Split the private key into N tuples of 16 bytes in order to split each of them into shares
     # and add the value 0 at the end of the last tuple if there is not enough values to have 16 bytes
-    split_prkey = split_as_padded_chunks(bytestring, 16)
-    chunks = tuple(split_prkey)
+    chunks = split_as_padded_chunks(bytestring, 16)
 
     # Split the chunks into share
     for chunk in chunks:
@@ -34,10 +33,10 @@ def split_bytestring_as_shamir_shares(
         all_shares.append(shares)
 
     all_shares = list(itertools.chain(*all_shares))
-    return all_shares
+    return all_shares  # FIXME, this func must return 3 long bytestrings, each with all the shares of index i
 
 
-def reconstruct_bytestring(shares: List, shares_count: int, length: int) -> bytes:
+def reconstruct_bytestring(shares: List, shares_count: int, bytestring_length: int) -> bytes:
     """Permits to reconstruct a key which has its secret shared
     into `shares_count` shares thanks to a list of `shares`
 
@@ -48,11 +47,11 @@ def reconstruct_bytestring(shares: List, shares_count: int, length: int) -> byte
     :return: the key reconstructed as bytes"""
 
     shares = split_as_padded_chunks(shares, shares_count)
-    combined_shares = _recombine_shares_into_bytestring(shares)
-    if length % 16 != 0:
+    combined_shares = _recombine_shares_into_list(shares)
+    if bytestring_length % 16 != 0:
         combined_shares[-1] = unpad(combined_shares[-1], 16)
-    key_reconstructed = b"".join(combined_shares)
-    return key_reconstructed
+    bytestring_reconstructed = b"".join(combined_shares)
+    return bytestring_reconstructed
 
 
 def _split_128b_bytestring_into_shares(
@@ -72,9 +71,9 @@ def _split_128b_bytestring_into_shares(
     return shares
 
 
-def _recombine_shares_into_bytestring(shares: List[bytes]) -> List[bytes]:
-    """Recombine a bytestring from a list of bytes corresponding
-        to the `shares` of a key. In the `shares` list, it is possible
+def _recombine_shares_into_list(shares: List[bytes]) -> List[bytes]:
+    """Recombine shares from a list of bytes corresponding
+        to the `shares` of a bytestring. In the `shares` list, it is possible
         to have shares which doesn't come from the same initial message.
 
         :param shares: list of tuples composed of the share and its corresponding number

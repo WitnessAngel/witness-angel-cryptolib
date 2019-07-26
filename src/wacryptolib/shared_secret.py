@@ -1,4 +1,5 @@
 from typing import List
+
 import itertools
 
 from Crypto.Protocol.SecretSharing import Shamir
@@ -32,22 +33,53 @@ def split_bytestring_as_shamir_shares(
         shares = _split_128b_bytestring_into_shares(chunk, shares_count, threshold_count)
         all_shares.append(shares)
 
-    all_shares = list(itertools.chain(*all_shares))
-    return all_shares  # FIXME, this func must return 3 long bytestrings, each with all the shares of index i
+    all_shares = list(map(list, zip(*all_shares)))
+    shares_long_bytestring = {}
+
+    for index in range(0, len(all_shares)):
+        bytestring = b""
+        for share in range(0, len(all_shares[index])):
+            bytestring += all_shares[index][share][1]
+            if share == len(all_shares[index])-1:
+                shares_long_bytestring[index] = bytestring
+
+    return shares_long_bytestring  # FIXME, this func must return 3 long bytestrings, each with all the shares of
+    # (FIXME) index i
 
 
-def reconstruct_bytestring(shares: List, shares_count: int, bytestring_length: int) -> bytes:
+def reconstruct_bytestring(shares_long_bytestring: dict, shares_count: int, bytestring_length: int) -> bytes:
     """Permits to reconstruct a key which has its secret shared
     into `shares_count` shares thanks to a list of `shares`
 
-    :param length: length of the bytestring to reconstruct
+    :param bytestring_length: length of the bytestring to reconstruct
     :param shares_count: number of shares
     :param shares: a list of tuple of shares
 
     :return: the key reconstructed as bytes"""
 
-    shares = split_as_padded_chunks(shares, shares_count)
-    combined_shares = _recombine_shares_into_list(shares)
+    shares = []
+    for index in range(0, 3):
+        long_bytestring = shares_long_bytestring[index]
+        split_long_bytestring = split_as_padded_chunks(long_bytestring, 16)
+        for slice in range(0, len(split_long_bytestring)):
+            share = index+1, split_long_bytestring[slice]
+            shares.append(share)
+
+    shares1 = []
+    shares2 = []
+    shares3 = []
+
+    for share in range(len(shares)):
+        if shares[share][0] == 1:
+            shares1.append(shares[share])
+        elif shares[share][0] == 2:
+            shares2.append(shares[share])
+        elif shares[share][0] == 3:
+            shares3.append(shares[share])
+
+    all_shares = list(zip(shares1, shares2, shares3))
+
+    combined_shares = _recombine_shares_into_list(all_shares)
     if bytestring_length % 16 != 0:
         combined_shares[-1] = unpad(combined_shares[-1], 16)
     bytestring_reconstructed = b"".join(combined_shares)

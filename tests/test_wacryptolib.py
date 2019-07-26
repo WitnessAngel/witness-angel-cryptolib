@@ -35,20 +35,6 @@ def test_split_bytestring_as_shamir_shares():
     assert private_key_reconstructed == private_key
 
 
-def test_remove_share():
-    key = b'\xe7i`.2{k\xf2\xe92\x04c;U[\x96'
-    shares = [(1, b'u\x87\xff"\xc3\xeb\x8a\xd5y\xa4\x99\x83\xa9y\x01\xd3'),
-              (2, b'\xc2\xb4^7\xd1Z\xa9\xbd\xc8\x1f?\xa2\x1f\r\xef\x9b'),
-              (3, b'PZ\xc1; \xcaH\x9aX\x89\xa2B\x8d!\xb5\xde'),
-              (4, b'\xac\xd3\x1c\x1d\xf48\xefl\xabhs\xe1s\xe43\x8c')]
-
-    key_reconstructed = wacryptolib.shared_secret.reconstruct_bytestring(
-        shares, shares_count=4, bytestring_length=len(key)
-    )
-
-    assert key_reconstructed == key
-
-
 def test_sign_and_verify_rsa():
     keypair = wacryptolib.key_generation.generate_rsa_keypair(None)
     signature = wacryptolib.signature.sign_rsa(

@@ -31,7 +31,8 @@ def cli(ctx, config):
 
 
 def _sign_content(content, algo):
-    pass # HASH content and then send it to proper cryptolib function
+    pass  # HASH content and then send it to proper cryptolib function
+
 
 def get_cryptolib_proxy():
     """
@@ -42,6 +43,7 @@ def get_cryptolib_proxy():
     """
     import wacryptolib
     return wacryptolib
+
 
 def _do_encrypt(plaintext):
     """
@@ -118,8 +120,6 @@ def decrypt(input_container, output_medium):
 
     with output_medium:
         output_medium.write(medium_content)
-
-
 
 
 if __name__ == '__main__':

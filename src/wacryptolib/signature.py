@@ -73,7 +73,9 @@ def _get_timestamp():
 
     :return: timestamp in bytes
     """
-    return bytes(int(datetime.timestamp(datetime.now())))
+    int_ts = int(datetime.timestamp(datetime.now()))
+    byte_timestamp = int_ts.to_bytes(int_ts.bit_length() // 8 + 1, byteorder='little')
+    return byte_timestamp
 
 
 def timestamping_authority(plaintext: bytes, timestamp: bytes):

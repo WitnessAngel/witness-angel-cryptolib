@@ -3,10 +3,11 @@ from base64 import b64decode, b64encode
 from Crypto.Random import get_random_bytes
 from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
 from Crypto.Util.Padding import pad, unpad
+from Crypto.PublicKey import RSA
 
 
 # ---- AES/CBC ----
-def encrypt_via_aes_cbc(key: bytes, plaintext: bytes) -> bytes:
+def encrypt_via_aes_cbc(key: bytes, plaintext: bytes) -> dict:
     """Permits to encrypt a `plaintext` thanks to a `key` with the CBC mode
 
     :param key: the cryptographic key which will serve to decipher the cipher text
@@ -21,7 +22,7 @@ def encrypt_via_aes_cbc(key: bytes, plaintext: bytes) -> bytes:
     return iv_and_ciphertext
 
 
-def decrypt_via_aes_cbc(key: bytes, iv_and_ciphertext: bytes) -> bytes:
+def decrypt_via_aes_cbc(key: bytes, iv_and_ciphertext: dict) -> bytes:
     """Permits to decrypt a `ciphertext` in base 64 thanks to a `key`
 
     :param key: the cryptographic key which will serve to cipher the plain text
@@ -48,11 +49,7 @@ def encrypt_via_aes_eax(key: bytes, plaintext: bytes) -> dict:
     cipher = AES.new(key, AES.MODE_EAX)
     nonce = cipher.nonce
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
-    encryption = {
-        "ciphertext": ciphertext,
-        "tag": tag,
-        "nonce": nonce
-    }
+    encryption = {"ciphertext": ciphertext, "tag": tag, "nonce": nonce}
     return encryption
 
 
@@ -71,7 +68,7 @@ def decrypt_via_aes_eax(key: bytes, encryption: dict) -> bytes:
 
 
 # ---- ChaCha20 ----
-def encrypt_via_chacha20_poly1305(key: bytes, plaintext: bytes, header: bytes) -> dict:
+def encrypt_via_chacha20_poly1305(key: bytes, plaintext: bytes, header: bytes = b"header") -> dict:
     """Permits to encrypt a `plaintext` thanks to a `key` of 32 bytes long
     with ChaCha20 which is a stream cipher.
 
@@ -89,7 +86,7 @@ def encrypt_via_chacha20_poly1305(key: bytes, plaintext: bytes, header: bytes) -
         "ciphertext": ciphertext,
         "tag": tag,
         "nonce": nonce,
-        "header": header
+        "header": header,
     }
     return encryption
 
@@ -104,12 +101,14 @@ def decrypt_via_chacha20_poly1305(key: bytes, encryption: dict) -> bytes:
 
     decipher = ChaCha20_Poly1305.new(key=key, nonce=encryption["nonce"])
     decipher.update(encryption["header"])
-    deciphertext = decipher.decrypt_and_verify(ciphertext=encryption["ciphertext"], received_mac_tag=encryption["tag"])
+    deciphertext = decipher.decrypt_and_verify(
+        ciphertext=encryption["ciphertext"], received_mac_tag=encryption["tag"]
+    )
     return deciphertext
 
 
 # ---- PKCS#1 OAEP ----
-def encrypt_via_rsa_oaep(key: bytes, plaintext: bytes) -> bytes:
+def encrypt_via_rsa_oaep(key: RSA.RsaKey, plaintext: bytes) -> bytes:
     """Permits to encrypt a `plaintext` thanks to a public RSA key
 
     :param key: the cryptographic key which will serve to cipher the plain text
@@ -122,7 +121,7 @@ def encrypt_via_rsa_oaep(key: bytes, plaintext: bytes) -> bytes:
     return ciphertext
 
 
-def decrypt_via_rsa_oaep(key: bytes, ciphertext: bytes) -> bytes:
+def decrypt_via_rsa_oaep(key: RSA.RsaKey, ciphertext: bytes) -> bytes:
     """Permits to decrypt a `ciphertext` thanks to a private RSA key
 
     :param key: the cryptographic key which will serve to decipher the cipher text

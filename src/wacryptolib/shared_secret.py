@@ -30,7 +30,9 @@ def split_bytestring_as_shamir_shares(
 
     # Split the chunks into share
     for chunk in chunks:
-        shares = _split_128b_bytestring_into_shares(chunk, shares_count, threshold_count)
+        shares = _split_128b_bytestring_into_shares(
+            chunk, shares_count, threshold_count
+        )
         all_shares.append(shares)
 
     all_shares = list(map(list, zip(*all_shares)))
@@ -40,14 +42,18 @@ def split_bytestring_as_shamir_shares(
         bytestring = b""
         for share in range(0, len(all_shares[index])):
             bytestring += all_shares[index][share][1]
-            if share == len(all_shares[index])-1:
+            if share == len(all_shares[index]) - 1:
                 shares_long_bytestring[index] = bytestring
 
-    return shares_long_bytestring  # FIXME, this func must return 3 long bytestrings, each with all the shares of
+    return (
+        shares_long_bytestring
+    )  # FIXME, this func must return 3 long bytestrings, each with all the shares of
     # (FIXME) index i
 
 
-def reconstruct_bytestring(shares_long_bytestring: dict, shares_count: int, bytestring_length: int) -> bytes:
+def reconstruct_bytestring(
+    shares_long_bytestring: dict, shares_count: int, bytestring_length: int
+) -> bytes:
     """Permits to reconstruct a key which has its secret shared
     into `shares_count` shares thanks to a list of `shares`
 
@@ -62,7 +68,7 @@ def reconstruct_bytestring(shares_long_bytestring: dict, shares_count: int, byte
         long_bytestring = shares_long_bytestring[index]
         split_long_bytestring = split_as_padded_chunks(long_bytestring, 16)
         for slice in range(0, len(split_long_bytestring)):
-            share = index+1, split_long_bytestring[slice]
+            share = index + 1, split_long_bytestring[slice]
             shares.append(share)
 
     shares1 = []
@@ -98,7 +104,9 @@ def _split_128b_bytestring_into_shares(
 
         :return: list with the `shares_count` tuples of shares."""
 
-    shares = Shamir.split(threshold_count, shares_count, secret=bytestring)  # Splitting the key
+    shares = Shamir.split(
+        threshold_count, shares_count, secret=bytestring
+    )  # Splitting the key
     assert len(shares) == shares_count, shares
     return shares
 

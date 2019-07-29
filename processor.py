@@ -1,6 +1,11 @@
 import json
 import sys
 import pathlib
+import uuid
+
+from Crypto.Random import get_random_bytes
+from src.wacryptolib import key_generation, cipher
+from src.wacryptolib.signature import sign_rsa, sign_dsa
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
@@ -10,8 +15,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[0]
 assert (ROOT / "manage.py").exists()
 sys.path.append(str(ROOT / "src"))
 
-
-CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 CONTAINER_SUFFIX = ".crypt"
 MEDIUM_SUFFIX = ".medium"
@@ -23,15 +27,33 @@ DEFAULT_ENCODING = "utf8"
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
-@click.option("-c", '--config', default=None, help='Json configuration file', type=click.File('rb'))
+@click.option(
+    "-c",
+    "--config",
+    default=None,
+    help="Json configuration file",
+    type=click.File("rb"),
+)
 @click.pass_context
 def cli(ctx, config):
     ctx.ensure_object(dict)
-    ctx.obj['config'] = config  # TODO read and validate this file later
+    ctx.obj["config"] = config  # TODO read and validate this file later
 
 
 def _sign_content(content, algo):
-    pass  # HASH content and then send it to proper cryptolib function
+    # HASH content and then send it to proper cryptolib function
+    signer_generator = dict(
+        RSA={"sign_function": sign_rsa,
+             "keypair": key_generation.generate_public_key(uid=None, key_type="RSA")},
+        DSA={"sign_function": sign_dsa,
+             "keypair": key_generation.generate_public_key(uid=None, key_type="DSA")}
+    )
+
+    generation_func = signer_generator[algo]["sign_function"]
+    keypair = signer_generator[algo]["keypair"]
+    signature = generation_func(keypair["private_key"], content)
+
+    return signature
 
 
 def get_cryptolib_proxy():
@@ -41,8 +63,9 @@ def get_cryptolib_proxy():
 
     We shall ensure that the wacryptolib root package and the proxy both expose the same high level functions like "generate_public_key(uid, ...)"
     """
-    import wacryptolib
-    return wacryptolib
+    import src.wacryptolib
+
+    return src.wacryptolib
 
 
 def _do_encrypt(plaintext):
@@ -69,23 +92,68 @@ def _do_encrypt(plaintext):
 
 
     """
-    return {"aa":33, "bb": {"toto": True}, "medium_content": plaintext}
+    uid = uuid.uuid4()
+
+    # ---- 1ST ENCRYPTION (WITH AES) ----
+    cipher_aes_key = get_random_bytes(16)
+    encryption_aes = cipher.encrypt_via_aes_eax(key=cipher_aes_key, plaintext=plaintext)
+
+    rsa_keypair_cipher = key_generation.generate_public_key(uid=uid, key_type="RSA")
+    encrypted_cipher_key_aes = cipher.encrypt_via_rsa_oaep(key=rsa_keypair_cipher["private_key"],
+                                                           plaintext=cipher_aes_key)
+    rsa_keypair_sign = key_generation.generate_public_key(uid=uid, key_type="RSA")
+    signed_ciphertext_rsa = _sign_content(content=encryption_aes["ciphertext"], algo="RSA")
+
+    # ---- 2ND ENCRYPTION (WITH CHACHA20) ----
+    cipher_chacha_key = get_random_bytes(32)
+    encryption_chacha = cipher.encrypt_via_chacha20_poly1305(key=cipher_chacha_key,
+                                                             plaintext=encryption_aes["ciphertext"])
+
+    rsa_keypair_cipher2 = key_generation.generate_public_key(uid=uid, key_type="RSA")
+    encrypted_cipher_key_chacha = cipher.encrypt_via_rsa_oaep(key=rsa_keypair_cipher2["private_key"],
+                                                              plaintext=cipher_chacha_key)
+
+    dsa_keypair_sign = key_generation.generate_public_key(uid=uid, key_type="DSA")
+    signed_ciphertext_dsa = _sign_content(content=encryption_chacha["ciphertext"], algo="DSA")
+
+    return {
+        "1": {"encrypted_cipher_key": encrypted_cipher_key_aes,
+              "rsa_keypair_sign": rsa_keypair_sign,
+              "signed_ciphertext_rsa": signed_ciphertext_rsa},
+        "2": {"encrypted_cipher_key": encrypted_cipher_key_chacha,
+              "rsa_keypair_sign": dsa_keypair_sign,
+              "signed_ciphertext_rsa": signed_ciphertext_dsa}}
 
 
 @cli.command()
-@click.option("-i", "--input-medium", type=click.File('r', encoding=DEFAULT_ENCODING), required=True)
-@click.option("-o", "--output-container", type=click.File('w', encoding=DEFAULT_ENCODING))
+@click.option(
+    "-i",
+    "--input-medium",
+    type=click.File("r", encoding=DEFAULT_ENCODING),
+    required=True,
+)
+@click.option(
+    "-o", "--output-container", type=click.File("w", encoding=DEFAULT_ENCODING)
+)
 def encrypt(input_medium, output_container):
     """Turn a media file into a secure container."""
     if not output_container:
-        output_container = LazyFile(input_medium.name + CONTAINER_SUFFIX, "w", encoding=DEFAULT_ENCODING)
+        output_container = LazyFile(
+            input_medium.name + CONTAINER_SUFFIX, "w", encoding=DEFAULT_ENCODING
+        )
     click.echo("In encrypt: %s" % str(locals()))
 
     # FIXME here compute real container data
     container_data = _do_encrypt(plaintext=input_medium.read())
 
     with output_container:
-        container_data_str = json.dump(container_data, fp=output_container, sort_keys=True, indent=4, cls=DjangoJSONEncoder)
+        container_data_str = json.dump(
+            container_data,
+            fp=output_container,
+            sort_keys=True,
+            indent=4,
+            cls=DjangoJSONEncoder,
+        )
 
 
 def _do_decrypt(container_data):
@@ -93,7 +161,7 @@ def _do_decrypt(container_data):
     TODO:
 
         This function must be able to decrypt the container created by _do_encrypt().
-        It must not rely on any external config, all data (uids, algos, digests...) is suppoed to be in the container_data.
+        It must not rely on any external config, all data (uids, algos, digests...) is supposed to be in the container_data.
 
     """
     plaintext = container_data["medium_content"]
@@ -101,13 +169,18 @@ def _do_decrypt(container_data):
 
 
 @cli.command()
-@click.option("-i", "--input-container", type=click.File('r', encoding=DEFAULT_ENCODING), required=True)
-@click.option("-o", "--output-medium", type=click.File('w', encoding=DEFAULT_ENCODING))
+@click.option(
+    "-i",
+    "--input-container",
+    type=click.File("r", encoding=DEFAULT_ENCODING),
+    required=True,
+)
+@click.option("-o", "--output-medium", type=click.File("w", encoding=DEFAULT_ENCODING))
 def decrypt(input_container, output_medium):
     """Turn a container file back into its original media file."""
     if not output_medium:
         if input_container.name.endswith(CONTAINER_SUFFIX):
-            output_medium_name = input_container.name[:-len(CONTAINER_SUFFIX)]
+            output_medium_name = input_container.name[: -len(CONTAINER_SUFFIX)]
         else:
             output_medium_name = input_container.name + MEDIUM_SUFFIX
         output_medium = LazyFile(output_medium_name, "w", encoding=DEFAULT_ENCODING)
@@ -122,5 +195,5 @@ def decrypt(input_container, output_medium):
         output_medium.write(medium_content)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

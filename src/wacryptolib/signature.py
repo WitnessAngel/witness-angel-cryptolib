@@ -19,11 +19,7 @@ def sign_rsa(private_key: RSA.RsaKey, plaintext: bytes):
     hash_payload = timestamping_authority(plaintext=plaintext, timestamp=timestamp)
     signer = pss.new(private_key)
     digest = signer.sign(hash_payload)
-    signature = {
-        "type": "RSA",
-        "timestamp_utc": timestamp,
-        "digest": digest
-    }
+    signature = {"type": "RSA", "timestamp_utc": timestamp, "digest": digest}
     return signature
 
 
@@ -40,16 +36,16 @@ def sign_dsa(private_key: DSA.DsaKey, plaintext: bytes) -> dict:
     timestamp = _get_timestamp()
     hash_payload = timestamping_authority(plaintext=plaintext, timestamp=timestamp)
     signer = DSS.new(private_key, "fips-186-3")
-    digest = signer.sign(hash_payload)  # Signature of the hash concatenated to the timestamp
-    signature = {
-        "type": "DSA",
-        "timestamp_utc": timestamp,
-        "digest": digest
-    }
+    digest = signer.sign(
+        hash_payload
+    )  # Signature of the hash concatenated to the timestamp
+    signature = {"type": "DSA", "timestamp_utc": timestamp, "digest": digest}
     return signature
 
 
-def verify_signature(public_key: Union[DSA.DsaKey, RSA.RsaKey], plaintext: bytes, signature: dict):
+def verify_signature(
+    public_key: Union[DSA.DsaKey, RSA.RsaKey], plaintext: bytes, signature: dict
+):
     """Permits to verify the authenticity of a signature
 
     :param public_key: the cryptographic key which will serve to verify the signature
@@ -58,7 +54,9 @@ def verify_signature(public_key: Union[DSA.DsaKey, RSA.RsaKey], plaintext: bytes
 
     :return: the timestamp"""
 
-    hash_payload = timestamping_authority(plaintext=plaintext, timestamp=signature["timestamp_utc"])
+    hash_payload = timestamping_authority(
+        plaintext=plaintext, timestamp=signature["timestamp_utc"]
+    )
     if signature["type"] == "RSA":
         verifier = pss.new(public_key)
     elif signature["type"] == "DSA":
@@ -74,7 +72,7 @@ def _get_timestamp():
     :return: timestamp in bytes
     """
     int_ts = int(datetime.timestamp(datetime.now()))
-    byte_timestamp = int_ts.to_bytes(int_ts.bit_length() // 8 + 1, byteorder='little')
+    byte_timestamp = int_ts.to_bytes(int_ts.bit_length() // 8 + 1, byteorder="little")
     return byte_timestamp
 
 

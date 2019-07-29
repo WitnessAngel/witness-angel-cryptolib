@@ -23,9 +23,7 @@ def test_split_bytestring_as_shamir_shares():
     private_key = RSA.RsaKey.export_key(keypair["private_key"])
 
     shares = wacryptolib.shared_secret.split_bytestring_as_shamir_shares(
-        bytestring=private_key,
-        shares_count=3,
-        threshold_count=2,
+        bytestring=private_key, shares_count=3, threshold_count=2
     )
 
     private_key_reconstructed = wacryptolib.shared_secret.reconstruct_bytestring(
@@ -42,9 +40,7 @@ def test_sign_and_verify_rsa():
     )
 
     wacryptolib.signature.verify_signature(
-        public_key=keypair["public_key"],
-        plaintext=b"Hello",
-        signature=signature,
+        public_key=keypair["public_key"], plaintext=b"Hello", signature=signature
     )
 
 
@@ -99,23 +95,27 @@ def test_aes_eax_encryption_and_decryption():
         key=key, plaintext=binary_content
     )
 
-    wacryptolib.cipher.decrypt_via_aes_eax(
-        key=key, encryption=encryption
-    )
+    wacryptolib.cipher.decrypt_via_aes_eax(key=key, encryption=encryption)
 
 
 def test_generate_ecc_keypair():
     keypair = wacryptolib.key_generation.generate_ecc_keypair(None, "p256")
-    assert isinstance(keypair["public_key"], ECC.EccKey), isinstance(keypair["private_key"], ECC.EccKey)
+    assert isinstance(keypair["public_key"], ECC.EccKey), isinstance(
+        keypair["private_key"], ECC.EccKey
+    )
 
 
 def test_chacha20_symetric_encryption_and_decryption():
     key = get_random_bytes(32)
     binary_content = "Mon hât èst joli".encode("utf-8")
 
-    encryption = wacryptolib.cipher.encrypt_via_chacha20_poly1305(key, binary_content, header=b"header")
+    encryption = wacryptolib.cipher.encrypt_via_chacha20_poly1305(
+        key, binary_content, header=b"header"
+    )
 
-    deciphertext = wacryptolib.cipher.decrypt_via_chacha20_poly1305(key=key, encryption=encryption)
+    deciphertext = wacryptolib.cipher.decrypt_via_chacha20_poly1305(
+        key=key, encryption=encryption
+    )
 
     assert deciphertext == binary_content
 
@@ -124,9 +124,13 @@ def test_rsa_oaep_encryption_and_decryption():
     keypair = wacryptolib.key_generation.generate_rsa_keypair(None)
     binary_content = "Mon hât èst joli".encode("utf-8")
 
-    ciphertext = wacryptolib.cipher.encrypt_via_rsa_oaep(key=keypair["public_key"], plaintext=binary_content)
+    ciphertext = wacryptolib.cipher.encrypt_via_rsa_oaep(
+        key=keypair["public_key"], plaintext=binary_content
+    )
 
-    deciphertext = wacryptolib.cipher.decrypt_via_rsa_oaep(key=keypair["private_key"], ciphertext=ciphertext)
+    deciphertext = wacryptolib.cipher.decrypt_via_rsa_oaep(
+        key=keypair["private_key"], ciphertext=ciphertext
+    )
 
     assert deciphertext == binary_content
 

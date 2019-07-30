@@ -4,7 +4,7 @@ import pathlib
 import uuid
 
 from Crypto.Random import get_random_bytes
-from src.wacryptolib import key_generation, cipher
+from src.wacryptolib import key_generation, cipher, signature
 from src.wacryptolib.signature import sign_rsa, sign_dsa
 
 import click  # See https://click.palletsprojects.com/en/7.x/
@@ -20,7 +20,6 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 CONTAINER_SUFFIX = ".crypt"
 MEDIUM_SUFFIX = ".medium"
 DEFAULT_ENCODING = "utf8"
-
 
 # TODO - much later, use "schema" for validation of config data and container format!  See https://github.com/keleshev/schema
 # Then export corresponding jsons-chema for the world to see!
@@ -42,17 +41,25 @@ def cli(ctx, config):
 
 def _sign_content(content, algo):
     # HASH content and then send it to proper cryptolib function
+    uid = uuid.uuid4()
     signer_generator = dict(
         RSA={"sign_function": sign_rsa,
-             "keypair": key_generation.generate_public_key(uid=None, key_type="RSA")},
+             "keypair": key_generation.generate_public_key(uid=uid, key_type="RSA")},
         DSA={"sign_function": sign_dsa,
-             "keypair": key_generation.generate_public_key(uid=None, key_type="DSA")}
+             "keypair": key_generation.generate_public_key(uid=uid, key_type="DSA")}
     )
 
     generation_func = signer_generator[algo]["sign_function"]
     keypair = signer_generator[algo]["keypair"]
-    signature = generation_func(keypair["private_key"], content)
-
+    signer = generation_func(keypair["private_key"], content)
+    signature = {
+        "signature_algorithm": algo,
+        "signature_payload": signer["digest"],
+        "signature_escrow": {
+            "escrow_type": "standalone",
+            "escrow_identity": uid
+        }
+    }
     return signature
 
 
@@ -80,49 +87,45 @@ def _do_encrypt(plaintext):
             - the resulting ciphertext must be signed with RSA (for the first encryption) or DSA (for the second and final encryption);
               of course, only sign a HASH of the content (thanks to new _sign_content() above)
         - the result json must "roughly" follow the format of containers.rst, except for signatures where the output dict of the cryptolib must be stored as-is
-
-        A loop like this would be a proper way to start the algorithm
-
-        ::
-
-            data_encryption_strata = []
-            for cipher_algo, signature_algo in [("aes", "rsa"), ("chacha???", "dsa")]:
-                signatures = []
-                # apply standard recipe
-
-
     """
-    uid = uuid.uuid4()
 
-    # ---- 1ST ENCRYPTION (WITH AES) ----
-    cipher_aes_key = get_random_bytes(16)
-    encryption_aes = cipher.encrypt_via_aes_eax(key=cipher_aes_key, plaintext=plaintext)
+    data_encryption_strata = []
+    for cipher_algo, signature_algo, key_cipher_algo in [("aes", "RSA", "RSA"), ("chacha", "DSA", "RSA")]:
 
-    rsa_keypair_cipher = key_generation.generate_public_key(uid=uid, key_type="RSA")
-    encrypted_cipher_key_aes = cipher.encrypt_via_rsa_oaep(key=rsa_keypair_cipher["private_key"],
-                                                           plaintext=cipher_aes_key)
-    rsa_keypair_sign = key_generation.generate_public_key(uid=uid, key_type="RSA")
-    signed_ciphertext_rsa = _sign_content(content=encryption_aes["ciphertext"], algo="RSA")
+        cipher_algo_generator = dict(
+            aes={"function": cipher.encrypt_via_aes_eax, "key_length": 16},
+            chacha={"function": cipher.encrypt_via_chacha20_poly1305, "key_length": 32},
+        )
 
-    # ---- 2ND ENCRYPTION (WITH CHACHA20) ----
-    cipher_chacha_key = get_random_bytes(32)
-    encryption_chacha = cipher.encrypt_via_chacha20_poly1305(key=cipher_chacha_key,
-                                                             plaintext=encryption_aes["ciphertext"])
+        cipher_key = get_random_bytes(cipher_algo_generator[cipher_algo]["key_length"])
+        encryption = cipher_algo_generator[cipher_algo]["function"](key=cipher_key, plaintext=plaintext)
 
-    rsa_keypair_cipher2 = key_generation.generate_public_key(uid=uid, key_type="RSA")
-    encrypted_cipher_key_chacha = cipher.encrypt_via_rsa_oaep(key=rsa_keypair_cipher2["private_key"],
-                                                              plaintext=cipher_chacha_key)
+        uid_cipher = uuid.uuid4()
+        rsa_keypair_cipher = key_generation.generate_public_key(uid=uid_cipher, key_type="RSA")
+        encrypted_cipher_key = cipher.encrypt_via_rsa_oaep(key=rsa_keypair_cipher["private_key"],
+                                                           plaintext=cipher_key)
 
-    dsa_keypair_sign = key_generation.generate_public_key(uid=uid, key_type="DSA")
-    signed_ciphertext_dsa = _sign_content(content=encryption_chacha["ciphertext"], algo="DSA")
+        signature = _sign_content(content=encryption["ciphertext"], algo=signature_algo)
+        plaintext = encryption["ciphertext"]
 
-    return {
-        "1": {"encrypted_cipher_key": encrypted_cipher_key_aes,
-              "rsa_keypair_sign": rsa_keypair_sign,
-              "signed_ciphertext_rsa": signed_ciphertext_rsa},
-        "2": {"encrypted_cipher_key": encrypted_cipher_key_chacha,
-              "rsa_keypair_sign": dsa_keypair_sign,
-              "signed_ciphertext_rsa": signed_ciphertext_dsa}}
+        data_encryption = {
+            "signatures": signature,
+            "encryption_algorithm": cipher_algo,
+            "key_ciphertext": encrypted_cipher_key,
+            "key_encryption_strata": {
+                "encryption_algorithm": key_cipher_algo,
+                "key_escrow": {
+                    "escrow_type": "standalone",
+                    "escrow_identity": uid_cipher,
+                }
+            }
+        }
+
+        data_encryption_strata.append(data_encryption)
+    data_ciphertext = encryption["ciphertext"]
+
+    container = {"data_ciphertext": data_ciphertext, "data_encryption_strata": data_encryption_strata}
+    return container
 
 
 @cli.command()

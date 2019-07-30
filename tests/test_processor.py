@@ -1,4 +1,7 @@
 import processor
+import random
+import os
+import uuid
 
 
 def test_do_encrypt():

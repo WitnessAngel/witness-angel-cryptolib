@@ -43,10 +43,10 @@ def generate_rsa_keypair(uid: uuid.UUID, key_length: int = 2048) -> dict:
     if key_length < 1024:
         raise ValueError("The key length must be superior to 1024 bits")
 
-    # randfunc = None
-    # if uid:
-    #     randfunc = _get_randfunc(uid)
-    key = RSA.generate(key_length)  # Generate private key pair
+    randfunc = None
+    if uid:
+        randfunc = _get_randfunc(uid)
+    key = RSA.generate(key_length, randfunc=randfunc)  # Generate private key pair
     public_key = key.publickey()  # Generate the corresponding public key
 
     keypair = {"public_key": public_key, "private_key": key}
@@ -89,12 +89,11 @@ def generate_dsa_keypair(uid: uuid.UUID, key_length: int = 2048) -> dict:
 
         :return: "public_key" and "private_key" as bytes."""
 
-    # randfunc = None
-    # if uid:
-    #     randfunc = _get_randfunc(uid=uid)
-    key = DSA.generate(key_length)  # Generate private key pair
+    randfunc = None
+    if uid:
+        randfunc = _get_randfunc(uid=uid)
+    key = DSA.generate(key_length, randfunc=randfunc)  # Generate private key pair
     public_key = key.publickey()  # Generate the corresponding public key
-
     keypair = {"public_key": public_key, "private_key": key}
 
     return keypair
@@ -153,10 +152,13 @@ def _serialize_ecc_key_objects_to_pem(key: ECC.EccKey):
     key = ECC.EccKey.export_key(key, format="PEM")
     return key
 
+
 def _get_randfunc(uid: uuid.UUID):
     import random
+    import os
 
-    random_instance = random.Random(uid.int)
-    randfunc = random_instance.getrandbits
-    print(randfunc)
+    randfunc = os.urandom
+    # random_instance = random.SystemRandom(uid.int)
+    # randfunc = random_instance.getrandbits(128)
+    # print(randfunc)
     return randfunc

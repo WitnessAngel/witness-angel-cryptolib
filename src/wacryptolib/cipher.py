@@ -121,7 +121,7 @@ def encrypt_via_rsa_oaep(key: RSA.RsaKey, plaintext: bytes) -> bytes:
     return ciphertext
 
 
-def decrypt_via_rsa_oaep(key: RSA.RsaKey, ciphertext: bytes) -> bytes:
+def decrypt_via_rsa_oaep(key: RSA.RsaKey, encryption: bytes) -> bytes:
     """Permits to decrypt a `ciphertext` thanks to a private RSA key
 
     :param key: the cryptographic key which will serve to decipher the cipher text
@@ -130,5 +130,5 @@ def decrypt_via_rsa_oaep(key: RSA.RsaKey, ciphertext: bytes) -> bytes:
     :return: data deciphered"""
 
     decipher = PKCS1_OAEP.new(key)
-    deciphertext = decipher.decrypt(ciphertext=ciphertext)
+    deciphertext = decipher.decrypt(ciphertext=encryption)
     return deciphertext

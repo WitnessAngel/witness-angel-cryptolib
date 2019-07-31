@@ -54,7 +54,8 @@ def _sign_content(content, algo):
     signer = generation_func(keypair["private_key"], content)
     signature = {
         "signature_algorithm": algo,
-        "signature_payload": signer["digest"],
+        "signature_payload": signer,
+        "signature_keypair": keypair,
         "signature_escrow": {
             "escrow_type": "standalone",
             "escrow_identity": uid
@@ -95,15 +96,16 @@ def _do_encrypt(plaintext):
         cipher_algo_generator = dict(
             aes={"function": cipher.encrypt_via_aes_eax, "key_length": 16},
             chacha={"function": cipher.encrypt_via_chacha20_poly1305, "key_length": 32},
+            RSA=cipher.encrypt_via_rsa_oaep,
         )
 
         cipher_key = get_random_bytes(cipher_algo_generator[cipher_algo]["key_length"])
         encryption = cipher_algo_generator[cipher_algo]["function"](key=cipher_key, plaintext=plaintext)
 
         uid_cipher = uuid.uuid4()
-        rsa_keypair_cipher = key_generation.generate_public_key(uid=uid_cipher, key_type="RSA")
-        encrypted_cipher_key = cipher.encrypt_via_rsa_oaep(key=rsa_keypair_cipher["private_key"],
-                                                           plaintext=cipher_key)
+        keypair_cipher_key = key_generation.generate_public_key(uid=uid_cipher, key_type=key_cipher_algo)
+        encryption_key = cipher_algo_generator[key_cipher_algo](key=keypair_cipher_key["public_key"],
+                                                                      plaintext=cipher_key)
 
         signature = _sign_content(content=encryption["ciphertext"], algo=signature_algo)
         plaintext = encryption["ciphertext"]
@@ -111,9 +113,11 @@ def _do_encrypt(plaintext):
         data_encryption = {
             "signatures": signature,
             "encryption_algorithm": cipher_algo,
-            "key_ciphertext": encrypted_cipher_key,
+            "encryption": encryption,
+            "encryption_key": encryption_key,
             "key_encryption_strata": {
                 "encryption_algorithm": key_cipher_algo,
+                "keypair_cipher": keypair_cipher_key,
                 "key_escrow": {
                     "escrow_type": "standalone",
                     "escrow_identity": uid_cipher,
@@ -165,8 +169,36 @@ def _do_decrypt(container_data):
 
         This function must be able to decrypt the container created by _do_encrypt().
         It must not rely on any external config, all data (uids, algos, digests...) is supposed to be in the container_data.
-
     """
+    for nb_encryption in range(1, -1, -1):
+
+        data_encryption_strata = container_data["data_encryption_strata"][nb_encryption]
+        decipher_algo_generator = dict(
+            aes=cipher.decrypt_via_aes_eax,
+            chacha=cipher.decrypt_via_chacha20_poly1305,
+            RSA=cipher.decrypt_via_rsa_oaep,
+        )
+        algo_encryption_key = data_encryption_strata["key_encryption_strata"]["encryption_algorithm"]
+
+        # Get the initial key to decipher
+        decrypted_key = decipher_algo_generator[algo_encryption_key](
+            key=data_encryption_strata["key_encryption_strata"]["keypair_cipher"]["private_key"],
+            encryption=data_encryption_strata["encryption_key"]
+        )
+
+        # Decipher the text
+        decrypted_text = decipher_algo_generator[data_encryption_strata["encryption_algorithm"]](
+            key=decrypted_key,
+            encryption=data_encryption_strata["encryption"]
+        )
+
+        signature.verify_signature(
+            public_key=data_encryption_strata["signatures"]["signature_keypair"]["public_key"],
+            plaintext=data_encryption_strata["encryption"]["ciphertext"],
+            signature=data_encryption_strata["signatures"]["signature_payload"]
+        )
+        container_data["medium_content"] = decrypted_text
+
     plaintext = container_data["medium_content"]
     return plaintext
 

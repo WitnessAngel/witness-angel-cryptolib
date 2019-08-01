@@ -2,6 +2,7 @@ import json
 import sys
 import pathlib
 import uuid
+import time
 
 from Crypto.Random import get_random_bytes
 from src.wacryptolib import key_generation, cipher, signature
@@ -42,6 +43,7 @@ def cli(ctx, config):
 def _sign_content(content, algo):
     # HASH content and then send it to proper cryptolib function
     uid = uuid.uuid4()
+
     signer_generator = dict(
         RSA={"sign_function": sign_rsa,
              "keypair": key_generation.generate_public_key(uid=uid, key_type="RSA")},
@@ -51,11 +53,12 @@ def _sign_content(content, algo):
 
     generation_func = signer_generator[algo]["sign_function"]
     keypair = signer_generator[algo]["keypair"]
+
     signer = generation_func(keypair["private_key"], content)
     signature = {
         "signature_algorithm": algo,
         "signature_payload": signer,
-        "signature_keypair": keypair,
+        "signature_keypair": keypair,  # TODO: DELETE
         "signature_escrow": {
             "escrow_type": "standalone",
             "escrow_identity": uid
@@ -76,7 +79,7 @@ def get_cryptolib_proxy():
     return src.wacryptolib
 
 
-def _do_encrypt(plaintext):
+def _do_encrypt(plaintext, algorithms):
     """
     TODO:
 
@@ -91,21 +94,21 @@ def _do_encrypt(plaintext):
     """
 
     data_encryption_strata = []
-    for cipher_algo, signature_algo, key_cipher_algo in [("aes", "RSA", "RSA"), ("chacha", "DSA", "RSA")]:
+    algos = zip(algorithms["cipher_algo"][0], algorithms["signature_algo"][0], algorithms["key_cipher_algo"][0])
+    for cipher_algo, signature_algo, key_cipher_algo in algos:
 
         cipher_algo_generator = dict(
             aes={"function": cipher.encrypt_via_aes_eax, "key_length": 16},
             chacha={"function": cipher.encrypt_via_chacha20_poly1305, "key_length": 32},
             RSA=cipher.encrypt_via_rsa_oaep,
         )
-
         cipher_key = get_random_bytes(cipher_algo_generator[cipher_algo]["key_length"])
         encryption = cipher_algo_generator[cipher_algo]["function"](key=cipher_key, plaintext=plaintext)
 
         uid_cipher = uuid.uuid4()
         keypair_cipher_key = key_generation.generate_public_key(uid=uid_cipher, key_type=key_cipher_algo)
         encryption_key = cipher_algo_generator[key_cipher_algo](key=keypair_cipher_key["public_key"],
-                                                                      plaintext=cipher_key)
+                                                                plaintext=cipher_key)
 
         signature = _sign_content(content=encryption["ciphertext"], algo=signature_algo)
         plaintext = encryption["ciphertext"]
@@ -117,7 +120,7 @@ def _do_encrypt(plaintext):
             "encryption_key": encryption_key,
             "key_encryption_strata": {
                 "encryption_algorithm": key_cipher_algo,
-                "keypair_cipher": keypair_cipher_key,
+                "keypair_cipher": keypair_cipher_key,  # TODO: DELETE
                 "key_escrow": {
                     "escrow_type": "standalone",
                     "escrow_identity": uid_cipher,
@@ -182,7 +185,11 @@ def _do_decrypt(container_data):
 
         # Get the initial key to decipher
         decrypted_key = decipher_algo_generator[algo_encryption_key](
-            key=data_encryption_strata["key_encryption_strata"]["keypair_cipher"]["private_key"],
+            # key=data_encryption_strata["key_encryption_strata"]["keypair_cipher"]["private_key"],
+            key=key_generation.generate_public_key(
+                uid=data_encryption_strata["key_encryption_strata"]["key_escrow"]["escrow_identity"],
+                key_type=data_encryption_strata["key_encryption_strata"]["encryption_algorithm"]
+            )["private_key"],
             encryption=data_encryption_strata["encryption_key"]
         )
 
@@ -194,6 +201,10 @@ def _do_decrypt(container_data):
 
         signature.verify_signature(
             public_key=data_encryption_strata["signatures"]["signature_keypair"]["public_key"],
+            # public_key=key_generation.generate_public_key(
+            #     uid=data_encryption_strata["signatures"]["signature_escrow"]["escrow_identity"],
+            #     key_type=data_encryption_strata["signatures"]["signature_algorithm"]
+            # )["public_key"],
             plaintext=data_encryption_strata["encryption"]["ciphertext"],
             signature=data_encryption_strata["signatures"]["signature_payload"]
         )

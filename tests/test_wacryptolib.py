@@ -6,16 +6,19 @@ import uuid
 import wacryptolib
 
 
-# def test_generate_keypair_uid():
-#     uid1 = uuid.UUID('12345678-1234-5678-1234-567812345678')
-#     uid2 = uuid.uuid4()
-#     keypair1 = wacryptolib.key_generation.generate_rsa_keypair(uid=uid1)
-#     keypair2 = wacryptolib.key_generation.generate_rsa_keypair(uid=uid1)
-#     keypair3 = wacryptolib.key_generation.generate_rsa_keypair(uid=uid2)
-#
-#     cond1 = keypair1["private_key"] == keypair2["private_key"]
-#     cond2 = keypair3["private_key"] != keypair1["private_key"]
-#     assert cond1 and cond2
+def test_generate_keypair_uid():
+    # uid1 = uuid.UUID('12345678-1234-5678-1234-567812345678')
+    uid1 = uuid.uuid4()
+    uid2 = uuid.uuid4()
+    uid3 = uuid.uuid4()
+    key_type = "ECC"
+    keypair1 = wacryptolib.key_generation.generate_public_key(uid=uid1, key_type=key_type)
+    keypair2 = wacryptolib.key_generation.generate_public_key(uid=uid1, key_type=key_type)
+    keypair3 = wacryptolib.key_generation.generate_public_key(uid=uid3, key_type=key_type)
+
+    cond1 = keypair1 == keypair2
+    cond2 = keypair3 != keypair1
+    assert cond1 and cond2
 
 
 def test_split_bytestring_as_shamir_shares():
@@ -129,7 +132,7 @@ def test_rsa_oaep_encryption_and_decryption():
     )
 
     deciphertext = wacryptolib.cipher.decrypt_via_rsa_oaep(
-        key=keypair["private_key"], ciphertext=ciphertext
+        key=keypair["private_key"], encryption=ciphertext
     )
 
     assert deciphertext == binary_content

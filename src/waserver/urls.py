@@ -22,7 +22,7 @@ from jsonrpc import jsonrpc_site
 from . import views
 
 urlpatterns = [
-    url(r"^json/browse/", jsonrpc.views.browse, name="jsonrpc_browser"),
-    url(r"^json/", jsonrpc_site.dispatch, name="jsonrpc_mountpoint"),
-    url(r"^json/(?P<method>[a-zA-Z0-9.]+)$", jsonrpc_site.dispatch),
+    url(r'^json/browse/', jsonrpc.views.browse, name="jsonrpc_browser"),
+    url(r'^json/', jsonrpc_site.dispatch, name="jsonrpc_mountpoint"),
+    url(r'^json/(?P<method>[a-zA-Z0-9.]+)$', jsonrpc_site.dispatch),
 ]

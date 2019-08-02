@@ -1,6 +1,7 @@
 from typing import List
+import uuid
 
-from Crypto.Util.Padding import pad, unpad
+from Crypto.Util.Padding import pad
 
 
 def split_as_padded_chunks(bytestring: bytes, chunk_size: int) -> List[bytes]:

@@ -3,7 +3,7 @@ from Crypto.Random import get_random_bytes
 
 import uuid
 
-import wacryptolib
+from src import wacryptolib
 
 
 def test_generate_keypair_uid():
@@ -12,9 +12,9 @@ def test_generate_keypair_uid():
     uid2 = uuid.uuid4()
     uid3 = uuid.uuid4()
     key_type = "ECC"
-    keypair1 = wacryptolib.key_generation.generate_public_key(uid=uid1, key_type=key_type)
-    keypair2 = wacryptolib.key_generation.generate_public_key(uid=uid1, key_type=key_type)
-    keypair3 = wacryptolib.key_generation.generate_public_key(uid=uid3, key_type=key_type)
+    keypair1 = wacryptolib.key_generation.generate_assymetric_keypair(uid=uid1, key_type=key_type)
+    keypair2 = wacryptolib.key_generation.generate_assymetric_keypair(uid=uid1, key_type=key_type)
+    keypair3 = wacryptolib.key_generation.generate_assymetric_keypair(uid=uid3, key_type=key_type)
 
     cond1 = keypair1 == keypair2
     cond2 = keypair3 != keypair1
@@ -139,18 +139,18 @@ def test_rsa_oaep_encryption_and_decryption():
 
 
 def test_publickey_generation_with_optional_parameters():
-    keypair_rsa = wacryptolib.key_generation.generate_public_key(None, "RSA", 1024)
+    keypair_rsa = wacryptolib.key_generation.generate_assymetric_keypair(None, "RSA", 1024)
     assert isinstance(keypair_rsa["public_key"], RSA.RsaKey)
-    keypair_dsa = wacryptolib.key_generation.generate_public_key(None, "DSA", 1024)
+    keypair_dsa = wacryptolib.key_generation.generate_assymetric_keypair(None, "DSA", 1024)
     assert isinstance(keypair_dsa["public_key"], DSA.DsaKey)
-    keypair_ecc = wacryptolib.key_generation.generate_public_key(None, "ECC", "p384")
+    keypair_ecc = wacryptolib.key_generation.generate_assymetric_keypair(None, "ECC", "p384")
     assert isinstance(keypair_ecc["public_key"], ECC.EccKey)
 
 
 def test_publickey_generation_without_optional_parameters():
-    keypair_rsa = wacryptolib.key_generation.generate_public_key(None, "RSA")
+    keypair_rsa = wacryptolib.key_generation.generate_assymetric_keypair(None, "RSA")
     assert isinstance(keypair_rsa["public_key"], RSA.RsaKey)
-    keypair_dsa = wacryptolib.key_generation.generate_public_key(None, "DSA")
+    keypair_dsa = wacryptolib.key_generation.generate_assymetric_keypair(None, "DSA")
     assert isinstance(keypair_dsa["public_key"], DSA.DsaKey)
-    keypair_ecc = wacryptolib.key_generation.generate_public_key(None, "ECC")
+    keypair_ecc = wacryptolib.key_generation.generate_assymetric_keypair(None, "ECC")
     assert isinstance(keypair_ecc["public_key"], ECC.EccKey)

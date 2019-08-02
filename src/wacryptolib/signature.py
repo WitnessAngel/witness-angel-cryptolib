@@ -16,7 +16,7 @@ def sign_rsa(private_key: RSA.RsaKey, plaintext: bytes):
     :return: digest, timestamp and type of method used corresponding to the signature"""
 
     timestamp = _get_timestamp()
-    hash_payload = timestamping_authority(plaintext=plaintext, timestamp=timestamp)
+    hash_payload = _timestamping_authority(plaintext=plaintext, timestamp=timestamp)
     signer = pss.new(private_key)
     digest = signer.sign(hash_payload)
     signature = {"type": "RSA", "timestamp_utc": timestamp, "digest": digest}
@@ -34,7 +34,7 @@ def sign_dsa(private_key: DSA.DsaKey, plaintext: bytes) -> dict:
     :return: digest, timestamp and type of method used corresponding to the signature"""
 
     timestamp = _get_timestamp()
-    hash_payload = timestamping_authority(plaintext=plaintext, timestamp=timestamp)
+    hash_payload = _timestamping_authority(plaintext=plaintext, timestamp=timestamp)
     signer = DSS.new(private_key, "fips-186-3")
     digest = signer.sign(
         hash_payload
@@ -54,7 +54,7 @@ def verify_signature(
 
     :return: the timestamp"""
 
-    hash_payload = timestamping_authority(
+    hash_payload = _timestamping_authority(
         plaintext=plaintext, timestamp=signature["timestamp_utc"]
     )
     if signature["type"] == "RSA":
@@ -76,7 +76,7 @@ def _get_timestamp():
     return byte_timestamp
 
 
-def timestamping_authority(plaintext: bytes, timestamp: bytes):
+def _timestamping_authority(plaintext: bytes, timestamp: bytes):
     """Permits to do a Time Stamping Authority (TSA)
 
     :param plaintext: text to sign

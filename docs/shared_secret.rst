@@ -2,7 +2,7 @@ Shamir's shared secret
 ----------------------
 
 	Documentation about the functions which permit to use the Shamir's
-	algorithm which permits to share a secret key into different shares.
+	algorithm to share a secret key into different shares.
 
 ____
 

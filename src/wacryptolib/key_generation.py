@@ -2,10 +2,9 @@ import uuid
 import random
 
 from Crypto.PublicKey import RSA, DSA, ECC
-from Crypto.Random.random import getrandbits
 
 
-def generate_public_key(uid: uuid.UUID, key_type: str, key_length=2048, curve="p256"):
+def generate_assymetric_keypair(uid: uuid.UUID, key_type: str, key_length=2048, curve="p256"):
     key_generator = dict(
         RSA={"function": generate_rsa_keypair, "parameter": key_length},
         DSA={"function": generate_dsa_keypair, "parameter": key_length},
@@ -163,13 +162,9 @@ def _serialize_ecc_key_objects_to_pem(key: ECC.EccKey):
 
 
 def _get_randfunc(count):
+    """Get a parameter `count` and return a bytestring of `count` bytes.
+
+    :param count: number of bytes in returned bytestring
+    :return: bytestring used to create pseudo-random keys"""
     randfunc = bytes(list(random_instance.randrange(0, 256) for _ in range(count)))
     return randfunc
-
-
-# def random_function(uid: uuid.UUID):
-#     from Crypto.Hash import SHA256
-#     hash_obj = SHA256.new(uid.bytes)
-#     hash_obj2 = SHA256.new(hash_obj.digest())
-#     hash_obj3 = SHA256.new(hash_obj2.digest())
-#     return hash_obj3.digest()

@@ -41,14 +41,19 @@ def cli(ctx, config):
 
 
 def _sign_content(content, algo):
-    # HASH content and then send it to proper cryptolib function
+    """Permits to sign a hash of `content`
+
+    :param content: plaintext to sign
+    :param algo: algorithm to use to sign. Can be "DSA" or "RSA"
+    :return: dictionary with informations necessary to verify the signature
+    """
     uid = uuid.uuid4()
 
     signer_generator = dict(
         RSA={"sign_function": sign_rsa,
-             "keypair": key_generation.generate_public_key(uid=uid, key_type="RSA")},
+             "keypair": key_generation.generate_assymetric_keypair(uid=uid, key_type="RSA")},
         DSA={"sign_function": sign_dsa,
-             "keypair": key_generation.generate_public_key(uid=uid, key_type="DSA")}
+             "keypair": key_generation.generate_assymetric_keypair(uid=uid, key_type="DSA")}
     )
 
     generation_func = signer_generator[algo]["sign_function"]
@@ -58,7 +63,7 @@ def _sign_content(content, algo):
     signature = {
         "signature_algorithm": algo,
         "signature_payload": signer,
-        "signature_keypair": keypair,  # TODO: DELETE
+        "signature_public_key": keypair["public_key"],
         "signature_escrow": {
             "escrow_type": "standalone",
             "escrow_identity": uid
@@ -72,7 +77,7 @@ def get_cryptolib_proxy():
     TODO - if ths jsonrpc webservice is ready, instantiate and return a jsonrpc client here instead of the local lib.
     Note that of course the waserver would have to be launched in a separate console!
 
-    We shall ensure that the wacryptolib root package and the proxy both expose the same high level functions like "generate_public_key(uid, ...)"
+    We shall ensure that the wacryptolib root package and the proxy both expose the same high level functions like "generate_assymetric_keypair(uid, ...)"
     """
     import src.wacryptolib
 
@@ -80,19 +85,20 @@ def get_cryptolib_proxy():
 
 
 def _do_encrypt(plaintext, algorithms):
-    """
-    TODO:
+    """Encrypt the plaintext and sign the resulting ciphertext, then cipher the
+    ciphering key with given algorithms. Can be repeated as much as you want.
 
-        - generate a common UID for the whole container (stored at the root of result json)
-        - encrypt the plaintext twice, first with AES/OAEP and then in chain with ChaCha20-Poly1305
-        - for each of these 2 encryptions:
-            - the symmetric cipher key must be generated randomly and locally,
-              used on data, and then RSA-encrypted (with cryptolib-originated public key) before being stored in container
-            - the resulting ciphertext must be signed with RSA (for the first encryption) or DSA (for the second and final encryption);
-              of course, only sign a HASH of the content (thanks to new _sign_content() above)
-        - the result json must "roughly" follow the format of containers.rst, except for signatures where the output dict of the cryptolib must be stored as-is
-    """
+    :param plaintext: Initial plaintext which have to be ciphered
+    :param algorithms: dictionary composed of the different algorithms to use. Should be
+    in this form :
+    {
+    "cipher_algo": [`tuple of algorithms to cipher the plaintext`],
+    "signature_algo": [`tuple of algorithms to sign`],
+    "key_cipher_algo": [`tuple of algorithms to cipher the ciphering key`]
+    :return: dictionary composed of information necessary to decipher the ciphertext.
+    It has to be parameter of function _do_decrypt."""
 
+    uid_container = uuid.uuid4()
     data_encryption_strata = []
     algos = zip(algorithms["cipher_algo"][0], algorithms["signature_algo"][0], algorithms["key_cipher_algo"][0])
     for cipher_algo, signature_algo, key_cipher_algo in algos:
@@ -106,7 +112,7 @@ def _do_encrypt(plaintext, algorithms):
         encryption = cipher_algo_generator[cipher_algo]["function"](key=cipher_key, plaintext=plaintext)
 
         uid_cipher = uuid.uuid4()
-        keypair_cipher_key = key_generation.generate_public_key(uid=uid_cipher, key_type=key_cipher_algo)
+        keypair_cipher_key = key_generation.generate_assymetric_keypair(uid=uid_cipher, key_type=key_cipher_algo)
         encryption_key = cipher_algo_generator[key_cipher_algo](key=keypair_cipher_key["public_key"],
                                                                 plaintext=cipher_key)
 
@@ -120,7 +126,6 @@ def _do_encrypt(plaintext, algorithms):
             "encryption_key": encryption_key,
             "key_encryption_strata": {
                 "encryption_algorithm": key_cipher_algo,
-                "keypair_cipher": keypair_cipher_key,  # TODO: DELETE
                 "key_escrow": {
                     "escrow_type": "standalone",
                     "escrow_identity": uid_cipher,
@@ -131,7 +136,7 @@ def _do_encrypt(plaintext, algorithms):
         data_encryption_strata.append(data_encryption)
     data_ciphertext = encryption["ciphertext"]
 
-    container = {"data_ciphertext": data_ciphertext, "data_encryption_strata": data_encryption_strata}
+    container = {"uid_container": uid_container, "data_ciphertext": data_ciphertext, "data_encryption_strata": data_encryption_strata}
     return container
 
 
@@ -167,12 +172,12 @@ def encrypt(input_medium, output_container):
 
 
 def _do_decrypt(container_data):
-    """
-    TODO:
+    """Permits to decrypt a ciphertext thanks to `container_data` which
+    is created in function _do_encrypt
 
-        This function must be able to decrypt the container created by _do_encrypt().
-        It must not rely on any external config, all data (uids, algos, digests...) is supposed to be in the container_data.
-    """
+    :param container_data: container returned from function _do_encrypt
+    :return: plaintext deciphered"""
+
     for nb_encryption in range(1, -1, -1):
 
         data_encryption_strata = container_data["data_encryption_strata"][nb_encryption]
@@ -185,8 +190,7 @@ def _do_decrypt(container_data):
 
         # Get the initial key to decipher
         decrypted_key = decipher_algo_generator[algo_encryption_key](
-            # key=data_encryption_strata["key_encryption_strata"]["keypair_cipher"]["private_key"],
-            key=key_generation.generate_public_key(
+            key=key_generation.generate_assymetric_keypair(
                 uid=data_encryption_strata["key_encryption_strata"]["key_escrow"]["escrow_identity"],
                 key_type=data_encryption_strata["key_encryption_strata"]["encryption_algorithm"]
             )["private_key"],
@@ -200,11 +204,7 @@ def _do_decrypt(container_data):
         )
 
         signature.verify_signature(
-            public_key=data_encryption_strata["signatures"]["signature_keypair"]["public_key"],
-            # public_key=key_generation.generate_public_key(
-            #     uid=data_encryption_strata["signatures"]["signature_escrow"]["escrow_identity"],
-            #     key_type=data_encryption_strata["signatures"]["signature_algorithm"]
-            # )["public_key"],
+            public_key=data_encryption_strata["signatures"]["signature_public_key"],
             plaintext=data_encryption_strata["encryption"]["ciphertext"],
             signature=data_encryption_strata["signatures"]["signature_payload"]
         )

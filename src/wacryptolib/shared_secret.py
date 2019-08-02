@@ -47,8 +47,7 @@ def split_bytestring_as_shamir_shares(
 
     return (
         shares_long_bytestring
-    )  # FIXME, this func must return 3 long bytestrings, each with all the shares of
-    # (FIXME) index i
+    )
 
 
 def reconstruct_bytestring(
@@ -57,14 +56,14 @@ def reconstruct_bytestring(
     """Permits to reconstruct a key which has its secret shared
     into `shares_count` shares thanks to a list of `shares`
 
+    :param shares_long_bytestring: list of shares
     :param bytestring_length: length of the bytestring to reconstruct
-    :param shares_count: number of shares
-    :param shares: a list of tuple of shares
+    :param shares_count: number of shares in `shares_long_bytestring`
 
     :return: the key reconstructed as bytes"""
 
     shares = []
-    for index in range(0, 3):
+    for index in range(0, shares_count):
         long_bytestring = shares_long_bytestring[index]
         split_long_bytestring = split_as_padded_chunks(long_bytestring, 16)
         for slice in range(0, len(split_long_bytestring)):

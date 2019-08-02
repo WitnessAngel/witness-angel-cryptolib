@@ -1,25 +1,13 @@
 from jsonrpc import jsonrpc_method
-from wacryptolib import *
+from wacryptolib import key_generation
 
 
-@jsonrpc_method("sayhelloworld")
-def helloworld(request):
+@jsonrpc_method("waserver.sayhelloworld")
+def sayhelloworld(request):
     return "Hello world"
 
 
 @jsonrpc_method("generatekeypair(str) -> bytes")
-def keypairs(request, algo):
-    if algo == "RSA":
-        pem_keypair = key_generation._serialize_rsa_key_objects_to_pem(
-            key_generation.generate_rsa_keypair(None)
-        )
-    elif algo == "DSA":
-        pem_keypair = key_generation._serialize_dsa_key_objects_to_pem(
-            key_generation.generate_dsa_keypair(None)
-        )
-    elif algo == "ECC":
-        pem_keypair = key_generation._serialize_ecc_key_objects_to_pem(
-            key_generation.generate_ecc_keypair(None, "p256")
-        )
-    print(type(pem_keypair["public_key"]))
+def generatekeypair(request, algo):
+    pem_keypair = key_generation.generate_assymetric_keypair(uid=None, key_type=algo)
     return pem_keypair["public_key"]

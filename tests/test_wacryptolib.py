@@ -3,26 +3,13 @@ from Crypto.Random import get_random_bytes
 
 import uuid
 
-from src import wacryptolib
+import wacryptolib
 
 
-def test_generate_keypair_uid():
-    # uid1 = uuid.UUID('12345678-1234-5678-1234-567812345678')
-    uid1 = uuid.uuid4()
-    uid2 = uuid.uuid4()
-    uid3 = uuid.uuid4()
-    key_type = "ECC"
-    keypair1 = wacryptolib.key_generation.generate_assymetric_keypair(uid=uid1, key_type=key_type)
-    keypair2 = wacryptolib.key_generation.generate_assymetric_keypair(uid=uid1, key_type=key_type)
-    keypair3 = wacryptolib.key_generation.generate_assymetric_keypair(uid=uid3, key_type=key_type)
-
-    cond1 = keypair1 == keypair2
-    cond2 = keypair3 != keypair1
-    assert cond1 and cond2
 
 
 def test_split_bytestring_as_shamir_shares():
-    keypair = wacryptolib.key_generation.generate_rsa_keypair(None)
+    keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(None)
     private_key = RSA.RsaKey.export_key(keypair["private_key"])
 
     shares = wacryptolib.shared_secret.split_bytestring_as_shamir_shares(
@@ -37,7 +24,7 @@ def test_split_bytestring_as_shamir_shares():
 
 
 def test_sign_and_verify_rsa():
-    keypair = wacryptolib.key_generation.generate_rsa_keypair(None)
+    keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(None)
     signature = wacryptolib.signature.sign_rsa(
         private_key=keypair["private_key"], plaintext=b"Hello"
     )
@@ -48,7 +35,7 @@ def test_sign_and_verify_rsa():
 
 
 def test_sign_and_verify_ecdsa():
-    keypair = wacryptolib.key_generation.generate_ecc_keypair(None, curve="p256")
+    keypair = wacryptolib.key_generation._generate_ecc_keypair_as_objects(None, curve="p256")
     signature = wacryptolib.signature.sign_dsa(
         private_key=keypair["private_key"], plaintext="Mon hât èst joli".encode("utf-8")
     )
@@ -61,7 +48,7 @@ def test_sign_and_verify_ecdsa():
 
 
 def test_sign_and_verify_dsa():
-    keypair = wacryptolib.key_generation.generate_dsa_keypair(None)
+    keypair = wacryptolib.key_generation._generate_dsa_keypair_as_objects(None)
     signature = wacryptolib.signature.sign_dsa(
         private_key=keypair["private_key"], plaintext="Mon hât èst joli".encode("utf-8")
     )
@@ -102,7 +89,7 @@ def test_aes_eax_encryption_and_decryption():
 
 
 def test_generate_ecc_keypair():
-    keypair = wacryptolib.key_generation.generate_ecc_keypair(None, "p256")
+    keypair = wacryptolib.key_generation._generate_ecc_keypair_as_objects(None, "p256")
     assert isinstance(keypair["public_key"], ECC.EccKey), isinstance(
         keypair["private_key"], ECC.EccKey
     )
@@ -124,7 +111,7 @@ def test_chacha20_symetric_encryption_and_decryption():
 
 
 def test_rsa_oaep_encryption_and_decryption():
-    keypair = wacryptolib.key_generation.generate_rsa_keypair(None)
+    keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(None)
     binary_content = "Mon hât èst joli".encode("utf-8")
 
     ciphertext = wacryptolib.cipher.encrypt_via_rsa_oaep(
@@ -137,20 +124,3 @@ def test_rsa_oaep_encryption_and_decryption():
 
     assert deciphertext == binary_content
 
-
-def test_publickey_generation_with_optional_parameters():
-    keypair_rsa = wacryptolib.key_generation.generate_assymetric_keypair(None, "RSA", 1024)
-    assert isinstance(keypair_rsa["public_key"], RSA.RsaKey)
-    keypair_dsa = wacryptolib.key_generation.generate_assymetric_keypair(None, "DSA", 1024)
-    assert isinstance(keypair_dsa["public_key"], DSA.DsaKey)
-    keypair_ecc = wacryptolib.key_generation.generate_assymetric_keypair(None, "ECC", "p384")
-    assert isinstance(keypair_ecc["public_key"], ECC.EccKey)
-
-
-def test_publickey_generation_without_optional_parameters():
-    keypair_rsa = wacryptolib.key_generation.generate_assymetric_keypair(None, "RSA")
-    assert isinstance(keypair_rsa["public_key"], RSA.RsaKey)
-    keypair_dsa = wacryptolib.key_generation.generate_assymetric_keypair(None, "DSA")
-    assert isinstance(keypair_dsa["public_key"], DSA.DsaKey)
-    keypair_ecc = wacryptolib.key_generation.generate_assymetric_keypair(None, "ECC")
-    assert isinstance(keypair_ecc["public_key"], ECC.EccKey)

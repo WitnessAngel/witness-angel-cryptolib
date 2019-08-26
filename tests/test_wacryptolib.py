@@ -23,43 +23,6 @@ def test_split_bytestring_as_shamir_shares():
     assert private_key_reconstructed == private_key
 
 
-def test_sign_and_verify_rsa():
-    keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(None)
-    signature = wacryptolib.signature.sign_rsa(
-        private_key=keypair["private_key"], plaintext=b"Hello"
-    )
-
-    wacryptolib.signature.verify_signature(
-        public_key=keypair["public_key"], plaintext=b"Hello", signature=signature
-    )
-
-
-def test_sign_and_verify_ecdsa():
-    keypair = wacryptolib.key_generation._generate_ecc_keypair_as_objects(None, curve="p256")
-    signature = wacryptolib.signature.sign_dsa(
-        private_key=keypair["private_key"], plaintext="Mon hât èst joli".encode("utf-8")
-    )
-
-    wacryptolib.signature.verify_signature(
-        public_key=keypair["public_key"],
-        plaintext="Mon hât èst joli".encode("utf-8"),
-        signature=signature,
-    )
-
-
-def test_sign_and_verify_dsa():
-    keypair = wacryptolib.key_generation._generate_dsa_keypair_as_objects(None)
-    signature = wacryptolib.signature.sign_dsa(
-        private_key=keypair["private_key"], plaintext="Mon hât èst joli".encode("utf-8")
-    )
-
-    wacryptolib.signature.verify_signature(
-        public_key=keypair["public_key"],
-        plaintext="Mon hât èst joli".encode("utf-8"),
-        signature=signature,
-    )
-
-
 def test_aes_cbc_encryption_and_decryption():
     key = get_random_bytes(16)
 

@@ -6,7 +6,7 @@ import time
 
 from Crypto.Random import get_random_bytes
 from src.wacryptolib import key_generation, cipher, signature
-from src.wacryptolib.signature import sign_rsa, sign_dsa
+from src.wacryptolib.signature import sign_with_rsa, sign_with_dsa_or_ecc
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
@@ -50,9 +50,9 @@ def _sign_content(content, algo):
     uid = uuid.uuid4()
 
     signer_generator = dict(
-        RSA={"sign_function": sign_rsa,
+        RSA={"sign_function": sign_with_rsa,
              "keypair": key_generation.generate_assymetric_keypair(uid=uid, key_type="RSA")},
-        DSA={"sign_function": sign_dsa,
+        DSA={"sign_function": sign_with_dsa_or_ecc,
              "keypair": key_generation.generate_assymetric_keypair(uid=uid, key_type="DSA")}
     )
 

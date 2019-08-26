@@ -2,89 +2,89 @@ from datetime import datetime
 
 from Crypto.Signature import pss, DSS
 from Crypto.Hash import SHA256
-from Crypto.PublicKey import RSA, DSA
+from Crypto.PublicKey import RSA, DSA, ECC
 
 from typing import Union
 
 
-def sign_rsa(private_key: RSA.RsaKey, plaintext: bytes):
-    """Permits to sign a message with a private RSA key as bytes.
+def sign_with_rsa(private_key: RSA.RsaKey, plaintext: bytes) -> dict:
+    """Sign a bytes message with a private RSA key.
 
-    :param private_key: the cryptographic key which will serve to sign the plain text
-    :param plaintext: the text to sign
+    :param private_key: the private key
+    :param plaintext: the bytestring to sign
 
-    :return: digest, timestamp and type of method used corresponding to the signature"""
+    :return: dict with keys "digest" (bytestring), "timestamp_utc" (integer) and "type" (string) of signature"""
 
-    timestamp = _get_timestamp()
-    hash_payload = _timestamping_authority(plaintext=plaintext, timestamp=timestamp)
+    timestamp_utc = _get_utc_timestamp()
+    hash_payload = _compute_timestamped_hash(plaintext=plaintext, timestamp_utc=timestamp_utc)
     signer = pss.new(private_key)
     digest = signer.sign(hash_payload)
-    signature = {"type": "RSA", "timestamp_utc": timestamp, "digest": digest}
+    signature = {"type": "RSA", "timestamp_utc": timestamp_utc, "digest": digest}
     return signature
 
 
-def sign_dsa(private_key: DSA.DsaKey, plaintext: bytes) -> dict:
-    """Permits to sign a message with a private DSA key as bytes. We use the `fips-186-3` mode
-    for the signer because key generation is randomized, while it is not the case for the mode
-    `deterministic-rfc6979`.
+def sign_with_dsa_or_ecc(private_key: Union[DSA.DsaKey, ECC.EccKey], plaintext: bytes) -> dict:
+    """Sign a bytes message with a private DSA or ECC key.
 
-    :param private_key: the cryptographic key which will serve to sign the plain text
-    :param plaintext: the text to sign
+    We use the `fips-186-3` mode for the signer because signature is randomized,
+    while it is not the case for the mode `deterministic-rfc6979`.
 
-    :return: digest, timestamp and type of method used corresponding to the signature"""
+    :param private_key: the private key
+    :param plaintext: the bytestring to sign
 
-    timestamp = _get_timestamp()
-    hash_payload = _timestamping_authority(plaintext=plaintext, timestamp=timestamp)
+    :return: dict with keys "digest" (bytestring), "timestamp_utc" (integer) and "type" (string) of signature"""
+
+    timestamp = _get_utc_timestamp()
+    hash_payload = _compute_timestamped_hash(plaintext=plaintext, timestamp_utc=timestamp)
     signer = DSS.new(private_key, "fips-186-3")
-    digest = signer.sign(
-        hash_payload
-    )  # Signature of the hash concatenated to the timestamp
-    signature = {"type": "DSA", "timestamp_utc": timestamp, "digest": digest}
+    digest = signer.sign(hash_payload)
+    signature = {"type": "DSA_OR_ECC", "timestamp_utc": timestamp, "digest": digest}  # FIXME find better TYPE
     return signature
 
 
 def verify_signature(
-    public_key: Union[DSA.DsaKey, RSA.RsaKey], plaintext: bytes, signature: dict
+    public_key: Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey], plaintext: bytes, signature: dict
 ):
-    """Permits to verify the authenticity of a signature
+    """Verify the authenticity of a signature.
 
-    :param public_key: the cryptographic key which will serve to verify the signature
-    :param plaintext: the text to sign
-    :param signature: digest, timestamp and type of method used corresponding to the signature
+    Raises if signature is invalid.
 
-    :return: the timestamp"""
+    :param public_key: the cryptographic key used to verify the signature
+    :param plaintext: the text which was signed
+    :param signature: dict describing the signature
+    """
 
-    hash_payload = _timestamping_authority(
-        plaintext=plaintext, timestamp=signature["timestamp_utc"]
+    hash_payload = _compute_timestamped_hash(
+        plaintext=plaintext, timestamp_utc=signature["timestamp_utc"]
     )
     if signature["type"] == "RSA":
         verifier = pss.new(public_key)
-    elif signature["type"] == "DSA":
+    elif signature["type"] == "DSA_OR_ECC":
         verifier = DSS.new(public_key, "fips-186-3")
     else:
-        verifier = None
+        raise ValueError("Unknown signature type '%s'" % signature["type"])
     verifier.verify(hash_payload, signature["digest"])
 
 
-def _get_timestamp():
-    """Get timestamp
+def _get_utc_timestamp():
+    """Get current UTC timestamp.
 
-    :return: timestamp in bytes
+    :return: timestamp as an integer
     """
-    int_ts = int(datetime.timestamp(datetime.now()))
-    byte_timestamp = int_ts.to_bytes(int_ts.bit_length() // 8 + 1, byteorder="little")
-    return byte_timestamp
+    timestamp_utc = int(datetime.utcnow().timestamp())
+    return timestamp_utc
 
 
-def _timestamping_authority(plaintext: bytes, timestamp: bytes):
-    """Permits to do a Time Stamping Authority (TSA)
+def _compute_timestamped_hash(plaintext: bytes, timestamp_utc: int) :
+    """Create a hash of content, including the timestamp.
 
     :param plaintext: text to sign
-    :param timestamp: modification timestamp of a document as bytes
-    :return: digital signature of the hash concatenated to the timestamp
-    """
+    :param timestamp: integer UTC timestamp
 
+    :return: stdlib hash object
+    """
     hash_plaintext = SHA256.new(plaintext)
-    payload_digest = SHA256.SHA256Hash.digest(hash_plaintext) + timestamp
+    timestamp_bytes = str(timestamp_utc).encode("ascii")
+    payload_digest = SHA256.SHA256Hash.digest(hash_plaintext) + timestamp_bytes
     payload_hash = SHA256.new(payload_digest)
     return payload_hash

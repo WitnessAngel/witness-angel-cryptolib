@@ -68,7 +68,9 @@ def decrypt_via_aes_eax(key: bytes, encryption: dict) -> bytes:
 
 
 # ---- ChaCha20 ----
-def encrypt_via_chacha20_poly1305(key: bytes, plaintext: bytes, header: bytes = b"header") -> dict:
+def encrypt_via_chacha20_poly1305(
+    key: bytes, plaintext: bytes, header: bytes = b"header"
+) -> dict:
     """Permits to encrypt a `plaintext` thanks to a `key` of 32 bytes long
     with ChaCha20 which is a stream cipher.
 

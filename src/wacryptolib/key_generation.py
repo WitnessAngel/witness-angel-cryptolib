@@ -4,7 +4,9 @@ import random
 from Crypto.PublicKey import RSA, DSA, ECC
 
 
-def generate_asymmetric_keypair(uid: uuid.UUID, key_type: str, key_length=2048, curve="p256"):
+def generate_asymmetric_keypair(
+    uid: uuid.UUID, key_type: str, key_length=2048, curve="p256"
+):
     """Generate a RSA (public_key, private_key) pair in PEM format.
 
     :param uid: UUID of the encryption operation
@@ -13,9 +15,18 @@ def generate_asymmetric_keypair(uid: uuid.UUID, key_type: str, key_length=2048, 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
 
     asymmetric_key_generators = dict(
-        RSA={"function": generate_rsa_keypair_as_pem_bytestrings, "extra_parameters": dict(key_length=key_length)},
-        DSA={"function": generate_dsa_keypair_as_pem_bytestrings, "extra_parameters": dict(key_length=key_length)},
-        ECC={"function": generate_ecc_keypair_as_pem_bytestrings, "extra_parameters": dict(curve=curve)},
+        RSA={
+            "function": generate_rsa_keypair_as_pem_bytestrings,
+            "extra_parameters": dict(key_length=key_length),
+        },
+        DSA={
+            "function": generate_dsa_keypair_as_pem_bytestrings,
+            "extra_parameters": dict(key_length=key_length),
+        },
+        ECC={
+            "function": generate_ecc_keypair_as_pem_bytestrings,
+            "extra_parameters": dict(curve=curve),
+        },
     )
 
     key_type = key_type.upper()
@@ -104,7 +115,10 @@ def generate_ecc_keypair_as_pem_bytestrings(uid: uuid.UUID, curve: str):
 def _generate_ecc_keypair_as_objects(uid: uuid.UUID, curve: str) -> dict:
 
     if curve not in ECC._curves:
-        raise ValueError("Unexisting ECC curve '%s', must be one of '%s'" % (curve, sorted(ECC._curves.keys())))
+        raise ValueError(
+            "Unexisting ECC curve '%s', must be one of '%s'"
+            % (curve, sorted(ECC._curves.keys()))
+        )
 
     randfunc = _get_pseudorandom_generator(uid)
     private_key = ECC.generate(curve=curve, randfunc=randfunc)
@@ -126,10 +140,12 @@ def _get_pseudorandom_generator(uid):
     :return: a callable taking a number of bytes as parameter and outputting this many pseudorandom bytes
     """
     random_instance = random.Random(uid.int)
+
     def _randfunc(count):
         """Return a bytestring of `count` bytes."""
-        random_bytes = bytes(list(random_instance.randrange(0, 256) for _ in range(count)))
+        random_bytes = bytes(
+            list(random_instance.randrange(0, 256) for _ in range(count))
+        )
         return random_bytes
+
     return _randfunc
-
-

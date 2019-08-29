@@ -7,6 +7,7 @@ from Crypto.PublicKey import RSA, DSA, ECC
 from typing import Union
 
 
+# FIXME rename RSAPSS machin chose
 def sign_with_rsa(private_key: RSA.RsaKey, plaintext: bytes) -> dict:
     """Sign a bytes message with a private RSA key.
 
@@ -16,14 +17,19 @@ def sign_with_rsa(private_key: RSA.RsaKey, plaintext: bytes) -> dict:
     :return: dict with keys "digest" (bytestring), "timestamp_utc" (integer) and "type" (string) of signature"""
 
     timestamp_utc = _get_utc_timestamp()
-    hash_payload = _compute_timestamped_hash(plaintext=plaintext, timestamp_utc=timestamp_utc)
+    hash_payload = _compute_timestamped_hash(
+        plaintext=plaintext, timestamp_utc=timestamp_utc
+    )
     signer = pss.new(private_key)
     digest = signer.sign(hash_payload)
     signature = {"type": "RSA", "timestamp_utc": timestamp_utc, "digest": digest}
     return signature
 
 
-def sign_with_dsa_or_ecc(private_key: Union[DSA.DsaKey, ECC.EccKey], plaintext: bytes) -> dict:
+# FIXME rename DSS machin chose
+def sign_with_dsa_or_ecc(
+    private_key: Union[DSA.DsaKey, ECC.EccKey], plaintext: bytes
+) -> dict:
     """Sign a bytes message with a private DSA or ECC key.
 
     We use the `fips-186-3` mode for the signer because signature is randomized,
@@ -35,15 +41,23 @@ def sign_with_dsa_or_ecc(private_key: Union[DSA.DsaKey, ECC.EccKey], plaintext: 
     :return: dict with keys "digest" (bytestring), "timestamp_utc" (integer) and "type" (string) of signature"""
 
     timestamp = _get_utc_timestamp()
-    hash_payload = _compute_timestamped_hash(plaintext=plaintext, timestamp_utc=timestamp)
+    hash_payload = _compute_timestamped_hash(
+        plaintext=plaintext, timestamp_utc=timestamp
+    )
     signer = DSS.new(private_key, "fips-186-3")
     digest = signer.sign(hash_payload)
-    signature = {"type": "DSA_OR_ECC", "timestamp_utc": timestamp, "digest": digest}  # FIXME find better TYPE
+    signature = {
+        "type": "DSA_OR_ECC",
+        "timestamp_utc": timestamp,
+        "digest": digest,
+    }  # FIXME find better TYPE
     return signature
 
 
 def verify_signature(
-    public_key: Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey], plaintext: bytes, signature: dict
+    public_key: Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey],
+    plaintext: bytes,
+    signature: dict,
 ):
     """Verify the authenticity of a signature.
 
@@ -75,7 +89,7 @@ def _get_utc_timestamp():
     return timestamp_utc
 
 
-def _compute_timestamped_hash(plaintext: bytes, timestamp_utc: int) :
+def _compute_timestamped_hash(plaintext: bytes, timestamp_utc: int):
     """Create a hash of content, including the timestamp.
 
     :param plaintext: text to sign

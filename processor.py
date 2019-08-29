@@ -50,10 +50,18 @@ def _sign_content(content, algo):
     uid = uuid.uuid4()
 
     signer_generator = dict(
-        RSA={"sign_function": sign_with_rsa,
-             "keypair": key_generation.generate_assymetric_keypair(uid=uid, key_type="RSA")},
-        DSA={"sign_function": sign_with_dsa_or_ecc,
-             "keypair": key_generation.generate_assymetric_keypair(uid=uid, key_type="DSA")}
+        RSA={
+            "sign_function": sign_with_rsa,
+            "keypair": key_generation.generate_assymetric_keypair(
+                uid=uid, key_type="RSA"
+            ),
+        },
+        DSA={
+            "sign_function": sign_with_dsa_or_ecc,
+            "keypair": key_generation.generate_assymetric_keypair(
+                uid=uid, key_type="DSA"
+            ),
+        },
     )
 
     generation_func = signer_generator[algo]["sign_function"]
@@ -64,10 +72,7 @@ def _sign_content(content, algo):
         "signature_algorithm": algo,
         "signature_payload": signer,
         "signature_public_key": keypair["public_key"],
-        "signature_escrow": {
-            "escrow_type": "standalone",
-            "escrow_identity": uid
-        }
+        "signature_escrow": {"escrow_type": "standalone", "escrow_identity": uid},
     }
     return signature
 
@@ -100,7 +105,11 @@ def _do_encrypt(plaintext, algorithms):
 
     uid_container = uuid.uuid4()
     data_encryption_strata = []
-    algos = zip(algorithms["cipher_algo"][0], algorithms["signature_algo"][0], algorithms["key_cipher_algo"][0])
+    algos = zip(
+        algorithms["cipher_algo"][0],
+        algorithms["signature_algo"][0],
+        algorithms["key_cipher_algo"][0],
+    )
     for cipher_algo, signature_algo, key_cipher_algo in algos:
 
         cipher_algo_generator = dict(
@@ -109,12 +118,17 @@ def _do_encrypt(plaintext, algorithms):
             RSA=cipher.encrypt_via_rsa_oaep,
         )
         cipher_key = get_random_bytes(cipher_algo_generator[cipher_algo]["key_length"])
-        encryption = cipher_algo_generator[cipher_algo]["function"](key=cipher_key, plaintext=plaintext)
+        encryption = cipher_algo_generator[cipher_algo]["function"](
+            key=cipher_key, plaintext=plaintext
+        )
 
         uid_cipher = uuid.uuid4()
-        keypair_cipher_key = key_generation.generate_assymetric_keypair(uid=uid_cipher, key_type=key_cipher_algo)
-        encryption_key = cipher_algo_generator[key_cipher_algo](key=keypair_cipher_key["public_key"],
-                                                                plaintext=cipher_key)
+        keypair_cipher_key = key_generation.generate_assymetric_keypair(
+            uid=uid_cipher, key_type=key_cipher_algo
+        )
+        encryption_key = cipher_algo_generator[key_cipher_algo](
+            key=keypair_cipher_key["public_key"], plaintext=cipher_key
+        )
 
         signature = _sign_content(content=encryption["ciphertext"], algo=signature_algo)
         plaintext = encryption["ciphertext"]
@@ -129,14 +143,18 @@ def _do_encrypt(plaintext, algorithms):
                 "key_escrow": {
                     "escrow_type": "standalone",
                     "escrow_identity": uid_cipher,
-                }
-            }
+                },
+            },
         }
 
         data_encryption_strata.append(data_encryption)
     data_ciphertext = encryption["ciphertext"]
 
-    container = {"uid_container": uid_container, "data_ciphertext": data_ciphertext, "data_encryption_strata": data_encryption_strata}
+    container = {
+        "uid_container": uid_container,
+        "data_ciphertext": data_ciphertext,
+        "data_encryption_strata": data_encryption_strata,
+    }
     return container
 
 
@@ -186,27 +204,32 @@ def _do_decrypt(container_data):
             chacha=cipher.decrypt_via_chacha20_poly1305,
             RSA=cipher.decrypt_via_rsa_oaep,
         )
-        algo_encryption_key = data_encryption_strata["key_encryption_strata"]["encryption_algorithm"]
+        algo_encryption_key = data_encryption_strata["key_encryption_strata"][
+            "encryption_algorithm"
+        ]
 
         # Get the initial key to decipher
         decrypted_key = decipher_algo_generator[algo_encryption_key](
             key=key_generation.generate_assymetric_keypair(
-                uid=data_encryption_strata["key_encryption_strata"]["key_escrow"]["escrow_identity"],
-                key_type=data_encryption_strata["key_encryption_strata"]["encryption_algorithm"]
+                uid=data_encryption_strata["key_encryption_strata"]["key_escrow"][
+                    "escrow_identity"
+                ],
+                key_type=data_encryption_strata["key_encryption_strata"][
+                    "encryption_algorithm"
+                ],
             )["private_key"],
-            encryption=data_encryption_strata["encryption_key"]
+            encryption=data_encryption_strata["encryption_key"],
         )
 
         # Decipher the text
-        decrypted_text = decipher_algo_generator[data_encryption_strata["encryption_algorithm"]](
-            key=decrypted_key,
-            encryption=data_encryption_strata["encryption"]
-        )
+        decrypted_text = decipher_algo_generator[
+            data_encryption_strata["encryption_algorithm"]
+        ](key=decrypted_key, encryption=data_encryption_strata["encryption"])
 
         signature.verify_signature(
             public_key=data_encryption_strata["signatures"]["signature_public_key"],
             plaintext=data_encryption_strata["encryption"]["ciphertext"],
-            signature=data_encryption_strata["signatures"]["signature_payload"]
+            signature=data_encryption_strata["signatures"]["signature_payload"],
         )
         container_data["medium_content"] = decrypted_text
 

@@ -4,20 +4,29 @@ import uuid
 from Crypto.Util.Padding import pad
 
 
-def split_as_padded_chunks(bytestring: bytes, chunk_size: int) -> List[bytes]:
-    """Collect a `bytestring` into chunks or blocks of size defined by `chunk_size` and
-        pad the last chunk when there isn't enough values initially
+def split_as_chunks(bytestring: bytes, chunk_size: int, must_pad: bool) -> List[bytes]:
+    """Split a `bytestring` into chunks (or blocks) of identical sizes, after padding it.
 
-        :param bytestring: bytestring which have to be split into chunks
-        :param chunk_size: size of a chunk
+        :param bytestring: element to be split into chunks
+        :param chunk_size: size of a chunk in bytes
+        :param must_pad: whether the bytestring must be padded (else, its size must be a multiple of chunk_size)
 
-        :return: list of padded chunks in bytes"""
+        :return: list of bytes chunks"""
+
+    assert chunk_size > 0, chunk_size
+
+    if must_pad:
+        bytestring = pad(bytestring, block_size=chunk_size)
+    if len(bytestring) % chunk_size:
+        raise ValueError(
+            "If no padding occurs, bytestring must have a size multiple of chunk_size"
+        )
+
+    chunks_count = len(bytestring) // chunk_size
 
     chunks = []
-    for i in range((len(bytestring) + chunk_size - 1) // chunk_size):
-        chunk = [bytestring[i * chunk_size : (i + 1) * chunk_size]]
-        if len(chunk[0]) != chunk_size:
-            chunks.append(pad(chunk[0], chunk_size))
-        else:
-            chunks.append(chunk[0])
+
+    for i in range(chunks_count):
+        chunk = bytestring[i * chunk_size : (i + 1) * chunk_size]
+        chunks.append(chunk)
     return chunks

@@ -11,7 +11,7 @@ ____
 _____
 
 
-.. autofunction:: wacryptolib.shared_secret.reconstruct_bytestring
+.. autofunction:: wacryptolib.shared_secret.reconstruct_secret_from_samir_shares
 
 
 

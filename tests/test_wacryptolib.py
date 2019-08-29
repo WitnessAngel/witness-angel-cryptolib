@@ -6,23 +6,6 @@ import uuid
 import wacryptolib
 
 
-
-
-def test_split_bytestring_as_shamir_shares():
-    keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(None)
-    private_key = RSA.RsaKey.export_key(keypair["private_key"])
-
-    shares = wacryptolib.shared_secret.split_bytestring_as_shamir_shares(
-        bytestring=private_key, shares_count=3, threshold_count=2
-    )
-
-    private_key_reconstructed = wacryptolib.shared_secret.reconstruct_bytestring(
-        shares, shares_count=3, bytestring_length=len(private_key)
-    )
-
-    assert private_key_reconstructed == private_key
-
-
 def test_aes_cbc_encryption_and_decryption():
     key = get_random_bytes(16)
 
@@ -86,4 +69,3 @@ def test_rsa_oaep_encryption_and_decryption():
     )
 
     assert deciphertext == binary_content
-

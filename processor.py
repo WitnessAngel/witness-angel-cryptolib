@@ -5,8 +5,8 @@ import uuid
 import time
 
 from Crypto.Random import get_random_bytes
-from src.wacryptolib import key_generation, cipher, signature
-from src.wacryptolib.signature import sign_with_rsa, sign_with_dsa_or_ecc
+from wacryptolib import key_generation, cipher, signature
+from wacryptolib.signature import sign_with_rsa, sign_with_dsa_or_ecc
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
@@ -84,9 +84,8 @@ def get_cryptolib_proxy():
 
     We shall ensure that the wacryptolib root package and the proxy both expose the same high level functions like "generate_assymetric_keypair(uid, ...)"
     """
-    import src.wacryptolib
-
-    return src.wacryptolib
+    import wacryptolib
+    return wacryptolib
 
 
 def _do_encrypt(plaintext, algorithms):
@@ -123,7 +122,7 @@ def _do_encrypt(plaintext, algorithms):
         )
 
         uid_cipher = uuid.uuid4()
-        keypair_cipher_key = key_generation.generate_assymetric_keypair(
+        keypair_cipher_key = key_generation.generate_asymmetric_keypair(
             uid=uid_cipher, key_type=key_cipher_algo
         )
         encryption_key = cipher_algo_generator[key_cipher_algo](

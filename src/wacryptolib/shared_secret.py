@@ -1,11 +1,9 @@
 from typing import List
 
-import itertools
-
 from Crypto.Protocol.SecretSharing import Shamir
 from Crypto.Util.Padding import unpad
 
-from wacryptolib.utilities import split_as_chunks, split_as_chunks
+from wacryptolib.utilities import split_as_chunks
 
 
 def split_bytestring_as_shamir_shares(

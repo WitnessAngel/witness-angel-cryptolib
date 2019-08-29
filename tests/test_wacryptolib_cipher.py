@@ -38,7 +38,9 @@ def test_aes_eax_encryption_and_decryption():
         key=key, plaintext=binary_content
     )
 
-    decrypted_content = wacryptolib.cipher.decrypt_via_aes_eax(key=key, encryption=encryption)
+    decrypted_content = wacryptolib.cipher.decrypt_via_aes_eax(
+        key=key, encryption=encryption
+    )
 
     assert decrypted_content == binary_content
 
@@ -61,9 +63,11 @@ def test_chacha20_symetric_encryption_and_decryption():
 
 def test_rsa_oaep_encryption_and_decryption():
     uid = uuid.uuid4()
-    key_length = random.choice([1024]) #, 2048, 4096])
+    key_length = random.choice([1024])  # , 2048, 4096])
 
-    keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(uid, key_length=key_length)
+    keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(
+        uid, key_length=key_length
+    )
 
     binary_content = _get_binary_content()
 

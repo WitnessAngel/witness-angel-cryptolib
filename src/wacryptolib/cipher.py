@@ -11,6 +11,7 @@ from wacryptolib.utilities import split_as_chunks
 RSA_OAEP_CHUNKS_SIZE = 60
 RSA_OAEP_HASH_ALGO = Crypto.Hash.SHA256
 
+
 def encrypt_via_aes_cbc(key: bytes, plaintext: bytes) -> dict:
     """Encrypt a bytestring using AES (CBC mode).
 
@@ -37,7 +38,9 @@ def decrypt_via_aes_cbc(key: bytes, iv_and_ciphertext: dict) -> bytes:
     iv = iv_and_ciphertext["iv"]
     ciphertext = iv_and_ciphertext["ciphertext"]
     decipher = AES.new(key, AES.MODE_CBC, b64decode(iv))
-    plaintext = unpad(decipher.decrypt(b64decode(ciphertext)), block_size=AES.block_size)
+    plaintext = unpad(
+        decipher.decrypt(b64decode(ciphertext)), block_size=AES.block_size
+    )
     return plaintext
 
 
@@ -52,7 +55,11 @@ def encrypt_via_aes_eax(key: bytes, plaintext: bytes) -> dict:
     cipher = AES.new(key, AES.MODE_EAX)
     nonce = cipher.nonce
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
-    encryption = {"ciphertext": b64encode(ciphertext), "tag": b64encode(tag), "nonce": b64encode(nonce)}
+    encryption = {
+        "ciphertext": b64encode(ciphertext),
+        "tag": b64encode(tag),
+        "nonce": b64encode(nonce),
+    }
     return encryption
 
 
@@ -105,7 +112,8 @@ def decrypt_via_chacha20_poly1305(key: bytes, encryption: dict) -> bytes:
     decipher = ChaCha20_Poly1305.new(key=key, nonce=b64decode(encryption["nonce"]))
     decipher.update(b64decode(encryption["header"]))
     plaintext = decipher.decrypt_and_verify(
-        ciphertext=b64decode(encryption["ciphertext"]), received_mac_tag=b64decode(encryption["tag"])
+        ciphertext=b64decode(encryption["ciphertext"]),
+        received_mac_tag=b64decode(encryption["tag"]),
     )
     return plaintext
 
@@ -119,7 +127,12 @@ def encrypt_via_rsa_oaep(key: RSA.RsaKey, plaintext: bytes) -> bytes:
     :return: a list of base64-encoded chunks of variable width"""
 
     cipher = PKCS1_OAEP.new(key=key, hashAlgo=RSA_OAEP_HASH_ALGO)
-    chunks = split_as_chunks(plaintext, chunk_size=RSA_OAEP_CHUNKS_SIZE, must_pad=False, accept_incomplete_chunk=True)
+    chunks = split_as_chunks(
+        plaintext,
+        chunk_size=RSA_OAEP_CHUNKS_SIZE,
+        must_pad=False,
+        accept_incomplete_chunk=True,
+    )
 
     encryption = []
     for chunk in chunks:

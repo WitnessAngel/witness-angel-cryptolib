@@ -14,12 +14,9 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
-from django.conf.urls import url
-
 import jsonrpc.views
+from django.conf.urls import url
 from jsonrpc import jsonrpc_site
-
-from . import views
 
 urlpatterns = [
     url(r"^json/browse/", jsonrpc.views.browse, name="jsonrpc_browser"),

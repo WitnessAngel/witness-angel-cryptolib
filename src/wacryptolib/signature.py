@@ -1,10 +1,9 @@
 from datetime import datetime
+from typing import Union
 
-from Crypto.Signature import pss, DSS
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA, DSA, ECC
-
-from typing import Union
+from Crypto.Signature import pss, DSS
 
 
 # FIXME rename RSAPSS machin chose

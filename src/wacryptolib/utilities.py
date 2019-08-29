@@ -1,10 +1,11 @@
 from typing import List
-import uuid
 
 from Crypto.Util.Padding import pad
 
 
-def split_as_chunks(bytestring: bytes, chunk_size: int, must_pad: bool) -> List[bytes]:
+def split_as_chunks(
+    bytestring: bytes, chunk_size: int, must_pad: bool, accept_incomplete_chunk=False
+) -> List[bytes]:
     """Split a `bytestring` into chunks (or blocks) of identical sizes, after padding it.
 
         :param bytestring: element to be split into chunks
@@ -17,12 +18,12 @@ def split_as_chunks(bytestring: bytes, chunk_size: int, must_pad: bool) -> List[
 
     if must_pad:
         bytestring = pad(bytestring, block_size=chunk_size)
-    if len(bytestring) % chunk_size:
+    if len(bytestring) % chunk_size and not accept_incomplete_chunk:
         raise ValueError(
             "If no padding occurs, bytestring must have a size multiple of chunk_size"
         )
 
-    chunks_count = len(bytestring) // chunk_size
+    chunks_count = (len(bytestring) + chunk_size - 1) // chunk_size
 
     chunks = []
 

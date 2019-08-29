@@ -1,5 +1,5 @@
-import uuid
 import random
+import uuid
 
 from Crypto.PublicKey import RSA, DSA, ECC
 

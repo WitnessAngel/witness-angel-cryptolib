@@ -5,7 +5,8 @@ import uuid
 import time
 
 from Crypto.Random import get_random_bytes
-from wacryptolib import key_generation, cipher, signature
+import wacryptolib
+from wacryptolib import key_generation, signature
 from wacryptolib.signature import sign_with_rsa, sign_with_dsa_or_ecc
 
 import click  # See https://click.palletsprojects.com/en/7.x/
@@ -112,9 +113,9 @@ def _do_encrypt(plaintext, algorithms):
     for cipher_algo, signature_algo, key_cipher_algo in algos:
 
         cipher_algo_generator = dict(
-            aes={"function": cipher.encrypt_via_aes_eax, "key_length": 16},
-            chacha={"function": cipher.encrypt_via_chacha20_poly1305, "key_length": 32},
-            RSA=cipher.encrypt_via_rsa_oaep,
+            aes={"function": wacryptolib.encryption.encrypt_via_aes_eax, "key_length": 16},
+            chacha={"function": wacryptolib.encryption.encrypt_via_chacha20_poly1305, "key_length": 32},
+            RSA=wacryptolib.encryption.encrypt_via_rsa_oaep,
         )
         cipher_key = get_random_bytes(cipher_algo_generator[cipher_algo]["key_length"])
         encryption = cipher_algo_generator[cipher_algo]["function"](
@@ -199,9 +200,9 @@ def _do_decrypt(container_data):
 
         data_encryption_strata = container_data["data_encryption_strata"][nb_encryption]
         decipher_algo_generator = dict(
-            aes=cipher.decrypt_via_aes_eax,
-            chacha=cipher.decrypt_via_chacha20_poly1305,
-            RSA=cipher.decrypt_via_rsa_oaep,
+            aes=wacryptolib.encryption.decrypt_via_aes_eax,
+            chacha=wacryptolib.encryption.decrypt_via_chacha20_poly1305,
+            RSA=wacryptolib.encryption.decrypt_via_rsa_oaep,
         )
         algo_encryption_key = data_encryption_strata["key_encryption_strata"][
             "encryption_algorithm"

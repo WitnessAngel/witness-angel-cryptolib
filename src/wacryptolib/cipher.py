@@ -1,11 +1,15 @@
 from base64 import b64decode, b64encode
 
-from Crypto.Random import get_random_bytes
-from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
-from Crypto.Util.Padding import pad, unpad
-from Crypto.PublicKey import RSA
 import Crypto.Hash
+from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
+from Crypto.PublicKey import RSA
+from Crypto.Random import get_random_bytes
+from Crypto.Util.Padding import pad, unpad
 
+from wacryptolib.utilities import split_as_chunks
+
+RSA_OAEP_CHUNKS_SIZE = 60
+RSA_OAEP_HASH_ALGO = Crypto.Hash.SHA256
 
 def encrypt_via_aes_cbc(key: bytes, plaintext: bytes) -> dict:
     """Encrypt a bytestring using AES (CBC mode).
@@ -112,21 +116,32 @@ def encrypt_via_rsa_oaep(key: RSA.RsaKey, plaintext: bytes) -> bytes:
     :param key: public RSA key
     :param plaintext: the bytes to cipher
 
-    :return: the ciphertext as bytes"""
+    :return: a list of base64-encoded chunks of variable width"""
 
-    cipher = PKCS1_OAEP.new(key=key, hashAlgo=Crypto.Hash.SHA256)
-    ciphertext = cipher.encrypt(plaintext)
-    return b64encode(ciphertext)
+    cipher = PKCS1_OAEP.new(key=key, hashAlgo=RSA_OAEP_HASH_ALGO)
+    chunks = split_as_chunks(plaintext, chunk_size=RSA_OAEP_CHUNKS_SIZE, must_pad=False, accept_incomplete_chunk=True)
+
+    encryption = []
+    for chunk in chunks:
+        encrypted_chunk = cipher.encrypt(chunk)
+        encryption.append(b64encode(encrypted_chunk))
+    return encryption
 
 
-def decrypt_via_rsa_oaep(key: RSA.RsaKey, ciphertext: bytes) -> bytes:
+def decrypt_via_rsa_oaep(key: RSA.RsaKey, encryption: bytes) -> bytes:
     """Decrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
     :param key: private RSA key
-    :param ciphertext: the text to decipher
+    :param encryption: list of base64-encoded ciphertext chunks
 
     :return: the decrypted bytestring"""
 
-    decipher = PKCS1_OAEP.new(key, hashAlgo=Crypto.Hash.SHA256)
-    plaintext = decipher.decrypt(ciphertext=b64decode(ciphertext))
-    return plaintext
+    decipher = PKCS1_OAEP.new(key, hashAlgo=RSA_OAEP_HASH_ALGO)
+
+    chunks = [b64decode(chunk) for chunk in encryption]
+
+    decrypted_chunks = []
+    for chunk in chunks:
+        decrypted_chunk = decipher.decrypt(chunk)
+        decrypted_chunks.append(decrypted_chunk)
+    return b"".join(decrypted_chunks)

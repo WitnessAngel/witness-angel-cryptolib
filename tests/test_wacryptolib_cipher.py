@@ -9,7 +9,7 @@ import wacryptolib
 
 
 def _get_binary_content():
-    bytes_length = random.randint(1, 100)
+    bytes_length = random.randint(1, 1000)
     return get_random_bytes(bytes_length)
 
 
@@ -61,16 +61,18 @@ def test_chacha20_symetric_encryption_and_decryption():
 
 def test_rsa_oaep_encryption_and_decryption():
     uid = uuid.uuid4()
-    keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(uid, key_length=2048)
+    key_length = random.choice([1024]) #, 2048, 4096])
+
+    keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(uid, key_length=key_length)
 
     binary_content = _get_binary_content()
 
-    ciphertext = wacryptolib.cipher.encrypt_via_rsa_oaep(
+    encryption = wacryptolib.cipher.encrypt_via_rsa_oaep(
         key=keypair["public_key"], plaintext=binary_content
     )
 
     decrypted_content = wacryptolib.cipher.decrypt_via_rsa_oaep(
-        key=keypair["private_key"], ciphertext=ciphertext
+        key=keypair["private_key"], encryption=encryption
     )
 
     assert decrypted_content == binary_content

@@ -4,6 +4,7 @@ import uuid
 from Crypto.PublicKey import RSA, DSA, ECC
 
 
+
 def generate_asymmetric_keypair(
     uid: uuid.UUID, key_type: str, key_length=2048, curve="p256"
 ):
@@ -14,31 +15,18 @@ def generate_asymmetric_keypair(
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
 
-    asymmetric_key_generators = dict(
-        RSA={
-            "function": generate_rsa_keypair_as_pem_bytestrings,
-            "extra_parameters": dict(key_length=key_length),
-        },
-        DSA={
-            "function": generate_dsa_keypair_as_pem_bytestrings,
-            "extra_parameters": dict(key_length=key_length),
-        },
-        ECC={
-            "function": generate_ecc_keypair_as_pem_bytestrings,
-            "extra_parameters": dict(curve=curve),
-        },
-    )
+    potential_params = dict(key_length=key_length, curve=curve)
 
     key_type = key_type.upper()
-    if key_type not in asymmetric_key_generators:
+    if key_type not in KEY_TYPES_REGISTRY:
         raise ValueError("Unknown asymmetric key type '%s'" % key_type)
 
-    key_generator = asymmetric_key_generators[key_type]
+    descriptors = KEY_TYPES_REGISTRY[key_type]
 
-    function = key_generator["function"]
-    extra_parameters = key_generator["extra_parameters"]
+    generation_function = descriptors["generation_function"]
+    generation_extra_parameters = descriptors["generation_extra_parameters"]
 
-    keypair = function(uid=uid, **extra_parameters)
+    keypair = generation_function(uid=uid, **{k: potential_params[k] for k in generation_extra_parameters})
 
     return keypair
 
@@ -149,3 +137,22 @@ def _get_pseudorandom_generator(uid):
         return random_bytes
 
     return _randfunc
+
+
+KEY_TYPES_REGISTRY = dict(
+        RSA={
+            "generation_function": generate_rsa_keypair_as_pem_bytestrings,
+            "generation_extra_parameters": ["key_length"],
+            "pem_import_function": RSA.import_key
+        },
+        DSA={
+            "generation_function": generate_dsa_keypair_as_pem_bytestrings,
+            "generation_extra_parameters": ["key_length"],
+            "pem_import_function": DSA.import_key
+        },
+        ECC={
+            "generation_function": generate_ecc_keypair_as_pem_bytestrings,
+            "generation_extra_parameters": ["curve"],
+            "pem_import_function": ECC.import_key
+        },
+    )

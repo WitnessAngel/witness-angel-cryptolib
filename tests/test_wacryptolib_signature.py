@@ -16,12 +16,12 @@ def _common_signature_checks(keypair, plaintext, signature):
     assert utcnow - 10 <= signature["timestamp_utc"] <= utcnow
 
     wacryptolib.signature.verify_signature(
-        public_key=keypair["public_key"], plaintext=plaintext, signature=signature
+        key=keypair["public_key"], plaintext=plaintext, signature=signature
     )
 
     with pytest.raises(ValueError, match="signature"):
         wacryptolib.signature.verify_signature(
-            public_key=keypair["public_key"],
+            key=keypair["public_key"],
             plaintext=plaintext + b"X",
             signature=signature,
         )
@@ -30,7 +30,7 @@ def _common_signature_checks(keypair, plaintext, signature):
     signature_corrupted["digest"] += b"x"
     with pytest.raises(ValueError, match="signature"):
         wacryptolib.signature.verify_signature(
-            public_key=keypair["public_key"],
+            key=keypair["public_key"],
             plaintext=plaintext,
             signature=signature_corrupted,
         )
@@ -39,7 +39,7 @@ def _common_signature_checks(keypair, plaintext, signature):
     signature_corrupted["timestamp_utc"] += 1
     with pytest.raises(ValueError, match="signature"):
         wacryptolib.signature.verify_signature(
-            public_key=keypair["public_key"],
+            key=keypair["public_key"],
             plaintext=plaintext,
             signature=signature_corrupted,
         )
@@ -52,8 +52,8 @@ def test_sign_and_verify_with_rsa_key():
     keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(
         uid, key_length=1024
     )
-    signature = wacryptolib.signature.sign_with_rsa(
-        private_key=keypair["private_key"], plaintext=plaintext
+    signature = wacryptolib.signature.sign_bytestring(
+        key=keypair["private_key"], plaintext=plaintext, signature_type="PSS"
     )
     _common_signature_checks(keypair=keypair, plaintext=plaintext, signature=signature)
 
@@ -65,8 +65,8 @@ def test_sign_and_verify_with_dsa_key():
     keypair = wacryptolib.key_generation._generate_dsa_keypair_as_objects(
         uid, key_length=1024
     )
-    signature = wacryptolib.signature.sign_with_dsa_or_ecc(
-        private_key=keypair["private_key"], plaintext=plaintext
+    signature = wacryptolib.signature.sign_bytestring(
+        key=keypair["private_key"], plaintext=plaintext, signature_type="DSS"
     )
     _common_signature_checks(keypair=keypair, plaintext=plaintext, signature=signature)
 
@@ -78,7 +78,7 @@ def test_sign_and_verify_with_ecc_key():
     keypair = wacryptolib.key_generation._generate_ecc_keypair_as_objects(
         uid, curve="p256"
     )
-    signature = wacryptolib.signature.sign_with_dsa_or_ecc(
-        private_key=keypair["private_key"], plaintext=plaintext
+    signature = wacryptolib.signature.sign_bytestring(
+        key=keypair["private_key"], plaintext=plaintext, signature_type="DSS"
     )
     _common_signature_checks(keypair=keypair, plaintext=plaintext, signature=signature)

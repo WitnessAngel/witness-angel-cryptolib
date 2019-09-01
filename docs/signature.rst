@@ -9,13 +9,13 @@ Signature
 RSA
 ---
 
-.. autofunction:: wacryptolib.signature.sign_with_rsa
+.. autofunction:: wacryptolib.signature.sign_with_pss
 
 
 DSA
 ---
 
-.. autofunction:: wacryptolib.signature.sign_with_dsa_or_ecc
+.. autofunction:: wacryptolib.signature.sign_with_dss
 
 
 Verify a signature

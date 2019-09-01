@@ -7,7 +7,7 @@ import time
 from Crypto.Random import get_random_bytes
 import wacryptolib
 from wacryptolib import key_generation, signature
-from wacryptolib.signature import sign_with_rsa, sign_with_dsa_or_ecc
+from wacryptolib.signature import sign_with_pss, sign_with_dss
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
@@ -52,13 +52,13 @@ def _sign_content(content, algo):
 
     signer_generator = dict(
         RSA={
-            "sign_function": sign_with_rsa,
+            "sign_function": sign_with_pss,
             "keypair": key_generation.generate_assymetric_keypair(
                 uid=uid, key_type="RSA"
             ),
         },
         DSA={
-            "sign_function": sign_with_dsa_or_ecc,
+            "sign_function": sign_with_dss,
             "keypair": key_generation.generate_assymetric_keypair(
                 uid=uid, key_type="DSA"
             ),
@@ -227,7 +227,7 @@ def _do_decrypt(container_data):
         ](key=decrypted_key, encryption=data_encryption_strata["encryption"])
 
         signature.verify_signature(
-            public_key=data_encryption_strata["signatures"]["signature_public_key"],
+            key=data_encryption_strata["signatures"]["signature_public_key"],
             plaintext=data_encryption_strata["encryption"]["ciphertext"],
             signature=data_encryption_strata["signatures"]["signature_payload"],
         )

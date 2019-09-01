@@ -8,7 +8,7 @@ from Crypto.PublicKey import RSA, DSA, ECC
 def generate_asymmetric_keypair(
     uid: uuid.UUID, key_type: str, key_length=2048, curve="p256"
 ):
-    """Generate a RSA (public_key, private_key) pair in PEM format.
+    """Generate a (public_key, private_key) pair in PEM format.
 
     :param uid: UUID of the encryption operation
     :param key_length: length of the key in bits, must be superior to 1024.

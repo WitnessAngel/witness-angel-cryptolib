@@ -1,5 +1,4 @@
 import processor
-import random
 
 
 def __test_container_encryption():

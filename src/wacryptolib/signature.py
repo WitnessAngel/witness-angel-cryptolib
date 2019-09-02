@@ -8,7 +8,7 @@ from Crypto.Signature import pss, DSS
 KNOWN_KEY_TYPES = Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey]
 
 
-def sign_message(plaintext: bytes, signature_type: str, key:KNOWN_KEY_TYPES) -> dict:
+def sign_message(plaintext: bytes, signature_type: str, key: KNOWN_KEY_TYPES) -> dict:
     """
     Return a timestamped signature of the chosen type for the given payload,
     with the provided key (which must be of a compatible type).
@@ -21,7 +21,9 @@ def sign_message(plaintext: bytes, signature_type: str, key:KNOWN_KEY_TYPES) -> 
     if signature_conf is None:
         raise ValueError("Unknown signature type '%s'" % signature_type)
     if not isinstance(key, signature_conf["compatible_key_types"]):
-        raise ValueError("Incompatible key type %s for %s signature" % (type(key), signature_type))
+        raise ValueError(
+            "Incompatible key type %s for %s signature" % (type(key), signature_type)
+        )
     signature_function = signature_conf["signature_function"]
     signature = signature_function(key=key, plaintext=plaintext)
     assert signature.get("type")
@@ -46,9 +48,7 @@ def _sign_with_pss(key: RSA.RsaKey, plaintext: bytes) -> dict:
     return signature
 
 
-def _sign_with_dss(
-    key: Union[DSA.DsaKey, ECC.EccKey], plaintext: bytes
-) -> dict:
+def _sign_with_dss(key: Union[DSA.DsaKey, ECC.EccKey], plaintext: bytes) -> dict:
     """Sign a bytes message with a private DSA or ECC key.
 
     We use the `fips-186-3` mode for the signer because signature is randomized,
@@ -65,19 +65,11 @@ def _sign_with_dss(
     )
     signer = DSS.new(key, "fips-186-3")
     digest = signer.sign(hash_payload)
-    signature = {
-        "type": "DSS",
-        "timestamp_utc": timestamp,
-        "digest": digest,
-    }
+    signature = {"type": "DSS", "timestamp_utc": timestamp, "digest": digest}
     return signature
 
 
-def verify_signature(
-    plaintext: bytes,
-    signature: dict,
-    key: Union[KNOWN_KEY_TYPES],
-):
+def verify_signature(plaintext: bytes, signature: dict, key: Union[KNOWN_KEY_TYPES]):
     """Verify the authenticity of a signature.
 
     Raises if signature is invalid.
@@ -125,15 +117,12 @@ def _compute_timestamped_hash(plaintext: bytes, timestamp_utc: int):
 
 
 SIGNATURE_TYPES_REGISTRY = dict(
-        PSS={
-            "signature_function": _sign_with_pss,
-            "compatible_key_types": (RSA.RsaKey),
-        },
-        DSS={
-            "signature_function": _sign_with_dss,
-            "compatible_key_types": (DSA.DsaKey, ECC.EccKey),
-        },
-    )
+    PSS={"signature_function": _sign_with_pss, "compatible_key_types": (RSA.RsaKey)},
+    DSS={
+        "signature_function": _sign_with_dss,
+        "compatible_key_types": (DSA.DsaKey, ECC.EccKey),
+    },
+)
 
 #: These values can be used as 'signature_type'.
 SUPPORTED_SIGNATURE_TYPES = sorted(SIGNATURE_TYPES_REGISTRY.keys())

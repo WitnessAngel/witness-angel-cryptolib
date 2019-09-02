@@ -1,8 +1,7 @@
+import uuid
 from datetime import datetime
 
 import pytest
-
-import uuid
 
 import wacryptolib
 
@@ -21,9 +20,7 @@ def _common_signature_checks(keypair, plaintext, signature):
 
     with pytest.raises(ValueError, match="signature"):
         wacryptolib.signature.verify_signature(
-            key=keypair["public_key"],
-            plaintext=plaintext + b"X",
-            signature=signature,
+            key=keypair["public_key"], plaintext=plaintext + b"X", signature=signature
         )
 
     signature_corrupted = signature.copy()
@@ -94,15 +91,17 @@ def test_generic_signature_errors():
 
     with pytest.raises(ValueError, match="Unknown signature type"):
         wacryptolib.signature.sign_message(
-                key=keypair["private_key"], plaintext=plaintext, signature_type="EIXH"
+            key=keypair["private_key"], plaintext=plaintext, signature_type="EIXH"
         )
 
     with pytest.raises(ValueError, match="Incompatible key type"):
         wacryptolib.signature.sign_message(
-                key=keypair["private_key"], plaintext=plaintext, signature_type="DSS"  # RSA key not accepted here
+            key=keypair["private_key"],
+            plaintext=plaintext,
+            signature_type="DSS",  # RSA key not accepted here
         )
 
     with pytest.raises(ValueError, match="Unknown signature type"):
         wacryptolib.signature.verify_signature(
-                key=keypair["public_key"], plaintext=plaintext, signature=dict(type="XPZH")
+            key=keypair["public_key"], plaintext=plaintext, signature=dict(type="XPZH")
         )

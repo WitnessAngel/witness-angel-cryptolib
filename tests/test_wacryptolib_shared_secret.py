@@ -1,10 +1,6 @@
 import random
 
 import pytest
-from Crypto.PublicKey import RSA, ECC, DSA
-
-import uuid
-
 from Crypto.Random import get_random_bytes
 
 import wacryptolib

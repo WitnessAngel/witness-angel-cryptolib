@@ -1,11 +1,11 @@
 from typing import List
 
 from Crypto.Protocol.SecretSharing import Shamir
-from Crypto.Util.Padding import unpad
 
 from wacryptolib.utilities import split_as_chunks, recombine_chunks
 
 SHAMIR_CHUNK_LENGTH = 16
+
 
 def split_bytestring_as_shamir_shares(
     secret: bytes, shares_count: int, threshold_count: int

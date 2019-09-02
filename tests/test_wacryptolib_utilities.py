@@ -1,13 +1,6 @@
-from datetime import datetime
-
 import pytest
-
-import uuid
-
 from Crypto.Random import get_random_bytes
-from Crypto.Util.Padding import unpad
 
-import wacryptolib
 from wacryptolib.utilities import split_as_chunks, recombine_chunks
 
 
@@ -33,10 +26,9 @@ def test_split_as_chunks_and_recombine():
     with pytest.raises(ValueError, match="size multiple of chunk_size"):
         split_as_chunks(bytestring, chunk_size=22, must_pad=False)
 
-    chunks = split_as_chunks(bytestring, chunk_size=22, must_pad=False, accept_incomplete_chunk=True)
+    chunks = split_as_chunks(
+        bytestring, chunk_size=22, must_pad=False, accept_incomplete_chunk=True
+    )
     assert not all(len(x) == 22 for x in chunks)
     result = recombine_chunks(chunks, chunk_size=22, must_unpad=False)
     assert result == bytestring
-
-
-

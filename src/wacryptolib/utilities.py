@@ -4,7 +4,10 @@ from Crypto.Util.Padding import pad, unpad
 
 
 def split_as_chunks(
-    bytestring: bytes, chunk_size: int, must_pad: bool, accept_incomplete_chunk: bool=False
+    bytestring: bytes,
+    chunk_size: int,
+    must_pad: bool,
+    accept_incomplete_chunk: bool = False,
 ) -> List[bytes]:
     """Split a `bytestring` into chunks (or blocks)
 

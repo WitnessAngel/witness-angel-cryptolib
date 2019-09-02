@@ -1,7 +1,7 @@
+import uuid
+
 import pytest
 from Crypto.PublicKey import RSA, ECC, DSA
-
-import uuid
 
 import wacryptolib
 
@@ -32,8 +32,9 @@ def test_generic_asymmetric_key_generation_errors():
 
     with pytest.raises(ValueError, match="Unknown asymmetric key type"):
         wacryptolib.key_generation.generate_asymmetric_keypair(
-                uid=uid, key_type="AONEG"
+            uid=uid, key_type="AONEG"
         )
+
 
 def test_rsa_asymmetric_key_generation():
     uid = uuid.uuid4()

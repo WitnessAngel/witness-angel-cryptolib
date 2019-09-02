@@ -197,23 +197,23 @@ def _decrypt_via_rsa_oaep(key: RSA.RsaKey, encryption: bytes) -> bytes:
 
 
 ENCRYPTION_TYPES_REGISTRY = dict(
-        AES_CBC={
-            "encryption_function": _encrypt_via_aes_cbc,
-            "decryption_function": _decrypt_via_aes_cbc,
-        },
-        AES_EAX={
-            "encryption_function": _encrypt_via_aes_eax,
-            "decryption_function": _decrypt_via_aes_eax,
-        },
-        CHACHA20_POLY1305={
-            "encryption_function": _encrypt_via_chacha20_poly1305,
-            "decryption_function": _decrypt_via_chacha20_poly1305,
-        },
-        RSA_OAEP={
-            "encryption_function": _encrypt_via_rsa_oaep,
-            "decryption_function": _decrypt_via_rsa_oaep,
-        },
-    )
+    AES_CBC={
+        "encryption_function": _encrypt_via_aes_cbc,
+        "decryption_function": _decrypt_via_aes_cbc,
+    },
+    AES_EAX={
+        "encryption_function": _encrypt_via_aes_eax,
+        "decryption_function": _decrypt_via_aes_eax,
+    },
+    CHACHA20_POLY1305={
+        "encryption_function": _encrypt_via_chacha20_poly1305,
+        "decryption_function": _decrypt_via_chacha20_poly1305,
+    },
+    RSA_OAEP={
+        "encryption_function": _encrypt_via_rsa_oaep,
+        "decryption_function": _decrypt_via_rsa_oaep,
+    },
+)
 
 #: These values can be used as 'encryption_type'.
 SUPPORTED_ENCRYPTION_TYPES = sorted(ENCRYPTION_TYPES_REGISTRY.keys())

@@ -27,6 +27,14 @@ def test_keypair_unicity_for_provided_uid(key_type):
     assert keypair3 != keypair1
 
 
+def test_generic_asymmetric_key_generation_errors():
+    uid = uuid.uuid4()
+
+    with pytest.raises(ValueError, match="Unknown asymmetric key type"):
+        wacryptolib.key_generation.generate_asymmetric_keypair(
+                uid=uid, key_type="AONEG"
+        )
+
 def test_rsa_asymmetric_key_generation():
     uid = uuid.uuid4()
 

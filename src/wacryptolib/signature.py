@@ -18,7 +18,7 @@ def sign_bytestring(plaintext: bytes, signature_type: str, key:KNOWN_KEY_TYPES) 
     assert signature_type, signature_type
     signature_conf = SIGNATURE_TYPES_REGISTRY.get(signature_type)
     if signature_conf is None:
-        raise ValueError("Unrecognized signature type '%s'" % signature_type)
+        raise ValueError("Unknown signature type '%s'" % signature_type)
     if not isinstance(key, signature_conf["compatible_key_types"]):
         raise ValueError("Incompatible key type %s for %s signature" % (type(key), signature_type))
     signature_function = signature_conf["signature_function"]
@@ -86,15 +86,16 @@ def verify_signature(
     :param signature: dict describing the signature
     """
 
-    hash_payload = _compute_timestamped_hash(
-        plaintext=plaintext, timestamp_utc=signature["timestamp_utc"]
-    )
     if signature["type"] == "PSS":
         verifier = pss.new(key)
     elif signature["type"] == "DSS":
         verifier = DSS.new(key, "fips-186-3")
     else:
         raise ValueError("Unknown signature type '%s'" % signature["type"])
+
+    hash_payload = _compute_timestamped_hash(
+        plaintext=plaintext, timestamp_utc=signature["timestamp_utc"]
+    )
     verifier.verify(hash_payload, signature["digest"])
 
 

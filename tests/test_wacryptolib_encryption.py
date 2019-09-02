@@ -1,5 +1,6 @@
 import random
 
+import pytest
 from Crypto.PublicKey import RSA, ECC, DSA
 from Crypto.Random import get_random_bytes
 
@@ -11,6 +12,22 @@ import wacryptolib
 def _get_binary_content():
     bytes_length = random.randint(1, 1000)
     return get_random_bytes(bytes_length)
+
+
+def test_generic_encryption_and_decryption_errors():
+    key = get_random_bytes(16)
+
+    binary_content = _get_binary_content()
+
+    with pytest.raises(ValueError, match="Unknown cipher type"):
+        wacryptolib.encryption.encrypt_bytestring(
+            key=key, plaintext=binary_content, encryption_type="EXHD"
+        )
+
+    with pytest.raises(ValueError, match="Unknown cipher type"):
+        wacryptolib.encryption.decrypt_bytestring(
+            key=key, encryption={}, encryption_type="EXHD"
+        )
 
 
 def test_aes_cbc_encryption_and_decryption():

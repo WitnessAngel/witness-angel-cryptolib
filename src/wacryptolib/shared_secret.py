@@ -142,19 +142,3 @@ def _recombine_128b_shares_into_bytestring(shares: List[tuple]) -> bytes:
 
     secret = Shamir.combine(shares)
     return secret
-
-
-def _recombine_shares_into_list(shares: List[bytes]) -> List[bytes]:
-    """Recombine shares from a list of bytes corresponding
-        to the `shares` of a bytestring. In the `shares` list, it is possible
-        to have shares which doesn't come from the same initial message.
-
-        :param shares: list of tuples composed of the share and its corresponding number
-
-        :return: list of bytes with all the shares recombined."""
-
-    combined_shares_list = []
-    for slices in range(0, len(shares)):
-        combined_share = Shamir.combine(shares[slices])
-        combined_shares_list.append(combined_share)
-    return combined_shares_list

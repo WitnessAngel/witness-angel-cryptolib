@@ -21,7 +21,7 @@ def _get_encryption_type_conf(encryption_type):
     return encryption_type_conf
 
 
-def encrypt_bytestring(plaintext: bytes, encryption_type: str, key: bytes, ) -> dict:
+def encrypt_bytestring(plaintext: bytes, encryption_type: str, key: bytes) -> dict:
     """Encrypt a bytestring with the selected algorithm for the given payload,
     using the provided key (which must be of a compatible type and length).
 
@@ -114,7 +114,7 @@ def _decrypt_via_aes_eax(encryption: dict, key: bytes) -> bytes:
 
 
 def _encrypt_via_chacha20_poly1305(
-        plaintext: bytes, key: bytes, aad: bytes = b"header"
+    plaintext: bytes, key: bytes, aad: bytes = b"header"
 ) -> dict:
     """Encrypt a bytestring with the stream cipher ChaCha20.
 

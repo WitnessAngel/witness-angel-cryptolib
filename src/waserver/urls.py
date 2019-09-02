@@ -19,10 +19,15 @@ from django.conf.urls import url
 from jsonrpc import jsonrpc_site
 
 from . import views  # Register methods
+
 del views
 
 urlpatterns = [
     url(r"^json/browse/", jsonrpc.views.browse, name="jsonrpc_browser"),
     url(r"^json/", jsonrpc_site.dispatch, name="jsonrpc_mountpoint"),
-    url(r"^json/(?P<method>[a-zA-Z0-9.]+)$", jsonrpc_site.dispatch, name="jsonrpc_getter_mountpoint"),
+    url(
+        r"^json/(?P<method>[a-zA-Z0-9.]+)$",
+        jsonrpc_site.dispatch,
+        name="jsonrpc_getter_mountpoint",
+    ),
 ]

@@ -23,9 +23,7 @@ def test_generic_encryption_and_decryption_errors():
         )
 
     with pytest.raises(ValueError, match="Unknown cipher type"):
-        wacryptolib.encryption.decrypt_bytestring(
-            key=key, encryption={"type": "EXHD"}
-        )
+        wacryptolib.encryption.decrypt_bytestring(key=key, encryption={"type": "EXHD"})
 
 
 def test_aes_cbc_encryption_and_decryption():

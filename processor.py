@@ -49,6 +49,7 @@ def get_cryptolib_proxy():
     We shall ensure that the wacryptolib root package and the proxy both expose the same high level functions like "generate_assymetric_keypair(uid, ...)"
     """
     import wacryptolib
+
     return wacryptolib
 
 
@@ -89,8 +90,6 @@ def _sign_content(content, algo):
     return signature
 
 
-
-
 def _do_encrypt(plaintext, algorithms):
     """Encrypt the plaintext and sign the resulting ciphertext, then cipher the
     ciphering key with given algorithms. Can be repeated as much as you want.
@@ -117,8 +116,14 @@ def _do_encrypt(plaintext, algorithms):
     for cipher_algo, signature_algo, key_cipher_algo in algos:
 
         cipher_algo_generator = dict(
-            aes={"function": wacryptolib.encryption._encrypt_via_aes_eax, "key_length": 16},
-            chacha={"function": wacryptolib.encryption._encrypt_via_chacha20_poly1305, "key_length": 32},
+            aes={
+                "function": wacryptolib.encryption._encrypt_via_aes_eax,
+                "key_length": 16,
+            },
+            chacha={
+                "function": wacryptolib.encryption._encrypt_via_chacha20_poly1305,
+                "key_length": 32,
+            },
             RSA=wacryptolib.encryption._encrypt_via_rsa_oaep,
         )
         cipher_key = get_random_bytes(cipher_algo_generator[cipher_algo]["key_length"])

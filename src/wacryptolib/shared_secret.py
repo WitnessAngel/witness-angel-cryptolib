@@ -3,8 +3,9 @@ from typing import List
 from Crypto.Protocol.SecretSharing import Shamir
 from Crypto.Util.Padding import unpad
 
-from wacryptolib.utilities import split_as_chunks
+from wacryptolib.utilities import split_as_chunks, recombine_chunks
 
+SHAMIR_CHUNK_LENGTH = 16
 
 def split_bytestring_as_shamir_shares(
     secret: bytes, shares_count: int, threshold_count: int
@@ -23,7 +24,7 @@ def split_bytestring_as_shamir_shares(
     all_chunk_shares = []  # List of lists of related 16-bytes shares
 
     # Split the secret into tuples of 16 bytes exactly (after padding)
-    chunks = split_as_chunks(secret, chunk_size=16, must_pad=True)
+    chunks = split_as_chunks(secret, chunk_size=SHAMIR_CHUNK_LENGTH, must_pad=True)
 
     # Separate each chunk into share
     for chunk in chunks:
@@ -80,38 +81,9 @@ def recombine_secret_from_samir_shares(shares: list) -> bytes:
         chunk = _recombine_128b_shares_into_bytestring(chunk_shares)
         chunks.append(chunk)
 
-    secret_padded = b"".join(chunks)
-    secret = unpad(secret_padded, block_size=16)
+    secret = recombine_chunks(chunks, chunk_size=SHAMIR_CHUNK_LENGTH, must_unpad=True)
+
     return secret
-
-    """
-    for index in range(0, shares_count):
-        long_bytestring = shares_long_bytestring[index]
-        split_long_bytestring = split_as_chunks(long_bytestring, 16)
-        for slice in range(0, len(split_long_bytestring)):
-            share = index + 1, split_long_bytestring[slice]
-            shares.append(share)
-
-    shares1 = []
-    shares2 = []
-    shares3 = []
-
-    for share in range(len(shares)):
-        if shares[share][0] == 1:
-            shares1.append(shares[share])
-        elif shares[share][0] == 2:
-            shares2.append(shares[share])
-        elif shares[share][0] == 3:
-            shares3.append(shares[share])
-
-    all_shares = list(zip(shares1, shares2, shares3))
-
-    combined_shares = _recombine_shares_into_list(all_shares)
-    if bytestring_length % 16 != 0:
-        combined_shares[-1] = unpad(combined_shares[-1], 16)
-    bytestring_reconstructed = b"".join(combined_shares)
-    return bytestring_reconstructed
-    """
 
 
 def _split_128b_bytestring_into_shares(

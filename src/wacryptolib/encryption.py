@@ -213,4 +213,5 @@ ENCRYPTION_TYPES_REGISTRY = dict(
         },
     )
 
+#: These values can be used as 'encryption_type'.
 SUPPORTED_ENCRYPTION_TYPES = sorted(ENCRYPTION_TYPES_REGISTRY.keys())

@@ -1,15 +1,10 @@
 Shamir's shared secret
 ----------------------
 
-	Documentation about the functions which permit to use the Shamir's
-	algorithm to share a secret key into different shares.
-
-____
+This module provides utilities to create and recombine "shared secrets", for which some parts can be lost
+without preventing the reconstruction of the whole secret.
 
 .. autofunction:: wacryptolib.shared_secret.split_bytestring_as_shamir_shares
-
-_____
-
 
 .. autofunction:: wacryptolib.shared_secret.recombine_secret_from_samir_shares
 

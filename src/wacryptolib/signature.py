@@ -8,7 +8,7 @@ from Crypto.Signature import pss, DSS
 KNOWN_KEY_TYPES = Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey]
 
 
-def sign_bytestring(plaintext: bytes, signature_type: str, key:KNOWN_KEY_TYPES) -> dict:
+def sign_message(plaintext: bytes, signature_type: str, key:KNOWN_KEY_TYPES) -> dict:
     """
     Return a timestamped signature of the chosen type for the given payload,
     with the provided key (which must be of a compatible type).
@@ -31,7 +31,7 @@ def _sign_with_pss(key: RSA.RsaKey, plaintext: bytes) -> dict:
     """Sign a bytes message with a private RSA key.
 
     :param private_key: the private key
-    :param plaintext: the bytestring to signure_function": sign_with_ps
+    :param plaintext: the bytestring to sign
 
     :return: dict with keys "digest" (bytestring), "timestamp_utc" (integer) and "type" (string) of signature"""
 
@@ -83,7 +83,7 @@ def verify_signature(
 
     :param public_key: the cryptographic key used to verify the signature
     :param plaintext: the text which was signed
-    :param signature: dict describing the signature
+    :param signature: structure describing the signature
     """
 
     if signature["type"] == "PSS":
@@ -134,4 +134,5 @@ SIGNATURE_TYPES_REGISTRY = dict(
         },
     )
 
+#: These values can be used as 'signature_type'.
 SUPPORTED_SIGNATURE_TYPES = sorted(SIGNATURE_TYPES_REGISTRY.keys())

@@ -1,4 +1,4 @@
-API's documentation
+API Documentation
 ===================
 
 .. toctree::
@@ -7,6 +7,6 @@ API's documentation
    
    key_generation
    signature
-   cipher
+   encryption
    shared_secret
    utilities

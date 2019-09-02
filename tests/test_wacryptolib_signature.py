@@ -52,7 +52,7 @@ def test_sign_and_verify_with_rsa_key():
     keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(
         uid, key_length=1024
     )
-    signature = wacryptolib.signature.sign_bytestring(
+    signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], plaintext=plaintext, signature_type="PSS"
     )
     _common_signature_checks(keypair=keypair, plaintext=plaintext, signature=signature)
@@ -65,7 +65,7 @@ def test_sign_and_verify_with_dsa_key():
     keypair = wacryptolib.key_generation._generate_dsa_keypair_as_objects(
         uid, key_length=1024
     )
-    signature = wacryptolib.signature.sign_bytestring(
+    signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], plaintext=plaintext, signature_type="DSS"
     )
     _common_signature_checks(keypair=keypair, plaintext=plaintext, signature=signature)
@@ -78,7 +78,7 @@ def test_sign_and_verify_with_ecc_key():
     keypair = wacryptolib.key_generation._generate_ecc_keypair_as_objects(
         uid, curve="p256"
     )
-    signature = wacryptolib.signature.sign_bytestring(
+    signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], plaintext=plaintext, signature_type="DSS"
     )
     _common_signature_checks(keypair=keypair, plaintext=plaintext, signature=signature)
@@ -93,12 +93,12 @@ def test_generic_signature_errors():
     )
 
     with pytest.raises(ValueError, match="Unknown signature type"):
-        wacryptolib.signature.sign_bytestring(
+        wacryptolib.signature.sign_message(
                 key=keypair["private_key"], plaintext=plaintext, signature_type="EIXH"
         )
 
     with pytest.raises(ValueError, match="Incompatible key type"):
-        wacryptolib.signature.sign_bytestring(
+        wacryptolib.signature.sign_message(
                 key=keypair["private_key"], plaintext=plaintext, signature_type="DSS"  # RSA key not accepted here
         )
 

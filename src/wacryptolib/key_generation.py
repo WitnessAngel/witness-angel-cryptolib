@@ -6,12 +6,13 @@ from Crypto.PublicKey import RSA, DSA, ECC
 
 
 def generate_asymmetric_keypair(
-    uid: uuid.UUID, key_type: str, key_length=2048, curve="p256"
+    uid: uuid.UUID, key_type: str, key_length=2048, curve="p521"
 ):
     """Generate a (public_key, private_key) pair in PEM format.
 
     :param uid: UUID of the encryption operation
-    :param key_length: length of the key in bits, must be superior to 1024.
+
+    Other arguments are used or not depending on the chosen `key_type`.
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
 
@@ -157,4 +158,6 @@ KEY_TYPES_REGISTRY = dict(
         },
     )
 
+
+#: These values can be used as 'key_type'.
 SUPPORTED_KEY_TYPES = sorted(KEY_TYPES_REGISTRY.keys())

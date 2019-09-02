@@ -1,24 +1,34 @@
 Signature
 =========
 
-	Documentation about functions which permit to sign a message
-	then verify the signature. 
-	Available signature types : RSA, DSA.
+This module allows one to sign messages, and then verify the signature.
 
 
-RSA
----
+
+Public API
+--------------
+
+.. autodata:: wacryptolib.signature.SUPPORTED_SIGNATURE_TYPES
+
+.. autofunction:: wacryptolib.signature.sign_message
+
+.. autofunction:: wacryptolib.signature.verify_signature
+
+
+
+Private API
+---------------
+
+The functions below are only documented for the details they give on specific arguments.
+
+
+PSS
+~~~~~~~~
 
 .. autofunction:: wacryptolib.signature._sign_with_pss
 
 
-DSA
----
+DSS
+~~~~~~~~
 
 .. autofunction:: wacryptolib.signature._sign_with_dss
-
-
-Verify a signature
-------------------
-
-.. autofunction:: wacryptolib.signature.verify_signature

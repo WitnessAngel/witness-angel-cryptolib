@@ -7,7 +7,7 @@ import time
 from Crypto.Random import get_random_bytes
 import wacryptolib
 from wacryptolib import key_generation, signature
-from wacryptolib.signature import sign_with_pss, sign_with_dss
+from wacryptolib.signature import _sign_with_pss, _sign_with_dss
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
@@ -52,13 +52,13 @@ def _sign_content(content, algo):
 
     signer_generator = dict(
         RSA={
-            "sign_function": sign_with_pss,
+            "sign_function": _sign_with_pss,
             "keypair": key_generation.generate_assymetric_keypair(
                 uid=uid, key_type="RSA"
             ),
         },
         DSA={
-            "sign_function": sign_with_dss,
+            "sign_function": _sign_with_dss,
             "keypair": key_generation.generate_assymetric_keypair(
                 uid=uid, key_type="DSA"
             ),
@@ -100,6 +100,8 @@ def _do_encrypt(plaintext, algorithms):
     "cipher_algo": [`tuple of algorithms to cipher the plaintext`],
     "signature_algo": [`tuple of algorithms to sign`],
     "key_cipher_algo": [`tuple of algorithms to cipher the ciphering key`]
+    }
+
     :return: dictionary composed of information necessary to decipher the ciphertext.
     It has to be parameter of function _do_decrypt."""
 
@@ -113,9 +115,9 @@ def _do_encrypt(plaintext, algorithms):
     for cipher_algo, signature_algo, key_cipher_algo in algos:
 
         cipher_algo_generator = dict(
-            aes={"function": wacryptolib.encryption.encrypt_via_aes_eax, "key_length": 16},
-            chacha={"function": wacryptolib.encryption.encrypt_via_chacha20_poly1305, "key_length": 32},
-            RSA=wacryptolib.encryption.encrypt_via_rsa_oaep,
+            aes={"function": wacryptolib.encryption._encrypt_via_aes_eax, "key_length": 16},
+            chacha={"function": wacryptolib.encryption._encrypt_via_chacha20_poly1305, "key_length": 32},
+            RSA=wacryptolib.encryption._encrypt_via_rsa_oaep,
         )
         cipher_key = get_random_bytes(cipher_algo_generator[cipher_algo]["key_length"])
         encryption = cipher_algo_generator[cipher_algo]["function"](
@@ -200,9 +202,9 @@ def _do_decrypt(container_data):
 
         data_encryption_strata = container_data["data_encryption_strata"][nb_encryption]
         decipher_algo_generator = dict(
-            aes=wacryptolib.encryption.decrypt_via_aes_eax,
-            chacha=wacryptolib.encryption.decrypt_via_chacha20_poly1305,
-            RSA=wacryptolib.encryption.decrypt_via_rsa_oaep,
+            aes=wacryptolib.encryption._decrypt_via_aes_eax,
+            chacha=wacryptolib.encryption._decrypt_via_chacha20_poly1305,
+            RSA=wacryptolib.encryption._decrypt_via_rsa_oaep,
         )
         algo_encryption_key = data_encryption_strata["key_encryption_strata"][
             "encryption_algorithm"

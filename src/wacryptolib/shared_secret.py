@@ -49,7 +49,7 @@ def split_bytestring_as_shamir_shares(
     return full_shares
 
 
-def reconstruct_secret_from_samir_shares(shares: list) -> bytes:
+def recombine_secret_from_samir_shares(shares: list) -> bytes:
     """Permits to reconstruct a key which has its secret shared
     into `shares_count` shares thanks to a list of `shares`
 

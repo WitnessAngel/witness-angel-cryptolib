@@ -31,7 +31,7 @@ def generate_asymmetric_keypair(
     return keypair
 
 
-def generate_rsa_keypair_as_pem_bytestrings(uid: uuid.UUID, key_length: int) -> dict:
+def _generate_rsa_keypair_as_pem_bytestrings(uid: uuid.UUID, key_length: int) -> dict:
     """Generate a RSA (public_key, private_key) pair in PEM format.
 
     :param uid: UUID of the encryption operation
@@ -57,7 +57,7 @@ def _generate_rsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
     return keypair
 
 
-def generate_dsa_keypair_as_pem_bytestrings(uid: uuid.UUID, key_length: int):
+def _generate_dsa_keypair_as_pem_bytestrings(uid: uuid.UUID, key_length: int):
     """Generate a DSA (public_key, private_key) pair in PEM format.
 
     DSA keypair is not used for encryption/decryption, only for signing.
@@ -85,7 +85,7 @@ def _generate_dsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
     return keypair
 
 
-def generate_ecc_keypair_as_pem_bytestrings(uid: uuid.UUID, curve: str):
+def _generate_ecc_keypair_as_pem_bytestrings(uid: uuid.UUID, curve: str):
     """Generate an ECC (public_key, private_key) pair in PEM format
 
     :param uid: UUID of the encryption operation
@@ -141,18 +141,20 @@ def _get_pseudorandom_generator(uid):
 
 KEY_TYPES_REGISTRY = dict(
         RSA={
-            "generation_function": generate_rsa_keypair_as_pem_bytestrings,
+            "generation_function": _generate_rsa_keypair_as_pem_bytestrings,
             "generation_extra_parameters": ["key_length"],
             "pem_import_function": RSA.import_key
         },
         DSA={
-            "generation_function": generate_dsa_keypair_as_pem_bytestrings,
+            "generation_function": _generate_dsa_keypair_as_pem_bytestrings,
             "generation_extra_parameters": ["key_length"],
             "pem_import_function": DSA.import_key
         },
         ECC={
-            "generation_function": generate_ecc_keypair_as_pem_bytestrings,
+            "generation_function": _generate_ecc_keypair_as_pem_bytestrings,
             "generation_extra_parameters": ["curve"],
             "pem_import_function": ECC.import_key
         },
     )
+
+SUPPORTED_KEY_TYPES = sorted(KEY_TYPES_REGISTRY.keys())

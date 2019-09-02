@@ -30,19 +30,19 @@ def test_shared_secret_normal_cases():
         assert len(shares) == shares_count
 
         selected_shares = random.sample(shares, k=threshold_count)
-        secret_reconstructed = wacryptolib.shared_secret.reconstruct_secret_from_samir_shares(
+        secret_reconstructed = wacryptolib.shared_secret.recombine_secret_from_samir_shares(
             selected_shares
         )
         assert secret_reconstructed == secret  # Just enough shares
 
         selected_shares = random.sample(shares, k=threshold_count + 1)
-        secret_reconstructed = wacryptolib.shared_secret.reconstruct_secret_from_samir_shares(
+        secret_reconstructed = wacryptolib.shared_secret.recombine_secret_from_samir_shares(
             selected_shares
         )
         assert secret_reconstructed == secret  # With MORE shares it works too
 
         selected_shares = shares
-        secret_reconstructed = wacryptolib.shared_secret.reconstruct_secret_from_samir_shares(
+        secret_reconstructed = wacryptolib.shared_secret.recombine_secret_from_samir_shares(
             selected_shares
         )
         assert secret_reconstructed == secret  # With ALL shares it works too
@@ -50,7 +50,7 @@ def test_shared_secret_normal_cases():
         if threshold_count > 1:
             selected_shares = random.sample(shares, k=threshold_count - 1)
             try:
-                secret_reconstructed = wacryptolib.shared_secret.reconstruct_secret_from_samir_shares(
+                secret_reconstructed = wacryptolib.shared_secret.recombine_secret_from_samir_shares(
                     selected_shares
                 )
             except ValueError:  # Bad reconstructed padding etc.
@@ -66,7 +66,7 @@ def test_shared_secret_corner_cases():
     # TODO - use proper validation errors instead of asserts in shared_secret code
 
     with pytest.raises(AssertionError):
-        wacryptolib.shared_secret.reconstruct_secret_from_samir_shares([])
+        wacryptolib.shared_secret.recombine_secret_from_samir_shares([])
 
     secret = get_random_bytes(50)
 
@@ -81,4 +81,4 @@ def test_shared_secret_corner_cases():
         )
 
     with pytest.raises(AssertionError):
-        wacryptolib.shared_secret.reconstruct_secret_from_samir_shares([])
+        wacryptolib.shared_secret.recombine_secret_from_samir_shares([])

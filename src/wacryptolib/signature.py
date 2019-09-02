@@ -10,8 +10,8 @@ KNOWN_KEY_TYPES = Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey]
 
 def sign_bytestring(plaintext: bytes, signature_type: str, key:KNOWN_KEY_TYPES) -> dict:
     """
-    Return a timestamped signature of the chosen type (PSS or DSS) for the given payload,
-    with the provided key (which must be of a compatible class).
+    Return a timestamped signature of the chosen type for the given payload,
+    with the provided key (which must be of a compatible type).
 
     :return: dictionary with signature data."""
 
@@ -22,10 +22,12 @@ def sign_bytestring(plaintext: bytes, signature_type: str, key:KNOWN_KEY_TYPES) 
     if not isinstance(key, signature_conf["compatible_key_types"]):
         raise ValueError("Incompatible key type %s for %s signature" % (type(key), signature_type))
     signature_function = signature_conf["signature_function"]
-    return signature_function(key=key, plaintext=plaintext)
+    signature = signature_function(key=key, plaintext=plaintext)
+    assert signature.get("type")
+    return signature
 
 
-def sign_with_pss(key: RSA.RsaKey, plaintext: bytes) -> dict:
+def _sign_with_pss(key: RSA.RsaKey, plaintext: bytes) -> dict:
     """Sign a bytes message with a private RSA key.
 
     :param private_key: the private key
@@ -43,7 +45,7 @@ def sign_with_pss(key: RSA.RsaKey, plaintext: bytes) -> dict:
     return signature
 
 
-def sign_with_dss(
+def _sign_with_dss(
     key: Union[DSA.DsaKey, ECC.EccKey], plaintext: bytes
 ) -> dict:
     """Sign a bytes message with a private DSA or ECC key.
@@ -122,11 +124,13 @@ def _compute_timestamped_hash(plaintext: bytes, timestamp_utc: int):
 
 SIGNATURE_TYPES_REGISTRY = dict(
         PSS={
-            "signature_function": sign_with_pss,
+            "signature_function": _sign_with_pss,
             "compatible_key_types": (RSA.RsaKey),
         },
         DSS={
-            "signature_function": sign_with_dss,
+            "signature_function": _sign_with_dss,
             "compatible_key_types": (DSA.DsaKey, ECC.EccKey),
         },
     )
+
+SUPPORTED_SIGNATURE_TYPES = sorted(SIGNATURE_TYPES_REGISTRY.keys())

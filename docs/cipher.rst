@@ -9,38 +9,38 @@ Cipher
 AES with CBC mode
 -----------------
 
-.. autofunction:: wacryptolib.encryption.encrypt_via_aes_cbc
+.. autofunction:: wacryptolib.encryption._encrypt_via_aes_cbc
 
 ____
 
-.. autofunction:: wacryptolib.encryption.decrypt_via_aes_cbc
+.. autofunction:: wacryptolib.encryption._decrypt_via_aes_cbc
 
 
 AES with EAX mode
 -----------------
 
-.. autofunction:: wacryptolib.encryption.encrypt_via_aes_eax
+.. autofunction:: wacryptolib.encryption._encrypt_via_aes_eax
 
 ____
 
-.. autofunction:: wacryptolib.encryption.decrypt_via_aes_eax
+.. autofunction:: wacryptolib.encryption._decrypt_via_aes_eax
 
 
 RSA - PKCS#1 OAEP
 -----------------
 
-.. autofunction:: wacryptolib.encryption.encrypt_via_rsa_oaep
+.. autofunction:: wacryptolib.encryption._encrypt_via_rsa_oaep
 
 ____
 
-.. autofunction:: wacryptolib.encryption.decrypt_via_rsa_oaep
+.. autofunction:: wacryptolib.encryption._decrypt_via_rsa_oaep
 
 
 ChaCha20_Poly1305
 -----------------
 
-.. autofunction:: wacryptolib.encryption.encrypt_via_chacha20_poly1305
+.. autofunction:: wacryptolib.encryption._encrypt_via_chacha20_poly1305
 
 ____
 
-.. autofunction:: wacryptolib.encryption.decrypt_via_chacha20_poly1305
+.. autofunction:: wacryptolib.encryption._decrypt_via_chacha20_poly1305

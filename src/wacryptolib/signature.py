@@ -16,6 +16,7 @@ def sign_message(plaintext: bytes, signature_type: str, key:KNOWN_KEY_TYPES) -> 
     :return: dictionary with signature data."""
 
     assert signature_type, signature_type
+    signature_type = signature_type.upper()
     signature_conf = SIGNATURE_TYPES_REGISTRY.get(signature_type)
     if signature_conf is None:
         raise ValueError("Unknown signature type '%s'" % signature_type)

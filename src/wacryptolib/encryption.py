@@ -46,7 +46,8 @@ def decrypt_bytestring(key: bytes, encryption: dict, encryption_type: str) -> by
 def _encrypt_via_aes_cbc(key: bytes, plaintext: bytes) -> dict:
     """Encrypt a bytestring using AES (CBC mode).
 
-    :param key: AES cryptographic key of a proper length for chose AES flavour.
+    :param key: AES cryptographic key. It must be 16, 24 or 32 bytes long
+        (respectively for *AES-128*, *AES-192* or *AES-256*).
     :param plaintext: the bytes to cipher
 
     :return: dict with fields "iv" and "ciphertext" as base64 strings"""
@@ -78,7 +79,8 @@ def _decrypt_via_aes_cbc(key: bytes, encryption: dict) -> bytes:
 def _encrypt_via_aes_eax(key: bytes, plaintext: bytes) -> dict:
     """Encrypt a bytestring using AES (EAX mode).
 
-    :param key: AES cryptographic key of a proper length for chose AES flavour.
+    :param key: AES cryptographic key. It must be 16, 24 or 32 bytes long
+        (respectively for *AES-128*, *AES-192* or *AES-256*).
     :param plaintext: the bytes to cipher
 
     :return: dict with fields "ciphertext", "tag" and "nonce" as base64 strings"""

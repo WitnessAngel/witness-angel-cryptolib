@@ -41,6 +41,17 @@ def cli(ctx, config):
     ctx.obj["config"] = config  # TODO read and validate this file later
 
 
+def get_cryptolib_proxy():
+    """
+    TODO - if ths jsonrpc webservice is ready, instantiate and return a jsonrpc client here instead of the local lib.
+    Note that of course the waserver would have to be launched in a separate console!
+
+    We shall ensure that the wacryptolib root package and the proxy both expose the same high level functions like "generate_assymetric_keypair(uid, ...)"
+    """
+    import wacryptolib
+    return wacryptolib
+
+
 def _sign_content(content, algo):
     """Permits to sign a hash of `content`
 
@@ -78,15 +89,6 @@ def _sign_content(content, algo):
     return signature
 
 
-def get_cryptolib_proxy():
-    """
-    TODO - if ths jsonrpc webservice is ready, instantiate and return a jsonrpc client here instead of the local lib.
-    Note that of course the waserver would have to be launched in a separate console!
-
-    We shall ensure that the wacryptolib root package and the proxy both expose the same high level functions like "generate_assymetric_keypair(uid, ...)"
-    """
-    import wacryptolib
-    return wacryptolib
 
 
 def _do_encrypt(plaintext, algorithms):
@@ -108,9 +110,9 @@ def _do_encrypt(plaintext, algorithms):
     uid_container = uuid.uuid4()
     data_encryption_strata = []
     algos = zip(
-        algorithms["cipher_algo"][0],
-        algorithms["signature_algo"][0],
-        algorithms["key_cipher_algo"][0],
+        algorithms["cipher_algo"],
+        algorithms["signature_algo"],
+        algorithms["key_cipher_algo"],
     )
     for cipher_algo, signature_algo, key_cipher_algo in algos:
 

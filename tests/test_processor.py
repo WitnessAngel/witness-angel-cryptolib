@@ -2,7 +2,7 @@ import processor
 import random
 
 
-def test_container_encryption():
+def __test_container_encryption():
     plaintext = "Mon hât èst joli".encode("utf-8")
     algorithms = {
         "cipher_algo": ["aes", "chacha", "aes"],

@@ -24,7 +24,7 @@ def test_generic_encryption_and_decryption_errors():
 
     with pytest.raises(ValueError, match="Unknown cipher type"):
         wacryptolib.encryption.decrypt_bytestring(
-            key=key, encryption={}, encryption_type="EXHD"
+            key=key, encryption={"type": "EXHD"}
         )
 
 
@@ -38,7 +38,7 @@ def test_aes_cbc_encryption_and_decryption():
     )
 
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
-        key=key, encryption=encryption, encryption_type="AES_CBC"
+        key=key, encryption=encryption
     )
 
     assert decrypted_content == binary_content
@@ -54,7 +54,7 @@ def test_aes_eax_encryption_and_decryption():
     )
 
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
-        key=key, encryption=encryption, encryption_type="AES_EAX"
+        key=key, encryption=encryption
     )
 
     assert decrypted_content == binary_content
@@ -66,11 +66,11 @@ def test_chacha20_poly1305_encryption_and_decryption():
     binary_content = _get_binary_content()
 
     encryption = wacryptolib.encryption.encrypt_bytestring(
-        key, binary_content, encryption_type="CHACHA20_POLY1305"
+        key=key, plaintext=binary_content, encryption_type="CHACHA20_POLY1305"
     )
 
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
-        key=key, encryption=encryption, encryption_type="CHACHA20_POLY1305"
+        key=key, encryption=encryption
     )
 
     assert decrypted_content == binary_content
@@ -91,7 +91,7 @@ def test_rsa_oaep_encryption_and_decryption():
     )
 
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
-        key=keypair["private_key"], encryption=encryption, encryption_type="RSA_OAEP"
+        key=keypair["private_key"], encryption=encryption
     )
 
     assert decrypted_content == binary_content

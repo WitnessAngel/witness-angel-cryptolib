@@ -13,7 +13,8 @@ def sign_message(plaintext: bytes, signature_type: str, key: KNOWN_KEY_TYPES) ->
     Return a timestamped signature of the chosen type for the given payload,
     with the provided key (which must be of a compatible type).
 
-    :return: dictionary with signature data."""
+    :return: dictionary with signature data, and
+        a "type" field echoing `signature_type`."""
 
     assert signature_type, signature_type
     signature_type = signature_type.upper()
@@ -26,11 +27,11 @@ def sign_message(plaintext: bytes, signature_type: str, key: KNOWN_KEY_TYPES) ->
         )
     signature_function = signature_conf["signature_function"]
     signature = signature_function(key=key, plaintext=plaintext)
-    assert signature.get("type")
+    signature["type"] = signature_type
     return signature
 
 
-def _sign_with_pss(key: RSA.RsaKey, plaintext: bytes) -> dict:
+def _sign_with_pss(plaintext: bytes, key: RSA.RsaKey) -> dict:
     """Sign a bytes message with a private RSA key.
 
     :param private_key: the private key
@@ -44,11 +45,11 @@ def _sign_with_pss(key: RSA.RsaKey, plaintext: bytes) -> dict:
     )
     signer = pss.new(key)
     digest = signer.sign(hash_payload)
-    signature = {"type": "PSS", "timestamp_utc": timestamp_utc, "digest": digest}
+    signature = {"timestamp_utc": timestamp_utc, "digest": digest}
     return signature
 
 
-def _sign_with_dss(key: Union[DSA.DsaKey, ECC.EccKey], plaintext: bytes) -> dict:
+def _sign_with_dss(plaintext: bytes, key: Union[DSA.DsaKey, ECC.EccKey]) -> dict:
     """Sign a bytes message with a private DSA or ECC key.
 
     We use the `fips-186-3` mode for the signer because signature is randomized,
@@ -65,7 +66,7 @@ def _sign_with_dss(key: Union[DSA.DsaKey, ECC.EccKey], plaintext: bytes) -> dict
     )
     signer = DSS.new(key, "fips-186-3")
     digest = signer.sign(hash_payload)
-    signature = {"type": "DSS", "timestamp_utc": timestamp, "digest": digest}
+    signature = {"timestamp_utc": timestamp, "digest": digest}
     return signature
 
 
@@ -92,7 +93,7 @@ def verify_signature(plaintext: bytes, signature: dict, key: Union[KNOWN_KEY_TYP
     verifier.verify(hash_payload, signature["digest"])
 
 
-def _get_utc_timestamp():
+def _get_utc_timestamp() -> int:
     """Get current UTC timestamp.
 
     :return: timestamp as an integer

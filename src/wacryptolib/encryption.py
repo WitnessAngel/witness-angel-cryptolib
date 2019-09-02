@@ -21,29 +21,32 @@ def _get_encryption_type_conf(encryption_type):
     return encryption_type_conf
 
 
-def encrypt_bytestring(key: bytes, plaintext: bytes, encryption_type: str) -> dict:
+def encrypt_bytestring(plaintext: bytes, encryption_type: str, key: bytes, ) -> dict:
     """Encrypt a bytestring with the selected algorithm for the given payload,
     using the provided key (which must be of a compatible type and length).
 
-    :return: dictionary with encryption data."""
+    :return: dictionary with encryption data, and
+        a "type" field echoing `encryption_type`."""
     encryption_type_conf = _get_encryption_type_conf(encryption_type=encryption_type)
     encryption_function = encryption_type_conf["encryption_function"]
     encryption = encryption_function(key=key, plaintext=plaintext)
+    encryption["type"] = encryption_type
     return encryption
 
 
-def decrypt_bytestring(key: bytes, encryption: dict, encryption_type: str) -> bytes:
+def decrypt_bytestring(encryption: dict, key: bytes) -> bytes:
     """Decrypt a bytestring with the selected algorithm for the given encryption data dict,
     using the provided key (which must be of a compatible type and length).
 
     :return: dictionary with encryption data."""
-    encryption_type_conf = _get_encryption_type_conf(encryption_type=encryption_type)
+    encryption_type = encryption["type"]
+    encryption_type_conf = _get_encryption_type_conf(encryption_type)
     decryption_function = encryption_type_conf["decryption_function"]
     plaintext = decryption_function(key=key, encryption=encryption)
     return plaintext
 
 
-def _encrypt_via_aes_cbc(key: bytes, plaintext: bytes) -> dict:
+def _encrypt_via_aes_cbc(plaintext: bytes, key: bytes) -> dict:
     """Encrypt a bytestring using AES (CBC mode).
 
     :param key: AES cryptographic key. It must be 16, 24 or 32 bytes long
@@ -59,7 +62,7 @@ def _encrypt_via_aes_cbc(key: bytes, plaintext: bytes) -> dict:
     return encryption
 
 
-def _decrypt_via_aes_cbc(key: bytes, encryption: dict) -> bytes:
+def _decrypt_via_aes_cbc(encryption: dict, key: bytes) -> bytes:
     """Decrypt a bytestring using AES (CBC mode).
 
     :param key: the cryptographic key used to decipher
@@ -76,7 +79,7 @@ def _decrypt_via_aes_cbc(key: bytes, encryption: dict) -> bytes:
     return plaintext
 
 
-def _encrypt_via_aes_eax(key: bytes, plaintext: bytes) -> dict:
+def _encrypt_via_aes_eax(plaintext: bytes, key: bytes) -> dict:
     """Encrypt a bytestring using AES (EAX mode).
 
     :param key: AES cryptographic key. It must be 16, 24 or 32 bytes long
@@ -96,7 +99,7 @@ def _encrypt_via_aes_eax(key: bytes, plaintext: bytes) -> dict:
     return encryption
 
 
-def _decrypt_via_aes_eax(key: bytes, encryption: dict) -> bytes:
+def _decrypt_via_aes_eax(encryption: dict, key: bytes) -> bytes:
     """Decrypt a bytestring using AES (EAX mode).
 
     :param key: the cryptographic key used to decipher
@@ -111,7 +114,7 @@ def _decrypt_via_aes_eax(key: bytes, encryption: dict) -> bytes:
 
 
 def _encrypt_via_chacha20_poly1305(
-    key: bytes, plaintext: bytes, aad: bytes = b"header"
+        plaintext: bytes, key: bytes, aad: bytes = b"header"
 ) -> dict:
     """Encrypt a bytestring with the stream cipher ChaCha20.
 
@@ -137,7 +140,7 @@ def _encrypt_via_chacha20_poly1305(
     return encryption
 
 
-def _decrypt_via_chacha20_poly1305(key: bytes, encryption: dict) -> bytes:
+def _decrypt_via_chacha20_poly1305(encryption: dict, key: bytes) -> bytes:
     """Decrypt a bytestring with the stream cipher ChaCha20.
 
     :param key: the cryptographic key used to decipher
@@ -154,13 +157,13 @@ def _decrypt_via_chacha20_poly1305(key: bytes, encryption: dict) -> bytes:
     return plaintext
 
 
-def _encrypt_via_rsa_oaep(key: RSA.RsaKey, plaintext: bytes) -> bytes:
+def _encrypt_via_rsa_oaep(plaintext: bytes, key: RSA.RsaKey) -> dict:
     """Encrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
     :param key: public RSA key
     :param plaintext: the bytes to cipher
 
-    :return: a list of base64-encoded chunks of variable width"""
+    :return: a dict with field `digest_list`, containing base64-encoded chunks of variable width."""
 
     cipher = PKCS1_OAEP.new(key=key, hashAlgo=RSA_OAEP_HASH_ALGO)
     chunks = split_as_chunks(
@@ -170,14 +173,14 @@ def _encrypt_via_rsa_oaep(key: RSA.RsaKey, plaintext: bytes) -> bytes:
         accept_incomplete_chunk=True,
     )
 
-    encryption = []
+    encrypted_chunks = []
     for chunk in chunks:
         encrypted_chunk = cipher.encrypt(chunk)
-        encryption.append(b64encode(encrypted_chunk))
-    return encryption
+        encrypted_chunks.append(b64encode(encrypted_chunk))
+    return dict(digest_list=encrypted_chunks)
 
 
-def _decrypt_via_rsa_oaep(key: RSA.RsaKey, encryption: bytes) -> bytes:
+def _decrypt_via_rsa_oaep(encryption: dict, key: RSA.RsaKey) -> bytes:
     """Decrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
     :param key: private RSA key
@@ -187,7 +190,9 @@ def _decrypt_via_rsa_oaep(key: RSA.RsaKey, encryption: bytes) -> bytes:
 
     decipher = PKCS1_OAEP.new(key, hashAlgo=RSA_OAEP_HASH_ALGO)
 
-    chunks = [b64decode(chunk) for chunk in encryption]
+    encrypted_chunk = encryption["digest_list"]
+
+    chunks = [b64decode(chunk) for chunk in encrypted_chunk]
 
     decrypted_chunks = []
     for chunk in chunks:

@@ -13,6 +13,8 @@ Unless specified otherwise, UTF8 is assumed as the encoding of all text data.
 
 When a serialization format doesn't natively support binary strings (e.g. Json), binary strings must be encoded with Base-64 by default.
 
+Preferably use keyword-only arguments in APIs, to ensure a better forward-compatibility of the client.
+
 
 Safety and performance rules
 --------------------------------

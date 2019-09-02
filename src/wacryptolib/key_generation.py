@@ -6,14 +6,15 @@ from Crypto.PublicKey import RSA, DSA, ECC
 
 def generate_asymmetric_keypair(
     uid: uuid.UUID, key_type: str, key_length=2048, curve="p521"
-):
+) -> dict:
     """Generate a (public_key, private_key) pair in PEM format.
 
     :param uid: UUID of the encryption operation
 
     Other arguments are used or not depending on the chosen `key_type`.
 
-    :return: dictionary with "private_key" and "public_key" fields in PEM format"""
+    :return: dictionary with "private_key" and "public_key" fields in PEM format, and
+        a "type" field echoing `key_type`. """
 
     potential_params = dict(key_length=key_length, curve=curve)
 
@@ -29,6 +30,8 @@ def generate_asymmetric_keypair(
     keypair = generation_function(
         uid=uid, **{k: potential_params[k] for k in generation_extra_parameters}
     )
+
+    keypair["type"] = key_type
 
     return keypair
 
@@ -59,7 +62,7 @@ def _generate_rsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
     return keypair
 
 
-def _generate_dsa_keypair_as_pem_bytestrings(uid: uuid.UUID, key_length: int):
+def _generate_dsa_keypair_as_pem_bytestrings(uid: uuid.UUID, key_length: int) -> dict:
     """Generate a DSA (public_key, private_key) pair in PEM format.
 
     DSA keypair is not used for encryption/decryption, only for signing.
@@ -87,7 +90,7 @@ def _generate_dsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
     return keypair
 
 
-def _generate_ecc_keypair_as_pem_bytestrings(uid: uuid.UUID, curve: str):
+def _generate_ecc_keypair_as_pem_bytestrings(uid: uuid.UUID, curve: str) -> dict:
     """Generate an ECC (public_key, private_key) pair in PEM format
 
     :param uid: UUID of the encryption operation
@@ -117,7 +120,7 @@ def _generate_ecc_keypair_as_objects(uid: uuid.UUID, curve: str) -> dict:
     return keypair
 
 
-def _serialize_key_object_to_pem_bytestring(key):
+def _serialize_key_object_to_pem_bytestring(key) -> str:
     """Convert a private or public key to PEM-formatted bytestring."""
     pem = key.export_key(format="PEM")
     return pem

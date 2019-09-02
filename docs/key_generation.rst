@@ -23,17 +23,17 @@ The functions below are only documented for the details they give on specific ar
 RSA
 ~~~~~~~~
 
-.. autofunction:: wacryptolib.key_generation._generate_rsa_keypair_as_pem_bytestrings
+.. autofunction:: wacryptolib.key_generation._generate_rsa_keypair_as_objects
 
 
 DSA
 ~~~~~~~~
 
-.. autofunction:: wacryptolib.key_generation._generate_dsa_keypair_as_pem_bytestrings
+.. autofunction:: wacryptolib.key_generation._generate_dsa_keypair_as_objects
 
 
 ECC
 ~~~~~~~~
 
-.. autofunction:: wacryptolib.key_generation._generate_ecc_keypair_as_pem_bytestrings
+.. autofunction:: wacryptolib.key_generation._generate_ecc_keypair_as_objects
 

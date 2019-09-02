@@ -28,7 +28,7 @@ def sign_message(plaintext: bytes, signature_type: str, key: KNOWN_KEY_TYPES) ->
     signature_function = signature_conf["signature_function"]
     signature = signature_function(key=key, plaintext=plaintext)
     signature["type"] = signature_type
-    return signature
+    return signature  # FIXME encode as base64 the bytes!!!!
 
 
 def _sign_with_pss(plaintext: bytes, key: RSA.RsaKey) -> dict:

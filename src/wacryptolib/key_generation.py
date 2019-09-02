@@ -5,16 +5,17 @@ from Crypto.PublicKey import RSA, DSA, ECC
 
 
 def generate_asymmetric_keypair(
-    uid: uuid.UUID, key_type: str, key_length=2048, curve="p521"
+    uid: uuid.UUID, key_type: str, serialize=True, key_length=2048, curve="p521"
 ) -> dict:
-    """Generate a (public_key, private_key) pair in PEM format.
+    """Generate a (public_key, private_key) pair.
 
     :param uid: UUID of the encryption operation
+    :param serialize: Indicates if key must be serialized as PEM string
 
     Other arguments are used or not depending on the chosen `key_type`.
 
-    :return: dictionary with "private_key" and "public_key" fields in PEM format, and
-        a "type" field echoing `key_type`. """
+    :return: dictionary with "private_key" and "public_key" fields as objects or PEM-format strings,
+        and a "type" field echoing `key_type`. """
 
     potential_params = dict(key_length=key_length, curve=curve)
 
@@ -31,26 +32,23 @@ def generate_asymmetric_keypair(
         uid=uid, **{k: potential_params[k] for k in generation_extra_parameters}
     )
 
+    assert set(keypair.keys()) == set(["private_key", "public_key"])
+    if serialize:
+        keypair["private_key"] = _serialize_key_object_to_pem_bytestring(keypair["private_key"])
+        keypair["public_key"] = _serialize_key_object_to_pem_bytestring(keypair["public_key"])
+
     keypair["type"] = key_type
 
     return keypair
 
 
-def _generate_rsa_keypair_as_pem_bytestrings(uid: uuid.UUID, key_length: int) -> dict:
+def _generate_rsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
     """Generate a RSA (public_key, private_key) pair in PEM format.
 
     :param uid: UUID of the encryption operation
     :param key_length: length of the key in bits, must be superior to 1024.
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
-    keypair = _generate_rsa_keypair_as_objects(uid=uid, key_length=key_length)
-    private_key = _serialize_key_object_to_pem_bytestring(keypair["private_key"])
-    public_key = _serialize_key_object_to_pem_bytestring(keypair["public_key"])
-    pem_keypair = {"private_key": private_key, "public_key": public_key}
-    return pem_keypair
-
-
-def _generate_rsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
 
     if key_length < 1024:
         raise ValueError("The RSA key length must be superior or equal to 1024 bits")
@@ -62,7 +60,7 @@ def _generate_rsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
     return keypair
 
 
-def _generate_dsa_keypair_as_pem_bytestrings(uid: uuid.UUID, key_length: int) -> dict:
+def _generate_dsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
     """Generate a DSA (public_key, private_key) pair in PEM format.
 
     DSA keypair is not used for encryption/decryption, only for signing.
@@ -71,14 +69,6 @@ def _generate_dsa_keypair_as_pem_bytestrings(uid: uuid.UUID, key_length: int) ->
     :param key_length: length of the key in bits, must be superior to 1024.
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
-    keypair = _generate_dsa_keypair_as_objects(uid=uid, key_length=key_length)
-    private_key = _serialize_key_object_to_pem_bytestring(keypair["private_key"])
-    public_key = _serialize_key_object_to_pem_bytestring(keypair["public_key"])
-    pem_keypair = {"private_key": private_key, "public_key": public_key}
-    return pem_keypair
-
-
-def _generate_dsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
 
     if key_length < 1024:
         raise ValueError("The DSA key length must be superior or equal to 1024 bits")
@@ -90,22 +80,13 @@ def _generate_dsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
     return keypair
 
 
-def _generate_ecc_keypair_as_pem_bytestrings(uid: uuid.UUID, curve: str) -> dict:
+def _generate_ecc_keypair_as_objects(uid: uuid.UUID, curve: str) -> dict:
     """Generate an ECC (public_key, private_key) pair in PEM format
 
     :param uid: UUID of the encryption operation
     :param curve: curve chosen among p256, p384, p521 and maybe others.
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
-
-    keypair = _generate_ecc_keypair_as_objects(uid=uid, curve=curve)
-    private_key = _serialize_key_object_to_pem_bytestring(keypair["private_key"])
-    public_key = _serialize_key_object_to_pem_bytestring(keypair["public_key"])
-    pem_keypair = {"private_key": private_key, "public_key": public_key}
-    return pem_keypair
-
-
-def _generate_ecc_keypair_as_objects(uid: uuid.UUID, curve: str) -> dict:
 
     if curve not in ECC._curves:
         raise ValueError(
@@ -146,17 +127,17 @@ def _get_pseudorandom_generator(uid):
 
 KEY_TYPES_REGISTRY = dict(
     RSA={
-        "generation_function": _generate_rsa_keypair_as_pem_bytestrings,
+        "generation_function": _generate_rsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length"],
         "pem_import_function": RSA.import_key,
     },
     DSA={
-        "generation_function": _generate_dsa_keypair_as_pem_bytestrings,
+        "generation_function": _generate_dsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length"],
         "pem_import_function": DSA.import_key,
     },
     ECC={
-        "generation_function": _generate_ecc_keypair_as_pem_bytestrings,
+        "generation_function": _generate_ecc_keypair_as_objects,
         "generation_extra_parameters": ["curve"],
         "pem_import_function": ECC.import_key,
     },

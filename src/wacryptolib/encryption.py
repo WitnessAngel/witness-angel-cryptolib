@@ -170,7 +170,8 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key: RSA.RsaKey) -> dict:
         plaintext,
         chunk_size=RSA_OAEP_CHUNKS_SIZE,
         must_pad=False,
-        accept_incomplete_chunk=True)
+        accept_incomplete_chunk=True,
+    )
 
     encrypted_chunks = []
     for chunk in chunks:

@@ -1,5 +1,8 @@
+import copy
+import functools
 import random
 import uuid
+from base64 import b64encode, b64decode
 
 import pytest
 from Crypto.Random import get_random_bytes
@@ -26,6 +29,54 @@ def test_generic_encryption_and_decryption_errors():
         wacryptolib.encryption.decrypt_bytestring(key=key, encryption={"type": "EXHD"})
 
 
+def _test_random_ciphertext_corruption(decryption_func, encryption, initial_content):
+
+    initial_encryption = copy.deepcopy(encryption)
+
+    def _ensure_decryption_fails(new_encryption):
+        try:
+            decrypted_content_bad = decryption_func(encryption=new_encryption)
+            assert decrypted_content_bad != initial_content
+        except ValueError as e:
+            msg = str(e).lower()
+            assert "mac" in msg or "padded" in msg or "padding" in msg or "length" in msg
+
+    for _ in range(5):
+
+        # Test in-place modification of encrypted data
+
+        encryption = copy.deepcopy(initial_encryption)
+
+        if encryption.get("digest_list"):  # RSA OAEP CASE
+            digest_list = encryption["digest_list"][:]
+            idx = random.randint(0, len(digest_list) - 1)
+            encryption["digest_list"][idx] = b64encode(get_random_bytes(random.randint(1, 10)))
+        else:
+            original_ciphertext = b64decode(encryption["ciphertext"])
+            editable_ciphertext = bytearray(original_ciphertext)
+            idx = random.randint(0, len(editable_ciphertext) - 1)
+            editable_ciphertext[idx] = (editable_ciphertext[idx] + random.randint(1, 100)) % 256
+            corrupted_ciphertext = bytes(editable_ciphertext)
+            encryption["ciphertext"] = b64encode(corrupted_ciphertext)
+
+        _ensure_decryption_fails(encryption)
+
+    for _ in range(3):
+
+        # Test extension of encrypetd data with random bytes
+
+        suffix = get_random_bytes(random.randint(4, 10))
+        if encryption.get("digest_list"):
+            suffix_b64 = b64encode(suffix)
+            encryption["digest_list"].append(suffix_b64)
+        else:
+            suffix_b64 = b64encode(b64decode(encryption["ciphertext"]) + suffix)
+            encryption["ciphertext"] += suffix_b64
+
+        _ensure_decryption_fails(encryption)
+
+
+
 def test_aes_cbc_encryption_and_decryption():
     key = get_random_bytes(16)
 
@@ -40,6 +91,9 @@ def test_aes_cbc_encryption_and_decryption():
     )
 
     assert decrypted_content == binary_content
+
+    decryption_func = functools.partial(wacryptolib.encryption.decrypt_bytestring, key=key)
+    _test_random_ciphertext_corruption(decryption_func, encryption=encryption, initial_content=binary_content)
 
 
 def test_aes_eax_encryption_and_decryption():
@@ -57,6 +111,9 @@ def test_aes_eax_encryption_and_decryption():
 
     assert decrypted_content == binary_content
 
+    decryption_func = functools.partial(wacryptolib.encryption.decrypt_bytestring, key=key)
+    _test_random_ciphertext_corruption(decryption_func, encryption=encryption, initial_content=binary_content)
+
 
 def test_chacha20_poly1305_encryption_and_decryption():
     key = get_random_bytes(32)  # ONLY length allowed for chacha20
@@ -72,6 +129,9 @@ def test_chacha20_poly1305_encryption_and_decryption():
     )
 
     assert decrypted_content == binary_content
+
+    decryption_func = functools.partial(wacryptolib.encryption.decrypt_bytestring, key=key)
+    _test_random_ciphertext_corruption(decryption_func, encryption=encryption, initial_content=binary_content)
 
 
 def test_rsa_oaep_encryption_and_decryption():
@@ -93,3 +153,6 @@ def test_rsa_oaep_encryption_and_decryption():
     )
 
     assert decrypted_content == binary_content
+
+    decryption_func = functools.partial(wacryptolib.encryption.decrypt_bytestring, key=keypair["private_key"])
+    _test_random_ciphertext_corruption(decryption_func, encryption=encryption, initial_content=binary_content)

@@ -34,8 +34,12 @@ def generate_asymmetric_keypair(
 
     assert set(keypair.keys()) == set(["private_key", "public_key"])
     if serialize:
-        keypair["private_key"] = _serialize_key_object_to_pem_bytestring(keypair["private_key"])
-        keypair["public_key"] = _serialize_key_object_to_pem_bytestring(keypair["public_key"])
+        keypair["private_key"] = _serialize_key_object_to_pem_bytestring(
+            keypair["private_key"]
+        )
+        keypair["public_key"] = _serialize_key_object_to_pem_bytestring(
+            keypair["public_key"]
+        )
 
     keypair["type"] = key_type
 

@@ -27,13 +27,13 @@ def test_waserver_escrow_api_workflow():
     with pytest.raises(ValueError, match="Incorrect signature"):
         verify_signature(plaintext=secret, signature=signature, key=public_key)
 
-    encryption = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key)
+    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key)
 
-    decrypted_base64 = unravel_secret(uid=uid, key_type="RSA", encryption=encryption)
+    decrypted_base64 = unravel_secret(uid=uid, key_type="RSA", cipherdict=cipherdict)
     decrypted = b64decode(decrypted_base64)
 
-    encryption["digest_list"].append(b64encode(b"aaabbbccc"))
+    cipherdict["digest_list"].append(b64encode(b"aaabbbccc"))
     with pytest.raises(ValueError, match="Ciphertext with incorrect length"):
-        unravel_secret(uid=uid, key_type="RSA", encryption=encryption)
+        unravel_secret(uid=uid, key_type="RSA", cipherdict=cipherdict)
 
     assert decrypted == secret

@@ -31,7 +31,7 @@ def get_message_signature(
     return signature
 
 
-def unravel_secret(uid: uuid.UUID, key_type: str, encryption: dict) -> str:
+def unravel_secret(uid: uuid.UUID, key_type: str, cipherdict: dict) -> str:
     """
     Return the message (probably a symmetric key) decrypted with the corresponding key,
     as base64-encoded string.
@@ -39,5 +39,5 @@ def unravel_secret(uid: uuid.UUID, key_type: str, encryption: dict) -> str:
     assert key_type.upper() == "RSA"  # Only supported asymmetric cipher for now
     keypair = generate_asymmetric_keypair(uid=uid, key_type=key_type, serialize=False)
     private_key = keypair["private_key"]
-    secret = _decrypt_via_rsa_oaep(encryption=encryption, key=private_key)
+    secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key=private_key)
     return b64encode(secret)

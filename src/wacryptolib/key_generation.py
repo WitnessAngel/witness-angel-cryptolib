@@ -87,6 +87,8 @@ def _generate_dsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
 def _generate_ecc_keypair_as_objects(uid: uuid.UUID, curve: str) -> dict:
     """Generate an ECC (public_key, private_key) pair in PEM format
 
+    ECC keypair is not used for encryption/decryption, only for signing.
+
     :param uid: UUID of the encryption operation
     :param curve: curve chosen among p256, p384, p521 and maybe others.
 

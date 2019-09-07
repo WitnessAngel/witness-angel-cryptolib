@@ -9,15 +9,15 @@ from wacryptolib.signature import sign_message
 
 def get_public_key(uid: uuid.UUID, key_type: str) -> str:
     """
-    Return a public key in PEM format, that caller shall use to encrypt its own symmetric keys.
+    Return a public key in base64-encoded PEM format, that caller shall use to encrypt its own symmetric keys.
     """
     assert key_type.upper() == "RSA"  # Only supported asymmetric cipher for now
     keypair = generate_asymmetric_keypair(uid=uid, key_type=key_type, serialize=True)
     del keypair["private_key"]  # Security
-    return keypair["public_key"]
+    return b64encode(keypair["public_key"])
 
 
-def get_message_signature(
+def get_message_signature(  #FIXME rename "plaintext" here, inadequate
     uid: uuid.UUID, plaintext: bytes, key_type: str, signature_type: str
 ) -> dict:
     """
@@ -26,7 +26,7 @@ def get_message_signature(
     keypair = generate_asymmetric_keypair(uid=uid, key_type=key_type, serialize=False)
     private_key = keypair["private_key"]
     signature = sign_message(
-        plaintext=plaintext, signature_type=signature_type, key=private_key
+        plaintext=plaintext, signature_type=signature_type, key=private_key  #FIXME rename "plaintext" here, inadequate
     )
     return signature
 

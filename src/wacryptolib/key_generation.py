@@ -2,6 +2,21 @@ import random
 import uuid
 
 from Crypto.PublicKey import RSA, DSA, ECC
+from Crypto.Random import get_random_bytes
+
+from wacryptolib.encryption import ENCRYPTION_TYPES_REGISTRY
+
+
+SUPPORTED_SYMMETRIC_KEY_TYPES = ["AES_CBC", "AES_EAX", "CHACHA20_POLY1305"]
+assert set(SUPPORTED_SYMMETRIC_KEY_TYPES) <= set(ENCRYPTION_TYPES_REGISTRY.keys())
+
+
+def generate_symmetric_key(encryption_type: str) -> bytes:
+    """
+    Generate the strongest key possible for the wanted symmetric cipher.
+    """
+    assert encryption_type in SUPPORTED_SYMMETRIC_KEY_TYPES, encryption_type
+    return get_random_bytes(32)  # Same length for all currently supported symmetric ciphers
 
 
 def generate_asymmetric_keypair(

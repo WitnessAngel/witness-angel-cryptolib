@@ -21,7 +21,7 @@ def sign_message(plaintext: bytes, signature_type: str, key: KNOWN_KEY_TYPES) ->
     signature_conf = SIGNATURE_TYPES_REGISTRY.get(signature_type)
     if signature_conf is None:
         raise ValueError("Unknown signature type '%s'" % signature_type)
-    if not isinstance(key, signature_conf["compatible_key_types"]):
+    if not isinstance(key, tuple(signature_conf["compatible_key_types"])):
         raise ValueError(
             "Incompatible key type %s for %s signature" % (type(key), signature_type)
         )
@@ -118,10 +118,10 @@ def _compute_timestamped_hash(plaintext: bytes, timestamp_utc: int):
 
 
 SIGNATURE_TYPES_REGISTRY = dict(
-    PSS={"signature_function": _sign_with_pss, "compatible_key_types": (RSA.RsaKey)},
+    PSS={"signature_function": _sign_with_pss, "compatible_key_types": [RSA.RsaKey]},
     DSS={
         "signature_function": _sign_with_dss,
-        "compatible_key_types": (DSA.DsaKey, ECC.EccKey),
+        "compatible_key_types": [DSA.DsaKey, ECC.EccKey],
     },
 )
 

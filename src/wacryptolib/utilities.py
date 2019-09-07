@@ -1,7 +1,13 @@
+import datetime
+import decimal
+import json
+import uuid
 from typing import List
 
 from Crypto.Util.Padding import pad, unpad
 
+
+DEFAULT_ENCODING = "utf8"
 
 def split_as_chunks(
     bytestring: bytes,
@@ -49,3 +55,24 @@ def recombine_chunks(chunks: List[bytes], chunk_size: int, must_unpad: bool) -> 
     if must_unpad:
         bytestring = unpad(bytestring, block_size=chunk_size)
     return bytestring
+
+
+
+
+class ExtendedJSONEncoder(json.JSONEncoder):
+    """
+    JSONEncoder subclass that knows how to encode bytes and
+    UUIDs.
+    """
+    def default(self, o):
+        if isinstance(o, bytes):
+            return "[bytes]:" + o.decode("ascii")  # TODO - soon use b64 HERE!!
+        elif isinstance(o, (decimal.Decimal, uuid.UUID)):
+            return "[uid]:" + str(o)
+        else:
+            return super().default(o)
+
+
+def dump_to_json_bytes(data):
+    json_str = json.dumps(data, cls=ExtendedJSONEncoder, sort_keys=True)
+    return json_str.encode(DEFAULT_ENCODING)

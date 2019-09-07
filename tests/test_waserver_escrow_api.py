@@ -15,7 +15,7 @@ def test_waserver_escrow_api_workflow():
     uid = uuid.uuid4()
     secret = get_random_bytes(101)
 
-    public_key_pem = get_public_key(uid=uid, key_type="RSA")
+    public_key_pem = b64decode(get_public_key(uid=uid, key_type="RSA"))
     public_key = KEY_TYPES_REGISTRY["RSA"]["pem_import_function"](public_key_pem)
 
     signature = get_message_signature(

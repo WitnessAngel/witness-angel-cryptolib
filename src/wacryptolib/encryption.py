@@ -82,9 +82,9 @@ def _decrypt_via_aes_cbc(cipherdict: dict, key: bytes) -> bytes:
 def _encrypt_via_aes_eax(plaintext: bytes, key: bytes) -> dict:
     """Encrypt a bytestring using AES (EAX mode).
 
+    :param plaintext: the bytes to cipher
     :param key: AES cryptographic key. It must be 16, 24 or 32 bytes long
         (respectively for *AES-128*, *AES-192* or *AES-256*).
-    :param plaintext: the bytes to cipher
 
     :return: dict with fields "ciphertext", "tag" and "nonce" as base64 strings"""
 
@@ -121,8 +121,8 @@ def _encrypt_via_chacha20_poly1305(
     Additional cleartext data can be provided so that the
     generated mac tag also verifies its integrity.
 
-    :param key: 32 bytes long cryptographic key
     :param plaintext: the bytes to cipher
+    :param key: 32 bytes long cryptographic key
     :param aad: optional "additional authenticated data"
 
     :return: dict with fields "ciphertext", "tag", "nonce" and "header" as base64 strings"""

@@ -1,4 +1,3 @@
-from base64 import b64decode, b64encode
 
 import Crypto.Hash
 from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
@@ -53,28 +52,28 @@ def _encrypt_via_aes_cbc(plaintext: bytes, key: bytes) -> dict:
     :param key: AES cryptographic key. It must be 16, 24 or 32 bytes long
         (respectively for *AES-128*, *AES-192* or *AES-256*).
 
-    :return: dict with fields "iv" and "ciphertext" as base64 strings"""
+    :return: dict with fields "iv" and "ciphertext" as bytestrings"""
 
     iv = get_random_bytes(AES.block_size)
     cipher = AES.new(key, AES.MODE_CBC, iv)
     ciphertext = cipher.encrypt(pad(plaintext, block_size=AES.block_size))
-    cipherdict = {"iv": b64encode(iv), "ciphertext": b64encode(ciphertext)}
+    cipherdict = {"iv": iv, "ciphertext": ciphertext}
     return cipherdict
 
 
 def _decrypt_via_aes_cbc(cipherdict: dict, key: bytes) -> bytes:
     """Decrypt a bytestring using AES (CBC mode).
 
-    :param cipherdict: dict with fields "iv" and "ciphertext" as base64 strings
+    :param cipherdict: dict with fields "iv" and "ciphertext" as bytestrings
     :param key: the cryptographic key used to decipher
 
     :return: the decrypted bytestring"""
 
     iv = cipherdict["iv"]
     ciphertext = cipherdict["ciphertext"]
-    decipher = AES.new(key, AES.MODE_CBC, b64decode(iv))
+    decipher = AES.new(key, AES.MODE_CBC, iv)
     plaintext = unpad(
-        decipher.decrypt(b64decode(ciphertext)), block_size=AES.block_size
+        decipher.decrypt(ciphertext), block_size=AES.block_size
     )
     return plaintext
 
@@ -86,15 +85,15 @@ def _encrypt_via_aes_eax(plaintext: bytes, key: bytes) -> dict:
     :param key: AES cryptographic key. It must be 16, 24 or 32 bytes long
         (respectively for *AES-128*, *AES-192* or *AES-256*).
 
-    :return: dict with fields "ciphertext", "tag" and "nonce" as base64 strings"""
+    :return: dict with fields "ciphertext", "tag" and "nonce" as bytestrings"""
 
     cipher = AES.new(key, AES.MODE_EAX)
     nonce = cipher.nonce
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
     cipherdict = {
-        "ciphertext": b64encode(ciphertext),
-        "tag": b64encode(tag),
-        "nonce": b64encode(nonce),
+        "ciphertext": ciphertext,
+        "tag": tag,
+        "nonce": nonce,
     }
     return cipherdict
 
@@ -102,14 +101,14 @@ def _encrypt_via_aes_eax(plaintext: bytes, key: bytes) -> dict:
 def _decrypt_via_aes_eax(cipherdict: dict, key: bytes) -> bytes:
     """Decrypt a bytestring using AES (EAX mode).
 
-    :param cipherdict: dict with fields "ciphertext", "tag" and "nonce" as base64 strings
+    :param cipherdict: dict with fields "ciphertext", "tag" and "nonce" as bytestrings
     :param key: the cryptographic key used to decipher
 
     :return: the decrypted bytestring"""
 
-    decipher = AES.new(key, AES.MODE_EAX, nonce=b64decode(cipherdict["nonce"]))
-    plaintext = decipher.decrypt(b64decode(cipherdict["ciphertext"]))
-    decipher.verify(b64decode(cipherdict["tag"]))
+    decipher = AES.new(key, AES.MODE_EAX, nonce=cipherdict["nonce"])
+    plaintext = decipher.decrypt(cipherdict["ciphertext"])
+    decipher.verify(cipherdict["tag"])
     return plaintext
 
 
@@ -125,17 +124,17 @@ def _encrypt_via_chacha20_poly1305(
     :param key: 32 bytes long cryptographic key
     :param aad: optional "additional authenticated data"
 
-    :return: dict with fields "ciphertext", "tag", "nonce" and "header" as base64 strings"""
+    :return: dict with fields "ciphertext", "tag", "nonce" and "header" as bytestrings"""
 
     cipher = ChaCha20_Poly1305.new(key=key)
     cipher.update(aad)
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
     nonce = cipher.nonce
     encryption = {
-        "ciphertext": b64encode(ciphertext),
-        "tag": b64encode(tag),
-        "nonce": b64encode(nonce),
-        "aad": b64encode(aad),
+        "ciphertext": ciphertext,
+        "tag": tag,
+        "nonce": nonce,
+        "aad": aad,
     }
     return encryption
 
@@ -143,16 +142,16 @@ def _encrypt_via_chacha20_poly1305(
 def _decrypt_via_chacha20_poly1305(cipherdict: dict, key: bytes) -> bytes:
     """Decrypt a bytestring with the stream cipher ChaCha20.
 
-    :param cipherdict: dict with fields "ciphertext", "tag", "nonce" and "header" as base64 strings
+    :param cipherdict: dict with fields "ciphertext", "tag", "nonce" and "header" as bytestrings
     :param key: the cryptographic key used to decipher
 
     :return: the decrypted bytestring"""
 
-    decipher = ChaCha20_Poly1305.new(key=key, nonce=b64decode(cipherdict["nonce"]))
-    decipher.update(b64decode(cipherdict["aad"]))
+    decipher = ChaCha20_Poly1305.new(key=key, nonce=cipherdict["nonce"])
+    decipher.update(cipherdict["aad"])
     plaintext = decipher.decrypt_and_verify(
-        ciphertext=b64decode(cipherdict["ciphertext"]),
-        received_mac_tag=b64decode(cipherdict["tag"]),
+        ciphertext=cipherdict["ciphertext"],
+        received_mac_tag=cipherdict["tag"],
     )
     return plaintext
 
@@ -163,7 +162,7 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key: RSA.RsaKey) -> dict:
     :param key: public RSA key
     :param plaintext: the bytes to cipher
 
-    :return: a dict with field `digest_list`, containing base64-encoded chunks of variable width."""
+    :return: a dict with field `digest_list`, containing bytestring chunks of variable width."""
 
     cipher = PKCS1_OAEP.new(key=key, hashAlgo=RSA_OAEP_HASH_ALGO)
     chunks = split_as_chunks(
@@ -176,27 +175,25 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key: RSA.RsaKey) -> dict:
     encrypted_chunks = []
     for chunk in chunks:
         encrypted_chunk = cipher.encrypt(chunk)
-        encrypted_chunks.append(b64encode(encrypted_chunk))
+        encrypted_chunks.append(encrypted_chunk)
     return dict(digest_list=encrypted_chunks)
 
 
 def _decrypt_via_rsa_oaep(cipherdict: dict, key: RSA.RsaKey) -> bytes:
     """Decrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
-    :param cipherdict: list of base64-encoded ciphertext chunks
+    :param cipherdict: list of ciphertext chunks
     :param key: private RSA key
 
     :return: the decrypted bytestring"""
 
     decipher = PKCS1_OAEP.new(key, hashAlgo=RSA_OAEP_HASH_ALGO)
 
-    encrypted_chunk = cipherdict["digest_list"]
-
-    chunks = [b64decode(chunk) for chunk in encrypted_chunk]
+    encrypted_chunks = cipherdict["digest_list"]
 
     decrypted_chunks = []
-    for chunk in chunks:
-        decrypted_chunk = decipher.decrypt(chunk)
+    for encrypted_chunk in encrypted_chunks:
+        decrypted_chunk = decipher.decrypt(encrypted_chunk)
         decrypted_chunks.append(decrypted_chunk)
     return b"".join(decrypted_chunks)
 

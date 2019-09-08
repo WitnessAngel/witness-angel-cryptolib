@@ -2,7 +2,6 @@ import copy
 import json
 import pprint
 import uuid
-from base64 import b64decode
 
 import wacryptolib
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
@@ -115,8 +114,7 @@ class ContainerWriter:
         subkey_type, key_encryption_type = conf["key_encryption_type"]
         encryption_proxy = _get_proxy_for_escrow(conf["key_escrow"])
 
-        subkey_bytes = encryption_proxy.get_public_key(uid=container_uid, key_type=subkey_type)
-        subkey_pem = b64decode(subkey_bytes)
+        subkey_pem = encryption_proxy.get_public_key(uid=container_uid, key_type=subkey_type)
         subkey = KEY_TYPES_REGISTRY[subkey_type]["pem_import_function"](subkey_pem)
 
         key_cipherdict = encrypt_bytestring(plaintext=symmetric_key_data, encryption_type=key_encryption_type, key=subkey)
@@ -172,8 +170,7 @@ class ContainerReader:
         subkey_type, key_encryption_type = conf["key_encryption_type"]
         encryption_proxy = _get_proxy_for_escrow(conf["key_escrow"])
 
-        symmetric_key_b64 = encryption_proxy.decrypt_with_private_key(uid=container_uid, key_type=subkey_type, cipherdict=symmetric_key_cipherdict)  # FIXME WRONG
-        symmetric_key_plaintext = b64decode(symmetric_key_b64)
+        symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(uid=container_uid, key_type=subkey_type, cipherdict=symmetric_key_cipherdict)  # FIXME WRONG
         return symmetric_key_plaintext
 
         subkey = KEY_TYPES_REGISTRY[subkey_type]["pem_import_function"](subkey_pem)

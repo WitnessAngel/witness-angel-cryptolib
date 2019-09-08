@@ -1,5 +1,4 @@
 import uuid
-from base64 import b64decode, b64encode
 
 import pytest
 from Crypto.Random import get_random_bytes
@@ -15,7 +14,7 @@ def test_waserver_escrow_api_workflow():
     uid = uuid.uuid4()
     secret = get_random_bytes(101)
 
-    public_key_pem = b64decode(get_public_key(uid=uid, key_type="RSA"))
+    public_key_pem = get_public_key(uid=uid, key_type="RSA")
     public_key = KEY_TYPES_REGISTRY["RSA"]["pem_import_function"](public_key_pem)
 
     signature = get_message_signature(
@@ -29,10 +28,9 @@ def test_waserver_escrow_api_workflow():
 
     cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key)
 
-    decrypted_base64 = decrypt_with_private_key(uid=uid, key_type="RSA", cipherdict=cipherdict)
-    decrypted = b64decode(decrypted_base64)
+    decrypted = decrypt_with_private_key(uid=uid, key_type="RSA", cipherdict=cipherdict)
 
-    cipherdict["digest_list"].append(b64encode(b"aaabbbccc"))
+    cipherdict["digest_list"].append(b"aaabbbccc")
     with pytest.raises(ValueError, match="Ciphertext with incorrect length"):
         decrypt_with_private_key(uid=uid, key_type="RSA", cipherdict=cipherdict)
 

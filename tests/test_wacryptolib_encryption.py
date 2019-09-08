@@ -2,7 +2,6 @@ import copy
 import functools
 import random
 import uuid
-from base64 import b64encode, b64decode
 
 import pytest
 from Crypto.Random import get_random_bytes
@@ -50,14 +49,14 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
         if encryption.get("digest_list"):  # RSA OAEP CASE
             digest_list = encryption["digest_list"][:]
             idx = random.randint(0, len(digest_list) - 1)
-            encryption["digest_list"][idx] = b64encode(get_random_bytes(random.randint(1, 10)))
+            encryption["digest_list"][idx] = get_random_bytes(random.randint(1, 10))
         else:
-            original_ciphertext = b64decode(encryption["ciphertext"])
+            original_ciphertext = encryption["ciphertext"]
             editable_ciphertext = bytearray(original_ciphertext)
             idx = random.randint(0, len(editable_ciphertext) - 1)
             editable_ciphertext[idx] = (editable_ciphertext[idx] + random.randint(1, 100)) % 256
             corrupted_ciphertext = bytes(editable_ciphertext)
-            encryption["ciphertext"] = b64encode(corrupted_ciphertext)
+            encryption["ciphertext"] = corrupted_ciphertext
 
         _ensure_decryption_fails(encryption)
 
@@ -67,11 +66,9 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
 
         suffix = get_random_bytes(random.randint(4, 10))
         if encryption.get("digest_list"):
-            suffix_b64 = b64encode(suffix)
-            encryption["digest_list"].append(suffix_b64)
+            encryption["digest_list"].append(suffix)
         else:
-            suffix_b64 = b64encode(b64decode(encryption["ciphertext"]) + suffix)
-            encryption["ciphertext"] += suffix_b64
+            encryption["ciphertext"] += suffix
 
         _ensure_decryption_fails(encryption)
 

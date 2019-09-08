@@ -59,7 +59,7 @@ def recombine_chunks(chunks: List[bytes], chunk_size: int, must_unpad: bool) -> 
 
 
 
-'''
+'''OBSOLETE STUFFS TO REMOVE
 JSON_BYTES_PREFIX =
 
 class ExtendedJSONEncoder(json.JSONEncoder):
@@ -69,7 +69,7 @@ class ExtendedJSONEncoder(json.JSONEncoder):
     """
     def default(self, o):
         if isinstance(o, bytes):
-            return "[bytes]:" + o.decode("ascii")  # TODO - soon use b64 HERE!!
+            return "[bytes]:" + o.decode("ascii") 
         elif isinstance(o, (decimal.Decimal, uuid.UUID)):
             return "[uid]:" + str(o)
         else:

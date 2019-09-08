@@ -17,7 +17,7 @@ SIMPLE_CONTAINER_CONF = dict(
                       key_escrow=LOCAL_ESCROW_PLACEHOLDER,)
              ],
              signatures=[  # TODO PUT DSA HERE!!
-                 dict(signature_type=("ECC", "DSS"),  # FIXME use subkey_type here
+                 dict(signature_type=("DSA", "DSS"),  # FIXME use subkey_type here
                       signature_escrow=LOCAL_ESCROW_PLACEHOLDER,)
              ],),
 ])
@@ -30,9 +30,15 @@ COMPLEX_CONTAINER_CONF = dict(
                  dict(key_encryption_type=("RSA", "RSA_OAEP"),  # FIXME use subkey_type here
                       key_escrow=LOCAL_ESCROW_PLACEHOLDER,)
              ],
+             signatures=[]),
+        dict(data_encryption_type="AES_CBC",
+             key_encryption_strata=[
+                 dict(key_encryption_type=("RSA", "RSA_OAEP"),  # FIXME use subkey_type here
+                      key_escrow=LOCAL_ESCROW_PLACEHOLDER,)
+             ],
              signatures=[
-                # dict(signature_type=("DSA", "DSS"),  # FIXME use subkey_type here
-                #      signature_escrow=LOCAL_ESCROW_PLACEHOLDER,)
+                dict(signature_type=("DSA", "DSS"),  # FIXME use subkey_type here
+                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,)
              ],),
         dict(data_encryption_type="CHACHA20_POLY1305",
              key_encryption_strata=[

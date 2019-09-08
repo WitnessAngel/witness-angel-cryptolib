@@ -19,14 +19,6 @@ def _get_proxy_for_escrow(escrow):
         raise NotImplementedError("escrow system to be completed")
 
 
-'''
-class CONTENT_TYPES:
-    DATA = "data"  # Real media data
-    KEY = "key"  # Cryptographic key
-    CIPHERDICT = "cipherdict"  # Encrypted json dictionary (wrapping any of content types)
-'''
-
-
 class ContainerBase:
 
     def __init__(self, uid):

@@ -7,7 +7,7 @@ from Crypto.Random import get_random_bytes
 from wacryptolib.encryption import _encrypt_via_rsa_oaep
 from wacryptolib.key_generation import KEY_TYPES_REGISTRY
 from wacryptolib.signature import verify_signature
-from waserver.escrow_api import get_public_key, get_message_signature, unravel_secret
+from waserver.escrow_api import get_public_key, get_message_signature, decrypt_with_private_key
 
 
 def test_waserver_escrow_api_workflow():
@@ -29,11 +29,11 @@ def test_waserver_escrow_api_workflow():
 
     cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key)
 
-    decrypted_base64 = unravel_secret(uid=uid, key_type="RSA", cipherdict=cipherdict)
+    decrypted_base64 = decrypt_with_private_key(uid=uid, key_type="RSA", cipherdict=cipherdict)
     decrypted = b64decode(decrypted_base64)
 
     cipherdict["digest_list"].append(b64encode(b"aaabbbccc"))
     with pytest.raises(ValueError, match="Ciphertext with incorrect length"):
-        unravel_secret(uid=uid, key_type="RSA", cipherdict=cipherdict)
+        decrypt_with_private_key(uid=uid, key_type="RSA", cipherdict=cipherdict)
 
     assert decrypted == secret

@@ -61,16 +61,19 @@ def generate_asymmetric_keypair(
     return keypair
 
 
+def _check_key_length(key_length):
+    if key_length < 2048:
+        raise ValueError("The asymmetric key length must be superior or equal to 2048 bits")
+
 def _generate_rsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
     """Generate a RSA (public_key, private_key) pair in PEM format.
 
     :param uid: UUID of the encryption operation
-    :param key_length: length of the key in bits, must be superior to 1024.
+    :param key_length: length of the key in bits, must be superior to 2048.
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
 
-    if key_length < 1024:
-        raise ValueError("The RSA key length must be superior or equal to 1024 bits")
+    _check_key_length(key_length)
 
     randfunc = _get_pseudorandom_generator(uid=uid)
     private_key = RSA.generate(key_length, randfunc=randfunc)
@@ -85,12 +88,11 @@ def _generate_dsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
     DSA keypair is not used for encryption/decryption, only for signing.
 
     :param uid: UUID of the encryption operation
-    :param key_length: length of the key in bits, must be superior to 1024.
+    :param key_length: length of the key in bits, must be superior to 2048.
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
 
-    if key_length < 1024:
-        raise ValueError("The DSA key length must be superior or equal to 1024 bits")
+    _check_key_length(key_length)
 
     randfunc = _get_pseudorandom_generator(uid=uid)
     private_key = DSA.generate(key_length, randfunc=randfunc)

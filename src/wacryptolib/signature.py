@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Union
 
-from Crypto.Hash import SHA256
+from Crypto.Hash import SHA256, SHA512
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Signature import pss, DSS
 
@@ -105,15 +105,15 @@ def _get_utc_timestamp() -> int:
 def _compute_timestamped_hash(plaintext: bytes, timestamp_utc: int):
     """Create a hash of content, including the timestamp.
 
-    :param plaintext: text to sign
+    :param plaintext: bytestring to sign
     :param timestamp: integer UTC timestamp
 
     :return: stdlib hash object
     """
-    hash_plaintext = SHA256.new(plaintext)
+    plaintext_hash_bytes = SHA512.new(plaintext).digest()
     timestamp_bytes = str(timestamp_utc).encode("ascii")
-    payload_digest = SHA256.SHA256Hash.digest(hash_plaintext) + timestamp_bytes
-    payload_hash = SHA256.new(payload_digest)
+    timestamped_payload = plaintext_hash_bytes + timestamp_bytes
+    payload_hash = SHA512.new(timestamped_payload)
     return payload_hash
 
 

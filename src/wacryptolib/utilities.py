@@ -59,6 +59,9 @@ def recombine_chunks(chunks: List[bytes], chunk_size: int, must_unpad: bool) -> 
 
 
 
+'''
+JSON_BYTES_PREFIX =
+
 class ExtendedJSONEncoder(json.JSONEncoder):
     """
     JSONEncoder subclass that knows how to encode bytes and
@@ -72,7 +75,27 @@ class ExtendedJSONEncoder(json.JSONEncoder):
         else:
             return super().default(o)
 
+class ExtendedJSONDecoder(json.JSONDecoder):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.original_parse_string = self.parse_string
+
+    def parse_string(self, *args, **kwargs):
+        string = self.original_parse_string(args, **kwargs)
+        pass
+'''
+
+
 
 def dump_to_json_bytes(data):
-    json_str = json.dumps(data, cls=ExtendedJSONEncoder, sort_keys=True)
+    #json_str = json.dumps(data, cls=ExtendedJSONEncoder, sort_keys=True)
+    from bson.json_util import dumps, CANONICAL_JSON_OPTIONS
+    json_str =  dumps(data, json_options=CANONICAL_JSON_OPTIONS)
     return json_str.encode(DEFAULT_ENCODING)
+
+def load_from_json_bytes(data):
+    from bson.json_util import loads, CANONICAL_JSON_OPTIONS
+    json_str = data.decode(DEFAULT_ENCODING)
+    #return json.loads(json_str, cls=ExtendedJSONDecoder, sort_keys=True)
+    return loads(data, json_options=CANONICAL_JSON_OPTIONS)

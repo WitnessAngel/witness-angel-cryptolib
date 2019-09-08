@@ -44,7 +44,7 @@ def test_rsa_asymmetric_key_generation():
             uid, key_type="RSA", key_length=1023
         )
 
-    for key_length in (None, 1024):
+    for key_length in (None, 2048):
         extra_parameters = dict(key_length=key_length) if key_length else {}
         keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
             uid, key_type="RSA", **extra_parameters
@@ -58,10 +58,10 @@ def test_dsa_asymmetric_key_generation():
 
     with pytest.raises(ValueError):
         wacryptolib.key_generation.generate_asymmetric_keypair(
-            uid, key_type="DSA", key_length=1023
+            uid, key_type="DSA", key_length=2047
         )
 
-    for key_length in (None, 1024):
+    for key_length in (None, 2048):
         extra_parameters = dict(key_length=key_length) if key_length else {}
         keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
             uid, key_type="DSA", **extra_parameters

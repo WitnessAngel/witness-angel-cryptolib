@@ -31,7 +31,7 @@ def get_message_signature(  #FIXME rename "plaintext" here, inadequate
     return signature
 
 
-def unravel_secret(uid: uuid.UUID, key_type: str, cipherdict: dict) -> str:
+def decrypt_with_private_key(uid: uuid.UUID, key_type: str, cipherdict: dict) -> str:
     """
     Return the message (probably a symmetric key) decrypted with the corresponding key,
     as base64-encoded string.

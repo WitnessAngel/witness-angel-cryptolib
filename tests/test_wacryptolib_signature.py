@@ -47,7 +47,7 @@ def test_sign_and_verify_with_rsa_key():
     plaintext = b"Hello"
 
     keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(
-        uid, key_length=1024
+        uid, key_length=2048
     )
     signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], plaintext=plaintext, signature_type="PSS"
@@ -60,7 +60,7 @@ def test_sign_and_verify_with_dsa_key():
     plaintext = "Mon hât èst joli".encode("utf-8")
 
     keypair = wacryptolib.key_generation._generate_dsa_keypair_as_objects(
-        uid, key_length=1024
+        uid, key_length=2048
     )
     signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], plaintext=plaintext, signature_type="DSS"
@@ -86,7 +86,7 @@ def test_generic_signature_errors():
     plaintext = b"Hello"
 
     keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(
-        uid, key_length=1024
+        uid, key_length=2048
     )
 
     with pytest.raises(ValueError, match="Unknown signature type"):

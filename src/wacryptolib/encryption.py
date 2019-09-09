@@ -1,4 +1,3 @@
-
 import Crypto.Hash
 from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
 from Crypto.PublicKey import RSA
@@ -72,9 +71,7 @@ def _decrypt_via_aes_cbc(cipherdict: dict, key: bytes) -> bytes:
     iv = cipherdict["iv"]
     ciphertext = cipherdict["ciphertext"]
     decipher = AES.new(key, AES.MODE_CBC, iv)
-    plaintext = unpad(
-        decipher.decrypt(ciphertext), block_size=AES.block_size
-    )
+    plaintext = unpad(decipher.decrypt(ciphertext), block_size=AES.block_size)
     return plaintext
 
 
@@ -90,11 +87,7 @@ def _encrypt_via_aes_eax(plaintext: bytes, key: bytes) -> dict:
     cipher = AES.new(key, AES.MODE_EAX)
     nonce = cipher.nonce
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
-    cipherdict = {
-        "ciphertext": ciphertext,
-        "tag": tag,
-        "nonce": nonce,
-    }
+    cipherdict = {"ciphertext": ciphertext, "tag": tag, "nonce": nonce}
     return cipherdict
 
 
@@ -130,12 +123,7 @@ def _encrypt_via_chacha20_poly1305(
     cipher.update(aad)
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
     nonce = cipher.nonce
-    encryption = {
-        "ciphertext": ciphertext,
-        "tag": tag,
-        "nonce": nonce,
-        "aad": aad,
-    }
+    encryption = {"ciphertext": ciphertext, "tag": tag, "nonce": nonce, "aad": aad}
     return encryption
 
 
@@ -150,8 +138,7 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key: bytes) -> bytes:
     decipher = ChaCha20_Poly1305.new(key=key, nonce=cipherdict["nonce"])
     decipher.update(cipherdict["aad"])
     plaintext = decipher.decrypt_and_verify(
-        ciphertext=cipherdict["ciphertext"],
-        received_mac_tag=cipherdict["tag"],
+        ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"]
     )
     return plaintext
 

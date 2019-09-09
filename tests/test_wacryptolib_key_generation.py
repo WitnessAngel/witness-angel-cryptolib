@@ -6,8 +6,7 @@ from Crypto.PublicKey import RSA, ECC, DSA
 import wacryptolib
 
 
-@pytest.mark.parametrize(
-    "key_type", ["RSA", "ECC", "DSA"])
+@pytest.mark.parametrize("key_type", ["RSA", "ECC", "DSA"])
 def test_keypair_unicity_for_provided_uid(key_type):
     uid1 = uuid.uuid4()
     uid2 = uuid.uuid4()

@@ -6,7 +6,6 @@ from Crypto.Random import get_random_bytes
 
 from wacryptolib.encryption import ENCRYPTION_TYPES_REGISTRY
 
-
 SUPPORTED_SYMMETRIC_KEY_TYPES = ["AES_CBC", "AES_EAX", "CHACHA20_POLY1305"]
 assert set(SUPPORTED_SYMMETRIC_KEY_TYPES) <= set(ENCRYPTION_TYPES_REGISTRY.keys())
 
@@ -16,7 +15,9 @@ def generate_symmetric_key(encryption_type: str) -> bytes:
     Generate the strongest key possible for the wanted symmetric cipher.
     """
     assert encryption_type in SUPPORTED_SYMMETRIC_KEY_TYPES, encryption_type
-    return get_random_bytes(32)  # Same length for all currently supported symmetric ciphers
+    return get_random_bytes(
+        32
+    )  # Same length for all currently supported symmetric ciphers
 
 
 def generate_asymmetric_keypair(
@@ -63,7 +64,10 @@ def generate_asymmetric_keypair(
 
 def _check_key_length(key_length):
     if key_length < 2048:
-        raise ValueError("The asymmetric key length must be superior or equal to 2048 bits")
+        raise ValueError(
+            "The asymmetric key length must be superior or equal to 2048 bits"
+        )
+
 
 def _generate_rsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
     """Generate a RSA (public_key, private_key) pair in PEM format.

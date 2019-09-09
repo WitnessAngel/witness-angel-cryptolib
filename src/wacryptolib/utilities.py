@@ -1,13 +1,9 @@
-import datetime
-import decimal
-import json
-import uuid
 from typing import List
 
 from Crypto.Util.Padding import pad, unpad
 
-
 DEFAULT_ENCODING = "utf8"
+
 
 def split_as_chunks(
     bytestring: bytes,
@@ -57,8 +53,6 @@ def recombine_chunks(chunks: List[bytes], chunk_size: int, must_unpad: bool) -> 
     return bytestring
 
 
-
-
 '''OBSOLETE STUFFS TO REMOVE
 JSON_BYTES_PREFIX =
 
@@ -87,15 +81,19 @@ class ExtendedJSONDecoder(json.JSONDecoder):
 '''
 
 
-
 def dump_to_json_bytes(data, **extra_options):
-    #json_str = json.dumps(data, cls=ExtendedJSONEncoder, sort_keys=True)
+    # json_str = json.dumps(data, cls=ExtendedJSONEncoder, sort_keys=True)
     from bson.json_util import dumps, CANONICAL_JSON_OPTIONS
-    json_str = dumps(data, sort_keys=True, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
+
+    json_str = dumps(
+        data, sort_keys=True, json_options=CANONICAL_JSON_OPTIONS, **extra_options
+    )
     return json_str.encode(DEFAULT_ENCODING)
+
 
 def load_from_json_bytes(data, **extra_options):
     from bson.json_util import loads, CANONICAL_JSON_OPTIONS
+
     json_str = data.decode(DEFAULT_ENCODING)
-    #return json.loads(json_str, cls=ExtendedJSONDecoder, sort_keys=True)
+    # return json.loads(json_str, cls=ExtendedJSONDecoder, sort_keys=True)
     return loads(data, json_options=CANONICAL_JSON_OPTIONS, **extra_options)

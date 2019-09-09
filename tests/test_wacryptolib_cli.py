@@ -1,6 +1,7 @@
 import os
 
 from click.testing import CliRunner
+
 from wacryptolib.__main__ import cli
 
 
@@ -28,7 +29,7 @@ def test_cli_encryption_and_decryption():
 
     with runner.isolated_filesystem() as tempdir:
 
-        print ("TEMPORARY TEST DIRECTORY:", tempdir)
+        print("TEMPORARY TEST DIRECTORY:", tempdir)
 
         with open(data_file, "w") as f:
             f.write(data_sample)
@@ -37,7 +38,9 @@ def test_cli_encryption_and_decryption():
         assert result.exit_code == 0
         assert os.path.exists(data_file + ".crypt")
 
-        result = runner.invoke(cli, ["encrypt", "-i", "test_file.txt", "-o", "stuff.dat"])
+        result = runner.invoke(
+            cli, ["encrypt", "-i", "test_file.txt", "-o", "stuff.dat"]
+        )
         assert result.exit_code == 0
         assert os.path.exists("stuff.dat")
 
@@ -60,5 +63,3 @@ def test_cli_encryption_and_decryption():
             with open(result_file, "r") as f:
                 data = f.read()
                 assert data == data_sample
-
-

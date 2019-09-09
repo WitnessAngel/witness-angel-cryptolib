@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Union
 
-from Crypto.Hash import SHA256, SHA512
+from Crypto.Hash import SHA512
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Signature import pss, DSS
 

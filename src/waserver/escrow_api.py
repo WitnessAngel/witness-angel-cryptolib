@@ -1,4 +1,3 @@
-import random
 import uuid
 
 from wacryptolib.encryption import _decrypt_via_rsa_oaep
@@ -17,7 +16,7 @@ def get_public_key(uid: uuid.UUID, key_type: str) -> bytes:
     return keypair["public_key"]
 
 
-def get_message_signature(  #FIXME rename "plaintext" here, inadequate
+def get_message_signature(  # FIXME rename "plaintext" here, inadequate
     uid: uuid.UUID, plaintext: bytes, key_type: str, signature_type: str
 ) -> dict:
     """
@@ -25,9 +24,18 @@ def get_message_signature(  #FIXME rename "plaintext" here, inadequate
     """
     keypair = generate_asymmetric_keypair(uid=uid, key_type=key_type, serialize=False)
     private_key = keypair["private_key"]
-    print("\n> SIGNING MESSAGE \n%s with %s key of public form %s" % (plaintext, keypair["public_key"].__class__, keypair["public_key"].export_key(format="PEM")))
+    print(
+        "\n> SIGNING MESSAGE \n%s with %s key of public form %s"
+        % (
+            plaintext,
+            keypair["public_key"].__class__,
+            keypair["public_key"].export_key(format="PEM"),
+        )
+    )
     signature = sign_message(
-        plaintext=plaintext, signature_type=signature_type, key=private_key  #FIXME rename "plaintext" here, inadequate
+        plaintext=plaintext,
+        signature_type=signature_type,
+        key=private_key,  # FIXME rename "plaintext" here, inadequate
     )
     return signature
 

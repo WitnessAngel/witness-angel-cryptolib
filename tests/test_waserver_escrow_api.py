@@ -6,7 +6,11 @@ from Crypto.Random import get_random_bytes
 from wacryptolib.encryption import _encrypt_via_rsa_oaep
 from wacryptolib.key_generation import KEY_TYPES_REGISTRY
 from wacryptolib.signature import verify_signature
-from waserver.escrow_api import get_public_key, get_message_signature, decrypt_with_private_key
+from waserver.escrow_api import (
+    get_public_key,
+    get_message_signature,
+    decrypt_with_private_key,
+)
 
 
 def test_waserver_escrow_api_workflow():

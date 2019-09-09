@@ -1,12 +1,11 @@
-import json
-
-import wacryptolib
-from wacryptolib.container import ContainerReader, ContainerWriter, LOCAL_ESCROW_PLACEHOLDER
-
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
-from django.core.serializers.json import DjangoJSONEncoder
 
+from wacryptolib.container import (
+    ContainerReader,
+    ContainerWriter,
+    LOCAL_ESCROW_PLACEHOLDER,
+)
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -22,17 +21,26 @@ MEDIUM_SUFFIX = ".medium"
 
 EXAMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
-        dict(data_encryption_type="AES_CBC",
-             key_encryption_strata=[
-                 dict(key_encryption_type=("RSA", "RSA_OAEP"),  # FIXME use subkey_type here
-                      key_escrow=LOCAL_ESCROW_PLACEHOLDER,)
-             ],
-             signatures=[
-                 dict(signature_type=("DSA", "DSS"),  # FIXME use subkey_type here
-                      signature_escrow=LOCAL_ESCROW_PLACEHOLDER,)
-             ],),
-])
-
+        dict(
+            data_encryption_type="AES_CBC",
+            key_encryption_strata=[
+                dict(
+                    key_encryption_type=(
+                        "RSA",
+                        "RSA_OAEP",
+                    ),  # FIXME use subkey_type here
+                    key_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                )
+            ],
+            signatures=[
+                dict(
+                    signature_type=("DSA", "DSS"),  # FIXME use subkey_type here
+                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                )
+            ],
+        )
+    ]
+)
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
@@ -54,22 +62,14 @@ def _do_encrypt(data):
     container = writer.encrypt_data(data, conf=EXAMPLE_CONTAINER_CONF)
     return container
 
+
 @cli.command()
-@click.option(
-    "-i",
-    "--input-medium",
-    type=click.File("rb"),
-    required=True,
-)
-@click.option(
-    "-o", "--output-container", type=click.File("wb")
-)
+@click.option("-i", "--input-medium", type=click.File("rb"), required=True)
+@click.option("-o", "--output-container", type=click.File("wb"))
 def encrypt(input_medium, output_container):
     """Turn a media file into a secure container."""
     if not output_container:
-        output_container = LazyFile(
-            input_medium.name + CONTAINER_SUFFIX, "wb"
-        )
+        output_container = LazyFile(input_medium.name + CONTAINER_SUFFIX, "wb")
     click.echo("In encrypt: %s" % str(locals()))
 
     container_data = _do_encrypt(data=input_medium.read())
@@ -87,12 +87,7 @@ def _do_decrypt(container):
 
 
 @cli.command()
-@click.option(
-    "-i",
-    "--input-container",
-    type=click.File("rb"),
-    required=True,
-)
+@click.option("-i", "--input-container", type=click.File("rb"), required=True)
 @click.option("-o", "--output-medium", type=click.File("ww"))
 def decrypt(input_container, output_medium):
     """Turn a container file back into its original media file."""

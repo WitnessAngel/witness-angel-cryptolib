@@ -8,16 +8,6 @@ from wacryptolib.container import (
     encrypt_data_into_container,
     decrypt_data_from_container,
 )
-import random
-import uuid
-
-import pytest
-
-from wacryptolib.container import (
-    LOCAL_ESCROW_PLACEHOLDER,
-    encrypt_data_into_container,
-    decrypt_data_from_container,
-)
 
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[

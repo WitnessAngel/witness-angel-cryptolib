@@ -24,11 +24,11 @@ def test_waserver_escrow_api_workflow():
     signature = get_message_signature(
         uid=uid, plaintext=secret, key_type="RSA", signature_type="PSS"
     )
-    verify_signature(plaintext=secret, signature=signature, key=public_key)
+    verify_signature(plaintext=secret, signature=signature, key=public_key, signature_type="PSS")
 
     signature["digest"] += b"xyz"
     with pytest.raises(ValueError, match="Incorrect signature"):
-        verify_signature(plaintext=secret, signature=signature, key=public_key)
+        verify_signature(plaintext=secret, signature=signature, key=public_key, signature_type="PSS")
 
     cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key)
 

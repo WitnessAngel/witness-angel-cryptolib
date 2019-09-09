@@ -23,21 +23,18 @@ def encrypt_bytestring(plaintext: bytes, encryption_type: str, key: bytes) -> di
     """Encrypt a bytestring with the selected algorithm for the given payload,
     using the provided key (which must be of a compatible type and length).
 
-    :return: dictionary with encryption data, and
-        a "type" field echoing `encryption_type`."""
+    :return: dictionary with encryption data"""
     encryption_type_conf = _get_encryption_type_conf(encryption_type=encryption_type)
     encryption_function = encryption_type_conf["encryption_function"]
     cipherdict = encryption_function(key=key, plaintext=plaintext)
-    cipherdict["type"] = encryption_type
     return cipherdict
 
 
-def decrypt_bytestring(cipherdict: dict, key: bytes) -> bytes:
+def decrypt_bytestring(cipherdict: dict, encryption_type: str, key: bytes) -> bytes:
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
     :return: dictionary with encryption data."""
-    encryption_type = cipherdict["type"]
     encryption_type_conf = _get_encryption_type_conf(encryption_type)
     decryption_function = encryption_type_conf["decryption_function"]
     plaintext = decryption_function(key=key, cipherdict=cipherdict)

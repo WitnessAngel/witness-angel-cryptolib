@@ -88,7 +88,7 @@ def _do_decrypt(container):
 
 @cli.command()
 @click.option("-i", "--input-container", type=click.File("rb"), required=True)
-@click.option("-o", "--output-medium", type=click.File("ww"))
+@click.option("-o", "--output-medium", type=click.File("wb"))
 def decrypt(input_container, output_medium):
     """Turn a container file back into its original media file."""
     if not output_medium:

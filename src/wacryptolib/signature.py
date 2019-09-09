@@ -13,8 +13,7 @@ def sign_message(plaintext: bytes, signature_type: str, key: KNOWN_KEY_TYPES) ->
     Return a timestamped signature of the chosen type for the given payload,
     with the provided key (which must be of a compatible type).
 
-    :return: dictionary with signature data, and
-        a "type" field echoing `signature_type`."""
+    :return: dictionary with signature data"""
 
     assert signature_type, signature_type
     signature_type = signature_type.upper()
@@ -27,7 +26,6 @@ def sign_message(plaintext: bytes, signature_type: str, key: KNOWN_KEY_TYPES) ->
         )
     signature_function = signature_conf["signature_function"]
     signature = signature_function(key=key, plaintext=plaintext)
-    signature["type"] = signature_type
     return signature
 
 
@@ -37,7 +35,7 @@ def _sign_with_pss(plaintext: bytes, key: RSA.RsaKey) -> dict:
     :param private_key: the private key
     :param plaintext: the bytestring to sign
 
-    :return: dict with keys "digest" (bytestring), "timestamp_utc" (integer) and "type" (string) of signature"""
+    :return: signature dict with keys "digest" (bytestring) and "timestamp_utc" (integer)"""
 
     timestamp_utc = _get_utc_timestamp()
     hash_payload = _compute_timestamped_hash(
@@ -58,7 +56,7 @@ def _sign_with_dss(plaintext: bytes, key: Union[DSA.DsaKey, ECC.EccKey]) -> dict
     :param private_key: the private key
     :param plaintext: the bytestring to sign
 
-    :return: dict with keys "digest" (bytestring), "timestamp_utc" (integer) and "type" (string) of signature"""
+    :return: signature dict with keys "digest" (bytestring) and "timestamp_utc" (integer)"""
 
     timestamp = _get_utc_timestamp()
     hash_payload = _compute_timestamped_hash(
@@ -70,7 +68,7 @@ def _sign_with_dss(plaintext: bytes, key: Union[DSA.DsaKey, ECC.EccKey]) -> dict
     return signature
 
 
-def verify_signature(plaintext: bytes, signature: dict, key: Union[KNOWN_KEY_TYPES]):
+def verify_signature(plaintext: bytes, signature_type: str, signature: dict, key: Union[KNOWN_KEY_TYPES]):
     """Verify the authenticity of a signature.
 
     Raises if signature is invalid.
@@ -80,12 +78,12 @@ def verify_signature(plaintext: bytes, signature: dict, key: Union[KNOWN_KEY_TYP
     :param signature: structure describing the signature
     """
 
-    if signature["type"] == "PSS":
+    if signature_type == "PSS":
         verifier = pss.new(key)
-    elif signature["type"] == "DSS":
+    elif signature_type == "DSS":
         verifier = DSS.new(key, "fips-186-3")
     else:
-        raise ValueError("Unknown signature type '%s'" % signature["type"])
+        raise ValueError("Unknown signature type '%s'" % signature_type)
 
     hash_payload = _compute_timestamped_hash(
         plaintext=plaintext, timestamp_utc=signature["timestamp_utc"]

@@ -125,7 +125,6 @@ class ContainerWriter(ContainerBase):
             key_type=subkey_type,
             signature_type=signature_type,
         )
-        # FIXME remove "type" from inside signature!!!
         return signature_value
 
 
@@ -141,7 +140,7 @@ class ContainerReader(ContainerBase):
 
             data_encryption_type = data_encryption_stratum[
                 "data_encryption_type"
-            ]  # FIXME USE THIS
+            ]
 
             for signature_conf in data_encryption_stratum["signatures"]:
                 self._verify_signatures(
@@ -168,7 +167,7 @@ class ContainerReader(ContainerBase):
             assert isinstance(symmetric_key_data, bytes), symmetric_key_data
             data_cipherdict = load_from_json_bytes(data_ciphertext)
             data_ciphertext = decrypt_bytestring(
-                cipherdict=data_cipherdict, key=symmetric_key_data
+                cipherdict=data_cipherdict, key=symmetric_key_data, encryption_type=data_encryption_type
             )
 
         data = data_ciphertext  # Now decrypted  FIXME FIND BETTER NAME
@@ -202,7 +201,7 @@ class ContainerReader(ContainerBase):
         )
 
         verify_signature(
-            plaintext=message, signature=conf["signature_value"], key=public_key
+            plaintext=message, signature_type=signature_type, signature=conf["signature_value"], key=public_key
         )  # Raises if troubles
 
 

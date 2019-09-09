@@ -30,8 +30,7 @@ def generate_asymmetric_keypair(
 
     Other arguments are used or not depending on the chosen `key_type`.
 
-    :return: dictionary with "private_key" and "public_key" fields as objects or PEM-format strings,
-        and a "type" field echoing `key_type`. """
+    :return: dictionary with "private_key" and "public_key" fields as objects or PEM-format strings"""
 
     potential_params = dict(key_length=key_length, curve=curve)
 
@@ -56,8 +55,6 @@ def generate_asymmetric_keypair(
         keypair["public_key"] = _serialize_key_object_to_pem_bytestring(
             keypair["public_key"]
         )
-
-    keypair["type"] = key_type
 
     return keypair
 

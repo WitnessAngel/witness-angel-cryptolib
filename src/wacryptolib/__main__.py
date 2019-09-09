@@ -25,10 +25,8 @@ EXAMPLE_CONTAINER_CONF = dict(
             data_encryption_type="AES_CBC",
             key_encryption_strata=[
                 dict(
-                    key_encryption_type=(
-                        "RSA",
-                        "RSA_OAEP",
-                    ),  # FIXME use subkey_type here
+                    escrow_key_type="RSA",
+                    key_encryption_algo="RSA_OAEP",
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],

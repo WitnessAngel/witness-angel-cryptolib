@@ -32,10 +32,10 @@ def test_waserver_escrow_api_workflow():
 
     cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key)
 
-    decrypted = decrypt_with_private_key(uid=uid, key_type="RSA", cipherdict=cipherdict)
+    decrypted = decrypt_with_private_key(uid=uid, key_type="RSA", encryption_type="RSA_OAEP", cipherdict=cipherdict)
 
     cipherdict["digest_list"].append(b"aaabbbccc")
     with pytest.raises(ValueError, match="Ciphertext with incorrect length"):
-        decrypt_with_private_key(uid=uid, key_type="RSA", cipherdict=cipherdict)
+        decrypt_with_private_key(uid=uid, key_type="RSA", encryption_type="RSA_OAEP", cipherdict=cipherdict)
 
     assert decrypted == secret

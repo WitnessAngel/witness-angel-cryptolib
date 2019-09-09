@@ -40,12 +40,13 @@ def get_message_signature(  # FIXME rename "plaintext" here, inadequate
     return signature
 
 
-def decrypt_with_private_key(uid: uuid.UUID, key_type: str, cipherdict: dict) -> str:
+def decrypt_with_private_key(uid: uuid.UUID, key_type: str, encryption_type:str, cipherdict: dict) -> str:
     """
     Return the message (probably a symmetric key) decrypted with the corresponding key,
     as bytestring.
     """
-    assert key_type.upper() == "RSA"  # Only supported asymmetric cipher for now
+    assert key_type.upper() == "RSA"  # Only supported key for now
+    assert encryption_type.upper() == "RSA_OAEP"  # Only supported asymmetric cipher for now
     keypair = generate_asymmetric_keypair(uid=uid, key_type=key_type, serialize=False)
     private_key = keypair["private_key"]
     secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key=private_key)

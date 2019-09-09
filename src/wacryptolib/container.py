@@ -32,8 +32,7 @@ class ContainerWriter(ContainerBase):
         assert isinstance(data, bytes), data
         assert isinstance(conf, dict), conf
 
-        # FIXME rename this
-        data_ciphertext = data  # Initially unencrypted, might remain so if no strata
+        data_current = data  # Initially unencrypted, might remain so if no strata
         result_data_encryption_strata = []
 
         for data_encryption_stratum in conf["data_encryption_strata"]:
@@ -41,12 +40,12 @@ class ContainerWriter(ContainerBase):
             symmetric_key = generate_symmetric_key(encryption_type=data_encryption_type)
 
             data_cipherdict = encrypt_bytestring(
-                plaintext=data_ciphertext,
+                plaintext=data_current,
                 encryption_type=data_encryption_type,
                 key=symmetric_key,
             )
             assert isinstance(data_cipherdict, dict), data_cipherdict
-            data_ciphertext = dump_to_json_bytes(data_cipherdict)
+            data_current = dump_to_json_bytes(data_cipherdict)
 
             symmetric_key_data = (
                 symmetric_key
@@ -72,7 +71,7 @@ class ContainerWriter(ContainerBase):
             for signature_conf in data_encryption_stratum["signatures"]:
                 signature_value = self._generate_signature(
                     container_uid=container_uid,
-                    data_ciphertext=data_ciphertext,
+                    data_ciphertext=data_current,
                     conf=signature_conf,
                 )
                 signature_conf["signature_value"] = signature_value
@@ -87,6 +86,8 @@ class ContainerWriter(ContainerBase):
                 )
             )
 
+        data_ciphertext = data_current  # New fully encrypted (unless data_encryption_strata is empty)
+
         return dict(
             uid=container_uid,
             data_ciphertext=data_ciphertext,
@@ -97,19 +98,20 @@ class ContainerWriter(ContainerBase):
         self, container_uid: uuid.UUID, symmetric_key_data: bytes, conf: dict
     ) -> bytes:
         assert isinstance(symmetric_key_data, bytes), symmetric_key_data
-        subkey_type, key_encryption_type = conf["key_encryption_type"]
+        escrow_key_type=conf["escrow_key_type"]
+        key_encryption_algo=conf["key_encryption_algo"]
         encryption_proxy = _get_proxy_for_escrow(conf["key_escrow"])
 
         subkey_pem = encryption_proxy.get_public_key(
-            uid=container_uid, key_type=subkey_type
+            uid=container_uid, key_type=escrow_key_type
         )
-        subkey = KEY_TYPES_REGISTRY[subkey_type]["pem_import_function"](
+        subkey = KEY_TYPES_REGISTRY[escrow_key_type]["pem_import_function"](
             subkey_pem
         )  # FIXME
 
         key_cipherdict = encrypt_bytestring(
             plaintext=symmetric_key_data,
-            encryption_type=key_encryption_type,
+            encryption_type=key_encryption_algo,
             key=subkey,
         )
         return key_cipherdict
@@ -134,7 +136,7 @@ class ContainerReader(ContainerBase):
 
         container_uid = container["uid"]
 
-        data_ciphertext = container["data_ciphertext"]
+        data_current = container["data_ciphertext"]
 
         for data_encryption_stratum in reversed(container["data_encryption_strata"]):
 
@@ -145,7 +147,7 @@ class ContainerReader(ContainerBase):
             for signature_conf in data_encryption_stratum["signatures"]:
                 self._verify_signatures(
                     container_uid=container_uid,
-                    message=data_ciphertext,
+                    message=data_current,
                     conf=signature_conf,
                 )
 
@@ -165,23 +167,24 @@ class ContainerReader(ContainerBase):
                 )
 
             assert isinstance(symmetric_key_data, bytes), symmetric_key_data
-            data_cipherdict = load_from_json_bytes(data_ciphertext)
-            data_ciphertext = decrypt_bytestring(
+            data_cipherdict = load_from_json_bytes(data_current)
+            data_current = decrypt_bytestring(
                 cipherdict=data_cipherdict, key=symmetric_key_data, encryption_type=data_encryption_type
             )
 
-        data = data_ciphertext  # Now decrypted  FIXME FIND BETTER NAME
+        data = data_current  # Now decrypted
         return data
 
     def _decrypt_symmetric_key(
         self, container_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list
     ):
         assert isinstance(symmetric_key_cipherdict, dict), symmetric_key_cipherdict
-        subkey_type, key_encryption_type = conf["key_encryption_type"]
+        escrow_key_type=conf["escrow_key_type"]
+        key_encryption_algo=conf["key_encryption_algo"]
         encryption_proxy = _get_proxy_for_escrow(conf["key_escrow"])
 
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
-            uid=container_uid, key_type=subkey_type, cipherdict=symmetric_key_cipherdict
+            uid=container_uid, key_type=escrow_key_type, encryption_type=key_encryption_algo, cipherdict=symmetric_key_cipherdict
         )
         return symmetric_key_plaintext
 

@@ -20,21 +20,19 @@ def _get_proxy_for_escrow(escrow):
 
 
 class ContainerBase:
-
-    def __init__(self, uid):
-        self.uid = uid
+    pass
 
 
 class ContainerWriter(ContainerBase):
 
-    def encrypt_data(self, data: bytes, conf):
+    def encrypt_data(self, data: bytes, conf: dict, uid=None) -> dict:
+
+        container_uid = uid or uuid.uuid4()
 
         conf = copy.deepcopy(conf)  # So that we can manipulate it
 
         assert isinstance(data, bytes), data
         assert isinstance(conf, dict), conf
-
-        container_uid = self.uid
 
         # FIXME rename this
         data_ciphertext = data  # Initially unencrypted, might remain so if no strata
@@ -108,7 +106,7 @@ class ContainerReader(ContainerBase):
 
         for data_encryption_stratum in reversed(container["data_encryption_strata"]):
 
-            data_encryption_type = data_encryption_stratum["data_encryption_type"]
+            data_encryption_type = data_encryption_stratum["data_encryption_type"]  # FIXME USE THIS
 
             for signature_conf in data_encryption_stratum["signatures"]:
                 self._verify_signatures(container_uid=container_uid, message=data_ciphertext, conf=signature_conf)
@@ -123,16 +121,7 @@ class ContainerReader(ContainerBase):
             assert isinstance(symmetric_key_data, bytes), symmetric_key_data
             data_cipherdict = load_from_json_bytes(data_ciphertext)
             data_ciphertext = decrypt_bytestring(cipherdict=data_cipherdict, key=symmetric_key_data)
-            '''
 
-                #result_key_encryption_strata.append(key_encryption_stratum)  # Unmodified for now
-
-
-            symmetric_key = self._decrypt_symmetric_key(key_ciphertext=data_encryption_stratum["key_ciphertext"],
-                                         key_encryption_strata=data_encryption_stratum["key_encryption_strata"])
-
-
-            '''
         data = data_ciphertext  # Now decrypted  FIXME FIND BETTER NAME
         return data
 
@@ -143,8 +132,6 @@ class ContainerReader(ContainerBase):
 
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(uid=container_uid, key_type=subkey_type, cipherdict=symmetric_key_cipherdict)
         return symmetric_key_plaintext
-
-        subkey = KEY_TYPES_REGISTRY[subkey_type]["pem_import_function"](subkey_pem)
 
     def _verify_signatures(self, container_uid: uuid.UUID, message: bytes, conf: dict):
         subkey_type, signature_type = conf["signature_type"]
@@ -158,3 +145,25 @@ class ContainerReader(ContainerBase):
 
 
 
+def encrypt_data_into_container(data: bytes, conf: dict, uid=None) -> dict:
+    """
+
+    :param data:
+    :param conf:
+    :param uid:
+    :return:
+    """
+    writer = ContainerWriter()
+    container = writer.encrypt_data(data, conf=conf, uid=uid)
+    return container
+
+
+def decrypt_data_from_container(container: dict) -> bytes:
+    """
+
+    :param container:
+    :return:
+    """
+    reader = ContainerReader()
+    data = reader.decrypt_data(container)
+    return data

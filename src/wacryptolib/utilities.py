@@ -88,14 +88,14 @@ class ExtendedJSONDecoder(json.JSONDecoder):
 
 
 
-def dump_to_json_bytes(data):
+def dump_to_json_bytes(data, **extra_options):
     #json_str = json.dumps(data, cls=ExtendedJSONEncoder, sort_keys=True)
     from bson.json_util import dumps, CANONICAL_JSON_OPTIONS
-    json_str =  dumps(data, sort_keys=True, json_options=CANONICAL_JSON_OPTIONS)
+    json_str = dumps(data, sort_keys=True, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
     return json_str.encode(DEFAULT_ENCODING)
 
-def load_from_json_bytes(data):
+def load_from_json_bytes(data, **extra_options):
     from bson.json_util import loads, CANONICAL_JSON_OPTIONS
     json_str = data.decode(DEFAULT_ENCODING)
     #return json.loads(json_str, cls=ExtendedJSONDecoder, sort_keys=True)
-    return loads(data, json_options=CANONICAL_JSON_OPTIONS)
+    return loads(data, json_options=CANONICAL_JSON_OPTIONS, **extra_options)

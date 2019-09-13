@@ -8,7 +8,7 @@ import wacryptolib
 
 def test_shared_secret_normal_cases():
 
-    for i in range(5):
+    for _ in range(5):
 
         bytes_length = random.randint(1, 500)
 

@@ -9,7 +9,7 @@ SHAMIR_CHUNK_LENGTH = 16
 
 def split_bytestring_as_shamir_shares(
     secret: bytes, shares_count: int, threshold_count: int
-) -> dict:
+) -> list:
     """Generate a shared secret of `shares_count` subkeys, with `threshold_count`
         of them required to recompute the initial `bytestring`.
 
@@ -17,7 +17,7 @@ def split_bytestring_as_shamir_shares(
         :param shares_count: the number of shares to be created for the secret
         :param threshold_count: the minimal number of shares needed to recombine the key
 
-        :return: a dict mapping indexes to full bytestring shares"""
+        :return: list of full bytestring shares"""
 
     assert threshold_count < shares_count, (threshold_count, shares_count)
 
@@ -74,7 +74,6 @@ def recombine_secret_from_samir_shares(shares: list) -> bytes:
 
     chunks = []
     for chunk_shares in all_chunk_shares:
-        print("CHUNK SHARES:", chunk_shares)
         chunk = _recombine_128b_shares_into_bytestring(chunk_shares)
         chunks.append(chunk)
 
@@ -85,7 +84,7 @@ def recombine_secret_from_samir_shares(shares: list) -> bytes:
 
 def _split_128b_bytestring_into_shares(
     secret: bytes, shares_count: int, threshold_count: int
-) -> List[tuple]:
+) -> list:
     """Split a bytestring of exactly 128 bits into shares.
 
         :param bytestring: bytestring to split

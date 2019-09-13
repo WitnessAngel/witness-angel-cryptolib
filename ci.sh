@@ -48,7 +48,7 @@ run_ci () {
 
   # Checking docs:
   echo "Running doc8"
-  doc8 --max-line-length 2000 -q docs
+  doc8 --max-line-length 3000 -q docs
 
   # Checking `yaml` files:
   #echo "Running yamllint"
@@ -63,11 +63,11 @@ run_ci () {
   #polint -i location,unsorted locale
 
   # Also checking translation files for syntax errors:
-  if find locale -name '*.po' -print0 | grep -q "."; then
-    # Only executes when there is at least one `.po` file:
-    echo "Running dennis-cmd lint"
-    dennis-cmd lint --errorsonly locale
-  fi
+  #if find locale -name '*.po' -print0 | grep -q "."; then
+  #  # Only executes when there is at least one `.po` file:
+  #  echo "Running dennis-cmd lint"
+  #  dennis-cmd lint --errorsonly locale
+  #fi
 
   echo ">> All CI tests were executed! <<"
 }

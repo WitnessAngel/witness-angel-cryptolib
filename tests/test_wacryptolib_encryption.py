@@ -38,8 +38,8 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
         try:
             decrypted_content_bad = decryption_func(cipherdict=new_cipherdict)
             assert decrypted_content_bad != initial_content
-        except ValueError as e:
-            msg = str(e).lower()
+        except ValueError as exc:
+            msg = str(exc).lower()
             assert (
                 "mac" in msg or "padded" in msg or "padding" in msg or "length" in msg
             )

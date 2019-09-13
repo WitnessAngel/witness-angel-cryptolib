@@ -2,6 +2,8 @@
 Encrypted containers
 ------------------------
 
+WIP OBSOLETE FORMAT
+
 Witness Angel data is stored in a flexible container, which is a json/bson compatible data tree.
 
 The idea is to allow each payload (media data, symmetric and asymmetric keys...) to be encrypted and signed by several entities one after the other.
@@ -18,12 +20,12 @@ UUID overrides can exist at different levels of container data, to change the id
             data_encryption_strata: <list of Stratum Objects targeting ciphertext, in order of application>,
             data_uid: <optional uuid of this specific data container>,
         }
-        
+
     Stratum Object:
 
         {
             signatures: <optional list of Signature objects for the parent ciphertext at this stratum of encryption>,
-            
+
             encryption_algorithm: <encryption type label>,
 
             key_uid: <optional uuid of this specific encryption stratum>,
@@ -34,7 +36,7 @@ UUID overrides can exist at different levels of container data, to change the id
             # or:
             key_escrow: <Escrow Entity object able to decrypt the parent data/key ciphertext at this stratum of encryption>,
         }
-        
+
     Signature object:
 
         {
@@ -53,7 +55,6 @@ UUID overrides can exist at different levels of container data, to change the id
 
             escrow_operation_uid: <optional uuid of this specific escrow operation>,
         }
-    
 
 
 

@@ -15,7 +15,7 @@ def get_public_key(uid: uuid.UUID, key_type: str) -> bytes:
     return keypair["public_key"]
 
 
-def get_message_signature(  # FIXME rename "plaintext" here, inadequate
+def get_message_signature(
     uid: uuid.UUID, message: bytes, key_type: str, signature_algo: str
 ) -> dict:
     """
@@ -34,7 +34,7 @@ def get_message_signature(  # FIXME rename "plaintext" here, inadequate
 
 def decrypt_with_private_key(
     uid: uuid.UUID, key_type: str, encryption_algo: str, cipherdict: dict
-) -> str:
+) -> bytes:
     """
     Return the message (probably a symmetric key) decrypted with the corresponding key,
     as bytestring.

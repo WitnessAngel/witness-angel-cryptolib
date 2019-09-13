@@ -107,7 +107,7 @@ class ContainerWriter(ContainerBase):
 
     def _encrypt_symmetric_key(
         self, keychain_uid: uuid.UUID, symmetric_key_data: bytes, conf: dict
-    ) -> bytes:
+    ) -> dict:
         assert isinstance(symmetric_key_data, bytes), symmetric_key_data
         escrow_key_type = conf["escrow_key_type"]
         key_encryption_algo = conf["key_encryption_algo"]

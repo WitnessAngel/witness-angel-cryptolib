@@ -31,8 +31,8 @@ def test_cli_encryption_and_decryption():
 
         print("TEMPORARY TEST DIRECTORY:", tempdir)
 
-        with open(data_file, "w") as f:
-            f.write(data_sample)
+        with open(data_file, "w") as output_file:
+            output_file.write(data_sample)
 
         result = runner.invoke(cli, ["encrypt", "-i", "test_file.txt"])
         assert result.exit_code == 0
@@ -60,6 +60,6 @@ def test_cli_encryption_and_decryption():
         assert os.path.exists("stuffs.txt")
 
         for result_file in (data_file, "stuff.dat.medium", "stuffs.txt"):
-            with open(result_file, "r") as f:
-                data = f.read()
+            with open(result_file, "r") as input_file:
+                data = input_file.read()
                 assert data == data_sample

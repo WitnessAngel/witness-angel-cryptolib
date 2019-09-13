@@ -10,32 +10,32 @@ RSA_OAEP_CHUNKS_SIZE = 60
 RSA_OAEP_HASH_ALGO = Crypto.Hash.SHA256
 
 
-def _get_encryption_type_conf(encryption_type):
-    encryption_type = encryption_type.upper()
-    if encryption_type not in ENCRYPTION_TYPES_REGISTRY:
-        raise ValueError("Unknown cipher type '%s'" % encryption_type)
+def _get_encryption_type_conf(encryption_algo):
+    encryption_algo = encryption_algo.upper()
+    if encryption_algo not in ENCRYPTION_TYPES_REGISTRY:
+        raise ValueError("Unknown cipher type '%s'" % encryption_algo)
 
-    encryption_type_conf = ENCRYPTION_TYPES_REGISTRY[encryption_type]
+    encryption_type_conf = ENCRYPTION_TYPES_REGISTRY[encryption_algo]
     return encryption_type_conf
 
 
-def encrypt_bytestring(plaintext: bytes, encryption_type: str, key: bytes) -> dict:
+def encrypt_bytestring(plaintext: bytes, encryption_algo: str, key: bytes) -> dict:
     """Encrypt a bytestring with the selected algorithm for the given payload,
     using the provided key (which must be of a compatible type and length).
 
     :return: dictionary with encryption data"""
-    encryption_type_conf = _get_encryption_type_conf(encryption_type=encryption_type)
+    encryption_type_conf = _get_encryption_type_conf(encryption_algo=encryption_algo)
     encryption_function = encryption_type_conf["encryption_function"]
     cipherdict = encryption_function(key=key, plaintext=plaintext)
     return cipherdict
 
 
-def decrypt_bytestring(cipherdict: dict, encryption_type: str, key: bytes) -> bytes:
+def decrypt_bytestring(cipherdict: dict, encryption_algo: str, key: bytes) -> bytes:
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
     :return: dictionary with encryption data."""
-    encryption_type_conf = _get_encryption_type_conf(encryption_type)
+    encryption_type_conf = _get_encryption_type_conf(encryption_algo)
     decryption_function = encryption_type_conf["decryption_function"]
     plaintext = decryption_function(key=key, cipherdict=cipherdict)
     return plaintext
@@ -143,8 +143,8 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key: bytes) -> bytes:
 def _encrypt_via_rsa_oaep(plaintext: bytes, key: RSA.RsaKey) -> dict:
     """Encrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
-    :param key: public RSA key
     :param plaintext: the bytes to cipher
+    :param key: public RSA key
 
     :return: a dict with field `digest_list`, containing bytestring chunks of variable width."""
 
@@ -201,5 +201,5 @@ ENCRYPTION_TYPES_REGISTRY = dict(
     },
 )
 
-#: These values can be used as 'encryption_type'.
+#: These values can be used as 'encryption_algo'.
 SUPPORTED_ENCRYPTION_TYPES = sorted(ENCRYPTION_TYPES_REGISTRY.keys())

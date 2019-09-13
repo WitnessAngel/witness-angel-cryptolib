@@ -22,20 +22,28 @@ def test_waserver_escrow_api_workflow():
     public_key = KEY_TYPES_REGISTRY["RSA"]["pem_import_function"](public_key_pem)
 
     signature = get_message_signature(
-        uid=uid, plaintext=secret, key_type="RSA", signature_type="PSS"
+        uid=uid, message=secret, key_type="RSA", signature_algo="PSS"
     )
-    verify_signature(plaintext=secret, signature=signature, key=public_key, signature_type="PSS")
+    verify_signature(
+        message=secret, signature=signature, key=public_key, signature_algo="PSS"
+    )
 
     signature["digest"] += b"xyz"
     with pytest.raises(ValueError, match="Incorrect signature"):
-        verify_signature(plaintext=secret, signature=signature, key=public_key, signature_type="PSS")
+        verify_signature(
+            message=secret, signature=signature, key=public_key, signature_algo="PSS"
+        )
 
     cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key)
 
-    decrypted = decrypt_with_private_key(uid=uid, key_type="RSA", encryption_type="RSA_OAEP", cipherdict=cipherdict)
+    decrypted = decrypt_with_private_key(
+        uid=uid, key_type="RSA", encryption_algo="RSA_OAEP", cipherdict=cipherdict
+    )
 
     cipherdict["digest_list"].append(b"aaabbbccc")
     with pytest.raises(ValueError, match="Ciphertext with incorrect length"):
-        decrypt_with_private_key(uid=uid, key_type="RSA", encryption_type="RSA_OAEP", cipherdict=cipherdict)
+        decrypt_with_private_key(
+            uid=uid, key_type="RSA", encryption_algo="RSA_OAEP", cipherdict=cipherdict
+        )
 
     assert decrypted == secret

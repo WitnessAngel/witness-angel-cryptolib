@@ -8,7 +8,7 @@ This module allows one to sign messages, and then verify the signature.
 Public API
 --------------
 
-.. autodata:: wacryptolib.signature.SUPPORTED_SIGNATURE_TYPES
+.. autodata:: wacryptolib.signature.SUPPORTED_SIGNATURE_ALGOS
 
 .. autofunction:: wacryptolib.signature.sign_message
 

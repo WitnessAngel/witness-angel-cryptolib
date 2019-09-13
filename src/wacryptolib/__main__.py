@@ -22,7 +22,7 @@ MEDIUM_SUFFIX = ".medium"
 EXAMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
         dict(
-            data_encryption_type="AES_CBC",
+            data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
                     escrow_key_type="RSA",
@@ -30,9 +30,10 @@ EXAMPLE_CONTAINER_CONF = dict(
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
-            signatures=[
+            data_signatures=[
                 dict(
-                    signature_type=("DSA", "DSS"),  # FIXME use subkey_type here
+                    signature_key_type="DSA",
+                    signature_algo="DSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],

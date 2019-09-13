@@ -34,9 +34,6 @@ def split_bytestring_as_shamir_shares(
         all_chunk_shares.append(shares)
         del shares
 
-    ##all_shares = list(map(list, zip(*all_shares)))
-    ##shares_long_bytestring = {}
-
     full_shares = []
 
     for idx in range(shares_count):

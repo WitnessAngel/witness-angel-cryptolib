@@ -10,11 +10,11 @@ SUPPORTED_SYMMETRIC_KEY_TYPES = ["AES_CBC", "AES_EAX", "CHACHA20_POLY1305"]
 assert set(SUPPORTED_SYMMETRIC_KEY_TYPES) <= set(ENCRYPTION_TYPES_REGISTRY.keys())
 
 
-def generate_symmetric_key(encryption_type: str) -> bytes:
+def generate_symmetric_key(encryption_algo: str) -> bytes:
     """
     Generate the strongest key possible for the wanted symmetric cipher.
     """
-    assert encryption_type in SUPPORTED_SYMMETRIC_KEY_TYPES, encryption_type
+    assert encryption_algo in SUPPORTED_SYMMETRIC_KEY_TYPES, encryption_algo
     return get_random_bytes(
         32
     )  # Same length for all currently supported symmetric ciphers
@@ -26,6 +26,7 @@ def generate_asymmetric_keypair(
     """Generate a (public_key, private_key) pair.
 
     :param uid: UUID of the encryption operation
+    :param key_type: name of the key type
     :param serialize: Indicates if key must be serialized as PEM string
 
     Other arguments are used or not depending on the chosen `key_type`.
@@ -135,6 +136,7 @@ def _get_pseudorandom_generator(uid):
     """Generate a pseudorandom generator from an uid.
 
     :param uid: uuid to be used as seed
+
     :return: a callable taking a number of bytes as parameter and outputting this many pseudorandom bytes
     """
     random_instance = random.Random(uid.int)

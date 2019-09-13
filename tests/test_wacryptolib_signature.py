@@ -6,7 +6,7 @@ import pytest
 import wacryptolib
 
 
-def _common_signature_checks(keypair, plaintext, signature, signature_type):
+def _common_signature_checks(keypair, message, signature, signature_algo):
 
     assert isinstance(signature["digest"], bytes)
     assert isinstance(signature["timestamp_utc"], int)
@@ -14,12 +14,18 @@ def _common_signature_checks(keypair, plaintext, signature, signature_type):
     assert utcnow - 10 <= signature["timestamp_utc"] <= utcnow
 
     wacryptolib.signature.verify_signature(
-        key=keypair["public_key"], plaintext=plaintext, signature=signature, signature_type=signature_type,
+        key=keypair["public_key"],
+        message=message,
+        signature=signature,
+        signature_algo=signature_algo,
     )
 
     with pytest.raises(ValueError, match="signature"):
         wacryptolib.signature.verify_signature(
-            key=keypair["public_key"], plaintext=plaintext + b"X", signature=signature, signature_type=signature_type
+            key=keypair["public_key"],
+            message=message + b"X",
+            signature=signature,
+            signature_algo=signature_algo,
         )
 
     signature_corrupted = signature.copy()
@@ -27,9 +33,9 @@ def _common_signature_checks(keypair, plaintext, signature, signature_type):
     with pytest.raises(ValueError, match="signature"):
         wacryptolib.signature.verify_signature(
             key=keypair["public_key"],
-            plaintext=plaintext,
+            message=message,
             signature=signature_corrupted,
-                signature_type=signature_type,
+            signature_algo=signature_algo,
         )
 
     signature_corrupted = signature.copy()
@@ -37,72 +43,81 @@ def _common_signature_checks(keypair, plaintext, signature, signature_type):
     with pytest.raises(ValueError, match="signature"):
         wacryptolib.signature.verify_signature(
             key=keypair["public_key"],
-            plaintext=plaintext,
+            message=message,
             signature=signature_corrupted,
-                signature_type=signature_type,
+            signature_algo=signature_algo,
         )
 
 
 def test_sign_and_verify_with_rsa_key():
     uid = uuid.uuid4()
-    plaintext = b"Hello"
+    message = b"Hello"
 
     keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(
         uid, key_length=2048
     )
     signature = wacryptolib.signature.sign_message(
-        key=keypair["private_key"], plaintext=plaintext, signature_type="PSS"
+        key=keypair["private_key"], message=message, signature_algo="PSS"
     )
-    _common_signature_checks(keypair=keypair, plaintext=plaintext, signature=signature, signature_type="PSS")
+    _common_signature_checks(
+        keypair=keypair, message=message, signature=signature, signature_algo="PSS"
+    )
 
 
 def test_sign_and_verify_with_dsa_key():
     uid = uuid.uuid4()
-    plaintext = "Mon hât èst joli".encode("utf-8")
+    message = "Mon hât èst joli".encode("utf-8")
 
     keypair = wacryptolib.key_generation._generate_dsa_keypair_as_objects(
         uid, key_length=2048
     )
     signature = wacryptolib.signature.sign_message(
-        key=keypair["private_key"], plaintext=plaintext, signature_type="DSS"
+        key=keypair["private_key"], message=message, signature_algo="DSS"
     )
-    _common_signature_checks(keypair=keypair, plaintext=plaintext, signature=signature, signature_type="DSS")
+    _common_signature_checks(
+        keypair=keypair, message=message, signature=signature, signature_algo="DSS"
+    )
 
 
 def test_sign_and_verify_with_ecc_key():
     uid = uuid.uuid4()
-    plaintext = "Msd sd 867_ss".encode("utf-8")
+    message = "Msd sd 867_ss".encode("utf-8")
 
     keypair = wacryptolib.key_generation._generate_ecc_keypair_as_objects(
         uid, curve="p256"
     )
     signature = wacryptolib.signature.sign_message(
-        key=keypair["private_key"], plaintext=plaintext, signature_type="DSS"
+        key=keypair["private_key"], message=message, signature_algo="DSS"
     )
-    _common_signature_checks(keypair=keypair, plaintext=plaintext, signature=signature, signature_type="DSS")
+    _common_signature_checks(
+        keypair=keypair, message=message, signature=signature, signature_algo="DSS"
+    )
 
 
 def test_generic_signature_errors():
     uid = uuid.uuid4()
-    plaintext = b"Hello"
+    message = b"Hello"
 
     keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(
         uid, key_length=2048
     )
 
-    with pytest.raises(ValueError, match="Unknown signature type"):
+    with pytest.raises(ValueError, match="Unknown signature algorithm"):
         wacryptolib.signature.sign_message(
-            key=keypair["private_key"], plaintext=plaintext, signature_type="EIXH"
+            key=keypair["private_key"], message=message, signature_algo="EIXH"
         )
 
     with pytest.raises(ValueError, match="Incompatible key type"):
         wacryptolib.signature.sign_message(
             key=keypair["private_key"],
-            plaintext=plaintext,
-            signature_type="DSS",  # RSA key not accepted here
+            message=message,
+            signature_algo="DSS",  # RSA key not accepted here
         )
 
-    with pytest.raises(ValueError, match="Unknown signature type"):
+    with pytest.raises(ValueError, match="Unknown signature algorithm"):
         wacryptolib.signature.verify_signature(
-            key=keypair["public_key"], plaintext=plaintext, signature={}, signature_type="XPZH"
+            key=keypair["public_key"],
+            message=message,
+            signature={},
+            signature_algo="XPZH",
         )

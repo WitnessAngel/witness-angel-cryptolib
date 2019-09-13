@@ -53,38 +53,12 @@ def recombine_chunks(chunks: List[bytes], chunk_size: int, must_unpad: bool) -> 
     return bytestring
 
 
-'''OBSOLETE STUFFS TO REMOVE
-JSON_BYTES_PREFIX =
-
-class ExtendedJSONEncoder(json.JSONEncoder):
-    """
-    JSONEncoder subclass that knows how to encode bytes and
-    UUIDs.
-    """
-    def default(self, o):
-        if isinstance(o, bytes):
-            return "[bytes]:" + o.decode("ascii") 
-        elif isinstance(o, (decimal.Decimal, uuid.UUID)):
-            return "[uid]:" + str(o)
-        else:
-            return super().default(o)
-
-class ExtendedJSONDecoder(json.JSONDecoder):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.original_parse_string = self.parse_string
-
-    def parse_string(self, *args, **kwargs):
-        string = self.original_parse_string(args, **kwargs)
-        pass
-'''
-
-
 def dump_to_json_bytes(data, **extra_options):
-    # json_str = json.dumps(data, cls=ExtendedJSONEncoder, sort_keys=True)
+    """
+    Dump a data tree to a json representation in bytes.
+    Supports advanced types like bytes, uuids, dates...
+    """
     from bson.json_util import dumps, CANONICAL_JSON_OPTIONS
-
     json_str = dumps(
         data, sort_keys=True, json_options=CANONICAL_JSON_OPTIONS, **extra_options
     )
@@ -92,8 +66,12 @@ def dump_to_json_bytes(data, **extra_options):
 
 
 def load_from_json_bytes(data, **extra_options):
+    """
+    Load a data tree from a json representation in bytes.
+    Supports advanced types like bytes, uuids, dates...
+    """
     from bson.json_util import loads, CANONICAL_JSON_OPTIONS
 
+    assert isinstance(data, bytes), data
     json_str = data.decode(DEFAULT_ENCODING)
-    # return json.loads(json_str, cls=ExtendedJSONDecoder, sort_keys=True)
-    return loads(data, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
+    return loads(json_str, json_options=CANONICAL_JSON_OPTIONS, **extra_options)

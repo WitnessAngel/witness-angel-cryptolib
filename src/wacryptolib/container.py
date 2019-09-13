@@ -36,12 +36,12 @@ class ContainerWriter(ContainerBase):
         result_data_encryption_strata = []
 
         for data_encryption_stratum in conf["data_encryption_strata"]:
-            data_encryption_type = data_encryption_stratum["data_encryption_type"]
-            symmetric_key = generate_symmetric_key(encryption_type=data_encryption_type)
+            data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
+            symmetric_key = generate_symmetric_key(encryption_algo=data_encryption_algo)
 
             data_cipherdict = encrypt_bytestring(
                 plaintext=data_current,
-                encryption_type=data_encryption_type,
+                encryption_algo=data_encryption_algo,
                 key=symmetric_key,
             )
             assert isinstance(data_cipherdict, dict), data_cipherdict
@@ -67,26 +67,28 @@ class ContainerWriter(ContainerBase):
                     key_encryption_stratum
                 )  # Unmodified for now
 
-            result_signatures = []
-            for signature_conf in data_encryption_stratum["signatures"]:
+            data_signatures = []
+            for signature_conf in data_encryption_stratum["data_signatures"]:
                 signature_value = self._generate_signature(
                     container_uid=container_uid,
                     data_ciphertext=data_current,
                     conf=signature_conf,
                 )
                 signature_conf["signature_value"] = signature_value
-                result_signatures.append(signature_conf)
+                data_signatures.append(signature_conf)
 
             result_data_encryption_strata.append(
                 dict(
-                    data_encryption_type=data_encryption_type,
+                    data_encryption_algo=data_encryption_algo,
                     key_ciphertext=symmetric_key_data,
                     key_encryption_strata=result_key_encryption_strata,
-                    signatures=result_signatures,
+                        data_signatures=data_signatures,
                 )
             )
 
-        data_ciphertext = data_current  # New fully encrypted (unless data_encryption_strata is empty)
+        data_ciphertext = (
+            data_current
+        )  # New fully encrypted (unless data_encryption_strata is empty)
 
         return dict(
             uid=container_uid,
@@ -98,8 +100,8 @@ class ContainerWriter(ContainerBase):
         self, container_uid: uuid.UUID, symmetric_key_data: bytes, conf: dict
     ) -> bytes:
         assert isinstance(symmetric_key_data, bytes), symmetric_key_data
-        escrow_key_type=conf["escrow_key_type"]
-        key_encryption_algo=conf["key_encryption_algo"]
+        escrow_key_type = conf["escrow_key_type"]
+        key_encryption_algo = conf["key_encryption_algo"]
         encryption_proxy = _get_proxy_for_escrow(conf["key_escrow"])
 
         subkey_pem = encryption_proxy.get_public_key(
@@ -111,7 +113,7 @@ class ContainerWriter(ContainerBase):
 
         key_cipherdict = encrypt_bytestring(
             plaintext=symmetric_key_data,
-            encryption_type=key_encryption_algo,
+            encryption_algo=key_encryption_algo,
             key=subkey,
         )
         return key_cipherdict
@@ -120,12 +122,13 @@ class ContainerWriter(ContainerBase):
         self, container_uid: uuid.UUID, data_ciphertext: bytes, conf: dict
     ) -> dict:
         encryption_proxy = _get_proxy_for_escrow(conf["signature_escrow"])
-        subkey_type, signature_type = conf["signature_type"]
+        signature_key_type = conf["signature_key_type"]
+        signature_algo = conf["signature_algo"]
         signature_value = encryption_proxy.get_message_signature(
             uid=container_uid,
-            plaintext=data_ciphertext,
-            key_type=subkey_type,
-            signature_type=signature_type,
+            message=data_ciphertext,
+            key_type=signature_key_type,
+            signature_algo=signature_algo,
         )
         return signature_value
 
@@ -140,11 +143,9 @@ class ContainerReader(ContainerBase):
 
         for data_encryption_stratum in reversed(container["data_encryption_strata"]):
 
-            data_encryption_type = data_encryption_stratum[
-                "data_encryption_type"
-            ]
+            data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
 
-            for signature_conf in data_encryption_stratum["signatures"]:
+            for signature_conf in data_encryption_stratum["data_signatures"]:
                 self._verify_signatures(
                     container_uid=container_uid,
                     message=data_current,
@@ -169,7 +170,9 @@ class ContainerReader(ContainerBase):
             assert isinstance(symmetric_key_data, bytes), symmetric_key_data
             data_cipherdict = load_from_json_bytes(data_current)
             data_current = decrypt_bytestring(
-                cipherdict=data_cipherdict, key=symmetric_key_data, encryption_type=data_encryption_type
+                cipherdict=data_cipherdict,
+                key=symmetric_key_data,
+                encryption_algo=data_encryption_algo,
             )
 
         data = data_current  # Now decrypted
@@ -179,22 +182,26 @@ class ContainerReader(ContainerBase):
         self, container_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list
     ):
         assert isinstance(symmetric_key_cipherdict, dict), symmetric_key_cipherdict
-        escrow_key_type=conf["escrow_key_type"]
-        key_encryption_algo=conf["key_encryption_algo"]
+        escrow_key_type = conf["escrow_key_type"]
+        key_encryption_algo = conf["key_encryption_algo"]
         encryption_proxy = _get_proxy_for_escrow(conf["key_escrow"])
 
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
-            uid=container_uid, key_type=escrow_key_type, encryption_type=key_encryption_algo, cipherdict=symmetric_key_cipherdict
+            uid=container_uid,
+            key_type=escrow_key_type,
+            encryption_algo=key_encryption_algo,
+            cipherdict=symmetric_key_cipherdict,
         )
         return symmetric_key_plaintext
 
     def _verify_signatures(self, container_uid: uuid.UUID, message: bytes, conf: dict):
-        subkey_type, signature_type = conf["signature_type"]
+        signature_key_type = conf["signature_key_type"]
+        signature_algo = conf["signature_algo"]
         encryption_proxy = _get_proxy_for_escrow(conf["signature_escrow"])
         public_key_pem = encryption_proxy.get_public_key(
-            uid=container_uid, key_type=subkey_type
+            uid=container_uid, key_type=signature_key_type
         )
-        public_key = KEY_TYPES_REGISTRY[subkey_type]["pem_import_function"](
+        public_key = KEY_TYPES_REGISTRY[signature_key_type]["pem_import_function"](
             public_key_pem
         )
 
@@ -204,7 +211,10 @@ class ContainerReader(ContainerBase):
         )
 
         verify_signature(
-            plaintext=message, signature_type=signature_type, signature=conf["signature_value"], key=public_key
+            message=message,
+            signature_algo=signature_algo,
+            signature=conf["signature_value"],
+            key=public_key,
         )  # Raises if troubles
 
 

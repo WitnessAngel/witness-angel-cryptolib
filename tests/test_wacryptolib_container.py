@@ -12,17 +12,18 @@ from wacryptolib.container import (
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
         dict(
-            data_encryption_type="AES_CBC",
+            data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                        escrow_key_type="RSA",
-                       key_encryption_algo="RSA_OAEP",
+                    escrow_key_type="RSA",
+                    key_encryption_algo="RSA_OAEP",
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
-            signatures=[
+                data_signatures=[
                 dict(
-                    signature_type=("DSA", "DSS"),  # FIXME use subkey_type here
+                    signature_key_type="DSA",
+                    signature_algo="DSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
@@ -34,53 +35,56 @@ SIMPLE_CONTAINER_CONF = dict(
 COMPLEX_CONTAINER_CONF = dict(
     data_encryption_strata=[
         dict(
-            data_encryption_type="AES_EAX",
+            data_encryption_algo="AES_EAX",
             key_encryption_strata=[
                 dict(
-                        escrow_key_type="RSA",
-                       key_encryption_algo="RSA_OAEP",
+                    escrow_key_type="RSA",
+                    key_encryption_algo="RSA_OAEP",
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
-            signatures=[],
+                data_signatures=[],
         ),
         dict(
-            data_encryption_type="AES_CBC",
+            data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                        escrow_key_type="RSA",
-                       key_encryption_algo="RSA_OAEP",
+                    escrow_key_type="RSA",
+                    key_encryption_algo="RSA_OAEP",
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
-            signatures=[
+                data_signatures=[
                 dict(
-                    signature_type=("DSA", "DSS"),  # FIXME use subkey_type here
+                    signature_key_type="DSA",
+                    signature_algo="DSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
         ),
         dict(
-            data_encryption_type="CHACHA20_POLY1305",
+            data_encryption_algo="CHACHA20_POLY1305",
             key_encryption_strata=[
                 dict(
-                        escrow_key_type="RSA",
-                       key_encryption_algo="RSA_OAEP",
+                    escrow_key_type="RSA",
+                    key_encryption_algo="RSA_OAEP",
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 ),
                 dict(
-                        escrow_key_type="RSA",
-                       key_encryption_algo="RSA_OAEP",
+                    escrow_key_type="RSA",
+                    key_encryption_algo="RSA_OAEP",
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 ),
             ],
-            signatures=[
+                data_signatures=[
                 dict(
-                    signature_type=("RSA", "PSS"),  # FIXME use subkey_type here
+                    signature_key_type="RSA",
+                    signature_algo="PSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 ),
                 dict(
-                    signature_type=("ECC", "DSS"),  # FIXME use subkey_type here
+                    signature_key_type="ECC",
+                    signature_algo="DSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 ),
             ],

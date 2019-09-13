@@ -21,11 +21,13 @@ def test_generic_encryption_and_decryption_errors():
 
     with pytest.raises(ValueError, match="Unknown cipher type"):
         wacryptolib.encryption.encrypt_bytestring(
-            key=key, plaintext=binary_content, encryption_type="EXHD"
+            key=key, plaintext=binary_content, encryption_algo="EXHD"
         )
 
     with pytest.raises(ValueError, match="Unknown cipher type"):
-        wacryptolib.encryption.decrypt_bytestring(key=key, cipherdict={}, encryption_type="EXHD")
+        wacryptolib.encryption.decrypt_bytestring(
+            key=key, cipherdict={}, encryption_algo="EXHD"
+        )
 
 
 def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_content):
@@ -83,17 +85,17 @@ def test_aes_cbc_encryption_and_decryption():
     binary_content = _get_binary_content()
 
     cipherdict = wacryptolib.encryption.encrypt_bytestring(
-        key=key, plaintext=binary_content, encryption_type="AES_CBC"
+        key=key, plaintext=binary_content, encryption_algo="AES_CBC"
     )
 
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
-        key=key, cipherdict=cipherdict, encryption_type="AES_CBC"
+        key=key, cipherdict=cipherdict, encryption_algo="AES_CBC"
     )
 
     assert decrypted_content == binary_content
 
     decryption_func = functools.partial(
-        wacryptolib.encryption.decrypt_bytestring, key=key, encryption_type="AES_CBC"
+        wacryptolib.encryption.decrypt_bytestring, key=key, encryption_algo="AES_CBC"
     )
     _test_random_ciphertext_corruption(
         decryption_func, cipherdict=cipherdict, initial_content=binary_content
@@ -106,17 +108,17 @@ def test_aes_eax_encryption_and_decryption():
     binary_content = _get_binary_content()
 
     cipherdict = wacryptolib.encryption.encrypt_bytestring(
-        key=key, plaintext=binary_content, encryption_type="AES_EAX"
+        key=key, plaintext=binary_content, encryption_algo="AES_EAX"
     )
 
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
-        key=key, cipherdict=cipherdict, encryption_type="AES_EAX"
+        key=key, cipherdict=cipherdict, encryption_algo="AES_EAX"
     )
 
     assert decrypted_content == binary_content
 
     decryption_func = functools.partial(
-        wacryptolib.encryption.decrypt_bytestring, key=key, encryption_type="AES_EAX"
+        wacryptolib.encryption.decrypt_bytestring, key=key, encryption_algo="AES_EAX"
     )
     _test_random_ciphertext_corruption(
         decryption_func, cipherdict=cipherdict, initial_content=binary_content
@@ -129,17 +131,19 @@ def test_chacha20_poly1305_encryption_and_decryption():
     binary_content = _get_binary_content()
 
     cipherdict = wacryptolib.encryption.encrypt_bytestring(
-        key=key, plaintext=binary_content, encryption_type="CHACHA20_POLY1305"
+        key=key, plaintext=binary_content, encryption_algo="CHACHA20_POLY1305"
     )
 
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
-        key=key, cipherdict=cipherdict, encryption_type="CHACHA20_POLY1305"
+        key=key, cipherdict=cipherdict, encryption_algo="CHACHA20_POLY1305"
     )
 
     assert decrypted_content == binary_content
 
     decryption_func = functools.partial(
-        wacryptolib.encryption.decrypt_bytestring, key=key, encryption_type="CHACHA20_POLY1305"
+        wacryptolib.encryption.decrypt_bytestring,
+        key=key,
+        encryption_algo="CHACHA20_POLY1305",
     )
     _test_random_ciphertext_corruption(
         decryption_func, cipherdict=cipherdict, initial_content=binary_content
@@ -157,17 +161,19 @@ def test_rsa_oaep_encryption_and_decryption():
     binary_content = _get_binary_content()
 
     cipherdict = wacryptolib.encryption.encrypt_bytestring(
-        key=keypair["public_key"], plaintext=binary_content, encryption_type="RSA_OAEP"
+        key=keypair["public_key"], plaintext=binary_content, encryption_algo="RSA_OAEP"
     )
 
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
-        key=keypair["private_key"], cipherdict=cipherdict, encryption_type="RSA_OAEP"
+        key=keypair["private_key"], cipherdict=cipherdict, encryption_algo="RSA_OAEP"
     )
 
     assert decrypted_content == binary_content
 
     decryption_func = functools.partial(
-        wacryptolib.encryption.decrypt_bytestring, key=keypair["private_key"], encryption_type="RSA_OAEP"
+        wacryptolib.encryption.decrypt_bytestring,
+        key=keypair["private_key"],
+        encryption_algo="RSA_OAEP",
     )
     _test_random_ciphertext_corruption(
         decryption_func, cipherdict=cipherdict, initial_content=binary_content

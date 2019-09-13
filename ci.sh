@@ -18,14 +18,14 @@ run_ci () {
 
   set +o errexit  # THESE LINTS MUST NOT STOP CHECKS
 
-  # Running linting for all python files in the project:
-  # "flake8 ." is too verbose for now, and would need to be made compatible with Black
-  echo "Running pylint"
-  pylint **/*.py
+      # Running linting for all python files in the project:
+      # "flake8 ." is too verbose for now, and would need to be made compatible with Black
+      echo "Running pylint"
+      pylint **/*.py
 
-  # Running tests and type checking:
-  echo "Running mypy"
-  mypy src  # Some mixin errors are impossible to workaround now...
+      # Running tests and type checking:
+      echo "Running mypy"
+      mypy src  # Some mixin errors are impossible to workaround now...
 
   set -o errexit
 
@@ -75,7 +75,7 @@ run_ci () {
 # Remove any cache before the script:
 pyclean
 
-# Clean everything up:
+# Hook to clean everything up on ctrl-C:
 trap pyclean EXIT INT TERM
 
 # Run the CI process:

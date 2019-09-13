@@ -4,17 +4,16 @@ import uuid
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Random import get_random_bytes
 
-from wacryptolib.encryption import ENCRYPTION_TYPES_REGISTRY
+from wacryptolib.encryption import ENCRYPTION_ALGOS_REGISTRY
 
-SUPPORTED_SYMMETRIC_KEY_TYPES = ["AES_CBC", "AES_EAX", "CHACHA20_POLY1305"]
-assert set(SUPPORTED_SYMMETRIC_KEY_TYPES) <= set(ENCRYPTION_TYPES_REGISTRY.keys())
 
 
 def generate_symmetric_key(encryption_algo: str) -> bytes:
     """
-    Generate the strongest key possible for the wanted symmetric cipher.
+    Generate the strongest key possible for the wanted symmetric cipher,
+    as a bytestring.
     """
-    assert encryption_algo in SUPPORTED_SYMMETRIC_KEY_TYPES, encryption_algo
+    assert encryption_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS, encryption_algo
     return get_random_bytes(
         32
     )  # Same length for all currently supported symmetric ciphers
@@ -36,10 +35,10 @@ def generate_asymmetric_keypair(
     potential_params = dict(key_length=key_length, curve=curve)
 
     key_type = key_type.upper()
-    if key_type not in KEY_TYPES_REGISTRY:
+    if key_type not in ASYMMETRIC_KEY_TYPES_REGISTRY:
         raise ValueError("Unknown asymmetric key type '%s'" % key_type)
 
-    descriptors = KEY_TYPES_REGISTRY[key_type]
+    descriptors = ASYMMETRIC_KEY_TYPES_REGISTRY[key_type]
 
     generation_function = descriptors["generation_function"]
     generation_extra_parameters = descriptors["generation_extra_parameters"]
@@ -69,9 +68,9 @@ def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, key_type: str):
     :return: key object
     """
     key_type = key_type.upper()
-    if key_type not in KEY_TYPES_REGISTRY:
+    if key_type not in ASYMMETRIC_KEY_TYPES_REGISTRY:
         raise ValueError("Unknown key type %s" % key_pem)
-    return KEY_TYPES_REGISTRY[key_type]["pem_import_function"](key_pem)
+    return ASYMMETRIC_KEY_TYPES_REGISTRY[key_type]["pem_import_function"](key_pem)
 
 
 def _check_key_length(key_length):
@@ -165,7 +164,7 @@ def _get_pseudorandom_generator(uid):
     return _randfunc
 
 
-KEY_TYPES_REGISTRY = dict(
+ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
     RSA={
         "generation_function": _generate_rsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length"],
@@ -184,5 +183,9 @@ KEY_TYPES_REGISTRY = dict(
 )
 
 
-#: These values can be used as 'key_type'.
-SUPPORTED_KEY_TYPES = sorted(KEY_TYPES_REGISTRY.keys())
+#: These values can be used as 'key_type' for asymmetric key generation.
+SUPPORTED_ASYMMETRIC_KEY_TYPES = sorted(ASYMMETRIC_KEY_TYPES_REGISTRY.keys())
+
+#: These values can be used as 'encryption_algo' for symmetric key generation.
+SUPPORTED_SYMMETRIC_KEY_ALGOS = ["AES_CBC", "AES_EAX", "CHACHA20_POLY1305"]
+assert set(SUPPORTED_SYMMETRIC_KEY_ALGOS) <= set(ENCRYPTION_ALGOS_REGISTRY.keys())

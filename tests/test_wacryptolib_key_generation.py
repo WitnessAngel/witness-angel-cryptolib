@@ -5,7 +5,7 @@ import pytest
 from Crypto.PublicKey import RSA, ECC, DSA
 
 import wacryptolib
-from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring, SUPPORTED_KEY_TYPES
+from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring, SUPPORTED_ASYMMETRIC_KEY_TYPES
 
 
 @pytest.mark.parametrize("key_type", ["RSA", "ECC", "DSA"])
@@ -90,7 +90,7 @@ def test_ecc_asymmetric_key_generation():
 def test_load_asymmetric_key_from_pem_bytestring():
 
     uid = uuid.uuid4()
-    key_type = random.choice(SUPPORTED_KEY_TYPES)
+    key_type = random.choice(SUPPORTED_ASYMMETRIC_KEY_TYPES)
 
     keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
                 uid, key_type=key_type)

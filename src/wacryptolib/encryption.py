@@ -12,10 +12,10 @@ RSA_OAEP_HASH_ALGO = Crypto.Hash.SHA256
 
 def _get_encryption_type_conf(encryption_algo):
     encryption_algo = encryption_algo.upper()
-    if encryption_algo not in ENCRYPTION_TYPES_REGISTRY:
+    if encryption_algo not in ENCRYPTION_ALGOS_REGISTRY:
         raise ValueError("Unknown cipher type '%s'" % encryption_algo)
 
-    encryption_type_conf = ENCRYPTION_TYPES_REGISTRY[encryption_algo]
+    encryption_type_conf = ENCRYPTION_ALGOS_REGISTRY[encryption_algo]
     return encryption_type_conf
 
 
@@ -182,7 +182,7 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key: RSA.RsaKey) -> bytes:
     return b"".join(decrypted_chunks)
 
 
-ENCRYPTION_TYPES_REGISTRY = dict(
+ENCRYPTION_ALGOS_REGISTRY = dict(
     AES_CBC={
         "encryption_function": _encrypt_via_aes_cbc,
         "decryption_function": _decrypt_via_aes_cbc,
@@ -202,4 +202,4 @@ ENCRYPTION_TYPES_REGISTRY = dict(
 )
 
 #: These values can be used as 'encryption_algo'.
-SUPPORTED_ENCRYPTION_TYPES = sorted(ENCRYPTION_TYPES_REGISTRY.keys())
+SUPPORTED_ENCRYPTION_TYPES = sorted(ENCRYPTION_ALGOS_REGISTRY.keys())

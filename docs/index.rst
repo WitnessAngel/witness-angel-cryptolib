@@ -6,6 +6,8 @@
 Welcome to Witness Angel's documentation!
 =========================================
 
+.. include:: ../Readme.rst
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:

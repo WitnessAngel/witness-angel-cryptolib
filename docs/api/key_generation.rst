@@ -7,10 +7,20 @@ This module is dedicated to key generation, especially assymetric public/private
 Public API
 --------------
 
-.. autodata:: wacryptolib.key_generation.SUPPORTED_KEY_TYPES
 
+
+.. autodata:: wacryptolib.key_generation.SUPPORTED_ASYMMETRIC_KEY_TYPES
 
 .. autofunction:: wacryptolib.key_generation.generate_asymmetric_keypair
+
+.. autofunction:: wacryptolib.key_generation.load_asymmetric_key_from_pem_bytestring
+
+.. autodata:: wacryptolib.key_generation.SUPPORTED_SYMMETRIC_KEY_ALGOS
+
+.. autofunction:: wacryptolib.key_generation.generate_symmetric_key
+
+
+
 
 
 

@@ -1,7 +1,7 @@
 Encryption
 =============
 
-This module allows to encrypt plain text data, then decrypt it.
+This module allows to encrypt bytestring data, then decrypt it.
 
 Public API
 --------------

@@ -5,8 +5,8 @@ API Documentation
    :maxdepth: 2
    :caption: Contents:
    
-   key_generation
-   signature
-   encryption
-   shared_secret
-   utilities
+   api/key_generation
+   api/signature
+   api/encryption
+   api/shared_secret
+   api/utilities

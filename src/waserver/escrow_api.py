@@ -23,18 +23,11 @@ def get_message_signature(  # FIXME rename "plaintext" here, inadequate
     """
     keypair = generate_asymmetric_keypair(uid=uid, key_type=key_type, serialize=False)
     private_key = keypair["private_key"]
-    print(
-        "\n> SIGNING MESSAGE \n%s with %s key of public form %s"
-        % (
-            message,
-            keypair["public_key"].__class__,
-            keypair["public_key"].export_key(format="PEM"),
-        )
-    )
+
     signature = sign_message(
         message=message,
         signature_algo=signature_algo,
-        key=private_key,  # FIXME rename "plaintext" here, inadequate
+        key=private_key,
     )
     return signature
 

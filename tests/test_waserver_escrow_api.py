@@ -4,7 +4,7 @@ import pytest
 from Crypto.Random import get_random_bytes
 
 from wacryptolib.encryption import _encrypt_via_rsa_oaep
-from wacryptolib.key_generation import KEY_TYPES_REGISTRY
+from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.signature import verify_signature
 from waserver.escrow_api import (
     get_public_key,
@@ -19,7 +19,7 @@ def test_waserver_escrow_api_workflow():
     secret = get_random_bytes(101)
 
     public_key_pem = get_public_key(uid=uid, key_type="RSA")
-    public_key = KEY_TYPES_REGISTRY["RSA"]["pem_import_function"](public_key_pem)
+    public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_type="RSA")
 
     signature = get_message_signature(
         uid=uid, message=secret, key_type="RSA", signature_algo="PSS"

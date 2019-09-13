@@ -100,16 +100,22 @@ def test_container_encryption_and_decryption(container_conf):
 
     data = b"abc"  # get_random_bytes(random.randint(1, 1000))
 
-    uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
+    keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
 
-    container = encrypt_data_into_container(data=data, conf=container_conf, uid=uid)
+    container = encrypt_data_into_container(data=data, conf=container_conf, keychain_uid=keychain_uid)
     # pprint.pprint(container, width=120)
 
-    assert container["uid"]
-    if uid:
-        assert container["uid"] == uid
+    assert container["keychain_uid"]
+    if keychain_uid:
+        assert container["keychain_uid"] == keychain_uid
 
     result = decrypt_data_from_container(container=container)
     # pprint.pprint(result, width=120)
 
     assert result == data
+
+    container["container_format"] = "OAJKB"
+    with pytest.raises(ValueError, match="Unknown container format"):
+        decrypt_data_from_container(container=container)
+
+

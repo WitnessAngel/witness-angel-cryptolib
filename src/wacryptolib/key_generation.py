@@ -60,6 +60,20 @@ def generate_asymmetric_keypair(
     return keypair
 
 
+def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, key_type: str):
+    """Load a key (public or private) from a PEM-formatted bytestring.
+
+    :param key_pem: the key bytrestring
+    :param key_type: name of the key format
+
+    :return: key object
+    """
+    key_type = key_type.upper()
+    if key_type not in KEY_TYPES_REGISTRY:
+        raise ValueError("Unknown key type %s" % key_pem)
+    return KEY_TYPES_REGISTRY[key_type]["pem_import_function"](key_pem)
+
+
 def _check_key_length(key_length):
     if key_length < 2048:
         raise ValueError(

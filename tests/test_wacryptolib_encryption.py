@@ -151,11 +151,10 @@ def test_chacha20_poly1305_encryption_and_decryption():
 
 
 def test_rsa_oaep_encryption_and_decryption():
-    uid = uuid.uuid4()
     key_length = random.choice([2048, 4096])
 
     keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(
-        uid, key_length=key_length
+        key_length=key_length
     )
 
     binary_content = _get_binary_content()

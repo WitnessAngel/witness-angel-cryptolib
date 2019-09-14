@@ -16,10 +16,6 @@ def test_shared_secret_normal_cases():
         shares_count = random.randint(2, 10)
         threshold_count = random.randint(1, shares_count - 1)
 
-        secret = get_random_bytes(10)
-        shares_count = 3
-        threshold_count = 2
-
         shares = wacryptolib.shared_secret.split_bytestring_as_shamir_shares(
             secret=secret, shares_count=shares_count, threshold_count=threshold_count
         )

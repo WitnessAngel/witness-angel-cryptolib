@@ -1,5 +1,3 @@
-import random
-import uuid
 
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Random import get_random_bytes
@@ -20,11 +18,10 @@ def generate_symmetric_key(encryption_algo: str) -> bytes:
 
 
 def generate_asymmetric_keypair(
-    uid: uuid.UUID, key_type: str, serialize=True, key_length=2048, curve="p521"
+    key_type: str, serialize=True, key_length=2048, curve="p521"
 ) -> dict:
     """Generate a (public_key, private_key) pair.
 
-    :param uid: UUID of the encryption operation
     :param key_type: name of the key type
     :param serialize: Indicates if key must be serialized as PEM string
 
@@ -44,7 +41,7 @@ def generate_asymmetric_keypair(
     generation_extra_parameters = descriptors["generation_extra_parameters"]
 
     keypair = generation_function(
-        uid=uid, **{k: potential_params[k] for k in generation_extra_parameters}
+        **{k: potential_params[k] for k in generation_extra_parameters}
     )
 
     assert set(keypair.keys()) == set(["private_key", "public_key"])
@@ -80,48 +77,43 @@ def _check_key_length(key_length):
         )
 
 
-def _generate_rsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
+def _generate_rsa_keypair_as_objects(key_length: int) -> dict:
     """Generate a RSA (public_key, private_key) pair in PEM format.
 
-    :param uid: UUID of the encryption operation
     :param key_length: length of the key in bits, must be superior to 2048.
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
 
     _check_key_length(key_length)
 
-    randfunc = _get_pseudorandom_generator(uid=uid)
-    private_key = RSA.generate(key_length, randfunc=randfunc)
+    private_key = RSA.generate(key_length)
     public_key = private_key.publickey()
     keypair = {"public_key": public_key, "private_key": private_key}
     return keypair
 
 
-def _generate_dsa_keypair_as_objects(uid: uuid.UUID, key_length: int) -> dict:
+def _generate_dsa_keypair_as_objects(key_length: int) -> dict:
     """Generate a DSA (public_key, private_key) pair in PEM format.
 
     DSA keypair is not used for encryption/decryption, only for signing.
 
-    :param uid: UUID of the encryption operation
     :param key_length: length of the key in bits, must be superior to 2048.
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
 
     _check_key_length(key_length)
 
-    randfunc = _get_pseudorandom_generator(uid=uid)
-    private_key = DSA.generate(key_length, randfunc=randfunc)
+    private_key = DSA.generate(key_length)
     public_key = private_key.publickey()
     keypair = {"public_key": public_key, "private_key": private_key}
     return keypair
 
 
-def _generate_ecc_keypair_as_objects(uid: uuid.UUID, curve: str) -> dict:
+def _generate_ecc_keypair_as_objects(curve: str) -> dict:
     """Generate an ECC (public_key, private_key) pair in PEM format
 
     ECC keypair is not used for encryption/decryption, only for signing.
 
-    :param uid: UUID of the encryption operation
     :param curve: curve chosen among p256, p384, p521 and maybe others.
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
@@ -132,8 +124,7 @@ def _generate_ecc_keypair_as_objects(uid: uuid.UUID, curve: str) -> dict:
             % (curve, sorted(ECC._curves.keys()))
         )
 
-    randfunc = _get_pseudorandom_generator(uid)
-    private_key = ECC.generate(curve=curve, randfunc=randfunc)
+    private_key = ECC.generate(curve=curve)
     public_key = private_key.public_key()
     keypair = {"public_key": public_key, "private_key": private_key}
     return keypair
@@ -143,25 +134,6 @@ def _serialize_key_object_to_pem_bytestring(key) -> str:
     """Convert a private or public key to PEM-formatted bytestring."""
     pem = key.export_key(format="PEM")
     return pem
-
-
-def _get_pseudorandom_generator(uid):
-    """Generate a pseudorandom generator from an uid.
-
-    :param uid: uuid to be used as seed
-
-    :return: a callable taking a number of bytes as parameter and outputting this many pseudorandom bytes
-    """
-    random_instance = random.Random(uid.int)
-
-    def _randfunc(count):
-        """Return a bytestring of `count` bytes."""
-        random_bytes = bytes(
-            list(random_instance.randrange(0, 256) for _ in range(count))
-        )
-        return random_bytes
-
-    return _randfunc
 
 
 ASYMMETRIC_KEY_TYPES_REGISTRY = dict(

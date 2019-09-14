@@ -1,4 +1,4 @@
-import uuid
+
 from datetime import datetime
 
 import pytest
@@ -50,11 +50,10 @@ def _common_signature_checks(keypair, message, signature, signature_algo):
 
 
 def test_sign_and_verify_with_rsa_key():
-    uid = uuid.uuid4()
     message = b"Hello"
 
     keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(
-        uid, key_length=2048
+        key_length=2048
     )
     signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], message=message, signature_algo="PSS"
@@ -65,11 +64,10 @@ def test_sign_and_verify_with_rsa_key():
 
 
 def test_sign_and_verify_with_dsa_key():
-    uid = uuid.uuid4()
     message = "Mon hât èst joli".encode("utf-8")
 
     keypair = wacryptolib.key_generation._generate_dsa_keypair_as_objects(
-        uid, key_length=2048
+        key_length=2048
     )
     signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], message=message, signature_algo="DSS"
@@ -80,11 +78,10 @@ def test_sign_and_verify_with_dsa_key():
 
 
 def test_sign_and_verify_with_ecc_key():
-    uid = uuid.uuid4()
     message = "Msd sd 867_ss".encode("utf-8")
 
     keypair = wacryptolib.key_generation._generate_ecc_keypair_as_objects(
-        uid, curve="p256"
+        curve="p256"
     )
     signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], message=message, signature_algo="DSS"
@@ -95,11 +92,11 @@ def test_sign_and_verify_with_ecc_key():
 
 
 def test_generic_signature_errors():
-    uid = uuid.uuid4()
+
     message = b"Hello"
 
     keypair = wacryptolib.key_generation._generate_rsa_keypair_as_objects(
-        uid, key_length=2048
+        key_length=2048
     )
 
     with pytest.raises(ValueError, match="Unknown signature algorithm"):

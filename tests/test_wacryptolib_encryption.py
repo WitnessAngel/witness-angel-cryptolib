@@ -1,7 +1,6 @@
 import copy
 import functools
 import random
-import uuid
 
 import pytest
 from Crypto.Random import get_random_bytes

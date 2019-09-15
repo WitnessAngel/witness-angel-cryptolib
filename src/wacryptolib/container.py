@@ -2,28 +2,31 @@ import copy
 import uuid
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
-from wacryptolib.key_generation import generate_symmetric_key, load_asymmetric_key_from_pem_bytestring
+from wacryptolib.escrow import DummyKeyStorage, EscrowApi, LOCAL_ESCROW_PLACEHOLDER
+from wacryptolib.key_generation import (
+    generate_symmetric_key,
+    load_asymmetric_key_from_pem_bytestring,
+)
 from wacryptolib.signature import verify_signature
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
-LOCAL_ESCROW_PLACEHOLDER = "_local_"
-
 CONTAINER_FORMAT = "WA_0.1a"
+
+LOCAL_ESCROW_API = EscrowApi(storage=DummyKeyStorage())
 
 
 def _get_proxy_for_escrow(escrow):
-    import waserver.escrow_api
-
     if escrow == LOCAL_ESCROW_PLACEHOLDER:
-        return waserver.escrow_api
+        return LOCAL_ESCROW_API
     else:
-        raise NotImplementedError("escrow system to be completed")
+        raise NotImplementedError("Escrow system for testing needs to be completed")
 
 
 class ContainerBase:
     """
     BEWARE - this class-based design is provisional and might change a lot.
     """
+
     pass
 
 
@@ -32,7 +35,9 @@ class ContainerWriter(ContainerBase):
 
         container_format = CONTAINER_FORMAT
         container_uid = uuid.uuid4()  # ALWAYS UNIQUE!
-        keychain_uid = keychain_uid or uuid.uuid4()  # Might be shared by lots of containers
+        keychain_uid = (
+            keychain_uid or uuid.uuid4()
+        )  # Might be shared by lots of containers
 
         conf = copy.deepcopy(conf)  # So that we can manipulate it
 
@@ -89,7 +94,7 @@ class ContainerWriter(ContainerBase):
                     data_encryption_algo=data_encryption_algo,
                     key_ciphertext=symmetric_key_data,
                     key_encryption_strata=result_key_encryption_strata,
-                        data_signatures=data_signatures,
+                    data_signatures=data_signatures,
                 )
             )
 
@@ -98,8 +103,8 @@ class ContainerWriter(ContainerBase):
         )  # New fully encrypted (unless data_encryption_strata is empty)
 
         return dict(
-            container_format = container_format,
-            container_uid = container_uid,
+            container_format=container_format,
+            container_uid=container_uid,
             keychain_uid=keychain_uid,
             data_ciphertext=data_ciphertext,
             data_encryption_strata=result_data_encryption_strata,
@@ -114,9 +119,11 @@ class ContainerWriter(ContainerBase):
         encryption_proxy = _get_proxy_for_escrow(conf["key_escrow"])
 
         subkey_pem = encryption_proxy.get_public_key(
-            uid=keychain_uid, key_type=escrow_key_type
+            keychain_uid=keychain_uid, key_type=escrow_key_type
         )
-        subkey = load_asymmetric_key_from_pem_bytestring(key_pem=subkey_pem, key_type=escrow_key_type)
+        subkey = load_asymmetric_key_from_pem_bytestring(
+            key_pem=subkey_pem, key_type=escrow_key_type
+        )
 
         key_cipherdict = encrypt_bytestring(
             plaintext=symmetric_key_data,
@@ -132,7 +139,7 @@ class ContainerWriter(ContainerBase):
         signature_key_type = conf["signature_key_type"]
         signature_algo = conf["signature_algo"]
         signature_value = encryption_proxy.get_message_signature(
-            uid=keychain_uid,
+            keychain_uid=keychain_uid,
             message=data_ciphertext,
             key_type=signature_key_type,
             signature_algo=signature_algo,
@@ -161,9 +168,7 @@ class ContainerReader(ContainerBase):
 
             for signature_conf in data_encryption_stratum["data_signatures"]:
                 self._verify_signatures(
-                    keychain_uid=keychain_uid,
-                    message=data_current,
-                    conf=signature_conf,
+                    keychain_uid=keychain_uid, message=data_current, conf=signature_conf
                 )
 
             symmetric_key_data = data_encryption_stratum[
@@ -201,7 +206,7 @@ class ContainerReader(ContainerBase):
         encryption_proxy = _get_proxy_for_escrow(conf["key_escrow"])
 
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
-            uid=keychain_uid,
+            keychain_uid=keychain_uid,
             key_type=escrow_key_type,
             encryption_algo=key_encryption_algo,
             cipherdict=symmetric_key_cipherdict,
@@ -213,9 +218,11 @@ class ContainerReader(ContainerBase):
         signature_algo = conf["signature_algo"]
         encryption_proxy = _get_proxy_for_escrow(conf["signature_escrow"])
         public_key_pem = encryption_proxy.get_public_key(
-            uid=keychain_uid, key_type=signature_key_type
+            keychain_uid=keychain_uid, key_type=signature_key_type
         )
-        public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_type=signature_key_type)
+        public_key = load_asymmetric_key_from_pem_bytestring(
+            key_pem=public_key_pem, key_type=signature_key_type
+        )
 
         verify_signature(
             message=message,

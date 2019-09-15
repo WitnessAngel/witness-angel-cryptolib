@@ -20,7 +20,7 @@ SIMPLE_CONTAINER_CONF = dict(
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
-                data_signatures=[
+            data_signatures=[
                 dict(
                     signature_key_type="DSA",
                     signature_algo="DSS",
@@ -43,7 +43,7 @@ COMPLEX_CONTAINER_CONF = dict(
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
-                data_signatures=[],
+            data_signatures=[],
         ),
         dict(
             data_encryption_algo="AES_CBC",
@@ -54,7 +54,7 @@ COMPLEX_CONTAINER_CONF = dict(
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
-                data_signatures=[
+            data_signatures=[
                 dict(
                     signature_key_type="DSA",
                     signature_algo="DSS",
@@ -76,7 +76,7 @@ COMPLEX_CONTAINER_CONF = dict(
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 ),
             ],
-                data_signatures=[
+            data_signatures=[
                 dict(
                     signature_key_type="RSA",
                     signature_algo="PSS",
@@ -100,9 +100,13 @@ def test_container_encryption_and_decryption(container_conf):
 
     data = b"abc"  # get_random_bytes(random.randint(1, 1000))
 
-    keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
+    keychain_uid = random.choice(
+        [None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")]
+    )
 
-    container = encrypt_data_into_container(data=data, conf=container_conf, keychain_uid=keychain_uid)
+    container = encrypt_data_into_container(
+        data=data, conf=container_conf, keychain_uid=keychain_uid
+    )
     # pprint.pprint(container, width=120)
 
     assert container["keychain_uid"]

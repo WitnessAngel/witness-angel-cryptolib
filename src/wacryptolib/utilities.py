@@ -59,6 +59,7 @@ def dump_to_json_bytes(data, **extra_options):
     Supports advanced types like bytes, uuids, dates...
     """
     from bson.json_util import dumps, CANONICAL_JSON_OPTIONS
+
     json_str = dumps(
         data, sort_keys=True, json_options=CANONICAL_JSON_OPTIONS, **extra_options
     )

@@ -1,9 +1,7 @@
-
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Random import get_random_bytes
 
 from wacryptolib.encryption import ENCRYPTION_ALGOS_REGISTRY
-
 
 
 def generate_symmetric_key(encryption_algo: str) -> bytes:

@@ -1,4 +1,3 @@
-
 from datetime import datetime
 
 import pytest
@@ -80,9 +79,7 @@ def test_sign_and_verify_with_dsa_key():
 def test_sign_and_verify_with_ecc_key():
     message = "Msd sd 867_ss".encode("utf-8")
 
-    keypair = wacryptolib.key_generation._generate_ecc_keypair_as_objects(
-        curve="p256"
-    )
+    keypair = wacryptolib.key_generation._generate_ecc_keypair_as_objects(curve="p256")
     signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], message=message, signature_algo="DSS"
     )

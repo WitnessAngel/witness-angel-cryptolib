@@ -4,27 +4,24 @@ import pytest
 from Crypto.PublicKey import RSA, ECC, DSA
 
 import wacryptolib
-from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring, SUPPORTED_ASYMMETRIC_KEY_TYPES
+from wacryptolib.key_generation import (
+    load_asymmetric_key_from_pem_bytestring,
+    SUPPORTED_ASYMMETRIC_KEY_TYPES,
+)
 
 
 @pytest.mark.parametrize("key_type", ["RSA", "ECC", "DSA"])
 def test_keypair_unicity(key_type):
 
-    keypair1 = wacryptolib.key_generation.generate_asymmetric_keypair(
-        key_type=key_type
-    )
-    keypair2 = wacryptolib.key_generation.generate_asymmetric_keypair(
-        key_type=key_type
-    )
+    keypair1 = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
+    keypair2 = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
 
     assert keypair1 != keypair2
 
 
 def test_generic_asymmetric_key_generation_errors():
     with pytest.raises(ValueError, match="Unknown asymmetric key type"):
-        wacryptolib.key_generation.generate_asymmetric_keypair(
-            key_type="AONEG"
-        )
+        wacryptolib.key_generation.generate_asymmetric_keypair(key_type="AONEG")
 
 
 def test_rsa_asymmetric_key_generation():
@@ -79,12 +76,15 @@ def test_load_asymmetric_key_from_pem_bytestring():
 
     key_type = random.choice(SUPPORTED_ASYMMETRIC_KEY_TYPES)
 
-    keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
-                key_type=key_type)
+    keypair = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
 
     for field in ["private_key", "public_key"]:
-        key = load_asymmetric_key_from_pem_bytestring(key_pem=keypair[field], key_type=key_type)
+        key = load_asymmetric_key_from_pem_bytestring(
+            key_pem=keypair[field], key_type=key_type
+        )
         assert key.export_key  # Method of Key bject
 
     with pytest.raises(ValueError, match="Unknown key type"):
-        load_asymmetric_key_from_pem_bytestring(key_pem=keypair["private_key"], key_type="ZHD")
+        load_asymmetric_key_from_pem_bytestring(
+            key_pem=keypair["private_key"], key_type="ZHD"
+        )

@@ -24,9 +24,10 @@ project = "Witness Angel"
 copyright = "2019, Manon"
 author = "Manon"
 
-# The full version, including alpha/beta/rc tags
-release = "4"
-
+# The short X.Y version.
+version = open("../VERSION").read()
+# The full version, including alpha/beta/rc tags.
+release = version
 
 # -- General configuration ---------------------------------------------------
 

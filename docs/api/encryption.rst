@@ -6,7 +6,7 @@ This module allows to encrypt bytestring data, then decrypt it.
 Public API
 --------------
 
-.. autodata:: wacryptolib.encryption.SUPPORTED_ENCRYPTION_TYPES
+.. autodata:: wacryptolib.encryption.SUPPORTED_ENCRYPTION_ALGOS
 
 .. autofunction:: wacryptolib.encryption.encrypt_bytestring
 

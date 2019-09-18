@@ -9,4 +9,5 @@ API Documentation
    api/signature
    api/encryption
    api/shared_secret
+   api/escrow
    api/utilities

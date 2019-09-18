@@ -14,6 +14,11 @@ LOCAL_ESCROW_PLACEHOLDER = (
 
 
 class KeyStorageBase(ABC):
+    """
+    Subclasses of this storage interface can be implemented to store/retrieve keys from
+    miscellaneous locations (disk, database...), without permission checks.
+    """
+
     @abstractmethod
     def get_keypair(self, *, keychain_uid: uuid.UUID, key_type: str) -> dict:
         """
@@ -41,6 +46,13 @@ class KeyStorageBase(ABC):
 
 
 class EscrowApi:
+    """
+    This is the API meant to be exposed by escrow webservices, to allow end users to create safely encrypted containers.
+
+    Subclasses must add their own permission checking, especially so that no decryption with private keys can occur
+    outside the scope of a well defined legal procedure.
+    """
+
     def __init__(self, storage: KeyStorageBase):
         self.storage = storage
 

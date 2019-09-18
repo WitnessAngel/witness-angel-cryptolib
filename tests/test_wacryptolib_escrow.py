@@ -4,24 +4,14 @@ import pytest
 from Crypto.Random import get_random_bytes
 
 from wacryptolib.encryption import _encrypt_via_rsa_oaep
-from wacryptolib.escrow import EscrowApi, DummyKeyStorage
+from wacryptolib.escrow import EscrowApi, DummyKeyStorage, KeyStorageBase
 from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.signature import verify_message_signature
 
 
-def test_wacryptolib_escrow_api_workflow():
+def test_escrow_api_workflow():
 
     storage = DummyKeyStorage()
-
-    # Sanity check on dummy storage used
-    _tmp_keychain_uid = uuid.uuid4()
-    storage.set_keypair(keychain_uid="aaa", key_type="bbb", keypair="hêllo1")
-    with pytest.raises(RuntimeError):
-        storage.set_keypair(keychain_uid="aaa", key_type="bbb", keypair="hêllo2")
-    assert storage.get_keypair(keychain_uid="aaa", key_type="bbb") == "hêllo1"
-    assert storage.get_keypair(keychain_uid="aaa", key_type="bbbb") == None
-    assert storage.get_keypair(keychain_uid="aaaa", key_type="bbb") == None
-
     escrow_api = EscrowApi(storage=storage)
 
     keychain_uid = uuid.uuid4()
@@ -66,3 +56,20 @@ def test_wacryptolib_escrow_api_workflow():
         )
 
     assert decrypted == secret
+
+
+def test_key_storage_bases():
+
+    storage = DummyKeyStorage()
+
+    # Sanity check on dummy storage used
+    _tmp_keychain_uid = uuid.uuid4()
+    storage.set_keypair(keychain_uid="aaa", key_type="bbb", keypair="hêllo1")
+    with pytest.raises(RuntimeError):
+        storage.set_keypair(keychain_uid="aaa", key_type="bbb", keypair="hêllo2")
+    assert storage.get_keypair(keychain_uid="aaa", key_type="bbb") == "hêllo1"
+    assert storage.get_keypair(keychain_uid="aaa", key_type="bbbb") == None
+    assert storage.get_keypair(keychain_uid="aaaa", key_type="bbb") == None
+
+    with pytest.raises(TypeError, match="Can't instantiate abstract class"):
+        KeyStorageBase()

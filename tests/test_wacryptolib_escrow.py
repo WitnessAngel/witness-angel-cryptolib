@@ -11,7 +11,18 @@ from wacryptolib.signature import verify_signature
 
 def test_wacryptolib_escrow_api_workflow():
 
-    escrow_api = EscrowApi(storage=DummyKeyStorage())
+    storage=DummyKeyStorage()
+
+    # Sanity check on dummy storage used
+    _tmp_keychain_uid = uuid.uuid4()
+    storage.set_keypair(keychain_uid="aaa", key_type="bbb", keypair="hêllo1")
+    with pytest.raises(RuntimeError):
+        storage.set_keypair(keychain_uid="aaa", key_type="bbb", keypair="hêllo2")
+    assert storage.get_keypair(keychain_uid="aaa", key_type="bbb") == "hêllo1"
+    assert storage.get_keypair(keychain_uid="aaa", key_type="bbbb") == None
+    assert storage.get_keypair(keychain_uid="aaaa", key_type="bbb") == None
+
+    escrow_api = EscrowApi(storage=storage)
 
     keychain_uid = uuid.uuid4()
     secret = get_random_bytes(101)

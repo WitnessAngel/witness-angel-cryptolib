@@ -14,6 +14,7 @@ LOCAL_ESCROW_PLACEHOLDER = (
 
 
 class KeyStorageBase(ABC):
+    
     @abstractmethod
     def get_keypair(self, keychain_uid: uuid.UUID, key_type: str) -> dict:
         """
@@ -29,7 +30,9 @@ class KeyStorageBase(ABC):
     @abstractmethod
     def set_keypair(self, keychain_uid: uuid.UUID, key_type: str, keypair: dict):
         """
-        Store a keypair into storage, overridding one if it exists already.
+        Store a keypair into storage.
+
+        Must raise an exception if a keypair already exists for these identifiers.
 
         :param keychain_uid: unique ID of the keychain
         :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
@@ -127,4 +130,6 @@ class DummyKeyStorage(KeyStorageBase):
         return self._cached_keypairs.get((keychain_uid, key_type))
 
     def set_keypair(self, keychain_uid, key_type, keypair):
+        if self._cached_keypairs.get((keychain_uid, key_type)):
+            raise RuntimeError("Can't save already existing key %s/%s" % (keychain_uid, key_type))
         self._cached_keypairs[(keychain_uid, key_type)] = keypair

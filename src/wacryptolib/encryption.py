@@ -4,10 +4,13 @@ from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import pad, unpad
 
+from wacryptolib.key_generation import _check_symmetric_key_length, SUPPORTED_SYMMETRIC_KEY_ALGOS, \
+    _check_asymmetric_key_length
 from wacryptolib.utilities import split_as_chunks
 
+
 RSA_OAEP_CHUNKS_SIZE = 60
-RSA_OAEP_HASH_ALGO = Crypto.Hash.SHA256
+RSA_OAEP_HASHER = Crypto.Hash.SHA512
 
 
 def _get_encryption_type_conf(encryption_algo):
@@ -19,7 +22,9 @@ def _get_encryption_type_conf(encryption_algo):
     return encryption_type_conf
 
 
-def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key: bytes) -> dict:
+
+
+def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key) -> dict:
     """Encrypt a bytestring with the selected algorithm for the given payload,
     using the provided key (which must be of a compatible type and length).
 
@@ -30,7 +35,7 @@ def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key: bytes) ->
     return cipherdict
 
 
-def decrypt_bytestring(cipherdict: dict, *, encryption_algo: str, key: bytes) -> bytes:
+def decrypt_bytestring(cipherdict: dict, *, encryption_algo: str, key) -> bytes:
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
@@ -49,7 +54,7 @@ def _encrypt_via_aes_cbc(plaintext: bytes, key: bytes) -> dict:
         (respectively for *AES-128*, *AES-192* or *AES-256*).
 
     :return: dict with fields "iv" and "ciphertext" as bytestrings"""
-
+    _check_symmetric_key_length(len(key))
     iv = get_random_bytes(AES.block_size)
     cipher = AES.new(key, AES.MODE_CBC, iv)
     ciphertext = cipher.encrypt(pad(plaintext, block_size=AES.block_size))
@@ -64,7 +69,7 @@ def _decrypt_via_aes_cbc(cipherdict: dict, key: bytes) -> bytes:
     :param key: the cryptographic key used to decipher
 
     :return: the decrypted bytestring"""
-
+    _check_symmetric_key_length(len(key))
     iv = cipherdict["iv"]
     ciphertext = cipherdict["ciphertext"]
     decipher = AES.new(key, AES.MODE_CBC, iv)
@@ -80,7 +85,7 @@ def _encrypt_via_aes_eax(plaintext: bytes, key: bytes) -> dict:
         (respectively for *AES-128*, *AES-192* or *AES-256*).
 
     :return: dict with fields "ciphertext", "tag" and "nonce" as bytestrings"""
-
+    _check_symmetric_key_length(len(key))
     cipher = AES.new(key, AES.MODE_EAX)
     nonce = cipher.nonce
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
@@ -95,7 +100,7 @@ def _decrypt_via_aes_eax(cipherdict: dict, key: bytes) -> bytes:
     :param key: the cryptographic key used to decipher
 
     :return: the decrypted bytestring"""
-
+    _check_symmetric_key_length(len(key))
     decipher = AES.new(key, AES.MODE_EAX, nonce=cipherdict["nonce"])
     plaintext = decipher.decrypt(cipherdict["ciphertext"])
     decipher.verify(cipherdict["tag"])
@@ -115,7 +120,7 @@ def _encrypt_via_chacha20_poly1305(
     :param aad: optional "additional authenticated data"
 
     :return: dict with fields "ciphertext", "tag", "nonce" and "header" as bytestrings"""
-
+    _check_symmetric_key_length(len(key))
     cipher = ChaCha20_Poly1305.new(key=key)
     cipher.update(aad)
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
@@ -131,7 +136,7 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key: bytes) -> bytes:
     :param key: the cryptographic key used to decipher
 
     :return: the decrypted bytestring"""
-
+    _check_symmetric_key_length(len(key))
     decipher = ChaCha20_Poly1305.new(key=key, nonce=cipherdict["nonce"])
     decipher.update(cipherdict["aad"])
     plaintext = decipher.decrypt_and_verify(
@@ -147,8 +152,9 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key: RSA.RsaKey) -> dict:
     :param key: public RSA key
 
     :return: a dict with field `digest_list`, containing bytestring chunks of variable width."""
+    _check_asymmetric_key_length(key.size_in_bits())
 
-    cipher = PKCS1_OAEP.new(key=key, hashAlgo=RSA_OAEP_HASH_ALGO)
+    cipher = PKCS1_OAEP.new(key=key, hashAlgo=RSA_OAEP_HASHER)
     chunks = split_as_chunks(
         plaintext,
         chunk_size=RSA_OAEP_CHUNKS_SIZE,
@@ -170,8 +176,9 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key: RSA.RsaKey) -> bytes:
     :param key: private RSA key
 
     :return: the decrypted bytestring"""
+    _check_asymmetric_key_length(key.size_in_bits())
 
-    decipher = PKCS1_OAEP.new(key, hashAlgo=RSA_OAEP_HASH_ALGO)
+    decipher = PKCS1_OAEP.new(key, hashAlgo=RSA_OAEP_HASHER)
 
     encrypted_chunks = cipherdict["digest_list"]
 
@@ -202,4 +209,5 @@ ENCRYPTION_ALGOS_REGISTRY = dict(
 )
 
 #: These values can be used as 'encryption_algo'.
-SUPPORTED_ENCRYPTION_TYPES = sorted(ENCRYPTION_ALGOS_REGISTRY.keys())
+SUPPORTED_ENCRYPTION_ALGOS = sorted(ENCRYPTION_ALGOS_REGISTRY.keys())
+assert set(SUPPORTED_SYMMETRIC_KEY_ALGOS) <= set(SUPPORTED_ENCRYPTION_ALGOS)

@@ -2,6 +2,8 @@
 Version 0.2
 ==================
 * Add Extended Json utilities to deal with both str and bytes
+* Make most arguments of public functions keyword-only
+* Forbid too small key lengths
 
 
 Version 0.1

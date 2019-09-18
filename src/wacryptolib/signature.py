@@ -1,12 +1,12 @@
 from datetime import datetime
 from typing import Union
 
-from Crypto.Hash import SHA512
+import Crypto.Hash
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Signature import pss, DSS
 
 KNOWN_KEY_TYPES = Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey]
-
+SIGNATURE_HASHER = Crypto.Hash.SHA512
 
 def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_TYPES) -> dict:
     """
@@ -110,10 +110,10 @@ def _compute_timestamped_hash(message: bytes, timestamp_utc: int):
 
     :return: stdlib hash object
     """
-    plaintext_hash_bytes = SHA512.new(message).digest()
+    plaintext_hash_bytes = SIGNATURE_HASHER.new(message).digest()
     timestamp_bytes = str(timestamp_utc).encode("ascii")
     timestamped_payload = plaintext_hash_bytes + timestamp_bytes
-    payload_hash = SHA512.new(timestamped_payload)
+    payload_hash = SIGNATURE_HASHER.new(timestamped_payload)
     return payload_hash
 
 

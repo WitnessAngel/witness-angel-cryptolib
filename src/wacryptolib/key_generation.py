@@ -1,18 +1,19 @@
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Random import get_random_bytes
 
-from wacryptolib.encryption import ENCRYPTION_ALGOS_REGISTRY
-
 
 def generate_symmetric_key(encryption_algo: str) -> bytes:
     """
     Generate the strongest key possible for the wanted symmetric cipher,
     as a bytestring.
     """
-    assert encryption_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS, encryption_algo
+    encryption_algo = encryption_algo.upper()
+    if encryption_algo not in SUPPORTED_SYMMETRIC_KEY_ALGOS:
+        raise ValueError("Unknown symmetric key algorithm '%s'" % encryption_algo)
+
     return get_random_bytes(
         32
-    )  # Same length for all currently supported symmetric ciphers
+    )  # Same (big) length for all currently supported symmetric ciphers
 
 
 def generate_asymmetric_keypair(
@@ -30,7 +31,7 @@ def generate_asymmetric_keypair(
     potential_params = dict(key_length=key_length, curve=curve)
 
     key_type = key_type.upper()
-    if key_type not in ASYMMETRIC_KEY_TYPES_REGISTRY:
+    if key_type not in SUPPORTED_ASYMMETRIC_KEY_TYPES:
         raise ValueError("Unknown asymmetric key type '%s'" % key_type)
 
     descriptors = ASYMMETRIC_KEY_TYPES_REGISTRY[key_type]
@@ -63,16 +64,9 @@ def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_type: str):
     :return: key object
     """
     key_type = key_type.upper()
-    if key_type not in ASYMMETRIC_KEY_TYPES_REGISTRY:
+    if key_type not in SUPPORTED_ASYMMETRIC_KEY_TYPES:
         raise ValueError("Unknown key type %s" % key_pem)
     return ASYMMETRIC_KEY_TYPES_REGISTRY[key_type]["pem_import_function"](key_pem)
-
-
-def _check_key_length(key_length):
-    if key_length < 2048:
-        raise ValueError(
-            "The asymmetric key length must be superior or equal to 2048 bits"
-        )
 
 
 def _generate_rsa_keypair_as_objects(key_length: int) -> dict:
@@ -82,7 +76,7 @@ def _generate_rsa_keypair_as_objects(key_length: int) -> dict:
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
 
-    _check_key_length(key_length)
+    _check_asymmetric_key_length(key_length)
 
     private_key = RSA.generate(key_length)
     public_key = private_key.publickey()
@@ -99,7 +93,7 @@ def _generate_dsa_keypair_as_objects(key_length: int) -> dict:
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
 
-    _check_key_length(key_length)
+    _check_asymmetric_key_length(key_length)
 
     private_key = DSA.generate(key_length)
     public_key = private_key.publickey()
@@ -133,6 +127,18 @@ def _serialize_key_object_to_pem_bytestring(key) -> str:
     pem = key.export_key(format="PEM")
     return pem
 
+def _check_asymmetric_key_length(key_length):
+    if key_length < 2048:
+        raise ValueError(
+            "The asymmetric key length must be superior or equal to 2048 bits"
+        )
+
+def _check_symmetric_key_length(key_length):
+    if key_length < 32:
+        raise ValueError(
+            "The symmetric key length must be superior or equal to 32 bits"
+        )
+
 
 ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
     RSA={
@@ -158,4 +164,3 @@ SUPPORTED_ASYMMETRIC_KEY_TYPES = sorted(ASYMMETRIC_KEY_TYPES_REGISTRY.keys())
 
 #: These values can be used as 'encryption_algo' for symmetric key generation.
 SUPPORTED_SYMMETRIC_KEY_ALGOS = ["AES_CBC", "AES_EAX", "CHACHA20_POLY1305"]
-assert set(SUPPORTED_SYMMETRIC_KEY_ALGOS) <= set(ENCRYPTION_ALGOS_REGISTRY.keys())

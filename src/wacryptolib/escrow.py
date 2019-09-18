@@ -53,18 +53,18 @@ class EscrowApi:
     outside the scope of a well defined legal procedure.
     """
 
-    def __init__(self, storage: KeyStorageBase):
-        self.storage = storage
+    def __init__(self, key_storage: KeyStorageBase):
+        self.key_storage = key_storage
 
     def _fetch_keypair_with_caching(self, keychain_uid: uuid.UUID, key_type: str):
-        existing_keypair = self.storage.get_keypair(
+        existing_keypair = self.key_storage.get_keypair(
             keychain_uid=keychain_uid, key_type=key_type
         )
         if existing_keypair:
             keypair = existing_keypair
         else:
             keypair = generate_asymmetric_keypair(key_type=key_type, serialize=True)
-            self.storage.set_keypair(
+            self.key_storage.set_keypair(
                 keychain_uid=keychain_uid, key_type=key_type, keypair=keypair
             )
         assert keypair, keypair
@@ -133,7 +133,7 @@ class EscrowApi:
 
 class DummyKeyStorage(KeyStorageBase):
     """
-    Dummy storage for use in tests, where keys are kepts only instance-locally.
+    Dummy key storage for use in tests, where keys are kepts only instance-locally.
     """
 
     def __init__(self):

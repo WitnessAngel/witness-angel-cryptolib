@@ -11,8 +11,8 @@ from wacryptolib.signature import verify_message_signature
 
 def test_escrow_api_workflow():
 
-    storage = DummyKeyStorage()
-    escrow_api = EscrowApi(storage=storage)
+    key_storage = DummyKeyStorage()
+    escrow_api = EscrowApi(key_storage=key_storage)
 
     keychain_uid = uuid.uuid4()
     secret = get_random_bytes(101)
@@ -60,16 +60,16 @@ def test_escrow_api_workflow():
 
 def test_key_storage_bases():
 
-    storage = DummyKeyStorage()
+    key_storage = DummyKeyStorage()
 
-    # Sanity check on dummy storage used
+    # Sanity check on dummy key storage used
     _tmp_keychain_uid = uuid.uuid4()
-    storage.set_keypair(keychain_uid="aaa", key_type="bbb", keypair="hêllo1")
+    key_storage.set_keypair(keychain_uid="aaa", key_type="bbb", keypair="hêllo1")
     with pytest.raises(RuntimeError):
-        storage.set_keypair(keychain_uid="aaa", key_type="bbb", keypair="hêllo2")
-    assert storage.get_keypair(keychain_uid="aaa", key_type="bbb") == "hêllo1"
-    assert storage.get_keypair(keychain_uid="aaa", key_type="bbbb") == None
-    assert storage.get_keypair(keychain_uid="aaaa", key_type="bbb") == None
+        key_storage.set_keypair(keychain_uid="aaa", key_type="bbb", keypair="hêllo2")
+    assert key_storage.get_keypair(keychain_uid="aaa", key_type="bbb") == "hêllo1"
+    assert key_storage.get_keypair(keychain_uid="aaa", key_type="bbbb") == None
+    assert key_storage.get_keypair(keychain_uid="aaaa", key_type="bbb") == None
 
     with pytest.raises(TypeError, match="Can't instantiate abstract class"):
         KeyStorageBase()

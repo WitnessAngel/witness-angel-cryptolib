@@ -12,7 +12,7 @@ from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTAINER_FORMAT = "WA_0.1a"
 
-LOCAL_ESCROW_API = EscrowApi(storage=DummyKeyStorage())
+LOCAL_ESCROW_API = EscrowApi(key_storage=DummyKeyStorage())
 
 
 def _get_proxy_for_escrow(escrow):

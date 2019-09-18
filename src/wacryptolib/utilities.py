@@ -61,7 +61,7 @@ def dump_to_json_str(data, **extra_options):
     from bson.json_util import dumps, CANONICAL_JSON_OPTIONS
 
     sort_keys = extra_options.pop("sort_keys", True)
-    
+
     json_str = dumps(
         data, sort_keys=sort_keys, json_options=CANONICAL_JSON_OPTIONS, **extra_options
     )
@@ -91,7 +91,6 @@ def load_from_json_bytes(data, **extra_options):
     """
     Same as `load_from_json_str`, but takes UTF8-encoded bytes as input.
     """
-    from bson.json_util import loads, CANONICAL_JSON_OPTIONS
 
     json_str = data.decode(UTF8_ENCODING)
     return load_from_json_str(data=json_str, **extra_options)

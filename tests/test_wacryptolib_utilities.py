@@ -3,7 +3,14 @@ import uuid
 import pytest
 from Crypto.Random import get_random_bytes
 
-from wacryptolib.utilities import split_as_chunks, recombine_chunks, dump_to_json_bytes, dump_to_json_str, load_from_json_bytes, load_from_json_str
+from wacryptolib.utilities import (
+    split_as_chunks,
+    recombine_chunks,
+    dump_to_json_bytes,
+    dump_to_json_str,
+    load_from_json_bytes,
+    load_from_json_str,
+)
 
 
 def test_split_as_chunks_and_recombine():
@@ -43,22 +50,38 @@ def test_serialization_utilities():
 
     serialized_str = dump_to_json_str(data)
     # Keys are sorted
-    assert serialized_str == r'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
+    assert (
+        serialized_str
+        == r'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
+    )
     deserialized = load_from_json_str(serialized_str)
     assert deserialized == data
 
-    serialized_str = dump_to_json_str(data, ensure_ascii=False)  # Json arguments well propagated
-    assert serialized_str == r'{"a": "hêllo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
+    serialized_str = dump_to_json_str(
+        data, ensure_ascii=False
+    )  # Json arguments well propagated
+    assert (
+        serialized_str
+        == r'{"a": "hêllo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
+    )
     deserialized = load_from_json_str(serialized_str)
     assert deserialized == data
 
     serialized_str = dump_to_json_bytes(data)
     # Keys are sorted
-    assert serialized_str == rb'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
+    assert (
+        serialized_str
+        == rb'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
+    )
     deserialized = load_from_json_bytes(serialized_str)
     assert deserialized == data
 
-    serialized_str = dump_to_json_bytes(data, ensure_ascii=False)  # Json arguments well propagated
-    assert serialized_str == b'{"a": "h\xc3\xaallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
+    serialized_str = dump_to_json_bytes(
+        data, ensure_ascii=False
+    )  # Json arguments well propagated
+    assert (
+        serialized_str
+        == b'{"a": "h\xc3\xaallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
+    )
     deserialized = load_from_json_bytes(serialized_str)
     assert deserialized == data

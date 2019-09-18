@@ -18,7 +18,7 @@ import toml
 root_dir = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root_dir / "src"))
 
-_metadata = (toml.load(str(root_dir / "pyproject.toml")))
+_metadata = toml.load(str(root_dir / "pyproject.toml"))
 
 # -- Project information -----------------------------------------------------
 

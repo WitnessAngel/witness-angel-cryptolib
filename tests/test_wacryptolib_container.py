@@ -121,4 +121,3 @@ def test_container_encryption_and_decryption(container_conf):
     container["container_format"] = "OAJKB"
     with pytest.raises(ValueError, match="Unknown container format"):
         decrypt_data_from_container(container=container)
-

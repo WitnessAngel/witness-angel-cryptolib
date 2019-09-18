@@ -11,7 +11,7 @@ from wacryptolib.signature import verify_signature
 
 def test_wacryptolib_escrow_api_workflow():
 
-    storage=DummyKeyStorage()
+    storage = DummyKeyStorage()
 
     # Sanity check on dummy storage used
     _tmp_keychain_uid = uuid.uuid4()

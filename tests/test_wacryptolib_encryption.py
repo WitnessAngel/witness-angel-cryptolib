@@ -152,8 +152,8 @@ def test_chacha20_poly1305_encryption_and_decryption():
 def test_rsa_oaep_encryption_and_decryption():
     key_length = random.choice([2048, 4096])
 
-    keypair = wacryptolib.key_generation.generate_asymmetric_keypair(key_type="RSA", serialize=False,
-        key_length=key_length
+    keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
+        key_type="RSA", serialize=False, key_length=key_length
     )
 
     binary_content = _get_binary_content()

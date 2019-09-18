@@ -12,7 +12,7 @@ Public API
 
 .. autofunction:: wacryptolib.signature.sign_message
 
-.. autofunction:: wacryptolib.signature.verify_signature
+.. autofunction:: wacryptolib.signature.verify_message_signature
 
 
 

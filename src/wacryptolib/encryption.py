@@ -19,7 +19,7 @@ def _get_encryption_type_conf(encryption_algo):
     return encryption_type_conf
 
 
-def encrypt_bytestring(plaintext: bytes, encryption_algo: str, key: bytes) -> dict:
+def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key: bytes) -> dict:
     """Encrypt a bytestring with the selected algorithm for the given payload,
     using the provided key (which must be of a compatible type and length).
 
@@ -30,7 +30,7 @@ def encrypt_bytestring(plaintext: bytes, encryption_algo: str, key: bytes) -> di
     return cipherdict
 
 
-def decrypt_bytestring(cipherdict: dict, encryption_algo: str, key: bytes) -> bytes:
+def decrypt_bytestring(cipherdict: dict, *, encryption_algo: str, key: bytes) -> bytes:
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 

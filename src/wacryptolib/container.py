@@ -7,7 +7,7 @@ from wacryptolib.key_generation import (
     generate_symmetric_key,
     load_asymmetric_key_from_pem_bytestring,
 )
-from wacryptolib.signature import verify_signature
+from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTAINER_FORMAT = "WA_0.1a"
@@ -31,7 +31,7 @@ class ContainerBase:
 
 
 class ContainerWriter(ContainerBase):
-    def encrypt_data(self, data: bytes, conf: dict, keychain_uid=None) -> dict:
+    def encrypt_data(self, data: bytes, *, conf: dict, keychain_uid=None) -> dict:
 
         container_format = CONTAINER_FORMAT
         container_uid = uuid.uuid4()  # ALWAYS UNIQUE!
@@ -167,7 +167,7 @@ class ContainerReader(ContainerBase):
             data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
 
             for signature_conf in data_encryption_stratum["data_signatures"]:
-                self._verify_signatures(
+                self._verify_message_signatures(
                     keychain_uid=keychain_uid, message=data_current, conf=signature_conf
                 )
 
@@ -213,7 +213,9 @@ class ContainerReader(ContainerBase):
         )
         return symmetric_key_plaintext
 
-    def _verify_signatures(self, keychain_uid: uuid.UUID, message: bytes, conf: dict):
+    def _verify_message_signatures(
+        self, keychain_uid: uuid.UUID, message: bytes, conf: dict
+    ):
         signature_key_type = conf["signature_key_type"]
         signature_algo = conf["signature_algo"]
         encryption_proxy = _get_proxy_for_escrow(conf["signature_escrow"])
@@ -224,7 +226,7 @@ class ContainerReader(ContainerBase):
             key_pem=public_key_pem, key_type=signature_key_type
         )
 
-        verify_signature(
+        verify_message_signature(
             message=message,
             signature_algo=signature_algo,
             signature=conf["signature_value"],
@@ -232,7 +234,7 @@ class ContainerReader(ContainerBase):
         )  # Raises if troubles
 
 
-def encrypt_data_into_container(data: bytes, conf: dict, keychain_uid=None) -> dict:
+def encrypt_data_into_container(data: bytes, *, conf: dict, keychain_uid=None) -> dict:
     """Turn raw data into a high-security container, which can only be decrypted with
     the agreement of the owner and multiple third-party escrows.
 

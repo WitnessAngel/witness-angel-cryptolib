@@ -8,7 +8,7 @@ SHAMIR_CHUNK_LENGTH = 16
 
 
 def split_bytestring_as_shamir_shares(
-    secret: bytes, shares_count: int, threshold_count: int
+    secret: bytes, *, shares_count: int, threshold_count: int
 ) -> list:
     """Generate a shared secret of `shares_count` subkeys, with `threshold_count`
         of them required to recompute the initial `bytestring`.

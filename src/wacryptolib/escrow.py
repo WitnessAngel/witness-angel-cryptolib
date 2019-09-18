@@ -15,7 +15,7 @@ LOCAL_ESCROW_PLACEHOLDER = (
 
 class KeyStorageBase(ABC):
     @abstractmethod
-    def get_keypair(self, keychain_uid: uuid.UUID, key_type: str) -> dict:
+    def get_keypair(self, *, keychain_uid: uuid.UUID, key_type: str) -> dict:
         """
         Fetch a key from persistent storage.
 
@@ -27,7 +27,7 @@ class KeyStorageBase(ABC):
         raise NotImplementedError("KeyStorageBase.get_keypair()")
 
     @abstractmethod
-    def set_keypair(self, keychain_uid: uuid.UUID, key_type: str, keypair: dict):
+    def set_keypair(self, *, keychain_uid: uuid.UUID, key_type: str, keypair: dict):
         """
         Store a keypair into storage.
 
@@ -58,7 +58,7 @@ class EscrowApi:
         assert keypair, keypair
         return keypair
 
-    def get_public_key(self, keychain_uid: uuid.UUID, key_type: str) -> bytes:
+    def get_public_key(self, *, keychain_uid: uuid.UUID, key_type: str) -> bytes:
         """
         Return a public key in PEM format bytestring, that caller shall use to encrypt its own symmetric keys,
         or to check a signature.
@@ -70,6 +70,7 @@ class EscrowApi:
 
     def get_message_signature(
         self,
+        *,
         keychain_uid: uuid.UUID,
         message: bytes,
         key_type: str,
@@ -92,6 +93,7 @@ class EscrowApi:
 
     def decrypt_with_private_key(
         self,
+        *,
         keychain_uid: uuid.UUID,
         key_type: str,
         encryption_algo: str,
@@ -125,10 +127,10 @@ class DummyKeyStorage(KeyStorageBase):
     def __init__(self):
         self._cached_keypairs = {}
 
-    def get_keypair(self, keychain_uid, key_type):
+    def get_keypair(self, *, keychain_uid, key_type):
         return self._cached_keypairs.get((keychain_uid, key_type))
 
-    def set_keypair(self, keychain_uid, key_type, keypair):
+    def set_keypair(self, *, keychain_uid, key_type, keypair):
         if self._cached_keypairs.get((keychain_uid, key_type)):
             raise RuntimeError(
                 "Can't save already existing key %s/%s" % (keychain_uid, key_type)

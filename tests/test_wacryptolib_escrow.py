@@ -6,7 +6,7 @@ from Crypto.Random import get_random_bytes
 from wacryptolib.encryption import _encrypt_via_rsa_oaep
 from wacryptolib.escrow import EscrowApi, DummyKeyStorage
 from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring
-from wacryptolib.signature import verify_signature
+from wacryptolib.signature import verify_message_signature
 
 
 def test_wacryptolib_escrow_api_workflow():
@@ -37,13 +37,13 @@ def test_wacryptolib_escrow_api_workflow():
     signature = escrow_api.get_message_signature(
         keychain_uid=keychain_uid, message=secret, key_type="RSA", signature_algo="PSS"
     )
-    verify_signature(
+    verify_message_signature(
         message=secret, signature=signature, key=public_key, signature_algo="PSS"
     )
 
     signature["digest"] += b"xyz"
     with pytest.raises(ValueError, match="Incorrect signature"):
-        verify_signature(
+        verify_message_signature(
             message=secret, signature=signature, key=public_key, signature_algo="PSS"
         )
 

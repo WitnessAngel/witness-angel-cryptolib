@@ -16,7 +16,7 @@ def generate_symmetric_key(encryption_algo: str) -> bytes:
 
 
 def generate_asymmetric_keypair(
-    key_type: str, serialize=True, key_length=2048, curve="p521"
+    *, key_type: str, serialize=True, key_length=2048, curve="p521"
 ) -> dict:
     """Generate a (public_key, private_key) pair.
 
@@ -54,7 +54,7 @@ def generate_asymmetric_keypair(
     return keypair
 
 
-def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, key_type: str):
+def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_type: str):
     """Load a key (public or private) from a PEM-formatted bytestring.
 
     :param key_pem: the key bytrestring

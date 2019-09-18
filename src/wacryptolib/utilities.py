@@ -7,6 +7,7 @@ UTF8_ENCODING = "utf8"
 
 def split_as_chunks(
     bytestring: bytes,
+    *,
     chunk_size: int,
     must_pad: bool,
     accept_incomplete_chunk: bool = False,
@@ -39,7 +40,9 @@ def split_as_chunks(
     return chunks
 
 
-def recombine_chunks(chunks: List[bytes], chunk_size: int, must_unpad: bool) -> bytes:
+def recombine_chunks(
+    chunks: List[bytes], *, chunk_size: int, must_unpad: bool
+) -> bytes:
     """Recombine chunks which were previously separated.
 
         :param chunks: sequence of bytestring parts

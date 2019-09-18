@@ -12,7 +12,7 @@ def _common_signature_checks(keypair, message, signature, signature_algo):
     utcnow = datetime.utcnow().timestamp()
     assert utcnow - 10 <= signature["timestamp_utc"] <= utcnow
 
-    wacryptolib.signature.verify_signature(
+    wacryptolib.signature.verify_message_signature(
         key=keypair["public_key"],
         message=message,
         signature=signature,
@@ -20,7 +20,7 @@ def _common_signature_checks(keypair, message, signature, signature_algo):
     )
 
     with pytest.raises(ValueError, match="signature"):
-        wacryptolib.signature.verify_signature(
+        wacryptolib.signature.verify_message_signature(
             key=keypair["public_key"],
             message=message + b"X",
             signature=signature,
@@ -30,7 +30,7 @@ def _common_signature_checks(keypair, message, signature, signature_algo):
     signature_corrupted = signature.copy()
     signature_corrupted["digest"] += b"x"
     with pytest.raises(ValueError, match="signature"):
-        wacryptolib.signature.verify_signature(
+        wacryptolib.signature.verify_message_signature(
             key=keypair["public_key"],
             message=message,
             signature=signature_corrupted,
@@ -40,7 +40,7 @@ def _common_signature_checks(keypair, message, signature, signature_algo):
     signature_corrupted = signature.copy()
     signature_corrupted["timestamp_utc"] += 1
     with pytest.raises(ValueError, match="signature"):
-        wacryptolib.signature.verify_signature(
+        wacryptolib.signature.verify_message_signature(
             key=keypair["public_key"],
             message=message,
             signature=signature_corrupted,
@@ -111,7 +111,7 @@ def test_generic_signature_errors():
         )
 
     with pytest.raises(ValueError, match="Unknown signature algorithm"):
-        wacryptolib.signature.verify_signature(
+        wacryptolib.signature.verify_message_signature(
             key=keypair["public_key"],
             message=message,
             signature={},

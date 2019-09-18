@@ -8,7 +8,7 @@ from Crypto.Signature import pss, DSS
 KNOWN_KEY_TYPES = Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey]
 
 
-def sign_message(message: bytes, signature_algo: str, key: KNOWN_KEY_TYPES) -> dict:
+def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_TYPES) -> dict:
     """
     Return a timestamped signature of the chosen type for the given payload,
     with the provided key (which must be of a compatible type).
@@ -67,8 +67,8 @@ def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey]) -> dict:
     return signature
 
 
-def verify_signature(
-    message: bytes, signature_algo: str, signature: dict, key: Union[KNOWN_KEY_TYPES]
+def verify_message_signature(
+    *, message: bytes, signature_algo: str, signature: dict, key: Union[KNOWN_KEY_TYPES]
 ):
     """Verify the authenticity of a signature.
 

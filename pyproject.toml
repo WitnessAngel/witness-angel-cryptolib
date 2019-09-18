@@ -24,7 +24,7 @@ classifiers = [
     "Operating System :: Unix",
     "Operating System :: MacOS :: MacOS X",
 ]
-include = ["AUTHORS", "CHANGELOG", "tox.ini", "docs/*", "docs/api/*", "tests/*.py"]
+include = ["CHANGELOG", "tox.ini", "docs/*", "docs/api/*", "tests/*.py"]
 exclude = ["_build"]
 
 [tool.poetry.dependencies]

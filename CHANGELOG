@@ -1,5 +1,10 @@
 
-Version 0.1a
+Version 0.2
+==================
+* Add Extended Json utilities to deal with both str and bytes
+
+
+Version 0.1
 ==================
 
 * Draft of wacryptolib API

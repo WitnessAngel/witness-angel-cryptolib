@@ -2,7 +2,7 @@ from typing import List
 
 from Crypto.Util.Padding import pad, unpad
 
-DEFAULT_ENCODING = "utf8"
+UTF8_ENCODING = "utf8"
 
 
 def split_as_chunks(
@@ -53,26 +53,45 @@ def recombine_chunks(chunks: List[bytes], chunk_size: int, must_unpad: bool) -> 
     return bytestring
 
 
-def dump_to_json_bytes(data, **extra_options):
+def dump_to_json_str(data, **extra_options):
     """
-    Dump a data tree to a json representation in bytes.
+    Dump a data tree to a json representation as string.
     Supports advanced types like bytes, uuids, dates...
     """
     from bson.json_util import dumps, CANONICAL_JSON_OPTIONS
 
+    sort_keys = extra_options.pop("sort_keys", True)
+    
     json_str = dumps(
-        data, sort_keys=True, json_options=CANONICAL_JSON_OPTIONS, **extra_options
+        data, sort_keys=sort_keys, json_options=CANONICAL_JSON_OPTIONS, **extra_options
     )
-    return json_str.encode(DEFAULT_ENCODING)
+    return json_str
 
 
-def load_from_json_bytes(data, **extra_options):
+def load_from_json_str(data, **extra_options):
     """
-    Load a data tree from a json representation in bytes.
+    Load a data tree from a json representation as string.
     Supports advanced types like bytes, uuids, dates...
     """
     from bson.json_util import loads, CANONICAL_JSON_OPTIONS
 
-    assert isinstance(data, bytes), data
-    json_str = data.decode(DEFAULT_ENCODING)
-    return loads(json_str, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
+    assert isinstance(data, str), data
+    return loads(data, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
+
+
+def dump_to_json_bytes(data, **extra_options):
+    """
+    Same as `dump_to_json_str`, but returns UTF8-encoded bytes.
+    """
+    json_str = dump_to_json_str(data, **extra_options)
+    return json_str.encode(UTF8_ENCODING)
+
+
+def load_from_json_bytes(data, **extra_options):
+    """
+    Same as `load_from_json_str`, but takes UTF8-encoded bytes as input.
+    """
+    from bson.json_util import loads, CANONICAL_JSON_OPTIONS
+
+    json_str = data.decode(UTF8_ENCODING)
+    return load_from_json_str(data=json_str, **extra_options)

@@ -1,13 +1,15 @@
 Witness Angel Cryptolib
 #############################
 
+.. image:: https://travis-ci.com/WitnessAngel/witness-angel-cryptolib.svg?branch=master
+    :target: https://travis-ci.com/WitnessAngel/witness-angel-cryptolib
+
 This lib gathers useful utilities to generate keys, and encrypt/descrypt/sign data, for the
 Witness Angel system.
 
 
 
-
-Development
+First steps
 ===================
 
 The interpreter for `python3.7` (see `pyproject.toml` for full version) must be installed.

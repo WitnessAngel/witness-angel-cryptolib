@@ -70,11 +70,11 @@ def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_type: str):
 
 
 def _generate_rsa_keypair_as_objects(key_length_bits: int) -> dict:
-    """Generate a RSA (public_key, private_key) pair in PEM format.
+    """Generate a RSA (public_key, private_key) pair.
 
     :param key_length_bits: length of the key in bits, must be superior to 2048.
 
-    :return: dictionary with "private_key" and "public_key" fields in PEM format"""
+    :return: dictionary with "private_key" and "public_key" fields as objects."""
 
     _check_asymmetric_key_length_bits(key_length_bits)
 
@@ -85,13 +85,13 @@ def _generate_rsa_keypair_as_objects(key_length_bits: int) -> dict:
 
 
 def _generate_dsa_keypair_as_objects(key_length_bits: int) -> dict:
-    """Generate a DSA (public_key, private_key) pair in PEM format.
+    """Generate a DSA (public_key, private_key) pair.
 
     DSA keypair is not used for encryption/decryption, only for signing.
 
     :param key_length_bits: length of the key in bits, must be superior to 2048.
 
-    :return: dictionary with "private_key" and "public_key" fields in PEM format"""
+    :return: dictionary with "private_key" and "public_key" fields as objects."""
 
     _check_asymmetric_key_length_bits(key_length_bits)
 
@@ -102,13 +102,13 @@ def _generate_dsa_keypair_as_objects(key_length_bits: int) -> dict:
 
 
 def _generate_ecc_keypair_as_objects(curve: str) -> dict:
-    """Generate an ECC (public_key, private_key) pair in PEM format
+    """Generate an ECC (public_key, private_key) pair.
 
     ECC keypair is not used for encryption/decryption, only for signing.
 
     :param curve: curve chosen among p256, p384, p521 and maybe others.
 
-    :return: dictionary with "private_key" and "public_key" fields in PEM format"""
+    :return: dictionary with "private_key" and "public_key" fields as objects."""
 
     if curve not in ECC._curves:
         raise ValueError(
@@ -124,8 +124,8 @@ def _generate_ecc_keypair_as_objects(curve: str) -> dict:
 
 def _serialize_key_object_to_pem_bytestring(key) -> str:
     """Convert a private or public key to PEM-formatted bytestring."""
-    pem = key.export_key(format="PEM")
-    return pem
+    key_pem = key.export_key(format="PEM")
+    return key_pem
 
 
 def _check_asymmetric_key_length_bits(key_length_bits):

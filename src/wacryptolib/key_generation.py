@@ -17,7 +17,7 @@ def generate_symmetric_key(encryption_algo: str) -> bytes:
 
 
 def generate_asymmetric_keypair(
-    *, key_type: str, serialize=True, key_length=2048, curve="p521"
+    *, key_type: str, serialize=True, key_length_bits=2048, curve="p521"
 ) -> dict:
     """Generate a (public_key, private_key) pair.
 
@@ -28,7 +28,7 @@ def generate_asymmetric_keypair(
 
     :return: dictionary with "private_key" and "public_key" fields as objects or PEM-format strings"""
 
-    potential_params = dict(key_length=key_length, curve=curve)
+    potential_params = dict(key_length_bits=key_length_bits, curve=curve)
 
     key_type = key_type.upper()
     if key_type not in SUPPORTED_ASYMMETRIC_KEY_TYPES:
@@ -69,33 +69,33 @@ def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_type: str):
     return ASYMMETRIC_KEY_TYPES_REGISTRY[key_type]["pem_import_function"](key_pem)
 
 
-def _generate_rsa_keypair_as_objects(key_length: int) -> dict:
+def _generate_rsa_keypair_as_objects(key_length_bits: int) -> dict:
     """Generate a RSA (public_key, private_key) pair in PEM format.
 
-    :param key_length: length of the key in bits, must be superior to 2048.
+    :param key_length_bits: length of the key in bits, must be superior to 2048.
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
 
-    _check_asymmetric_key_length(key_length)
+    _check_asymmetric_key_length_bits(key_length_bits)
 
-    private_key = RSA.generate(key_length)
+    private_key = RSA.generate(key_length_bits)
     public_key = private_key.publickey()
     keypair = {"public_key": public_key, "private_key": private_key}
     return keypair
 
 
-def _generate_dsa_keypair_as_objects(key_length: int) -> dict:
+def _generate_dsa_keypair_as_objects(key_length_bits: int) -> dict:
     """Generate a DSA (public_key, private_key) pair in PEM format.
 
     DSA keypair is not used for encryption/decryption, only for signing.
 
-    :param key_length: length of the key in bits, must be superior to 2048.
+    :param key_length_bits: length of the key in bits, must be superior to 2048.
 
     :return: dictionary with "private_key" and "public_key" fields in PEM format"""
 
-    _check_asymmetric_key_length(key_length)
+    _check_asymmetric_key_length_bits(key_length_bits)
 
-    private_key = DSA.generate(key_length)
+    private_key = DSA.generate(key_length_bits)
     public_key = private_key.publickey()
     keypair = {"public_key": public_key, "private_key": private_key}
     return keypair
@@ -127,14 +127,18 @@ def _serialize_key_object_to_pem_bytestring(key) -> str:
     pem = key.export_key(format="PEM")
     return pem
 
-def _check_asymmetric_key_length(key_length):
-    if key_length < 2048:
+
+def _check_asymmetric_key_length_bits(key_length_bits):
+    """Asymmetric ciphers usually talk in bits: 1024, 2048, 3072..."""
+    if key_length_bits < 2048:
         raise ValueError(
             "The asymmetric key length must be superior or equal to 2048 bits"
         )
 
-def _check_symmetric_key_length(key_length):
-    if key_length < 32:
+
+def _check_symmetric_key_length_bytes(key_length_bytes):
+    """Symmetric ciphers usually talk in bytes: 16, 24, 32..."""
+    if key_length_bytes < 32:
         raise ValueError(
             "The symmetric key length must be superior or equal to 32 bits"
         )
@@ -143,12 +147,12 @@ def _check_symmetric_key_length(key_length):
 ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
     RSA={
         "generation_function": _generate_rsa_keypair_as_objects,
-        "generation_extra_parameters": ["key_length"],
+        "generation_extra_parameters": ["key_length_bits"],
         "pem_import_function": RSA.import_key,
     },
     DSA={
         "generation_function": _generate_dsa_keypair_as_objects,
-        "generation_extra_parameters": ["key_length"],
+        "generation_extra_parameters": ["key_length_bits"],
         "pem_import_function": DSA.import_key,
     },
     ECC={

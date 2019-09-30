@@ -1,4 +1,7 @@
 import copy
+from datetime import datetime
+import io
+import tarfile
 import uuid
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
@@ -259,3 +262,72 @@ def decrypt_data_from_container(container: dict) -> bytes:
     reader = ContainerReader()
     data = reader.decrypt_data(container)
     return data
+
+
+class DataAggregator:
+    # TODO DOCUMENT THIS
+
+    DATETIME_FORMAT = "%Y%m%d%H%M%S"
+
+    _current_tarfile = None
+    _current_bytesio = None
+
+    @staticmethod
+    def read_tarfile_from_bytestring(data_bytestring):
+        """
+        #....................
+        """
+        return tarfile.open(mode="r", fileobj=io.BytesIO(data_bytestring))
+
+    def __init__(self):
+        pass
+
+    def finalize_tarfile(self):
+        """
+        Returns the content of current tarfile as a bytestring, possibly empty.
+        """
+        result_bytestring = self._finalize_current_tarfile()
+        return result_bytestring
+
+    def _ensure_current_tarfile(self):
+        if not self._current_tarfile:
+            assert not self._current_bytesio, repr(self._current_bytesio)
+            self._current_bytesio = io.BytesIO()
+            self._current_tarfile = tarfile.open(mode="w",  # TODO - add compression?
+                                                 fileobj=self._current_bytesio)
+
+    def _finalize_current_tarfile(self):
+        result_bytestring = ""
+
+        if self._current_tarfile:
+            self._current_tarfile.close()
+            result_bytestring = self._current_bytesio.getvalue()
+
+        self._current_tarfile = None
+        self._current_bytesio = None
+        return result_bytestring
+
+    def _create_data_filename(self, sensor_name, from_datetime, to_datetime, extension):
+        assert extension.startswith("."), extension
+        from_ts = from_datetime.strftime(self.DATETIME_FORMAT)
+        to_ts = to_datetime.strftime(self.DATETIME_FORMAT)
+        filename = "{from_ts}_{to_ts}_{sensor_name}{extension}".format(**locals())
+        assert " " not in filename, repr(filename)
+        return filename
+
+    def add_record(self, sensor_name, from_datetime, to_datetime, extension, data):
+        assert isinstance(data, bytes), repr(data)
+
+        self._ensure_current_tarfile()
+
+        filename = self._create_data_filename(sensor_name=sensor_name,
+                                              from_datetime=from_datetime, to_datetime=to_datetime, extension=extension)
+
+        mtime = datetime.timestamp(to_datetime)
+
+        tarinfo = tarfile.TarInfo(filename)
+        tarinfo.size = len(data)  # this is crucial
+        tarinfo.mtime = mtime
+        self._current_tarfile.addfile(tarinfo, io.BytesIO(data))
+
+

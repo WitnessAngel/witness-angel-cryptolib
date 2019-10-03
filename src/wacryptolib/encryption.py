@@ -4,8 +4,11 @@ from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import pad, unpad
 
-from wacryptolib.key_generation import _check_symmetric_key_length_bytes, SUPPORTED_SYMMETRIC_KEY_ALGOS, \
-    _check_asymmetric_key_length_bits
+from wacryptolib.key_generation import (
+    _check_symmetric_key_length_bytes,
+    SUPPORTED_SYMMETRIC_KEY_ALGOS,
+    _check_asymmetric_key_length_bits,
+)
 from wacryptolib.utilities import split_as_chunks
 
 
@@ -20,8 +23,6 @@ def _get_encryption_type_conf(encryption_algo):
 
     encryption_type_conf = ENCRYPTION_ALGOS_REGISTRY[encryption_algo]
     return encryption_type_conf
-
-
 
 
 def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key) -> dict:

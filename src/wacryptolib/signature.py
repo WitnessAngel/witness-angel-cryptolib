@@ -8,6 +8,7 @@ from Crypto.Signature import pss, DSS
 KNOWN_KEY_TYPES = Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey]
 SIGNATURE_HASHER = Crypto.Hash.SHA512
 
+
 def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_TYPES) -> dict:
     """
     Return a timestamped signature of the chosen type for the given payload,

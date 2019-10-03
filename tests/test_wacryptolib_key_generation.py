@@ -7,7 +7,8 @@ import wacryptolib
 from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
     SUPPORTED_ASYMMETRIC_KEY_TYPES,
-    SUPPORTED_SYMMETRIC_KEY_ALGOS)
+    SUPPORTED_SYMMETRIC_KEY_ALGOS,
+)
 
 
 @pytest.mark.parametrize("key_type", SUPPORTED_ASYMMETRIC_KEY_TYPES)
@@ -21,7 +22,9 @@ def test_keypair_unicity(key_type):
 
 @pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
 def test_symmetric_key_generation(encryption_algo):
-    key = wacryptolib.key_generation.generate_symmetric_key(encryption_algo=encryption_algo)
+    key = wacryptolib.key_generation.generate_symmetric_key(
+        encryption_algo=encryption_algo
+    )
     assert isinstance(key, bytes)
     assert len(key) == 32  # Always max size
 
@@ -44,7 +47,9 @@ def test_rsa_asymmetric_key_generation():
         )
 
     for key_length_bits in (None, 2048):
-        extra_parameters = dict(key_length_bits=key_length_bits) if key_length_bits else {}
+        extra_parameters = (
+            dict(key_length_bits=key_length_bits) if key_length_bits else {}
+        )
         keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
             key_type="RSA", **extra_parameters
         )
@@ -60,7 +65,9 @@ def test_dsa_asymmetric_key_generation():
         )
 
     for key_length_bits in (None, 2048):
-        extra_parameters = dict(key_length_bits=key_length_bits) if key_length_bits else {}
+        extra_parameters = (
+            dict(key_length_bits=key_length_bits) if key_length_bits else {}
+        )
         keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
             key_type="DSA", **extra_parameters
         )

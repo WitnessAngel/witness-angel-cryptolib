@@ -293,8 +293,9 @@ class DataAggregator:
         if not self._current_tarfile:
             assert not self._current_bytesio, repr(self._current_bytesio)
             self._current_bytesio = io.BytesIO()
-            self._current_tarfile = tarfile.open(mode="w",  # TODO - add compression?
-                                                 fileobj=self._current_bytesio)
+            self._current_tarfile = tarfile.open(
+                mode="w", fileobj=self._current_bytesio  # TODO - add compression?
+            )
 
     def _finalize_current_tarfile(self):
         result_bytestring = ""
@@ -320,8 +321,12 @@ class DataAggregator:
 
         self._ensure_current_tarfile()
 
-        filename = self._create_data_filename(sensor_name=sensor_name,
-                                              from_datetime=from_datetime, to_datetime=to_datetime, extension=extension)
+        filename = self._create_data_filename(
+            sensor_name=sensor_name,
+            from_datetime=from_datetime,
+            to_datetime=to_datetime,
+            extension=extension,
+        )
 
         mtime = datetime.timestamp(to_datetime)
 
@@ -329,5 +334,3 @@ class DataAggregator:
         tarinfo.size = len(data)  # this is crucial
         tarinfo.mtime = mtime
         self._current_tarfile.addfile(tarinfo, io.BytesIO(data))
-
-

@@ -1,6 +1,7 @@
 from typing import List
 
 from Crypto.Util.Padding import pad, unpad
+from decorator import decorator
 
 UTF8_ENCODING = "utf8"
 
@@ -97,3 +98,12 @@ def load_from_json_bytes(data, **extra_options):
 
     json_str = data.decode(UTF8_ENCODING)
     return load_from_json_str(data=json_str, **extra_options)
+
+
+@decorator
+def synchronized(func, self, *args, **kwargs):
+    """
+    Wraps the function call with a mutex locking on the expected "self._lock" mutex.
+    """
+    with self._lock:
+        return func(self, *args, **kwargs)

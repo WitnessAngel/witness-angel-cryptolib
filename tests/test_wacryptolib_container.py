@@ -2,16 +2,17 @@ import io
 import random
 import tarfile
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import pytest
+from freezegun import freeze_time
 
 from wacryptolib.container import (
     LOCAL_ESCROW_PLACEHOLDER,
     encrypt_data_into_container,
     decrypt_data_from_container,
-    DataAggregator,
-)
+    TarfileAggregator,
+    TimedJsonAggregator)
 
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -127,15 +128,16 @@ def test_container_encryption_and_decryption(container_conf):
         decrypt_data_from_container(container=container)
 
 
-def test_data_aggregator():
+def test_tarfile_aggregator():
 
-    aggregator = DataAggregator()
+    tarfile_aggregator = TarfileAggregator()
+    assert len(tarfile_aggregator) == 0
 
-    result_bytestring = aggregator.finalize_tarfile()
+    result_bytestring = tarfile_aggregator.finalize_tarfile()
     assert result_bytestring == ""
 
     data1 = "hêllö".encode("utf8")
-    aggregator.add_record(
+    tarfile_aggregator.add_record(
         sensor_name="smartphone_front_camera",
         from_datetime=datetime(
             year=2014,
@@ -150,18 +152,22 @@ def test_data_aggregator():
         extension=".txt",
         data=data1,
     )
+    assert len(tarfile_aggregator) == 1
 
     data2 = b"123xyz"
-    aggregator.add_record(
+    tarfile_aggregator.add_record(
         sensor_name="smartphone_recorder",
         from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
         to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
         extension=".mp3",
         data=data2,
     )
+    assert len(tarfile_aggregator) == 2
 
-    result_bytestring = aggregator.finalize_tarfile()
-    tar_file = DataAggregator.read_tarfile_from_bytestring(result_bytestring)
+    result_bytestring = tarfile_aggregator.finalize_tarfile()
+    tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
+
+    assert len(tarfile_aggregator) == 0
 
     filenames = sorted(tar_file.getnames())
     assert filenames == [
@@ -172,25 +178,90 @@ def test_data_aggregator():
     assert tar_file.extractfile(filenames[1]).read() == data2
 
     for i in range(2):
-        result_bytestring = aggregator.finalize_tarfile()
+        result_bytestring = tarfile_aggregator.finalize_tarfile()
         assert result_bytestring == ""
+        assert len(tarfile_aggregator) == 0
 
     data3 = b""
-    aggregator.add_record(
+    tarfile_aggregator.add_record(
         sensor_name="abc",
         from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
         to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
         extension=".avi",
         data=data3,
     )
+    assert len(tarfile_aggregator) == 1
 
-    result_bytestring = aggregator.finalize_tarfile()
-    tar_file = DataAggregator.read_tarfile_from_bytestring(result_bytestring)
+    result_bytestring = tarfile_aggregator.finalize_tarfile()
+    tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
+    assert len(tarfile_aggregator) == 0
 
     filenames = sorted(tar_file.getnames())
     assert filenames == ["20171011000000_20171201000000_abc.avi"]
     assert tar_file.extractfile(filenames[0]).read() == b""
 
     for i in range(2):
-        result_bytestring = aggregator.finalize_tarfile()
+        result_bytestring = tarfile_aggregator.finalize_tarfile()
         assert result_bytestring == ""
+        assert len(tarfile_aggregator) == 0
+
+
+def test_timed_json_aggregator():
+
+    tarfile_aggregator = TarfileAggregator()
+    assert len(tarfile_aggregator) == 0
+
+    json_aggregator = TimedJsonAggregator(max_duration_s=2, tarfile_aggregator=tarfile_aggregator, sensor_name="some_sensors")
+    assert len(json_aggregator) == 0
+
+    with freeze_time() as frozen_datetime:
+
+        json_aggregator.add_data(dict(pulse=42))
+        json_aggregator.add_data(dict(timing=True))
+
+        assert len(tarfile_aggregator) == 0
+        assert len(json_aggregator) == 2
+
+        frozen_datetime.tick(delta=timedelta(seconds=1))
+
+        json_aggregator.add_data(dict(abc=2.2))
+
+        assert len(tarfile_aggregator) == 0
+        assert len(json_aggregator) == 3
+
+        frozen_datetime.tick(delta=timedelta(seconds=1))
+
+        json_aggregator.add_data(dict(x="abc"))
+
+        assert len(tarfile_aggregator) == 1  # single json file
+        assert len(json_aggregator) == 1
+
+        json_aggregator.finalize_dataset()
+
+        assert len(tarfile_aggregator) == 2  # 2 json files
+        assert len(json_aggregator) == 0
+
+        frozen_datetime.tick(delta=timedelta(seconds=10))
+
+        json_aggregator.finalize_dataset()
+
+        # Unchanged
+        assert len(tarfile_aggregator) == 2
+        assert len(json_aggregator) == 0
+
+        result_bytestring = tarfile_aggregator.finalize_tarfile()
+        tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
+        assert len(tarfile_aggregator) == 0
+
+        filenames = sorted(tar_file.getnames())
+        assert len(filenames) == 2
+
+        for filename in filenames:
+            assert "some_sensors" in filename
+            assert filename.endswith(".json")
+
+        data = tar_file.extractfile(filenames[0]).read()
+        assert data == b'[{"pulse": {"$numberInt": "42"}}, {"timing": true}, {"abc": {"$numberDouble": "2.2"}}]'
+
+        data = tar_file.extractfile(filenames[1]).read()
+        assert data == b'[{"x": "abc"}]'

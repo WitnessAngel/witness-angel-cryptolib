@@ -1,8 +1,9 @@
 import copy
-from datetime import datetime
+import threading
 import io
 import tarfile
 import uuid
+from datetime import datetime, timezone
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
 from wacryptolib.escrow import DummyKeyStorage, EscrowApi, LOCAL_ESCROW_PLACEHOLDER
@@ -11,7 +12,7 @@ from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
 )
 from wacryptolib.signature import verify_message_signature
-from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
+from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, synchronized
 
 CONTAINER_FORMAT = "WA_0.1a"
 
@@ -264,30 +265,23 @@ def decrypt_data_from_container(container: dict) -> bytes:
     return data
 
 
-class DataAggregator:
-    # TODO DOCUMENT THIS
+class TarfileAggregator:
+    """
+    This class allows sensors to aggregate file-like records of data in memory.
+
+    Public methods of this class are threadreturn func(*args, **kwar-safe.
+    """
 
     DATETIME_FORMAT = "%Y%m%d%H%M%S"
 
+    _lock = None
+
     _current_tarfile = None
     _current_bytesio = None
-
-    @staticmethod
-    def read_tarfile_from_bytestring(data_bytestring):
-        """
-        #....................
-        """
-        return tarfile.open(mode="r", fileobj=io.BytesIO(data_bytestring))
+    _current_files_count = 0
 
     def __init__(self):
-        pass
-
-    def finalize_tarfile(self):
-        """
-        Returns the content of current tarfile as a bytestring, possibly empty.
-        """
-        result_bytestring = self._finalize_current_tarfile()
-        return result_bytestring
+        self._lock = threading.Lock()
 
     def _ensure_current_tarfile(self):
         if not self._current_tarfile:
@@ -296,6 +290,7 @@ class DataAggregator:
             self._current_tarfile = tarfile.open(
                 mode="w", fileobj=self._current_bytesio  # TODO - add compression?
             )
+            assert self._current_files_count == 0, self._current_bytesio
 
     def _finalize_current_tarfile(self):
         result_bytestring = ""
@@ -306,6 +301,8 @@ class DataAggregator:
 
         self._current_tarfile = None
         self._current_bytesio = None
+        self._current_files_count = 0
+
         return result_bytestring
 
     def _create_data_filename(self, sensor_name, from_datetime, to_datetime, extension):
@@ -316,8 +313,18 @@ class DataAggregator:
         assert " " not in filename, repr(filename)
         return filename
 
-    def add_record(self, sensor_name, from_datetime, to_datetime, extension, data):
-        assert isinstance(data, bytes), repr(data)
+    @synchronized
+    def add_record(self, sensor_name: str, from_datetime: datetime, to_datetime: datetime, extension: str, data: bytes):
+        """Add the provided data to the tarfile, using associated metadata.
+
+        :param sensor_name: slug label for the sensor
+        :param from_datetime: start time of the recording
+        :param to_datetime: end time of the recording
+        :param extension: file extension, starting with a dot
+        :param data: bytestring of audio/video/other data
+        """
+        assert isinstance(data, bytes), repr(data)  # For now, only format supported
+        assert extension.startswith("."), extension
 
         self._ensure_current_tarfile()
 
@@ -328,9 +335,94 @@ class DataAggregator:
             extension=extension,
         )
 
-        mtime = datetime.timestamp(to_datetime)
+        mtime = to_datetime.timestamp()
 
         tarinfo = tarfile.TarInfo(filename)
         tarinfo.size = len(data)  # this is crucial
         tarinfo.mtime = mtime
         self._current_tarfile.addfile(tarinfo, io.BytesIO(data))
+
+        self._current_files_count += 1
+
+    @synchronized
+    def finalize_tarfile(self):
+        """
+        Return the content of current tarfile as a bytestring, possibly empty, and clear the current tarfile.
+        """
+        result_bytestring = self._finalize_current_tarfile()
+        return result_bytestring
+
+    def __len__(self):
+        return self._current_files_count
+
+    @staticmethod
+    def read_tarfile_from_bytestring(data_bytestring):
+        """
+        Create a readonly TarFile instance from the provided bytestring.
+        """
+        return tarfile.open(mode="r", fileobj=io.BytesIO(data_bytestring))
+
+
+class TimedJsonAggregator:
+    """
+    This class allows sensors to aggregate dicts of data, which are pushed to the underlying TarfileAggregator after a
+    certain amount of seconds.
+
+    Public methods of this class are thread-safe.
+    """
+    _lock = threading.Lock()
+    _max_duration_s = None
+    _tarfile_aggregator = None
+
+    _current_dataset = None
+    _current_start_time = None
+
+    def __init__(self, max_duration_s: int, tarfile_aggregator: TarfileAggregator, sensor_name:str):
+        assert max_duration_s > 0, max_duration_s
+        assert isinstance(tarfile_aggregator, TarfileAggregator), tarfile_aggregator
+        self._max_duration_s = max_duration_s
+        self._tarfile_aggregator = tarfile_aggregator
+        self._sensor_name = sensor_name
+
+    def _conditionally_setup_dataset(self):
+        if self._current_dataset is None:
+            self._current_dataset = []
+            self._current_start_time = datetime.now(tz=timezone.utc)  # TODO make datetime utility with TZ
+
+    def _finalize_dataset(self):
+        if not self._current_dataset:
+            return
+        end_time = datetime.now(tz=timezone.utc)
+        dataset_bytes = dump_to_json_bytes(self._current_dataset)
+        self._tarfile_aggregator.add_record(data=dataset_bytes, sensor_name=self._sensor_name,
+                                            from_datetime=self._current_start_time,
+                                            to_datetime=end_time, extension=".json")
+
+        self._current_dataset = None
+        self._current_start_time = None
+
+    def _manage_dataset_renewal(self):
+        if self._current_start_time is not None:
+            delay_s = datetime.now(tz=timezone.utc) - self._current_start_time
+            if delay_s.seconds >= self._max_duration_s:
+                self._finalize_dataset()
+        self._conditionally_setup_dataset()
+
+    @synchronized
+    def add_data(self, data_dict: dict):
+        """
+        Flush current data to the tarfile if needed, and append `data_dict` to the queue.
+        """
+        assert isinstance(data_dict, dict), data_dict
+        self._manage_dataset_renewal()
+        self._current_dataset.append(data_dict)
+
+    @synchronized
+    def finalize_dataset(self):
+        """
+        Force the flushing of current data to teh tarfiel (e.g. when terminating the service).
+        """
+        self._finalize_dataset()
+
+    def __len__(self):
+        return len(self._current_dataset) if self._current_dataset else 0

@@ -5,11 +5,11 @@ from wacryptolib.error_handling import (
     _construct_status_slugs_mapper,
     _slugify_exception_class,
     _retrieve_exception_class_for_status_slugs,
-)
+    _fully_qualified_name)
 
 
+LookupError = LookupError
 IOError = IOError
-
 
 class MyRuntimeError(RuntimeError):
     pass
@@ -37,14 +37,17 @@ class MyExcChild1GrandChild(MyExcChild1):
 
 def test_status_slugs_utilities():
 
-    poc_tarfile = sys.modules[MyExc.__module__]
+    this_module = sys.modules[MyExc.__module__]
 
     selected_classes = _gather_exception_subclasses(
-        module=poc_tarfile, parent_classes=MyExc
+        module=this_module, parent_classes=MyExc
     )
     assert set(selected_classes) == set(
         [MyExc, MyExcChild1, MyExcChild2, MyExcChild1GrandChild]
     ), selected_classes
+
+    assert _fully_qualified_name(LookupError) == "LookupError"  # Builtins don't keep their module prefix
+    assert _fully_qualified_name(MyExc) == "test_wacryptolib_error_handling.MyExc"
 
     mapper = _construct_status_slugs_mapper(
         selected_classes, fallback_exception_class=NotImplementedError
@@ -65,12 +68,12 @@ def test_status_slugs_utilities():
     }
 
     selected_classes = _gather_exception_subclasses(
-        module=poc_tarfile, parent_classes=(EnvironmentError, RuntimeError)
+        module=this_module, parent_classes=(EnvironmentError, RuntimeError)
     )
     assert set(selected_classes) == set([IOError, MyRuntimeError]), selected_classes
 
     selected_classes = _gather_exception_subclasses(
-        module=poc_tarfile, parent_classes=(UnicodeError,)
+        module=this_module, parent_classes=(UnicodeError,)
     )
     assert set(selected_classes) == set(), selected_classes
 

@@ -1,4 +1,6 @@
 import os
+import pathlib
+import subprocess
 
 from click.testing import CliRunner
 
@@ -63,3 +65,18 @@ def test_cli_encryption_and_decryption():
             with open(result_file, "r") as input_file:
                 data = input_file.read()
                 assert data == data_sample
+
+
+def test_cli_subprocess_invocation():
+
+    src_dir = str(pathlib.Path(__file__).resolve().parents[1] / "src")
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = src_dir
+
+    proc = subprocess.Popen("python -m wacryptolib -h", env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = proc.communicate(timeout=15)
+    assert b"Options:" in stdout
+    assert b"Commands:" in stdout
+    assert not stderr or b"debugger" in stderr  # For when pydev debugger connects to process...
+    assert proc.returncode == 0

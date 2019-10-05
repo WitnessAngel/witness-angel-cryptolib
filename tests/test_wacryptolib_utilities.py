@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from Crypto.Random import get_random_bytes
@@ -10,7 +11,13 @@ from wacryptolib.utilities import (
     dump_to_json_str,
     load_from_json_bytes,
     load_from_json_str,
-)
+    check_datetime_is_tz_aware)
+
+
+def test_check_datetime_is_tz_aware():
+    with pytest.raises(ValueError):
+        check_datetime_is_tz_aware(datetime.now())
+    check_datetime_is_tz_aware(datetime.now(tz=timezone.utc))
 
 
 def test_split_as_chunks_and_recombine():

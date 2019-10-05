@@ -6,6 +6,13 @@ from decorator import decorator
 UTF8_ENCODING = "utf8"
 
 
+def check_datetime_is_tz_aware(dt):
+    """Raise if datetime is naive regarding timezones"""
+    is_aware = dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
+    if not is_aware:
+        raise ValueError("Naive datetime was encountered: %s" % dt)
+
+
 def split_as_chunks(
     bytestring: bytes,
     *,

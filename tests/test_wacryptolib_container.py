@@ -1,7 +1,9 @@
-import io
+
+import os
 import random
-import tarfile
+import time
 import uuid
+from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 
 import pytest
@@ -13,6 +15,7 @@ from wacryptolib.container import (
     decrypt_data_from_container,
     TarfileAggregator,
     TimedJsonAggregator)
+from wacryptolib.utilities import load_from_json_bytes
 
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -205,6 +208,22 @@ def test_tarfile_aggregator():
         assert result_bytestring == ""
         assert len(tarfile_aggregator) == 0
 
+    # We tests conflicts between identifical tar record names
+    for i in range(3):  # Three times the same file name!
+        tarfile_aggregator.add_record(
+            sensor_name="smartphone_recorder",
+            from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
+            to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
+            extension=".mp3",
+            data=bytes([i]*500),
+        )
+    result_bytestring = tarfile_aggregator.finalize_tarfile()
+    tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
+    assert len(tar_file.getmembers()) == 3
+    assert len(tar_file.getnames()) == 3
+    # The LAST record has priority over others with the same name
+    assert tar_file.extractfile(tar_file.getnames()[0]).read() == bytes([2]*500)
+
 
 def test_timed_json_aggregator():
 
@@ -236,14 +255,14 @@ def test_timed_json_aggregator():
         assert len(tarfile_aggregator) == 1  # single json file
         assert len(json_aggregator) == 1
 
-        json_aggregator.finalize_dataset()
+        json_aggregator.flush_dataset()
 
         assert len(tarfile_aggregator) == 2  # 2 json files
         assert len(json_aggregator) == 0
 
         frozen_datetime.tick(delta=timedelta(seconds=10))
 
-        json_aggregator.finalize_dataset()
+        json_aggregator.flush_dataset()
 
         # Unchanged
         assert len(tarfile_aggregator) == 2
@@ -265,3 +284,65 @@ def test_timed_json_aggregator():
 
         data = tar_file.extractfile(filenames[1]).read()
         assert data == b'[{"x": "abc"}]'
+
+
+def test_aggregators_thread_safety():
+
+    tarfile_aggregator = TarfileAggregator()
+    json_aggregator = TimedJsonAggregator(max_duration_s=1, tarfile_aggregator=tarfile_aggregator, sensor_name="some_sensors")
+
+    tarfile_futures = []
+    misc_futures = []
+
+    record_data = "hêllo".encode("utf8")
+
+    with ThreadPoolExecutor(max_workers=30) as executor:
+        for burst in range(10):
+            for idx in range(100):
+                misc_futures.append(executor.submit(json_aggregator.add_data, dict(res=idx)))
+                misc_futures.append(executor.submit(json_aggregator.flush_dataset))
+                misc_futures.append(executor.submit(tarfile_aggregator.add_record,
+                    sensor_name="some_recorder_%s_%s" % (burst, idx),
+                    from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
+                    to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
+                    extension=".txt",
+                    data=record_data,
+                ))
+                tarfile_futures.append(executor.submit(tarfile_aggregator.finalize_tarfile))
+            time.sleep(0.2)
+
+    json_aggregator.flush_dataset()
+    last_tarfile = tarfile_aggregator.finalize_tarfile()
+
+    misc_results = set(future.result() for future in misc_futures)
+    assert misc_results == set([None])  # No results expected from these methods
+
+    tarfiles_bytes = [future.result() for future in tarfile_futures] + [last_tarfile]
+    tarfiles = [TarfileAggregator.read_tarfile_from_bytestring(bytestring)
+                for bytestring in tarfiles_bytes
+                if bytestring]
+
+    tarfiles_count = len(tarfiles)
+    print ("Tarfiles count:", tarfiles_count)
+
+    total_idx = 0
+    txt_count = 0
+
+    for tarfile in tarfiles:
+        print("NEW TARFILE")
+        members = tarfile.getmembers()
+        for member in members:
+            print(">>>>", member.name)
+            ext = os.path.splitext(member.name)[1]
+            record_bytes = tarfile.extractfile(member).read()
+            if ext == ".json":
+                data_array = load_from_json_bytes(record_bytes)
+                total_idx += sum(data["res"] for data in data_array)
+            elif ext == ".txt":
+                assert record_bytes == record_data
+                txt_count += 1
+            else:
+                raise RuntimeError(ext)
+
+    assert txt_count == 1000
+    assert total_idx == 1000 * 99 / 2 == 49500  # Sum of idx sequences

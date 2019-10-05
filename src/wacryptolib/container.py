@@ -12,7 +12,7 @@ from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
 )
 from wacryptolib.signature import verify_message_signature
-from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, synchronized
+from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, synchronized, check_datetime_is_tz_aware
 
 CONTAINER_FORMAT = "WA_0.1a"
 
@@ -317,6 +317,9 @@ class TarfileAggregator:
     def add_record(self, sensor_name: str, from_datetime: datetime, to_datetime: datetime, extension: str, data: bytes):
         """Add the provided data to the tarfile, using associated metadata.
 
+        If, despite included timestamps, several records end up having the exact same name, the last one will have
+        priority when extracting the tarfile, but all of them will be stored in it anyway.
+
         :param sensor_name: slug label for the sensor
         :param from_datetime: start time of the recording
         :param to_datetime: end time of the recording
@@ -325,6 +328,8 @@ class TarfileAggregator:
         """
         assert isinstance(data, bytes), repr(data)  # For now, only format supported
         assert extension.startswith("."), extension
+        check_datetime_is_tz_aware(from_datetime)
+        check_datetime_is_tz_aware(to_datetime)
 
         self._ensure_current_tarfile()
 
@@ -347,7 +352,7 @@ class TarfileAggregator:
     @synchronized
     def finalize_tarfile(self):
         """
-        Return the content of current tarfile as a bytestring, possibly empty, and clear the current tarfile.
+        Return the content of current tarfile as a bytestring, possibly empty, and reset the current tarfile.
         """
         result_bytestring = self._finalize_current_tarfile()
         return result_bytestring
@@ -360,6 +365,7 @@ class TarfileAggregator:
         """
         Create a readonly TarFile instance from the provided bytestring.
         """
+        assert data_bytestring, data_bytestring  # Empty bytestrings must already have been filtered out
         return tarfile.open(mode="r", fileobj=io.BytesIO(data_bytestring))
 
 
@@ -389,7 +395,7 @@ class TimedJsonAggregator:
             self._current_dataset = []
             self._current_start_time = datetime.now(tz=timezone.utc)  # TODO make datetime utility with TZ
 
-    def _finalize_dataset(self):
+    def _flush_dataset(self):
         if not self._current_dataset:
             return
         end_time = datetime.now(tz=timezone.utc)
@@ -405,7 +411,7 @@ class TimedJsonAggregator:
         if self._current_start_time is not None:
             delay_s = datetime.now(tz=timezone.utc) - self._current_start_time
             if delay_s.seconds >= self._max_duration_s:
-                self._finalize_dataset()
+                self._flush_dataset()
         self._conditionally_setup_dataset()
 
     @synchronized
@@ -418,11 +424,11 @@ class TimedJsonAggregator:
         self._current_dataset.append(data_dict)
 
     @synchronized
-    def finalize_dataset(self):
+    def flush_dataset(self):
         """
-        Force the flushing of current data to teh tarfiel (e.g. when terminating the service).
+        Force the flushing of current data to the tarfile (e.g. when terminating the service).
         """
-        self._finalize_dataset()
+        self._flush_dataset()
 
     def __len__(self):
         return len(self._current_dataset) if self._current_dataset else 0

@@ -8,9 +8,9 @@ from wacryptolib.key_generation import (
 )
 from wacryptolib.signature import sign_message
 
-LOCAL_ESCROW_PLACEHOLDER = (
-    "_local_"
-)  # Special value in containers, to invoke a device-local escrow
+
+#: Special value in containers, to invoke a device-local escrow
+LOCAL_ESCROW_PLACEHOLDER = "_local_"
 
 
 class KeyStorageBase(ABC):

@@ -14,7 +14,9 @@ from wacryptolib.container import (
     decrypt_data_from_container,
     TarfileAggregator,
     TimedJsonAggregator,
-)
+    _get_proxy_for_escrow)
+from wacryptolib.escrow import EscrowApi
+from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.utilities import load_from_json_bytes
 
 SIMPLE_CONTAINER_CONF = dict(
@@ -223,6 +225,21 @@ def test_tarfile_aggregator():
     assert len(tar_file.getnames()) == 3
     # The LAST record has priority over others with the same name
     assert tar_file.extractfile(tar_file.getnames()[0]).read() == bytes([2] * 500)
+
+
+def test_get_proxy_for_escrow():
+
+    proxy = _get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
+    assert isinstance(proxy, EscrowApi)  # Local proxy
+
+    proxy = _get_proxy_for_escrow(dict(url="http://example.com/jsonrpc"))
+    assert isinstance(proxy, JsonRpcProxy)  # It should expose identical methods to EscrowApi
+
+    with pytest.raises(ValueError):
+        _get_proxy_for_escrow(dict(urn="athena"))
+
+    with pytest.raises(ValueError):
+        _get_proxy_for_escrow("weird-value")
 
 
 def test_timed_json_aggregator():

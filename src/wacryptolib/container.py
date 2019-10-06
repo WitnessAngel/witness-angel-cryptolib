@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
 from wacryptolib.escrow import DummyKeyStorage, EscrowApi, LOCAL_ESCROW_PLACEHOLDER
+from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.key_generation import (
     generate_symmetric_key,
     load_asymmetric_key_from_pem_bytestring,
@@ -27,8 +28,11 @@ LOCAL_ESCROW_API = EscrowApi(key_storage=DummyKeyStorage())
 def _get_proxy_for_escrow(escrow):
     if escrow == LOCAL_ESCROW_PLACEHOLDER:
         return LOCAL_ESCROW_API
-    else:
-        raise NotImplementedError("Escrow system for testing needs to be completed")
+    elif isinstance (escrow, dict):
+        if "url" in escrow:
+            return JsonRpcProxy(url=escrow)
+        # TODO - Implement escrow lookup in global registry, shared-secret group, etc.
+    raise ValueError("Unrecognized escrow identifiers: %s" % str(escrow))
 
 
 class ContainerBase:

@@ -12,7 +12,12 @@ from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
 )
 from wacryptolib.signature import verify_message_signature
-from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, synchronized, check_datetime_is_tz_aware
+from wacryptolib.utilities import (
+    dump_to_json_bytes,
+    load_from_json_bytes,
+    synchronized,
+    check_datetime_is_tz_aware,
+)
 
 CONTAINER_FORMAT = "WA_0.1a"
 
@@ -314,7 +319,14 @@ class TarfileAggregator:
         return filename
 
     @synchronized
-    def add_record(self, sensor_name: str, from_datetime: datetime, to_datetime: datetime, extension: str, data: bytes):
+    def add_record(
+        self,
+        sensor_name: str,
+        from_datetime: datetime,
+        to_datetime: datetime,
+        extension: str,
+        data: bytes,
+    ):
         """Add the provided data to the tarfile, using associated metadata.
 
         If, despite included timestamps, several records end up having the exact same name, the last one will have
@@ -365,7 +377,9 @@ class TarfileAggregator:
         """
         Create a readonly TarFile instance from the provided bytestring.
         """
-        assert data_bytestring, data_bytestring  # Empty bytestrings must already have been filtered out
+        assert (
+            data_bytestring
+        ), data_bytestring  # Empty bytestrings must already have been filtered out
         return tarfile.open(mode="r", fileobj=io.BytesIO(data_bytestring))
 
 
@@ -376,6 +390,7 @@ class TimedJsonAggregator:
 
     Public methods of this class are thread-safe.
     """
+
     _lock = threading.Lock()
     _max_duration_s = None
     _tarfile_aggregator = None
@@ -383,7 +398,12 @@ class TimedJsonAggregator:
     _current_dataset = None
     _current_start_time = None
 
-    def __init__(self, max_duration_s: int, tarfile_aggregator: TarfileAggregator, sensor_name:str):
+    def __init__(
+        self,
+        max_duration_s: int,
+        tarfile_aggregator: TarfileAggregator,
+        sensor_name: str,
+    ):
         assert max_duration_s > 0, max_duration_s
         assert isinstance(tarfile_aggregator, TarfileAggregator), tarfile_aggregator
         self._max_duration_s = max_duration_s
@@ -393,16 +413,22 @@ class TimedJsonAggregator:
     def _conditionally_setup_dataset(self):
         if self._current_dataset is None:
             self._current_dataset = []
-            self._current_start_time = datetime.now(tz=timezone.utc)  # TODO make datetime utility with TZ
+            self._current_start_time = datetime.now(
+                tz=timezone.utc
+            )  # TODO make datetime utility with TZ
 
     def _flush_dataset(self):
         if not self._current_dataset:
             return
         end_time = datetime.now(tz=timezone.utc)
         dataset_bytes = dump_to_json_bytes(self._current_dataset)
-        self._tarfile_aggregator.add_record(data=dataset_bytes, sensor_name=self._sensor_name,
-                                            from_datetime=self._current_start_time,
-                                            to_datetime=end_time, extension=".json")
+        self._tarfile_aggregator.add_record(
+            data=dataset_bytes,
+            sensor_name=self._sensor_name,
+            from_datetime=self._current_start_time,
+            to_datetime=end_time,
+            extension=".json",
+        )
 
         self._current_dataset = None
         self._current_start_time = None

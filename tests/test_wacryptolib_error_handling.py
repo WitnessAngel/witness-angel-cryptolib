@@ -5,11 +5,13 @@ from wacryptolib.error_handling import (
     _construct_status_slugs_mapper,
     _slugify_exception_class,
     _retrieve_exception_class_for_status_slugs,
-    _fully_qualified_name)
+    _fully_qualified_name,
+)
 
 
 LookupError = LookupError
 IOError = IOError
+
 
 class MyRuntimeError(RuntimeError):
     pass
@@ -46,7 +48,9 @@ def test_status_slugs_utilities():
         [MyExc, MyExcChild1, MyExcChild2, MyExcChild1GrandChild]
     ), selected_classes
 
-    assert _fully_qualified_name(LookupError) == "LookupError"  # Builtins don't keep their module prefix
+    assert (
+        _fully_qualified_name(LookupError) == "LookupError"
+    )  # Builtins don't keep their module prefix
     assert _fully_qualified_name(MyExc) == "test_wacryptolib_error_handling.MyExc"
 
     mapper = _construct_status_slugs_mapper(

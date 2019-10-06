@@ -20,7 +20,9 @@ class KeyStorageBase(ABC):
     """
 
     @abstractmethod
-    def get_keypair(self, *, keychain_uid: uuid.UUID, key_type: str) -> dict:  #pragma: no cover
+    def get_keypair(
+        self, *, keychain_uid: uuid.UUID, key_type: str
+    ) -> dict:  # pragma: no cover
         """
         Fetch a key from persistent storage.
 
@@ -32,7 +34,9 @@ class KeyStorageBase(ABC):
         raise NotImplementedError("KeyStorageBase.get_keypair()")
 
     @abstractmethod
-    def set_keypair(self, *, keychain_uid: uuid.UUID, key_type: str, keypair: dict):  #pragma: no cover
+    def set_keypair(
+        self, *, keychain_uid: uuid.UUID, key_type: str, keypair: dict
+    ):  # pragma: no cover
         """
         Store a keypair into storage.
 

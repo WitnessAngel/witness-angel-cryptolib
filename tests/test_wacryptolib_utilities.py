@@ -11,7 +11,8 @@ from wacryptolib.utilities import (
     dump_to_json_str,
     load_from_json_bytes,
     load_from_json_str,
-    check_datetime_is_tz_aware)
+    check_datetime_is_tz_aware,
+)
 
 
 def test_check_datetime_is_tz_aware():

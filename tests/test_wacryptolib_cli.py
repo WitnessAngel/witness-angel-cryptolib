@@ -74,9 +74,16 @@ def test_cli_subprocess_invocation():
     env = os.environ.copy()
     env["PYTHONPATH"] = src_dir
 
-    proc = subprocess.Popen("python -m wacryptolib -h", env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(
+        "python -m wacryptolib -h",
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     stdout, stderr = proc.communicate(timeout=15)
     assert b"Options:" in stdout
     assert b"Commands:" in stdout
-    assert not stderr or b"debugger" in stderr  # For when pydev debugger connects to process...
+    assert (
+        not stderr or b"debugger" in stderr
+    )  # For when pydev debugger connects to process...
     assert proc.returncode == 0

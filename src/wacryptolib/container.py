@@ -322,13 +322,14 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
     _current_bytesio = None
     _current_files_count = 0
 
-    def __init__(
-        self,
-        max_duration_s: int=100
-    ):
+    def __init__(self, max_duration_s: int=1000):
         super().__init__(max_duration_s=max_duration_s)
 
-    def _ensure_current_tarfile(self):
+    def __len__(self):
+        return self._current_files_count
+
+    def _notify_aggregation_operation(self):
+        super()._notify_aggregation_operation()
         if not self._current_tarfile:
             assert not self._current_bytesio, repr(self._current_bytesio)
             self._current_bytesio = io.BytesIO()
@@ -337,7 +338,7 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
             )
             assert self._current_files_count == 0, self._current_bytesio
 
-    def _finalize_current_tarfile(self):
+    def _flush_aggregated_data(self):
         result_bytestring = ""
 
         if self._current_tarfile:
@@ -383,7 +384,7 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
         check_datetime_is_tz_aware(from_datetime)
         check_datetime_is_tz_aware(to_datetime)
 
-        self._ensure_current_tarfile()
+        self._notify_aggregation_operation()
 
         filename = self._create_data_filename(
             sensor_name=sensor_name,
@@ -406,11 +407,8 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
         """
         Return the content of current tarfile as a bytestring, possibly empty, and reset the current tarfile.
         """
-        result_bytestring = self._finalize_current_tarfile()
+        result_bytestring = self._flush_aggregated_data()
         return result_bytestring
-
-    def __len__(self):
-        return self._current_files_count
 
     @staticmethod
     def read_tarfile_from_bytestring(data_bytestring):
@@ -444,6 +442,9 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         assert isinstance(tarfile_aggregator, TarfileAggregator), tarfile_aggregator
         self._tarfile_aggregator = tarfile_aggregator
         self._sensor_name = sensor_name
+
+    def __len__(self):
+        return len(self._current_dataset) if self._current_dataset else 0
 
     def _notify_aggregation_operation(self):
         super()._notify_aggregation_operation()
@@ -479,6 +480,3 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         Force the flushing of current data to the tarfile (e.g. when terminating the service).
         """
         self._flush_aggregated_data()
-
-    def __len__(self):
-        return len(self._current_dataset) if self._current_dataset else 0

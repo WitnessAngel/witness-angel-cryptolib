@@ -13,7 +13,7 @@ from wacryptolib.container import (
     encrypt_data_into_container,
     decrypt_data_from_container,
     TarfileAggregator,
-    TimedJsonAggregator,
+    JsonAggregator,
     _get_proxy_for_escrow)
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
@@ -247,7 +247,7 @@ def test_timed_json_aggregator():
     tarfile_aggregator = TarfileAggregator()
     assert len(tarfile_aggregator) == 0
 
-    json_aggregator = TimedJsonAggregator(
+    json_aggregator = JsonAggregator(
         max_duration_s=2,
         tarfile_aggregator=tarfile_aggregator,
         sensor_name="some_sensors",
@@ -313,7 +313,7 @@ def test_timed_json_aggregator():
 def test_aggregators_thread_safety():
 
     tarfile_aggregator = TarfileAggregator()
-    json_aggregator = TimedJsonAggregator(
+    json_aggregator = JsonAggregator(
         max_duration_s=1,
         tarfile_aggregator=tarfile_aggregator,
         sensor_name="some_sensors",

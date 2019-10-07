@@ -274,7 +274,42 @@ def decrypt_data_from_container(container: dict) -> bytes:
     return data
 
 
-class TarfileAggregator:
+class TimeLimitedAggregatorMixin:
+    """
+    This class provides utilities to flush underlying data after a defined delay has been exceeded,
+    as well as a per-instance "self._lock" threading lock for use by public methods.
+    """
+
+    _max_duration_s = None
+    _tarfile_aggregator = None
+
+    _current_dataset = None
+    _current_start_time = None
+
+    _lock = None
+
+    def __init__(self, max_duration_s: int):
+        assert max_duration_s > 0, max_duration_s
+        self._max_duration_s = max_duration_s
+        self._lock = threading.Lock()
+
+    def _notify_aggregation_operation(self):
+        """Call this before every "data append" operation, to renew underlying aggregator if needed."""
+        if self._current_start_time is not None:
+            delay_s = datetime.now(tz=timezone.utc) - self._current_start_time
+            if delay_s.seconds >= self._max_duration_s:
+                self._flush_aggregated_data()
+                self._current_start_time = None
+        if self._current_start_time is None:
+            self._current_start_time = datetime.now(
+                tz=timezone.utc  # TODO make datetime utility with TZ
+            )
+
+    def _flush_aggregated_data(self):
+        raise RuntimeError("_flush() is not implemented")
+
+
+class TarfileAggregator(TimeLimitedAggregatorMixin):
     """
     This class allows sensors to aggregate file-like records of data in memory.
 
@@ -283,14 +318,15 @@ class TarfileAggregator:
 
     DATETIME_FORMAT = "%Y%m%d%H%M%S"
 
-    _lock = None
-
     _current_tarfile = None
     _current_bytesio = None
     _current_files_count = 0
 
-    def __init__(self):
-        self._lock = threading.Lock()
+    def __init__(
+        self,
+        max_duration_s: int=100
+    ):
+        super().__init__(max_duration_s=max_duration_s)
 
     def _ensure_current_tarfile(self):
         if not self._current_tarfile:
@@ -387,7 +423,7 @@ class TarfileAggregator:
         return tarfile.open(mode="r", fileobj=io.BytesIO(data_bytestring))
 
 
-class TimedJsonAggregator:
+class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
     """
     This class allows sensors to aggregate dicts of data, which are pushed to the underlying TarfileAggregator after a
     certain amount of seconds.
@@ -395,33 +431,26 @@ class TimedJsonAggregator:
     Public methods of this class are thread-safe.
     """
 
-    _lock = threading.Lock()
-    _max_duration_s = None
     _tarfile_aggregator = None
-
     _current_dataset = None
-    _current_start_time = None
 
     def __init__(
         self,
-        max_duration_s: int,
         tarfile_aggregator: TarfileAggregator,
         sensor_name: str,
+        max_duration_s: int
     ):
-        assert max_duration_s > 0, max_duration_s
+        super().__init__(max_duration_s=max_duration_s)
         assert isinstance(tarfile_aggregator, TarfileAggregator), tarfile_aggregator
-        self._max_duration_s = max_duration_s
         self._tarfile_aggregator = tarfile_aggregator
         self._sensor_name = sensor_name
 
-    def _conditionally_setup_dataset(self):
+    def _notify_aggregation_operation(self):
+        super()._notify_aggregation_operation()
         if self._current_dataset is None:
             self._current_dataset = []
-            self._current_start_time = datetime.now(
-                tz=timezone.utc
-            )  # TODO make datetime utility with TZ
 
-    def _flush_dataset(self):
+    def _flush_aggregated_data(self):
         if not self._current_dataset:
             return
         end_time = datetime.now(tz=timezone.utc)
@@ -433,16 +462,7 @@ class TimedJsonAggregator:
             to_datetime=end_time,
             extension=".json",
         )
-
         self._current_dataset = None
-        self._current_start_time = None
-
-    def _manage_dataset_renewal(self):
-        if self._current_start_time is not None:
-            delay_s = datetime.now(tz=timezone.utc) - self._current_start_time
-            if delay_s.seconds >= self._max_duration_s:
-                self._flush_dataset()
-        self._conditionally_setup_dataset()
 
     @synchronized
     def add_data(self, data_dict: dict):
@@ -450,7 +470,7 @@ class TimedJsonAggregator:
         Flush current data to the tarfile if needed, and append `data_dict` to the queue.
         """
         assert isinstance(data_dict, dict), data_dict
-        self._manage_dataset_renewal()
+        self._notify_aggregation_operation()
         self._current_dataset.append(data_dict)
 
     @synchronized
@@ -458,7 +478,7 @@ class TimedJsonAggregator:
         """
         Force the flushing of current data to the tarfile (e.g. when terminating the service).
         """
-        self._flush_dataset()
+        self._flush_aggregated_data()
 
     def __len__(self):
         return len(self._current_dataset) if self._current_dataset else 0

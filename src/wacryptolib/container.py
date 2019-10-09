@@ -280,8 +280,9 @@ def decrypt_data_from_container(container: dict) -> bytes:
 
 class TimeLimitedAggregatorMixin:
     """
-    This class provides utilities to flush underlying data after a defined delay has been exceeded,
-    as well as a per-instance "self._lock" threading lock for use by public methods.
+    This class provides utilities to flush underlying data after a defined `max_duration_s` 
+    delay has been exceeded, as well as a per-instance "self._lock" threading lock for use 
+    by public methods.
     """
 
     _max_duration_s = None
@@ -316,6 +317,8 @@ class TimeLimitedAggregatorMixin:
 class ContainerStorage:
     """
     This class encrypts file streams and stores them into filesystem.
+
+    Since it doesn't use in-memory aggregation structures, it's supposed to be thread-safe.
     """
 
     def __init__(self, encryption_conf, output_dir=None):
@@ -345,7 +348,8 @@ class ContainerStorage:
         output_filename = os.path.join(self._output_dir, filename_base + CONTAINER_SUFFIX)
         container = self._encrypt_data_into_container(data)
         container_bytes = dump_to_json_bytes(container, indent=4)
-        with open(output_filename, "wb") as f:  # Might erase existing file
+        # Beware, this might erase existing file, it's accepted
+        with open(output_filename, "wb") as f:
             f.write(container_bytes)
 
     def enqueue_file_for_encryption(self, filename_base, data):
@@ -372,7 +376,9 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
     """
     This class allows sensors to aggregate file-like records of data in memory.
 
-    Public methods of this class are threadreturn func(*args, **kwar-safe.
+    It is in charge of building the filenames of tar records, as well as of completed tarfiles.
+
+    Public methods of this class are thread-safe.
     """
 
     DATETIME_FORMAT = "%Y%m%d%H%M%S"
@@ -416,7 +422,7 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
 
         return result_bytestring
 
-    def _create_data_filename(self, sensor_name, from_datetime, to_datetime, extension):
+    def _create_record_filename(self, sensor_name, from_datetime, to_datetime, extension):
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(self.DATETIME_FORMAT)
         to_ts = to_datetime.strftime(self.DATETIME_FORMAT)
@@ -453,7 +459,7 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
 
         self._notify_aggregation_operation()
 
-        filename = self._create_data_filename(
+        filename = self._create_record_filename(
             sensor_name=sensor_name,
             from_datetime=from_datetime,
             to_datetime=to_datetime,

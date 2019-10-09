@@ -2,18 +2,11 @@ import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
 
 from wacryptolib.container import (
-    ContainerReader,
-    ContainerWriter,
     LOCAL_ESCROW_PLACEHOLDER,
-)
+    encrypt_data_into_container, decrypt_data_from_container, CONTAINER_SUFFIX, MEDIUM_SUFFIX)
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
-
-
-CONTAINER_SUFFIX = ".crypt"
-MEDIUM_SUFFIX = ".medium"
-
 
 # TODO - much later, use "schema" for validation of config data and container format!  See https://github.com/keleshev/schema
 # Then export corresponding jsons-chema for the world to see!
@@ -57,8 +50,7 @@ def cli(ctx, config):
 
 
 def _do_encrypt(data):
-    writer = ContainerWriter()
-    container = writer.encrypt_data(data, conf=EXAMPLE_CONTAINER_CONF)
+    container = encrypt_data_into_container(data, conf=EXAMPLE_CONTAINER_CONF)
     return container
 
 
@@ -80,9 +72,8 @@ def encrypt(input_medium, output_container):
 
 
 def _do_decrypt(container):
-    reader = ContainerReader()
-    result = reader.decrypt_data(container)
-    return result
+    data = decrypt_data_from_container(container)
+    return data
 
 
 @cli.command()

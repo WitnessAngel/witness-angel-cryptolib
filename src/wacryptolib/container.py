@@ -321,21 +321,41 @@ class ContainerStorage:
     Since it doesn't use in-memory aggregation structures, it's supposed to be thread-safe.
     """
 
-    def __init__(self, encryption_conf, output_dir=None):
+    def __init__(self, encryption_conf, output_dir, max_containers_count=None):
         assert os.path.isdir(output_dir), output_dir
+        assert max_containers_count is None or max_containers_count > 0, max_containers_count
         self._encryption_conf = encryption_conf
         self._output_dir = output_dir
+        self._max_containers_count = max_containers_count
 
     def __len__(self):
         """Beware, might be SLOW if many files are present in folder."""
-        return len(self.list_container_names())
+        return len(self.list_container_names())  # No sorting, to be quicker
 
     def list_container_names(self, as_sorted_relative_paths=False):
-        """Returns the unsorted list of encrypted containers present in storage."""
+        """Returns the list of encrypted containers present in storage, sorted or not."""
         paths = glob.glob(os.path.join(self._output_dir,"*" + CONTAINER_SUFFIX))
         if as_sorted_relative_paths:
             paths = sorted(os.path.basename(x) for x in self.list_container_names())
         return paths
+
+    def _make_absolute_container_path(self, container_name):
+        return os.path.join(self._output_dir, container_name)
+
+    def _delete_container(self, container_name):
+        container_filepath = self._make_absolute_container_path(container_name)
+        os.remove(container_filepath)  # TODO - additional retries if file access errors?
+
+    def _purge_exceeding_containers(self):
+        if self._max_containers_count:
+            # BEWARE, due to the way we name files, alphabetical and start-datetime sorts are the same!
+            container_names = self.list_container_names(as_sorted_relative_paths=True)
+            containers_count = len(container_names)
+            if containers_count > self._max_containers_count:
+                excess_count = containers_count - self._max_containers_count
+                containers_to_delete = container_names[:excess_count]
+                for container_name in containers_to_delete:
+                    self._delete_container(container_name)
 
     def _encrypt_data_into_container(self, data):
         return encrypt_data_into_container(data=data, conf=self._encryption_conf)
@@ -344,12 +364,13 @@ class ContainerStorage:
         return decrypt_data_from_container(container)  # Will fail if authorizations are not OK
 
     def _process_and_store_file(self, filename_base, data):
-        output_filename = os.path.join(self._output_dir, filename_base + CONTAINER_SUFFIX)
+        container_filepath = self._make_absolute_container_path(filename_base + CONTAINER_SUFFIX)
         container = self._encrypt_data_into_container(data)
         container_bytes = dump_to_json_bytes(container, indent=4)
         # Beware, this might erase existing file, it's accepted
-        with open(output_filename, "wb") as f:
+        with open(container_filepath, "wb") as f:
             f.write(container_bytes)
+        self._purge_exceeding_containers()  # AFTER new container is created
 
     def enqueue_file_for_encryption(self, filename_base, data):
         """Enqueue a data file for encryption and storage.

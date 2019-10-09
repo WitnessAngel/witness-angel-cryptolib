@@ -165,6 +165,7 @@ def test_container_storage(tmp_path):
 
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
     storage = ContainerStorage(encryption_conf=SIMPLE_CONTAINER_CONF, output_dir=tmp_path)
+    assert storage._max_containers_count is None
     assert len(storage) == 0
     assert storage.list_container_names() == []
 
@@ -184,6 +185,24 @@ def test_container_storage(tmp_path):
     os.remove(os.path.join(tmp_path, 'animals.dat.crypt'))
     assert storage.list_container_names(as_sorted_relative_paths=True) == ['empty.txt.crypt']
     assert len(storage) == 1
+
+    # Test purge system
+
+    storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path)
+    assert storage._max_containers_count is None
+    for i in range(10):
+        storage.enqueue_file_for_encryption("file.dat", b"dogs\ncats\n")
+    assert len(storage) == 11  # Still the older file remains
+
+    storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path, max_containers_count=3)
+    for i in range(3):
+        storage.enqueue_file_for_encryption("xyz.dat", b"abc")
+    assert len(storage) == 3  # Purged
+    assert storage.list_container_names(as_sorted_relative_paths=True) == ['xyz.dat.000.crypt', 'xyz.dat.001.crypt', 'xyz.dat.002.crypt']
+
+    storage.enqueue_file_for_encryption("xyz.dat", b"abc")
+    assert len(storage) == 3  # Purged
+    assert storage.list_container_names(as_sorted_relative_paths=True) == ['xyz.dat.001.crypt', 'xyz.dat.002.crypt', 'xyz.dat.003.crypt']
 
 
 def test_tarfile_aggregator(tmp_path):

@@ -1,4 +1,6 @@
 import copy
+import glob
+import os
 import threading
 import io
 import tarfile
@@ -21,6 +23,8 @@ from wacryptolib.utilities import (
 )
 
 CONTAINER_FORMAT = "WA_0.1a"
+CONTAINER_SUFFIX = ".crypt"
+MEDIUM_SUFFIX = ".medium"  # To construct decrypted filename when no previous extensions are found in container filename
 
 LOCAL_ESCROW_API = EscrowApi(key_storage=DummyKeyStorage())
 
@@ -307,6 +311,61 @@ class TimeLimitedAggregatorMixin:
     def _flush_aggregated_data(self):
         """Call this AFTER really flushing data to the next step of the pipeline"""
         self._current_start_time = None
+
+
+class ContainerStorage:
+    """
+    This class encrypts file streams and stores them into filesystem.
+    """
+
+    def __init__(self, encryption_conf, output_dir=None):
+        assert encryption_conf, encryption_conf
+        assert os.path.isdir(output_dir), output_dir
+        self._encryption_conf = encryption_conf
+        self._output_dir = output_dir
+
+    def __len__(self):
+        """Beware, might be SLOW if many files are present in folder."""
+        return len(self.list_container_names())
+
+    def list_container_names(self, as_sorted_relative_paths=False):
+        """Returns the unsorted list of encrypted containers present in storage."""
+        paths = glob.glob(os.path.join(self._output_dir,"*" + CONTAINER_SUFFIX))
+        if as_sorted_relative_paths:
+            paths = sorted(os.path.basename(x) for x in self.list_container_names())
+        return paths
+
+    def _encrypt_data_into_container(self, data):
+        return encrypt_data_into_container(data=data, conf=self._encryption_conf)
+
+    def _decrypt_data_from_container(self, container):
+        return decrypt_data_from_container(container)  # Will fail if authorizations are not OK
+
+    def _process_and_store_file(self, filename_base, data):
+        output_filename = os.path.join(self._output_dir, filename_base + CONTAINER_SUFFIX)
+        container = self._encrypt_data_into_container(data)
+        container_bytes = dump_to_json_bytes(container, indent=4)
+        with open(output_filename, "wb") as f:  # Might erase existing file
+            f.write(container_bytes)
+
+    def enqueue_file_for_encryption(self, filename_base, data):
+        """Enqueue a data file for encryption and storage.
+
+        Default implementation does the encryption/output job synchronously.
+
+        `filename` of the final container might be different from provided one.
+        """
+        self._process_and_store_file(filename_base=filename_base, data=data)
+
+    def decrypt_container_from_storage(self, container_name):
+        """
+        Return the decrypted content of the container `filename` (which must be in `list_container_names()`).
+        """
+        assert not os.path.isabs(container_name), container_name
+        with open(os.path.join(self._output_dir, container_name) , "rb") as f:
+            data = f.read()
+        container = load_from_json_bytes(data)
+        return self._decrypt_data_from_container(container)
 
 
 class TarfileAggregator(TimeLimitedAggregatorMixin):

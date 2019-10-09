@@ -14,7 +14,7 @@ from wacryptolib.container import (
     decrypt_data_from_container,
     TarfileAggregator,
     JsonAggregator,
-    _get_proxy_for_escrow)
+    _get_proxy_for_escrow, ContainerStorage)
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.utilities import load_from_json_bytes
@@ -146,6 +146,30 @@ def test_get_proxy_for_escrow():
 
     with pytest.raises(ValueError):
         _get_proxy_for_escrow("weird-value")
+
+
+def test_container_storage(tmp_path):
+
+    storage = ContainerStorage(encryption_conf=SIMPLE_CONTAINER_CONF, output_dir=tmp_path)
+    assert len(storage) == 0
+    assert storage.list_container_names() == []
+
+    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n")
+    storage.enqueue_file_for_encryption("empty.txt", b"")
+
+    assert len(storage) == 2
+    assert storage.list_container_names(as_sorted_relative_paths=True) == ['animals.dat.crypt', 'empty.txt.crypt']
+
+    animals_content = storage.decrypt_container_from_storage('animals.dat.crypt')
+    assert animals_content == b"dogs\ncats\n"
+
+    empty_content = storage.decrypt_container_from_storage('empty.txt.crypt')
+    assert empty_content == b""
+
+    assert len(storage) == 2
+    os.remove(os.path.join(tmp_path, 'animals.dat.crypt'))
+    assert storage.list_container_names(as_sorted_relative_paths=True) == ['empty.txt.crypt']
+    assert len(storage) == 1
 
 
 def test_tarfile_aggregator():

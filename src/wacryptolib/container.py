@@ -294,19 +294,19 @@ class TimeLimitedAggregatorMixin:
         self._lock = threading.Lock()
 
     def _notify_aggregation_operation(self):
-        """Call this before every "data append" operation, to renew underlying aggregator if needed."""
+        """Call this before every "data append" operation, to flush AND renew inner aggregator if needed."""
         if self._current_start_time is not None:
             delay_s = datetime.now(tz=timezone.utc) - self._current_start_time
             if delay_s.seconds >= self._max_duration_s:
                 self._flush_aggregated_data()
-                self._current_start_time = None
         if self._current_start_time is None:
             self._current_start_time = datetime.now(
                 tz=timezone.utc  # TODO make datetime utility with TZ
             )
 
     def _flush_aggregated_data(self):
-        raise RuntimeError("_flush() is not implemented")
+        """Call this AFTER really flushing data to the next step of the pipeline"""
+        self._current_start_time = None
 
 
 class TarfileAggregator(TimeLimitedAggregatorMixin):
@@ -341,6 +341,10 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
     def _flush_aggregated_data(self):
         result_bytestring = ""
 
+        if not self._current_start_time:
+            assert not self._current_files_count
+            return ""
+
         if self._current_tarfile:
             self._current_tarfile.close()
             result_bytestring = self._current_bytesio.getvalue()
@@ -348,6 +352,8 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
         self._current_tarfile = None
         self._current_bytesio = None
         self._current_files_count = 0
+
+        super()._flush_aggregated_data()
 
         return result_bytestring
 
@@ -379,8 +385,10 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
         :param extension: file extension, starting with a dot
         :param data: bytestring of audio/video/other data
         """
+        assert self._current_files_count or not self._current_start_time  # INVARIANT of our system!
         assert isinstance(data, bytes), repr(data)  # For now, only format supported
         assert extension.startswith("."), extension
+        assert from_datetime <= to_datetime, (from_datetime, to_datetime)
         check_datetime_is_tz_aware(from_datetime)
         check_datetime_is_tz_aware(to_datetime)
 
@@ -407,6 +415,7 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
         """
         Return the content of current tarfile as a bytestring, possibly empty, and reset the current tarfile.
         """
+        assert self._current_files_count or not self._current_start_time  # INVARIANT of our system!
         result_bytestring = self._flush_aggregated_data()
         return result_bytestring
 
@@ -452,7 +461,8 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
             self._current_dataset = []
 
     def _flush_aggregated_data(self):
-        if not self._current_dataset:
+        if not self._current_start_time:
+            assert not self._current_dataset
             return
         end_time = datetime.now(tz=timezone.utc)
         dataset_bytes = dump_to_json_bytes(self._current_dataset)
@@ -464,12 +474,14 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
             extension=".json",
         )
         self._current_dataset = None
+        super()._flush_aggregated_data()
 
     @synchronized
     def add_data(self, data_dict: dict):
         """
         Flush current data to the tarfile if needed, and append `data_dict` to the queue.
         """
+        assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
         assert isinstance(data_dict, dict), data_dict
         self._notify_aggregation_operation()
         self._current_dataset.append(data_dict)
@@ -479,4 +491,5 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         """
         Force the flushing of current data to the tarfile (e.g. when terminating the service).
         """
+        assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
         self._flush_aggregated_data()

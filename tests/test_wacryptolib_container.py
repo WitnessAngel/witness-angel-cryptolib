@@ -133,100 +133,6 @@ def test_container_encryption_and_decryption(container_conf):
         decrypt_data_from_container(container=container)
 
 
-def test_tarfile_aggregator():
-
-    tarfile_aggregator = TarfileAggregator()
-    assert len(tarfile_aggregator) == 0
-
-    result_bytestring = tarfile_aggregator.finalize_tarfile()
-    assert result_bytestring == ""
-
-    data1 = "hêllö".encode("utf8")
-    tarfile_aggregator.add_record(
-        sensor_name="smartphone_front_camera",
-        from_datetime=datetime(
-            year=2014,
-            month=1,
-            day=2,
-            hour=22,
-            minute=11,
-            second=55,
-            tzinfo=timezone.utc,
-        ),
-        to_datetime=datetime(year=2015, month=2, day=3, tzinfo=timezone.utc),
-        extension=".txt",
-        data=data1,
-    )
-    assert len(tarfile_aggregator) == 1
-
-    data2 = b"123xyz"
-    tarfile_aggregator.add_record(
-        sensor_name="smartphone_recorder",
-        from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
-        to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
-        extension=".mp3",
-        data=data2,
-    )
-    assert len(tarfile_aggregator) == 2
-
-    result_bytestring = tarfile_aggregator.finalize_tarfile()
-    tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
-
-    assert len(tarfile_aggregator) == 0
-
-    filenames = sorted(tar_file.getnames())
-    assert filenames == [
-        "20140102221155_20150203000000_smartphone_front_camera.txt",
-        "20171011000000_20171201000000_smartphone_recorder.mp3",
-    ]
-    assert tar_file.extractfile(filenames[0]).read() == data1
-    assert tar_file.extractfile(filenames[1]).read() == data2
-
-    for i in range(2):
-        result_bytestring = tarfile_aggregator.finalize_tarfile()
-        assert result_bytestring == ""
-        assert len(tarfile_aggregator) == 0
-
-    data3 = b""
-    tarfile_aggregator.add_record(
-        sensor_name="abc",
-        from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
-        to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
-        extension=".avi",
-        data=data3,
-    )
-    assert len(tarfile_aggregator) == 1
-
-    result_bytestring = tarfile_aggregator.finalize_tarfile()
-    tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
-    assert len(tarfile_aggregator) == 0
-
-    filenames = sorted(tar_file.getnames())
-    assert filenames == ["20171011000000_20171201000000_abc.avi"]
-    assert tar_file.extractfile(filenames[0]).read() == b""
-
-    for i in range(2):
-        result_bytestring = tarfile_aggregator.finalize_tarfile()
-        assert result_bytestring == ""
-        assert len(tarfile_aggregator) == 0
-
-    # We tests conflicts between identifical tar record names
-    for i in range(3):  # Three times the same file name!
-        tarfile_aggregator.add_record(
-            sensor_name="smartphone_recorder",
-            from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
-            to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
-            extension=".mp3",
-            data=bytes([i] * 500),
-        )
-    result_bytestring = tarfile_aggregator.finalize_tarfile()
-    tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
-    assert len(tar_file.getmembers()) == 3
-    assert len(tar_file.getnames()) == 3
-    # The LAST record has priority over others with the same name
-    assert tar_file.extractfile(tar_file.getnames()[0]).read() == bytes([2] * 500)
-
-
 def test_get_proxy_for_escrow():
 
     proxy = _get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
@@ -242,7 +148,140 @@ def test_get_proxy_for_escrow():
         _get_proxy_for_escrow("weird-value")
 
 
-def test_timed_json_aggregator():
+def test_tarfile_aggregator():
+
+    tarfile_aggregator = TarfileAggregator(max_duration_s=10)
+    assert len(tarfile_aggregator) == 0
+    assert not tarfile_aggregator._current_start_time
+
+    with freeze_time() as frozen_datetime:
+
+        result_bytestring = tarfile_aggregator.finalize_tarfile()
+        assert result_bytestring == ""
+        assert not tarfile_aggregator._current_start_time
+
+        data1 = "hêllö".encode("utf8")
+        tarfile_aggregator.add_record(
+            sensor_name="smartphone_front_camera",
+            from_datetime=datetime(
+                year=2014,
+                month=1,
+                day=2,
+                hour=22,
+                minute=11,
+                second=55,
+                tzinfo=timezone.utc,
+            ),
+            to_datetime=datetime(year=2015, month=2, day=3, tzinfo=timezone.utc),
+            extension=".txt",
+            data=data1,
+        )
+        assert len(tarfile_aggregator) == 1
+        assert tarfile_aggregator._current_start_time
+
+        data2 = b"123xyz"
+        tarfile_aggregator.add_record(
+            sensor_name="smartphone_recorder",
+            from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
+            to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
+            extension=".mp3",
+            data=data2,
+        )
+        assert len(tarfile_aggregator) == 2
+        assert tarfile_aggregator._current_start_time
+
+        result_bytestring = tarfile_aggregator.finalize_tarfile()
+        tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
+        assert not tarfile_aggregator._current_start_time
+
+        assert len(tarfile_aggregator) == 0
+
+        filenames = sorted(tar_file.getnames())
+        assert filenames == [
+            "20140102221155_20150203000000_smartphone_front_camera.txt",
+            "20171011000000_20171201000000_smartphone_recorder.mp3",
+        ]
+        assert tar_file.extractfile(filenames[0]).read() == data1
+        assert tar_file.extractfile(filenames[1]).read() == data2
+
+        for i in range(2):
+            result_bytestring = tarfile_aggregator.finalize_tarfile()
+            assert result_bytestring == ""
+            assert len(tarfile_aggregator) == 0
+            assert not tarfile_aggregator._current_start_time
+
+        data3 = b""
+        tarfile_aggregator.add_record(
+            sensor_name="abc",
+            from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
+            to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
+            extension=".avi",
+            data=data3,
+        )
+        assert len(tarfile_aggregator) == 1
+        assert tarfile_aggregator._current_start_time
+
+        result_bytestring = tarfile_aggregator.finalize_tarfile()
+        tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
+        assert len(tarfile_aggregator) == 0
+        assert not tarfile_aggregator._current_start_time
+
+        filenames = sorted(tar_file.getnames())
+        assert filenames == ["20171011000000_20171201000000_abc.avi"]
+        assert tar_file.extractfile(filenames[0]).read() == b""
+
+        for i in range(2):
+            result_bytestring = tarfile_aggregator.finalize_tarfile()
+            assert result_bytestring == ""
+            assert len(tarfile_aggregator) == 0
+            assert not tarfile_aggregator._current_start_time
+
+        # We test time-limited aggregation
+        simple_add_record = lambda: tarfile_aggregator.add_record(
+            sensor_name="somedata",
+            from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
+            to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
+            extension=".dat",
+            data=b"hiiii",
+        )
+        simple_add_record()
+        assert len(tarfile_aggregator) == 1
+        assert tarfile_aggregator._current_start_time
+        current_start_time_saved = tarfile_aggregator._current_start_time
+
+        frozen_datetime.tick(delta=timedelta(seconds=9))
+
+        simple_add_record()
+        assert len(tarfile_aggregator) == 2
+        assert tarfile_aggregator._current_start_time == current_start_time_saved
+
+        frozen_datetime.tick(delta=timedelta(seconds=2))
+
+        simple_add_record()
+        assert len(tarfile_aggregator) == 1
+        assert tarfile_aggregator._current_start_time
+        assert tarfile_aggregator._current_start_time != current_start_time_saved  # AUTO FLUSH occurred
+
+        tarfile_aggregator.finalize_tarfile()  # CLEANUP
+
+        # We tests conflicts between identifical tar record names
+        for i in range(3):  # Three times the same file name!
+            tarfile_aggregator.add_record(
+                sensor_name="smartphone_recorder",
+                from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
+                to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
+                extension=".mp3",
+                data=bytes([i] * 500),
+            )
+        result_bytestring = tarfile_aggregator.finalize_tarfile()
+        tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
+        assert len(tar_file.getmembers()) == 3
+        assert len(tar_file.getnames()) == 3
+        # The LAST record has priority over others with the same name
+        assert tar_file.extractfile(tar_file.getnames()[0]).read() == bytes([2] * 500)
+
+
+def test_json_aggregator():
 
     tarfile_aggregator = TarfileAggregator()
     assert len(tarfile_aggregator) == 0
@@ -254,6 +293,11 @@ def test_timed_json_aggregator():
     )
     assert len(json_aggregator) == 0
 
+    json_aggregator.flush_dataset()  # Does nothing
+    assert len(tarfile_aggregator) == 0
+    assert len(json_aggregator) == 0
+    assert not json_aggregator._current_start_time
+
     with freeze_time() as frozen_datetime:
 
         json_aggregator.add_data(dict(pulse=42))
@@ -261,6 +305,7 @@ def test_timed_json_aggregator():
 
         assert len(tarfile_aggregator) == 0
         assert len(json_aggregator) == 2
+        assert json_aggregator._current_start_time
 
         frozen_datetime.tick(delta=timedelta(seconds=1))
 
@@ -273,10 +318,12 @@ def test_timed_json_aggregator():
 
         json_aggregator.add_data(dict(x="abc"))
 
-        assert len(tarfile_aggregator) == 1  # single json file
+        assert len(tarfile_aggregator) == 1  # Single json file
         assert len(json_aggregator) == 1
+        assert json_aggregator._current_start_time
 
         json_aggregator.flush_dataset()
+        assert not json_aggregator._current_start_time
 
         assert len(tarfile_aggregator) == 2  # 2 json files
         assert len(json_aggregator) == 0
@@ -302,12 +349,14 @@ def test_timed_json_aggregator():
 
         data = tar_file.extractfile(filenames[0]).read()
         assert (
-            data
-            == b'[{"pulse": {"$numberInt": "42"}}, {"timing": true}, {"abc": {"$numberDouble": "2.2"}}]'
+            data == b'[{"pulse": {"$numberInt": "42"}}, {"timing": true}, {"abc": {"$numberDouble": "2.2"}}]'
         )
 
         data = tar_file.extractfile(filenames[1]).read()
         assert data == b'[{"x": "abc"}]'
+
+        assert tarfile_aggregator.finalize_tarfile() == ""
+        assert not json_aggregator._current_start_time
 
 
 def test_aggregators_thread_safety():

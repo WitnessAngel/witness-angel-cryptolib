@@ -322,7 +322,6 @@ class ContainerStorage:
     """
 
     def __init__(self, encryption_conf, output_dir=None):
-        assert encryption_conf, encryption_conf
         assert os.path.isdir(output_dir), output_dir
         self._encryption_conf = encryption_conf
         self._output_dir = output_dir
@@ -361,10 +360,18 @@ class ContainerStorage:
         """
         self._process_and_store_file(filename_base=filename_base, data=data)
 
-    def decrypt_container_from_storage(self, container_name):
+    def decrypt_container_from_storage(self, container_name_or_idx):
         """
-        Return the decrypted content of the container `filename` (which must be in `list_container_names()`).
+        Return the decrypted content of the container `filename` (which must be in `list_container_names()`,
+        or an index suitable for this list).
         """
+        if isinstance(container_name_or_idx, int):
+            container_names = self.list_container_names(as_sorted_relative_paths=True)
+            container_name = container_names[container_name_or_idx]  # Will break if idx is out of bounds
+        else:
+            assert isinstance(container_name_or_idx, str), repr(container_name_or_idx)
+            container_name = container_name_or_idx
+
         assert not os.path.isabs(container_name), container_name
         with open(os.path.join(self._output_dir, container_name) , "rb") as f:
             data = f.read()
@@ -383,15 +390,20 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
 
     DATETIME_FORMAT = "%Y%m%d%H%M%S"
 
+    # Keep these in sync if you add bz/gz compression later
+    tarfile_writing_mode = "w"
+    tarfile_extension = ".tar"
+
     _current_tarfile = None
     _current_bytesio = None
-    _current_files_count = 0
+    _current_records_count = 0
 
-    def __init__(self, max_duration_s: int=1000):
+    def __init__(self, container_storage: ContainerStorage, max_duration_s: int):
         super().__init__(max_duration_s=max_duration_s)
+        self._container_storage = container_storage
 
     def __len__(self):
-        return self._current_files_count
+        return self._current_records_count
 
     def _notify_aggregation_operation(self):
         super()._notify_aggregation_operation()
@@ -399,30 +411,41 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
             assert not self._current_bytesio, repr(self._current_bytesio)
             self._current_bytesio = io.BytesIO()
             self._current_tarfile = tarfile.open(
-                mode="w", fileobj=self._current_bytesio  # TODO - add compression?
+                mode=self.tarfile_writing_mode, fileobj=self._current_bytesio  # TODO - add compression?
             )
-            assert self._current_files_count == 0, self._current_bytesio
+            assert self._current_records_count == 0, self._current_bytesio
+
+    def _build_tarfile_filename(self, from_datetime, to_datetime):
+        extension = self.tarfile_extension
+        assert extension.startswith("."), extension
+        from_ts = from_datetime.strftime(self.DATETIME_FORMAT)
+        to_ts = to_datetime.strftime(self.DATETIME_FORMAT)
+        filename = "{from_ts}_{to_ts}_container{extension}".format(**locals())
+        assert " " not in filename, repr(filename)
+        return filename
 
     def _flush_aggregated_data(self):
-        result_bytestring = ""
 
         if not self._current_start_time:
-            assert not self._current_files_count
-            return ""
+            assert not self._current_records_count
+            return
 
         if self._current_tarfile:
             self._current_tarfile.close()
             result_bytestring = self._current_bytesio.getvalue()
+            end_time = datetime.now(tz=timezone.utc)
+            filename_base = self._build_tarfile_filename(from_datetime=self._current_start_time,
+                                                    to_datetime=end_time)
+            self._container_storage.enqueue_file_for_encryption(filename_base=filename_base,
+                                                                data=result_bytestring)
 
         self._current_tarfile = None
         self._current_bytesio = None
-        self._current_files_count = 0
+        self._current_records_count = 0
 
         super()._flush_aggregated_data()
 
-        return result_bytestring
-
-    def _create_record_filename(self, sensor_name, from_datetime, to_datetime, extension):
+    def _build_record_filename(self, sensor_name, from_datetime, to_datetime, extension):
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(self.DATETIME_FORMAT)
         to_ts = to_datetime.strftime(self.DATETIME_FORMAT)
@@ -450,7 +473,7 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
         :param extension: file extension, starting with a dot
         :param data: bytestring of audio/video/other data
         """
-        assert self._current_files_count or not self._current_start_time  # INVARIANT of our system!
+        assert self._current_records_count or not self._current_start_time  # INVARIANT of our system!
         assert isinstance(data, bytes), repr(data)  # For now, only format supported
         assert extension.startswith("."), extension
         assert from_datetime <= to_datetime, (from_datetime, to_datetime)
@@ -459,7 +482,7 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
 
         self._notify_aggregation_operation()
 
-        filename = self._create_record_filename(
+        filename = self._build_record_filename(
             sensor_name=sensor_name,
             from_datetime=from_datetime,
             to_datetime=to_datetime,
@@ -473,16 +496,15 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
         tarinfo.mtime = mtime
         self._current_tarfile.addfile(tarinfo, io.BytesIO(data))
 
-        self._current_files_count += 1
+        self._current_records_count += 1
 
     @synchronized
     def finalize_tarfile(self):
         """
         Return the content of current tarfile as a bytestring, possibly empty, and reset the current tarfile.
         """
-        assert self._current_files_count or not self._current_start_time  # INVARIANT of our system!
-        result_bytestring = self._flush_aggregated_data()
-        return result_bytestring
+        assert self._current_records_count or not self._current_start_time  # INVARIANT of our system!
+        self._flush_aggregated_data()
 
     @staticmethod
     def read_tarfile_from_bytestring(data_bytestring):

@@ -19,6 +19,19 @@ from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.utilities import load_from_json_bytes
 
+
+class FakeTestContainerStorage(ContainerStorage):
+    """Fake class which bypasses encryption and forces filename unicity regardless fo datetime, to speed up tests..."""
+    increment = 0
+    def enqueue_file_for_encryption(self, filename_base, data):
+        super().enqueue_file_for_encryption(filename_base + (".%03d" % self.increment), data)
+        self.increment += 1
+    def _encrypt_data_into_container(self, data):
+        return data
+    def _decrypt_data_from_container(self, container):
+        return container
+
+
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
         dict(
@@ -150,6 +163,7 @@ def test_get_proxy_for_escrow():
 
 def test_container_storage(tmp_path):
 
+    # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
     storage = ContainerStorage(encryption_conf=SIMPLE_CONTAINER_CONF, output_dir=tmp_path)
     assert len(storage) == 0
     assert storage.list_container_names() == []
@@ -172,17 +186,21 @@ def test_container_storage(tmp_path):
     assert len(storage) == 1
 
 
-def test_tarfile_aggregator():
+def test_tarfile_aggregator(tmp_path):
 
-    tarfile_aggregator = TarfileAggregator(max_duration_s=10)
+    container_storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path)
+
+    tarfile_aggregator = TarfileAggregator(container_storage=container_storage, max_duration_s=10)
     assert len(tarfile_aggregator) == 0
     assert not tarfile_aggregator._current_start_time
+    assert len(container_storage) == 0
 
     with freeze_time() as frozen_datetime:
 
-        result_bytestring = tarfile_aggregator.finalize_tarfile()
-        assert result_bytestring == ""
+        tarfile_aggregator.finalize_tarfile()
+        assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
+        assert len(container_storage) == 0
 
         data1 = "hêllö".encode("utf8")
         tarfile_aggregator.add_record(
@@ -212,13 +230,15 @@ def test_tarfile_aggregator():
             data=data2,
         )
         assert len(tarfile_aggregator) == 2
-        assert tarfile_aggregator._current_start_time
 
-        result_bytestring = tarfile_aggregator.finalize_tarfile()
-        tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
-        assert not tarfile_aggregator._current_start_time
+        frozen_datetime.tick(delta=timedelta(seconds=1))
 
+        tarfile_aggregator.finalize_tarfile()
+        assert len(container_storage) == 1
+        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        tar_file = TarfileAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
+        assert not tarfile_aggregator._current_start_time
 
         filenames = sorted(tar_file.getnames())
         assert filenames == [
@@ -229,10 +249,11 @@ def test_tarfile_aggregator():
         assert tar_file.extractfile(filenames[1]).read() == data2
 
         for i in range(2):
-            result_bytestring = tarfile_aggregator.finalize_tarfile()
-            assert result_bytestring == ""
+            frozen_datetime.tick(delta=timedelta(seconds=1))
+            tarfile_aggregator.finalize_tarfile()
             assert len(tarfile_aggregator) == 0
             assert not tarfile_aggregator._current_start_time
+            assert len(container_storage) == 1  # Unchanged
 
         data3 = b""
         tarfile_aggregator.add_record(
@@ -245,8 +266,11 @@ def test_tarfile_aggregator():
         assert len(tarfile_aggregator) == 1
         assert tarfile_aggregator._current_start_time
 
-        result_bytestring = tarfile_aggregator.finalize_tarfile()
-        tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
+        frozen_datetime.tick(delta=timedelta(seconds=1))
+        tarfile_aggregator.finalize_tarfile()
+        assert len(container_storage) == 2
+        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        tar_file = TarfileAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
 
@@ -255,10 +279,11 @@ def test_tarfile_aggregator():
         assert tar_file.extractfile(filenames[0]).read() == b""
 
         for i in range(2):
-            result_bytestring = tarfile_aggregator.finalize_tarfile()
-            assert result_bytestring == ""
+            frozen_datetime.tick(delta=timedelta(seconds=1))
+            tarfile_aggregator.finalize_tarfile()
             assert len(tarfile_aggregator) == 0
             assert not tarfile_aggregator._current_start_time
+            assert len(container_storage) == 2  # Unchanged
 
         # We test time-limited aggregation
         simple_add_record = lambda: tarfile_aggregator.add_record(
@@ -274,6 +299,7 @@ def test_tarfile_aggregator():
         current_start_time_saved = tarfile_aggregator._current_start_time
 
         frozen_datetime.tick(delta=timedelta(seconds=9))
+        assert datetime.now(tz=timezone.utc) - tarfile_aggregator._current_start_time == timedelta(seconds=9)
 
         simple_add_record()
         assert len(tarfile_aggregator) == 2
@@ -286,7 +312,11 @@ def test_tarfile_aggregator():
         assert tarfile_aggregator._current_start_time
         assert tarfile_aggregator._current_start_time != current_start_time_saved  # AUTO FLUSH occurred
 
+        assert len(container_storage) == 3
+
         tarfile_aggregator.finalize_tarfile()  # CLEANUP
+
+        assert len(container_storage) == 4
 
         # We tests conflicts between identifical tar record names
         for i in range(3):  # Three times the same file name!
@@ -295,19 +325,25 @@ def test_tarfile_aggregator():
                 from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
                 to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
                 extension=".mp3",
-                data=bytes([i] * 500),
-            )
-        result_bytestring = tarfile_aggregator.finalize_tarfile()
-        tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
+                data=bytes([i] * 500))
+
+        frozen_datetime.tick(delta=timedelta(seconds=1))
+        tarfile_aggregator.finalize_tarfile()
+        assert len(container_storage) == 5
+        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        tar_file = TarfileAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tar_file.getmembers()) == 3
         assert len(tar_file.getnames()) == 3
         # The LAST record has priority over others with the same name
         assert tar_file.extractfile(tar_file.getnames()[0]).read() == bytes([2] * 500)
 
 
-def test_json_aggregator():
+def test_json_aggregator(tmp_path):
 
-    tarfile_aggregator = TarfileAggregator()
+    container_storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path)
+
+    tarfile_aggregator = TarfileAggregator(container_storage=container_storage, max_duration_s=100)
+
     assert len(tarfile_aggregator) == 0
 
     json_aggregator = JsonAggregator(
@@ -360,8 +396,10 @@ def test_json_aggregator():
         assert len(tarfile_aggregator) == 2
         assert len(json_aggregator) == 0
 
-        result_bytestring = tarfile_aggregator.finalize_tarfile()
-        tar_file = TarfileAggregator.read_tarfile_from_bytestring(result_bytestring)
+        tarfile_aggregator.finalize_tarfile()
+        assert len(container_storage) == 1
+        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        tar_file = TarfileAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
 
         filenames = sorted(tar_file.getnames())
@@ -379,20 +417,22 @@ def test_json_aggregator():
         data = tar_file.extractfile(filenames[1]).read()
         assert data == b'[{"x": "abc"}]'
 
-        assert tarfile_aggregator.finalize_tarfile() == ""
+        tarfile_aggregator.finalize_tarfile()
+        assert len(container_storage) == 1  # Unchanged
         assert not json_aggregator._current_start_time
 
 
-def test_aggregators_thread_safety():
+def test_aggregators_thread_safety(tmp_path):
 
-    tarfile_aggregator = TarfileAggregator()
+    container_storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path)
+
+    tarfile_aggregator = TarfileAggregator(container_storage=container_storage, max_duration_s=100)
     json_aggregator = JsonAggregator(
         max_duration_s=1,
         tarfile_aggregator=tarfile_aggregator,
         sensor_name="some_sensors",
     )
 
-    tarfile_futures = []
     misc_futures = []
 
     record_data = "hêllo".encode("utf8")
@@ -418,18 +458,22 @@ def test_aggregators_thread_safety():
                         data=record_data,
                     )
                 )
-                tarfile_futures.append(
+                misc_futures.append(
                     executor.submit(tarfile_aggregator.finalize_tarfile)
                 )
             time.sleep(0.2)
 
     json_aggregator.flush_dataset()
-    last_tarfile = tarfile_aggregator.finalize_tarfile()
+    tarfile_aggregator.finalize_tarfile()
 
     misc_results = set(future.result() for future in misc_futures)
-    assert misc_results == set([None])  # No results expected from these methods
+    assert misc_results == set([None])  # No results expected from any of these methods
 
-    tarfiles_bytes = [future.result() for future in tarfile_futures] + [last_tarfile]
+    container_names = container_storage.list_container_names(as_sorted_relative_paths=True)
+
+    tarfiles_bytes = [container_storage.decrypt_container_from_storage(container_name)
+                      for container_name in container_names]
+
     tarfiles = [
         TarfileAggregator.read_tarfile_from_bytestring(bytestring)
         for bytestring in tarfiles_bytes

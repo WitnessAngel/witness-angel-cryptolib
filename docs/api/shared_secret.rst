@@ -1,5 +1,5 @@
 Shamir's shared secret
-----------------------
+======================
 
 This module provides utilities to create and recombine "shared secrets", for which some parts can be lost
 without preventing the reconstruction of the whole secret.

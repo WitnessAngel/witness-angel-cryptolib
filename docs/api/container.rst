@@ -1,5 +1,5 @@
 Container
------------------
+==========
 
 This module provides utilities to write and read encrypted containers, which themselves use
 encryption/signing keys of the escrow system.

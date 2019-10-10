@@ -1,5 +1,5 @@
 Utilities
----------
+==========
 
 This module exposes different functions which can be useful when dealing with cryptography.
 

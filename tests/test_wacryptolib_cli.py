@@ -76,7 +76,7 @@ def test_cli_subprocess_invocation():
     env["PYTHONPATH"] = src_dir
 
     proc = subprocess.Popen(
-        "python -m wacryptolib -h",
+        ["python", "-m", "wacryptolib", "-h"],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

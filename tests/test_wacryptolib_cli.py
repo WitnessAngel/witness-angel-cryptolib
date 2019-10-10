@@ -69,7 +69,8 @@ def test_cli_encryption_and_decryption():
 
 def test_cli_subprocess_invocation():
 
-    src_dir = str(pathlib.Path(__file__).resolve().parents[1] / "src")
+    import wacryptolib
+    src_dir = str(pathlib.Path(wacryptolib.__file__).resolve().parents[1])
 
     env = os.environ.copy()
     env["PYTHONPATH"] = src_dir

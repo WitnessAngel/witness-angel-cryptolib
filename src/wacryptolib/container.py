@@ -451,14 +451,14 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
             assert not self._current_records_count
             return
 
-        if self._current_tarfile:
-            self._current_tarfile.close()
-            result_bytestring = self._current_bytesio.getvalue()
-            end_time = datetime.now(tz=timezone.utc)
-            filename_base = self._build_tarfile_filename(from_datetime=self._current_start_time,
-                                                    to_datetime=end_time)
-            self._container_storage.enqueue_file_for_encryption(filename_base=filename_base,
-                                                                data=result_bytestring)
+        assert self._current_tarfile  # Since start time is only set on new aggregation...
+        self._current_tarfile.close()
+        result_bytestring = self._current_bytesio.getvalue()
+        end_time = datetime.now(tz=timezone.utc)
+        filename_base = self._build_tarfile_filename(from_datetime=self._current_start_time,
+                                                to_datetime=end_time)
+        self._container_storage.enqueue_file_for_encryption(filename_base=filename_base,
+                                                            data=result_bytestring)
 
         self._current_tarfile = None
         self._current_bytesio = None

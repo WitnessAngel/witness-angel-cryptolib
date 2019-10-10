@@ -204,6 +204,15 @@ def test_container_storage(tmp_path):
     assert len(storage) == 3  # Purged
     assert storage.list_container_names(as_sorted_relative_paths=True) == ['xyz.dat.001.crypt', 'xyz.dat.002.crypt', 'xyz.dat.003.crypt']
 
+    storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path, max_containers_count=4)
+    assert len(storage) == 3  # Retrieves existing containers
+    storage.enqueue_file_for_encryption("aaa.dat", b"000")
+    assert len(storage) == 4  # Unchanged
+    storage.enqueue_file_for_encryption("zzz.dat", b"000")
+    assert len(storage) == 4  # Purge occurred
+    # Entry "aaa.dat.000.crypt" was ejected because it's a sorting by NAMES for now!
+    assert storage.list_container_names(as_sorted_relative_paths=True) == ['xyz.dat.001.crypt', 'xyz.dat.002.crypt', 'xyz.dat.003.crypt', "zzz.dat.001.crypt"]
+
 
 def test_tarfile_aggregator(tmp_path):
 

@@ -2,6 +2,10 @@ Version 0.3
 ==================
 
 * Rename key length arguments to distinguish bytes and bits
+* Add thread-safe data aggregation classes ContainerStorage, TarfileAggregator and JsonAggregator
+* Add JsonRpcProxy class
+* Add url-based escrow type
+* Add drafts of private error handling utilities
 
 
 Version 0.2

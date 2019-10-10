@@ -2,12 +2,14 @@ API Documentation
 ===================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
+   api/container
+   api/escrow
    api/key_generation
    api/signature
    api/encryption
    api/shared_secret
-   api/escrow
+   api/jsonrpc_client
    api/utilities

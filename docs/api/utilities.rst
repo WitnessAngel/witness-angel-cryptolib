@@ -1,7 +1,7 @@
 Utilities
 ---------
 
-Different functions which can be useful when dealing with cryptography.
+This module exposes different functions which can be useful when dealing with cryptography.
 
 
 .. autofunction:: wacryptolib.utilities.split_as_chunks

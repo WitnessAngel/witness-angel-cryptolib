@@ -6,12 +6,25 @@ from decorator import decorator
 UTF8_ENCODING = "utf8"
 
 
+### Private utilities ###
+
 def check_datetime_is_tz_aware(dt):
     """Raise if datetime is naive regarding timezones"""
     is_aware = dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
     if not is_aware:
         raise ValueError("Naive datetime was encountered: %s" % dt)
 
+
+@decorator
+def synchronized(func, self, *args, **kwargs):
+    """
+    Wraps the function call with a mutex locking on the expected "self._lock" mutex.
+    """
+    with self._lock:
+        return func(self, *args, **kwargs)
+
+
+### Public utilities ###
 
 def split_as_chunks(
     bytestring: bytes,
@@ -107,10 +120,3 @@ def load_from_json_bytes(data, **extra_options):
     return load_from_json_str(data=json_str, **extra_options)
 
 
-@decorator
-def synchronized(func, self, *args, **kwargs):
-    """
-    Wraps the function call with a mutex locking on the expected "self._lock" mutex.
-    """
-    with self._lock:
-        return func(self, *args, **kwargs)

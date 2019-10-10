@@ -4,6 +4,18 @@ from wacryptolib.utilities import dump_to_json_str, load_from_json_str
 
 
 class JsonRpcProxy(ServerBase):
+    """A connection to a HTTP JSON-RPC server, backed by the `requests` library.
+
+    See https://github.com/gciotta/jsonrpc-requests for usage examples.
+
+    The differences between our `JsonRpcProxy` and upstream's `Server` class are:
+
+    - we dump/load data using Pymongo's Extended Json format, able to transparently deal with bytes, uuids, dates etc.
+    - we do not auto-unpack single dict arguments on call, e.g `proxy.foo({'fizz': 1, 'fuzz': 2})` will be treated as
+      calling remote foo() with a single dict argument, not as passing it keyword arguments `fizz` and `fuzz`.
+
+    """
+
     @staticmethod
     def dumps(data):
         """We override to use Extended Json here."""

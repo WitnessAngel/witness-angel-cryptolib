@@ -10,10 +10,10 @@ Welcome to Witness Angel's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Menu
 
    algorithms_overview
-   containers
+   container_format
    api
 
 

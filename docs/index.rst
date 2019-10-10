@@ -12,6 +12,7 @@ Welcome to Witness Angel's documentation!
    :maxdepth: 2
    :caption: Menu
 
+   getting_started
    algorithms_overview
    container_format
    api

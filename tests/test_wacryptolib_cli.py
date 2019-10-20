@@ -1,9 +1,11 @@
 import os
 import pathlib
 import subprocess
+import sys
 
 from click.testing import CliRunner
 
+import wacryptolib
 from wacryptolib.__main__ import cli
 
 
@@ -68,15 +70,13 @@ def test_cli_encryption_and_decryption():
 
 
 def test_cli_subprocess_invocation():
-
-    import wacryptolib
     src_dir = str(pathlib.Path(wacryptolib.__file__).resolve().parents[1])
 
     env = os.environ.copy()
-    env["PYTHONPATH"] = src_dir
+    env["PYTHONPATH"] = env.get("PYTHONPATH", "") + os.pathsep + src_dir
 
     proc = subprocess.Popen(
-        ["python", "-m", "wacryptolib", "-h"],
+        [sys.executable, "-m", "wacryptolib", "-h"],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

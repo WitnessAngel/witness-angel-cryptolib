@@ -1,6 +1,9 @@
+import abc
 import copy
 import glob
 import os
+from abc import abstractmethod
+
 import threading
 import io
 import tarfile
@@ -605,37 +608,70 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         self._flush_aggregated_data()
 
 
-class PeriodicValuePoller:
+
+class PeriodicValueProviderBase(abc.ABC):
+
+    def __init__(self, interval_s, json_aggregator):
+        self._provider_is_started = False
+        self._interval_s = interval_s
+        self._json_aggregator = json_aggregator
+
+    def _offloaded_add_data(self, data_dict):
+        """This function is meant to be called by secondary thread, to push data into the json aggregator."""
+        self._json_aggregator.add_data(data_dict)
+
+    def start(self):
+        """Start the periodic system which will poll or push the value."""
+        if self._provider_is_started:
+            raise RuntimeError("Can't start an already started periodic value provider")
+        self._provider_is_started = True
+
+    def stop(self):
+        """Request the periodic system to stop as soon as possible."""
+        if not self._provider_is_started:
+            raise RuntimeError("Can't stop an already stopped periodic value provider")
+        self._provider_is_started = False
+
+    def join(self):
+        """Wait for the periodic system to really finish running."""
+        if self._provider_is_started:
+            raise RuntimeError("Can't join a running periodic value provider")
+
+
+class PeriodicValuePoller(PeriodicValueProviderBase):
     """
     This class runs a function at a specified interval, and pushes its result to a json aggregator.
 
     Two-steps shutdown (`stop()`, and later `join()`) allows caller to efficiently and safely stop numerous pollers.
     """
 
+    from multitimer import RepeatingTimer as _RepeatingTimer
+    _RepeatingTimer.daemon = True  # Do not prevent process shutdown if we forgot to stop...
+
     def __init__(self, interval_s, task_func, json_aggregator):
+        super().__init__(interval_s=interval_s, json_aggregator=json_aggregator)
         self._task_func = task_func
-        self._json_aggregator = json_aggregator
         self._multitimer = multitimer.MultiTimer(
             interval=interval_s,
             function=self._offloaded_run_task,
             count=-1,
             runonstart=True,
         )
-        self._poller_is_started = False
 
     def _offloaded_run_task(self):
-        """This function is meant to be called by secondary thread, to fetch and transfer data into the json aggregator."""
+        """This function is meant to be called by secondary thread, to fetch and store data."""
         result = self._task_func()
-        assert isinstance(result, dict), repr(result)
-        self._json_aggregator.add_data(result)
+        self._offloaded_add_data(result)
 
     def start(self):
         """Launch the secondary thread for periodic polling."""
+        super().start()
         self._multitimer.start()
 
     def stop(self):
         """Request the secondary thread to stop. If it's currently processing data,
         it will not stop immediately, and another data aggregation operation might happen."""
+        super().stop()
         self._multitimer.stop()
 
     def join(self):
@@ -646,10 +682,8 @@ class PeriodicValuePoller:
 
         This does NOT flush the underlying json aggregator!
         """
+        super().join()
         timer_thread = self._multitimer._timer
         if timer_thread:
-            if not timer_thread.stopevent.is_set():
-                raise RuntimeError(
-                    "Can't join multitimer thread which has not been stopped"
-                )
-            self._multitimer._timer.join()
+            assert timer_thread.stopevent.is_set()
+            timer_thread.join()

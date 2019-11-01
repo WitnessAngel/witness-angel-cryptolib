@@ -563,14 +563,22 @@ def test_periodic_value_poller(tmp_path):
     )
     poller.join()  # Does nothing
 
-    poller.start()
+    with pytest.raises(RuntimeError, match="already stopped"):
+        poller.stop()
 
-    with pytest.raises(RuntimeError, match="not been stopped"):
+    poller.start()
+    with pytest.raises(RuntimeError, match="already started"):
+        poller.start()
+
+    with pytest.raises(RuntimeError, match="running periodic value provider"):
         poller.join()
 
     time.sleep(0.45)
 
     poller.stop()
+    with pytest.raises(RuntimeError, match="already stopped"):
+        poller.stop()
+
     poller.join()
     poller.join()  # Does nothing
 

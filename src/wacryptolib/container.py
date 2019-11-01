@@ -22,6 +22,8 @@ from wacryptolib.utilities import (
     check_datetime_is_tz_aware,
 )
 
+import multitimer
+
 CONTAINER_FORMAT = "WA_0.1a"
 CONTAINER_SUFFIX = ".crypt"
 MEDIUM_SUFFIX = ".medium"  # To construct decrypted filename when no previous extensions are found in container filename
@@ -601,3 +603,53 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         """
         assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
         self._flush_aggregated_data()
+
+
+class PeriodicValuePoller:
+    """
+    This class runs a function at a specified interval, and pushes its result to a json aggregator.
+
+    Two-steps shutdown (`stop()`, and later `join()`) allows caller to efficiently and safely stop numerous pollers.
+    """
+
+    def __init__(self, interval_s, task_func, json_aggregator):
+        self._task_func = task_func
+        self._json_aggregator = json_aggregator
+        self._multitimer = multitimer.MultiTimer(
+            interval=interval_s,
+            function=self._offloaded_run_task,
+            count=-1,
+            runonstart=True,
+        )
+        self._poller_is_started = False
+
+    def _offloaded_run_task(self):
+        """This function is meant to be called by secondary thread, to fetch and transfer data into the json aggregator."""
+        result = self._task_func()
+        assert isinstance(result, dict), repr(result)
+        self._json_aggregator.add_data(result)
+
+    def start(self):
+        """Launch the secondary thread for periodic polling."""
+        self._multitimer.start()
+
+    def stop(self):
+        """Request the secondary thread to stop. If it's currently processing data,
+        it will not stop immediately, and another data aggregation operation might happen."""
+        self._multitimer.stop()
+
+    def join(self):
+        """
+        Wait for the secondary thread to really exit, after `stop()` was called.
+        When this function returns, no more data should be sent to the json aggregator by this poller,
+        until the next `start()`.
+
+        This does NOT flush the underlying json aggregator!
+        """
+        timer_thread = self._multitimer._timer
+        if timer_thread:
+            if not timer_thread.stopevent.is_set():
+                raise RuntimeError(
+                    "Can't join multitimer thread which has not been stopped"
+                )
+            self._multitimer._timer.join()

@@ -14,7 +14,10 @@ from wacryptolib.container import (
     decrypt_data_from_container,
     TarfileAggregator,
     JsonAggregator,
-    _get_proxy_for_escrow, ContainerStorage)
+    _get_proxy_for_escrow,
+    ContainerStorage,
+    PeriodicValuePoller,
+)
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.utilities import load_from_json_bytes
@@ -532,3 +535,69 @@ def test_aggregators_thread_safety(tmp_path):
 
     assert txt_count == 1000
     assert total_idx == 1000 * 99 / 2 == 49500  # Sum of idx sequences
+
+
+def test_periodic_value_poller(tmp_path):
+
+    container_storage = FakeTestContainerStorage(
+        encryption_conf=None, output_dir=tmp_path
+    )
+
+    tarfile_aggregator = TarfileAggregator(
+        container_storage=container_storage, max_duration_s=100
+    )
+
+    assert len(tarfile_aggregator) == 0
+
+    json_aggregator = JsonAggregator(
+        max_duration_s=100,
+        tarfile_aggregator=tarfile_aggregator,
+        sensor_name="some_sensors",
+    )
+
+    def task_func():
+        return dict(time=int(time.time()), type="current time")
+
+    poller = PeriodicValuePoller(
+        interval_s=0.1, task_func=task_func, json_aggregator=json_aggregator
+    )
+    poller.join()  # Does nothing
+
+    poller.start()
+
+    with pytest.raises(RuntimeError, match="not been stopped"):
+        poller.join()
+
+    time.sleep(0.45)
+
+    poller.stop()
+    poller.join()
+    poller.join()  # Does nothing
+
+    assert len(json_aggregator) == 5  # Data was fetched immediately on start
+    data_sets = json_aggregator._current_dataset
+    assert all(rec["type"] == "current time" for rec in data_sets), data_sets
+
+    json_aggregator.flush_dataset()  # From here one, everything is just standard
+    assert len(json_aggregator) == 0
+
+    # CASE OF SLOW FETCHER #
+
+    def task_func_slow():
+        time.sleep(0.2)
+        return dict(time=int(time.time()), type="current time 2")
+
+    poller = PeriodicValuePoller(
+        interval_s=0.05, task_func=task_func_slow, json_aggregator=json_aggregator
+    )
+    poller.start()
+    time.sleep(0.3)
+    poller.stop()
+    poller.join()
+
+    assert len(json_aggregator) == 2  # Second fetching could complete
+    data_sets = json_aggregator._current_dataset
+    assert all(rec["type"] == "current time 2" for rec in data_sets), data_sets
+
+    json_aggregator.flush_dataset()  # From here one, everything is just standard
+    assert len(json_aggregator) == 0

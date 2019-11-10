@@ -18,35 +18,51 @@ class KeyStorageBase(ABC):
     Subclasses of this storage interface can be implemented to store/retrieve keys from
     miscellaneous locations (disk, database...), without permission checks.
     """
+    # TODO use exceptions in case of key not found or unauthorized, instead of "None"!
 
     @abstractmethod
-    def get_keypair(
-        self, *, keychain_uid: uuid.UUID, key_type: str
-    ) -> dict:  # pragma: no cover
-        """
-        Fetch a key from persistent storage.
-
-        :param keychain_uid: unique ID of the keychain
-        :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
-
-        :return: dict with fields "private_key" and "public_key" in PEM format, or None if unexisting.
-        """
-        raise NotImplementedError("KeyStorageBase.get_keypair()")
-
-    @abstractmethod
-    def set_keypair(
-        self, *, keychain_uid: uuid.UUID, key_type: str, keypair: dict
+    def set_keys(
+        self, *, keychain_uid: uuid.UUID, key_type: str, public_key: bytes, private_key: bytes
     ):  # pragma: no cover
         """
-        Store a keypair into storage.
+        Store a pair of asymmetric keys into storage.
 
-        Must raise an exception if a keypair already exists for these identifiers.
+        Must raise an exception if a key pair already exists for these identifiers.
 
         :param keychain_uid: unique ID of the keychain
         :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
-        :param keypair: dict with fields "private_key" and "public_key" in PEM format
+        :param public_key: public key in PEM format (potentially encrypted)
+        :param private_key: private key in PEM format
         """
         raise NotImplementedError("KeyStorageBase.set_keypair()")
+
+    @abstractmethod
+    def get_public_key(
+        self, *, keychain_uid: uuid.UUID, key_type: str
+    ) -> bytes:  # pragma: no cover
+        """
+        Fetch a public key from persistent storage.
+
+        :param keychain_uid: unique ID of the keychain
+        :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
+
+        :return: public key in PEM format, or None if unexisting.
+        """
+        raise NotImplementedError("KeyStorageBase.get_public_key()")
+
+    @abstractmethod
+    def get_private_key(
+        self, *, keychain_uid: uuid.UUID, key_type: str
+    ) -> bytes:  # pragma: no cover
+        """
+        Fetch a private key from persistent storage.
+
+        :param keychain_uid: unique ID of the keychain
+        :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
+
+        :return: private key in PEM format (potentially encrypted), or None if unexisting.
+        """
+        raise NotImplementedError("KeyStorageBase.get_private_key()")
 
 
 class EscrowApi:
@@ -60,29 +76,23 @@ class EscrowApi:
     def __init__(self, key_storage: KeyStorageBase):
         self.key_storage = key_storage
 
-    def _fetch_keypair_with_caching(self, keychain_uid: uuid.UUID, key_type: str):
-        existing_keypair = self.key_storage.get_keypair(
+    def _ensure_keypair_exists(self, keychain_uid: uuid.UUID, key_type: str):
+        has_public_key = self.key_storage.get_public_key(
             keychain_uid=keychain_uid, key_type=key_type
         )
-        if existing_keypair:
-            keypair = existing_keypair
-        else:
+        if not has_public_key:
             keypair = generate_asymmetric_keypair(key_type=key_type, serialize=True)
-            self.key_storage.set_keypair(
-                keychain_uid=keychain_uid, key_type=key_type, keypair=keypair
+            self.key_storage.set_keys(
+                keychain_uid=keychain_uid, key_type=key_type, public_key=keypair["public_key"], private_key=keypair["private_key"]
             )
-        assert keypair, keypair
-        return keypair
 
     def get_public_key(self, *, keychain_uid: uuid.UUID, key_type: str) -> bytes:
         """
         Return a public key in PEM format bytestring, that caller shall use to encrypt its own symmetric keys,
         or to check a signature.
         """
-        keypair_pem = self._fetch_keypair_with_caching(
-            keychain_uid=keychain_uid, key_type=key_type
-        )
-        return keypair_pem["public_key"]
+        self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
+        return self.key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type)
 
     def get_message_signature(
         self,
@@ -95,11 +105,12 @@ class EscrowApi:
         """
         Return a signature structure corresponding to the provided key and signature types.
         """
-        keypair_pem = self._fetch_keypair_with_caching(
-            keychain_uid=keychain_uid, key_type=key_type
-        )
+        self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
+
+        private_key_pem = self.key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type)
+
         private_key = load_asymmetric_key_from_pem_bytestring(
-            key_pem=keypair_pem["private_key"], key_type=key_type
+            key_pem=private_key_pem, key_type=key_type
         )
 
         signature = sign_message(
@@ -123,12 +134,12 @@ class EscrowApi:
         assert (
             encryption_algo.upper() == "RSA_OAEP"
         )  # Only supported asymmetric cipher for now
+        self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
 
-        keypair_pem = self._fetch_keypair_with_caching(
-            keychain_uid=keychain_uid, key_type=key_type
-        )
+        private_key_pem = self.key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type)
+
         private_key = load_asymmetric_key_from_pem_bytestring(
-            key_pem=keypair_pem["private_key"], key_type=key_type
+            key_pem=private_key_pem, key_type=key_type
         )
 
         secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key=private_key)
@@ -143,12 +154,20 @@ class DummyKeyStorage(KeyStorageBase):
     def __init__(self):
         self._cached_keypairs = {}
 
-    def get_keypair(self, *, keychain_uid, key_type):
+    def _get_keypair(self, *, keychain_uid, key_type):
         return self._cached_keypairs.get((keychain_uid, key_type))
 
-    def set_keypair(self, *, keychain_uid, key_type, keypair):
-        if self._cached_keypairs.get((keychain_uid, key_type)):
+    def set_keys(self, *, keychain_uid, key_type, public_key, private_key):
+        if self._get_keypair(keychain_uid=keychain_uid, key_type=key_type):
             raise RuntimeError(
                 "Can't save already existing key %s/%s" % (keychain_uid, key_type)
             )
-        self._cached_keypairs[(keychain_uid, key_type)] = keypair
+        self._cached_keypairs[(keychain_uid, key_type)] = dict(public_key=public_key, private_key=private_key)
+
+    def get_public_key(self, *, keychain_uid, key_type):
+        keypair = self._get_keypair(keychain_uid=keychain_uid, key_type=key_type)
+        return keypair["public_key"] if keypair else None
+
+    def get_private_key(self, *, keychain_uid, key_type):
+        keypair = self._get_keypair(keychain_uid=keychain_uid, key_type=key_type)
+        return keypair["private_key"] if keypair else None

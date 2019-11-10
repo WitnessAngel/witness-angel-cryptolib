@@ -58,18 +58,30 @@ def test_escrow_api_workflow():
     assert decrypted == secret
 
 
-def test_key_storage_bases():
+def test_key_storage_base():
 
     key_storage = DummyKeyStorage()
 
-    # Sanity check on dummy key storage used
-    _tmp_keychain_uid = uuid.uuid4()
-    key_storage.set_keypair(keychain_uid="aaa", key_type="bbb", keypair="hêllo1")
-    with pytest.raises(RuntimeError):
-        key_storage.set_keypair(keychain_uid="aaa", key_type="bbb", keypair="hêllo2")
-    assert key_storage.get_keypair(keychain_uid="aaa", key_type="bbb") == "hêllo1"
-    assert key_storage.get_keypair(keychain_uid="aaa", key_type="bbbb") == None
-    assert key_storage.get_keypair(keychain_uid="aaaa", key_type="bbb") == None
-
     with pytest.raises(TypeError, match="Can't instantiate abstract class"):
         KeyStorageBase()
+
+    # Sanity checks on dummy key storage used
+
+    _tmp_keychain_uid = uuid.uuid4()
+
+    key_storage.set_keys(keychain_uid="aaa", key_type="bbb", public_key=b"public", private_key=b"private")
+    with pytest.raises(RuntimeError):
+        key_storage.set_keys(keychain_uid="aaa", key_type="bbb", public_key=b"public", private_key=b"private")
+    with pytest.raises(RuntimeError):
+        key_storage.set_keys(keychain_uid="aaa", key_type="bbb", public_key=b"public2", private_key=b"private2")
+
+    assert key_storage.get_public_key(keychain_uid="aaa", key_type="bbb") == b"public"
+    assert key_storage.get_private_key(keychain_uid="aaa", key_type="bbb") == b"private"
+
+    assert key_storage.get_public_key(keychain_uid="aaa", key_type="bbbX") == None
+    assert key_storage.get_private_key(keychain_uid="aaa", key_type="bbbX") == None
+
+    assert key_storage.get_public_key(keychain_uid="aaaX", key_type="bbb") == None
+    assert key_storage.get_private_key(keychain_uid="aaaX", key_type="bbb") == None
+
+

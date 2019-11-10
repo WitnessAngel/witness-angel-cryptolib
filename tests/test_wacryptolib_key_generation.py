@@ -93,17 +93,48 @@ def test_ecc_asymmetric_key_generation():
 
 def test_load_asymmetric_key_from_pem_bytestring():
 
-    key_type = random.choice(SUPPORTED_ASYMMETRIC_KEY_TYPES)
+    for key_type in SUPPORTED_ASYMMETRIC_KEY_TYPES:
 
-    keypair = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
+        keypair = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
 
-    for field in ["private_key", "public_key"]:
-        key = load_asymmetric_key_from_pem_bytestring(
-            key_pem=keypair[field], key_type=key_type
+        for field in ["private_key", "public_key"]:
+            key = load_asymmetric_key_from_pem_bytestring(
+                key_pem=keypair[field], key_type=key_type
+            )
+            assert key.export_key  # Method of Key object
+
+        with pytest.raises(ValueError, match="Unknown key type"):
+            load_asymmetric_key_from_pem_bytestring(
+                key_pem=keypair["private_key"], key_type="ZHD"
+            )
+
+
+def test_generate_and_load_passphrase_protected_asymmetric_key():
+
+    passphrase = b"this is a passphrase"
+
+    for key_type in SUPPORTED_ASYMMETRIC_KEY_TYPES:
+
+        keypair = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type, passphrase=passphrase)
+
+        public_key = load_asymmetric_key_from_pem_bytestring(
+            key_pem=keypair["public_key"], key_type=key_type  # NOT encrypted
         )
-        assert key.export_key  # Method of Key bject
+        assert public_key.export_key
 
-    with pytest.raises(ValueError, match="Unknown key type"):
-        load_asymmetric_key_from_pem_bytestring(
-            key_pem=keypair["private_key"], key_type="ZHD"
+        private_key = load_asymmetric_key_from_pem_bytestring(
+            key_pem=keypair["private_key"], key_type=key_type, passphrase=passphrase  # Encrypted
         )
+        assert private_key.export_key
+
+        error_matcher = "key format is not supported|Invalid DER encoding"
+
+        with pytest.raises(ValueError, match=error_matcher):
+            load_asymmetric_key_from_pem_bytestring(
+                        key_pem=keypair["private_key"], key_type=key_type, passphrase=b"wrong passphrase"
+                    )
+
+        with pytest.raises(ValueError, match=error_matcher):
+            load_asymmetric_key_from_pem_bytestring(
+                        key_pem=keypair["private_key"], key_type=key_type, passphrase=None  # Missing passphrase
+                    )

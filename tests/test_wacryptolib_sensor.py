@@ -18,7 +18,8 @@ from wacryptolib.container import (
 )
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
-from wacryptolib.sensor import TarfileAggregator, JsonAggregator, PeriodicValuePoller
+from wacryptolib.sensor import TarfileAggregator, JsonAggregator, PeriodicValuePoller, SensorManager, \
+    ProviderStateMachineBase
 from wacryptolib.utilities import load_from_json_bytes
 
 
@@ -27,6 +28,33 @@ from datetime import timedelta
 from freezegun import freeze_time
 
 from wacryptolib.sensor import TimeLimitedAggregatorMixin
+
+
+
+def _check_sensor_state_machine(sensor, run_delay=0):
+
+    sensor.join()  # Does nothing
+
+    with pytest.raises(RuntimeError, match="already stopped"):
+        sensor.stop()
+
+    sensor.start()
+
+    with pytest.raises(RuntimeError, match="already started"):
+        sensor.start()
+
+    with pytest.raises(RuntimeError, match="running periodic value provider"):
+        sensor.join()
+
+    time.sleep(run_delay)
+
+    sensor.stop()
+
+    with pytest.raises(RuntimeError, match="already stopped"):
+        sensor.stop()
+
+    sensor.join()
+    sensor.join()  # Does nothing
 
 
 def test_time_limited_aggregator_mixin():
@@ -437,26 +465,8 @@ def test_periodic_value_poller(tmp_path):
     poller = PeriodicValuePoller(
         interval_s=0.1, task_func=task_func, json_aggregator=json_aggregator
     )
-    poller.join()  # Does nothing
 
-    with pytest.raises(RuntimeError, match="already stopped"):
-        poller.stop()
-
-    poller.start()
-    with pytest.raises(RuntimeError, match="already started"):
-        poller.start()
-
-    with pytest.raises(RuntimeError, match="running periodic value provider"):
-        poller.join()
-
-    time.sleep(0.45)
-
-    poller.stop()
-    with pytest.raises(RuntimeError, match="already stopped"):
-        poller.stop()
-
-    poller.join()
-    poller.join()  # Does nothing
+    _check_sensor_state_machine(poller, run_delay=0.45)
 
     assert len(json_aggregator) == 5  # Data was fetched immediately on start
     data_sets = json_aggregator._current_dataset
@@ -485,3 +495,49 @@ def test_periodic_value_poller(tmp_path):
 
     json_aggregator.flush_dataset()  # From here one, everything is just standard
     assert len(json_aggregator) == 0
+
+
+def test_sensor_manager():
+
+    class DummyUnstableSensor(ProviderStateMachineBase):
+
+        def __init__(self, is_broken):
+            super().__init__()
+            self._is_broken = is_broken
+
+        def start(self):
+            super().start()
+            if self._is_broken:
+                raise OSError("dummy sensor failure on start")
+
+        def stop(self):
+            super().stop()
+            if self._is_broken:
+                raise OSError("dummy sensor failure on stop")
+
+        def join(self):
+            super().join()
+            if self._is_broken:
+                raise OSError("dummy sensor failure on join")
+
+    # First with EMPTY manager
+
+    manager = SensorManager(sensors=[])
+    _check_sensor_state_machine(manager)
+
+    # Now with FILLED manager
+
+    sensors = [DummyUnstableSensor(is_broken=False), DummyUnstableSensor(is_broken=False),
+               DummyUnstableSensor(is_broken=True), DummyUnstableSensor(is_broken=False)]
+
+    manager = SensorManager(sensors=sensors)
+    _check_sensor_state_machine(manager)
+
+    success_count = manager.start()
+    assert success_count == 3
+
+    success_count = manager.stop()
+    assert success_count == 3
+
+    success_count = manager.join()
+    assert success_count == 3

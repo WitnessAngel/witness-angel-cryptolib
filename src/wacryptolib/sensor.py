@@ -271,17 +271,9 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         self._flush_aggregated_data()
 
 
-class PeriodicValueProviderBase(
-    abc.ABC
-):  # FIXME redesign this to allow direct push to tarfile too?
-    def __init__(self, interval_s, json_aggregator):
+class ProviderStateMachineBase(abc.ABC):  # Fixme rename to sensor!!
+    def __init__(self):
         self._provider_is_started = False
-        self._interval_s = interval_s
-        self._json_aggregator = json_aggregator
-
-    def _offloaded_add_data(self, data_dict):
-        """This function is meant to be called by secondary thread, to push data into the json aggregator."""
-        self._json_aggregator.add_data(data_dict)
 
     def start(self):
         """Start the periodic system which will poll or push the value."""
@@ -296,9 +288,25 @@ class PeriodicValueProviderBase(
         self._provider_is_started = False
 
     def join(self):
-        """Wait for the periodic system to really finish running."""
+        """
+        Wait for the periodic system to really finish running.
+        Does nothing if periodic system is already stopped.
+        """
         if self._provider_is_started:
             raise RuntimeError("Can't join a running periodic value provider")
+
+
+class PeriodicValueProviderBase(
+    ProviderStateMachineBase
+):  # FIXME redesign this to allow direct push to tarfile too?
+    def __init__(self, interval_s, json_aggregator):
+        super().__init__()
+        self._interval_s = interval_s
+        self._json_aggregator = json_aggregator
+
+    def _offloaded_add_data(self, data_dict):
+        """This function is meant to be called by secondary thread, to push data into the json aggregator."""
+        self._json_aggregator.add_data(data_dict)
 
 
 class PeriodicValuePoller(PeriodicValueProviderBase):
@@ -359,3 +367,52 @@ class PeriodicValuePoller(PeriodicValueProviderBase):
         if timer_thread:
             assert timer_thread.stopevent.is_set()
             timer_thread.join()
+
+
+class SensorManager(ProviderStateMachineBase):
+    """
+    Manage a group of sensors for simultaneous starts/stops.
+    """
+
+    def __init__(self, sensors):
+        super().__init__()
+        self._sensors = sensors
+
+    def start(self):
+        logger.info("Starting all managed sensors")
+        super().start()
+        success_count = 0
+        for sensor in self._sensors:
+            try:
+                sensor.start()
+            except Exception as exc:
+                logger.error(f"Failed starting sensor {sensor.__class__.__name__} ({exc!r})")
+            else:
+                success_count += 1
+        return success_count
+
+    def stop(self):
+        logger.info("Stopping all managed sensors")
+        super().stop()
+        success_count = 0
+        for sensor in self._sensors:
+            try:
+                sensor.stop()
+            except Exception as exc:
+                logger.error(f"Failed stopping sensor {sensor.__class__.__name__} ({exc!r})")
+            else:
+                success_count += 1
+        return success_count
+
+    def join(self):
+        logger.info("Joining all managed sensors")
+        super().join()
+        success_count = 0
+        for sensor in self._sensors:
+            try:
+                sensor.join()
+            except Exception as exc:
+                logger.error(f"Failed joining sensor {sensor.__class__.__name__} ({exc!r})")
+            else:
+                success_count += 1
+        return success_count

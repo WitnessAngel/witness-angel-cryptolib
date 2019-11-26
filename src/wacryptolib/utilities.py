@@ -8,6 +8,7 @@ UTF8_ENCODING = "utf8"
 
 ### Private utilities ###
 
+
 def check_datetime_is_tz_aware(dt):
     """Raise if datetime is naive regarding timezones"""
     is_aware = dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
@@ -25,6 +26,7 @@ def synchronized(func, self, *args, **kwargs):
 
 
 ### Public utilities ###
+
 
 def split_as_chunks(
     bytestring: bytes,
@@ -118,5 +120,3 @@ def load_from_json_bytes(data, **extra_options):
 
     json_str = data.decode(UTF8_ENCODING)
     return load_from_json_str(data=json_str, **extra_options)
-
-

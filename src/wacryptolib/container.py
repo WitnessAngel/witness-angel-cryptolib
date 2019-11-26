@@ -1,14 +1,8 @@
-import abc
+import copy
 import copy
 import glob
 import os
-from abc import abstractmethod
-
-import threading
-import io
-import tarfile
 import uuid
-from datetime import datetime, timezone
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
 from wacryptolib.escrow import DummyKeyStorage, EscrowApi, LOCAL_ESCROW_PLACEHOLDER
@@ -18,18 +12,13 @@ from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
 )
 from wacryptolib.signature import verify_message_signature
-from wacryptolib.utilities import (
-    dump_to_json_bytes,
-    load_from_json_bytes,
-    synchronized,
-    check_datetime_is_tz_aware,
-)
-
-import multitimer
+from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTAINER_FORMAT = "WA_0.1a"
 CONTAINER_SUFFIX = ".crypt"
-MEDIUM_SUFFIX = ".medium"  # To construct decrypted filename when no previous extensions are found in container filename
+MEDIUM_SUFFIX = (
+    ".medium"
+)  # To construct decrypted filename when no previous extensions are found in container filename
 
 LOCAL_ESCROW_API = EscrowApi(key_storage=DummyKeyStorage())
 
@@ -37,7 +26,7 @@ LOCAL_ESCROW_API = EscrowApi(key_storage=DummyKeyStorage())
 def _get_proxy_for_escrow(escrow):
     if escrow == LOCAL_ESCROW_PLACEHOLDER:
         return LOCAL_ESCROW_API
-    elif isinstance (escrow, dict):
+    elif isinstance(escrow, dict):
         if "url" in escrow:
             return JsonRpcProxy(url=escrow)
         # TODO - Implement escrow lookup in global registry, shared-secret group, etc.
@@ -292,7 +281,9 @@ class ContainerStorage:
 
     def __init__(self, encryption_conf, output_dir, max_containers_count=None):
         assert os.path.isdir(output_dir), output_dir
-        assert max_containers_count is None or max_containers_count > 0, max_containers_count
+        assert (
+            max_containers_count is None or max_containers_count > 0
+        ), max_containers_count
         self._encryption_conf = encryption_conf
         self._output_dir = output_dir
         self._max_containers_count = max_containers_count
@@ -303,7 +294,7 @@ class ContainerStorage:
 
     def list_container_names(self, as_sorted_relative_paths=False):
         """Returns the list of encrypted containers present in storage, sorted or not."""
-        paths = glob.glob(os.path.join(self._output_dir,"*" + CONTAINER_SUFFIX))
+        paths = glob.glob(os.path.join(self._output_dir, "*" + CONTAINER_SUFFIX))
         if as_sorted_relative_paths:
             paths = sorted(os.path.basename(x) for x in self.list_container_names())
         return paths
@@ -313,7 +304,9 @@ class ContainerStorage:
 
     def _delete_container(self, container_name):
         container_filepath = self._make_absolute_container_path(container_name)
-        os.remove(container_filepath)  # TODO - additional retries if file access errors?
+        os.remove(
+            container_filepath
+        )  # TODO - additional retries if file access errors?
 
     def _purge_exceeding_containers(self):
         if self._max_containers_count:
@@ -330,10 +323,14 @@ class ContainerStorage:
         return encrypt_data_into_container(data=data, conf=self._encryption_conf)
 
     def _decrypt_data_from_container(self, container):
-        return decrypt_data_from_container(container)  # Will fail if authorizations are not OK
+        return decrypt_data_from_container(
+            container
+        )  # Will fail if authorizations are not OK
 
     def _process_and_store_file(self, filename_base, data):
-        container_filepath = self._make_absolute_container_path(filename_base + CONTAINER_SUFFIX)
+        container_filepath = self._make_absolute_container_path(
+            filename_base + CONTAINER_SUFFIX
+        )
         container = self._encrypt_data_into_container(data)
         container_bytes = dump_to_json_bytes(container, indent=4)
         # Beware, this might erase existing file, it's accepted
@@ -357,13 +354,15 @@ class ContainerStorage:
         """
         if isinstance(container_name_or_idx, int):
             container_names = self.list_container_names(as_sorted_relative_paths=True)
-            container_name = container_names[container_name_or_idx]  # Will break if idx is out of bounds
+            container_name = container_names[
+                container_name_or_idx
+            ]  # Will break if idx is out of bounds
         else:
             assert isinstance(container_name_or_idx, str), repr(container_name_or_idx)
             container_name = container_name_or_idx
 
         assert not os.path.isabs(container_name), container_name
-        with open(os.path.join(self._output_dir, container_name) , "rb") as f:
+        with open(os.path.join(self._output_dir, container_name), "rb") as f:
             data = f.read()
         container = load_from_json_bytes(data)
         return self._decrypt_data_from_container(container)

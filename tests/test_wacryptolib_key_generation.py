@@ -1,5 +1,3 @@
-import random
-
 import pytest
 from Crypto.PublicKey import RSA, ECC, DSA
 
@@ -95,7 +93,9 @@ def test_load_asymmetric_key_from_pem_bytestring():
 
     for key_type in SUPPORTED_ASYMMETRIC_KEY_TYPES:
 
-        keypair = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
+        keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
+            key_type=key_type
+        )
 
         for field in ["private_key", "public_key"]:
             key = load_asymmetric_key_from_pem_bytestring(
@@ -115,7 +115,9 @@ def test_generate_and_load_passphrase_protected_asymmetric_key():
 
     for key_type in SUPPORTED_ASYMMETRIC_KEY_TYPES:
 
-        keypair = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type, passphrase=passphrase)
+        keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
+            key_type=key_type, passphrase=passphrase
+        )
 
         public_key = load_asymmetric_key_from_pem_bytestring(
             key_pem=keypair["public_key"], key_type=key_type  # NOT encrypted
@@ -123,7 +125,9 @@ def test_generate_and_load_passphrase_protected_asymmetric_key():
         assert public_key.export_key
 
         private_key = load_asymmetric_key_from_pem_bytestring(
-            key_pem=keypair["private_key"], key_type=key_type, passphrase=passphrase  # Encrypted
+            key_pem=keypair["private_key"],
+            key_type=key_type,
+            passphrase=passphrase,  # Encrypted
         )
         assert private_key.export_key
 
@@ -131,10 +135,14 @@ def test_generate_and_load_passphrase_protected_asymmetric_key():
 
         with pytest.raises(ValueError, match=error_matcher):
             load_asymmetric_key_from_pem_bytestring(
-                        key_pem=keypair["private_key"], key_type=key_type, passphrase=b"wrong passphrase"
-                    )
+                key_pem=keypair["private_key"],
+                key_type=key_type,
+                passphrase=b"wrong passphrase",
+            )
 
         with pytest.raises(ValueError, match=error_matcher):
             load_asymmetric_key_from_pem_bytestring(
-                        key_pem=keypair["private_key"], key_type=key_type, passphrase=None  # Missing passphrase
-                    )
+                key_pem=keypair["private_key"],
+                key_type=key_type,
+                passphrase=None,  # Missing passphrase
+            )

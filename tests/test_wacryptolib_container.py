@@ -8,6 +8,7 @@ from datetime import datetime, timezone, timedelta
 import pytest
 from freezegun import freeze_time
 
+from _test_mockups import FakeTestContainerStorage
 from wacryptolib.container import (
     LOCAL_ESCROW_PLACEHOLDER,
     encrypt_data_into_container,
@@ -15,18 +16,10 @@ from wacryptolib.container import (
     _get_proxy_for_escrow,
     ContainerStorage,
 )
-from wacryptolib.sensor import (
-    TarfileAggregator,
-    JsonAggregator,
-    PeriodicValuePoller,
-)
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
+from wacryptolib.sensor import TarfileAggregator, JsonAggregator, PeriodicValuePoller
 from wacryptolib.utilities import load_from_json_bytes
-
-from _test_mockups import FakeTestContainerStorage
-
-
 
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -148,7 +141,9 @@ def test_get_proxy_for_escrow():
     assert isinstance(proxy, EscrowApi)  # Local proxy
 
     proxy = _get_proxy_for_escrow(dict(url="http://example.com/jsonrpc"))
-    assert isinstance(proxy, JsonRpcProxy)  # It should expose identical methods to EscrowApi
+    assert isinstance(
+        proxy, JsonRpcProxy
+    )  # It should expose identical methods to EscrowApi
 
     with pytest.raises(ValueError):
         _get_proxy_for_escrow(dict(urn="athena"))
@@ -160,7 +155,9 @@ def test_get_proxy_for_escrow():
 def test_container_storage(tmp_path):
 
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
-    storage = ContainerStorage(encryption_conf=SIMPLE_CONTAINER_CONF, output_dir=tmp_path)
+    storage = ContainerStorage(
+        encryption_conf=SIMPLE_CONTAINER_CONF, output_dir=tmp_path
+    )
     assert storage._max_containers_count is None
     assert len(storage) == 0
     assert storage.list_container_names() == []
@@ -169,17 +166,22 @@ def test_container_storage(tmp_path):
     storage.enqueue_file_for_encryption("empty.txt", b"")
 
     assert len(storage) == 2
-    assert storage.list_container_names(as_sorted_relative_paths=True) == ['animals.dat.crypt', 'empty.txt.crypt']
+    assert storage.list_container_names(as_sorted_relative_paths=True) == [
+        "animals.dat.crypt",
+        "empty.txt.crypt",
+    ]
 
-    animals_content = storage.decrypt_container_from_storage('animals.dat.crypt')
+    animals_content = storage.decrypt_container_from_storage("animals.dat.crypt")
     assert animals_content == b"dogs\ncats\n"
 
-    empty_content = storage.decrypt_container_from_storage('empty.txt.crypt')
+    empty_content = storage.decrypt_container_from_storage("empty.txt.crypt")
     assert empty_content == b""
 
     assert len(storage) == 2
-    os.remove(os.path.join(tmp_path, 'animals.dat.crypt'))
-    assert storage.list_container_names(as_sorted_relative_paths=True) == ['empty.txt.crypt']
+    os.remove(os.path.join(tmp_path, "animals.dat.crypt"))
+    assert storage.list_container_names(as_sorted_relative_paths=True) == [
+        "empty.txt.crypt"
+    ]
     assert len(storage) == 1
 
     # Test purge system
@@ -190,31 +192,52 @@ def test_container_storage(tmp_path):
         storage.enqueue_file_for_encryption("file.dat", b"dogs\ncats\n")
     assert len(storage) == 11  # Still the older file remains
 
-    storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path, max_containers_count=3)
+    storage = FakeTestContainerStorage(
+        encryption_conf=None, output_dir=tmp_path, max_containers_count=3
+    )
     for i in range(3):
         storage.enqueue_file_for_encryption("xyz.dat", b"abc")
     assert len(storage) == 3  # Purged
-    assert storage.list_container_names(as_sorted_relative_paths=True) == ['xyz.dat.000.crypt', 'xyz.dat.001.crypt', 'xyz.dat.002.crypt']
+    assert storage.list_container_names(as_sorted_relative_paths=True) == [
+        "xyz.dat.000.crypt",
+        "xyz.dat.001.crypt",
+        "xyz.dat.002.crypt",
+    ]
 
     storage.enqueue_file_for_encryption("xyz.dat", b"abc")
     assert len(storage) == 3  # Purged
-    assert storage.list_container_names(as_sorted_relative_paths=True) == ['xyz.dat.001.crypt', 'xyz.dat.002.crypt', 'xyz.dat.003.crypt']
+    assert storage.list_container_names(as_sorted_relative_paths=True) == [
+        "xyz.dat.001.crypt",
+        "xyz.dat.002.crypt",
+        "xyz.dat.003.crypt",
+    ]
 
-    storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path, max_containers_count=4)
+    storage = FakeTestContainerStorage(
+        encryption_conf=None, output_dir=tmp_path, max_containers_count=4
+    )
     assert len(storage) == 3  # Retrieves existing containers
     storage.enqueue_file_for_encryption("aaa.dat", b"000")
     assert len(storage) == 4  # Unchanged
     storage.enqueue_file_for_encryption("zzz.dat", b"000")
     assert len(storage) == 4  # Purge occurred
     # Entry "aaa.dat.000.crypt" was ejected because it's a sorting by NAMES for now!
-    assert storage.list_container_names(as_sorted_relative_paths=True) == ['xyz.dat.001.crypt', 'xyz.dat.002.crypt', 'xyz.dat.003.crypt', "zzz.dat.001.crypt"]
+    assert storage.list_container_names(as_sorted_relative_paths=True) == [
+        "xyz.dat.001.crypt",
+        "xyz.dat.002.crypt",
+        "xyz.dat.003.crypt",
+        "zzz.dat.001.crypt",
+    ]
 
 
 def test_tarfile_aggregator(tmp_path):
 
-    container_storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path)
+    container_storage = FakeTestContainerStorage(
+        encryption_conf=None, output_dir=tmp_path
+    )
 
-    tarfile_aggregator = TarfileAggregator(container_storage=container_storage, max_duration_s=10)
+    tarfile_aggregator = TarfileAggregator(
+        container_storage=container_storage, max_duration_s=10
+    )
     assert len(tarfile_aggregator) == 0
     assert not tarfile_aggregator._current_start_time
     assert len(container_storage) == 0
@@ -259,7 +282,9 @@ def test_tarfile_aggregator(tmp_path):
 
         tarfile_aggregator.finalize_tarfile()
         assert len(container_storage) == 1
-        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        tarfile_bytestring = container_storage.decrypt_container_from_storage(
+            container_name_or_idx=-1
+        )
         tar_file = TarfileAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
@@ -293,7 +318,9 @@ def test_tarfile_aggregator(tmp_path):
         frozen_datetime.tick(delta=timedelta(seconds=1))
         tarfile_aggregator.finalize_tarfile()
         assert len(container_storage) == 2
-        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        tarfile_bytestring = container_storage.decrypt_container_from_storage(
+            container_name_or_idx=-1
+        )
         tar_file = TarfileAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
@@ -323,7 +350,9 @@ def test_tarfile_aggregator(tmp_path):
         current_start_time_saved = tarfile_aggregator._current_start_time
 
         frozen_datetime.tick(delta=timedelta(seconds=9))
-        assert datetime.now(tz=timezone.utc) - tarfile_aggregator._current_start_time == timedelta(seconds=9)
+        assert datetime.now(
+            tz=timezone.utc
+        ) - tarfile_aggregator._current_start_time == timedelta(seconds=9)
 
         simple_add_record()
         assert len(tarfile_aggregator) == 2
@@ -334,7 +363,9 @@ def test_tarfile_aggregator(tmp_path):
         simple_add_record()
         assert len(tarfile_aggregator) == 1
         assert tarfile_aggregator._current_start_time
-        assert tarfile_aggregator._current_start_time != current_start_time_saved  # AUTO FLUSH occurred
+        assert (
+            tarfile_aggregator._current_start_time != current_start_time_saved
+        )  # AUTO FLUSH occurred
 
         assert len(container_storage) == 3
 
@@ -346,15 +377,20 @@ def test_tarfile_aggregator(tmp_path):
         for i in range(3):  # Three times the same file name!
             tarfile_aggregator.add_record(
                 sensor_name="smartphone_recorder",
-                from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
+                from_datetime=datetime(
+                    year=2017, month=10, day=11, tzinfo=timezone.utc
+                ),
                 to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
                 extension=".mp3",
-                data=bytes([i] * 500))
+                data=bytes([i] * 500),
+            )
 
         frozen_datetime.tick(delta=timedelta(seconds=1))
         tarfile_aggregator.finalize_tarfile()
         assert len(container_storage) == 5
-        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        tarfile_bytestring = container_storage.decrypt_container_from_storage(
+            container_name_or_idx=-1
+        )
         tar_file = TarfileAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tar_file.getmembers()) == 3
         assert len(tar_file.getnames()) == 3
@@ -364,9 +400,13 @@ def test_tarfile_aggregator(tmp_path):
 
 def test_json_aggregator(tmp_path):
 
-    container_storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path)
+    container_storage = FakeTestContainerStorage(
+        encryption_conf=None, output_dir=tmp_path
+    )
 
-    tarfile_aggregator = TarfileAggregator(container_storage=container_storage, max_duration_s=100)
+    tarfile_aggregator = TarfileAggregator(
+        container_storage=container_storage, max_duration_s=100
+    )
 
     assert len(tarfile_aggregator) == 0
 
@@ -422,7 +462,9 @@ def test_json_aggregator(tmp_path):
 
         tarfile_aggregator.finalize_tarfile()
         assert len(container_storage) == 1
-        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        tarfile_bytestring = container_storage.decrypt_container_from_storage(
+            container_name_or_idx=-1
+        )
         tar_file = TarfileAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
 
@@ -435,7 +477,8 @@ def test_json_aggregator(tmp_path):
 
         data = tar_file.extractfile(filenames[0]).read()
         assert (
-            data == b'[{"pulse": {"$numberInt": "42"}}, {"timing": true}, {"abc": {"$numberDouble": "2.2"}}]'
+            data
+            == b'[{"pulse": {"$numberInt": "42"}}, {"timing": true}, {"abc": {"$numberDouble": "2.2"}}]'
         )
 
         data = tar_file.extractfile(filenames[1]).read()
@@ -448,9 +491,13 @@ def test_json_aggregator(tmp_path):
 
 def test_aggregators_thread_safety(tmp_path):
 
-    container_storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path)
+    container_storage = FakeTestContainerStorage(
+        encryption_conf=None, output_dir=tmp_path
+    )
 
-    tarfile_aggregator = TarfileAggregator(container_storage=container_storage, max_duration_s=100)
+    tarfile_aggregator = TarfileAggregator(
+        container_storage=container_storage, max_duration_s=100
+    )
     json_aggregator = JsonAggregator(
         max_duration_s=1,
         tarfile_aggregator=tarfile_aggregator,
@@ -493,10 +540,14 @@ def test_aggregators_thread_safety(tmp_path):
     misc_results = set(future.result() for future in misc_futures)
     assert misc_results == set([None])  # No results expected from any of these methods
 
-    container_names = container_storage.list_container_names(as_sorted_relative_paths=True)
+    container_names = container_storage.list_container_names(
+        as_sorted_relative_paths=True
+    )
 
-    tarfiles_bytes = [container_storage.decrypt_container_from_storage(container_name)
-                      for container_name in container_names]
+    tarfiles_bytes = [
+        container_storage.decrypt_container_from_storage(container_name)
+        for container_name in container_names
+    ]
 
     tarfiles = [
         TarfileAggregator.read_tarfile_from_bytestring(bytestring)

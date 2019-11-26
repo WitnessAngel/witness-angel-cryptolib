@@ -69,11 +69,23 @@ def test_key_storage_base():
 
     _tmp_keychain_uid = uuid.uuid4()
 
-    key_storage.set_keys(keychain_uid="aaa", key_type="bbb", public_key=b"public", private_key=b"private")
+    key_storage.set_keys(
+        keychain_uid="aaa", key_type="bbb", public_key=b"public", private_key=b"private"
+    )
     with pytest.raises(RuntimeError):
-        key_storage.set_keys(keychain_uid="aaa", key_type="bbb", public_key=b"public", private_key=b"private")
+        key_storage.set_keys(
+            keychain_uid="aaa",
+            key_type="bbb",
+            public_key=b"public",
+            private_key=b"private",
+        )
     with pytest.raises(RuntimeError):
-        key_storage.set_keys(keychain_uid="aaa", key_type="bbb", public_key=b"public2", private_key=b"private2")
+        key_storage.set_keys(
+            keychain_uid="aaa",
+            key_type="bbb",
+            public_key=b"public2",
+            private_key=b"private2",
+        )
 
     assert key_storage.get_public_key(keychain_uid="aaa", key_type="bbb") == b"public"
     assert key_storage.get_private_key(keychain_uid="aaa", key_type="bbb") == b"private"
@@ -83,5 +95,3 @@ def test_key_storage_base():
 
     assert key_storage.get_public_key(keychain_uid="aaaX", key_type="bbb") == None
     assert key_storage.get_private_key(keychain_uid="aaaX", key_type="bbb") == None
-
-

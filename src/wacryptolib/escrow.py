@@ -8,7 +8,6 @@ from wacryptolib.key_generation import (
 )
 from wacryptolib.signature import sign_message
 
-
 #: Special value in containers, to invoke a device-local escrow
 LOCAL_ESCROW_PLACEHOLDER = "_local_"
 
@@ -18,11 +17,17 @@ class KeyStorageBase(ABC):
     Subclasses of this storage interface can be implemented to store/retrieve keys from
     miscellaneous locations (disk, database...), without permission checks.
     """
+
     # TODO use exceptions in case of key not found or unauthorized, instead of "None"!
 
     @abstractmethod
     def set_keys(
-        self, *, keychain_uid: uuid.UUID, key_type: str, public_key: bytes, private_key: bytes
+        self,
+        *,
+        keychain_uid: uuid.UUID,
+        key_type: str,
+        public_key: bytes,
+        private_key: bytes,
     ):  # pragma: no cover
         """
         Store a pair of asymmetric keys into storage.
@@ -83,7 +88,10 @@ class EscrowApi:
         if not has_public_key:
             keypair = generate_asymmetric_keypair(key_type=key_type, serialize=True)
             self.key_storage.set_keys(
-                keychain_uid=keychain_uid, key_type=key_type, public_key=keypair["public_key"], private_key=keypair["private_key"]
+                keychain_uid=keychain_uid,
+                key_type=key_type,
+                public_key=keypair["public_key"],
+                private_key=keypair["private_key"],
             )
 
     def get_public_key(self, *, keychain_uid: uuid.UUID, key_type: str) -> bytes:
@@ -92,7 +100,9 @@ class EscrowApi:
         or to check a signature.
         """
         self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
-        return self.key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type)
+        return self.key_storage.get_public_key(
+            keychain_uid=keychain_uid, key_type=key_type
+        )
 
     def get_message_signature(
         self,
@@ -107,7 +117,9 @@ class EscrowApi:
         """
         self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
 
-        private_key_pem = self.key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type)
+        private_key_pem = self.key_storage.get_private_key(
+            keychain_uid=keychain_uid, key_type=key_type
+        )
 
         private_key = load_asymmetric_key_from_pem_bytestring(
             key_pem=private_key_pem, key_type=key_type
@@ -136,7 +148,9 @@ class EscrowApi:
         )  # Only supported asymmetric cipher for now
         self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
 
-        private_key_pem = self.key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type)
+        private_key_pem = self.key_storage.get_private_key(
+            keychain_uid=keychain_uid, key_type=key_type
+        )
 
         private_key = load_asymmetric_key_from_pem_bytestring(
             key_pem=private_key_pem, key_type=key_type
@@ -162,7 +176,9 @@ class DummyKeyStorage(KeyStorageBase):
             raise RuntimeError(
                 "Can't save already existing key %s/%s" % (keychain_uid, key_type)
             )
-        self._cached_keypairs[(keychain_uid, key_type)] = dict(public_key=public_key, private_key=private_key)
+        self._cached_keypairs[(keychain_uid, key_type)] = dict(
+            public_key=public_key, private_key=private_key
+        )
 
     def get_public_key(self, *, keychain_uid, key_type):
         keypair = self._get_keypair(keychain_uid=keychain_uid, key_type=key_type)

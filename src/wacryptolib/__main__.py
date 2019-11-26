@@ -3,7 +3,11 @@ from click.utils import LazyFile
 
 from wacryptolib.container import (
     LOCAL_ESCROW_PLACEHOLDER,
-    encrypt_data_into_container, decrypt_data_from_container, CONTAINER_SUFFIX, MEDIUM_SUFFIX)
+    encrypt_data_into_container,
+    decrypt_data_from_container,
+    CONTAINER_SUFFIX,
+    MEDIUM_SUFFIX,
+)
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])

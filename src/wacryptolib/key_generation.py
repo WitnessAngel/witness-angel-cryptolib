@@ -1,5 +1,3 @@
-import functools
-
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Random import get_random_bytes
 
@@ -19,7 +17,12 @@ def generate_symmetric_key(encryption_algo: str) -> bytes:
 
 
 def generate_asymmetric_keypair(
-    *, key_type: str, serialize=True, key_length_bits=2048, curve="p521", passphrase: bytes=None
+    *,
+    key_type: str,
+    serialize=True,
+    key_length_bits=2048,
+    curve="p521",
+    passphrase: bytes = None
 ) -> dict:
     """Generate a (public_key, private_key) pair.
 
@@ -58,7 +61,9 @@ def generate_asymmetric_keypair(
     return keypair
 
 
-def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_type: str, passphrase: bytes=None):
+def load_asymmetric_key_from_pem_bytestring(
+    key_pem: bytes, *, key_type: str, passphrase: bytes = None
+):
     """Load a key (public or private) from a PEM-formatted bytestring.
 
     :param key_pem: the key bytrestring
@@ -126,16 +131,24 @@ def _generate_ecc_keypair_as_objects(curve: str) -> dict:
     return keypair
 
 
-def _serialize_key_object_to_pem_bytestring(key, key_type: str, passphrase: bytes=None) -> str:
+def _serialize_key_object_to_pem_bytestring(
+    key, key_type: str, passphrase: bytes = None
+) -> str:
     """Convert a private or public key to PEM-formatted bytestring.
 
     If a passphrase is provided, the key (which must be PRIVATE) is encrypted with it.
     The exact encryption of the key depends on its key_type."""
-    assert passphrase is None or (isinstance(passphrase, bytes) and passphrase), repr(passphrase)  # No implicit encoding
+    assert passphrase is None or (isinstance(passphrase, bytes) and passphrase), repr(
+        passphrase
+    )  # No implicit encoding
     extra_params = {}
     if passphrase:
         extra_params = dict(passphrase=passphrase)
-        extra_params.update(ASYMMETRIC_KEY_TYPES_REGISTRY[key_type]["pem_export_private_key_encryption_kwargs"])
+        extra_params.update(
+            ASYMMETRIC_KEY_TYPES_REGISTRY[key_type][
+                "pem_export_private_key_encryption_kwargs"
+            ]
+        )
     key_pem = key.export_key(format="PEM", **extra_params)
     return key_pem
 
@@ -160,19 +173,25 @@ ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
     RSA={
         "generation_function": _generate_rsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length_bits"],
-        "pem_export_private_key_encryption_kwargs": dict(pkcs=8, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC"),
+        "pem_export_private_key_encryption_kwargs": dict(
+            pkcs=8, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC"
+        ),
         "pem_import_function": RSA.import_key,
     },
     DSA={
         "generation_function": _generate_dsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length_bits"],
-        "pem_export_private_key_encryption_kwargs": dict(pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC"),
+        "pem_export_private_key_encryption_kwargs": dict(
+            pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC"
+        ),
         "pem_import_function": DSA.import_key,
     },
     ECC={
         "generation_function": _generate_ecc_keypair_as_objects,
         "generation_extra_parameters": ["curve"],
-        "pem_export_private_key_encryption_kwargs": dict(use_pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndAES128-CBC"),
+        "pem_export_private_key_encryption_kwargs": dict(
+            use_pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndAES128-CBC"
+        ),
         "pem_import_function": ECC.import_key,
     },
 )

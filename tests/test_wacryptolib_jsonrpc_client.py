@@ -24,7 +24,11 @@ def test_jsonrpc_extended_json_calls():
             {"$binary": {"base64": b64encode(b"xyz").decode("ascii"), "subType": "00"}},
             {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "03"}},
         ]
-        return 200, {}, u'{"jsonrpc": "2.0", "result": {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "03"}}, "id": 1}'
+        return (
+            200,
+            {},
+            u'{"jsonrpc": "2.0", "result": {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "03"}}, "id": 1}',
+        )
 
     responses.add_callback(
         responses.POST,
@@ -43,7 +47,11 @@ def test_jsonrpc_extended_json_calls():
             "y": {"$binary": {"base64": "eHl6", "subType": "00"}},
             "z": {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "03"}},
         }
-        return 200, {}, u'{"jsonrpc": "2.0", "result": {"$binary": {"base64": "eHl6", "subType": "00"}}, "id": 1}'
+        return (
+            200,
+            {},
+            u'{"jsonrpc": "2.0", "result": {"$binary": {"base64": "eHl6", "subType": "00"}}, "id": 1}',
+        )
 
     responses.add_callback(
         responses.POST,
@@ -71,5 +79,7 @@ def test_jsonrpc_extended_json_calls():
     assert server.foobar({"foo": "bar"}) is None
     responses.reset()
 
-    with pytest.raises(ProtocolError, match="spec forbids mixing arguments and keyword arguments"):
+    with pytest.raises(
+        ProtocolError, match="spec forbids mixing arguments and keyword arguments"
+    ):
         server.foobar(33, a=22)

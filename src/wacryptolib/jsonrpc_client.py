@@ -37,7 +37,7 @@ class JsonRpcProxy(ServerBase):
         is_notification = kwargs.pop("_notification", False)
         if args and kwargs:
             raise ProtocolError(
-                    "JSON-RPC spec forbids mixing arguments and keyword arguments"
+                "JSON-RPC spec forbids mixing arguments and keyword arguments"
             )
 
         # NOPE WE DISABLE THIS AMBIGUOUS NORMALIZATION!

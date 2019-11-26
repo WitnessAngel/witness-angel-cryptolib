@@ -11,7 +11,6 @@ from wacryptolib.key_generation import (
 )
 from wacryptolib.utilities import split_as_chunks
 
-
 RSA_OAEP_CHUNKS_SIZE = 60
 RSA_OAEP_HASHER = Crypto.Hash.SHA512
 

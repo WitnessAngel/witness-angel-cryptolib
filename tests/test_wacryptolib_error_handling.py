@@ -8,7 +8,6 @@ from wacryptolib.error_handling import (
     _fully_qualified_name,
 )
 
-
 LookupError = LookupError
 IOError = IOError
 

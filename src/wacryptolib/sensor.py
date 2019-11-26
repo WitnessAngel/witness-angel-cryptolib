@@ -1,25 +1,17 @@
 import abc
-import copy
-import glob
-import os
-from abc import abstractmethod
-
-import threading
 import io
 import tarfile
-import uuid
+import threading
 from datetime import datetime, timezone
+
+import multitimer
 
 from wacryptolib.container import ContainerStorage
 from wacryptolib.utilities import (
     dump_to_json_bytes,
-    load_from_json_bytes,
     synchronized,
     check_datetime_is_tz_aware,
 )
-
-import multitimer
-
 
 
 class TimeLimitedAggregatorMixin:
@@ -88,7 +80,8 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
             assert not self._current_bytesio, repr(self._current_bytesio)
             self._current_bytesio = io.BytesIO()
             self._current_tarfile = tarfile.open(
-                mode=self.tarfile_writing_mode, fileobj=self._current_bytesio  # TODO - add compression?
+                mode=self.tarfile_writing_mode,
+                fileobj=self._current_bytesio,  # TODO - add compression?
             )
             assert self._current_records_count == 0, self._current_bytesio
 
@@ -107,14 +100,18 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
             assert not self._current_records_count
             return
 
-        assert self._current_tarfile  # Since start time is only set on new aggregation...
+        assert (
+            self._current_tarfile
+        )  # Since start time is only set on new aggregation...
         self._current_tarfile.close()
         result_bytestring = self._current_bytesio.getvalue()
         end_time = datetime.now(tz=timezone.utc)
-        filename_base = self._build_tarfile_filename(from_datetime=self._current_start_time,
-                                                to_datetime=end_time)
-        self._container_storage.enqueue_file_for_encryption(filename_base=filename_base,
-                                                            data=result_bytestring)
+        filename_base = self._build_tarfile_filename(
+            from_datetime=self._current_start_time, to_datetime=end_time
+        )
+        self._container_storage.enqueue_file_for_encryption(
+            filename_base=filename_base, data=result_bytestring
+        )
 
         self._current_tarfile = None
         self._current_bytesio = None
@@ -122,7 +119,9 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
 
         super()._flush_aggregated_data()
 
-    def _build_record_filename(self, sensor_name, from_datetime, to_datetime, extension):
+    def _build_record_filename(
+        self, sensor_name, from_datetime, to_datetime, extension
+    ):
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(self.DATETIME_FORMAT)
         to_ts = to_datetime.strftime(self.DATETIME_FORMAT)
@@ -150,7 +149,9 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
         :param extension: file extension, starting with a dot
         :param data: bytestring of audio/video/other data
         """
-        assert self._current_records_count or not self._current_start_time  # INVARIANT of our system!
+        assert (
+            self._current_records_count or not self._current_start_time
+        )  # INVARIANT of our system!
         assert isinstance(data, bytes), repr(data)  # For now, only format supported
         assert extension.startswith("."), extension
         assert from_datetime <= to_datetime, (from_datetime, to_datetime)
@@ -180,7 +181,9 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
         """
         Return the content of current tarfile as a bytestring, possibly empty, and reset the current tarfile.
         """
-        assert self._current_records_count or not self._current_start_time  # INVARIANT of our system!
+        assert (
+            self._current_records_count or not self._current_start_time
+        )  # INVARIANT of our system!
         self._flush_aggregated_data()
 
     @staticmethod
@@ -210,7 +213,7 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         self,
         tarfile_aggregator: TarfileAggregator,
         sensor_name: str,
-        max_duration_s: int
+        max_duration_s: int,
     ):
         super().__init__(max_duration_s=max_duration_s)
         assert isinstance(tarfile_aggregator, TarfileAggregator), tarfile_aggregator
@@ -247,7 +250,9 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         """
         Flush current data to the tarfile if needed, and append `data_dict` to the queue.
         """
-        assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
+        assert (
+            self._current_dataset or not self._current_start_time
+        )  # INVARIANT of our system!
         assert isinstance(data_dict, dict), data_dict
         self._notify_aggregation_operation()
         self._current_dataset.append(data_dict)
@@ -257,13 +262,13 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         """
         Force the flushing of current data to the tarfile (e.g. when terminating the service).
         """
-        assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
+        assert (
+            self._current_dataset or not self._current_start_time
+        )  # INVARIANT of our system!
         self._flush_aggregated_data()
 
 
-
 class PeriodicValueProviderBase(abc.ABC):
-
     def __init__(self, interval_s, json_aggregator):
         self._provider_is_started = False
         self._interval_s = interval_s
@@ -299,7 +304,10 @@ class PeriodicValuePoller(PeriodicValueProviderBase):
     """
 
     from multitimer import RepeatingTimer as _RepeatingTimer
-    _RepeatingTimer.daemon = True  # Do not prevent process shutdown if we forgot to stop...
+
+    _RepeatingTimer.daemon = (
+        True
+    )  # Do not prevent process shutdown if we forgot to stop...
 
     def __init__(self, interval_s, task_func, json_aggregator):
         super().__init__(interval_s=interval_s, json_aggregator=json_aggregator)
@@ -319,6 +327,7 @@ class PeriodicValuePoller(PeriodicValueProviderBase):
         except Exception:
             # TODO add logging/warnings
             import traceback
+
             traceback.print_exc()
 
     def start(self):

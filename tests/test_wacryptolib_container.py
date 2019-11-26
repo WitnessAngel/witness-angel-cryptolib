@@ -12,10 +12,12 @@ from wacryptolib.container import (
     LOCAL_ESCROW_PLACEHOLDER,
     encrypt_data_into_container,
     decrypt_data_from_container,
-    TarfileAggregator,
-    JsonAggregator,
     _get_proxy_for_escrow,
     ContainerStorage,
+)
+from wacryptolib.sensor import (
+    TarfileAggregator,
+    JsonAggregator,
     PeriodicValuePoller,
 )
 from wacryptolib.escrow import EscrowApi

@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from freezegun import freeze_time
 
-from wacryptolib.container import TimeLimitedAggregatorMixin
+from wacryptolib.sensor import TimeLimitedAggregatorMixin
 
 
 def test_time_limited_aggregator_mixin():

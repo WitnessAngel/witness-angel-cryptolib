@@ -11,10 +11,3 @@ encryption/signing keys of the escrow system.
 
 .. autoclass:: wacryptolib.container.ContainerStorage
     :members:
-
-.. autoclass:: wacryptolib.container.TarfileAggregator
-    :members:
-
-.. autoclass:: wacryptolib.container.JsonAggregator
-    :members:
-

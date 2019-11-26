@@ -11,5 +11,6 @@ API Documentation
    api/signature
    api/encryption
    api/shared_secret
+   api/sensor
    api/jsonrpc_client
    api/utilities

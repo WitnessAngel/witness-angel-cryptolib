@@ -19,7 +19,7 @@ from wacryptolib.container import (
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.sensor import TarfileAggregator, JsonAggregator, PeriodicValuePoller, SensorManager, \
-    ProviderStateMachineBase
+    SensorStateMachineBase
 from wacryptolib.utilities import load_from_json_bytes
 
 
@@ -43,7 +43,7 @@ def _check_sensor_state_machine(sensor, run_delay=0):
     with pytest.raises(RuntimeError, match="already started"):
         sensor.start()
 
-    with pytest.raises(RuntimeError, match="running periodic value provider"):
+    with pytest.raises(RuntimeError, match="running periodic value Sensor"):
         sensor.join()
 
     time.sleep(run_delay)
@@ -499,7 +499,7 @@ def test_periodic_value_poller(tmp_path):
 
 def test_sensor_manager():
 
-    class DummyUnstableSensor(ProviderStateMachineBase):
+    class DummyUnstableSensor(SensorStateMachineBase):
 
         def __init__(self, is_broken):
             super().__init__()

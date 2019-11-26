@@ -271,34 +271,43 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         self._flush_aggregated_data()
 
 
-class ProviderStateMachineBase(abc.ABC):  # Fixme rename to sensor!!
+class SensorStateMachineBase(abc.ABC):
+    """
+    State machine for all sensors, checking that the order of start/stop/join
+    operations is correct.
+
+    The two-steps shutdown (`stop()`, and later `join()`) allows caller to
+    efficiently and safely stop numerous pollers.
+    """
     def __init__(self):
-        self._provider_is_started = False
+        self._sensor_is_started = False
 
     def start(self):
         """Start the periodic system which will poll or push the value."""
-        if self._provider_is_started:
-            raise RuntimeError("Can't start an already started periodic value provider")
-        self._provider_is_started = True
+        if self._sensor_is_started:
+            raise RuntimeError("Can't start an already started periodic value Sensor")
+        self._sensor_is_started = True
 
     def stop(self):
         """Request the periodic system to stop as soon as possible."""
-        if not self._provider_is_started:
-            raise RuntimeError("Can't stop an already stopped periodic value provider")
-        self._provider_is_started = False
+        if not self._sensor_is_started:
+            raise RuntimeError("Can't stop an already stopped periodic value Sensor")
+        self._sensor_is_started = False
 
     def join(self):
         """
         Wait for the periodic system to really finish running.
         Does nothing if periodic system is already stopped.
         """
-        if self._provider_is_started:
-            raise RuntimeError("Can't join a running periodic value provider")
+        if self._sensor_is_started:
+            raise RuntimeError("Can't join a running periodic value Sensor")
 
 
-class PeriodicValueProviderBase(
-    ProviderStateMachineBase
-):  # FIXME redesign this to allow direct push to tarfile too?
+class PeriodicValueSensorBase(SensorStateMachineBase):
+    """
+    Base classes for sensors polling or pushing data to a json aggragator at regular intervals.
+    """
+
     def __init__(self, interval_s, json_aggregator):
         super().__init__()
         self._interval_s = interval_s
@@ -309,11 +318,9 @@ class PeriodicValueProviderBase(
         self._json_aggregator.add_data(data_dict)
 
 
-class PeriodicValuePoller(PeriodicValueProviderBase):
+class PeriodicValuePoller(PeriodicValueSensorBase):
     """
     This class runs a function at a specified interval, and pushes its result to a json aggregator.
-
-    Two-steps shutdown (`stop()`, and later `join()`) allows caller to efficiently and safely stop numerous pollers.
     """
 
     from multitimer import RepeatingTimer as _RepeatingTimer
@@ -369,7 +376,7 @@ class PeriodicValuePoller(PeriodicValueProviderBase):
             timer_thread.join()
 
 
-class SensorManager(ProviderStateMachineBase):
+class SensorManager(SensorStateMachineBase):
     """
     Manage a group of sensors for simultaneous starts/stops.
     """

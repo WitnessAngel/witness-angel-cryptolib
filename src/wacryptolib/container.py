@@ -286,17 +286,12 @@ def decrypt_data_from_container(container: dict) -> bytes:
 class TimeLimitedAggregatorMixin:
     """
     This class provides utilities to flush underlying data after a defined `max_duration_s` 
-    delay has been exceeded, as well as a per-instance "self._lock" threading lock for use 
-    by public methods.
+    delay has been exceeded.
     """
 
     _max_duration_s = None
-    _tarfile_aggregator = None
 
-    _current_dataset = None
     _current_start_time = None
-
-    _lock = None
 
     def __init__(self, max_duration_s: int):
         assert max_duration_s > 0, max_duration_s
@@ -307,7 +302,7 @@ class TimeLimitedAggregatorMixin:
         """Call this before every "data append" operation, to flush AND renew inner aggregator if needed."""
         if self._current_start_time is not None:
             delay_s = datetime.now(tz=timezone.utc) - self._current_start_time
-            if delay_s.seconds >= self._max_duration_s:
+            if delay_s.total_seconds() >= self._max_duration_s:
                 self._flush_aggregated_data()
         if self._current_start_time is None:
             self._current_start_time = datetime.now(
@@ -416,6 +411,8 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
 
     DATETIME_FORMAT = "%Y%m%d%H%M%S"
 
+    _lock = None
+
     # Keep these in sync if you add bz/gz compression later
     tarfile_writing_mode = "w"
     tarfile_extension = ".tar"
@@ -427,6 +424,7 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
     def __init__(self, container_storage: ContainerStorage, max_duration_s: int):
         super().__init__(max_duration_s=max_duration_s)
         self._container_storage = container_storage
+        self._lock = threading.Lock()
 
     def __len__(self):
         return self._current_records_count
@@ -553,6 +551,7 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
 
     _tarfile_aggregator = None
     _current_dataset = None
+    _lock = None
 
     def __init__(
         self,
@@ -564,6 +563,7 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         assert isinstance(tarfile_aggregator, TarfileAggregator), tarfile_aggregator
         self._tarfile_aggregator = tarfile_aggregator
         self._sensor_name = sensor_name
+        self._lock = threading.Lock()
 
     def __len__(self):
         return len(self._current_dataset) if self._current_dataset else 0
@@ -660,8 +660,13 @@ class PeriodicValuePoller(PeriodicValueProviderBase):
 
     def _offloaded_run_task(self):
         """This function is meant to be called by secondary thread, to fetch and store data."""
-        result = self._task_func()
-        self._offloaded_add_data(result)
+        try:
+            result = self._task_func()
+            self._offloaded_add_data(result)
+        except Exception:
+            # TODO add logging/warnings
+            import traceback
+            traceback.print_exc()
 
     def start(self):
         """Launch the secondary thread for periodic polling."""
@@ -677,7 +682,7 @@ class PeriodicValuePoller(PeriodicValueProviderBase):
     def join(self):
         """
         Wait for the secondary thread to really exit, after `stop()` was called.
-        When this function returns, no more data should be sent to the json aggregator by this poller,
+        When this function returns, no more data will be sent to the json aggregator by this poller,
         until the next `start()`.
 
         This does NOT flush the underlying json aggregator!

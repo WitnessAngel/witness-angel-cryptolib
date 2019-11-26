@@ -1,3 +1,4 @@
+import logging
 import uuid
 from abc import ABC, abstractmethod
 
@@ -7,6 +8,8 @@ from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
 )
 from wacryptolib.signature import sign_message
+
+logger = logging.getLogger(__name__)
 
 #: Special value in containers, to invoke a device-local escrow
 LOCAL_ESCROW_PLACEHOLDER = "_local_"

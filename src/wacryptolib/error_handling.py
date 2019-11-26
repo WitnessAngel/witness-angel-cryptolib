@@ -1,3 +1,8 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 def _gather_exception_subclasses(module, parent_classes):
     selected_classes = []
     for (key, value) in vars(module).items():

@@ -1,6 +1,10 @@
+import logging
+
 from jsonrpc_requests import Server as ServerBase, ProtocolError
 
 from wacryptolib.utilities import dump_to_json_str, load_from_json_str
+
+logger = logging.getLogger(__name__)
 
 
 class JsonRpcProxy(ServerBase):

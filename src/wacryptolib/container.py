@@ -1,5 +1,6 @@
 import copy
 import glob
+import logging
 import os
 import uuid
 
@@ -12,6 +13,8 @@ from wacryptolib.key_generation import (
 )
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
+
+logger = logging.getLogger(__name__)
 
 CONTAINER_FORMAT = "WA_0.1a"
 CONTAINER_SUFFIX = ".crypt"

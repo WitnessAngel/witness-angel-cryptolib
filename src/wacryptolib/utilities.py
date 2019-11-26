@@ -1,7 +1,10 @@
+import logging
 from typing import List
 
 from Crypto.Util.Padding import pad, unpad
 from decorator import decorator
+
+logger = logging.getLogger(__name__)
 
 UTF8_ENCODING = "utf8"
 

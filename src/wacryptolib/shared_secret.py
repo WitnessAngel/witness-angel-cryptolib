@@ -1,8 +1,11 @@
+import logging
 from typing import List
 
 from Crypto.Protocol.SecretSharing import Shamir
 
 from wacryptolib.utilities import split_as_chunks, recombine_chunks
+
+logger = logging.getLogger(__name__)
 
 SHAMIR_CHUNK_LENGTH = 16
 

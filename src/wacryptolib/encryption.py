@@ -1,3 +1,5 @@
+import logging
+
 import Crypto.Hash
 from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
 from Crypto.PublicKey import RSA
@@ -10,6 +12,8 @@ from wacryptolib.key_generation import (
     _check_asymmetric_key_length_bits,
 )
 from wacryptolib.utilities import split_as_chunks
+
+logger = logging.getLogger(__name__)
 
 RSA_OAEP_CHUNKS_SIZE = 60
 RSA_OAEP_HASHER = Crypto.Hash.SHA512

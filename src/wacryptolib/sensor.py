@@ -1,5 +1,6 @@
 import abc
 import io
+import logging
 import tarfile
 import threading
 from datetime import datetime, timezone
@@ -12,6 +13,8 @@ from wacryptolib.utilities import (
     synchronized,
     check_datetime_is_tz_aware,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TimeLimitedAggregatorMixin:
@@ -268,7 +271,9 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         self._flush_aggregated_data()
 
 
-class PeriodicValueProviderBase(abc.ABC):
+class PeriodicValueProviderBase(
+    abc.ABC
+):  # FIXME redesign this to allow direct push to tarfile too?
     def __init__(self, interval_s, json_aggregator):
         self._provider_is_started = False
         self._interval_s = interval_s

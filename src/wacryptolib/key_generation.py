@@ -1,5 +1,9 @@
+import logging
+
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Random import get_random_bytes
+
+logger = logging.getLogger(__name__)
 
 
 def generate_symmetric_key(encryption_algo: str) -> bytes:

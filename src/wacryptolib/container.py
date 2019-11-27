@@ -283,6 +283,7 @@ class ContainerStorage:
 
     def __init__(self, encryption_conf, output_dir, max_containers_count=None):
         assert os.path.isdir(output_dir), output_dir
+        output_dir = os.path.abspath(output_dir)
         assert (
             max_containers_count is None or max_containers_count > 0
         ), max_containers_count
@@ -295,10 +296,12 @@ class ContainerStorage:
         return len(self.list_container_names())  # No sorting, to be quicker
 
     def list_container_names(self, as_sorted_relative_paths=False):
-        """Returns the list of encrypted containers present in storage, sorted or not."""
+        """Returns the list of encrypted containers present in storage, as random absolute paths,
+        or as sorted relative path."""
+        assert os.path.isabs(self._output_dir), self._output_dir
         paths = glob.glob(os.path.join(self._output_dir, "*" + CONTAINER_SUFFIX))
         if as_sorted_relative_paths:
-            paths = sorted(os.path.basename(x) for x in self.list_container_names())
+            paths = sorted(os.path.basename(x) for x in paths)
         return paths
 
     def _make_absolute_container_path(self, container_name):

@@ -33,12 +33,18 @@ from wacryptolib.sensor import TimeLimitedAggregatorMixin
 
 def _check_sensor_state_machine(sensor, run_delay=0):
 
+    assert not sensor.is_running
+
     sensor.join()  # Does nothing
 
     with pytest.raises(RuntimeError, match="already stopped"):
         sensor.stop()
 
+    assert not sensor.is_running
+
     sensor.start()
+
+    assert sensor.is_running
 
     with pytest.raises(RuntimeError, match="already started"):
         sensor.start()
@@ -46,15 +52,25 @@ def _check_sensor_state_machine(sensor, run_delay=0):
     with pytest.raises(RuntimeError, match="running periodic value Sensor"):
         sensor.join()
 
+    assert sensor.is_running
+
     time.sleep(run_delay)
 
+    assert sensor.is_running
+
     sensor.stop()
+
+    assert not sensor.is_running
 
     with pytest.raises(RuntimeError, match="already stopped"):
         sensor.stop()
 
+    assert not sensor.is_running
+
     sensor.join()
     sensor.join()  # Does nothing
+
+    assert not sensor.is_running
 
 
 def test_time_limited_aggregator_mixin():
@@ -535,9 +551,12 @@ def test_sensor_manager():
 
     success_count = manager.start()
     assert success_count == 3
+    assert all(sensor.is_running for sensor in manager._sensors)
 
     success_count = manager.stop()
     assert success_count == 3
+    assert not any(sensor.is_running for sensor in manager._sensors)
 
     success_count = manager.join()
     assert success_count == 3
+    assert not any(sensor.is_running for sensor in manager._sensors)

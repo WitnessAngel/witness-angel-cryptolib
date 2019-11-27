@@ -282,6 +282,10 @@ class SensorStateMachineBase(abc.ABC):
     def __init__(self):
         self._sensor_is_started = False
 
+    @property
+    def is_running(self):
+        return self._sensor_is_started
+
     def start(self):
         """Start the periodic system which will poll or push the value."""
         if self._sensor_is_started:
@@ -361,7 +365,7 @@ class PeriodicValuePoller(PeriodicValueSensorBase):
         super().stop()
         self._multitimer.stop()
 
-    def join(self):
+    def join(self):  # TODO - add a join timeout everywhere?
         """
         Wait for the secondary thread to really exit, after `stop()` was called.
         When this function returns, no more data will be sent to the json aggregator by this poller,
@@ -376,9 +380,11 @@ class PeriodicValuePoller(PeriodicValueSensorBase):
             timer_thread.join()
 
 
-class SensorManager(SensorStateMachineBase):
+class SensorManager(SensorStateMachineBase):  # TODO rename as plural !!!!!!
     """
     Manage a group of sensors for simultaneous starts/stops.
+
+    The underlying aggregators are not supposed to be impacted by these changes.
     """
 
     def __init__(self, sensors):

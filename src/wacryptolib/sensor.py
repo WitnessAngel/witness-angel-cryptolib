@@ -68,6 +68,7 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
     _current_tarfile = None
     _current_bytesio = None
     _current_records_count = 0
+    _current_metadata = None
 
     def __init__(self, container_storage: ContainerStorage, max_duration_s: int):
         super().__init__(max_duration_s=max_duration_s)
@@ -81,12 +82,15 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
         super()._notify_aggregation_operation()
         if not self._current_tarfile:
             assert not self._current_bytesio, repr(self._current_bytesio)
+            assert not self._current_metadata, repr(self._current_metadata)
+            assert not self._current_records_count, self._current_bytesio
             self._current_bytesio = io.BytesIO()
             self._current_tarfile = tarfile.open(
                 mode=self.tarfile_writing_mode,
                 fileobj=self._current_bytesio,  # TODO - add compression?
             )
-            assert self._current_records_count == 0, self._current_bytesio
+            self._current_metadata = {"members": {}}
+
 
     def _build_tarfile_filename(self, from_datetime, to_datetime):
         extension = self.tarfile_extension
@@ -113,11 +117,12 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
             from_datetime=self._current_start_time, to_datetime=end_time
         )
         self._container_storage.enqueue_file_for_encryption(
-            filename_base=filename_base, data=result_bytestring
+            filename_base=filename_base, data=result_bytestring, metadata=self._current_metadata
         )
 
         self._current_tarfile = None
         self._current_bytesio = None
+        self._current_metadata = None
         self._current_records_count = 0
 
         super()._flush_aggregated_data()
@@ -171,6 +176,10 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
         )
 
         mtime = to_datetime.timestamp()
+
+        member_metadata = dict(size=len(data),
+                               mtime=to_datetime)
+        self._current_metadata["members"][filename] = member_metadata  # Overridden if existing
 
         tarinfo = tarfile.TarInfo(filename)
         tarinfo.size = len(data)  # this is crucial
@@ -336,6 +345,8 @@ class PeriodicValuePoller(PeriodicValueSensorBase):
     def __init__(self, interval_s, task_func, json_aggregator):
         super().__init__(interval_s=interval_s, json_aggregator=json_aggregator)
         self._task_func = task_func
+
+        # TODO make PR to ensure that multitimer is a DAEMON thread!
         self._multitimer = multitimer.MultiTimer(
             interval=interval_s,
             function=self._offloaded_run_task,

@@ -4,6 +4,8 @@ import logging
 import os
 import uuid
 
+from typing import Optional
+
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
 from wacryptolib.escrow import DummyKeyStorage, EscrowApi, LOCAL_ESCROW_PLACEHOLDER
 from wacryptolib.jsonrpc_client import JsonRpcProxy
@@ -44,8 +46,8 @@ class ContainerBase:
 
 
 class ContainerWriter(ContainerBase):
-    def encrypt_data(self, data: bytes, *, conf: dict, keychain_uid=None) -> dict:
-
+    def encrypt_data(self, data: bytes, *, conf: dict, keychain_uid=None, metadata=None) -> dict:
+        assert metadata is None or isinstance(metadata, dict), metadata
         container_format = CONTAINER_FORMAT
         container_uid = uuid.uuid4()  # ALWAYS UNIQUE!
         keychain_uid = (
@@ -121,6 +123,7 @@ class ContainerWriter(ContainerBase):
             keychain_uid=keychain_uid,
             data_ciphertext=data_ciphertext,
             data_encryption_strata=result_data_encryption_strata,
+            metadata=metadata,
         )
 
     def _encrypt_symmetric_key(
@@ -161,6 +164,11 @@ class ContainerWriter(ContainerBase):
 
 
 class ContainerReader(ContainerBase):
+
+    def extract_metadata(self, container: dict) -> Optional[dict]:
+        assert isinstance(container, dict), container
+        return container["metadata"]
+
     def decrypt_data(self, container: dict) -> bytes:
         assert isinstance(container, dict), container
 
@@ -247,7 +255,7 @@ class ContainerReader(ContainerBase):
         )  # Raises if troubles
 
 
-def encrypt_data_into_container(data: bytes, *, conf: dict, keychain_uid=None) -> dict:
+def encrypt_data_into_container(data: bytes, *, conf: dict, metadata: Optional[dict], keychain_uid=None) -> dict:
     """Turn raw data into a high-security container, which can only be decrypted with
     the agreement of the owner and multiple third-party escrows.
 
@@ -258,7 +266,7 @@ def encrypt_data_into_container(data: bytes, *, conf: dict, keychain_uid=None) -
     :return:
     """
     writer = ContainerWriter()
-    container = writer.encrypt_data(data, conf=conf, keychain_uid=keychain_uid)
+    container = writer.encrypt_data(data, conf=conf, keychain_uid=keychain_uid, metadata=metadata)
     return container
 
 
@@ -271,6 +279,20 @@ def decrypt_data_from_container(container: dict) -> bytes:
     """
     reader = ContainerReader()
     data = reader.decrypt_data(container)
+    return data
+
+
+def extract_metadata_from_container(container: dict) -> Optional[dict]:
+    """Read the metadata tree (possibly None) from a container.
+
+    CURRENTLY METADATA IS NOT ENCRYPTED.
+
+    :param container: the container tree, which also holds metadata about encrypted content
+
+    :return: dict
+    """
+    reader = ContainerReader()
+    data = reader.extract_metadata(container)
     return data
 
 
@@ -324,33 +346,33 @@ class ContainerStorage:
                 for container_name in containers_to_delete:
                     self._delete_container(container_name)
 
-    def _encrypt_data_into_container(self, data):
-        return encrypt_data_into_container(data=data, conf=self._encryption_conf)
+    def _encrypt_data_into_container(self, data, metadata):
+        return encrypt_data_into_container(data=data, conf=self._encryption_conf, metadata=metadata)
 
     def _decrypt_data_from_container(self, container):
         return decrypt_data_from_container(
             container
         )  # Will fail if authorizations are not OK
 
-    def _process_and_store_file(self, filename_base, data):
+    def _process_and_store_file(self, filename_base, data, metadata):
         container_filepath = self._make_absolute_container_path(
             filename_base + CONTAINER_SUFFIX
         )
-        container = self._encrypt_data_into_container(data)
+        container = self._encrypt_data_into_container(data, metadata=metadata)
         container_bytes = dump_to_json_bytes(container, indent=4)
         # Beware, this might erase existing file, it's accepted
         with open(container_filepath, "wb") as f:
             f.write(container_bytes)
         self._purge_exceeding_containers()  # AFTER new container is created
 
-    def enqueue_file_for_encryption(self, filename_base, data):
-        """Enqueue a data file for encryption and storage.
+    def enqueue_file_for_encryption(self, filename_base, data, metadata):
+        """Enqueue a data file for encryption and storage, with its metadata tree.
 
         Default implementation does the encryption/output job synchronously.
 
         `filename` of the final container might be different from provided one.
         """
-        self._process_and_store_file(filename_base=filename_base, data=data)
+        self._process_and_store_file(filename_base=filename_base, data=data, metadata=metadata)
 
     def decrypt_container_from_storage(self, container_name_or_idx):
         """

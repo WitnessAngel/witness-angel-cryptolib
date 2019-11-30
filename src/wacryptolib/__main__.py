@@ -54,7 +54,7 @@ def cli(ctx, config):
 
 
 def _do_encrypt(data):
-    container = encrypt_data_into_container(data, conf=EXAMPLE_CONTAINER_CONF)
+    container = encrypt_data_into_container(data, conf=EXAMPLE_CONTAINER_CONF, metadata=None)
     return container
 
 

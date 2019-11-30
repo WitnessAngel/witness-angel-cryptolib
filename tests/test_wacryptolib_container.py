@@ -15,7 +15,7 @@ from wacryptolib.container import (
     decrypt_data_from_container,
     _get_proxy_for_escrow,
     ContainerStorage,
-)
+    extract_metadata_from_container)
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.sensor import TarfileAggregator, JsonAggregator, PeriodicValuePoller
@@ -116,8 +116,12 @@ def test_container_encryption_and_decryption(container_conf):
         [None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")]
     )
 
+    metadata = random.choice(
+            [None, dict(a=[123])]
+        )
+
     container = encrypt_data_into_container(
-        data=data, conf=container_conf, keychain_uid=keychain_uid
+        data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata
     )
     # pprint.pprint(container, width=120)
 
@@ -125,14 +129,17 @@ def test_container_encryption_and_decryption(container_conf):
     if keychain_uid:
         assert container["keychain_uid"] == keychain_uid
 
-    result = decrypt_data_from_container(container=container)
+    result_data = decrypt_data_from_container(container=container)
     # pprint.pprint(result, width=120)
+    assert result_data == data
 
-    assert result == data
+    result_metadata = extract_metadata_from_container(container=container)
+    assert result_metadata == metadata
 
     container["container_format"] = "OAJKB"
     with pytest.raises(ValueError, match="Unknown container format"):
         decrypt_data_from_container(container=container)
+
 
 
 def test_get_proxy_for_escrow():
@@ -162,8 +169,8 @@ def test_container_storage(tmp_path):
     assert len(storage) == 0
     assert storage.list_container_names() == []
 
-    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n")
-    storage.enqueue_file_for_encryption("empty.txt", b"")
+    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
+    storage.enqueue_file_for_encryption("empty.txt", b"", metadata=dict(somevalue=True))
 
     assert len(storage) == 2
     assert storage.list_container_names(as_sorted_relative_paths=True) == [
@@ -189,14 +196,14 @@ def test_container_storage(tmp_path):
     storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path)
     assert storage._max_containers_count is None
     for i in range(10):
-        storage.enqueue_file_for_encryption("file.dat", b"dogs\ncats\n")
+        storage.enqueue_file_for_encryption("file.dat", b"dogs\ncats\n", metadata=None)
     assert len(storage) == 11  # Still the older file remains
 
     storage = FakeTestContainerStorage(
         encryption_conf=None, output_dir=tmp_path, max_containers_count=3
     )
     for i in range(3):
-        storage.enqueue_file_for_encryption("xyz.dat", b"abc")
+        storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
     assert len(storage) == 3  # Purged
     assert storage.list_container_names(as_sorted_relative_paths=True) == [
         "xyz.dat.000.crypt",
@@ -204,7 +211,7 @@ def test_container_storage(tmp_path):
         "xyz.dat.002.crypt",
     ]
 
-    storage.enqueue_file_for_encryption("xyz.dat", b"abc")
+    storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
     assert len(storage) == 3  # Purged
     assert storage.list_container_names(as_sorted_relative_paths=True) == [
         "xyz.dat.001.crypt",
@@ -216,9 +223,9 @@ def test_container_storage(tmp_path):
         encryption_conf=None, output_dir=tmp_path, max_containers_count=4
     )
     assert len(storage) == 3  # Retrieves existing containers
-    storage.enqueue_file_for_encryption("aaa.dat", b"000")
+    storage.enqueue_file_for_encryption("aaa.dat", b"000", metadata=None)
     assert len(storage) == 4  # Unchanged
-    storage.enqueue_file_for_encryption("zzz.dat", b"000")
+    storage.enqueue_file_for_encryption("zzz.dat", b"000", metadata=None)
     assert len(storage) == 4  # Purge occurred
     # Entry "aaa.dat.000.crypt" was ejected because it's a sorting by NAMES for now!
     assert storage.list_container_names(as_sorted_relative_paths=True) == [

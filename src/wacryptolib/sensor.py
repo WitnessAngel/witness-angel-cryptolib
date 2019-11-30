@@ -91,7 +91,6 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
             )
             self._current_metadata = {"members": {}}
 
-
     def _build_tarfile_filename(self, from_datetime, to_datetime):
         extension = self.tarfile_extension
         assert extension.startswith("."), extension
@@ -117,7 +116,9 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
             from_datetime=self._current_start_time, to_datetime=end_time
         )
         self._container_storage.enqueue_file_for_encryption(
-            filename_base=filename_base, data=result_bytestring, metadata=self._current_metadata
+            filename_base=filename_base,
+            data=result_bytestring,
+            metadata=self._current_metadata,
         )
 
         self._current_tarfile = None
@@ -177,9 +178,10 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
 
         mtime = to_datetime.timestamp()
 
-        member_metadata = dict(size=len(data),
-                               mtime=to_datetime)
-        self._current_metadata["members"][filename] = member_metadata  # Overridden if existing
+        member_metadata = dict(size=len(data), mtime=to_datetime)
+        self._current_metadata["members"][
+            filename
+        ] = member_metadata  # Overridden if existing
 
         tarinfo = tarfile.TarInfo(filename)
         tarinfo.size = len(data)  # this is crucial
@@ -288,6 +290,7 @@ class SensorStateMachineBase(abc.ABC):
     The two-steps shutdown (`stop()`, and later `join()`) allows caller to
     efficiently and safely stop numerous pollers.
     """
+
     def __init__(self):
         self._sensor_is_started = False
 
@@ -410,7 +413,9 @@ class SensorManager(SensorStateMachineBase):  # TODO rename as plural !!!!!!
             try:
                 sensor.start()
             except Exception as exc:
-                logger.error(f"Failed starting sensor {sensor.__class__.__name__} ({exc!r})")
+                logger.error(
+                    f"Failed starting sensor {sensor.__class__.__name__} ({exc!r})"
+                )
             else:
                 success_count += 1
         return success_count
@@ -423,7 +428,9 @@ class SensorManager(SensorStateMachineBase):  # TODO rename as plural !!!!!!
             try:
                 sensor.stop()
             except Exception as exc:
-                logger.error(f"Failed stopping sensor {sensor.__class__.__name__} ({exc!r})")
+                logger.error(
+                    f"Failed stopping sensor {sensor.__class__.__name__} ({exc!r})"
+                )
             else:
                 success_count += 1
         return success_count
@@ -436,7 +443,9 @@ class SensorManager(SensorStateMachineBase):  # TODO rename as plural !!!!!!
             try:
                 sensor.join()
             except Exception as exc:
-                logger.error(f"Failed joining sensor {sensor.__class__.__name__} ({exc!r})")
+                logger.error(
+                    f"Failed joining sensor {sensor.__class__.__name__} ({exc!r})"
+                )
             else:
                 success_count += 1
         return success_count

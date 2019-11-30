@@ -15,7 +15,8 @@ from wacryptolib.container import (
     decrypt_data_from_container,
     _get_proxy_for_escrow,
     ContainerStorage,
-    extract_metadata_from_container)
+    extract_metadata_from_container,
+)
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.sensor import TarfileAggregator, JsonAggregator, PeriodicValuePoller
@@ -116,9 +117,7 @@ def test_container_encryption_and_decryption(container_conf):
         [None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")]
     )
 
-    metadata = random.choice(
-            [None, dict(a=[123])]
-        )
+    metadata = random.choice([None, dict(a=[123])])
 
     container = encrypt_data_into_container(
         data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata
@@ -139,7 +138,6 @@ def test_container_encryption_and_decryption(container_conf):
     container["container_format"] = "OAJKB"
     with pytest.raises(ValueError, match="Unknown container format"):
         decrypt_data_from_container(container=container)
-
 
 
 def test_get_proxy_for_escrow():

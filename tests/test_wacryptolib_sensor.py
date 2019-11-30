@@ -18,8 +18,13 @@ from wacryptolib.container import (
 )
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
-from wacryptolib.sensor import TarfileAggregator, JsonAggregator, PeriodicValuePoller, SensorManager, \
-    SensorStateMachineBase
+from wacryptolib.sensor import (
+    TarfileAggregator,
+    JsonAggregator,
+    PeriodicValuePoller,
+    SensorManager,
+    SensorStateMachineBase,
+)
 from wacryptolib.utilities import load_from_json_bytes
 
 
@@ -28,7 +33,6 @@ from datetime import timedelta
 from freezegun import freeze_time
 
 from wacryptolib.sensor import TimeLimitedAggregatorMixin
-
 
 
 def _check_sensor_state_machine(sensor, run_delay=0):
@@ -514,9 +518,7 @@ def test_periodic_value_poller(tmp_path):
 
 
 def test_sensor_manager():
-
     class DummyUnstableSensor(SensorStateMachineBase):
-
         def __init__(self, is_broken):
             super().__init__()
             self._is_broken = is_broken
@@ -543,8 +545,12 @@ def test_sensor_manager():
 
     # Now with FILLED manager
 
-    sensors = [DummyUnstableSensor(is_broken=False), DummyUnstableSensor(is_broken=False),
-               DummyUnstableSensor(is_broken=True), DummyUnstableSensor(is_broken=False)]
+    sensors = [
+        DummyUnstableSensor(is_broken=False),
+        DummyUnstableSensor(is_broken=False),
+        DummyUnstableSensor(is_broken=True),
+        DummyUnstableSensor(is_broken=False),
+    ]
 
     manager = SensorManager(sensors=sensors)
     _check_sensor_state_machine(manager)

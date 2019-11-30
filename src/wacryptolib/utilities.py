@@ -134,6 +134,7 @@ def dump_to_json_file(filepath, data, **extra_options):
         f.write(json_bytes)
     return json_bytes
 
+
 def load_from_json_file(filepath, **extra_options):
     """
     Same as `load_from_json_bytes`, but reads data from filesystem.
@@ -141,4 +142,3 @@ def load_from_json_file(filepath, **extra_options):
     with open(filepath, "rb") as f:
         json_bytes = f.read()
     return load_from_json_bytes(json_bytes, **extra_options)
-

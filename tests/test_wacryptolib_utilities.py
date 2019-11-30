@@ -13,7 +13,9 @@ from wacryptolib.utilities import (
     load_from_json_bytes,
     load_from_json_str,
     check_datetime_is_tz_aware,
-    dump_to_json_file, load_from_json_file)
+    dump_to_json_file,
+    load_from_json_file,
+)
 
 
 def test_check_datetime_is_tz_aware():
@@ -96,7 +98,9 @@ def test_serialization_utilities(tmp_path):
     assert deserialized == data
 
     tmp_filepath = os.path.join(tmp_path, "dummy_temp_file.dat")
-    serialized_str = dump_to_json_file(tmp_filepath, data=data, ensure_ascii=True) # Json arguments well propagated
+    serialized_str = dump_to_json_file(
+        tmp_filepath, data=data, ensure_ascii=True
+    )  # Json arguments well propagated
     assert (
         serialized_str
         == b'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'

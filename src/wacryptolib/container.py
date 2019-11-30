@@ -14,7 +14,12 @@ from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
 )
 from wacryptolib.signature import verify_message_signature
-from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, dump_to_json_file, load_from_json_file
+from wacryptolib.utilities import (
+    dump_to_json_bytes,
+    load_from_json_bytes,
+    dump_to_json_file,
+    load_from_json_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +51,9 @@ class ContainerBase:
 
 
 class ContainerWriter(ContainerBase):
-    def encrypt_data(self, data: bytes, *, conf: dict, keychain_uid=None, metadata=None) -> dict:
+    def encrypt_data(
+        self, data: bytes, *, conf: dict, keychain_uid=None, metadata=None
+    ) -> dict:
         assert metadata is None or isinstance(metadata, dict), metadata
         container_format = CONTAINER_FORMAT
         container_uid = uuid.uuid4()  # ALWAYS UNIQUE!
@@ -164,7 +171,6 @@ class ContainerWriter(ContainerBase):
 
 
 class ContainerReader(ContainerBase):
-
     def extract_metadata(self, container: dict) -> Optional[dict]:
         assert isinstance(container, dict), container
         return container["metadata"]
@@ -255,7 +261,9 @@ class ContainerReader(ContainerBase):
         )  # Raises if troubles
 
 
-def encrypt_data_into_container(data: bytes, *, conf: dict, metadata: Optional[dict], keychain_uid=None) -> dict:
+def encrypt_data_into_container(
+    data: bytes, *, conf: dict, metadata: Optional[dict], keychain_uid=None
+) -> dict:
     """Turn raw data into a high-security container, which can only be decrypted with
     the agreement of the owner and multiple third-party escrows.
 
@@ -266,7 +274,9 @@ def encrypt_data_into_container(data: bytes, *, conf: dict, metadata: Optional[d
     :return:
     """
     writer = ContainerWriter()
-    container = writer.encrypt_data(data, conf=conf, keychain_uid=keychain_uid, metadata=metadata)
+    container = writer.encrypt_data(
+        data, conf=conf, keychain_uid=keychain_uid, metadata=metadata
+    )
     return container
 
 
@@ -347,7 +357,9 @@ class ContainerStorage:
                     self._delete_container(container_name)
 
     def _encrypt_data_into_container(self, data, metadata):
-        return encrypt_data_into_container(data=data, conf=self._encryption_conf, metadata=metadata)
+        return encrypt_data_into_container(
+            data=data, conf=self._encryption_conf, metadata=metadata
+        )
 
     def _decrypt_data_from_container(self, container):
         return decrypt_data_from_container(
@@ -359,7 +371,9 @@ class ContainerStorage:
             filename_base + CONTAINER_SUFFIX
         )
         container = self._encrypt_data_into_container(data, metadata=metadata)
-        dump_to_json_file(container_filepath, data=container, indent=4)  # Note that this might erase existing file, it's OK
+        dump_to_json_file(
+            container_filepath, data=container, indent=4
+        )  # Note that this might erase existing file, it's OK
         self._purge_exceeding_containers()  # AFTER new container is created
 
     def enqueue_file_for_encryption(self, filename_base, data, metadata):
@@ -369,7 +383,9 @@ class ContainerStorage:
 
         `filename` of the final container might be different from provided one.
         """
-        self._process_and_store_file(filename_base=filename_base, data=data, metadata=metadata)
+        self._process_and_store_file(
+            filename_base=filename_base, data=data, metadata=metadata
+        )
 
     def decrypt_container_from_storage(self, container_name_or_idx):
         """

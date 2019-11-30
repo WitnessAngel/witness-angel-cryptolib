@@ -19,7 +19,7 @@ from wacryptolib.utilities import (
     load_from_json_bytes,
     dump_to_json_file,
     load_from_json_file,
-)
+    generate_uuid0)
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +56,9 @@ class ContainerWriter(ContainerBase):
     ) -> dict:
         assert metadata is None or isinstance(metadata, dict), metadata
         container_format = CONTAINER_FORMAT
-        container_uid = uuid.uuid4()  # ALWAYS UNIQUE!
+        container_uid = generate_uuid0()  # ALWAYS UNIQUE!
         keychain_uid = (
-            keychain_uid or uuid.uuid4()
+            keychain_uid or generate_uuid0()
         )  # Might be shared by lots of containers
 
         conf = copy.deepcopy(conf)  # So that we can manipulate it

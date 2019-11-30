@@ -7,6 +7,7 @@ from wacryptolib.encryption import _encrypt_via_rsa_oaep
 from wacryptolib.escrow import EscrowApi, DummyKeyStorage, KeyStorageBase
 from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.signature import verify_message_signature
+from wacryptolib.utilities import generate_uuid0
 
 
 def test_escrow_api_workflow():
@@ -14,7 +15,7 @@ def test_escrow_api_workflow():
     key_storage = DummyKeyStorage()
     escrow_api = EscrowApi(key_storage=key_storage)
 
-    keychain_uid = uuid.uuid4()
+    keychain_uid = generate_uuid0()
     secret = get_random_bytes(101)
 
     public_key_pem = escrow_api.get_public_key(
@@ -67,7 +68,7 @@ def test_key_storage_base():
 
     # Sanity checks on dummy key storage used
 
-    _tmp_keychain_uid = uuid.uuid4()
+    _tmp_keychain_uid = generate_uuid0()
 
     key_storage.set_keys(
         keychain_uid="aaa", key_type="bbb", public_key=b"public", private_key=b"private"

@@ -129,7 +129,7 @@ def load_from_json_bytes(data, **extra_options):
 
 def dump_to_json_file(filepath, data, **extra_options):
     """
-    Same as `dump_to_json_bytes`, but writes data to filesystem (and retuurn bytes too).
+    Same as `dump_to_json_bytes`, but writes data to filesystem (and returns bytes too).
     """
     json_bytes = dump_to_json_bytes(data, **extra_options)
     with open(filepath, "wb") as f:

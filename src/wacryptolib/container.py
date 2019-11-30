@@ -14,7 +14,7 @@ from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
 )
 from wacryptolib.signature import verify_message_signature
-from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
+from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, dump_to_json_file, load_from_json_file
 
 logger = logging.getLogger(__name__)
 
@@ -359,10 +359,7 @@ class ContainerStorage:
             filename_base + CONTAINER_SUFFIX
         )
         container = self._encrypt_data_into_container(data, metadata=metadata)
-        container_bytes = dump_to_json_bytes(container, indent=4)
-        # Beware, this might erase existing file, it's accepted
-        with open(container_filepath, "wb") as f:
-            f.write(container_bytes)
+        dump_to_json_file(container_filepath, data=container, indent=4)  # Note that this might erase existing file, it's OK
         self._purge_exceeding_containers()  # AFTER new container is created
 
     def enqueue_file_for_encryption(self, filename_base, data, metadata):
@@ -389,7 +386,8 @@ class ContainerStorage:
             container_name = container_name_or_idx
 
         assert not os.path.isabs(container_name), container_name
-        with open(os.path.join(self._output_dir, container_name), "rb") as f:
-            data = f.read()
-        container = load_from_json_bytes(data)
+
+        container_filepath = os.path.join(self._output_dir, container_name)
+        container = load_from_json_file(container_filepath)
+
         return self._decrypt_data_from_container(container)

@@ -123,3 +123,22 @@ def load_from_json_bytes(data, **extra_options):
 
     json_str = data.decode(UTF8_ENCODING)
     return load_from_json_str(data=json_str, **extra_options)
+
+
+def dump_to_json_file(filepath, data, **extra_options):
+    """
+    Same as `dump_to_json_bytes`, but writes data to filesystem (and retuurn bytes too).
+    """
+    json_bytes = dump_to_json_bytes(data, **extra_options)
+    with open(filepath, "wb") as f:
+        f.write(json_bytes)
+    return json_bytes
+
+def load_from_json_file(filepath, **extra_options):
+    """
+    Same as `load_from_json_bytes`, but reads data from filesystem.
+    """
+    with open(filepath, "rb") as f:
+        json_bytes = f.read()
+    return load_from_json_bytes(json_bytes, **extra_options)
+

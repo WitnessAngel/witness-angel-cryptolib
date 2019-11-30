@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -12,7 +13,7 @@ from wacryptolib.utilities import (
     load_from_json_bytes,
     load_from_json_str,
     check_datetime_is_tz_aware,
-)
+    dump_to_json_file, load_from_json_file)
 
 
 def test_check_datetime_is_tz_aware():
@@ -51,7 +52,7 @@ def test_split_as_chunks_and_recombine():
     assert result == bytestring
 
 
-def test_serialization_utilities():
+def test_serialization_utilities(tmp_path):
 
     uid = uuid.UUID("7c0b18f5-f410-4e83-9263-b38c2328e516")
     data = dict(b=b"xyz", a="hêllo", c=uid)
@@ -92,4 +93,13 @@ def test_serialization_utilities():
         == b'{"a": "h\xc3\xaallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
     )
     deserialized = load_from_json_bytes(serialized_str)
+    assert deserialized == data
+
+    tmp_filepath = os.path.join(tmp_path, "dummy_temp_file.dat")
+    serialized_str = dump_to_json_file(tmp_filepath, data=data, ensure_ascii=True) # Json arguments well propagated
+    assert (
+        serialized_str
+        == b'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
+    )
+    deserialized = load_from_json_file(tmp_filepath)
     assert deserialized == data

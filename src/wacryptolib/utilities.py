@@ -1,6 +1,8 @@
+from datetime import datetime
 import logging
-from typing import List
+from typing import List, Optional
 
+import uuid0
 from Crypto.Util.Padding import pad, unpad
 from decorator import decorator
 
@@ -142,3 +144,15 @@ def load_from_json_file(filepath, **extra_options):
     with open(filepath, "rb") as f:
         json_bytes = f.read()
     return load_from_json_bytes(json_bytes, **extra_options)
+
+
+def generate_uuid0(ts: Optional[int]=None):
+    """
+    Generate a random UUID partly based on Unix timestamp (not part of official "variants").
+
+    Uses 6 bytes to encode the time and does not encode any version bits, leaving 10 bytes (80 bits) of random data.
+
+    :param ts: optional timestamp to use instead of current time (if not falsey)
+    :return: uuid0 object (subclass of UUID)
+    """
+    return uuid0.generate(ts)

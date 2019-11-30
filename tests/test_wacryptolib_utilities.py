@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 
 import pytest
 from Crypto.Random import get_random_bytes
+import pytz
+
+
 
 from wacryptolib.utilities import (
     split_as_chunks,
@@ -15,7 +18,7 @@ from wacryptolib.utilities import (
     check_datetime_is_tz_aware,
     dump_to_json_file,
     load_from_json_file,
-)
+    generate_uuid0)
 
 
 def test_check_datetime_is_tz_aware():
@@ -107,3 +110,25 @@ def test_serialization_utilities(tmp_path):
     )
     deserialized = load_from_json_file(tmp_filepath)
     assert deserialized == data
+
+
+def test_generate_uuid0():
+
+    utc=pytz.UTC
+
+    some_date = datetime(year=2000, month=6, day=12, tzinfo=timezone.min)
+    some_timestamp = datetime.timestamp(some_date)
+
+    uuid0 = generate_uuid0(some_timestamp)
+    assert utc.localize(uuid0.datetime) == some_date
+    assert uuid0.datetime_local != some_date.replace(tzinfo=None)  # Local TZ is used here
+    assert uuid0.unix_ts == some_timestamp
+
+    uuids = [generate_uuid0().int for _ in range(1000)]
+    assert len(set(uuids)) == 1000
+
+    uuids = [generate_uuid0(some_timestamp).int for _ in range(1000)]
+    assert len(set(uuids)) == 1000
+
+    uuid_test = generate_uuid0(0)
+    assert uuid_test.unix_ts != 0  # Can't generate UUIDs with timestamp=0

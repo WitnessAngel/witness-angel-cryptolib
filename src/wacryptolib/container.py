@@ -7,7 +7,7 @@ import uuid
 from typing import Optional
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
-from wacryptolib.escrow import DummyKeyStorage, EscrowApi, LOCAL_ESCROW_PLACEHOLDER
+from wacryptolib.escrow import DummyKeyStorage, EscrowApi as LocalEscrowApi, LOCAL_ESCROW_PLACEHOLDER, KeyStorageBase
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.key_generation import (
     generate_symmetric_key,
@@ -29,17 +29,8 @@ MEDIUM_SUFFIX = (
     ".medium"
 )  # To construct decrypted filename when no previous extensions are found in container filename
 
-LOCAL_ESCROW_API = EscrowApi(key_storage=DummyKeyStorage())
 
-
-def _get_proxy_for_escrow(escrow):
-    if escrow == LOCAL_ESCROW_PLACEHOLDER:
-        return LOCAL_ESCROW_API
-    elif isinstance(escrow, dict):
-        if "url" in escrow:
-            return JsonRpcProxy(url=escrow)
-        # TODO - Implement escrow lookup in global registry, shared-secret group, etc.
-    raise ValueError("Unrecognized escrow identifiers: %s" % str(escrow))
+DUMMY_KEY_STORAGE = DummyKeyStorage()  # Fallback storage with in-memory keys
 
 
 class ContainerBase:
@@ -47,7 +38,22 @@ class ContainerBase:
     BEWARE - this class-based design is provisional and might change a lot.
     """
 
-    pass
+    def __init__(self, local_key_storage=None):
+        if not local_key_storage:
+            logger.warning("No local key storage provided for %s instance, falling back to DummyKeyStorage()",
+                           self.__class__.__name__)
+            local_key_storage = DUMMY_KEY_STORAGE
+        self._local_key_storage = local_key_storage
+        self._local_escrow_api = LocalEscrowApi(key_storage=self._local_key_storage)
+
+    def _get_proxy_for_escrow(self, escrow):
+        if escrow == LOCAL_ESCROW_PLACEHOLDER:
+            return self._local_escrow_api
+        elif isinstance(escrow, dict):
+            if "url" in escrow:
+                return JsonRpcProxy(url=escrow)
+            # TODO - Implement escrow lookup in global registry, shared-secret group, etc.
+        raise ValueError("Unrecognized escrow identifiers: %s" % str(escrow))
 
 
 class ContainerWriter(ContainerBase):
@@ -139,7 +145,7 @@ class ContainerWriter(ContainerBase):
         assert isinstance(symmetric_key_data, bytes), symmetric_key_data
         escrow_key_type = conf["escrow_key_type"]
         key_encryption_algo = conf["key_encryption_algo"]
-        encryption_proxy = _get_proxy_for_escrow(conf["key_escrow"])
+        encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
 
         subkey_pem = encryption_proxy.get_public_key(
             keychain_uid=keychain_uid, key_type=escrow_key_type
@@ -158,7 +164,7 @@ class ContainerWriter(ContainerBase):
     def _generate_signature(
         self, keychain_uid: uuid.UUID, data_ciphertext: bytes, conf: dict
     ) -> dict:
-        encryption_proxy = _get_proxy_for_escrow(conf["signature_escrow"])
+        encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
         signature_key_type = conf["signature_key_type"]
         signature_algo = conf["signature_algo"]
         signature_value = encryption_proxy.get_message_signature(
@@ -230,7 +236,7 @@ class ContainerReader(ContainerBase):
         assert isinstance(symmetric_key_cipherdict, dict), symmetric_key_cipherdict
         escrow_key_type = conf["escrow_key_type"]
         key_encryption_algo = conf["key_encryption_algo"]
-        encryption_proxy = _get_proxy_for_escrow(conf["key_escrow"])
+        encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
 
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
             keychain_uid=keychain_uid,
@@ -245,7 +251,7 @@ class ContainerReader(ContainerBase):
     ):
         signature_key_type = conf["signature_key_type"]
         signature_algo = conf["signature_algo"]
-        encryption_proxy = _get_proxy_for_escrow(conf["signature_escrow"])
+        encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
         public_key_pem = encryption_proxy.get_public_key(
             keychain_uid=keychain_uid, key_type=signature_key_type
         )
@@ -262,32 +268,34 @@ class ContainerReader(ContainerBase):
 
 
 def encrypt_data_into_container(
-    data: bytes, *, conf: dict, metadata: Optional[dict], keychain_uid=None
+    data: bytes, *, conf: dict, metadata: Optional[dict], keychain_uid: Optional[uuid.UUID]=None, local_key_storage: Optional[KeyStorageBase]=None
 ) -> dict:
     """Turn raw data into a high-security container, which can only be decrypted with
     the agreement of the owner and multiple third-party escrows.
 
     :param data: bytestring of media (image, video, sound...) to protect
     :param conf: tree of format-specific settings
+    :param metadata: dict of metadata describing the data
     :param keychain_uid: optional ID of a keychain to reuse
+    :param local_key_storage: optional local key storage
 
-    :return:
+    :return: dict of container
     """
-    writer = ContainerWriter()
+    writer = ContainerWriter(local_key_storage=local_key_storage)
     container = writer.encrypt_data(
         data, conf=conf, keychain_uid=keychain_uid, metadata=metadata
     )
     return container
 
 
-def decrypt_data_from_container(container: dict) -> bytes:
+def decrypt_data_from_container(container: dict, local_key_storage: Optional[KeyStorageBase]=None) -> bytes:
     """Decrypt a container with the help of third-parties.
 
     :param container: the container tree, which holds all information about involved keys
 
     :return: raw bytestring
     """
-    reader = ContainerReader()
+    reader = ContainerReader(local_key_storage=local_key_storage)
     data = reader.decrypt_data(container)
     return data
 
@@ -311,9 +319,11 @@ class ContainerStorage:
     This class encrypts file streams and stores them into filesystem.
 
     Since it doesn't use in-memory aggregation structures, it's supposed to be thread-safe.
+
+    Exceeding containers are automatically purged after each file addition.
     """
 
-    def __init__(self, encryption_conf, output_dir, max_containers_count=None):
+    def __init__(self, encryption_conf, output_dir, max_containers_count=None, local_key_storage=None):
         assert os.path.isdir(output_dir), output_dir
         output_dir = os.path.abspath(output_dir)
         assert (
@@ -322,6 +332,7 @@ class ContainerStorage:
         self._encryption_conf = encryption_conf
         self._output_dir = output_dir
         self._max_containers_count = max_containers_count
+        self._local_key_storage = None
 
     def __len__(self):
         """Beware, might be SLOW if many files are present in folder."""
@@ -358,12 +369,13 @@ class ContainerStorage:
 
     def _encrypt_data_into_container(self, data, metadata):
         return encrypt_data_into_container(
-            data=data, conf=self._encryption_conf, metadata=metadata
+            data=data, conf=self._encryption_conf, metadata=metadata, local_key_storage=self._local_key_storage
         )
 
     def _decrypt_data_from_container(self, container):
         return decrypt_data_from_container(
-            container
+            container,
+            local_key_storage=self._local_key_storage
         )  # Will fail if authorizations are not OK
 
     def _process_and_store_file(self, filename_base, data, metadata):

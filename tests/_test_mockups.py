@@ -2,7 +2,7 @@ from wacryptolib.container import ContainerStorage
 
 
 class FakeTestContainerStorage(ContainerStorage):
-    """Fake class which bypasses encryption and forces filename unicity regardless fo datetime, to speed up tests..."""
+    """Fake class which bypasses encryption and forces filename unicity regardless of datetime, to speed up tests..."""
 
     increment = 0
 

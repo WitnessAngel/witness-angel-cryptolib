@@ -13,10 +13,9 @@ from wacryptolib.container import (
     LOCAL_ESCROW_PLACEHOLDER,
     encrypt_data_into_container,
     decrypt_data_from_container,
-    _get_proxy_for_escrow,
     ContainerStorage,
     extract_metadata_from_container,
-)
+    ContainerBase)
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.sensor import TarfileAggregator, JsonAggregator, PeriodicValuePoller
@@ -142,19 +141,23 @@ def test_container_encryption_and_decryption(container_conf):
 
 def test_get_proxy_for_escrow():
 
-    proxy = _get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
+    container_base = ContainerBase()
+
+    proxy = container_base._get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
     assert isinstance(proxy, EscrowApi)  # Local proxy
 
-    proxy = _get_proxy_for_escrow(dict(url="http://example.com/jsonrpc"))
+    proxy = container_base._get_proxy_for_escrow(dict(url="http://example.com/jsonrpc"))
     assert isinstance(
         proxy, JsonRpcProxy
     )  # It should expose identical methods to EscrowApi
 
     with pytest.raises(ValueError):
-        _get_proxy_for_escrow(dict(urn="athena"))
+        container_base._get_proxy_for_escrow(dict(urn="athena"))
 
     with pytest.raises(ValueError):
-        _get_proxy_for_escrow("weird-value")
+        container_base._get_proxy_for_escrow("weird-value")
+
+    assert False  # TODO complete with OTHER local escrow implementation
 
 
 def test_container_storage(tmp_path):

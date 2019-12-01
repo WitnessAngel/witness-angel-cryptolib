@@ -16,7 +16,7 @@ from wacryptolib.container import (
     ContainerStorage,
     extract_metadata_from_container,
     ContainerBase)
-from wacryptolib.escrow import EscrowApi
+from wacryptolib.escrow import EscrowApi, FilesystemKeyStorage, DummyKeyStorage
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.sensor import TarfileAggregator, JsonAggregator, PeriodicValuePoller
 from wacryptolib.utilities import load_from_json_bytes
@@ -139,32 +139,43 @@ def test_container_encryption_and_decryption(container_conf):
         decrypt_data_from_container(container=container)
 
 
-def test_get_proxy_for_escrow():
+def test_get_proxy_for_escrow(tmp_path):
 
-    container_base = ContainerBase()
+    container_base1 = ContainerBase()
+    proxy1 = container_base1._get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
+    assert isinstance(proxy1, EscrowApi)  # Local Escrow
+    assert isinstance(proxy1._key_storage, DummyKeyStorage)  # Default type
 
-    proxy = container_base._get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
-    assert isinstance(proxy, EscrowApi)  # Local proxy
+    container_base1_bis = ContainerBase()
+    proxy1_bis = container_base1_bis._get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
+    assert proxy1_bis._key_storage is proxy1_bis._key_storage  # process-local storage is SINGLETON!
 
-    proxy = container_base._get_proxy_for_escrow(dict(url="http://example.com/jsonrpc"))
-    assert isinstance(
-        proxy, JsonRpcProxy
-    )  # It should expose identical methods to EscrowApi
+    container_base2 = ContainerBase(local_key_storage=FilesystemKeyStorage(keys_dir=str(tmp_path)))
+    proxy2 = container_base2._get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
+    assert isinstance(proxy2, EscrowApi)  # Local Escrow
+    assert isinstance(proxy2._key_storage, FilesystemKeyStorage)
 
-    with pytest.raises(ValueError):
-        container_base._get_proxy_for_escrow(dict(urn="athena"))
 
-    with pytest.raises(ValueError):
-        container_base._get_proxy_for_escrow("weird-value")
+    for container_base in (container_base1, container_base2):
 
-    assert False  # TODO complete with OTHER local escrow implementation
+        proxy = container_base._get_proxy_for_escrow(dict(url="http://example.com/jsonrpc"))
+        assert isinstance(
+            proxy, JsonRpcProxy
+        )  # It should expose identical methods to EscrowApi
+
+        with pytest.raises(ValueError):
+            container_base._get_proxy_for_escrow(dict(urn="athena"))
+
+        with pytest.raises(ValueError):
+            container_base._get_proxy_for_escrow("weird-value")
+
 
 
 def test_container_storage(tmp_path):
 
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
     storage = ContainerStorage(
-        encryption_conf=SIMPLE_CONTAINER_CONF, output_dir=tmp_path
+        encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path
     )
     assert storage._max_containers_count is None
     assert len(storage) == 0
@@ -194,14 +205,14 @@ def test_container_storage(tmp_path):
 
     # Test purge system
 
-    storage = FakeTestContainerStorage(encryption_conf=None, output_dir=tmp_path)
+    storage = FakeTestContainerStorage(encryption_conf=None, containers_dir=tmp_path)
     assert storage._max_containers_count is None
     for i in range(10):
         storage.enqueue_file_for_encryption("file.dat", b"dogs\ncats\n", metadata=None)
     assert len(storage) == 11  # Still the older file remains
 
     storage = FakeTestContainerStorage(
-        encryption_conf=None, output_dir=tmp_path, max_containers_count=3
+        encryption_conf=None, containers_dir=tmp_path, max_containers_count=3
     )
     for i in range(3):
         storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
@@ -221,7 +232,7 @@ def test_container_storage(tmp_path):
     ]
 
     storage = FakeTestContainerStorage(
-        encryption_conf=None, output_dir=tmp_path, max_containers_count=4
+        encryption_conf=None, containers_dir=tmp_path, max_containers_count=4
     )
     assert len(storage) == 3  # Retrieves existing containers
     storage.enqueue_file_for_encryption("aaa.dat", b"000", metadata=None)

@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from abc import ABC, abstractmethod
 
@@ -82,15 +83,15 @@ class EscrowApi:
     """
 
     def __init__(self, key_storage: KeyStorageBase):
-        self.key_storage = key_storage
+        self._key_storage = key_storage
 
     def _ensure_keypair_exists(self, keychain_uid: uuid.UUID, key_type: str):
-        has_public_key = self.key_storage.get_public_key(
+        has_public_key = self._key_storage.get_public_key(
             keychain_uid=keychain_uid, key_type=key_type
         )
         if not has_public_key:
             keypair = generate_asymmetric_keypair(key_type=key_type, serialize=True)
-            self.key_storage.set_keys(
+            self._key_storage.set_keys(
                 keychain_uid=keychain_uid,
                 key_type=key_type,
                 public_key=keypair["public_key"],
@@ -103,7 +104,7 @@ class EscrowApi:
         or to check a signature.
         """
         self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
-        return self.key_storage.get_public_key(
+        return self._key_storage.get_public_key(
             keychain_uid=keychain_uid, key_type=key_type
         )
 
@@ -120,7 +121,7 @@ class EscrowApi:
         """
         self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
 
-        private_key_pem = self.key_storage.get_private_key(
+        private_key_pem = self._key_storage.get_private_key(
             keychain_uid=keychain_uid, key_type=key_type
         )
 
@@ -151,7 +152,7 @@ class EscrowApi:
         )  # Only supported asymmetric cipher for now
         self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
 
-        private_key_pem = self.key_storage.get_private_key(
+        private_key_pem = self._key_storage.get_private_key(
             keychain_uid=keychain_uid, key_type=key_type
         )
 
@@ -177,7 +178,7 @@ class DummyKeyStorage(KeyStorageBase):
     def set_keys(self, *, keychain_uid, key_type, public_key, private_key):
         if self._get_keypair(keychain_uid=keychain_uid, key_type=key_type):
             raise RuntimeError(
-                "Can't save already existing key %s/%s" % (keychain_uid, key_type)
+                "Can't save already existing dummy key %s/%s" % (keychain_uid, key_type)
             )
         self._cached_keypairs[(keychain_uid, key_type)] = dict(
             public_key=public_key, private_key=private_key
@@ -190,3 +191,49 @@ class DummyKeyStorage(KeyStorageBase):
     def get_private_key(self, *, keychain_uid, key_type):
         keypair = self._get_keypair(keychain_uid=keychain_uid, key_type=key_type)
         return keypair["private_key"] if keypair else None
+
+
+class FilesystemKeyStorage(KeyStorageBase):
+
+    def __init__(self, keys_dir):
+        assert os.path.isdir(keys_dir), keys_dir
+        keys_dir = os.path.abspath(keys_dir)
+        self._keys_dir = keys_dir
+
+    def _get_filename(self, keychain_uid, key_type, is_public: bool):
+        return "%s_%s_%s.pem" % (keychain_uid, key_type, "public_key" if is_public else "private_key")
+
+    def _write_to_storage_file(self, basename: str, data: bytes):
+        assert os.sep not in basename, basename
+        with open(os.path.join(self._keys_dir, basename), "wb") as f:
+            f.write(data)
+
+    def _read_from_storage_file(self, basename: str):
+        assert os.sep not in basename, basename
+        try:
+            with open(os.path.join(self._keys_dir, basename), "rb") as f:
+                return f.read()
+        except FileNotFoundError:
+            return None
+
+    def set_keys(self, *, keychain_uid, key_type, public_key, private_key):
+        filename_public_key = self._get_filename(keychain_uid, key_type=key_type, is_public=True)
+        filename_private_key = self._get_filename(keychain_uid, key_type=key_type, is_public=False)
+
+        # We use PRIVATE key as marker of existence
+        if os.path.exists(os.path.join(self._keys_dir, filename_private_key)):
+            raise RuntimeError(
+                "Can't save already existing filesystem key %s/%s" % (keychain_uid, key_type)
+            )
+
+        # We override (unexpected) already existing files
+        self._write_to_storage_file(basename=filename_public_key, data=public_key)
+        self._write_to_storage_file(basename=filename_private_key, data=private_key)
+
+    def get_public_key(self, *, keychain_uid, key_type):
+        filename_public_key = self._get_filename(keychain_uid, key_type=key_type, is_public=True)
+        return self._read_from_storage_file(basename=filename_public_key)
+
+    def get_private_key(self, *, keychain_uid, key_type):
+        filename_private_key = self._get_filename(keychain_uid, key_type=key_type, is_public=False)
+        return self._read_from_storage_file(basename=filename_private_key)

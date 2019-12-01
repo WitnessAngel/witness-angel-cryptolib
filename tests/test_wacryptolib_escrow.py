@@ -1,10 +1,12 @@
+import os
+import random
 import uuid
 
 import pytest
 from Crypto.Random import get_random_bytes
 
 from wacryptolib.encryption import _encrypt_via_rsa_oaep
-from wacryptolib.escrow import EscrowApi, DummyKeyStorage, KeyStorageBase
+from wacryptolib.escrow import EscrowApi, DummyKeyStorage, KeyStorageBase, FilesystemKeyStorage
 from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import generate_uuid0
@@ -59,40 +61,51 @@ def test_escrow_api_workflow():
     assert decrypted == secret
 
 
-def test_key_storage_base():
+def test_key_storages(tmp_path):
 
-    key_storage = DummyKeyStorage()
+    dummy_key_storage = DummyKeyStorage()
+    filesystem_key_storage = FilesystemKeyStorage(keys_dir=str(tmp_path))
 
     with pytest.raises(TypeError, match="Can't instantiate abstract class"):
         KeyStorageBase()
 
     # Sanity checks on dummy key storage used
 
-    _tmp_keychain_uid = generate_uuid0()
+    keychain_uid = generate_uuid0()
+    keychain_uid_other = generate_uuid0()
 
-    key_storage.set_keys(
-        keychain_uid="aaa", key_type="bbb", public_key=b"public", private_key=b"private"
-    )
-    with pytest.raises(RuntimeError):
+    for key_storage in (dummy_key_storage, filesystem_key_storage):
+
         key_storage.set_keys(
-            keychain_uid="aaa",
-            key_type="bbb",
-            public_key=b"public",
-            private_key=b"private",
+            keychain_uid=keychain_uid, key_type="abxz", public_key=b"public_data", private_key=b"private_data"
         )
-    with pytest.raises(RuntimeError):
-        key_storage.set_keys(
-            keychain_uid="aaa",
-            key_type="bbb",
-            public_key=b"public2",
-            private_key=b"private2",
-        )
+        with pytest.raises(RuntimeError):
+            key_storage.set_keys(
+                keychain_uid=keychain_uid,
+                key_type="abxz",
+                public_key=b"public_data",
+                private_key=b"private_data",
+            )
+        with pytest.raises(RuntimeError):
+            key_storage.set_keys(
+                keychain_uid=keychain_uid,
+                key_type="abxz",
+                public_key=b"public_data2",
+                private_key=b"private_data2",
+            )
 
-    assert key_storage.get_public_key(keychain_uid="aaa", key_type="bbb") == b"public"
-    assert key_storage.get_private_key(keychain_uid="aaa", key_type="bbb") == b"private"
+        assert key_storage.get_public_key(keychain_uid=keychain_uid, key_type="abxz") == b"public_data"
+        assert key_storage.get_private_key(keychain_uid=keychain_uid, key_type="abxz") == b"private_data"
 
-    assert key_storage.get_public_key(keychain_uid="aaa", key_type="bbbX") == None
-    assert key_storage.get_private_key(keychain_uid="aaa", key_type="bbbX") == None
+        assert key_storage.get_public_key(keychain_uid=keychain_uid, key_type="abxz_") == None
+        assert key_storage.get_private_key(keychain_uid=keychain_uid, key_type="abxz_") == None
 
-    assert key_storage.get_public_key(keychain_uid="aaaX", key_type="bbb") == None
-    assert key_storage.get_private_key(keychain_uid="aaaX", key_type="bbb") == None
+        assert key_storage.get_public_key(keychain_uid=keychain_uid_other, key_type="abxz") == None
+        assert key_storage.get_private_key(keychain_uid=keychain_uid_other, key_type="abxz") == None
+
+
+    is_public = random.choice([True, False])
+    basename = filesystem_key_storage._get_filename(keychain_uid, key_type="abxz", is_public=is_public)
+    with open(os.path.join(str(tmp_path), basename), "rb") as f:
+        key_data = f.read()
+        assert key_data == (b"public_data" if is_public else b"private_data")  # IMPORTANT no exchange of keys in files!

@@ -101,7 +101,7 @@ def test_time_limited_aggregator_mixin():
 def test_tarfile_aggregator(tmp_path):
 
     container_storage = FakeTestContainerStorage(
-        encryption_conf=None, output_dir=tmp_path
+        encryption_conf=None, containers_dir=tmp_path
     )
 
     tarfile_aggregator = TarfileAggregator(
@@ -270,7 +270,7 @@ def test_tarfile_aggregator(tmp_path):
 def test_json_aggregator(tmp_path):
 
     container_storage = FakeTestContainerStorage(
-        encryption_conf=None, output_dir=tmp_path
+        encryption_conf=None, containers_dir=tmp_path
     )
 
     tarfile_aggregator = TarfileAggregator(
@@ -361,7 +361,7 @@ def test_json_aggregator(tmp_path):
 def test_aggregators_thread_safety(tmp_path):
 
     container_storage = FakeTestContainerStorage(
-        encryption_conf=None, output_dir=tmp_path
+        encryption_conf=None, containers_dir=tmp_path
     )
 
     tarfile_aggregator = TarfileAggregator(
@@ -453,7 +453,7 @@ def test_aggregators_thread_safety(tmp_path):
 def test_periodic_value_poller(tmp_path):
 
     container_storage = FakeTestContainerStorage(
-        encryption_conf=None, output_dir=tmp_path
+        encryption_conf=None, containers_dir=tmp_path
     )
 
     tarfile_aggregator = TarfileAggregator(

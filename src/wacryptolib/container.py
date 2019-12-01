@@ -43,8 +43,7 @@ class ContainerBase:
             logger.warning("No local key storage provided for %s instance, falling back to DummyKeyStorage()",
                            self.__class__.__name__)
             local_key_storage = DUMMY_KEY_STORAGE
-        self._local_key_storage = local_key_storage
-        self._local_escrow_api = LocalEscrowApi(key_storage=self._local_key_storage)
+        self._local_escrow_api = LocalEscrowApi(key_storage=local_key_storage)
 
     def _get_proxy_for_escrow(self, escrow):
         if escrow == LOCAL_ESCROW_PLACEHOLDER:
@@ -323,16 +322,16 @@ class ContainerStorage:
     Exceeding containers are automatically purged after each file addition.
     """
 
-    def __init__(self, encryption_conf, output_dir, max_containers_count=None, local_key_storage=None):
-        assert os.path.isdir(output_dir), output_dir
-        output_dir = os.path.abspath(output_dir)
+    def __init__(self, encryption_conf, containers_dir, max_containers_count=None, local_key_storage=None):
+        assert os.path.isdir(containers_dir), containers_dir
+        containers_dir = os.path.abspath(containers_dir)
         assert (
             max_containers_count is None or max_containers_count > 0
         ), max_containers_count
         self._encryption_conf = encryption_conf
-        self._output_dir = output_dir
+        self._containers_dir = containers_dir
         self._max_containers_count = max_containers_count
-        self._local_key_storage = None
+        self._local_key_storage = local_key_storage
 
     def __len__(self):
         """Beware, might be SLOW if many files are present in folder."""
@@ -341,14 +340,14 @@ class ContainerStorage:
     def list_container_names(self, as_sorted_relative_paths=False):
         """Returns the list of encrypted containers present in storage, as random absolute paths,
         or as sorted relative path."""
-        assert os.path.isabs(self._output_dir), self._output_dir
-        paths = glob.glob(os.path.join(self._output_dir, "*" + CONTAINER_SUFFIX))
+        assert os.path.isabs(self._containers_dir), self._containers_dir
+        paths = glob.glob(os.path.join(self._containers_dir, "*" + CONTAINER_SUFFIX))
         if as_sorted_relative_paths:
             paths = sorted(os.path.basename(x) for x in paths)
         return paths
 
     def _make_absolute_container_path(self, container_name):
-        return os.path.join(self._output_dir, container_name)
+        return os.path.join(self._containers_dir, container_name)
 
     def _delete_container(self, container_name):
         container_filepath = self._make_absolute_container_path(container_name)
@@ -415,7 +414,7 @@ class ContainerStorage:
 
         assert not os.path.isabs(container_name), container_name
 
-        container_filepath = os.path.join(self._output_dir, container_name)
+        container_filepath = os.path.join(self._containers_dir, container_name)
         container = load_from_json_file(container_filepath)
 
         return self._decrypt_data_from_container(container)

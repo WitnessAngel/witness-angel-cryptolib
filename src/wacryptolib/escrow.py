@@ -226,15 +226,17 @@ class DummyKeyStorage(KeyStorageBase):
         assert isinstance(keypair, dict), keypair
         self._cached_keypairs[(keychain_uid, key_type)] = keypair
 
-    def set_keys(self, *, keychain_uid, key_type, public_key, private_key):
+    def _ensure_keypair_does_not_exist(self, keychain_uid, key_type):
         if self._get_keypair(keychain_uid=keychain_uid, key_type=key_type):
             raise RuntimeError(
-                "Can't save already existing dummy key %s/%s" % (keychain_uid, key_type)
+                "Already existing dummy keypair %s/%s" % (keychain_uid, key_type)
             )
+
+    def set_keys(self, *, keychain_uid, key_type, public_key, private_key):
+        self._ensure_keypair_does_not_exist(keychain_uid=keychain_uid, key_type=key_type)
         self._set_keypair(keychain_uid=keychain_uid, key_type=key_type, keypair=dict(
                     public_key=public_key, private_key=private_key
                 ))
-
 
     def get_public_key(self, *, keychain_uid, key_type):
         keypair = self._get_keypair(keychain_uid=keychain_uid, key_type=key_type)
@@ -259,11 +261,12 @@ class DummyKeyStorage(KeyStorageBase):
         sublist.append(keypair)
 
     def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_type: str):
+        self._ensure_keypair_does_not_exist(keychain_uid=keychain_uid, key_type=key_type)
         try:
             sublist = self._free_keypairs[key_type]
             keypair = sublist.pop()
         except LookupError:
-            raise RuntimeError("No free keypair of type %s available" % key_type)
+            raise RuntimeError("No free keypair of type %s available in dummy storage" % key_type)
         else:
             self._set_keypair(keychain_uid=keychain_uid, key_type=key_type, keypair=keypair)
 
@@ -273,9 +276,14 @@ class FilesystemKeyStorage(KeyStorageBase):
     Filesystem-based key storage for use in tests, where keys are kepts only instance-locally.
 
     Protected by a process-wide lock (but not safe to use in multiprocessing environment).
+
+    Beware, public and private keys (free or not) are stored side by side, if one of these is deleted, the resulting behaviour is undefined (but buggy).
     """
 
     _lock = threading.Lock()
+
+    _free_private_key_suffix = "_private_key.pem"
+    _free_public_key_suffix = "_public_key.pem"
 
     def __init__(self, keys_dir):
         keys_dir = Path(keys_dir)
@@ -301,20 +309,24 @@ class FilesystemKeyStorage(KeyStorageBase):
         except FileNotFoundError:
             return None
 
-    @synchronized
-    def set_keys(self, *, keychain_uid, key_type, public_key, private_key):
-        filename_public_key = self._get_filename(keychain_uid, key_type=key_type, is_public=True)
-        filename_private_key = self._get_filename(keychain_uid, key_type=key_type, is_public=False)
-
+    def _ensure_keypair_does_not_exist(self, keychain_uid, key_type):
         # We use PRIVATE key as marker of existence
-        if self._keys_dir.joinpath(filename_private_key).exists():
+        target_private_key_filename = self._get_filename(keychain_uid, key_type=key_type, is_public=False)
+        if self._keys_dir.joinpath(target_private_key_filename).exists():
             raise RuntimeError(
-                "Can't save already existing filesystem key %s/%s" % (keychain_uid, key_type)
+                "Already existing filesystem keypair %s/%s" % (keychain_uid, key_type)
             )
 
+    @synchronized
+    def set_keys(self, *, keychain_uid, key_type, public_key, private_key):
+        target_public_key_filename = self._get_filename(keychain_uid, key_type=key_type, is_public=True)
+        target_private_key_filename = self._get_filename(keychain_uid, key_type=key_type, is_public=False)
+
+        self._ensure_keypair_does_not_exist(keychain_uid=keychain_uid, key_type=key_type)
+
         # We override (unexpected) already existing files
-        self._write_to_storage_file(basename=filename_public_key, data=public_key)
-        self._write_to_storage_file(basename=filename_private_key, data=private_key)
+        self._write_to_storage_file(basename=target_public_key_filename, data=public_key)
+        self._write_to_storage_file(basename=target_private_key_filename, data=private_key)
 
     @synchronized
     def get_public_key(self, *, keychain_uid, key_type):
@@ -328,7 +340,10 @@ class FilesystemKeyStorage(KeyStorageBase):
 
     # No need for lock here
     def get_free_keypairs_count(self, key_type):
-        pass
+        subdir = self._free_keys_dir.joinpath(key_type)
+        if not subdir.is_dir():
+            return 0
+        return len(list(subdir.glob("*"+self._free_private_key_suffix)))
 
     @synchronized
     def add_free_keypair(
@@ -341,8 +356,28 @@ class FilesystemKeyStorage(KeyStorageBase):
         subdir = self._free_keys_dir.joinpath(key_type)
         subdir.mkdir(exist_ok=True)
 
+        # If these already exist, we overwrite them
         random_name = str(random.randint(1000000000000, 1000000000000000))
+        # First the public key, since the private one identifies the presence of a full free key
+        subdir.joinpath(random_name+self._free_public_key_suffix).write_bytes(public_key)
+        subdir.joinpath(random_name+self._free_private_key_suffix).write_bytes(private_key)
 
     @synchronized
     def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_type: str):
-        pass
+        self._ensure_keypair_does_not_exist(keychain_uid=keychain_uid, key_type=key_type)
+
+        target_public_key_filename = self._free_keys_dir.joinpath(self._get_filename(keychain_uid, key_type=key_type, is_public=True))
+        target_private_key_filename = self._free_keys_dir.joinpath(self._get_filename(keychain_uid, key_type=key_type, is_public=False))
+
+        subdir = self._free_keys_dir.joinpath(key_type)
+        globber = subdir.glob("*"+self._free_private_key_suffix)
+        try:
+            free_private_key = next(globber)
+        except StopIteration:
+            raise RuntimeError("No free keypair of type %s available in filesystem storage" % key_type)
+        _free_public_key_name = free_private_key.name.replace(self._free_private_key_suffix,
+                                                             self._free_public_key_suffix)
+        free_public_key = subdir.joinpath(_free_public_key_name)
+
+        free_public_key.replace(target_public_key_filename)
+        free_private_key.replace(target_private_key_filename)

@@ -1,5 +1,7 @@
 import logging
 import os
+import random
+import threading
 import uuid
 from abc import ABC, abstractmethod
 
@@ -9,6 +11,7 @@ from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
 )
 from wacryptolib.signature import sign_message
+from wacryptolib.utilities import synchronized
 
 logger = logging.getLogger(__name__)
 
@@ -34,16 +37,16 @@ class KeyStorageBase(ABC):
         private_key: bytes,
     ):  # pragma: no cover
         """
-        Store a pair of asymmetric keys into storage.
+        Store a pair of asymmetric keys into storage, attached to a specific UUID.
 
-        Must raise an exception if a key pair already exists for these identifiers.
+        Must raise an exception if a key pair already exists for these uid/type identifiers.
 
         :param keychain_uid: unique ID of the keychain
         :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
-        :param public_key: public key in PEM format (potentially encrypted)
-        :param private_key: private key in PEM format
+        :param public_key: public key in clear PEM format
+        :param private_key: private key in PEM format (potentially encrypted)
         """
-        raise NotImplementedError("KeyStorageBase.set_keypair()")
+        raise NotImplementedError("KeyStorageBase.set_keys()")
 
     @abstractmethod
     def get_public_key(
@@ -55,7 +58,7 @@ class KeyStorageBase(ABC):
         :param keychain_uid: unique ID of the keychain
         :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
 
-        :return: public key in PEM format, or None if unexisting.
+        :return: clearpublic key in clear PEM format, or None if unexisting.
         """
         raise NotImplementedError("KeyStorageBase.get_public_key()")
 
@@ -72,6 +75,46 @@ class KeyStorageBase(ABC):
         :return: private key in PEM format (potentially encrypted), or None if unexisting.
         """
         raise NotImplementedError("KeyStorageBase.get_private_key()")
+
+    @abstractmethod
+    def get_free_keypairs_count(self, key_type: str) -> int:  # pragma: no cover
+        """
+        Calculate the count of keypairs of type `key_type` which are free for subsequent attachment to an UUID.
+
+        :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
+        :return: count of free keypairs of said type
+        """
+        raise NotImplementedError("KeyStorageBase.get_free_keypairs_count()")
+
+    @abstractmethod
+    def add_free_keypair(
+        self,
+        *,
+        key_type: str,
+        public_key: bytes,
+        private_key: bytes,
+    ):  # pragma: no cover
+        """
+        Store a pair of asymmetric keys into storage, free for subsequent attachment to an UUID.
+
+        :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
+        :param public_key: public key in clear PEM format
+        :param private_key: private key in PEM format (potentially encrypted)
+        """
+        raise NotImplementedError("KeyStorageBase.add_free_keypair()")
+
+    @abstractmethod
+    def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_type: str):  # pragma: no cover
+        """
+        Fetch one of the free keypairs of storage of type `key_type`, and attach it to UUID `keychain_uid`.
+
+        If no free keypair is available, a RuntimeError is raised.
+
+        :param keychain_uid: unique ID of the keychain
+        :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
+        :return: public key of the keypair, in clear PEM format
+        """
+        raise NotImplementedError("KeyStorageBase.attach_free_keypair_to_uuid()")
 
 
 class EscrowApi:
@@ -166,23 +209,31 @@ class EscrowApi:
 
 class DummyKeyStorage(KeyStorageBase):
     """
-    Dummy key storage for use in tests, where keys are kepts only instance-locally.
+    Dummy key storage for use in tests, where keys are kepts only process-locally.
+
+    NOT THREAD-SAFE
     """
 
     def __init__(self):
-        self._cached_keypairs = {}
+        self._cached_keypairs = {}  # Maps (keychain_uid, key_type) to dicts of public_key/private_key
+        self._free_keypairs = {}  # Maps key types to lists of dicts of public_key/private_key
 
     def _get_keypair(self, *, keychain_uid, key_type):
         return self._cached_keypairs.get((keychain_uid, key_type))
+
+    def _set_keypair(self, *, keychain_uid, key_type, keypair):
+        assert isinstance(keypair, dict), keypair
+        self._cached_keypairs[(keychain_uid, key_type)] = keypair
 
     def set_keys(self, *, keychain_uid, key_type, public_key, private_key):
         if self._get_keypair(keychain_uid=keychain_uid, key_type=key_type):
             raise RuntimeError(
                 "Can't save already existing dummy key %s/%s" % (keychain_uid, key_type)
             )
-        self._cached_keypairs[(keychain_uid, key_type)] = dict(
-            public_key=public_key, private_key=private_key
-        )
+        self._set_keypair(keychain_uid=keychain_uid, key_type=key_type, keypair=dict(
+                    public_key=public_key, private_key=private_key
+                ))
+
 
     def get_public_key(self, *, keychain_uid, key_type):
         keypair = self._get_keypair(keychain_uid=keychain_uid, key_type=key_type)
@@ -192,13 +243,47 @@ class DummyKeyStorage(KeyStorageBase):
         keypair = self._get_keypair(keychain_uid=keychain_uid, key_type=key_type)
         return keypair["private_key"] if keypair else None
 
+    def get_free_keypairs_count(self, key_type):
+        return len(self._free_keypairs.get(key_type, []))
+
+    def add_free_keypair(
+        self,
+        *,
+        key_type: str,
+        public_key: bytes,
+        private_key: bytes,
+    ):
+        keypair = dict(public_key=public_key, private_key=private_key)
+        sublist = self._free_keypairs.setdefault(key_type, [])
+        sublist.append(keypair)
+
+    def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_type: str):
+        try:
+            sublist = self._free_keypairs[key_type]
+            keypair = sublist.pop()
+        except LookupError:
+            raise RuntimeError("No free keypair of type %s available" % key_type)
+        else:
+            self._set_keypair(keychain_uid=keychain_uid, key_type=key_type, keypair=keypair)
+
 
 class FilesystemKeyStorage(KeyStorageBase):
+    """
+    Filesystem-based key storage for use in tests, where keys are kepts only instance-locally.
+
+    Protected by a process-wide lock (but not safe to use in multiprocessing environment).
+    """
+
+    _lock = threading.Lock()
 
     def __init__(self, keys_dir):
         assert os.path.isdir(keys_dir), keys_dir
         keys_dir = os.path.abspath(keys_dir)
         self._keys_dir = keys_dir
+
+        free_keys_dir = os.path.join(keys_dir, "free_keys")
+        os.makedirs(free_keys_dir, exist_ok=True)
+        self._free_keys_dir = free_keys_dir
 
     def _get_filename(self, keychain_uid, key_type, is_public: bool):
         return "%s_%s_%s.pem" % (keychain_uid, key_type, "public_key" if is_public else "private_key")
@@ -216,6 +301,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         except FileNotFoundError:
             return None
 
+    @synchronized
     def set_keys(self, *, keychain_uid, key_type, public_key, private_key):
         filename_public_key = self._get_filename(keychain_uid, key_type=key_type, is_public=True)
         filename_private_key = self._get_filename(keychain_uid, key_type=key_type, is_public=False)
@@ -230,10 +316,33 @@ class FilesystemKeyStorage(KeyStorageBase):
         self._write_to_storage_file(basename=filename_public_key, data=public_key)
         self._write_to_storage_file(basename=filename_private_key, data=private_key)
 
+    @synchronized
     def get_public_key(self, *, keychain_uid, key_type):
         filename_public_key = self._get_filename(keychain_uid, key_type=key_type, is_public=True)
         return self._read_from_storage_file(basename=filename_public_key)
 
+    @synchronized
     def get_private_key(self, *, keychain_uid, key_type):
         filename_private_key = self._get_filename(keychain_uid, key_type=key_type, is_public=False)
         return self._read_from_storage_file(basename=filename_private_key)
+
+    # No need for lock here
+    def get_free_keypairs_count(self, key_type):
+        pass
+
+    @synchronized
+    def add_free_keypair(
+        self,
+        *,
+        key_type: str,
+        public_key: bytes,
+        private_key: bytes,
+    ):
+        subdir = os.path.join(self._free_keys_dir, key_type)
+        os.makedirs(subdir, exist_ok=True)
+
+        random_name = str(random.randint(1000000000000, 1000000000000000))
+
+    @synchronized
+    def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_type: str):
+        pass

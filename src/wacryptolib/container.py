@@ -8,12 +8,13 @@ from pathlib import Path
 from typing import Optional
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
-from wacryptolib.escrow import DummyKeyStorage, EscrowApi as LocalEscrowApi, LOCAL_ESCROW_PLACEHOLDER, KeyStorageBase
+from wacryptolib.escrow import EscrowApi as LocalEscrowApi, LOCAL_ESCROW_PLACEHOLDER
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.key_generation import (
     generate_symmetric_key,
     load_asymmetric_key_from_pem_bytestring,
 )
+from wacryptolib.key_storage import DummyKeyStorage, KeyStorageBase
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import (
     dump_to_json_bytes,

@@ -17,8 +17,9 @@ from wacryptolib.container import (
     ContainerStorage,
     extract_metadata_from_container,
     ContainerBase)
-from wacryptolib.escrow import EscrowApi, FilesystemKeyStorage, DummyKeyStorage
+from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
+from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage
 from wacryptolib.sensor import TarfileAggregator, JsonAggregator, PeriodicValuePoller
 from wacryptolib.utilities import load_from_json_bytes
 

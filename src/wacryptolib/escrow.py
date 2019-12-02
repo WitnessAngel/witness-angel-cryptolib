@@ -4,6 +4,7 @@ import random
 import threading
 import uuid
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 from wacryptolib.encryption import _decrypt_via_rsa_oaep
 from wacryptolib.key_generation import (
@@ -277,12 +278,13 @@ class FilesystemKeyStorage(KeyStorageBase):
     _lock = threading.Lock()
 
     def __init__(self, keys_dir):
-        assert os.path.isdir(keys_dir), keys_dir
-        keys_dir = os.path.abspath(keys_dir)
+        keys_dir = Path(keys_dir)
+        assert keys_dir.is_dir(), keys_dir
+        keys_dir = keys_dir.absolute()
         self._keys_dir = keys_dir
 
-        free_keys_dir = os.path.join(keys_dir, "free_keys")
-        os.makedirs(free_keys_dir, exist_ok=True)
+        free_keys_dir = keys_dir.joinpath("free_keys")
+        free_keys_dir.mkdir(exist_ok=True)
         self._free_keys_dir = free_keys_dir
 
     def _get_filename(self, keychain_uid, key_type, is_public: bool):
@@ -290,14 +292,12 @@ class FilesystemKeyStorage(KeyStorageBase):
 
     def _write_to_storage_file(self, basename: str, data: bytes):
         assert os.sep not in basename, basename
-        with open(os.path.join(self._keys_dir, basename), "wb") as f:
-            f.write(data)
+        self._keys_dir.joinpath(basename).write_bytes(data)
 
     def _read_from_storage_file(self, basename: str):
         assert os.sep not in basename, basename
         try:
-            with open(os.path.join(self._keys_dir, basename), "rb") as f:
-                return f.read()
+            return self._keys_dir.joinpath(basename).read_bytes()
         except FileNotFoundError:
             return None
 
@@ -307,7 +307,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         filename_private_key = self._get_filename(keychain_uid, key_type=key_type, is_public=False)
 
         # We use PRIVATE key as marker of existence
-        if os.path.exists(os.path.join(self._keys_dir, filename_private_key)):
+        if self._keys_dir.joinpath(filename_private_key).exists():
             raise RuntimeError(
                 "Can't save already existing filesystem key %s/%s" % (keychain_uid, key_type)
             )
@@ -338,8 +338,8 @@ class FilesystemKeyStorage(KeyStorageBase):
         public_key: bytes,
         private_key: bytes,
     ):
-        subdir = os.path.join(self._free_keys_dir, key_type)
-        os.makedirs(subdir, exist_ok=True)
+        subdir = self._free_keys_dir.joinpath(key_type)
+        subdir.mkdir(exist_ok=True)
 
         random_name = str(random.randint(1000000000000, 1000000000000000))
 

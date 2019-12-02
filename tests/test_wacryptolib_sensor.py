@@ -410,7 +410,7 @@ def test_aggregators_thread_safety(tmp_path):
     assert misc_results == set([None])  # No results expected from any of these methods
 
     container_names = container_storage.list_container_names(
-        as_sorted_relative_paths=True
+        as_sorted=True
     )
 
     tarfiles_bytes = [

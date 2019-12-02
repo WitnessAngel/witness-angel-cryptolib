@@ -3,6 +3,7 @@ import glob
 import logging
 import os
 import uuid
+from pathlib import Path
 
 from typing import Optional
 
@@ -322,9 +323,10 @@ class ContainerStorage:
     Exceeding containers are automatically purged after each file addition.
     """
 
-    def __init__(self, encryption_conf, containers_dir, max_containers_count=None, local_key_storage=None):
-        assert os.path.isdir(containers_dir), containers_dir
-        containers_dir = os.path.abspath(containers_dir)
+    def __init__(self, encryption_conf: dict, containers_dir: Path, max_containers_count: int=None, local_key_storage: KeyStorageBase=None):
+        containers_dir = Path(containers_dir)
+        assert containers_dir.is_dir(), containers_dir
+        containers_dir = containers_dir.absolute()
         assert (
             max_containers_count is None or max_containers_count > 0
         ), max_containers_count
@@ -337,20 +339,24 @@ class ContainerStorage:
         """Beware, might be SLOW if many files are present in folder."""
         return len(self.list_container_names())  # No sorting, to be quicker
 
-    def list_container_names(self, as_sorted_relative_paths=False):
-        """Returns the list of encrypted containers present in storage, as random absolute paths,
-        or as sorted relative path."""
-        assert os.path.isabs(self._containers_dir), self._containers_dir
-        paths = glob.glob(os.path.join(self._containers_dir, "*" + CONTAINER_SUFFIX))
-        if as_sorted_relative_paths:
-            paths = sorted(os.path.basename(x) for x in paths)
-        return paths
+    def list_container_names(self, as_sorted=False, as_absolute=False):
+        """Returns the list of encrypted containers present in storage,
+        sorted or not, absolute or not, as Path objects."""
+        assert self._containers_dir.is_absolute(), self._containers_dir
+        paths = list(self._containers_dir.glob( "*" + CONTAINER_SUFFIX))  # As list, for multiple looping on it
+        assert all(p.is_absolute() for p in paths), paths
+        if as_sorted:
+            paths = sorted(p for p in paths)
+        if not as_absolute:
+            paths = (Path(p.name) for p in paths)
+        return list(paths)
 
-    def _make_absolute_container_path(self, container_name):
-        return os.path.join(self._containers_dir, container_name)
+    def _make_absolute(self, container_name):
+        assert not Path(container_name).is_absolute()
+        return self._containers_dir.joinpath(container_name)
 
     def _delete_container(self, container_name):
-        container_filepath = self._make_absolute_container_path(container_name)
+        container_filepath = self._make_absolute(container_name)
         os.remove(
             container_filepath
         )  # TODO - additional retries if file access errors?
@@ -358,7 +364,7 @@ class ContainerStorage:
     def _purge_exceeding_containers(self):
         if self._max_containers_count:
             # BEWARE, due to the way we name files, alphabetical and start-datetime sorts are the same!
-            container_names = self.list_container_names(as_sorted_relative_paths=True)
+            container_names = self.list_container_names(as_sorted=True, as_absolute=False)
             containers_count = len(container_names)
             if containers_count > self._max_containers_count:
                 excess_count = containers_count - self._max_containers_count
@@ -378,9 +384,7 @@ class ContainerStorage:
         )  # Will fail if authorizations are not OK
 
     def _process_and_store_file(self, filename_base, data, metadata):
-        container_filepath = self._make_absolute_container_path(
-            filename_base + CONTAINER_SUFFIX
-        )
+        container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
         container = self._encrypt_data_into_container(data, metadata=metadata)
         dump_to_json_file(
             container_filepath, data=container, indent=4
@@ -404,17 +408,17 @@ class ContainerStorage:
         or an index suitable for this list).
         """
         if isinstance(container_name_or_idx, int):
-            container_names = self.list_container_names(as_sorted_relative_paths=True)
+            container_names = self.list_container_names(as_sorted=True, as_absolute=False)
             container_name = container_names[
                 container_name_or_idx
             ]  # Will break if idx is out of bounds
         else:
-            assert isinstance(container_name_or_idx, str), repr(container_name_or_idx)
-            container_name = container_name_or_idx
 
-        assert not os.path.isabs(container_name), container_name
+            assert isinstance(container_name_or_idx, (Path, str)), repr(container_name_or_idx)
+            container_name = Path(container_name_or_idx)
 
-        container_filepath = os.path.join(self._containers_dir, container_name)
+        assert not container_name.is_absolute(), container_name
+        container_filepath = self._make_absolute(container_name)
         container = load_from_json_file(container_filepath)
 
         return self._decrypt_data_from_container(container)

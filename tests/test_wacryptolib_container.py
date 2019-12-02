@@ -4,6 +4,7 @@ import time
 import uuid
 from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 
 import pytest
 from freezegun import freeze_time
@@ -185,10 +186,14 @@ def test_container_storage(tmp_path):
     storage.enqueue_file_for_encryption("empty.txt", b"", metadata=dict(somevalue=True))
 
     assert len(storage) == 2
-    assert storage.list_container_names(as_sorted_relative_paths=True) == [
-        "animals.dat.crypt",
-        "empty.txt.crypt",
+    assert storage.list_container_names(as_sorted=True) == [
+        Path("animals.dat.crypt"),
+        Path("empty.txt.crypt"),
     ]
+
+    abs_entries = storage.list_container_names(as_absolute=True)
+    assert len(abs_entries) == 2  # Unchanged
+    assert all(entry.is_absolute() for entry in abs_entries)
 
     animals_content = storage.decrypt_container_from_storage("animals.dat.crypt")
     assert animals_content == b"dogs\ncats\n"
@@ -198,8 +203,8 @@ def test_container_storage(tmp_path):
 
     assert len(storage) == 2
     os.remove(os.path.join(tmp_path, "animals.dat.crypt"))
-    assert storage.list_container_names(as_sorted_relative_paths=True) == [
-        "empty.txt.crypt"
+    assert storage.list_container_names(as_sorted=True) == [
+        Path("empty.txt.crypt")
     ]
     assert len(storage) == 1
 
@@ -217,18 +222,18 @@ def test_container_storage(tmp_path):
     for i in range(3):
         storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
     assert len(storage) == 3  # Purged
-    assert storage.list_container_names(as_sorted_relative_paths=True) == [
-        "xyz.dat.000.crypt",
-        "xyz.dat.001.crypt",
-        "xyz.dat.002.crypt",
+    assert storage.list_container_names(as_sorted=True) == [
+        Path("xyz.dat.000.crypt"),
+        Path("xyz.dat.001.crypt"),
+        Path("xyz.dat.002.crypt"),
     ]
 
     storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
     assert len(storage) == 3  # Purged
-    assert storage.list_container_names(as_sorted_relative_paths=True) == [
-        "xyz.dat.001.crypt",
-        "xyz.dat.002.crypt",
-        "xyz.dat.003.crypt",
+    assert storage.list_container_names(as_sorted=True) == [
+        Path("xyz.dat.001.crypt"),
+        Path("xyz.dat.002.crypt"),
+        Path("xyz.dat.003.crypt"),
     ]
 
     storage = FakeTestContainerStorage(
@@ -240,9 +245,9 @@ def test_container_storage(tmp_path):
     storage.enqueue_file_for_encryption("zzz.dat", b"000", metadata=None)
     assert len(storage) == 4  # Purge occurred
     # Entry "aaa.dat.000.crypt" was ejected because it's a sorting by NAMES for now!
-    assert storage.list_container_names(as_sorted_relative_paths=True) == [
-        "xyz.dat.001.crypt",
-        "xyz.dat.002.crypt",
-        "xyz.dat.003.crypt",
-        "zzz.dat.001.crypt",
+    assert storage.list_container_names(as_sorted=True) == [
+        Path("xyz.dat.001.crypt"),
+        Path("xyz.dat.002.crypt"),
+        Path("xyz.dat.003.crypt"),
+        Path("zzz.dat.001.crypt"),
     ]

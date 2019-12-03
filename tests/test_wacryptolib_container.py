@@ -1,13 +1,9 @@
 import os
 import random
-import time
 import uuid
-from concurrent.futures.thread import ThreadPoolExecutor
-from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import pytest
-from freezegun import freeze_time
 
 from _test_mockups import FakeTestContainerStorage
 from wacryptolib.container import (
@@ -16,12 +12,11 @@ from wacryptolib.container import (
     decrypt_data_from_container,
     ContainerStorage,
     extract_metadata_from_container,
-    ContainerBase)
+    ContainerBase,
+)
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage
-from wacryptolib.sensor import TarfileAggregator, JsonAggregator, PeriodicValuePoller
-from wacryptolib.utilities import load_from_json_bytes
 
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -150,17 +145,22 @@ def test_get_proxy_for_escrow(tmp_path):
 
     container_base1_bis = ContainerBase()
     proxy1_bis = container_base1_bis._get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
-    assert proxy1_bis._key_storage is proxy1_bis._key_storage  # process-local storage is SINGLETON!
+    assert (
+        proxy1_bis._key_storage is proxy1_bis._key_storage
+    )  # process-local storage is SINGLETON!
 
-    container_base2 = ContainerBase(local_key_storage=FilesystemKeyStorage(keys_dir=str(tmp_path)))
+    container_base2 = ContainerBase(
+        local_key_storage=FilesystemKeyStorage(keys_dir=str(tmp_path))
+    )
     proxy2 = container_base2._get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
     assert isinstance(proxy2, EscrowApi)  # Local Escrow
     assert isinstance(proxy2._key_storage, FilesystemKeyStorage)
 
-
     for container_base in (container_base1, container_base2):
 
-        proxy = container_base._get_proxy_for_escrow(dict(url="http://example.com/jsonrpc"))
+        proxy = container_base._get_proxy_for_escrow(
+            dict(url="http://example.com/jsonrpc")
+        )
         assert isinstance(
             proxy, JsonRpcProxy
         )  # It should expose identical methods to EscrowApi
@@ -170,7 +170,6 @@ def test_get_proxy_for_escrow(tmp_path):
 
         with pytest.raises(ValueError):
             container_base._get_proxy_for_escrow("weird-value")
-
 
 
 def test_container_storage(tmp_path):
@@ -204,9 +203,7 @@ def test_container_storage(tmp_path):
 
     assert len(storage) == 2
     os.remove(os.path.join(tmp_path, "animals.dat.crypt"))
-    assert storage.list_container_names(as_sorted=True) == [
-        Path("empty.txt.crypt")
-    ]
+    assert storage.list_container_names(as_sorted=True) == [Path("empty.txt.crypt")]
     assert len(storage) == 1
 
     # Test purge system

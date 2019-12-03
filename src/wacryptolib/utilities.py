@@ -1,5 +1,4 @@
 import abc
-from datetime import datetime
 import logging
 from typing import List, Optional
 
@@ -148,7 +147,7 @@ def load_from_json_file(filepath, **extra_options):
     return load_from_json_bytes(json_bytes, **extra_options)
 
 
-def generate_uuid0(ts: Optional[int]=None):
+def generate_uuid0(ts: Optional[int] = None):
     """
     Generate a random UUID partly based on Unix timestamp (not part of official "variants").
 
@@ -205,6 +204,7 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
     """
 
     from multitimer import RepeatingTimer as _RepeatingTimer
+
     # FIXME doesn't work, it's daemonic...
     # TODO make PR to ensure that multitimer is a DAEMON thread!
     _RepeatingTimer.daemon = (
@@ -222,7 +222,7 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
             runonstart=runonstart,
         )
 
-    def _offloaded_run_task(self):   # pragma: no cover
+    def _offloaded_run_task(self):  # pragma: no cover
         """Method which will be run periodically, and which by default simply calls task_func()."""
         return self._task_func()
 
@@ -250,4 +250,3 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
         if timer_thread:
             assert timer_thread.stopevent.is_set()
             timer_thread.join()
-

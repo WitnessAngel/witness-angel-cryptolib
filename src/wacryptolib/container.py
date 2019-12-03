@@ -1,10 +1,8 @@
 import copy
-import glob
 import logging
 import os
 import uuid
 from pathlib import Path
-
 from typing import Optional
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
@@ -21,7 +19,8 @@ from wacryptolib.utilities import (
     load_from_json_bytes,
     dump_to_json_file,
     load_from_json_file,
-    generate_uuid0)
+    generate_uuid0,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +41,10 @@ class ContainerBase:
 
     def __init__(self, local_key_storage=None):
         if not local_key_storage:
-            logger.warning("No local key storage provided for %s instance, falling back to DummyKeyStorage()",
-                           self.__class__.__name__)
+            logger.warning(
+                "No local key storage provided for %s instance, falling back to DummyKeyStorage()",
+                self.__class__.__name__,
+            )
             local_key_storage = DUMMY_KEY_STORAGE
         self._local_escrow_api = LocalEscrowApi(key_storage=local_key_storage)
 
@@ -269,7 +270,12 @@ class ContainerReader(ContainerBase):
 
 
 def encrypt_data_into_container(
-    data: bytes, *, conf: dict, metadata: Optional[dict], keychain_uid: Optional[uuid.UUID]=None, local_key_storage: Optional[KeyStorageBase]=None
+    data: bytes,
+    *,
+    conf: dict,
+    metadata: Optional[dict],
+    keychain_uid: Optional[uuid.UUID] = None,
+    local_key_storage: Optional[KeyStorageBase] = None
 ) -> dict:
     """Turn raw data into a high-security container, which can only be decrypted with
     the agreement of the owner and multiple third-party escrows.
@@ -289,7 +295,9 @@ def encrypt_data_into_container(
     return container
 
 
-def decrypt_data_from_container(container: dict, local_key_storage: Optional[KeyStorageBase]=None) -> bytes:
+def decrypt_data_from_container(
+    container: dict, local_key_storage: Optional[KeyStorageBase] = None
+) -> bytes:
     """Decrypt a container with the help of third-parties.
 
     :param container: the container tree, which holds all information about involved keys
@@ -324,7 +332,13 @@ class ContainerStorage:
     Exceeding containers are automatically purged after each file addition.
     """
 
-    def __init__(self, encryption_conf: dict, containers_dir: Path, max_containers_count: int=None, local_key_storage: KeyStorageBase=None):
+    def __init__(
+        self,
+        encryption_conf: dict,
+        containers_dir: Path,
+        max_containers_count: int = None,
+        local_key_storage: KeyStorageBase = None,
+    ):
         containers_dir = Path(containers_dir)
         assert containers_dir.is_dir(), containers_dir
         containers_dir = containers_dir.absolute()
@@ -344,7 +358,9 @@ class ContainerStorage:
         """Returns the list of encrypted containers present in storage,
         sorted or not, absolute or not, as Path objects."""
         assert self._containers_dir.is_absolute(), self._containers_dir
-        paths = list(self._containers_dir.glob( "*" + CONTAINER_SUFFIX))  # As list, for multiple looping on it
+        paths = list(
+            self._containers_dir.glob("*" + CONTAINER_SUFFIX)
+        )  # As list, for multiple looping on it
         assert all(p.is_absolute() for p in paths), paths
         if as_sorted:
             paths = sorted(p for p in paths)
@@ -365,7 +381,9 @@ class ContainerStorage:
     def _purge_exceeding_containers(self):
         if self._max_containers_count:
             # BEWARE, due to the way we name files, alphabetical and start-datetime sorts are the same!
-            container_names = self.list_container_names(as_sorted=True, as_absolute=False)
+            container_names = self.list_container_names(
+                as_sorted=True, as_absolute=False
+            )
             containers_count = len(container_names)
             if containers_count > self._max_containers_count:
                 excess_count = containers_count - self._max_containers_count
@@ -375,13 +393,15 @@ class ContainerStorage:
 
     def _encrypt_data_into_container(self, data, metadata):
         return encrypt_data_into_container(
-            data=data, conf=self._encryption_conf, metadata=metadata, local_key_storage=self._local_key_storage
+            data=data,
+            conf=self._encryption_conf,
+            metadata=metadata,
+            local_key_storage=self._local_key_storage,
         )
 
     def _decrypt_data_from_container(self, container):
         return decrypt_data_from_container(
-            container,
-            local_key_storage=self._local_key_storage
+            container, local_key_storage=self._local_key_storage
         )  # Will fail if authorizations are not OK
 
     def _process_and_store_file(self, filename_base, data, metadata):
@@ -409,13 +429,17 @@ class ContainerStorage:
         or an index suitable for this list).
         """
         if isinstance(container_name_or_idx, int):
-            container_names = self.list_container_names(as_sorted=True, as_absolute=False)
+            container_names = self.list_container_names(
+                as_sorted=True, as_absolute=False
+            )
             container_name = container_names[
                 container_name_or_idx
             ]  # Will break if idx is out of bounds
         else:
 
-            assert isinstance(container_name_or_idx, (Path, str)), repr(container_name_or_idx)
+            assert isinstance(container_name_or_idx, (Path, str)), repr(
+                container_name_or_idx
+            )
             container_name = Path(container_name_or_idx)
 
         assert not container_name.is_absolute(), container_name

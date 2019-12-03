@@ -1,10 +1,11 @@
 import os
 import time
-
 from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import datetime, timezone
+from datetime import timedelta
 
 import pytest
+from freezegun import freeze_time
 
 from _test_mockups import FakeTestContainerStorage
 from wacryptolib.sensor import (
@@ -13,13 +14,8 @@ from wacryptolib.sensor import (
     PeriodicValuePoller,
     SensorsManager,
 )
-from wacryptolib.utilities import load_from_json_bytes, TaskRunnerStateMachineBase
-
-from datetime import timedelta
-
-from freezegun import freeze_time
-
 from wacryptolib.sensor import TimeLimitedAggregatorMixin
+from wacryptolib.utilities import load_from_json_bytes, TaskRunnerStateMachineBase
 
 
 def _check_sensor_state_machine(sensor, run_delay=0):
@@ -407,9 +403,7 @@ def test_aggregators_thread_safety(tmp_path):
     misc_results = set(future.result() for future in misc_futures)
     assert misc_results == set([None])  # No results expected from any of these methods
 
-    container_names = container_storage.list_container_names(
-        as_sorted=True
-    )
+    container_names = container_storage.list_container_names(as_sorted=True)
 
     tarfiles_bytes = [
         container_storage.decrypt_container_from_storage(container_name)

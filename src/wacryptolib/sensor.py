@@ -1,18 +1,17 @@
-import abc
 import io
 import logging
 import tarfile
 import threading
 from datetime import datetime, timezone
 
-import multitimer
-
 from wacryptolib.container import ContainerStorage
 from wacryptolib.utilities import (
     dump_to_json_bytes,
     synchronized,
     check_datetime_is_tz_aware,
-    PeriodicTaskHandler, TaskRunnerStateMachineBase)
+    PeriodicTaskHandler,
+    TaskRunnerStateMachineBase,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -309,6 +308,7 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
         except Exception:
             # TODO add logging/warnings
             import traceback
+
             traceback.print_exc()
 
 

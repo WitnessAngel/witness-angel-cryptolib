@@ -178,7 +178,8 @@ class FilesystemKeyStorage(KeyStorageBase):
     """
     Filesystem-based key storage for use in tests, where keys are kepts only instance-locally.
 
-    Protected by a process-wide lock (but not safe to use in multiprocessing environment).
+    Protected by a process-wide lock, but not safe to use in multiprocessing environment, or in a process which can be brutally shutdown.
+    To prevent corruption, one should only persistent UUIDs when the key storage operation is successfully finished.
 
     Beware, public and private keys (free or not) are stored side by side, if one of these is deleted, the resulting behaviour is undefined (but buggy).
     """
@@ -259,11 +260,17 @@ class FilesystemKeyStorage(KeyStorageBase):
         subdir = self._free_keys_dir.joinpath(key_type)
         subdir.mkdir(exist_ok=True)
 
-        # If these already exist, we overwrite them
         random_name = str(random.randint(1000000000000, 1000000000000000))
-        # First the public key, since the private one identifies the presence of a full free key
-        subdir.joinpath(random_name+self._free_public_key_suffix).write_bytes(public_key)
-        subdir.joinpath(random_name+self._free_private_key_suffix).write_bytes(private_key)
+
+        # If these free keys already exist, we overwrite them, it's OK
+        # We first write the public key, since the private one identifies the presence of a full free key
+        # Two-steps writing is used for increased atomicity
+
+        subdir.joinpath(random_name+self._free_public_key_suffix+".temp").write_bytes(public_key)
+        subdir.joinpath(random_name+self._free_private_key_suffix+".temp").write_bytes(private_key)
+
+        subdir.joinpath(random_name+self._free_public_key_suffix+".temp").replace(subdir.joinpath(random_name+self._free_public_key_suffix))
+        subdir.joinpath(random_name+self._free_private_key_suffix+".temp").replace(subdir.joinpath(random_name+self._free_private_key_suffix))
 
     @synchronized
     def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_type: str):

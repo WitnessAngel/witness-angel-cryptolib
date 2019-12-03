@@ -12,10 +12,8 @@ from wacryptolib.sensor import (
     JsonAggregator,
     PeriodicValuePoller,
     SensorManager,
-    SensorStateMachineBase,
 )
-from wacryptolib.utilities import load_from_json_bytes
-
+from wacryptolib.utilities import load_from_json_bytes, TaskRunnerStateMachineBase
 
 from datetime import timedelta
 
@@ -42,7 +40,7 @@ def _check_sensor_state_machine(sensor, run_delay=0):
     with pytest.raises(RuntimeError, match="already started"):
         sensor.start()
 
-    with pytest.raises(RuntimeError, match="running periodic value Sensor"):
+    with pytest.raises(RuntimeError, match="in-progress runner"):
         sensor.join()
 
     assert sensor.is_running
@@ -507,7 +505,7 @@ def test_periodic_value_poller(tmp_path):
 
 
 def test_sensor_manager():
-    class DummyUnstableSensor(SensorStateMachineBase):
+    class DummyUnstableSensor(TaskRunnerStateMachineBase):
         def __init__(self, is_broken):
             super().__init__()
             self._is_broken = is_broken

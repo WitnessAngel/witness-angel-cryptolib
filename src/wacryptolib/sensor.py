@@ -12,7 +12,7 @@ from wacryptolib.utilities import (
     dump_to_json_bytes,
     synchronized,
     check_datetime_is_tz_aware,
-)
+    PeriodicTaskHandler, TaskRunnerStateMachineBase)
 
 logger = logging.getLogger(__name__)
 
@@ -282,51 +282,13 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
         self._flush_aggregated_data()
 
 
-class SensorStateMachineBase(abc.ABC):
+class PeriodicValueMixin:
     """
-    State machine for all sensors, checking that the order of start/stop/join
-    operations is correct.
-
-    The two-steps shutdown (`stop()`, and later `join()`) allows caller to
-    efficiently and safely stop numerous pollers.
+    Mixin for sensors polling or pushing data to a json aggregator at regular intervals.
     """
 
-    def __init__(self):
-        self._sensor_is_started = False
-
-    @property
-    def is_running(self):
-        return self._sensor_is_started
-
-    def start(self):
-        """Start the periodic system which will poll or push the value."""
-        if self._sensor_is_started:
-            raise RuntimeError("Can't start an already started periodic value Sensor")
-        self._sensor_is_started = True
-
-    def stop(self):
-        """Request the periodic system to stop as soon as possible."""
-        if not self._sensor_is_started:
-            raise RuntimeError("Can't stop an already stopped periodic value Sensor")
-        self._sensor_is_started = False
-
-    def join(self):
-        """
-        Wait for the periodic system to really finish running.
-        Does nothing if periodic system is already stopped.
-        """
-        if self._sensor_is_started:
-            raise RuntimeError("Can't join a running periodic value Sensor")
-
-
-class PeriodicValueSensorBase(SensorStateMachineBase):
-    """
-    Base classes for sensors polling or pushing data to a json aggragator at regular intervals.
-    """
-
-    def __init__(self, interval_s, json_aggregator):
-        super().__init__()
-        self._interval_s = interval_s
+    def __init__(self, interval_s, json_aggregator, **kwargs):
+        super().__init__(interval_s=interval_s, **kwargs)
         self._json_aggregator = json_aggregator
 
     def _offloaded_add_data(self, data_dict):
@@ -334,28 +296,10 @@ class PeriodicValueSensorBase(SensorStateMachineBase):
         self._json_aggregator.add_data(data_dict)
 
 
-class PeriodicValuePoller(PeriodicValueSensorBase):
+class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
     """
     This class runs a function at a specified interval, and pushes its result to a json aggregator.
     """
-
-    from multitimer import RepeatingTimer as _RepeatingTimer
-
-    _RepeatingTimer.daemon = (
-        True
-    )  # Do not prevent process shutdown if we forgot to stop...
-
-    def __init__(self, interval_s, task_func, json_aggregator):
-        super().__init__(interval_s=interval_s, json_aggregator=json_aggregator)
-        self._task_func = task_func
-
-        # TODO make PR to ensure that multitimer is a DAEMON thread!
-        self._multitimer = multitimer.MultiTimer(
-            interval=interval_s,
-            function=self._offloaded_run_task,
-            count=-1,
-            runonstart=True,
-        )
 
     def _offloaded_run_task(self):
         """This function is meant to be called by secondary thread, to fetch and store data."""
@@ -365,36 +309,10 @@ class PeriodicValuePoller(PeriodicValueSensorBase):
         except Exception:
             # TODO add logging/warnings
             import traceback
-
             traceback.print_exc()
 
-    def start(self):
-        """Launch the secondary thread for periodic polling."""
-        super().start()
-        self._multitimer.start()
 
-    def stop(self):
-        """Request the secondary thread to stop. If it's currently processing data,
-        it will not stop immediately, and another data aggregation operation might happen."""
-        super().stop()
-        self._multitimer.stop()
-
-    def join(self):  # TODO - add a join timeout everywhere?
-        """
-        Wait for the secondary thread to really exit, after `stop()` was called.
-        When this function returns, no more data will be sent to the json aggregator by this poller,
-        until the next `start()`.
-
-        This does NOT flush the underlying json aggregator!
-        """
-        super().join()
-        timer_thread = self._multitimer._timer
-        if timer_thread:
-            assert timer_thread.stopevent.is_set()
-            timer_thread.join()
-
-
-class SensorManager(SensorStateMachineBase):  # TODO rename as plural !!!!!!
+class SensorManager(TaskRunnerStateMachineBase):  # TODO rename as plural !!!!!!
     """
     Manage a group of sensors for simultaneous starts/stops.
 

@@ -1,7 +1,9 @@
+import abc
 from datetime import datetime
 import logging
 from typing import List, Optional
 
+import multitimer
 import uuid0
 from Crypto.Util.Padding import pad, unpad
 from decorator import decorator
@@ -156,3 +158,96 @@ def generate_uuid0(ts: Optional[int]=None):
     :return: uuid0 object (subclass of UUID)
     """
     return uuid0.generate(ts)
+
+
+class TaskRunnerStateMachineBase(abc.ABC):
+    """
+    State machine for all sensors/players, checking that the order of start/stop/join
+    operations is correct.
+
+    The two-steps shutdown (`stop()`, and later `join()`) allows caller to
+    efficiently and safely stop numerous runners.
+    """
+
+    def __init__(self):
+        self._runner_is_started = False
+
+    @property
+    def is_running(self):
+        return self._runner_is_started
+
+    def start(self):
+        """Start the periodic system which will poll or push the value."""
+        if self._runner_is_started:
+            raise RuntimeError("Can't start an already started runner")
+        self._runner_is_started = True
+
+    def stop(self):
+        """Request the periodic system to stop as soon as possible."""
+        if not self._runner_is_started:
+            raise RuntimeError("Can't stop an already stopped runner")
+        self._runner_is_started = False
+
+    def join(self):
+        """
+        Wait for the periodic system to really finish running.
+        Does nothing if periodic system is already stopped.
+        """
+        if self._runner_is_started:
+            raise RuntimeError("Can't join an in-progress runner")
+
+
+class PeriodicTaskHandler(TaskRunnerStateMachineBase):
+    """
+    This class runs a task at a specified interval, with start/stop/join controls.
+
+    If `task_func` argument is not provided, then `_offloaded_run_task()` must be overridden by subclass.
+    """
+
+    from multitimer import RepeatingTimer as _RepeatingTimer
+    # FIXME doesn't work, it's daemonic...
+    # TODO make PR to ensure that multitimer is a DAEMON thread!
+    _RepeatingTimer.daemon = (
+        True
+    )  # Do not prevent process shutdown if we forgot to stop...
+
+    def __init__(self, interval_s, count=-1, runonstart=True, task_func=None):
+        super().__init__()
+        self._interval_s = interval_s
+        self._task_func = task_func
+        self._multitimer = multitimer.MultiTimer(
+            interval=interval_s,
+            function=self._offloaded_run_task,
+            count=count,
+            runonstart=runonstart,
+        )
+
+    def _offloaded_run_task(self):   # pragma: no cover
+        """Method which will be run periodically, and which by default simply calls task_func()."""
+        return self._task_func()
+
+    def start(self):
+        """Launch the secondary thread for periodic task execution."""
+        super().start()
+        self._multitimer.start()
+
+    def stop(self):
+        """Request the secondary thread to stop. If it's currently processing data,
+        it will not stop immediately, and another data aggregation operation might happen."""
+        super().stop()
+        self._multitimer.stop()
+
+    def join(self):  # TODO - add a join timeout everywhere?
+        """
+        Wait for the secondary thread to really exit, after `stop()` was called.
+        When this function returns, no more data will be sent to the json aggregator by this poller,
+        until the next `start()`.
+
+        This does NOT flush the underlying json aggregator!
+        """
+        super().join()
+        timer_thread = self._multitimer._timer
+        if timer_thread:
+            assert timer_thread.stopevent.is_set()
+            timer_thread.join()
+

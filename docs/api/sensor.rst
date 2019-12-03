@@ -11,16 +11,13 @@ Aggregation of records into binary archives
     :members:
 
 
-Base classes for poll/push sensors
+Base classes for poller/pusher sensors
 ---------------------------------------------
 
 .. autoclass:: wacryptolib.sensor.JsonAggregator
     :members:
 
-.. autoclass:: wacryptolib.sensor.SensorStateMachineBase
-    :members:
-
-.. autoclass:: wacryptolib.sensor.PeriodicValueSensorBase
+.. autoclass:: wacryptolib.sensor.PeriodicValueMixin
     :members:
 
 .. autoclass:: wacryptolib.sensor.PeriodicValuePoller

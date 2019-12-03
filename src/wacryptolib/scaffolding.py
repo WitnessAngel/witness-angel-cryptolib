@@ -3,6 +3,8 @@ import time
 import uuid
 from concurrent.futures.thread import ThreadPoolExecutor
 
+from django.db import transaction
+
 from wacryptolib.utilities import generate_uuid0
 
 
@@ -13,53 +15,62 @@ def check_key_storage_basic_get_set_api(key_storage):
 
     keychain_uid = generate_uuid0()
     keychain_uid_other = generate_uuid0()
+    key_type="abxz"
+
+    assert not key_storage.get_public_key(keychain_uid=keychain_uid, key_type="abxz")
 
     key_storage.set_keys(
         keychain_uid=keychain_uid,
-        key_type="abxz",
+        key_type=key_type,
         public_key=b"public_data",
         private_key=b"private_data",
     )
+
+    assert (
+        key_storage.get_public_key(keychain_uid=keychain_uid, key_type="abxz")
+        == b"public_data"
+    )  # Well readable even without any kind of "commit"
+
     with pytest.raises(RuntimeError, match="Already existing"):
         key_storage.set_keys(
             keychain_uid=keychain_uid,
-            key_type="abxz",
+            key_type=key_type,
             public_key=b"public_data",
             private_key=b"private_data",
         )
     with pytest.raises(RuntimeError, match="Already existing"):
         key_storage.set_keys(
             keychain_uid=keychain_uid,
-            key_type="abxz",
+            key_type=key_type,
             public_key=b"public_data2",
             private_key=b"private_data2",
         )
 
     assert (
-        key_storage.get_public_key(keychain_uid=keychain_uid, key_type="abxz")
+        key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type)
         == b"public_data"
     )
     assert (
-        key_storage.get_private_key(keychain_uid=keychain_uid, key_type="abxz")
+        key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type)
         == b"private_data"
     )
 
     assert (
-        key_storage.get_public_key(keychain_uid=keychain_uid, key_type="abxz_")
+        key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type+"_")
         is None
     )
     assert (
-        key_storage.get_private_key(keychain_uid=keychain_uid, key_type="abxz_")
+        key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type+"_")
         is None
     )
 
     assert (
-        key_storage.get_public_key(keychain_uid=keychain_uid_other, key_type="abxz")
+        key_storage.get_public_key(keychain_uid=keychain_uid_other, key_type=key_type)
         is None
     )
     assert (
         key_storage.get_private_key(
-            keychain_uid=keychain_uid_other, key_type="abxz"
+            keychain_uid=keychain_uid_other, key_type=key_type
         )
         is None
     )
@@ -151,16 +162,16 @@ def check_key_storage_free_keys_concurrency(key_storage):
             )
 
     def retrieve_free_keypair_for_index(idx, key_type):
-        keychain_uid = uuid.UUID(int=idx)
-        try:
-            key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_type=key_type)
-            time.sleep(0.001)
-            public_key_content = key_storage.get_public_key(keychain_uid=uuid.UUID(int=idx), key_type=key_type)
-            assert public_key_content == b"whatever1"
-            res = True
-        except RuntimeError:
-            res = False
-        return res
+            keychain_uid = uuid.UUID(int=idx)
+            try:
+                key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_type=key_type)
+                time.sleep(0.001)
+                public_key_content = key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type)
+                assert public_key_content == b"whatever1"
+                res = True
+            except RuntimeError:
+                res = False
+            return res
 
     executor = ThreadPoolExecutor(max_workers=20)
 

@@ -10,7 +10,7 @@ from wacryptolib.encryption import _decrypt_via_rsa_oaep
 from wacryptolib.key_generation import (
     generate_asymmetric_keypair,
     load_asymmetric_key_from_pem_bytestring,
-)
+    SUPPORTED_ASYMMETRIC_KEY_TYPES)
 from wacryptolib.key_storage import KeyStorageBase as KeyStorageBase
 from wacryptolib.signature import sign_message
 from wacryptolib.utilities import synchronized
@@ -110,4 +110,36 @@ class EscrowApi:
 
         secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key=private_key)
         return secret
+
+
+def generate_free_keypair_for_least_provisioned_key_type(key_storage: KeyStorageBase,
+                                                         max_keys_count_per_type: int,
+                                                         key_generation_func=generate_asymmetric_keypair,
+                                                         key_types=SUPPORTED_ASYMMETRIC_KEY_TYPES):
+    """
+    Generate a single free keypair for the type which is the least available in key storage, and
+    add it to storage. If the "free keys" pool of the storage is full, do nothing.
+
+    :param key_storage: the key storage to use
+    :param max_keys_count_per_type: how many free keys should exist per type
+    :param key_generation_func: callable to use for keypair generation
+    :param key_types: the different key types (strings) to consider
+    :return: True iff a key was generated (i.e. the free keys pool was not full)
+    """
+    assert key_types, key_types
+    free_keys_counts = [(key_storage.get_free_keypairs_count(key_type), key_type)
+                        for key_type in key_types]
+
+    (count, key_type) = min(free_keys_counts)
+
+    if count >= max_keys_count_per_type:
+        return False
+
+    keypair = key_generation_func(key_type=key_type, serialize=True)
+    key_storage.add_free_keypair(
+        key_type=key_type,
+        public_key=keypair["public_key"],
+        private_key=keypair["private_key"],
+    )
+    return True
 

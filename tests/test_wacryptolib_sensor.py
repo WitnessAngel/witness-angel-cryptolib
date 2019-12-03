@@ -8,6 +8,7 @@ import pytest
 from freezegun import freeze_time
 
 from _test_mockups import FakeTestContainerStorage
+from wacryptolib.scaffolding import check_sensor_state_machine
 from wacryptolib.sensor import (
     TarfileAggregator,
     JsonAggregator,
@@ -16,48 +17,6 @@ from wacryptolib.sensor import (
 )
 from wacryptolib.sensor import TimeLimitedAggregatorMixin
 from wacryptolib.utilities import load_from_json_bytes, TaskRunnerStateMachineBase
-
-
-def _check_sensor_state_machine(sensor, run_delay=0):
-
-    assert not sensor.is_running
-
-    sensor.join()  # Does nothing
-
-    with pytest.raises(RuntimeError, match="already stopped"):
-        sensor.stop()
-
-    assert not sensor.is_running
-
-    sensor.start()
-
-    assert sensor.is_running
-
-    with pytest.raises(RuntimeError, match="already started"):
-        sensor.start()
-
-    with pytest.raises(RuntimeError, match="in-progress runner"):
-        sensor.join()
-
-    assert sensor.is_running
-
-    time.sleep(run_delay)
-
-    assert sensor.is_running
-
-    sensor.stop()
-
-    assert not sensor.is_running
-
-    with pytest.raises(RuntimeError, match="already stopped"):
-        sensor.stop()
-
-    assert not sensor.is_running
-
-    sensor.join()
-    sensor.join()  # Does nothing
-
-    assert not sensor.is_running
 
 
 def test_time_limited_aggregator_mixin():
@@ -467,7 +426,7 @@ def test_periodic_value_poller(tmp_path):
         interval_s=0.1, task_func=task_func, json_aggregator=json_aggregator
     )
 
-    _check_sensor_state_machine(poller, run_delay=0.45)
+    check_sensor_state_machine(poller, run_duration=0.45)
 
     assert len(json_aggregator) == 5  # Data was fetched immediately on start
     data_sets = json_aggregator._current_dataset
@@ -497,6 +456,21 @@ def test_periodic_value_poller(tmp_path):
     json_aggregator.flush_dataset()  # From here one, everything is just standard
     assert len(json_aggregator) == 0
 
+    # CASE OF BROKEN TASK #
+
+    broken_iterations = 0
+    def task_func_broken():
+        nonlocal broken_iterations
+        broken_iterations += 1
+        ABCDE
+
+    poller = PeriodicValuePoller(
+        interval_s=0.05, task_func=task_func_broken, json_aggregator=json_aggregator
+    )
+
+    check_sensor_state_machine(poller, run_duration=0.5)
+    assert broken_iterations > 5
+
 
 def test_sensor_manager():
     class DummyUnstableSensor(TaskRunnerStateMachineBase):
@@ -522,7 +496,7 @@ def test_sensor_manager():
     # First with EMPTY manager
 
     manager = SensorsManager(sensors=[])
-    _check_sensor_state_machine(manager)
+    check_sensor_state_machine(manager)
 
     # Now with FILLED manager
 
@@ -534,7 +508,7 @@ def test_sensor_manager():
     ]
 
     manager = SensorsManager(sensors=sensors)
-    _check_sensor_state_machine(manager)
+    check_sensor_state_machine(manager)
 
     success_count = manager.start()
     assert success_count == 3

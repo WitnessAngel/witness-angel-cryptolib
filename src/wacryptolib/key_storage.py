@@ -2,6 +2,7 @@ import logging
 import os
 import random
 import threading
+import time
 import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -111,7 +112,7 @@ class DummyKeyStorage(KeyStorageBase):
     """
     Dummy key storage for use in tests, where keys are kepts only process-locally.
 
-    NOT THREAD-SAFE
+    NOT MEANT TO BE THREAD-SAFE
     """
 
     def __init__(self):
@@ -304,10 +305,10 @@ class FilesystemKeyStorage(KeyStorageBase):
             keychain_uid=keychain_uid, key_type=key_type
         )
 
-        target_public_key_filename = self._free_keys_dir.joinpath(
+        target_public_key_filename = self._keys_dir.joinpath(
             self._get_filename(keychain_uid, key_type=key_type, is_public=True)
         )
-        target_private_key_filename = self._free_keys_dir.joinpath(
+        target_private_key_filename = self._keys_dir.joinpath(
             self._get_filename(keychain_uid, key_type=key_type, is_public=False)
         )
 
@@ -324,5 +325,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         )
         free_public_key = subdir.joinpath(_free_public_key_name)
 
-        free_public_key.replace(target_public_key_filename)
+        # First move the private key, so that it's not shown anymore as "free"
         free_private_key.replace(target_private_key_filename)
+        free_public_key.replace(target_public_key_filename)
+

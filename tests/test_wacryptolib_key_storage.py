@@ -8,8 +8,11 @@ from wacryptolib.key_storage import (
     DummyKeyStorage,
     KeyStorageBase,
 )
-from wacryptolib.scaffolding import check_key_storage_free_keys_concurrency, check_key_storage_basic_get_set_api, \
-    check_key_storage_free_keys_api
+from wacryptolib.scaffolding import (
+    check_key_storage_free_keys_concurrency,
+    check_key_storage_basic_get_set_api,
+    check_key_storage_free_keys_api,
+)
 from wacryptolib.utilities import generate_uuid0
 
 
@@ -56,5 +59,5 @@ def test_key_storages_free_keys_concurrency(tmp_path):
     dummy_key_storage = DummyKeyStorage()
     filesystem_key_storage = FilesystemKeyStorage(keys_dir=str(tmp_path))
 
-    for key_storage in (dummy_key_storage, filesystem_key_storage,):
+    for key_storage in (dummy_key_storage, filesystem_key_storage):
         check_key_storage_free_keys_concurrency(key_storage)

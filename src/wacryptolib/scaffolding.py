@@ -15,7 +15,7 @@ def check_key_storage_basic_get_set_api(key_storage):
 
     keychain_uid = generate_uuid0()
     keychain_uid_other = generate_uuid0()
-    key_type="abxz"
+    key_type = "abxz"
 
     assert not key_storage.get_public_key(keychain_uid=keychain_uid, key_type="abxz")
 
@@ -56,11 +56,11 @@ def check_key_storage_basic_get_set_api(key_storage):
     )
 
     assert (
-        key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type+"_")
+        key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type + "_")
         is None
     )
     assert (
-        key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type+"_")
+        key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type + "_")
         is None
     )
 
@@ -69,9 +69,7 @@ def check_key_storage_basic_get_set_api(key_storage):
         is None
     )
     assert (
-        key_storage.get_private_key(
-            keychain_uid=keychain_uid_other, key_type=key_type
-        )
+        key_storage.get_private_key(keychain_uid=keychain_uid_other, key_type=key_type)
         is None
     )
 
@@ -115,10 +113,10 @@ def check_key_storage_free_keys_api(key_storage):
         )
 
     assert not key_storage.get_public_key(keychain_uid=keychain_uid, key_type="type2")
-    key_storage.attach_free_keypair_to_uuid(
+    key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_type="type2")
+    assert b"public_data" in key_storage.get_public_key(
         keychain_uid=keychain_uid, key_type="type2"
     )
-    assert b"public_data" in key_storage.get_public_key(keychain_uid=keychain_uid, key_type="type2")
 
     assert key_storage.get_free_keypairs_count("type1") == 2
     assert key_storage.get_free_keypairs_count("type2") == 0
@@ -156,27 +154,33 @@ def check_key_storage_free_keys_concurrency(key_storage):
 
     for i in range(77):
         for key_type in (key_type1, key_type2):
-            key_storage.add_free_keypair(key_type=key_type,
-                public_key=b"whatever1",
-                private_key=b"whatever2",
+            key_storage.add_free_keypair(
+                key_type=key_type, public_key=b"whatever1", private_key=b"whatever2"
             )
 
     def retrieve_free_keypair_for_index(idx, key_type):
-            keychain_uid = uuid.UUID(int=idx)
-            try:
-                key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_type=key_type)
-                time.sleep(0.001)
-                public_key_content = key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type)
-                assert public_key_content == b"whatever1"
-                res = True
-            except RuntimeError:
-                res = False
-            return res
+        keychain_uid = uuid.UUID(int=idx)
+        try:
+            key_storage.attach_free_keypair_to_uuid(
+                keychain_uid=keychain_uid, key_type=key_type
+            )
+            time.sleep(0.001)
+            public_key_content = key_storage.get_public_key(
+                keychain_uid=keychain_uid, key_type=key_type
+            )
+            assert public_key_content == b"whatever1"
+            res = True
+        except RuntimeError:
+            res = False
+        return res
 
     executor = ThreadPoolExecutor(max_workers=20)
 
     for key_type in (key_type1, key_type2):
-        results_gen = executor.map(functools.partial(retrieve_free_keypair_for_index, key_type=key_type), range(200))
+        results_gen = executor.map(
+            functools.partial(retrieve_free_keypair_for_index, key_type=key_type),
+            range(200),
+        )
         results = list(results_gen)
         assert results.count(True) == 77
         assert results.count(False) == 123
@@ -184,7 +188,6 @@ def check_key_storage_free_keys_concurrency(key_storage):
     assert key_storage.get_free_keypairs_count(key_type=key_type1) == 0
     assert key_storage.get_free_keypairs_count(key_type=key_type2) == 0
     return locals()
-
 
 
 def check_sensor_state_machine(sensor, run_duration=0):

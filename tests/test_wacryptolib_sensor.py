@@ -459,6 +459,7 @@ def test_periodic_value_poller(tmp_path):
     # CASE OF BROKEN TASK #
 
     broken_iterations = 0
+
     def task_func_broken():
         nonlocal broken_iterations
         broken_iterations += 1

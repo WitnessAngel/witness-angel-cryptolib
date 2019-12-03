@@ -328,4 +328,3 @@ class FilesystemKeyStorage(KeyStorageBase):
         # First move the private key, so that it's not shown anymore as "free"
         free_private_key.replace(target_private_key_filename)
         free_public_key.replace(target_public_key_filename)
-

@@ -1,12 +1,14 @@
 import os
 import random
+import time
 import uuid
 
 import pytest
 from Crypto.Random import get_random_bytes
 
 from wacryptolib.encryption import _encrypt_via_rsa_oaep
-from wacryptolib.escrow import EscrowApi, generate_free_keypair_for_least_provisioned_key_type
+from wacryptolib.escrow import EscrowApi, generate_free_keypair_for_least_provisioned_key_type, \
+    get_free_keys_generator_worker
 from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.key_storage import DummyKeyStorage
 from wacryptolib.signature import verify_message_signature
@@ -120,3 +122,44 @@ def test_generate_free_keypair_for_least_provisioned_key_type():
                                                             key_generation_func=key_generation_func)
     assert not res
     assert generate_keys_count == 38
+
+
+def test_get_free_keys_generator_worker():
+
+    generate_keys_count = 0
+
+    key_storage = DummyKeyStorage()
+
+    def key_generation_func(key_type, serialize):
+        nonlocal generate_keys_count
+        generate_keys_count += 1
+        time.sleep(0.01)
+        return dict(private_key="someprivatekey", public_key="somepublickey")
+
+    worker = get_free_keys_generator_worker(key_storage=key_storage, max_keys_count_per_type=30, sleep_on_overflow_s=0.5, key_generation_func=key_generation_func)
+
+    try:
+        worker.start()
+        time.sleep(0.5)
+        worker.stop()
+        worker.join()
+
+        assert 10 < generate_keys_count < 50, generate_keys_count  # Not enough time to generate all
+
+        worker.start()
+        time.sleep(1)
+        worker.stop()
+        worker.join()
+
+        assert generate_keys_count == 90, generate_keys_count  # All keys had the time to be generated
+
+        start = time.time()
+        worker.start()
+        worker.stop()
+        worker.join()
+        end = time.time()
+        assert (end - start) > 0.4  # sleep-on-overflow occurred
+
+    finally:
+        if worker.is_running:
+            worker.stop()

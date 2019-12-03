@@ -2,6 +2,7 @@ import logging
 import os
 import random
 import threading
+import time
 import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -13,7 +14,7 @@ from wacryptolib.key_generation import (
     SUPPORTED_ASYMMETRIC_KEY_TYPES)
 from wacryptolib.key_storage import KeyStorageBase as KeyStorageBase
 from wacryptolib.signature import sign_message
-from wacryptolib.utilities import synchronized
+from wacryptolib.utilities import synchronized, PeriodicTaskHandler
 
 logger = logging.getLogger(__name__)
 
@@ -117,11 +118,11 @@ def generate_free_keypair_for_least_provisioned_key_type(key_storage: KeyStorage
                                                          key_generation_func=generate_asymmetric_keypair,
                                                          key_types=SUPPORTED_ASYMMETRIC_KEY_TYPES):
     """
-    Generate a single free keypair for the type which is the least available in key storage, and
-    add it to storage. If the "free keys" pool of the storage is full, do nothing.
+    Generate a single free keypair for the key type which is the least available in key storage, and
+    add it to storage. If the "free keys" pools of the storage are full, do nothing.
 
     :param key_storage: the key storage to use
-    :param max_keys_count_per_type: how many free keys should exist per type
+    :param max_keys_count_per_type: how many free keys should exist per key type
     :param key_generation_func: callable to use for keypair generation
     :param key_types: the different key types (strings) to consider
     :return: True iff a key was generated (i.e. the free keys pool was not full)
@@ -143,3 +144,26 @@ def generate_free_keypair_for_least_provisioned_key_type(key_storage: KeyStorage
     )
     return True
 
+
+def get_free_keys_generator_worker(key_storage: KeyStorageBase, max_keys_count_per_type: int, sleep_on_overflow_s: float, **extra_generation_kwargs) -> PeriodicTaskHandler:
+    """
+    Return a periodic task handler which will gradually fill the pools of free keys of the key storage,
+    and wait longer when these pools are full.
+    
+    :param key_storage: the key storage to use 
+    :param max_keys_count_per_type: how many free keys should exist per key type
+    :param sleep_on_overflow_s: time to wait when free keys pools are full
+    :param extra_generation_kwargs: extra arguments to transmit to `generate_free_keypair_for_least_provisioned_key_type()`
+    :return: periodic task handler
+    """
+    def free_keypair_generator_task():
+        has_generated = generate_free_keypair_for_least_provisioned_key_type(key_storage=key_storage,
+                                                                     max_keys_count_per_type=max_keys_count_per_type,
+                                                                     **extra_generation_kwargs)
+        # FIXME - improve this with refactored multitimer, later
+        if not has_generated:
+            time.sleep(sleep_on_overflow_s)
+        return has_generated
+
+    periodic_task_handler = PeriodicTaskHandler(interval_s=0.001, task_func=free_keypair_generator_task)
+    return periodic_task_handler

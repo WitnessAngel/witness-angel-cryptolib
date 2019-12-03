@@ -312,7 +312,7 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
             traceback.print_exc()
 
 
-class SensorManager(TaskRunnerStateMachineBase):  # TODO rename as plural !!!!!!
+class SensorsManager(TaskRunnerStateMachineBase):  # TODO rename as plural !!!!!!
     """
     Manage a group of sensors for simultaneous starts/stops.
 

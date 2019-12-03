@@ -11,7 +11,7 @@ from wacryptolib.sensor import (
     TarfileAggregator,
     JsonAggregator,
     PeriodicValuePoller,
-    SensorManager,
+    SensorsManager,
 )
 from wacryptolib.utilities import load_from_json_bytes, TaskRunnerStateMachineBase
 
@@ -527,7 +527,7 @@ def test_sensor_manager():
 
     # First with EMPTY manager
 
-    manager = SensorManager(sensors=[])
+    manager = SensorsManager(sensors=[])
     _check_sensor_state_machine(manager)
 
     # Now with FILLED manager
@@ -539,7 +539,7 @@ def test_sensor_manager():
         DummyUnstableSensor(is_broken=False),
     ]
 
-    manager = SensorManager(sensors=sensors)
+    manager = SensorsManager(sensors=sensors)
     _check_sensor_state_machine(manager)
 
     success_count = manager.start()

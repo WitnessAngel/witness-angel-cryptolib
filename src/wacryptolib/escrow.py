@@ -78,6 +78,24 @@ class EscrowApi:
         )
         return signature
 
+    def request_decryption_authorization(self,
+                                         keypair_identifiers: list,
+                                         request_message: str
+                                         ) -> dict:
+        """
+        Send a list of keypairs for which decryption access is requested, with the reason why.
+
+        If request is immediately denied, an exception is raised, else the status of the authorization process
+        (process which might involve several steps, including live encounters) is returned.
+
+        :param keypair_identifiers: list of (keychain_uid, key_type) indices to authorize
+        :param request_message: user text explaining the reasons for the decryption (and the legal procedures involved)
+        :return: a dict with at least a string field "response_message" detailing the status of the request.
+        """
+        if not keypair_identifiers:
+            raise ValueError("Keypair identifiers must not be empty, when requesting decryption authorization")
+        return dict(response_message="Decryption request accepted")  # TODO localize string field!
+
     def decrypt_with_private_key(
         self,
         *,

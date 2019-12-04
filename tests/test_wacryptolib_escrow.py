@@ -45,6 +45,7 @@ def test_escrow_api_workflow():
 
     cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key)
 
+    # Works even without decryption authorization request, by default:
     decrypted = escrow_api.decrypt_with_private_key(
         keychain_uid=keychain_uid,
         key_type="RSA",
@@ -62,6 +63,14 @@ def test_escrow_api_workflow():
         )
 
     assert decrypted == secret
+
+    result = escrow_api.request_decryption_authorization(keypair_identifiers=[(keychain_uid, "RSA")],
+                                                      request_message="I need this decryption!")
+    assert result["response_message"]
+
+    with pytest.raises(ValueError, match="empty"):
+        escrow_api.request_decryption_authorization(keypair_identifiers=[],
+                                                      request_message="I need this decryption!")
 
 
 def test_generate_free_keypair_for_least_provisioned_key_type():

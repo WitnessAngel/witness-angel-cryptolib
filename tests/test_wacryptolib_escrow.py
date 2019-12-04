@@ -172,7 +172,7 @@ def test_get_free_keys_generator_worker():
         ), generate_keys_count  # Not enough time to generate all
 
         worker.start()
-        time.sleep(1)
+        time.sleep(1.5)
         worker.stop()
         worker.join()
 

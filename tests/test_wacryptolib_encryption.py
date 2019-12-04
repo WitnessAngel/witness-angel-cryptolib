@@ -35,7 +35,7 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
 
     initial_cipherdict = copy.deepcopy(cipherdict)
 
-    def _ensure_decryption_fails(new_cipherdict):
+    def _check_decryption_fails(new_cipherdict):
         try:
             decrypted_content_bad = decryption_func(cipherdict=new_cipherdict)
             assert decrypted_content_bad != initial_content
@@ -65,7 +65,7 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
             corrupted_ciphertext = bytes(editable_ciphertext)
             encryption["ciphertext"] = corrupted_ciphertext
 
-        _ensure_decryption_fails(encryption)
+        _check_decryption_fails(encryption)
 
     for _ in range(3):
 
@@ -77,7 +77,7 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
         else:
             encryption["ciphertext"] += suffix
 
-        _ensure_decryption_fails(encryption)
+        _check_decryption_fails(encryption)
 
 
 @pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)

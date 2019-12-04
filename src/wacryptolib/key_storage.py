@@ -130,14 +130,14 @@ class DummyKeyStorage(KeyStorageBase):
         assert isinstance(keypair, dict), keypair
         self._cached_keypairs[(keychain_uid, key_type)] = keypair
 
-    def _ensure_keypair_does_not_exist(self, keychain_uid, key_type):
+    def _check_keypair_does_not_exist(self, keychain_uid, key_type):
         if self._get_keypair(keychain_uid=keychain_uid, key_type=key_type):
             raise RuntimeError(
                 "Already existing dummy keypair %s/%s" % (keychain_uid, key_type)
             )
 
     def set_keys(self, *, keychain_uid, key_type, public_key, private_key):
-        self._ensure_keypair_does_not_exist(
+        self._check_keypair_does_not_exist(
             keychain_uid=keychain_uid, key_type=key_type
         )
         self._set_keypair(
@@ -163,7 +163,7 @@ class DummyKeyStorage(KeyStorageBase):
         sublist.append(keypair)
 
     def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_type: str):
-        self._ensure_keypair_does_not_exist(
+        self._check_keypair_does_not_exist(
             keychain_uid=keychain_uid, key_type=key_type
         )
         try:
@@ -222,7 +222,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         except FileNotFoundError:
             return None
 
-    def _ensure_keypair_does_not_exist(self, keychain_uid, key_type):
+    def _check_keypair_does_not_exist(self, keychain_uid, key_type):
         # We use PRIVATE key as marker of existence
         target_private_key_filename = self._get_filename(
             keychain_uid, key_type=key_type, is_public=False
@@ -241,7 +241,7 @@ class FilesystemKeyStorage(KeyStorageBase):
             keychain_uid, key_type=key_type, is_public=False
         )
 
-        self._ensure_keypair_does_not_exist(
+        self._check_keypair_does_not_exist(
             keychain_uid=keychain_uid, key_type=key_type
         )
 
@@ -301,7 +301,7 @@ class FilesystemKeyStorage(KeyStorageBase):
 
     @synchronized
     def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_type: str):
-        self._ensure_keypair_does_not_exist(
+        self._check_keypair_does_not_exist(
             keychain_uid=keychain_uid, key_type=key_type
         )
 

@@ -21,8 +21,11 @@ def test_escrow_api_workflow():
     escrow_api = EscrowApi(key_storage=key_storage)
 
     keychain_uid = generate_uuid0()
+    keychain_uid_other = generate_uuid0()
+    keychain_uid_unexisting = generate_uuid0()
     secret = get_random_bytes(101)
 
+    # Keypair is well auto-created by get_public_key()
     public_key_pem = escrow_api.get_public_key(
         keychain_uid=keychain_uid, key_type="RSA"
     )
@@ -36,12 +39,17 @@ def test_escrow_api_workflow():
     verify_message_signature(
         message=secret, signature=signature, key=public_key, signature_algo="PSS"
     )
-
     signature["digest"] += b"xyz"
     with pytest.raises(ValueError, match="Incorrect signature"):
         verify_message_signature(
             message=secret, signature=signature, key=public_key, signature_algo="PSS"
         )
+
+    # Keypair is well auto-created by get_message_signature()
+    signature = escrow_api.get_message_signature(
+        keychain_uid=keychain_uid_other, message=secret, key_type="RSA", signature_algo="PSS"
+    )
+    assert signature
 
     cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key)
 
@@ -52,6 +60,15 @@ def test_escrow_api_workflow():
         encryption_algo="RSA_OAEP",
         cipherdict=cipherdict,
     )
+
+    # NO auto-creation of keypair in decrypt_with_private_key()
+    with pytest.raises(ValueError, match="Unexisting"):
+        escrow_api.decrypt_with_private_key(
+            keychain_uid=keychain_uid_unexisting,
+            key_type="RSA",
+            encryption_algo="RSA_OAEP",
+            cipherdict=cipherdict,
+        )
 
     cipherdict["digest_list"].append(b"aaabbbccc")
     with pytest.raises(ValueError, match="Ciphertext with incorrect length"):

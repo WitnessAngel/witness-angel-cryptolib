@@ -30,6 +30,7 @@ class EscrowApi:
         self._key_storage = key_storage
 
     def _ensure_keypair_exists(self, keychain_uid: uuid.UUID, key_type: str):
+        """Create a keypair if it doesn't exist."""
         has_public_key = self._key_storage.get_public_key(
             keychain_uid=keychain_uid, key_type=key_type
         )
@@ -41,6 +42,14 @@ class EscrowApi:
                 public_key=keypair["public_key"],
                 private_key=keypair["private_key"],
             )
+
+    def _check_keypair_exists(self, keychain_uid: uuid.UUID, key_type: str):
+        """Raise if a keypair doesn't exist."""
+        has_public_key = self._key_storage.get_public_key(
+            keychain_uid=keychain_uid, key_type=key_type
+        )
+        if not has_public_key:
+            raise ValueError("Unexisting sql keypair %s/%s in escrow api" % (keychain_uid, key_type))
 
     def get_public_key(self, *, keychain_uid: uuid.UUID, key_type: str) -> bytes:
         """
@@ -88,7 +97,7 @@ class EscrowApi:
         If request is immediately denied, an exception is raised, else the status of the authorization process
         (process which might involve several steps, including live encounters) is returned.
 
-        :param keypair_identifiers: list of (keychain_uid, key_type) indices to authorize
+        :param keypair_identifiers: list of dicts with (keychain_uid, key_type) indices to authorize
         :param request_message: user text explaining the reasons for the decryption (and the legal procedures involved)
         :return: a dict with at least a string field "response_message" detailing the status of the request.
         """
@@ -112,7 +121,7 @@ class EscrowApi:
         assert (
             encryption_algo.upper() == "RSA_OAEP"
         )  # Only supported asymmetric cipher for now
-        self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
+        self._check_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
 
         private_key_pem = self._key_storage.get_private_key(
             keychain_uid=keychain_uid, key_type=key_type

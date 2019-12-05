@@ -12,6 +12,14 @@ Task handling
 .. autofunction:: wacryptolib.utilities.PeriodicTaskHandler
 
 
+Hashing
+-----------
+
+.. autodata:: wacryptolib.utilities.SUPPORTED_HASH_ALGOS
+
+.. autofunction:: wacryptolib.utilities.hash_message
+
+
 Serialization
 ------------------
 

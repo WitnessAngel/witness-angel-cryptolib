@@ -1,4 +1,5 @@
 import abc
+import importlib
 import logging
 from typing import List, Optional
 
@@ -32,6 +33,20 @@ def synchronized(func, self, *args, **kwargs):
 
 
 ### Public utilities ###
+
+
+#: Hash algorithms authorized for use with `hash_message()`
+SUPPORTED_HASH_ALGOS = ["SHA256", "SHA512", "SHA3_256", "SHA3_512"]
+
+
+def hash_message(message: bytes, hash_algo: str):
+    """Hash a message with the selected hash algorithm, and return the hash as bytes."""
+    if hash_algo not in SUPPORTED_HASH_ALGOS:
+        raise ValueError("Unsupported hash algorithm %r" % hash_algo)
+    module = importlib.import_module("Crypto.Hash.%s" % hash_algo)
+    digest = module.new(message).digest()
+    assert 32 <= len(digest) <= 64, len(digest)
+    return digest
 
 
 def split_as_chunks(

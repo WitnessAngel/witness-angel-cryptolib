@@ -193,6 +193,7 @@ class FilesystemKeyStorage(KeyStorageBase):
 
     _free_private_key_suffix = "_private_key.pem"
     _free_public_key_suffix = "_public_key.pem"
+    _randint_args = (10**10, 10**11 - 1)
 
     def __init__(self, keys_dir):
         keys_dir = Path(keys_dir)
@@ -279,7 +280,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         subdir = self._free_keys_dir.joinpath(key_type)
         subdir.mkdir(exist_ok=True)
 
-        random_name = str(random.randint(1000000000000, 1000000000000000))
+        random_name = str(random.randint(*self._randint_args))
 
         # If these free keys already exist, we overwrite them, it's OK
         # We first write the public key, since the private one identifies the presence of a full free key

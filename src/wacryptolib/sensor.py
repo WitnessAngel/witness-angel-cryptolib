@@ -174,6 +174,7 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
             to_datetime=to_datetime,
             extension=extension,
         )
+        logger.info("Adding record %r to tarfile builder" % filename)
 
         mtime = to_datetime.timestamp()
 
@@ -237,6 +238,10 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
     def __len__(self):
         return len(self._current_dataset) if self._current_dataset else 0
 
+    @property
+    def sensor_name(self):
+        return self._sensor_name
+
     def _notify_aggregation_operation(self):
         super()._notify_aggregation_operation()
         if self._current_dataset is None:
@@ -267,6 +272,7 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
             self._current_dataset or not self._current_start_time
         )  # INVARIANT of our system!
         assert isinstance(data_dict, dict), data_dict
+        logger.debug("New data added to json builder: %s" % data_dict)
         self._notify_aggregation_operation()
         self._current_dataset.append(data_dict)
 
@@ -354,7 +360,7 @@ class SensorsManager(TaskRunnerStateMachineBase):  # TODO rename as plural !!!!!
         return success_count
 
     def join(self):
-        logger.info("Joining all managed sensors")
+        logger.info("Waiting for all managed sensors termination")
         super().join()
         success_count = 0
         for sensor in self._sensors:

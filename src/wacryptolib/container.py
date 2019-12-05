@@ -81,6 +81,8 @@ class ContainerWriter(ContainerBase):
             data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
             symmetric_key = generate_symmetric_key(encryption_algo=data_encryption_algo)
 
+            logger.debug("Encrypting data with symmetric key of type %r", data_encryption_algo)
+
             data_cipherdict = encrypt_bytestring(
                 plaintext=data_current,
                 encryption_algo=data_encryption_algo,
@@ -149,6 +151,8 @@ class ContainerWriter(ContainerBase):
         key_encryption_algo = conf["key_encryption_algo"]
         encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
 
+        logger.debug("Encrypting symmetric key with algo %r", key_encryption_algo)
+
         subkey_pem = encryption_proxy.get_public_key(
             keychain_uid=keychain_uid, key_type=escrow_key_type
         )
@@ -169,6 +173,9 @@ class ContainerWriter(ContainerBase):
         encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
         signature_key_type = conf["signature_key_type"]
         signature_algo = conf["signature_algo"]
+
+        logger.debug("Signing encrypted data with algo %r", signature_algo)
+
         signature_value = encryption_proxy.get_message_signature(
             keychain_uid=keychain_uid,
             message=data_ciphertext,
@@ -405,12 +412,14 @@ class ContainerStorage:
         )  # Will fail if authorizations are not OK
 
     def _process_and_store_file(self, filename_base, data, metadata):
+        """Returns the container basename."""
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
         container = self._encrypt_data_into_container(data, metadata=metadata)
         dump_to_json_file(
             container_filepath, data=container, indent=4
         )  # Note that this might erase existing file, it's OK
         self._purge_exceeding_containers()  # AFTER new container is created
+        return container_filepath.name
 
     def enqueue_file_for_encryption(self, filename_base, data, metadata):
         """Enqueue a data file for encryption and storage, with its metadata tree.
@@ -419,9 +428,11 @@ class ContainerStorage:
 
         `filename` of the final container might be different from provided one.
         """
-        self._process_and_store_file(
+        logger.info("Encrypting container %r into storage", filename_base)
+        container_name = self._process_and_store_file(
             filename_base=filename_base, data=data, metadata=metadata
         )
+        logger.info("Container %r successfully encrypted", container_name)
 
     def decrypt_container_from_storage(self, container_name_or_idx):
         """
@@ -443,7 +454,12 @@ class ContainerStorage:
             container_name = Path(container_name_or_idx)
 
         assert not container_name.is_absolute(), container_name
+
+        logger.info("Decrypting container %r from storage", container_name)
+
         container_filepath = self._make_absolute(container_name)
         container = load_from_json_file(container_filepath)
 
-        return self._decrypt_data_from_container(container)
+        result = self._decrypt_data_from_container(container)
+        logger.info("Container %r successfully decrypted", container_name)
+        return result

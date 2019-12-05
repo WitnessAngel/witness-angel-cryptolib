@@ -32,6 +32,7 @@ SIMPLE_CONTAINER_CONF = dict(
             data_signatures=[
                 dict(
                     signature_key_type="DSA",
+                    signature_prehash="SHA256",
                     signature_algo="DSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
@@ -66,6 +67,7 @@ COMPLEX_CONTAINER_CONF = dict(
             data_signatures=[
                 dict(
                     signature_key_type="DSA",
+                    signature_prehash="SHA3_512",
                     signature_algo="DSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
@@ -88,11 +90,13 @@ COMPLEX_CONTAINER_CONF = dict(
             data_signatures=[
                 dict(
                     signature_key_type="RSA",
+                    signature_prehash="SHA3_256",
                     signature_algo="PSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 ),
                 dict(
                     signature_key_type="ECC",
+                    signature_prehash="SHA512",
                     signature_algo="DSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 ),

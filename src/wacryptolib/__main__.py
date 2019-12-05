@@ -30,6 +30,7 @@ EXAMPLE_CONTAINER_CONF = dict(
             data_signatures=[
                 dict(
                     signature_key_type="DSA",
+                    signature_prehash="SHA256",
                     signature_algo="DSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )

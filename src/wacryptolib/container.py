@@ -20,7 +20,7 @@ from wacryptolib.utilities import (
     dump_to_json_file,
     load_from_json_file,
     generate_uuid0,
-)
+    hash_message)
 
 logger = logging.getLogger(__name__)
 
@@ -172,13 +172,16 @@ class ContainerWriter(ContainerBase):
     ) -> dict:
         encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
         signature_key_type = conf["signature_key_type"]
+        signature_prehash = conf["signature_prehash"]
         signature_algo = conf["signature_algo"]
 
-        logger.debug("Signing encrypted data with algo %r", signature_algo)
+        data_ciphertext_hash = hash_message(data_ciphertext, hash_algo=signature_prehash)
+
+        logger.debug("Signing hash of encrypted data with algo %r", signature_algo)
 
         signature_value = encryption_proxy.get_message_signature(
             keychain_uid=keychain_uid,
-            message=data_ciphertext,
+            message=data_ciphertext_hash,
             key_type=signature_key_type,
             signature_algo=signature_algo,
         )
@@ -209,7 +212,7 @@ class ContainerReader(ContainerBase):
             data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
 
             for signature_conf in data_encryption_stratum["data_signatures"]:
-                self._verify_message_signatures(
+                self._verify_message_signature(
                     keychain_uid=keychain_uid, message=data_current, conf=signature_conf
                 )
 
@@ -255,10 +258,11 @@ class ContainerReader(ContainerBase):
         )
         return symmetric_key_plaintext
 
-    def _verify_message_signatures(
+    def _verify_message_signature(
         self, keychain_uid: uuid.UUID, message: bytes, conf: dict
     ):
         signature_key_type = conf["signature_key_type"]
+        signature_prehash = conf["signature_prehash"]
         signature_algo = conf["signature_algo"]
         encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
         public_key_pem = encryption_proxy.get_public_key(
@@ -268,8 +272,10 @@ class ContainerReader(ContainerBase):
             key_pem=public_key_pem, key_type=signature_key_type
         )
 
+        message_hash = hash_message(message, hash_algo=signature_prehash)
+
         verify_message_signature(
-            message=message,
+            message=message_hash,
             signature_algo=signature_algo,
             signature=conf["signature_value"],
             key=public_key,

@@ -141,6 +141,20 @@ def test_status_slugs_utilities():
             == RuntimeError
     )
 
+    # Test the case of an empty mapper
+
+    mapper_tree = construct_status_slugs_mapper(
+        [Exception], fallback_exception_class=NotImplementedError
+    )
+    assert (
+            get_closest_exception_class_for_status_slugs(["Exception"], mapper_tree=mapper_tree)
+            == NotImplementedError  # Shadowns the "Exception" class which has an empty slug due to slugifier config
+    )
+    assert (
+            get_closest_exception_class_for_status_slugs(["OSError"], mapper_tree=mapper_tree)
+            == NotImplementedError
+    )
+
 
 def test_status_slugs_mapper_class():
 

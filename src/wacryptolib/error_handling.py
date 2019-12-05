@@ -32,12 +32,13 @@ def _fully_qualified_name(o):
         return module + "." + o.__name__
 
 
-DEFAULT_EXCLUDED_CLASSES = (object, BaseException, Exception)
+#: These ancestor classes are too generic to be included in status slugs
+DEFAULT_EXCLUDED_EXCEPTION_CLASSES = (object, BaseException, Exception)
 
 
 def slugify_exception_class(
     exception_class,
-    excluded_classes=DEFAULT_EXCLUDED_CLASSES,
+    excluded_classes=DEFAULT_EXCLUDED_EXCEPTION_CLASSES,
     qualified_name_extractor=_fully_qualified_name,
 ):
     """
@@ -50,11 +51,13 @@ def slugify_exception_class(
     :return: list of strings
     """
     # TODO change casing? Inspect exception_class.slug_name?
-    return [
+    assert isinstance(exception_class, type), exception_class  # Must be a CLASS, not an instance!
+    slugs = [
         qualified_name_extractor(ancestor)
         for ancestor in reversed(exception_class.__mro__)
         if ancestor not in excluded_classes
     ]
+    return slugs
 
 
 def construct_status_slugs_mapper(
@@ -74,7 +77,8 @@ def construct_status_slugs_mapper(
 
     for exception_class in exception_classes:
         slugs = exception_slugifier(exception_class)
-        assert slugs, slugs
+        if not slugs:
+            continue  # E.g. for BaseException and the likes, shadowed by fallback_exception_class
         current = mapper_tree
         for slug in slugs:
             current = current.setdefault(slug, {})  # No auto-creation of entries for ancestors

@@ -6,7 +6,7 @@ import pytest
 import responses
 from jsonrpc_requests import ProtocolError
 
-from wacryptolib.jsonrpc_client import JsonRpcProxy
+from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 
 
 @responses.activate
@@ -14,7 +14,7 @@ def test_jsonrpc_extended_json_calls():
 
     uid = uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")
 
-    server = JsonRpcProxy("http://mock/xmlrpc")
+    server = JsonRpcProxy("http://mock/xmlrpc", response_error_handler=None)
 
     # rpc call with positional args
     def callback1(request):
@@ -83,3 +83,54 @@ def test_jsonrpc_extended_json_calls():
         ProtocolError, match="spec forbids mixing arguments and keyword arguments"
     ):
         server.foobar(33, a=22)
+
+    def callback_protocol_error(request):
+        return 200, {}, u'{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}'
+
+
+    # Test exception handling
+
+    responses.add_callback(
+        responses.POST,
+        "http://mock/xmlrpc",
+        content_type="application/json",
+        callback=callback_protocol_error,
+    )
+    with pytest.raises(ProtocolError, match="Error: -32700 Parse error"):
+        server.foobar({"foo": "bar"})
+
+
+    must_raise = True
+
+    def _response_error_handler(exc_to_handle):
+        nonlocal must_raise
+        if not must_raise:
+            return "some error occurred"
+        raise RuntimeError(str(exc_to_handle))
+
+    server = JsonRpcProxy("http://mock/xmlrpc", response_error_handler=_response_error_handler)
+
+    with pytest.raises(RuntimeError, match="Error: -32700 Parse error"):
+        server.foobar({"foo": "bar"})
+
+    must_raise = False
+
+    assert server.foobar({"foo": "bar"}) == "some error occurred"
+
+    responses.reset()
+
+
+def test_status_slugs_response_error_handler():
+
+    exc = ProtocolError("problems occurred", server_data={'error': {'code': 400, 'data': {'data': None, 'message_untranslated': "bigfailure", "status_slugs": ["RuntimeError"]}}})
+    with pytest.raises(RuntimeError, match="bigfailure"):
+        status_slugs_response_error_handler(exc)
+
+    exc = ProtocolError("problems occurred", server_data={'error': {'code': 400, 'data': {'data': None, 'message_untranslated': "bigfailure", "status_slugs": ["UnknownClass"]}}})
+    with pytest.raises(Exception, match="bigfailure") as exc_info:
+        status_slugs_response_error_handler(exc)
+    assert exc_info.type is Exception  # Not a subclass, here
+
+    exc = ProtocolError("problems occurred", server_data={'error': {'code': 400, 'data': None}})
+    with pytest.raises(ProtocolError, match="problems occurred"):
+        status_slugs_response_error_handler(exc)

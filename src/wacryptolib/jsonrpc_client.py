@@ -1,10 +1,32 @@
 import logging
+import builtins
 
 from jsonrpc_requests import Server as ServerBase, ProtocolError
 
+from wacryptolib.error_handling import StatusSlugsMapper
 from wacryptolib.utilities import dump_to_json_str, load_from_json_str
 
 logger = logging.getLogger(__name__)
+
+
+
+_exception_classes = StatusSlugsMapper.gather_exception_subclasses(builtins, parent_classes=[Exception])
+status_slugs_to_builtins_mapper = StatusSlugsMapper(_exception_classes, fallback_exception_class=Exception)
+
+
+def status_slugs_response_error_handler(exc):
+    """
+    Generic handler which recognizes status slugs of builtin exceptions in json-rpc errorresponses,
+    and reraises them client-side.
+    """
+    assert isinstance(exc, ProtocolError), exc
+    error_data = exc.server_data["error"]["data"]
+    if error_data:
+        status_slugs = error_data["status_slugs"]
+        status_message = error_data["message_untranslated"]
+        exception_class = status_slugs_to_builtins_mapper.get_closest_exception_class_for_status_slugs(status_slugs)
+        raise exception_class(status_message) from exc
+    raise exc from None
 
 
 class JsonRpcProxy(ServerBase):
@@ -20,20 +42,28 @@ class JsonRpcProxy(ServerBase):
 
     """
 
+    def __init__(self, *args, response_error_handler=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._response_error_handler = response_error_handler
+
     @staticmethod
     def dumps(data):
         """We override to use Extended Json here."""
         return dump_to_json_str(data)
 
-    @staticmethod
-    def parse_response(response):
+    def parse_response(self, response):
         """We override to use Extended Json here."""
 
         def custom_json_decoder():
             return load_from_json_str(response.text)
 
         response.json = custom_json_decoder
-        return ServerBase.parse_response(response)
+        try:
+            return ServerBase.parse_response(response)
+        except ProtocolError as exc:
+            if self._response_error_handler:
+                return self._response_error_handler(exc)
+            raise
 
     # We override ultra-private Server.__request() method!
     def _Server__request(self, method_name, args=None, kwargs=None):

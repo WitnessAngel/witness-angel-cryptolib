@@ -9,9 +9,10 @@ def gather_exception_subclasses(module, parent_classes: list):
     which are subclasses of `parent_classes` (including these, if found in module).
 
     :param module: python module object
-    :param parent_classes: list of exception classes
+    :param parent_classes: list of exception classes (or single exception class)
     :return: list of exception subclasses
     """
+    parent_classes = tuple(parent_classes) if isinstance(parent_classes, list) else parent_classes
     selected_classes = []
     for (key, value) in vars(module).items():
         if isinstance(value, type):
@@ -44,7 +45,7 @@ def slugify_exception_class(
     from ancestor to descendant.
 
     :param exception_class: exception class to slugify
-    :param excluded_classes: parents classes so generic that they needn't be included in slugs
+    :param excluded_classes: list of parents classes so generic that they needn't be included in slugs
     :param qualified_name_extractor: callable which turns an exception class into its qualified name
     :return: list of strings
     """
@@ -63,6 +64,9 @@ def construct_status_slugs_mapper(
     Construct and return a tree where branches are qualified slugs, and each leaf is an exception
     class corresponding to the path leading to it.
 
+    Intermediate branches can carry an (ancestor) exception class too, but only if this one is explicitely
+    included in `exception_classes`.
+
     The fallback exception class is stored at the root of the tree under the "" key.
     """
 
@@ -73,7 +77,7 @@ def construct_status_slugs_mapper(
         assert slugs, slugs
         current = mapper_tree
         for slug in slugs:
-            current = current.setdefault(slug, {})
+            current = current.setdefault(slug, {})  # No auto-creation of entries for ancestors
         current[""] = exception_class
 
     return mapper_tree
@@ -91,12 +95,14 @@ def get_closest_exception_class_for_status_slugs(slugs, mapper_tree):
     :return: exception class object
     """
     current = mapper_tree
+    fallback_exception_class = mapper_tree[""]  # Ultimate root fallback
     for slug in slugs:
-        fallback_exception_class = current[""]
         current = current.get(slug)
         if current is None:
             return fallback_exception_class
-    return current[""]
+        else:
+            fallback_exception_class = current.get("", fallback_exception_class)
+    return current.get("", fallback_exception_class)
 
 
 class StatusSlugsMapper:

@@ -121,12 +121,32 @@ def test_status_slugs_utilities():
             == MyExc  # closest ancestor found
     )
 
+    # Test the case of not-included ancestor exception classes
+
+    mapper_tree = construct_status_slugs_mapper(
+        [KeyError], fallback_exception_class=RuntimeError
+    )
+    assert (
+            get_closest_exception_class_for_status_slugs(["LookupError", "KeyError"], mapper_tree=mapper_tree)
+            == KeyError
+    )
+
+    assert (
+            get_closest_exception_class_for_status_slugs(["LookupError"], mapper_tree=mapper_tree)
+            == RuntimeError  # No fallback on some auto-created LookupError entry
+    )
+
+    assert (
+            get_closest_exception_class_for_status_slugs(["OSError"], mapper_tree=mapper_tree)
+            == RuntimeError
+    )
+
 
 def test_status_slugs_mapper_class():
 
     import builtins
 
-    exception_classes = StatusSlugsMapper.gather_exception_subclasses(builtins, parent_classes=LookupError)
+    exception_classes = StatusSlugsMapper.gather_exception_subclasses(builtins, parent_classes=[LookupError, UnicodeDecodeError])
 
     def qualified_name_extractor(exception_class):
         return "#%s#" % exception_class.__name__
@@ -135,6 +155,16 @@ def test_status_slugs_mapper_class():
     mapper = StatusSlugsMapper(exception_classes, fallback_exception_class=RuntimeError, exception_slugifier=exception_slugifier)
 
     assert mapper.slugify_exception_class(FileNotFoundError) == ['#OSError#', '#FileNotFoundError#']
+    assert mapper.slugify_exception_class(UnicodeDecodeError) == ['#ValueError#', '#UnicodeError#', '#UnicodeDecodeError#']
+
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#ValueError#', '#UnicodeError#', '#UnicodeDecodeError#'])
+    assert exc_class == UnicodeDecodeError
+
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#ValueError#', '#UnicodeError#', '#UnicodeEncodeError#'])
+    assert exc_class == RuntimeError  # Ancestor classes were not included in "exception_classes"
+
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#ValueError#', '#UnicodeError#'])
+    assert exc_class == RuntimeError  # Same thing
 
     exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#LookupError#', '#IndexError#'])
     assert exc_class == IndexError

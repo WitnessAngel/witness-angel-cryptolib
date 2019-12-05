@@ -1,11 +1,13 @@
+import functools
 import sys
 
 from wacryptolib.error_handling import (
     gather_exception_subclasses,
     construct_status_slugs_mapper,
     slugify_exception_class,
-    retrieve_closest_exception_class_for_status_slugs,
+    get_closest_exception_class_for_status_slugs,
     _fully_qualified_name,
+    StatusSlugsMapper
 )
 
 LookupError = LookupError
@@ -52,11 +54,11 @@ def test_status_slugs_utilities():
     )  # Builtins don't keep their module prefix
     assert _fully_qualified_name(MyExc) == "test_wacryptolib_error_handling.MyExc"
 
-    mapper = construct_status_slugs_mapper(
+    mapper_tree = construct_status_slugs_mapper(
         selected_classes, fallback_exception_class=NotImplementedError
     )
     # from pprint import pprint ; pprint(mapper)
-    assert mapper == {
+    assert mapper_tree == {
         "": NotImplementedError,
         "test_wacryptolib_error_handling.MyExc": {
             "": MyExc,
@@ -91,12 +93,12 @@ def test_status_slugs_utilities():
     ], slugify_exception_class(MyExcChild1GrandChild)
 
     assert (
-            retrieve_closest_exception_class_for_status_slugs((), mapper=mapper)
+            get_closest_exception_class_for_status_slugs((), mapper_tree=mapper_tree)
             == NotImplementedError
     )
 
     assert (
-            retrieve_closest_exception_class_for_status_slugs(("XYZ", "ZXY"), mapper=mapper)
+            get_closest_exception_class_for_status_slugs(("XYZ", "ZXY"), mapper_tree=mapper_tree)
             == NotImplementedError
     )
 
@@ -105,7 +107,7 @@ def test_status_slugs_utilities():
         "test_wacryptolib_error_handling.MyExcChild1",
     )
     assert (
-            retrieve_closest_exception_class_for_status_slugs(status_slug, mapper=mapper)
+            get_closest_exception_class_for_status_slugs(status_slug, mapper_tree=mapper_tree)
             == MyExcChild1
     )
 
@@ -115,6 +117,33 @@ def test_status_slugs_utilities():
         "test_wacryptolib_error_handling.YYYYYYYY"
     )
     assert (
-            retrieve_closest_exception_class_for_status_slugs(status_slug, mapper=mapper)
+            get_closest_exception_class_for_status_slugs(status_slug, mapper_tree=mapper_tree)
             == MyExc  # closest ancestor found
     )
+
+
+def test_status_slugs_mapper_class():
+
+    import builtins
+
+    exception_classes = StatusSlugsMapper.gather_exception_subclasses(builtins, parent_classes=LookupError)
+
+    def qualified_name_extractor(exception_class):
+        return "#%s#" % exception_class.__name__
+    exception_slugifier = functools.partial(slugify_exception_class, qualified_name_extractor=qualified_name_extractor)
+
+    mapper = StatusSlugsMapper(exception_classes, fallback_exception_class=RuntimeError, exception_slugifier=exception_slugifier)
+
+    assert mapper.slugify_exception_class(FileNotFoundError) == ['#OSError#', '#FileNotFoundError#']
+
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#LookupError#', '#IndexError#'])
+    assert exc_class == IndexError
+
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#LookupError#', '#SomeStuff#'])
+    assert exc_class == LookupError
+
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#ABC#', '#DEF#'])
+    assert exc_class == RuntimeError
+
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=[])
+    assert exc_class == RuntimeError

@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 def gather_exception_subclasses(module, parent_classes: list):
     """
     Browse the module's variables, and return all found exception classes
-    which are subclasses of `parent_classes`(including these, if found in module).
+    which are subclasses of `parent_classes` (including these, if found in module).
 
     :param module: python module object
     :param parent_classes: list of exception classes
@@ -57,7 +57,7 @@ def slugify_exception_class(
 
 
 def construct_status_slugs_mapper(
-    exception_classes, fallback_exception_class, slugifier=slugify_exception_class
+    exception_classes, fallback_exception_class, exception_slugifier=slugify_exception_class
 ):
     """
     Construct and return a tree where branches are qualified slugs, and each leaf is an exception
@@ -66,20 +66,20 @@ def construct_status_slugs_mapper(
     The fallback exception class is stored at the root of the tree under the "" key.
     """
 
-    mapper = {"": fallback_exception_class} # Special value at root
+    mapper_tree = {"": fallback_exception_class} # Special value at root
 
     for exception_class in exception_classes:
-        slugs = slugifier(exception_class)
+        slugs = exception_slugifier(exception_class)
         assert slugs, slugs
-        current = mapper
+        current = mapper_tree
         for slug in slugs:
             current = current.setdefault(slug, {})
         current[""] = exception_class
 
-    return mapper
+    return mapper_tree
 
 
-def retrieve_closest_exception_class_for_status_slugs(slugs, mapper):
+def get_closest_exception_class_for_status_slugs(slugs, mapper_tree):
     """
     Return the exception class targeted by the provided status slugs,
     or the closest ancestor class if the exact exception class is not in the mapper.
@@ -90,10 +90,34 @@ def retrieve_closest_exception_class_for_status_slugs(slugs, mapper):
     :param mapper: mapper tree constructed from selected exceptions
     :return: exception class object
     """
-    current = mapper
+    current = mapper_tree
     for slug in slugs:
         fallback_exception_class = current[""]
         current = current.get(slug)
         if current is None:
             return fallback_exception_class
     return current[""]
+
+
+class StatusSlugsMapper:
+    """
+    High-level wrapper for converting exceptions from/to status slugs.
+    """
+    def __init__(self, exception_classes, fallback_exception_class, exception_slugifier=slugify_exception_class):
+        self._slugify_exception_class = exception_slugifier
+        self._mapper_tree = construct_status_slugs_mapper(exception_classes=exception_classes,
+                                                     fallback_exception_class=fallback_exception_class,
+                                                     exception_slugifier=exception_slugifier)
+
+    def slugify_exception_class(self, exception_class, *args, **kwargs):
+        """Use the exception slugifier provided in `__init__()` to turn an exception class into a qualified name."""
+        return self._slugify_exception_class(exception_class, *args, **kwargs)
+
+    def get_closest_exception_class_for_status_slugs(self, slugs):
+        """Return the closest exception class targeted by the provided status slugs,
+        with a fallback class if no matching ancestor is found at all."""
+        return get_closest_exception_class_for_status_slugs(slugs, mapper_tree=self._mapper_tree)
+
+    gather_exception_subclasses = staticmethod(gather_exception_subclasses)
+
+

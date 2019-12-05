@@ -173,6 +173,7 @@ def generate_free_keypair_for_least_provisioned_key_type(
         public_key=keypair["public_key"],
         private_key=keypair["private_key"],
     )
+    logger.info("New free key of type %s pregenerated" % key_type)
     return True
 
 

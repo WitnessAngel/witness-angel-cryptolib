@@ -1,10 +1,10 @@
 import sys
 
 from wacryptolib.error_handling import (
-    _gather_exception_subclasses,
-    _construct_status_slugs_mapper,
-    _slugify_exception_class,
-    _retrieve_exception_class_for_status_slugs,
+    gather_exception_subclasses,
+    construct_status_slugs_mapper,
+    slugify_exception_class,
+    retrieve_closest_exception_class_for_status_slugs,
     _fully_qualified_name,
 )
 
@@ -40,7 +40,7 @@ def test_status_slugs_utilities():
 
     this_module = sys.modules[MyExc.__module__]
 
-    selected_classes = _gather_exception_subclasses(
+    selected_classes = gather_exception_subclasses(
         module=this_module, parent_classes=MyExc
     )
     assert set(selected_classes) == set(
@@ -52,7 +52,7 @@ def test_status_slugs_utilities():
     )  # Builtins don't keep their module prefix
     assert _fully_qualified_name(MyExc) == "test_wacryptolib_error_handling.MyExc"
 
-    mapper = _construct_status_slugs_mapper(
+    mapper = construct_status_slugs_mapper(
         selected_classes, fallback_exception_class=NotImplementedError
     )
     # from pprint import pprint ; pprint(mapper)
@@ -70,42 +70,51 @@ def test_status_slugs_utilities():
         },
     }
 
-    selected_classes = _gather_exception_subclasses(
+    selected_classes = gather_exception_subclasses(
         module=this_module, parent_classes=(EnvironmentError, RuntimeError)
     )
     assert set(selected_classes) == set([IOError, MyRuntimeError]), selected_classes
 
-    selected_classes = _gather_exception_subclasses(
+    selected_classes = gather_exception_subclasses(
         module=this_module, parent_classes=(UnicodeError,)
     )
     assert set(selected_classes) == set(), selected_classes
 
-    assert _slugify_exception_class(Exception) == [], _slugify_exception_class(
+    assert slugify_exception_class(Exception) == [], slugify_exception_class(
         Exception
     )
-    assert _slugify_exception_class(MyExcChild1GrandChild) == [
+
+    assert slugify_exception_class(MyExcChild1GrandChild) == [
         "test_wacryptolib_error_handling.MyExc",
         "test_wacryptolib_error_handling.MyExcChild1",
         "test_wacryptolib_error_handling.MyExcChild1GrandChild",
-    ], _slugify_exception_class(MyExcChild1GrandChild)
+    ], slugify_exception_class(MyExcChild1GrandChild)
 
     assert (
-        _retrieve_exception_class_for_status_slugs((), mapper=mapper)
-        == NotImplementedError
+            retrieve_closest_exception_class_for_status_slugs((), mapper=mapper)
+            == NotImplementedError
     )
+
+    assert (
+            retrieve_closest_exception_class_for_status_slugs(("XYZ", "ZXY"), mapper=mapper)
+            == NotImplementedError
+    )
+
     status_slug = (
         "test_wacryptolib_error_handling.MyExc",
         "test_wacryptolib_error_handling.MyExcChild1",
     )
     assert (
-        _retrieve_exception_class_for_status_slugs(status_slug, mapper=mapper)
-        == MyExcChild1
+            retrieve_closest_exception_class_for_status_slugs(status_slug, mapper=mapper)
+            == MyExcChild1
     )
+
     status_slug = (
         "test_wacryptolib_error_handling.MyExc",
         "test_wacryptolib_error_handling.XXXXXXXX",
+        "test_wacryptolib_error_handling.YYYYYYYY"
     )
     assert (
-        _retrieve_exception_class_for_status_slugs(status_slug, mapper=mapper)
-        == NotImplementedError
+            retrieve_closest_exception_class_for_status_slugs(status_slug, mapper=mapper)
+            == MyExc  # closest ancestor found
     )

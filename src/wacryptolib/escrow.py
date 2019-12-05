@@ -34,7 +34,12 @@ class EscrowApi:
         has_public_key = self._key_storage.get_public_key(
             keychain_uid=keychain_uid, key_type=key_type
         )
-        if not has_public_key:
+        if has_public_key:
+            return
+
+        try:
+            self._key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_type=key_type)
+        except RuntimeError:  # FIXME improve error discrimination
             keypair = generate_asymmetric_keypair(key_type=key_type, serialize=True)
             self._key_storage.set_keys(
                 keychain_uid=keychain_uid,
@@ -137,7 +142,7 @@ class EscrowApi:
 
 def generate_free_keypair_for_least_provisioned_key_type(
     key_storage: KeyStorageBase,
-    max_keys_count_per_type: int,
+    max_free_keys_per_type: int,
     key_generation_func=generate_asymmetric_keypair,
     key_types=SUPPORTED_ASYMMETRIC_KEY_TYPES,
 ):
@@ -146,7 +151,7 @@ def generate_free_keypair_for_least_provisioned_key_type(
     add it to storage. If the "free keys" pools of the storage are full, do nothing.
 
     :param key_storage: the key storage to use
-    :param max_keys_count_per_type: how many free keys should exist per key type
+    :param max_free_keys_per_type: how many free keys should exist per key type
     :param key_generation_func: callable to use for keypair generation
     :param key_types: the different key types (strings) to consider
     :return: True iff a key was generated (i.e. the free keys pool was not full)
@@ -159,7 +164,7 @@ def generate_free_keypair_for_least_provisioned_key_type(
 
     (count, key_type) = min(free_keys_counts)
 
-    if count >= max_keys_count_per_type:
+    if count >= max_free_keys_per_type:
         return False
 
     keypair = key_generation_func(key_type=key_type, serialize=True)
@@ -173,7 +178,7 @@ def generate_free_keypair_for_least_provisioned_key_type(
 
 def get_free_keys_generator_worker(
     key_storage: KeyStorageBase,
-    max_keys_count_per_type: int,
+    max_free_keys_per_type: int,
     sleep_on_overflow_s: float,
     **extra_generation_kwargs,
 ) -> PeriodicTaskHandler:
@@ -182,7 +187,7 @@ def get_free_keys_generator_worker(
     and wait longer when these pools are full.
     
     :param key_storage: the key storage to use 
-    :param max_keys_count_per_type: how many free keys should exist per key type
+    :param max_free_keys_per_type: how many free keys should exist per key type
     :param sleep_on_overflow_s: time to wait when free keys pools are full
     :param extra_generation_kwargs: extra arguments to transmit to `generate_free_keypair_for_least_provisioned_key_type()`
     :return: periodic task handler
@@ -191,7 +196,7 @@ def get_free_keys_generator_worker(
     def free_keypair_generator_task():
         has_generated = generate_free_keypair_for_least_provisioned_key_type(
             key_storage=key_storage,
-            max_keys_count_per_type=max_keys_count_per_type,
+            max_free_keys_per_type=max_free_keys_per_type,
             **extra_generation_kwargs,
         )
         # FIXME - improve this with refactored multitimer, later

@@ -25,33 +25,65 @@ def test_escrow_api_workflow():
     keychain_uid_unexisting = generate_uuid0()
     secret = get_random_bytes(101)
 
+    for _ in range(2):
+        generate_free_keypair_for_least_provisioned_key_type(
+                    key_storage=key_storage,
+                    max_free_keys_per_type=10,
+                    key_types=["RSA", "DSA"],
+                )
+    assert key_storage.get_free_keypairs_count("DSA") == 1
+    assert key_storage.get_free_keypairs_count("ECC") == 0
+    assert key_storage.get_free_keypairs_count("RSA") == 1
+
     # Keypair is well auto-created by get_public_key()
-    public_key_pem = escrow_api.get_public_key(
+    public_key_rsa_pem = escrow_api.get_public_key(
         keychain_uid=keychain_uid, key_type="RSA"
     )
-    public_key = load_asymmetric_key_from_pem_bytestring(
-        key_pem=public_key_pem, key_type="RSA"
+    public_key_rsa = load_asymmetric_key_from_pem_bytestring(
+        key_pem=public_key_rsa_pem, key_type="RSA"
     )
+
+    assert key_storage.get_free_keypairs_count("DSA") == 1
+    assert key_storage.get_free_keypairs_count("ECC") == 0
+    assert key_storage.get_free_keypairs_count("RSA") == 0  # Taken
 
     signature = escrow_api.get_message_signature(
-        keychain_uid=keychain_uid, message=secret, key_type="RSA", signature_algo="PSS"
+        keychain_uid=keychain_uid, message=secret, key_type="DSA", signature_algo="DSS"
     )
+
+    assert key_storage.get_free_keypairs_count("DSA") == 0  #Taken
+    assert key_storage.get_free_keypairs_count("ECC") == 0
+    assert key_storage.get_free_keypairs_count("RSA") == 0
+
+    public_key_dsa_pem = escrow_api.get_public_key(
+        keychain_uid=keychain_uid, key_type="DSA"
+    )
+    public_key_dsa = load_asymmetric_key_from_pem_bytestring(
+        key_pem=public_key_dsa_pem, key_type="DSA"
+    )
+
     verify_message_signature(
-        message=secret, signature=signature, key=public_key, signature_algo="PSS"
+        message=secret, signature=signature, key=public_key_dsa, signature_algo="DSS"
     )
     signature["digest"] += b"xyz"
-    with pytest.raises(ValueError, match="Incorrect signature"):
+    with pytest.raises(ValueError, match="not authentic"):
         verify_message_signature(
-            message=secret, signature=signature, key=public_key, signature_algo="PSS"
+            message=secret, signature=signature, key=public_key_dsa, signature_algo="DSS"
         )
 
-    # Keypair is well auto-created by get_message_signature()
+    # Keypair is well auto-created by get_message_signature(), even when no more free keys
     signature = escrow_api.get_message_signature(
         keychain_uid=keychain_uid_other, message=secret, key_type="RSA", signature_algo="PSS"
     )
     assert signature
 
-    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key)
+    # Keypair well autocreated by get_public_key(), even when no more free keys
+    public_key_pem = escrow_api.get_public_key(
+        keychain_uid=keychain_uid_other, key_type="DSA"
+    )
+    assert public_key_pem
+
+    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key_rsa)
 
     # Works even without decryption authorization request, by default:
     decrypted = escrow_api.decrypt_with_private_key(
@@ -89,6 +121,10 @@ def test_escrow_api_workflow():
         escrow_api.request_decryption_authorization(keypair_identifiers=[],
                                                       request_message="I need this decryption!")
 
+    assert key_storage.get_free_keypairs_count("DSA") == 0
+    assert key_storage.get_free_keypairs_count("ECC") == 0
+    assert key_storage.get_free_keypairs_count("RSA") == 0
+
 
 def test_generate_free_keypair_for_least_provisioned_key_type():
 
@@ -104,7 +140,7 @@ def test_generate_free_keypair_for_least_provisioned_key_type():
     for _ in range(7):
         res = generate_free_keypair_for_least_provisioned_key_type(
             key_storage=key_storage,
-            max_keys_count_per_type=10,
+            max_free_keys_per_type=10,
             key_generation_func=key_generation_func,
         )
         assert res
@@ -117,7 +153,7 @@ def test_generate_free_keypair_for_least_provisioned_key_type():
     for _ in range(23):
         res = generate_free_keypair_for_least_provisioned_key_type(
             key_storage=key_storage,
-            max_keys_count_per_type=10,
+            max_free_keys_per_type=10,
             key_generation_func=key_generation_func,
         )
         assert res
@@ -129,7 +165,7 @@ def test_generate_free_keypair_for_least_provisioned_key_type():
 
     res = generate_free_keypair_for_least_provisioned_key_type(
         key_storage=key_storage,
-        max_keys_count_per_type=10,
+        max_free_keys_per_type=10,
         key_generation_func=key_generation_func,
     )
     assert not res
@@ -138,7 +174,7 @@ def test_generate_free_keypair_for_least_provisioned_key_type():
     for _ in range(7):
         generate_free_keypair_for_least_provisioned_key_type(
             key_storage=key_storage,
-            max_keys_count_per_type=15,
+            max_free_keys_per_type=15,
             key_generation_func=key_generation_func,
             key_types=["RSA", "DSA"],
         )
@@ -150,7 +186,7 @@ def test_generate_free_keypair_for_least_provisioned_key_type():
 
     res = generate_free_keypair_for_least_provisioned_key_type(
         key_storage=key_storage,
-        max_keys_count_per_type=20,
+        max_free_keys_per_type=20,
         key_generation_func=key_generation_func,
     )
     assert res
@@ -161,7 +197,7 @@ def test_generate_free_keypair_for_least_provisioned_key_type():
 
     res = generate_free_keypair_for_least_provisioned_key_type(
         key_storage=key_storage,
-        max_keys_count_per_type=5,
+        max_free_keys_per_type=5,
         key_generation_func=key_generation_func,
     )
     assert not res
@@ -182,7 +218,7 @@ def test_get_free_keys_generator_worker():
 
     worker = get_free_keys_generator_worker(
         key_storage=key_storage,
-        max_keys_count_per_type=30,
+        max_free_keys_per_type=30,
         sleep_on_overflow_s=0.5,
         key_generation_func=key_generation_func,
     )

@@ -238,6 +238,7 @@ def test_json_aggregator(tmp_path):
         sensor_name="some_sensors",
     )
     assert len(json_aggregator) == 0
+    assert json_aggregator.sensor_name == "some_sensors"
 
     json_aggregator.flush_dataset()  # Does nothing
     assert len(tarfile_aggregator) == 0

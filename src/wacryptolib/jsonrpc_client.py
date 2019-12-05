@@ -9,7 +9,6 @@ from wacryptolib.utilities import dump_to_json_str, load_from_json_str
 logger = logging.getLogger(__name__)
 
 
-
 _exception_classes = StatusSlugsMapper.gather_exception_subclasses(builtins, parent_classes=[Exception])
 status_slugs_to_builtins_mapper = StatusSlugsMapper(_exception_classes, fallback_exception_class=Exception)
 
@@ -42,8 +41,9 @@ class JsonRpcProxy(ServerBase):
 
     """
 
-    def __init__(self, *args, response_error_handler=None, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, url, *args, response_error_handler=None, **kwargs):
+        super().__init__(url, *args, **kwargs)
+        self._url = url
         self._response_error_handler = response_error_handler
 
     @staticmethod
@@ -81,4 +81,5 @@ class JsonRpcProxy(ServerBase):
         # if len(args) == 1 and isinstance(args[0], collections.Mapping):
         #    args = dict(args[0])
 
+        logger.info("Initiating remote call %s() to server %s", method_name, self._url)
         return self.send_request(method_name, is_notification, args or kwargs)

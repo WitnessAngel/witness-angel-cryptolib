@@ -7,7 +7,7 @@ from typing import Optional
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
 from wacryptolib.escrow import EscrowApi as LocalEscrowApi, LOCAL_ESCROW_PLACEHOLDER
-from wacryptolib.jsonrpc_client import JsonRpcProxy
+from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import (
     generate_symmetric_key,
     load_asymmetric_key_from_pem_bytestring,
@@ -53,7 +53,7 @@ class ContainerBase:
             return self._local_escrow_api
         elif isinstance(escrow, dict):
             if "url" in escrow:
-                return JsonRpcProxy(url=escrow)
+                return JsonRpcProxy(url=escrow["url"], response_error_handler=status_slugs_response_error_handler)
             # TODO - Implement escrow lookup in global registry, shared-secret group, etc.
         raise ValueError("Unrecognized escrow identifiers: %s" % str(escrow))
 

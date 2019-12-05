@@ -15,7 +15,7 @@ from wacryptolib.container import (
     ContainerBase,
 )
 from wacryptolib.escrow import EscrowApi
-from wacryptolib.jsonrpc_client import JsonRpcProxy
+from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage
 
 SIMPLE_CONTAINER_CONF = dict(
@@ -164,6 +164,9 @@ def test_get_proxy_for_escrow(tmp_path):
         assert isinstance(
             proxy, JsonRpcProxy
         )  # It should expose identical methods to EscrowApi
+
+        assert proxy._url == "http://example.com/jsonrpc"
+        assert proxy._response_error_handler == status_slugs_response_error_handler
 
         with pytest.raises(ValueError):
             container_base._get_proxy_for_escrow(dict(urn="athena"))

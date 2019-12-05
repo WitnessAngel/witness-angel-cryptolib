@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 #: Special value in containers, to invoke a device-local escrow
 LOCAL_ESCROW_PLACEHOLDER = "_local_"
 
+MAX_PAYLOAD_LENGTH_FOR_SIGNATURE = 128  # Max 2*SHA512 length
+
 
 class EscrowApi:
     """
@@ -77,6 +79,10 @@ class EscrowApi:
         """
         Return a signature structure corresponding to the provided key and signature types.
         """
+
+        if len(message) > MAX_PAYLOAD_LENGTH_FOR_SIGNATURE:  # SECURITY
+            raise ValueError("Message too big for signing, only a hash should be sent")
+
         self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
 
         private_key_pem = self._key_storage.get_private_key(

@@ -23,7 +23,8 @@ def test_escrow_api_workflow():
     keychain_uid = generate_uuid0()
     keychain_uid_other = generate_uuid0()
     keychain_uid_unexisting = generate_uuid0()
-    secret = get_random_bytes(101)
+    secret = get_random_bytes(127)
+    secret_too_big = get_random_bytes(140)
 
     for _ in range(2):
         generate_free_keypair_for_least_provisioned_key_type(
@@ -50,6 +51,11 @@ def test_escrow_api_workflow():
     signature = escrow_api.get_message_signature(
         keychain_uid=keychain_uid, message=secret, key_type="DSA", signature_algo="DSS"
     )
+
+    with pytest.raises(ValueError, match="too big"):
+        escrow_api.get_message_signature(
+            keychain_uid=keychain_uid, message=secret_too_big, key_type="DSA", signature_algo="DSS"
+        )
 
     assert key_storage.get_free_keypairs_count("DSA") == 0  #Taken
     assert key_storage.get_free_keypairs_count("ECC") == 0

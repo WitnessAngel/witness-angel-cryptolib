@@ -429,7 +429,8 @@ def test_periodic_value_poller(tmp_path):
 
     check_sensor_state_machine(poller, run_duration=0.45)
 
-    assert len(json_aggregator) == 5  # Data was fetched immediately on start
+    # We have variations due to machine load (but data was fetched immediately on start)
+    assert 5 <= len(json_aggregator) <= 6
     data_sets = json_aggregator._current_dataset
     assert all(rec["type"] == "current time" for rec in data_sets), data_sets
 

@@ -1,6 +1,6 @@
 import logging
 
-import Crypto.Hash
+import Crypto.Hash.SHA512
 from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes

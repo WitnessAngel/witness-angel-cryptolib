@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import Union
 
-import Crypto.Hash
+import Crypto.Hash.SHA512
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Signature import pss, DSS
 

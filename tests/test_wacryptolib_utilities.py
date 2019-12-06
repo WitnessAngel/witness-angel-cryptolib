@@ -38,6 +38,9 @@ def test_hash_message():
         digest2 = hash_message(bytestring, hash_algo=hash_algo)
         assert digest1 == digest2
 
+    with pytest.raises(ValueError, match="Unsupported"):
+        hash_message(bytestring, hash_algo="XYZ")
+
 
 def test_split_as_chunks_and_recombine():
 

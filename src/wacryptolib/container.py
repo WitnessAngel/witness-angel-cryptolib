@@ -46,6 +46,7 @@ class ContainerBase:
                 self.__class__.__name__,
             )
             local_key_storage = DUMMY_KEY_STORAGE
+        assert isinstance(local_key_storage, KeyStorageBase), local_key_storage
         self._local_escrow_api = LocalEscrowApi(key_storage=local_key_storage)
 
     def _get_proxy_for_escrow(self, escrow):
@@ -249,6 +250,11 @@ class ContainerReader(ContainerBase):
         escrow_key_type = conf["escrow_key_type"]
         key_encryption_algo = conf["key_encryption_algo"]
         encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
+
+        keypair_identifiers = [dict(keychain_uid=keychain_uid, key_type=escrow_key_type)]
+        request_result = encryption_proxy.request_decryption_authorization(keypair_identifiers=keypair_identifiers,
+                                                                   request_message="Automatic decryption authorization request")
+        logger.info("Decryption authorization request result: %s", request_result["response_message"])
 
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
             keychain_uid=keychain_uid,

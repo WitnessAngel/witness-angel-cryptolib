@@ -81,5 +81,5 @@ class JsonRpcProxy(ServerBase):
         # if len(args) == 1 and isinstance(args[0], collections.Mapping):
         #    args = dict(args[0])
 
-        logger.info("Initiating remote call %s() to server %s", method_name, self._url)
+        logger.info("Initiating remote call '%s()' to server %s", method_name, self._url)
         return self.send_request(method_name, is_notification, args or kwargs)

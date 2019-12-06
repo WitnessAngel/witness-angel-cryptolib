@@ -172,10 +172,10 @@ class ContainerWriter(ContainerBase):
     ) -> dict:
         encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
         signature_key_type = conf["signature_key_type"]
-        signature_prehash = conf["signature_prehash"]
+        message_prehash_algo = conf["message_prehash_algo"]
         signature_algo = conf["signature_algo"]
 
-        data_ciphertext_hash = hash_message(data_ciphertext, hash_algo=signature_prehash)
+        data_ciphertext_hash = hash_message(data_ciphertext, hash_algo=message_prehash_algo)
 
         logger.debug("Signing hash of encrypted data with algo %r", signature_algo)
 
@@ -262,7 +262,7 @@ class ContainerReader(ContainerBase):
         self, keychain_uid: uuid.UUID, message: bytes, conf: dict
     ):
         signature_key_type = conf["signature_key_type"]
-        signature_prehash = conf["signature_prehash"]
+        message_prehash_algo = conf["message_prehash_algo"]
         signature_algo = conf["signature_algo"]
         encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
         public_key_pem = encryption_proxy.get_public_key(
@@ -272,7 +272,7 @@ class ContainerReader(ContainerBase):
             key_pem=public_key_pem, key_type=signature_key_type
         )
 
-        message_hash = hash_message(message, hash_algo=signature_prehash)
+        message_hash = hash_message(message, hash_algo=message_prehash_algo)
 
         verify_message_signature(
             message=message_hash,

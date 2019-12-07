@@ -74,7 +74,7 @@ COMPLEX_CONTAINER_CONF = dict(
             ],
         ),
         dict(
-            data_encryption_algo="CHACHA20_POLY1305",
+            data_encryption_algo="AES_EAX",
             key_encryption_strata=[
                 dict(
                     escrow_key_type="RSA",

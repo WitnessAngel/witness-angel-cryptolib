@@ -4,6 +4,7 @@ import os
 import uuid
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
 from wacryptolib.escrow import EscrowApi as LocalEscrowApi, LOCAL_ESCROW_PLACEHOLDER
@@ -475,3 +476,35 @@ class ContainerStorage:
         result = self._decrypt_data_from_container(container)
         logger.info("Container %r successfully decrypted", container_name)
         return result
+
+
+def get_encryption_configuration_summary(conf_or_container):
+    """
+    Returns a string summary of the layers of encryption/signature of a container or a configuration tree.
+    """
+
+    def _get_escrow_identifier(_escrow):
+        if _escrow == LOCAL_ESCROW_PLACEHOLDER:
+            _escrow = "local device"
+        elif "url" in _escrow:
+            _escrow = urlparse(_escrow["url"]).netloc
+        else:
+            raise NotImplementedError("Unrecognized key escrow %s" % _escrow)
+        return _escrow
+
+    lines = []
+    for idx, data_encryption_stratum in enumerate(conf_or_container["data_encryption_strata"], start=1):
+        lines.append("Data encryption layer %d: %s" % (idx, data_encryption_stratum["data_encryption_algo"]))
+        lines.append("  Key encryption layers:")
+        for idx2, key_encryption_stratum in enumerate(data_encryption_stratum["key_encryption_strata"], start=1):
+            key_escrow = key_encryption_stratum["key_escrow"]
+            escrow_id = _get_escrow_identifier(key_escrow)
+            lines.append("    %s (by %s)" % (key_encryption_stratum["key_encryption_algo"], escrow_id))
+        lines.append("  Signatures:")
+        for idx3, data_signature in enumerate(data_encryption_stratum["data_signatures"], start=1):
+            signature_escrow = data_signature["signature_escrow"]
+            escrow_id = _get_escrow_identifier(signature_escrow)
+            lines.append("    %s/%s (by %s)" % (data_signature["message_prehash_algo"],
+                                                      data_signature["signature_algo"], escrow_id))
+    result = "\n".join(lines) + "\n"
+    return result

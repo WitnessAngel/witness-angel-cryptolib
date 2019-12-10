@@ -1,7 +1,10 @@
+import copy
 import os
 import random
+import textwrap
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -13,10 +16,12 @@ from wacryptolib.container import (
     ContainerStorage,
     extract_metadata_from_container,
     ContainerBase,
-)
+    get_encryption_configuration_summary)
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
+from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage
+
 
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -256,3 +261,54 @@ def test_container_storage(tmp_path):
         Path("xyz.dat.003.crypt"),
         Path("zzz.dat.001.crypt"),
     ]
+
+
+def test_get_encryption_configuration_summary():
+
+    data = b"some data whatever"
+
+    summary = get_encryption_configuration_summary(SIMPLE_CONTAINER_CONF)
+
+    assert summary == textwrap.dedent("""\
+        Data encryption layer 1: AES_CBC
+          Key encryption layers:
+            RSA_OAEP (by local device)
+          Signatures:
+            SHA256/DSS (by local device)
+            """)  # Ending by newline!
+
+    container = encrypt_data_into_container(
+            data=data, conf=SIMPLE_CONTAINER_CONF, keychain_uid=None, metadata=None)
+    summary2 = get_encryption_configuration_summary(container)
+    assert summary2 == summary  # Identical summary for conf and generated containers!
+
+
+    CONF_WITH_ESCROW = copy.deepcopy(COMPLEX_CONTAINER_CONF)
+    CONF_WITH_ESCROW["data_encryption_strata"][0]["key_encryption_strata"][0]["key_escrow"] = dict(url="http://www.mydomain.com/json")
+
+    summary = get_encryption_configuration_summary(CONF_WITH_ESCROW)
+    assert summary == textwrap.dedent("""\
+        Data encryption layer 1: AES_EAX
+          Key encryption layers:
+            RSA_OAEP (by www.mydomain.com)
+          Signatures:
+        Data encryption layer 2: AES_CBC
+          Key encryption layers:
+            RSA_OAEP (by local device)
+          Signatures:
+            SHA3_512/DSS (by local device)
+        Data encryption layer 3: AES_EAX
+          Key encryption layers:
+            RSA_OAEP (by local device)
+            RSA_OAEP (by local device)
+          Signatures:
+            SHA3_256/PSS (by local device)
+            SHA512/DSS (by local device)
+            """)  # Ending by newline!
+
+    _public_key = generate_asymmetric_keypair(key_type="RSA")["public_key"]
+    with patch.object(JsonRpcProxy, 'get_public_key', return_value=_public_key, create=True) as mock_method:
+        container = encrypt_data_into_container(
+                data=data, conf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
+        summary2 = get_encryption_configuration_summary(container)
+        assert summary2 == summary  # Identical summary for conf and generated containers!

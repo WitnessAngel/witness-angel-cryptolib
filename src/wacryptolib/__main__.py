@@ -22,16 +22,14 @@ EXAMPLE_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                    escrow_key_type="RSA",
                     key_encryption_algo="RSA_OAEP",
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
             data_signatures=[
                 dict(
-                    signature_key_type="DSA",
                     message_prehash_algo="SHA256",
-                    signature_algo="DSS",
+                    signature_algo="DSA_DSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],

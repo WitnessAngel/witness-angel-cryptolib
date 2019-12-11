@@ -156,6 +156,7 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key: RSA.RsaKey) -> bytes:
 
 
 ENCRYPTION_ALGOS_REGISTRY = dict(
+    ## SYMMETRIC ENCRYPTION ##
     AES_CBC={
         "encryption_function": _encrypt_via_aes_cbc,
         "decryption_function": _decrypt_via_aes_cbc,
@@ -164,6 +165,8 @@ ENCRYPTION_ALGOS_REGISTRY = dict(
         "encryption_function": _encrypt_via_aes_eax,
         "decryption_function": _decrypt_via_aes_eax,
     },
+
+    ## ASYMMETRIC ENCRYPTION ##
     RSA_OAEP={
         "encryption_function": _encrypt_via_rsa_oaep,
         "decryption_function": _decrypt_via_rsa_oaep,

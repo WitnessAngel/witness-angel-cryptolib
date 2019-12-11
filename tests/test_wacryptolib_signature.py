@@ -52,13 +52,13 @@ def test_sign_and_verify_with_rsa_key():
     message = b"Hello"
 
     keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
-        key_type="RSA", serialize=False, key_length_bits=2048
+        key_type="RSA_PSS", serialize=False, key_length_bits=2048
     )
     signature = wacryptolib.signature.sign_message(
-        key=keypair["private_key"], message=message, signature_algo="PSS"
+        key=keypair["private_key"], message=message, signature_algo="RSA_PSS"
     )
     _common_signature_checks(
-        keypair=keypair, message=message, signature=signature, signature_algo="PSS"
+        keypair=keypair, message=message, signature=signature, signature_algo="RSA_PSS"
     )
 
 
@@ -66,13 +66,13 @@ def test_sign_and_verify_with_dsa_key():
     message = "Mon hât èst joli".encode("utf-8")
 
     keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
-        key_type="DSA", serialize=False, key_length_bits=2048
+        key_type="DSA_DSS", serialize=False, key_length_bits=2048
     )
     signature = wacryptolib.signature.sign_message(
-        key=keypair["private_key"], message=message, signature_algo="DSS"
+        key=keypair["private_key"], message=message, signature_algo="DSA_DSS"
     )
     _common_signature_checks(
-        keypair=keypair, message=message, signature=signature, signature_algo="DSS"
+        keypair=keypair, message=message, signature=signature, signature_algo="DSA_DSS"
     )
 
 
@@ -80,13 +80,13 @@ def test_sign_and_verify_with_ecc_key():
     message = "Msd sd 867_ss".encode("utf-8")
 
     keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
-        key_type="ECC", serialize=False, curve="p256"
+        key_type="ECC_DSS", serialize=False, curve="p256"
     )
     signature = wacryptolib.signature.sign_message(
-        key=keypair["private_key"], message=message, signature_algo="DSS"
+        key=keypair["private_key"], message=message, signature_algo="ECC_DSS"
     )
     _common_signature_checks(
-        keypair=keypair, message=message, signature=signature, signature_algo="DSS"
+        keypair=keypair, message=message, signature=signature, signature_algo="ECC_DSS"
     )
 
 
@@ -95,7 +95,7 @@ def test_generic_signature_errors():
     message = b"Hello"
 
     keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
-        key_type="RSA", serialize=False, key_length_bits=2048
+        key_type="RSA_OAEP", serialize=False, key_length_bits=2048
     )
 
     with pytest.raises(ValueError, match="Unknown signature algorithm"):
@@ -107,7 +107,7 @@ def test_generic_signature_errors():
         wacryptolib.signature.sign_message(
             key=keypair["private_key"],
             message=message,
-            signature_algo="DSS",  # RSA key not accepted here
+            signature_algo="DSA_DSS",  # RSA key not accepted here
         )
 
     with pytest.raises(ValueError, match="Unknown signature algorithm"):

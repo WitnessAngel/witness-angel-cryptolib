@@ -149,17 +149,16 @@ class ContainerWriter(ContainerBase):
         self, keychain_uid: uuid.UUID, symmetric_key_data: bytes, conf: dict
     ) -> dict:
         assert isinstance(symmetric_key_data, bytes), symmetric_key_data
-        escrow_key_type = conf["escrow_key_type"]
         key_encryption_algo = conf["key_encryption_algo"]
         encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
 
         logger.debug("Encrypting symmetric key with algo %r", key_encryption_algo)
 
         subkey_pem = encryption_proxy.get_public_key(
-            keychain_uid=keychain_uid, key_type=escrow_key_type
+            keychain_uid=keychain_uid, key_type=key_encryption_algo
         )
         subkey = load_asymmetric_key_from_pem_bytestring(
-            key_pem=subkey_pem, key_type=escrow_key_type
+            key_pem=subkey_pem, key_type=key_encryption_algo
         )
 
         key_cipherdict = encrypt_bytestring(
@@ -173,7 +172,6 @@ class ContainerWriter(ContainerBase):
         self, keychain_uid: uuid.UUID, data_ciphertext: bytes, conf: dict
     ) -> dict:
         encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
-        signature_key_type = conf["signature_key_type"]
         message_prehash_algo = conf["message_prehash_algo"]
         signature_algo = conf["signature_algo"]
 
@@ -184,7 +182,6 @@ class ContainerWriter(ContainerBase):
         signature_value = encryption_proxy.get_message_signature(
             keychain_uid=keychain_uid,
             message=data_ciphertext_hash,
-            key_type=signature_key_type,
             signature_algo=signature_algo,
         )
         return signature_value
@@ -248,18 +245,16 @@ class ContainerReader(ContainerBase):
         self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list
     ):
         assert isinstance(symmetric_key_cipherdict, dict), symmetric_key_cipherdict
-        escrow_key_type = conf["escrow_key_type"]
         key_encryption_algo = conf["key_encryption_algo"]
         encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
 
-        keypair_identifiers = [dict(keychain_uid=keychain_uid, key_type=escrow_key_type)]
+        keypair_identifiers = [dict(keychain_uid=keychain_uid, key_type=key_encryption_algo)]
         request_result = encryption_proxy.request_decryption_authorization(keypair_identifiers=keypair_identifiers,
                                                                    request_message="Automatic decryption authorization request")
         logger.info("Decryption authorization request result: %s", request_result["response_message"])
 
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
             keychain_uid=keychain_uid,
-            key_type=escrow_key_type,
             encryption_algo=key_encryption_algo,
             cipherdict=symmetric_key_cipherdict,
         )
@@ -268,15 +263,14 @@ class ContainerReader(ContainerBase):
     def _verify_message_signature(
         self, keychain_uid: uuid.UUID, message: bytes, conf: dict
     ):
-        signature_key_type = conf["signature_key_type"]
         message_prehash_algo = conf["message_prehash_algo"]
         signature_algo = conf["signature_algo"]
         encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
         public_key_pem = encryption_proxy.get_public_key(
-            keychain_uid=keychain_uid, key_type=signature_key_type
+            keychain_uid=keychain_uid, key_type=signature_algo
         )
         public_key = load_asymmetric_key_from_pem_bytestring(
-            key_pem=public_key_pem, key_type=signature_key_type
+            key_pem=public_key_pem, key_type=signature_algo
         )
 
         message_hash = hash_message(message, hash_algo=message_prehash_algo)

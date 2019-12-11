@@ -174,7 +174,8 @@ def _check_symmetric_key_length_bytes(key_length_bytes):
 
 
 ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
-    RSA={
+    ## KEYS FOR ASYMMETRIC ENCRYPTION ##
+    RSA_OAEP={
         "generation_function": _generate_rsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length_bits"],
         "pem_export_private_key_encryption_kwargs": dict(
@@ -182,7 +183,17 @@ ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
         ),
         "pem_import_function": RSA.import_key,
     },
-    DSA={
+
+    ## KEYS FOR SIGNATURE ##
+    RSA_PSS={  # Same parameters as RSA_OAEP for now
+        "generation_function": _generate_rsa_keypair_as_objects,
+        "generation_extra_parameters": ["key_length_bits"],
+        "pem_export_private_key_encryption_kwargs": dict(
+            pkcs=8, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC"
+        ),
+        "pem_import_function": RSA.import_key,
+    },
+    DSA_DSS={
         "generation_function": _generate_dsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length_bits"],
         "pem_export_private_key_encryption_kwargs": dict(
@@ -190,7 +201,7 @@ ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
         ),
         "pem_import_function": DSA.import_key,
     },
-    ECC={
+    ECC_DSS={
         "generation_function": _generate_ecc_keypair_as_objects,
         "generation_extra_parameters": ["curve"],
         "pem_export_private_key_encryption_kwargs": dict(

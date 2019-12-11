@@ -123,7 +123,7 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
     key_length_bits = random.choice([2048, 3072, 4096])
     encryption_algo = "RSA_OAEP"
     keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
-        key_type="RSA", serialize=False, key_length_bits=key_length_bits
+        key_type="RSA_OAEP", serialize=False, key_length_bits=key_length_bits
     )
 
     binary_content = _get_binary_content()

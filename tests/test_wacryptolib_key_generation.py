@@ -39,27 +39,29 @@ def test_generic_asymmetric_key_generation_errors():
 
 def test_rsa_asymmetric_key_generation():
 
-    with pytest.raises(ValueError, match="asymmetric key length"):
-        wacryptolib.key_generation.generate_asymmetric_keypair(
-            key_type="RSA", key_length_bits=1024
-        )
+    for key_type in ("RSA_OAEP", "RSA_PSS"):  # Both use teh same RSA keys
 
-    for key_length_bits in (None, 2048):
-        extra_parameters = (
-            dict(key_length_bits=key_length_bits) if key_length_bits else {}
-        )
-        keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
-            key_type="RSA", **extra_parameters
-        )
-        key = RSA.import_key(keypair["private_key"])
-        assert isinstance(key, RSA.RsaKey)
+        with pytest.raises(ValueError, match="asymmetric key length"):
+            wacryptolib.key_generation.generate_asymmetric_keypair(
+                key_type=key_type, key_length_bits=1024
+            )
+
+        for key_length_bits in (None, 2048):
+            extra_parameters = (
+                dict(key_length_bits=key_length_bits) if key_length_bits else {}
+            )
+            keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
+                key_type=key_type, **extra_parameters
+            )
+            key = RSA.import_key(keypair["private_key"])
+            assert isinstance(key, RSA.RsaKey)
 
 
 def test_dsa_asymmetric_key_generation():
 
     with pytest.raises(ValueError, match="asymmetric key length"):
         wacryptolib.key_generation.generate_asymmetric_keypair(
-            key_type="DSA", key_length_bits=1024
+            key_type="DSA_DSS", key_length_bits=1024
         )
 
     for key_length_bits in (None, 2048):
@@ -67,7 +69,7 @@ def test_dsa_asymmetric_key_generation():
             dict(key_length_bits=key_length_bits) if key_length_bits else {}
         )
         keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
-            key_type="DSA", **extra_parameters
+            key_type="DSA_DSS", **extra_parameters
         )
         key = DSA.import_key(keypair["private_key"])
         assert isinstance(key, DSA.DsaKey)
@@ -77,13 +79,13 @@ def test_ecc_asymmetric_key_generation():
 
     with pytest.raises(ValueError, match="Unexisting ECC curve"):
         wacryptolib.key_generation.generate_asymmetric_keypair(
-            key_type="ECC", curve="unexisting"
+            key_type="ECC_DSS", curve="unexisting"
         )
 
     for curve in (None, "p384"):
         extra_parameters = dict(curve=curve) if curve else {}
         keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
-            key_type="ECC", **extra_parameters
+            key_type="ECC_DSS", **extra_parameters
         )
         key = ECC.import_key(keypair["private_key"])
         assert isinstance(key, ECC.EccKey)

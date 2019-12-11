@@ -24,7 +24,7 @@ def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_TYPES) -
     signature_conf = SIGNATURE_ALGOS_REGISTRY.get(signature_algo)
     if signature_conf is None:
         raise ValueError("Unknown signature algorithm '%s'" % signature_algo)
-    if not isinstance(key, tuple(signature_conf["compatible_key_types"])):
+    if not isinstance(key, signature_conf["compatible_key_type"]):
         raise ValueError(
             "Incompatible key type %s for signature algorithm %s"
             % (type(key), signature_algo)
@@ -83,10 +83,11 @@ def verify_message_signature(
     :param signature: structure describing the signature
     :param key: the cryptographic key used to verify the signature
     """
+    # TODO refactor this with new SIGNATURE_ALGOS_REGISTRY fields
     signature_algo = signature_algo.upper()
-    if signature_algo == "PSS":
+    if signature_algo == "RSA_PSS":
         verifier = pss.new(key)
-    elif signature_algo == "DSS":
+    elif signature_algo in ["DSA_DSS", "ECC_DSS"]:
         verifier = DSS.new(key, "fips-186-3")
     else:
         raise ValueError("Unknown signature algorithm %s" % signature_algo)
@@ -122,11 +123,15 @@ def _compute_timestamped_hash(message: bytes, timestamp_utc: int):
 
 
 SIGNATURE_ALGOS_REGISTRY = dict(
-    PSS={"signature_function": _sign_with_pss, "compatible_key_types": [RSA.RsaKey]},
-    DSS={
+    RSA_PSS={"signature_function": _sign_with_pss, "compatible_key_type": RSA.RsaKey},
+    DSA_DSS={
         "signature_function": _sign_with_dss,
-        "compatible_key_types": [DSA.DsaKey, ECC.EccKey],
+        "compatible_key_type": DSA.DsaKey,
     },
+    ECC_DSS={
+            "signature_function": _sign_with_dss,
+            "compatible_key_type": ECC.EccKey,
+        },
 )
 
 #: These values can be used as 'signature_algo' parameters.

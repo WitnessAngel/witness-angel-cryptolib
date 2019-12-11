@@ -73,7 +73,6 @@ class EscrowApi:
         *,
         keychain_uid: uuid.UUID,
         message: bytes,
-        key_type: str,
         signature_algo: str,
     ) -> dict:
         """
@@ -83,14 +82,14 @@ class EscrowApi:
         if len(message) > MAX_PAYLOAD_LENGTH_FOR_SIGNATURE:  # SECURITY
             raise ValueError("Message too big for signing, only a hash should be sent")
 
-        self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
+        self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=signature_algo)
 
         private_key_pem = self._key_storage.get_private_key(
-            keychain_uid=keychain_uid, key_type=key_type
+            keychain_uid=keychain_uid, key_type=signature_algo
         )
 
         private_key = load_asymmetric_key_from_pem_bytestring(
-            key_pem=private_key_pem, key_type=key_type
+            key_pem=private_key_pem, key_type=signature_algo
         )
 
         signature = sign_message(
@@ -120,7 +119,6 @@ class EscrowApi:
         self,
         *,
         keychain_uid: uuid.UUID,
-        key_type: str,
         encryption_algo: str,
         cipherdict: dict,
     ) -> bytes:
@@ -128,18 +126,17 @@ class EscrowApi:
         Return the message (probably a symmetric key) decrypted with the corresponding key,
         as bytestring.
         """
-        assert key_type.upper() == "RSA"  # Only supported key for now
         assert (
             encryption_algo.upper() == "RSA_OAEP"
         )  # Only supported asymmetric cipher for now
-        self._check_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
+        self._check_keypair_exists(keychain_uid=keychain_uid, key_type=encryption_algo)
 
         private_key_pem = self._key_storage.get_private_key(
-            keychain_uid=keychain_uid, key_type=key_type
+            keychain_uid=keychain_uid, key_type=encryption_algo
         )
 
         private_key = load_asymmetric_key_from_pem_bytestring(
-            key_pem=private_key_pem, key_type=key_type
+            key_pem=private_key_pem, key_type=encryption_algo
         )
 
         secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key=private_key)

@@ -29,16 +29,14 @@ SIMPLE_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                    escrow_key_type="RSA",
                     key_encryption_algo="RSA_OAEP",
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
             data_signatures=[
                 dict(
-                    signature_key_type="DSA",
                     message_prehash_algo="SHA256",
-                    signature_algo="DSS",
+                    signature_algo="DSA_DSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
@@ -53,7 +51,6 @@ COMPLEX_CONTAINER_CONF = dict(
             data_encryption_algo="AES_EAX",
             key_encryption_strata=[
                 dict(
-                    escrow_key_type="RSA",
                     key_encryption_algo="RSA_OAEP",
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
@@ -64,16 +61,14 @@ COMPLEX_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                    escrow_key_type="RSA",
                     key_encryption_algo="RSA_OAEP",
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
             data_signatures=[
                 dict(
-                    signature_key_type="DSA",
                     message_prehash_algo="SHA3_512",
-                    signature_algo="DSS",
+                    signature_algo="DSA_DSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 )
             ],
@@ -82,27 +77,23 @@ COMPLEX_CONTAINER_CONF = dict(
             data_encryption_algo="AES_EAX",
             key_encryption_strata=[
                 dict(
-                    escrow_key_type="RSA",
                     key_encryption_algo="RSA_OAEP",
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 ),
                 dict(
-                    escrow_key_type="RSA",
                     key_encryption_algo="RSA_OAEP",
                     key_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 ),
             ],
             data_signatures=[
                 dict(
-                    signature_key_type="RSA",
                     message_prehash_algo="SHA3_256",
-                    signature_algo="PSS",
+                    signature_algo="RSA_PSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 ),
                 dict(
-                    signature_key_type="ECC",
                     message_prehash_algo="SHA512",
-                    signature_algo="DSS",
+                    signature_algo="ECC_DSS",
                     signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
                 ),
             ],
@@ -274,7 +265,7 @@ def test_get_encryption_configuration_summary():
           Key encryption layers:
             RSA_OAEP (by local device)
           Signatures:
-            SHA256/DSS (by local device)
+            SHA256/DSA_DSS (by local device)
             """)  # Ending by newline!
 
     container = encrypt_data_into_container(
@@ -296,17 +287,17 @@ def test_get_encryption_configuration_summary():
           Key encryption layers:
             RSA_OAEP (by local device)
           Signatures:
-            SHA3_512/DSS (by local device)
+            SHA3_512/DSA_DSS (by local device)
         Data encryption layer 3: AES_EAX
           Key encryption layers:
             RSA_OAEP (by local device)
             RSA_OAEP (by local device)
           Signatures:
-            SHA3_256/PSS (by local device)
-            SHA512/DSS (by local device)
+            SHA3_256/RSA_PSS (by local device)
+            SHA512/ECC_DSS (by local device)
             """)  # Ending by newline!
 
-    _public_key = generate_asymmetric_keypair(key_type="RSA")["public_key"]
+    _public_key = generate_asymmetric_keypair(key_type="RSA_OAEP")["public_key"]
     with patch.object(JsonRpcProxy, 'get_public_key', return_value=_public_key, create=True) as mock_method:
         container = encrypt_data_into_container(
                 data=data, conf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)

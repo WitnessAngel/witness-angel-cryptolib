@@ -38,11 +38,22 @@ def test_escrow_api_workflow():
     assert key_storage.get_free_keypairs_count("RSA_PSS") == 0  # Different from other RSA keys
 
     # Keypair is well auto-created by get_public_key()
-    public_key_rsa_pem = escrow_api.get_public_key(
+    public_key_rsa_oaep_pem = escrow_api.get_public_key(
         keychain_uid=keychain_uid, key_type="RSA_OAEP"
     )
-    public_key_rsa = load_asymmetric_key_from_pem_bytestring(
-        key_pem=public_key_rsa_pem, key_type="RSA_OAEP"
+
+    _public_key_rsa_oaep_pem2 = escrow_api.get_public_key(
+        keychain_uid=keychain_uid, key_type="RSA_OAEP"
+    )
+    assert _public_key_rsa_oaep_pem2 == public_key_rsa_oaep_pem  # Same KEYS!
+
+    _public_key_rsa_pss_pem = escrow_api.get_public_key(
+        keychain_uid=keychain_uid, key_type="RSA_PSS"
+    )
+    assert _public_key_rsa_pss_pem != public_key_rsa_oaep_pem  # Different KEYS!
+
+    public_key_rsa_oaep = load_asymmetric_key_from_pem_bytestring(
+        key_pem=public_key_rsa_oaep_pem, key_type="RSA_OAEP"
     )
 
     assert key_storage.get_free_keypairs_count("DSA_DSS") == 1
@@ -92,7 +103,7 @@ def test_escrow_api_workflow():
     )
     assert public_key_pem
 
-    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key_rsa)
+    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key_rsa_oaep)
 
     # Works even without decryption authorization request, by default:
     decrypted = escrow_api.decrypt_with_private_key(

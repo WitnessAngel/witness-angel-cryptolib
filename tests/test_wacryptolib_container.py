@@ -273,6 +273,7 @@ def test_get_encryption_configuration_summary():
     summary2 = get_encryption_configuration_summary(container)
     assert summary2 == summary  # Identical summary for conf and generated containers!
 
+    # Simulate a conf with remote escrow webservices
 
     CONF_WITH_ESCROW = copy.deepcopy(COMPLEX_CONTAINER_CONF)
     CONF_WITH_ESCROW["data_encryption_strata"][0]["key_encryption_strata"][0]["key_escrow"] = dict(url="http://www.mydomain.com/json")
@@ -303,3 +304,11 @@ def test_get_encryption_configuration_summary():
                 data=data, conf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
         summary2 = get_encryption_configuration_summary(container)
         assert summary2 == summary  # Identical summary for conf and generated containers!
+
+    # Test unknown escrow structure
+
+    CONF_WITH_BROKEN_ESCROW = copy.deepcopy(SIMPLE_CONTAINER_CONF)
+    CONF_WITH_BROKEN_ESCROW["data_encryption_strata"][0]["key_encryption_strata"][0]["key_escrow"] = dict(abc=33)
+
+    with pytest.raises(ValueError, match="Unrecognized key escrow"):
+        get_encryption_configuration_summary(CONF_WITH_BROKEN_ESCROW)

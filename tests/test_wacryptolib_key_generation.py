@@ -2,11 +2,13 @@ import pytest
 from Crypto.PublicKey import RSA, ECC, DSA
 
 import wacryptolib
+from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS
 from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
     SUPPORTED_ASYMMETRIC_KEY_TYPES,
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
 )
+from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
 
 
 @pytest.mark.parametrize("key_type", SUPPORTED_ASYMMETRIC_KEY_TYPES)
@@ -148,3 +150,16 @@ def test_generate_and_load_passphrase_protected_asymmetric_key():
                 key_type=key_type,
                 passphrase=None,  # Missing passphrase
             )
+
+
+def test_key_types_mapping_and_isolation():
+
+    # We separate keys for encryption and signature (especially for RSA)!
+    assert not set(SUPPORTED_ENCRYPTION_ALGOS) & set(SUPPORTED_SIGNATURE_ALGOS)
+
+    # All these signature algos use asymmetric keys
+    assert set(SUPPORTED_SIGNATURE_ALGOS) <= set(SUPPORTED_ASYMMETRIC_KEY_TYPES)
+
+    # Some encryption algos are symettric, and use simple keys of random bytes
+    asymmetric_key_types = set(SUPPORTED_ENCRYPTION_ALGOS) - set(SUPPORTED_SYMMETRIC_KEY_ALGOS)
+    assert asymmetric_key_types <= set(SUPPORTED_ASYMMETRIC_KEY_TYPES)

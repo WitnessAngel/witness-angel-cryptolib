@@ -483,7 +483,7 @@ def get_encryption_configuration_summary(conf_or_container):
         elif "url" in _escrow:
             _escrow = urlparse(_escrow["url"]).netloc
         else:
-            raise NotImplementedError("Unrecognized key escrow %s" % _escrow)
+            raise ValueError("Unrecognized key escrow %s" % _escrow)
         return _escrow
 
     lines = []

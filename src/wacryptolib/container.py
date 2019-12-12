@@ -81,6 +81,8 @@ class ContainerWriter(ContainerBase):
 
         for data_encryption_stratum in conf["data_encryption_strata"]:
             data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
+
+            logger.debug("Generating symmetric key of type %r", data_encryption_algo)
             symmetric_key = generate_symmetric_key(encryption_algo=data_encryption_algo)
 
             logger.debug("Encrypting data with symmetric key of type %r", data_encryption_algo)
@@ -152,11 +154,12 @@ class ContainerWriter(ContainerBase):
         key_encryption_algo = conf["key_encryption_algo"]
         encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
 
-        logger.debug("Encrypting symmetric key with algo %r", key_encryption_algo)
-
+        logger.debug("Generating asymmetric key of type %r", key_encryption_algo)
         subkey_pem = encryption_proxy.get_public_key(
             keychain_uid=keychain_uid, key_type=key_encryption_algo
         )
+
+        logger.debug("Encrypting symmetric key with asymmetric key of type %r", key_encryption_algo)
         subkey = load_asymmetric_key_from_pem_bytestring(
             key_pem=subkey_pem, key_type=key_encryption_algo
         )
@@ -422,6 +425,7 @@ class ContainerStorage:
         """Returns the container basename."""
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
         container = self._encrypt_data_into_container(data, metadata=metadata)
+        logger.debug("Dumping container data into file %s", container_filepath)
         dump_to_json_file(
             container_filepath, data=container, indent=4
         )  # Note that this might erase existing file, it's OK

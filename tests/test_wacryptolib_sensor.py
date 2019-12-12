@@ -10,8 +10,8 @@ from freezegun import freeze_time
 from _test_mockups import FakeTestContainerStorage
 from wacryptolib.scaffolding import check_sensor_state_machine
 from wacryptolib.sensor import (
-    TarfileAggregator,
-    JsonAggregator,
+    TarfileRecordsAggregator,
+    JsonDataAggregator,
     PeriodicValuePoller,
     SensorsManager,
 )
@@ -57,7 +57,7 @@ def test_tarfile_aggregator(tmp_path):
         encryption_conf=None, containers_dir=tmp_path
     )
 
-    tarfile_aggregator = TarfileAggregator(
+    tarfile_aggregator = TarfileRecordsAggregator(
         container_storage=container_storage, max_duration_s=10
     )
     assert len(tarfile_aggregator) == 0
@@ -107,7 +107,7 @@ def test_tarfile_aggregator(tmp_path):
         tarfile_bytestring = container_storage.decrypt_container_from_storage(
             container_name_or_idx=-1
         )
-        tar_file = TarfileAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
 
@@ -143,7 +143,7 @@ def test_tarfile_aggregator(tmp_path):
         tarfile_bytestring = container_storage.decrypt_container_from_storage(
             container_name_or_idx=-1
         )
-        tar_file = TarfileAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
 
@@ -213,7 +213,7 @@ def test_tarfile_aggregator(tmp_path):
         tarfile_bytestring = container_storage.decrypt_container_from_storage(
             container_name_or_idx=-1
         )
-        tar_file = TarfileAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tar_file.getmembers()) == 3
         assert len(tar_file.getnames()) == 3
         # The LAST record has priority over others with the same name
@@ -226,13 +226,13 @@ def test_json_aggregator(tmp_path):
         encryption_conf=None, containers_dir=tmp_path
     )
 
-    tarfile_aggregator = TarfileAggregator(
+    tarfile_aggregator = TarfileRecordsAggregator(
         container_storage=container_storage, max_duration_s=100
     )
 
     assert len(tarfile_aggregator) == 0
 
-    json_aggregator = JsonAggregator(
+    json_aggregator = JsonDataAggregator(
         max_duration_s=2,
         tarfile_aggregator=tarfile_aggregator,
         sensor_name="some_sensors",
@@ -288,7 +288,7 @@ def test_json_aggregator(tmp_path):
         tarfile_bytestring = container_storage.decrypt_container_from_storage(
             container_name_or_idx=-1
         )
-        tar_file = TarfileAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
 
         filenames = sorted(tar_file.getnames())
@@ -318,10 +318,10 @@ def test_aggregators_thread_safety(tmp_path):
         encryption_conf=None, containers_dir=tmp_path
     )
 
-    tarfile_aggregator = TarfileAggregator(
+    tarfile_aggregator = TarfileRecordsAggregator(
         container_storage=container_storage, max_duration_s=100
     )
-    json_aggregator = JsonAggregator(
+    json_aggregator = JsonDataAggregator(
         max_duration_s=1,
         tarfile_aggregator=tarfile_aggregator,
         sensor_name="some_sensors",
@@ -371,7 +371,7 @@ def test_aggregators_thread_safety(tmp_path):
     ]
 
     tarfiles = [
-        TarfileAggregator.read_tarfile_from_bytestring(bytestring)
+        TarfileRecordsAggregator.read_tarfile_from_bytestring(bytestring)
         for bytestring in tarfiles_bytes
         if bytestring
     ]
@@ -408,13 +408,13 @@ def test_periodic_value_poller(tmp_path):
         encryption_conf=None, containers_dir=tmp_path
     )
 
-    tarfile_aggregator = TarfileAggregator(
+    tarfile_aggregator = TarfileRecordsAggregator(
         container_storage=container_storage, max_duration_s=100
     )
 
     assert len(tarfile_aggregator) == 0
 
-    json_aggregator = JsonAggregator(
+    json_aggregator = JsonDataAggregator(
         max_duration_s=100,
         tarfile_aggregator=tarfile_aggregator,
         sensor_name="some_sensors",

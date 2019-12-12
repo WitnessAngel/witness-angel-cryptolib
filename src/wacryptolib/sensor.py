@@ -47,7 +47,7 @@ class TimeLimitedAggregatorMixin:
         self._current_start_time = None
 
 
-class TarfileAggregator(TimeLimitedAggregatorMixin):
+class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
     """
     This class allows sensors to aggregate file-like records of data in memory.
 
@@ -211,10 +211,10 @@ class TarfileAggregator(TimeLimitedAggregatorMixin):
         return tarfile.open(mode="r", fileobj=io.BytesIO(data_bytestring))
 
 
-class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
+class JsonDataAggregator(TimeLimitedAggregatorMixin):
     """
-    This class allows sensors to aggregate dicts of data, which are pushed to the underlying TarfileAggregator after a
-    certain amount of seconds.
+    This class allows sensors to aggregate dicts of data, which are periodically pushed as a json bytestring
+    to the underlying TarfileRecordsAggregator.
 
     Public methods of this class are thread-safe.
     """
@@ -225,12 +225,12 @@ class JsonAggregator(TimeLimitedAggregatorMixin):  # TODO -> JsonAggregator
 
     def __init__(
         self,
-        tarfile_aggregator: TarfileAggregator,
+        tarfile_aggregator: TarfileRecordsAggregator,
         sensor_name: str,
         max_duration_s: int,
     ):
         super().__init__(max_duration_s=max_duration_s)
-        assert isinstance(tarfile_aggregator, TarfileAggregator), tarfile_aggregator
+        assert isinstance(tarfile_aggregator, TarfileRecordsAggregator), tarfile_aggregator
         self._tarfile_aggregator = tarfile_aggregator
         self._sensor_name = sensor_name
         self._lock = threading.Lock()
@@ -318,7 +318,7 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
             traceback.print_exc()
 
 
-class SensorsManager(TaskRunnerStateMachineBase):  # TODO rename as plural !!!!!!
+class SensorsManager(TaskRunnerStateMachineBase):
     """
     Manage a group of sensors for simultaneous starts/stops.
 

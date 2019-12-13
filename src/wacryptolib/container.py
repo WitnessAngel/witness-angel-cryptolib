@@ -425,7 +425,7 @@ class ContainerStorage:
         """Returns the container basename."""
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
         container = self._encrypt_data_into_container(data, metadata=metadata)
-        logger.debug("Dumping container data into file %s", container_filepath)
+        logger.debug("Writing container data to file %s", container_filepath)
         dump_to_json_file(
             container_filepath, data=container, indent=4
         )  # Note that this might erase existing file, it's OK

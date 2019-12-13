@@ -237,8 +237,10 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
             runonstart=runonstart,
         )
 
-    def _offloaded_run_task(self):  # pragma: no cover
-        """Method which will be run periodically, and which by default simply calls task_func()."""
+    def _offloaded_run_task(self):
+        """Method which will be run periodically by background thread,
+           and which by default simply calls task_func().
+        """
         return self._task_func()
 
     def start(self):

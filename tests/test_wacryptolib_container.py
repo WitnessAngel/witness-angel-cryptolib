@@ -175,7 +175,7 @@ def test_get_proxy_for_escrow(tmp_path):
             container_base._get_proxy_for_escrow("weird-value")
 
 
-def test_container_storage(tmp_path):
+def test_container_storage_and_executor(tmp_path, caplog):
 
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
     storage = ContainerStorage(
@@ -187,12 +187,26 @@ def test_container_storage(tmp_path):
 
     storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
     storage.enqueue_file_for_encryption("empty.txt", b"", metadata=dict(somevalue=True))
+    assert len(storage) == 0  # Container threads are just beginning to work!
+
+    storage.wait_for_idle_state()
 
     assert len(storage) == 2
     assert storage.list_container_names(as_sorted=True) == [
         Path("animals.dat.crypt"),
         Path("empty.txt.crypt"),
     ]
+
+    # Test proper logging of errors occurring in thread pool executor
+    assert storage._make_absolute  # Instance method
+    storage._make_absolute = None  # Corruption!
+    assert "Caught exception" not in caplog.text, caplog.text
+    storage.enqueue_file_for_encryption("something.mpg", b"#########", metadata=None)
+    storage.wait_for_idle_state()
+    assert len(storage) == 2  # Unchanged
+    assert "Caught exception" in caplog.text, caplog.text
+    del storage._make_absolute
+    assert storage._make_absolute  # Back to the method
 
     abs_entries = storage.list_container_names(as_absolute=True)
     assert len(abs_entries) == 2  # Unchanged
@@ -215,6 +229,8 @@ def test_container_storage(tmp_path):
     assert storage._max_containers_count is None
     for i in range(10):
         storage.enqueue_file_for_encryption("file.dat", b"dogs\ncats\n", metadata=None)
+    assert len(storage) < 11  # In progress
+    storage.wait_for_idle_state()
     assert len(storage) == 11  # Still the older file remains
 
     storage = FakeTestContainerStorage(
@@ -222,6 +238,7 @@ def test_container_storage(tmp_path):
     )
     for i in range(3):
         storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
+    storage.wait_for_idle_state()
     assert len(storage) == 3  # Purged
     assert storage.list_container_names(as_sorted=True) == [
         Path("xyz.dat.000.crypt"),
@@ -230,6 +247,7 @@ def test_container_storage(tmp_path):
     ]
 
     storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
+    storage.wait_for_idle_state()
     assert len(storage) == 3  # Purged
     assert storage.list_container_names(as_sorted=True) == [
         Path("xyz.dat.001.crypt"),
@@ -242,8 +260,10 @@ def test_container_storage(tmp_path):
     )
     assert len(storage) == 3  # Retrieves existing containers
     storage.enqueue_file_for_encryption("aaa.dat", b"000", metadata=None)
+    storage.wait_for_idle_state()
     assert len(storage) == 4  # Unchanged
     storage.enqueue_file_for_encryption("zzz.dat", b"000", metadata=None)
+    storage.wait_for_idle_state()
     assert len(storage) == 4  # Purge occurred
     # Entry "aaa.dat.000.crypt" was ejected because it's a sorting by NAMES for now!
     assert storage.list_container_names(as_sorted=True) == [

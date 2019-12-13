@@ -1,7 +1,9 @@
 import copy
 import logging
 import os
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
@@ -21,7 +23,7 @@ from wacryptolib.utilities import (
     dump_to_json_file,
     load_from_json_file,
     generate_uuid0,
-    hash_message)
+    hash_message, synchronized, catch_and_log_exception)
 
 logger = logging.getLogger(__name__)
 
@@ -355,6 +357,7 @@ class ContainerStorage:
         containers_dir: Path,
         max_containers_count: int = None,
         local_key_storage: KeyStorageBase = None,
+        max_workers=1,
     ):
         containers_dir = Path(containers_dir)
         assert containers_dir.is_dir(), containers_dir
@@ -366,6 +369,12 @@ class ContainerStorage:
         self._containers_dir = containers_dir
         self._max_containers_count = max_containers_count
         self._local_key_storage = local_key_storage
+        self._thread_pool_executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="container_worker")
+        self._pending_executor_futures = []
+        self._lock = threading.Lock()
+
+    def __del__(self):
+        self._thread_pool_executor.shutdown(wait=False)
 
     def __len__(self):
         """Beware, might be SLOW if many files are present in folder."""
@@ -421,17 +430,25 @@ class ContainerStorage:
             container, local_key_storage=self._local_key_storage
         )  # Will fail if authorizations are not OK
 
-    def _process_and_store_file(self, filename_base, data, metadata):
-        """Returns the container basename."""
-        container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
+    @catch_and_log_exception
+    def _offloaded_process_and_store_file(self, filename_base, data, metadata):
+        """Task to be called by background thread, which encrypts a payload into a disk container.
+
+        Returns the container basename."""
+
+        logger.debug("Encrypting file %s", filename_base)
         container = self._encrypt_data_into_container(data, metadata=metadata)
+
+        container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
         logger.debug("Writing container data to file %s", container_filepath)
         dump_to_json_file(
             container_filepath, data=container, indent=4
-        )  # Note that this might erase existing file, it's OK
-        self._purge_exceeding_containers()  # AFTER new container is created
+        )  # Note that this might erase an existing file, it's OK
+
+        logger.info("File %r successfully encrypted into storage container", filename_base)
         return container_filepath.name
 
+    @synchronized
     def enqueue_file_for_encryption(self, filename_base, data, metadata):
         """Enqueue a data file for encryption and storage, with its metadata tree.
 
@@ -439,12 +456,25 @@ class ContainerStorage:
 
         `filename` of the final container might be different from provided one.
         """
-        logger.info("Encrypting container %r into storage", filename_base)
-        container_name = self._process_and_store_file(
-            filename_base=filename_base, data=data, metadata=metadata
-        )
-        logger.info("Container %r successfully encrypted", container_name)
+        logger.info("Enqueuing file %r for encryption and storage", filename_base)
+        self._purge_exceeding_containers()
+        self._purge_executor_results()
+        future = self._thread_pool_executor.submit(self._offloaded_process_and_store_file, filename_base=filename_base, data=data, metadata=metadata)
+        self._pending_executor_futures.append(future)
 
+    def _purge_executor_results(self):
+        """Remove futures which are actually over. We don't care about their result/exception here"""
+        still_pending_results = [future for future in self._pending_executor_futures if not future.done()]
+        self._pending_executor_futures = still_pending_results
+
+    @synchronized
+    def wait_for_idle_state(self):
+        """Wait for each pending future to be completed, using each time `timeout` if provided."""
+        self._purge_executor_results()
+        for future in self._pending_executor_futures:
+            future.result()  # Should NEVER raise, thanks to the @catch_and_log_exception above, and absence of cancellations
+        self._purge_exceeding_containers()  # Good to have now
+        
     def decrypt_container_from_storage(self, container_name_or_idx):
         """
         Return the decrypted content of the container `filename` (which must be in `list_container_names()`,

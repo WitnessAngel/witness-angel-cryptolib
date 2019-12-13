@@ -32,6 +32,15 @@ def synchronized(func, self, *args, **kwargs):
         return func(self, *args, **kwargs)
 
 
+@decorator
+def catch_and_log_exception(f, *args, **kwargs):
+    try:
+        return f(*args, **kwargs)
+    except Exception as exc:
+        logger.error(f"Caught exception when calling {f!r}(): {exc!r}")
+
+
+
 ### Public utilities ###
 
 

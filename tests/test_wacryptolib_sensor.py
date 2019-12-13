@@ -67,6 +67,7 @@ def test_tarfile_aggregator(tmp_path):
     with freeze_time() as frozen_datetime:
 
         tarfile_aggregator.finalize_tarfile()
+        container_storage.wait_for_idle_state()
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
         assert len(container_storage) == 0
@@ -103,6 +104,7 @@ def test_tarfile_aggregator(tmp_path):
         frozen_datetime.tick(delta=timedelta(seconds=1))
 
         tarfile_aggregator.finalize_tarfile()
+        container_storage.wait_for_idle_state()
         assert len(container_storage) == 1
         tarfile_bytestring = container_storage.decrypt_container_from_storage(
             container_name_or_idx=-1
@@ -122,6 +124,7 @@ def test_tarfile_aggregator(tmp_path):
         for i in range(2):
             frozen_datetime.tick(delta=timedelta(seconds=1))
             tarfile_aggregator.finalize_tarfile()
+            container_storage.wait_for_idle_state()
             assert len(tarfile_aggregator) == 0
             assert not tarfile_aggregator._current_start_time
             assert len(container_storage) == 1  # Unchanged
@@ -139,6 +142,7 @@ def test_tarfile_aggregator(tmp_path):
 
         frozen_datetime.tick(delta=timedelta(seconds=1))
         tarfile_aggregator.finalize_tarfile()
+        container_storage.wait_for_idle_state()
         assert len(container_storage) == 2
         tarfile_bytestring = container_storage.decrypt_container_from_storage(
             container_name_or_idx=-1
@@ -154,6 +158,7 @@ def test_tarfile_aggregator(tmp_path):
         for i in range(2):
             frozen_datetime.tick(delta=timedelta(seconds=1))
             tarfile_aggregator.finalize_tarfile()
+            container_storage.wait_for_idle_state()
             assert len(tarfile_aggregator) == 0
             assert not tarfile_aggregator._current_start_time
             assert len(container_storage) == 2  # Unchanged
@@ -188,10 +193,12 @@ def test_tarfile_aggregator(tmp_path):
         assert (
             tarfile_aggregator._current_start_time != current_start_time_saved
         )  # AUTO FLUSH occurred
+        container_storage.wait_for_idle_state()
 
         assert len(container_storage) == 3
 
         tarfile_aggregator.finalize_tarfile()  # CLEANUP
+        container_storage.wait_for_idle_state()
 
         assert len(container_storage) == 4
 
@@ -209,6 +216,7 @@ def test_tarfile_aggregator(tmp_path):
 
         frozen_datetime.tick(delta=timedelta(seconds=1))
         tarfile_aggregator.finalize_tarfile()
+        container_storage.wait_for_idle_state()
         assert len(container_storage) == 5
         tarfile_bytestring = container_storage.decrypt_container_from_storage(
             container_name_or_idx=-1
@@ -284,6 +292,7 @@ def test_json_aggregator(tmp_path):
         assert len(json_aggregator) == 0
 
         tarfile_aggregator.finalize_tarfile()
+        container_storage.wait_for_idle_state()
         assert len(container_storage) == 1
         tarfile_bytestring = container_storage.decrypt_container_from_storage(
             container_name_or_idx=-1
@@ -308,6 +317,7 @@ def test_json_aggregator(tmp_path):
         assert data == b'[{"x": "abc"}]'
 
         tarfile_aggregator.finalize_tarfile()
+        container_storage.wait_for_idle_state()
         assert len(container_storage) == 1  # Unchanged
         assert not json_aggregator._current_start_time
 
@@ -359,6 +369,7 @@ def test_aggregators_thread_safety(tmp_path):
 
     json_aggregator.flush_dataset()
     tarfile_aggregator.finalize_tarfile()
+    container_storage.wait_for_idle_state()
 
     misc_results = set(future.result() for future in misc_futures)
     assert misc_results == set([None])  # No results expected from any of these methods

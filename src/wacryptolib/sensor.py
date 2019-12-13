@@ -309,6 +309,7 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
     def _offloaded_run_task(self):
         """This function is meant to be called by secondary thread, to fetch and store data."""
         try:
+            assert self._task_func  # Sanity check, else _offloaded_run_task() should have been overridden
             result = self._task_func()
             self._offloaded_add_data(result)
         except Exception:

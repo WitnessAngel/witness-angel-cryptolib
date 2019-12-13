@@ -226,10 +226,13 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
         True
     )  # Do not prevent process shutdown if we forgot to stop...
 
+    _task_func = None  # Might be overridden as a method too!
+
     def __init__(self, interval_s, count=-1, runonstart=True, task_func=None, **kwargs):
         super().__init__(**kwargs)
         self._interval_s = interval_s
-        self._task_func = task_func
+        if task_func:  # Important
+            self._task_func = task_func
         self._multitimer = multitimer.MultiTimer(
             interval=interval_s,
             function=self._offloaded_run_task,
@@ -239,7 +242,7 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
 
     def _offloaded_run_task(self):
         """Method which will be run periodically by background thread,
-           and which by default simply calls task_func().
+           and which by default simply calls task_func() and returns the result.
         """
         return self._task_func()
 

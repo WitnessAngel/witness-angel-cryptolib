@@ -3,8 +3,6 @@ import time
 import uuid
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from django.db import transaction
-
 from wacryptolib.utilities import generate_uuid0
 
 

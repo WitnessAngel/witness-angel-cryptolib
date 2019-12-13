@@ -74,7 +74,7 @@ COMPLEX_CONTAINER_CONF = dict(
             ],
         ),
         dict(
-            data_encryption_algo="AES_EAX",
+            data_encryption_algo="CHACHA20_POLY1305",
             key_encryption_strata=[
                 dict(
                     key_encryption_algo="RSA_OAEP",
@@ -309,7 +309,7 @@ def test_get_encryption_configuration_summary():
             RSA_OAEP (by local device)
           Signatures:
             SHA3_512/DSA_DSS (by local device)
-        Data encryption layer 3: AES_EAX
+        Data encryption layer 3: CHACHA20_POLY1305
           Key encryption layers:
             RSA_OAEP (by local device)
             RSA_OAEP (by local device)

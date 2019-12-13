@@ -1,7 +1,7 @@
 import logging
 
 import Crypto.Hash.SHA512
-from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import pad, unpad
@@ -111,6 +111,44 @@ def _decrypt_via_aes_eax(cipherdict: dict, key: bytes) -> bytes:
     return plaintext
 
 
+def _encrypt_via_chacha20_poly1305(
+    plaintext: bytes, key: bytes, aad: bytes = b"header"
+) -> dict:
+    """Encrypt a bytestring with the stream cipher ChaCha20.
+
+    Additional cleartext data can be provided so that the
+    generated mac tag also verifies its integrity.
+
+    :param plaintext: the bytes to cipher
+    :param key: 32 bytes long cryptographic key
+    :param aad: optional "additional authenticated data"
+
+    :return: dict with fields "ciphertext", "tag", "nonce" and "header" as bytestrings"""
+    _check_symmetric_key_length_bytes(len(key))
+    cipher = ChaCha20_Poly1305.new(key=key)
+    cipher.update(aad)
+    ciphertext, tag = cipher.encrypt_and_digest(plaintext)
+    nonce = cipher.nonce
+    encryption = {"ciphertext": ciphertext, "tag": tag, "nonce": nonce, "aad": aad}
+    return encryption
+
+
+def _decrypt_via_chacha20_poly1305(cipherdict: dict, key: bytes) -> bytes:
+    """Decrypt a bytestring with the stream cipher ChaCha20.
+
+    :param cipherdict: dict with fields "ciphertext", "tag", "nonce" and "header" as bytestrings
+    :param key: the cryptographic key used to decipher
+
+    :return: the decrypted bytestring"""
+    _check_symmetric_key_length_bytes(len(key))
+    decipher = ChaCha20_Poly1305.new(key=key, nonce=cipherdict["nonce"])
+    decipher.update(cipherdict["aad"])
+    plaintext = decipher.decrypt_and_verify(
+        ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"]
+    )
+    return plaintext
+
+
 def _encrypt_via_rsa_oaep(plaintext: bytes, key: RSA.RsaKey) -> dict:
     """Encrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
@@ -165,7 +203,10 @@ ENCRYPTION_ALGOS_REGISTRY = dict(
         "encryption_function": _encrypt_via_aes_eax,
         "decryption_function": _decrypt_via_aes_eax,
     },
-
+    CHACHA20_POLY1305={
+        "encryption_function": _encrypt_via_chacha20_poly1305,
+        "decryption_function": _decrypt_via_chacha20_poly1305,
+    },
     ## ASYMMETRIC ENCRYPTION ##
     RSA_OAEP={
         "encryption_function": _encrypt_via_rsa_oaep,

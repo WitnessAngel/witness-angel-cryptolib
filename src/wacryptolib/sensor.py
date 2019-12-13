@@ -272,7 +272,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
             self._current_dataset or not self._current_start_time
         )  # INVARIANT of our system!
         assert isinstance(data_dict, dict), data_dict
-        logger.debug("New data added to json builder: %s" % data_dict)
+        logger.debug("New data added to %s json builder: %s", self._sensor_name, data_dict)
         self._notify_aggregation_operation()
         self._current_dataset.append(data_dict)
 
@@ -292,8 +292,8 @@ class PeriodicValueMixin:
     Mixin for sensors polling or pushing data to a json aggregator at regular intervals.
     """
 
-    def __init__(self, interval_s, json_aggregator, **kwargs):
-        super().__init__(interval_s=interval_s, **kwargs)
+    def __init__(self, json_aggregator, **kwargs):
+        super().__init__(**kwargs)
         self._json_aggregator = json_aggregator
 
     def _offloaded_add_data(self, data_dict):

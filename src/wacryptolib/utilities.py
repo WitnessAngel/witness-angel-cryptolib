@@ -183,7 +183,7 @@ class TaskRunnerStateMachineBase(abc.ABC):
     efficiently and safely stop numerous runners.
     """
 
-    def __init__(self):
+    def __init__(self, **kwargs):  # Ignored exceeding kwargs here
         self._runner_is_started = False
 
     @property
@@ -226,8 +226,8 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
         True
     )  # Do not prevent process shutdown if we forgot to stop...
 
-    def __init__(self, interval_s, count=-1, runonstart=True, task_func=None):
-        super().__init__()
+    def __init__(self, interval_s, count=-1, runonstart=True, task_func=None, **kwargs):
+        super().__init__(**kwargs)
         self._interval_s = interval_s
         self._task_func = task_func
         self._multitimer = multitimer.MultiTimer(

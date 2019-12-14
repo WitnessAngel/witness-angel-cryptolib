@@ -1,5 +1,5 @@
-import logging
 import builtins
+import logging
 
 from jsonrpc_requests import Server as ServerBase, ProtocolError
 

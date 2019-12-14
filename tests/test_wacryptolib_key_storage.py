@@ -13,7 +13,6 @@ from wacryptolib.scaffolding import (
     check_key_storage_basic_get_set_api,
     check_key_storage_free_keys_api,
 )
-from wacryptolib.utilities import generate_uuid0
 
 
 def test_key_storage_basic_get_set_api(tmp_path):

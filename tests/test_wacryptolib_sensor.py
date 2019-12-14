@@ -4,7 +4,6 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import datetime, timezone
 from datetime import timedelta
 
-import pytest
 from freezegun import freeze_time
 
 from _test_mockups import FakeTestContainerStorage

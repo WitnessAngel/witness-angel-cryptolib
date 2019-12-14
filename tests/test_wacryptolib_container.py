@@ -23,7 +23,6 @@ from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error
 from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage
 
-
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
         dict(

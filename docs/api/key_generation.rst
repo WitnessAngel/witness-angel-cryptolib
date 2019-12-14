@@ -1,12 +1,14 @@
 Key generation
 ==============
 
-This module is dedicated to key generation, especially assymetric public/private key pairs.
+This module is dedicated to key generation, especially asymmetric public/private key pairs.
+
+Note that keys are separated by use, thus keys of type RSA_OAEP (encryption) and RSA_PSS (signature) are different
+for the same keychain uid.
 
 
 Public API
 --------------
-
 
 
 .. autodata:: wacryptolib.key_generation.SUPPORTED_ASYMMETRIC_KEY_TYPES
@@ -18,8 +20,6 @@ Public API
 .. autodata:: wacryptolib.key_generation.SUPPORTED_SYMMETRIC_KEY_ALGOS
 
 .. autofunction:: wacryptolib.key_generation.generate_symmetric_key
-
-
 
 
 

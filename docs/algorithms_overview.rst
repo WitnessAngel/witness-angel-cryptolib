@@ -3,7 +3,7 @@
 Overview of Algorithms
 ===============================
 
-This document describes he different technologies available in modern cryptography, in particular the selected algorithms and their worthy or obsolete alternatives.
+This document describes the different technologies available in modern cryptography, in particular the selected algorithms and their worthy or obsolete alternatives.
 
 
 Invariants
@@ -69,7 +69,6 @@ Symmetric ciphers
     - the algorithm is "on-line", that means that can process a stream of data, using constant memory, without knowing total data length in advance;
     - the algorithm can process static Associated Data (AD), useful for encryption/decryption of communication session parameters (where session parameters may represent the Associated Data).
 
-
-- ChaCha20 : while this algorithm is mainly used for encryption, its core is a pseudo-random number generator. The cipher text is obtained by XOR'ing the plain text with a pseudo-random stream. Provided you never use the same nonce with the same key twice, you can treat that stream as a one time pad. This makes it very simple: unlike block ciphers, you don't have to worry about padding, and decryption is the same XOR operation as encryption.
+- ChaCha20 with Poly1305: while this algorithm is mainly used for encryption, its core is a pseudo-random number generator. The cipher text is obtained by XOR'ing the plain text with a pseudo-random stream. Provided you never use the same nonce with the same key twice, you can treat that stream as a one time pad. This makes it very simple: unlike block ciphers, you don't have to worry about padding, and decryption is the same XOR operation as encryption. The Poly1305 authenticator prevents the insertion of fake messages into the stream.
 
 

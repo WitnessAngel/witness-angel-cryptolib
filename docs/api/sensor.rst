@@ -17,9 +17,6 @@ Base classes for poller/pusher sensors
 .. autoclass:: wacryptolib.sensor.JsonDataAggregator
     :members:
 
-.. autoclass:: wacryptolib.sensor.PeriodicValueMixin
-    :members:
-
 .. autoclass:: wacryptolib.sensor.PeriodicValuePoller
     :members:
 

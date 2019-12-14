@@ -11,7 +11,7 @@ API for escrow services
     :members:
 
 
-Auto-replenishing of lcoal free keys
+Auto-replenishing of local free keys
 -------------------------------------
 
 .. autofunction:: wacryptolib.escrow.generate_free_keypair_for_least_provisioned_key_type

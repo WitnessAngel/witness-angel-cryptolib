@@ -320,6 +320,7 @@ def decrypt_data_from_container(
     """Decrypt a container with the help of third-parties.
 
     :param container: the container tree, which holds all information about involved keys
+    :param local_key_storage: optional local key storage
 
     :return: raw bytestring
     """
@@ -344,11 +345,11 @@ def extract_metadata_from_container(container: dict) -> Optional[dict]:
 
 class ContainerStorage:
     """
-    This class encrypts file streams and stores them into filesystem.
+    This class encrypts file streams and stores them into filesystem, in a thread-safe way.
 
-    Since it doesn't use in-memory aggregation structures, it's supposed to be thread-safe.
+    Exceeding containers are automatically purged when enqueuing new files or waiting for idle state.
 
-    Exceeding containers are automatically purged after each file addition.
+    A thread pool is used to encrypt files in the background.
     """
 
     def __init__(
@@ -469,7 +470,7 @@ class ContainerStorage:
 
     @synchronized
     def wait_for_idle_state(self):
-        """Wait for each pending future to be completed, using each time `timeout` if provided."""
+        """Wait for each pending future to be completed."""
         self._purge_executor_results()
         for future in self._pending_executor_futures:
             future.result()  # Should NEVER raise, thanks to the @catch_and_log_exception above, and absence of cancellations

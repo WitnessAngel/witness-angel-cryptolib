@@ -1,3 +1,21 @@
+Version 0.4
+==================
+
+* Improve Key storage API to separate private and public keys
+* Add FilesystemKeyStorage implementation
+* Add APIs and workers for pregeneration of free keypairs
+* Add Base classes for poll/push sensors
+* Add some logging in encryption toolchain
+* Add metadata to storage containers, and get_encryption_configuration_summary() utility
+* Make UUIDs include a timestamp
+* Add request_decryption_authorization() to Escrow API
+* Complete error conversion utilities (using StatusSlugs for webservices)
+* Add hashing utilities
+* Ensure escrows only sign hashes, never real data
+* Refactor key types to separate encryption and signature keys.
+* Perform container encryption in a separate threads pool
+
+
 Version 0.3
 ==================
 

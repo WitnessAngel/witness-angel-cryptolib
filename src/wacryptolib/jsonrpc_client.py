@@ -15,7 +15,7 @@ status_slugs_to_builtins_mapper = StatusSlugsMapper(_exception_classes, fallback
 
 def status_slugs_response_error_handler(exc):
     """
-    Generic handler which recognizes status slugs of builtin exceptions in json-rpc errorresponses,
+    Generic error handler which recognizes status slugs of builtin exceptions in json-rpc error responses,
     and reraises them client-side.
     """
     assert isinstance(exc, ProtocolError), exc
@@ -38,6 +38,7 @@ class JsonRpcProxy(ServerBase):
     - we dump/load data using Pymongo's Extended Json format, able to transparently deal with bytes, uuids, dates etc.
     - we do not auto-unpack single dict arguments on call, e.g `proxy.foo({'fizz': 1, 'fuzz': 2})` will be treated as
       calling remote foo() with a single dict argument, not as passing it keyword arguments `fizz` and `fuzz`.
+    - a `response_error_handler` callback can be provided to swallow or convert an error received in an RPC response.
 
     """
 

@@ -12,6 +12,102 @@ While the `container_uid` value uniquely identifies the container, its `keychain
 
 **Beware, this format is not stable and specified yet.**
 
+
+Example
+---------
+
+A minimal container configuration in python, with a single encryption layer and its single signature, both backed by the "local" escrow service of the device; this format can't be used in real life of course, since the data is not protected against illegal reads::
+
+    from wacryptolib.escrow import LOCAL_ESCROW_PLACEHOLDER
+
+    CONFIG = dict(
+        data_encryption_strata=[
+            dict(
+                data_encryption_algo="AES_CBC",
+                key_encryption_strata=[
+                    dict(
+                        key_encryption_algo="RSA_OAEP",
+                        key_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    )
+                ],
+                data_signatures=[
+                    dict(
+                        message_prehash_algo="SHA256",
+                        signature_algo="DSA_DSS",
+                        signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    )
+                ],
+            )
+        ]
+    )
+
+
+The corresponding container content, in Pymongo's Extended Json format::
+
+
+  {
+      "container_format": "WA_0.1a",
+      "container_uid": {
+          "$binary": {
+              "base64": "DlYx92FIAAkm8ncnLoDO4Q==",
+              "subType": "03"
+          }
+      },
+      "data_ciphertext": {
+          "$binary": {
+              "base64": "eyJjaXBoZXJ0ZXh0IjogeyIkYmluYXJ5IjogeyJiYXNlNjQiOiAibEZFVWw3Qm1aRExXNkZTSDlsaDVrTjVPYkpYQ2RJN0RIWnlxcm9kSktob20rZmEza0JOYzM3K2NKTzBaay9MUnlId3lhSExlK20yclpsMm1tNXJtd24zMGNmNlZYNTdlNlVFcDVKWkc4MXNNcHpsQ2N6UmZBRUpmM1o4ZUFBdXo0UnJ1ZTROYnFmQml3TjkxbnRkaDhjcFRVVnRsVnZoWFc1VGZSdU9ROCtCR284R1EreHkvS1I0WE9QNlJFbkdhR1dXdjJ2bElaT2Flcm42dytqN3lhQnVEWXZESW1oMWNyK0hGSWIwaXZNYz0iLCAic3ViVHlwZSI6ICIwMCJ9fSwgIml2IjogeyIkYmluYXJ5IjogeyJiYXNlNjQiOiAiM280eXAvcG5lamFZRWtkTjlSOXNUUT09IiwgInN1YlR5cGUiOiAiMDAifX19",
+              "subType": "00"
+          }
+      },
+      "data_encryption_strata": [
+          {
+              "data_encryption_algo": "AES_CBC",
+              "data_signatures": [
+                  {
+                      "message_prehash_algo": "SHA256",
+                      "signature_algo": "DSA_DSS",
+                      "signature_escrow": "_local_",
+                      "signature_value": {
+                          "digest": {
+                              "$binary": {
+                                  "base64": "PDVJ2+UXnFsQy4JRisXOJW3cwMyX4PDanVoA6q7+hORZsMN8yK7ndpUqLMQNNFcpWAWFw+gtzCM=",
+                                  "subType": "00"
+                              }
+                          },
+                          "timestamp_utc": {
+                              "$numberInt": "1576333246"
+                          }
+                      }
+                  }
+              ],
+              "key_ciphertext": {
+                  "$binary": {
+                      "base64": "eyJkaWdlc3RfbGlzdCI6IFt7IiRiaW5hcnkiOiB7ImJhc2U2NCI6ICJCOXowVkF4anpKdDhrcGRod1MzcEdieVhZMk9xZ2NjZjMyUWQyYlJPMmNoRkMrZitQUEJFM2hEUVFPbW4wUDF4V1ZjeUFjQi9ueDFYek9kRUJ4QU9JVHlEWEwyTGFPbVpWdmQ4UUt1OW9LMyt2RTBxdFY0WUt1RHZqcmdPUS92aHRnWnRBQmxORjdrME9Rd1dtNXpvM3NEb3drTG5IaUN2YVJ4OHhUd2FNL2w0UUxTNEg2bVFPMGxiZkJISVQ2aTFIT21FV251TkFJVDMrNi9iWnd2aEJRUjlLbG04eVcrUnJTM1NUa1ZGLytCRHhnQjhhU0pka1ZnbnBwenF0UTlmamhETTd4Z2NRSUxlazl2cnl6QVdxOXRuZXl5OW5HODNrSFZkZXZOWlA5Ty81R29HR3ZtUGtGVGVPeng2cFoxYmx3RDlPWlB0YVNRMG5jNU11QVZKVHc9PSIsICJzdWJUeXBlIjogIjAwIn19XX0=",
+                      "subType": "00"
+                  }
+              },
+              "key_encryption_strata": [
+                  {
+                      "key_encryption_algo": "RSA_OAEP",
+                      "key_escrow": "_local_"
+                  }
+              ]
+          }
+      ],
+      "keychain_uid": {
+          "$binary": {
+              "base64": "DlYx92FIysgcjOsbL4J+DQ==",
+              "subType": "03"
+          }
+      },
+      "metadata": null  // Can include additional information about contained data
+  }
+
+
+
+
+
+
 .. OBSOLETE STUFFS - TO BE RESPECIFIED LATER
 
     NOPE not yet - UUID overrides can exist at different levels of container data, to change the identifier used in transactions with third-party entities.
@@ -60,95 +156,3 @@ While the `container_uid` value uniquely identifies the container, its `keychain
 
             escrow_operation_uid: <optional uuid of this specific escrow operation>,
         }
-
-
-Example
----------
-
-A minimal container configuration in python, with a single encryption layer and its single signature, both backed by the "local" escrow service of the device; this format can't be used in real life of course, since the data is not protected against illegal reads::
-
-    from wacryptolib.escrow import LOCAL_ESCROW_PLACEHOLDER
-
-    CONFIG = dict(
-        data_encryption_strata=[
-            dict(
-                data_encryption_algo="AES_CBC",
-                key_encryption_strata=[
-                    dict(
-                        escrow_key_type="RSA",
-                        key_encryption_algo="RSA_OAEP",
-                        key_escrow=LOCAL_ESCROW_PLACEHOLDER,
-                    )
-                ],
-                data_signatures=[
-                    dict(
-                        signature_key_type="DSA",
-                        signature_algo="DSS",
-                        signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
-                    )
-                ],
-            )
-        ]
-    )
-
-
-The corresponding container content, in Pymongo's Extended Json format::
-
-
-  {
-      "container_format": "WA_0.1a",
-      "container_uid": {
-          "$binary": {
-              "base64": "UEpBPq23RMagS9aTDa5I1g==",
-              "subType": "03"
-          }
-      },
-      "data_ciphertext": {
-          "$binary": {
-              "base64": "eyJjaXBoZXJuYXJ5IjogeyJiY...jQiOiA1YlRiMDAifX19",
-              "subType": "00"
-          }
-      },
-      "data_encryption_strata": [
-          {
-              "data_encryption_algo": "AES_CBC",
-              "data_signatures": [
-                  {
-                      "signature_algo": "DSS",
-                      "signature_escrow": "_local_",
-                      "signature_key_type": "DSA",
-                      "signature_value": {
-                          "digest": {
-                              "$binary": {
-                                  "base64": "uJm8Zis/fNI...u9Zy36aeOOOmiXvk=",
-                                  "subType": "00"
-                              }
-                          },
-                          "timestamp_utc": {
-                              "$numberInt": "1570722817"
-                          }
-                      }
-                  }
-              ],
-              "key_ciphertext": {
-                  "$binary": {
-                      "base64": "eyJkaWdlc3RfbGlzdCI6I...UeXBlIjogIjAwIn19XX0=",
-                      "subType": "00"
-                  }
-              },
-              "key_encryption_strata": [
-                  {
-                      "escrow_key_type": "RSA",
-                      "key_encryption_algo": "RSA_OAEP",
-                      "key_escrow": "_local_"
-                  }
-              ]
-          }
-      ],
-      "keychain_uid": {
-          "$binary": {
-              "base64": "OvJb4C/oSke+/QG5Im0Mng==",
-              "subType": "03"
-          }
-      }
-  }

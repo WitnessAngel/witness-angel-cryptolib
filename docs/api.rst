@@ -15,4 +15,5 @@ API Documentation
    api/sensor
    api/jsonrpc_client
    api/utilities
+   api/error_handling
    api/scaffolding

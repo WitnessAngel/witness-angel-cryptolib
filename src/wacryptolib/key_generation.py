@@ -183,7 +183,6 @@ ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
         ),
         "pem_import_function": RSA.import_key,
     },
-
     ## KEYS FOR SIGNATURE ##
     RSA_PSS={  # Same parameters as RSA_OAEP for now
         "generation_function": _generate_rsa_keypair_as_objects,

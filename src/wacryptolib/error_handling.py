@@ -12,7 +12,9 @@ def gather_exception_subclasses(module, parent_classes: list):
     :param parent_classes: list of exception classes (or single exception class)
     :return: list of exception subclasses
     """
-    parent_classes = tuple(parent_classes) if isinstance(parent_classes, list) else parent_classes
+    parent_classes = (
+        tuple(parent_classes) if isinstance(parent_classes, list) else parent_classes
+    )
     selected_classes = []
     for (key, value) in vars(module).items():
         if isinstance(value, type):
@@ -51,7 +53,9 @@ def slugify_exception_class(
     :return: list of strings
     """
     # TODO change casing? Inspect exception_class.slug_name?
-    assert isinstance(exception_class, type), exception_class  # Must be a CLASS, not an instance!
+    assert isinstance(
+        exception_class, type
+    ), exception_class  # Must be a CLASS, not an instance!
     slugs = [
         qualified_name_extractor(ancestor)
         for ancestor in reversed(exception_class.__mro__)
@@ -61,7 +65,9 @@ def slugify_exception_class(
 
 
 def construct_status_slugs_mapper(
-    exception_classes, fallback_exception_class, exception_slugifier=slugify_exception_class
+    exception_classes,
+    fallback_exception_class,
+    exception_slugifier=slugify_exception_class,
 ):
     """
     Construct and return a tree where branches are qualified slugs, and each leaf is an exception
@@ -73,7 +79,7 @@ def construct_status_slugs_mapper(
     The fallback exception class is stored at the root of the tree under the "" key.
     """
 
-    mapper_tree = {"": fallback_exception_class} # Special value at root
+    mapper_tree = {"": fallback_exception_class}  # Special value at root
 
     for exception_class in exception_classes:
         slugs = exception_slugifier(exception_class)
@@ -81,7 +87,9 @@ def construct_status_slugs_mapper(
             continue  # E.g. for BaseException and the likes, shadowed by fallback_exception_class
         current = mapper_tree
         for slug in slugs:
-            current = current.setdefault(slug, {})  # No auto-creation of entries for ancestors
+            current = current.setdefault(
+                slug, {}
+            )  # No auto-creation of entries for ancestors
         current[""] = exception_class
 
     return mapper_tree
@@ -113,11 +121,19 @@ class StatusSlugsMapper:
     """
     High-level wrapper for converting exceptions from/to status slugs.
     """
-    def __init__(self, exception_classes, fallback_exception_class, exception_slugifier=slugify_exception_class):
+
+    def __init__(
+        self,
+        exception_classes,
+        fallback_exception_class,
+        exception_slugifier=slugify_exception_class,
+    ):
         self._slugify_exception_class = exception_slugifier
-        self._mapper_tree = construct_status_slugs_mapper(exception_classes=exception_classes,
-                                                     fallback_exception_class=fallback_exception_class,
-                                                     exception_slugifier=exception_slugifier)
+        self._mapper_tree = construct_status_slugs_mapper(
+            exception_classes=exception_classes,
+            fallback_exception_class=fallback_exception_class,
+            exception_slugifier=exception_slugifier,
+        )
 
     def slugify_exception_class(self, exception_class, *args, **kwargs):
         """Use the exception slugifier provided in `__init__()` to turn an exception class into a qualified name."""
@@ -126,8 +142,8 @@ class StatusSlugsMapper:
     def get_closest_exception_class_for_status_slugs(self, slugs):
         """Return the closest exception class targeted by the provided status slugs,
         with a fallback class if no matching ancestor is found at all."""
-        return get_closest_exception_class_for_status_slugs(slugs, mapper_tree=self._mapper_tree)
+        return get_closest_exception_class_for_status_slugs(
+            slugs, mapper_tree=self._mapper_tree
+        )
 
     gather_exception_subclasses = staticmethod(gather_exception_subclasses)
-
-

@@ -161,5 +161,7 @@ def test_key_types_mapping_and_isolation():
     assert set(SUPPORTED_SIGNATURE_ALGOS) <= set(SUPPORTED_ASYMMETRIC_KEY_TYPES)
 
     # Some encryption algos are symettric, and use simple keys of random bytes
-    asymmetric_key_types = set(SUPPORTED_ENCRYPTION_ALGOS) - set(SUPPORTED_SYMMETRIC_KEY_ALGOS)
+    asymmetric_key_types = set(SUPPORTED_ENCRYPTION_ALGOS) - set(
+        SUPPORTED_SYMMETRIC_KEY_ALGOS
+    )
     assert asymmetric_key_types <= set(SUPPORTED_ASYMMETRIC_KEY_TYPES)

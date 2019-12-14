@@ -137,9 +137,7 @@ class DummyKeyStorage(KeyStorageBase):
             )
 
     def set_keys(self, *, keychain_uid, key_type, public_key, private_key):
-        self._check_keypair_does_not_exist(
-            keychain_uid=keychain_uid, key_type=key_type
-        )
+        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_type=key_type)
         self._set_keypair(
             keychain_uid=keychain_uid,
             key_type=key_type,
@@ -163,9 +161,7 @@ class DummyKeyStorage(KeyStorageBase):
         sublist.append(keypair)
 
     def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_type: str):
-        self._check_keypair_does_not_exist(
-            keychain_uid=keychain_uid, key_type=key_type
-        )
+        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_type=key_type)
         try:
             sublist = self._free_keypairs[key_type]
             keypair = sublist.pop()
@@ -193,7 +189,7 @@ class FilesystemKeyStorage(KeyStorageBase):
 
     _free_private_key_suffix = "_private_key.pem"
     _free_public_key_suffix = "_public_key.pem"
-    _randint_args = (10**10, 10**11 - 1)
+    _randint_args = (10 ** 10, 10 ** 11 - 1)
 
     def __init__(self, keys_dir):
         keys_dir = Path(keys_dir)
@@ -242,9 +238,7 @@ class FilesystemKeyStorage(KeyStorageBase):
             keychain_uid, key_type=key_type, is_public=False
         )
 
-        self._check_keypair_does_not_exist(
-            keychain_uid=keychain_uid, key_type=key_type
-        )
+        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_type=key_type)
 
         # We override (unexpected) already existing files
         self._write_to_storage_file(
@@ -302,9 +296,7 @@ class FilesystemKeyStorage(KeyStorageBase):
 
     @synchronized
     def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_type: str):
-        self._check_keypair_does_not_exist(
-            keychain_uid=keychain_uid, key_type=key_type
-        )
+        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_type=key_type)
 
         target_public_key_filename = self._keys_dir.joinpath(
             self._get_filename(keychain_uid, key_type=key_type, is_public=True)

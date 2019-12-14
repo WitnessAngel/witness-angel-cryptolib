@@ -7,7 +7,7 @@ from wacryptolib.error_handling import (
     slugify_exception_class,
     get_closest_exception_class_for_status_slugs,
     _fully_qualified_name,
-    StatusSlugsMapper
+    StatusSlugsMapper,
 )
 
 LookupError = LookupError
@@ -82,9 +82,7 @@ def test_status_slugs_utilities():
     )
     assert set(selected_classes) == set(), selected_classes
 
-    assert slugify_exception_class(Exception) == [], slugify_exception_class(
-        Exception
-    )
+    assert slugify_exception_class(Exception) == [], slugify_exception_class(Exception)
 
     assert slugify_exception_class(MyExcChild1GrandChild) == [
         "test_wacryptolib_error_handling.MyExc",
@@ -93,13 +91,15 @@ def test_status_slugs_utilities():
     ], slugify_exception_class(MyExcChild1GrandChild)
 
     assert (
-            get_closest_exception_class_for_status_slugs((), mapper_tree=mapper_tree)
-            == NotImplementedError
+        get_closest_exception_class_for_status_slugs((), mapper_tree=mapper_tree)
+        == NotImplementedError
     )
 
     assert (
-            get_closest_exception_class_for_status_slugs(("XYZ", "ZXY"), mapper_tree=mapper_tree)
-            == NotImplementedError
+        get_closest_exception_class_for_status_slugs(
+            ("XYZ", "ZXY"), mapper_tree=mapper_tree
+        )
+        == NotImplementedError
     )
 
     status_slug = (
@@ -107,18 +107,22 @@ def test_status_slugs_utilities():
         "test_wacryptolib_error_handling.MyExcChild1",
     )
     assert (
-            get_closest_exception_class_for_status_slugs(status_slug, mapper_tree=mapper_tree)
-            == MyExcChild1
+        get_closest_exception_class_for_status_slugs(
+            status_slug, mapper_tree=mapper_tree
+        )
+        == MyExcChild1
     )
 
     status_slug = (
         "test_wacryptolib_error_handling.MyExc",
         "test_wacryptolib_error_handling.XXXXXXXX",
-        "test_wacryptolib_error_handling.YYYYYYYY"
+        "test_wacryptolib_error_handling.YYYYYYYY",
     )
     assert (
-            get_closest_exception_class_for_status_slugs(status_slug, mapper_tree=mapper_tree)
-            == MyExc  # closest ancestor found
+        get_closest_exception_class_for_status_slugs(
+            status_slug, mapper_tree=mapper_tree
+        )
+        == MyExc  # closest ancestor found
     )
 
     # Test the case of not-included ancestor exception classes
@@ -127,18 +131,24 @@ def test_status_slugs_utilities():
         [KeyError], fallback_exception_class=RuntimeError
     )
     assert (
-            get_closest_exception_class_for_status_slugs(["LookupError", "KeyError"], mapper_tree=mapper_tree)
-            == KeyError
+        get_closest_exception_class_for_status_slugs(
+            ["LookupError", "KeyError"], mapper_tree=mapper_tree
+        )
+        == KeyError
     )
 
     assert (
-            get_closest_exception_class_for_status_slugs(["LookupError"], mapper_tree=mapper_tree)
-            == RuntimeError  # No fallback on some auto-created LookupError entry
+        get_closest_exception_class_for_status_slugs(
+            ["LookupError"], mapper_tree=mapper_tree
+        )
+        == RuntimeError  # No fallback on some auto-created LookupError entry
     )
 
     assert (
-            get_closest_exception_class_for_status_slugs(["OSError"], mapper_tree=mapper_tree)
-            == RuntimeError
+        get_closest_exception_class_for_status_slugs(
+            ["OSError"], mapper_tree=mapper_tree
+        )
+        == RuntimeError
     )
 
     # Test the case of an empty mapper
@@ -147,12 +157,16 @@ def test_status_slugs_utilities():
         [Exception], fallback_exception_class=NotImplementedError
     )
     assert (
-            get_closest_exception_class_for_status_slugs(["Exception"], mapper_tree=mapper_tree)
-            == NotImplementedError  # Shadowns the "Exception" class which has an empty slug due to slugifier config
+        get_closest_exception_class_for_status_slugs(
+            ["Exception"], mapper_tree=mapper_tree
+        )
+        == NotImplementedError  # Shadowns the "Exception" class which has an empty slug due to slugifier config
     )
     assert (
-            get_closest_exception_class_for_status_slugs(["OSError"], mapper_tree=mapper_tree)
-            == NotImplementedError
+        get_closest_exception_class_for_status_slugs(
+            ["OSError"], mapper_tree=mapper_tree
+        )
+        == NotImplementedError
     )
 
 
@@ -160,33 +174,63 @@ def test_status_slugs_mapper_class():
 
     import builtins
 
-    exception_classes = StatusSlugsMapper.gather_exception_subclasses(builtins, parent_classes=[LookupError, UnicodeDecodeError])
+    exception_classes = StatusSlugsMapper.gather_exception_subclasses(
+        builtins, parent_classes=[LookupError, UnicodeDecodeError]
+    )
 
     def qualified_name_extractor(exception_class):
         return "#%s#" % exception_class.__name__
-    exception_slugifier = functools.partial(slugify_exception_class, qualified_name_extractor=qualified_name_extractor)
 
-    mapper = StatusSlugsMapper(exception_classes, fallback_exception_class=RuntimeError, exception_slugifier=exception_slugifier)
+    exception_slugifier = functools.partial(
+        slugify_exception_class, qualified_name_extractor=qualified_name_extractor
+    )
 
-    assert mapper.slugify_exception_class(FileNotFoundError) == ['#OSError#', '#FileNotFoundError#']
-    assert mapper.slugify_exception_class(UnicodeDecodeError) == ['#ValueError#', '#UnicodeError#', '#UnicodeDecodeError#']
+    mapper = StatusSlugsMapper(
+        exception_classes,
+        fallback_exception_class=RuntimeError,
+        exception_slugifier=exception_slugifier,
+    )
 
-    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#ValueError#', '#UnicodeError#', '#UnicodeDecodeError#'])
+    assert mapper.slugify_exception_class(FileNotFoundError) == [
+        "#OSError#",
+        "#FileNotFoundError#",
+    ]
+    assert mapper.slugify_exception_class(UnicodeDecodeError) == [
+        "#ValueError#",
+        "#UnicodeError#",
+        "#UnicodeDecodeError#",
+    ]
+
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(
+        slugs=["#ValueError#", "#UnicodeError#", "#UnicodeDecodeError#"]
+    )
     assert exc_class == UnicodeDecodeError
 
-    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#ValueError#', '#UnicodeError#', '#UnicodeEncodeError#'])
-    assert exc_class == RuntimeError  # Ancestor classes were not included in "exception_classes"
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(
+        slugs=["#ValueError#", "#UnicodeError#", "#UnicodeEncodeError#"]
+    )
+    assert (
+        exc_class == RuntimeError
+    )  # Ancestor classes were not included in "exception_classes"
 
-    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#ValueError#', '#UnicodeError#'])
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(
+        slugs=["#ValueError#", "#UnicodeError#"]
+    )
     assert exc_class == RuntimeError  # Same thing
 
-    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#LookupError#', '#IndexError#'])
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(
+        slugs=["#LookupError#", "#IndexError#"]
+    )
     assert exc_class == IndexError
 
-    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#LookupError#', '#SomeStuff#'])
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(
+        slugs=["#LookupError#", "#SomeStuff#"]
+    )
     assert exc_class == LookupError
 
-    exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=['#ABC#', '#DEF#'])
+    exc_class = mapper.get_closest_exception_class_for_status_slugs(
+        slugs=["#ABC#", "#DEF#"]
+    )
     assert exc_class == RuntimeError
 
     exc_class = mapper.get_closest_exception_class_for_status_slugs(slugs=[])

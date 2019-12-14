@@ -85,8 +85,11 @@ def test_jsonrpc_extended_json_calls():
         server.foobar(33, a=22)
 
     def callback_protocol_error(request):
-        return 200, {}, u'{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}'
-
+        return (
+            200,
+            {},
+            u'{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}',
+        )
 
     # Test exception handling
 
@@ -99,7 +102,6 @@ def test_jsonrpc_extended_json_calls():
     with pytest.raises(ProtocolError, match="Error: -32700 Parse error"):
         server.foobar({"foo": "bar"})
 
-
     must_raise = True
 
     def _response_error_handler(exc_to_handle):
@@ -108,7 +110,9 @@ def test_jsonrpc_extended_json_calls():
             return "some error occurred"
         raise RuntimeError(str(exc_to_handle))
 
-    server = JsonRpcProxy("http://mock/xmlrpc", response_error_handler=_response_error_handler)
+    server = JsonRpcProxy(
+        "http://mock/xmlrpc", response_error_handler=_response_error_handler
+    )
 
     with pytest.raises(RuntimeError, match="Error: -32700 Parse error"):
         server.foobar({"foo": "bar"})
@@ -122,15 +126,41 @@ def test_jsonrpc_extended_json_calls():
 
 def test_status_slugs_response_error_handler():
 
-    exc = ProtocolError("problems occurred", server_data={'error': {'code': 400, 'data': {'data': None, 'message_untranslated': "bigfailure", "status_slugs": ["RuntimeError"]}}})
+    exc = ProtocolError(
+        "problems occurred",
+        server_data={
+            "error": {
+                "code": 400,
+                "data": {
+                    "data": None,
+                    "message_untranslated": "bigfailure",
+                    "status_slugs": ["RuntimeError"],
+                },
+            }
+        },
+    )
     with pytest.raises(RuntimeError, match="bigfailure"):
         status_slugs_response_error_handler(exc)
 
-    exc = ProtocolError("problems occurred", server_data={'error': {'code': 400, 'data': {'data': None, 'message_untranslated': "bigfailure", "status_slugs": ["UnknownClass"]}}})
+    exc = ProtocolError(
+        "problems occurred",
+        server_data={
+            "error": {
+                "code": 400,
+                "data": {
+                    "data": None,
+                    "message_untranslated": "bigfailure",
+                    "status_slugs": ["UnknownClass"],
+                },
+            }
+        },
+    )
     with pytest.raises(Exception, match="bigfailure") as exc_info:
         status_slugs_response_error_handler(exc)
     assert exc_info.type is Exception  # Not a subclass, here
 
-    exc = ProtocolError("problems occurred", server_data={'error': {'code': 400, 'data': None}})
+    exc = ProtocolError(
+        "problems occurred", server_data={"error": {"code": 400, "data": None}}
+    )
     with pytest.raises(ProtocolError, match="problems occurred"):
         status_slugs_response_error_handler(exc)

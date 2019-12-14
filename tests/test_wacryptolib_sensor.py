@@ -109,7 +109,9 @@ def test_tarfile_aggregator(tmp_path):
         tarfile_bytestring = container_storage.decrypt_container_from_storage(
             container_name_or_idx=-1
         )
-        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(
+            tarfile_bytestring
+        )
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
 
@@ -147,7 +149,9 @@ def test_tarfile_aggregator(tmp_path):
         tarfile_bytestring = container_storage.decrypt_container_from_storage(
             container_name_or_idx=-1
         )
-        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(
+            tarfile_bytestring
+        )
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
 
@@ -221,7 +225,9 @@ def test_tarfile_aggregator(tmp_path):
         tarfile_bytestring = container_storage.decrypt_container_from_storage(
             container_name_or_idx=-1
         )
-        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(
+            tarfile_bytestring
+        )
         assert len(tar_file.getmembers()) == 3
         assert len(tar_file.getnames()) == 3
         # The LAST record has priority over others with the same name
@@ -297,7 +303,9 @@ def test_json_aggregator(tmp_path):
         tarfile_bytestring = container_storage.decrypt_container_from_storage(
             container_name_or_idx=-1
         )
-        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(
+            tarfile_bytestring
+        )
         assert len(tarfile_aggregator) == 0
 
         filenames = sorted(tar_file.getnames())

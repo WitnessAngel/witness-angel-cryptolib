@@ -40,7 +40,9 @@ class EscrowApi:
             return
 
         try:
-            self._key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_type=key_type)
+            self._key_storage.attach_free_keypair_to_uuid(
+                keychain_uid=keychain_uid, key_type=key_type
+            )
         except RuntimeError:  # FIXME improve error discrimination
             keypair = generate_asymmetric_keypair(key_type=key_type, serialize=True)
             self._key_storage.set_keys(
@@ -56,7 +58,9 @@ class EscrowApi:
             keychain_uid=keychain_uid, key_type=key_type
         )
         if not has_public_key:
-            raise ValueError("Unexisting sql keypair %s/%s in escrow api" % (keychain_uid, key_type))
+            raise ValueError(
+                "Unexisting sql keypair %s/%s in escrow api" % (keychain_uid, key_type)
+            )
 
     def get_public_key(self, *, keychain_uid: uuid.UUID, key_type: str) -> bytes:
         """
@@ -69,11 +73,7 @@ class EscrowApi:
         )
 
     def get_message_signature(
-        self,
-        *,
-        keychain_uid: uuid.UUID,
-        message: bytes,
-        signature_algo: str,
+        self, *, keychain_uid: uuid.UUID, message: bytes, signature_algo: str
     ) -> dict:
         """
         Return a signature structure corresponding to the provided key and signature types.
@@ -97,10 +97,9 @@ class EscrowApi:
         )
         return signature
 
-    def request_decryption_authorization(self,
-                                         keypair_identifiers: list,
-                                         request_message: str
-                                         ) -> dict:
+    def request_decryption_authorization(
+        self, keypair_identifiers: list, request_message: str
+    ) -> dict:
         """
         Send a list of keypairs for which decryption access is requested, with the reason why.
 
@@ -112,15 +111,15 @@ class EscrowApi:
         :return: a dict with at least a string field "response_message" detailing the status of the request.
         """
         if not keypair_identifiers:
-            raise ValueError("Keypair identifiers must not be empty, when requesting decryption authorization")
-        return dict(response_message="Decryption request accepted")  # TODO localize string field!
+            raise ValueError(
+                "Keypair identifiers must not be empty, when requesting decryption authorization"
+            )
+        return dict(
+            response_message="Decryption request accepted"
+        )  # TODO localize string field!
 
     def decrypt_with_private_key(
-        self,
-        *,
-        keychain_uid: uuid.UUID,
-        encryption_algo: str,
-        cipherdict: dict,
+        self, *, keychain_uid: uuid.UUID, encryption_algo: str, cipherdict: dict
     ) -> bytes:
         """
         Return the message (probably a symmetric key) decrypted with the corresponding key,

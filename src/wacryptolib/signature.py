@@ -124,14 +124,8 @@ def _compute_timestamped_hash(message: bytes, timestamp_utc: int):
 
 SIGNATURE_ALGOS_REGISTRY = dict(
     RSA_PSS={"signature_function": _sign_with_pss, "compatible_key_type": RSA.RsaKey},
-    DSA_DSS={
-        "signature_function": _sign_with_dss,
-        "compatible_key_type": DSA.DsaKey,
-    },
-    ECC_DSS={
-            "signature_function": _sign_with_dss,
-            "compatible_key_type": ECC.EccKey,
-        },
+    DSA_DSS={"signature_function": _sign_with_dss, "compatible_key_type": DSA.DsaKey},
+    ECC_DSS={"signature_function": _sign_with_dss, "compatible_key_type": ECC.EccKey},
 )
 
 #: These values can be used as 'signature_algo' parameters.

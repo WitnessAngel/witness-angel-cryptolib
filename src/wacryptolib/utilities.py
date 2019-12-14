@@ -40,7 +40,6 @@ def catch_and_log_exception(f, *args, **kwargs):
         logger.error(f"Caught exception when calling {f!r}(): {exc!r}")
 
 
-
 ### Public utilities ###
 
 

@@ -23,7 +23,10 @@ from wacryptolib.utilities import (
     dump_to_json_file,
     load_from_json_file,
     generate_uuid0,
-    hash_message, synchronized, catch_and_log_exception)
+    hash_message,
+    synchronized,
+    catch_and_log_exception,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +60,10 @@ class ContainerBase:
             return self._local_escrow_api
         elif isinstance(escrow, dict):
             if "url" in escrow:
-                return JsonRpcProxy(url=escrow["url"], response_error_handler=status_slugs_response_error_handler)
+                return JsonRpcProxy(
+                    url=escrow["url"],
+                    response_error_handler=status_slugs_response_error_handler,
+                )
             # TODO - Implement escrow lookup in global registry, shared-secret group, etc.
         raise ValueError("Unrecognized escrow identifiers: %s" % str(escrow))
 
@@ -87,7 +93,9 @@ class ContainerWriter(ContainerBase):
             logger.debug("Generating symmetric key of type %r", data_encryption_algo)
             symmetric_key = generate_symmetric_key(encryption_algo=data_encryption_algo)
 
-            logger.debug("Encrypting data with symmetric key of type %r", data_encryption_algo)
+            logger.debug(
+                "Encrypting data with symmetric key of type %r", data_encryption_algo
+            )
 
             data_cipherdict = encrypt_bytestring(
                 plaintext=data_current,
@@ -161,7 +169,10 @@ class ContainerWriter(ContainerBase):
             keychain_uid=keychain_uid, key_type=key_encryption_algo
         )
 
-        logger.debug("Encrypting symmetric key with asymmetric key of type %r", key_encryption_algo)
+        logger.debug(
+            "Encrypting symmetric key with asymmetric key of type %r",
+            key_encryption_algo,
+        )
         subkey = load_asymmetric_key_from_pem_bytestring(
             key_pem=subkey_pem, key_type=key_encryption_algo
         )
@@ -180,7 +191,9 @@ class ContainerWriter(ContainerBase):
         message_prehash_algo = conf["message_prehash_algo"]
         signature_algo = conf["signature_algo"]
 
-        data_ciphertext_hash = hash_message(data_ciphertext, hash_algo=message_prehash_algo)
+        data_ciphertext_hash = hash_message(
+            data_ciphertext, hash_algo=message_prehash_algo
+        )
 
         logger.debug("Signing hash of encrypted data with algo %r", signature_algo)
 
@@ -253,10 +266,17 @@ class ContainerReader(ContainerBase):
         key_encryption_algo = conf["key_encryption_algo"]
         encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
 
-        keypair_identifiers = [dict(keychain_uid=keychain_uid, key_type=key_encryption_algo)]
-        request_result = encryption_proxy.request_decryption_authorization(keypair_identifiers=keypair_identifiers,
-                                                                   request_message="Automatic decryption authorization request")
-        logger.info("Decryption authorization request result: %s", request_result["response_message"])
+        keypair_identifiers = [
+            dict(keychain_uid=keychain_uid, key_type=key_encryption_algo)
+        ]
+        request_result = encryption_proxy.request_decryption_authorization(
+            keypair_identifiers=keypair_identifiers,
+            request_message="Automatic decryption authorization request",
+        )
+        logger.info(
+            "Decryption authorization request result: %s",
+            request_result["response_message"],
+        )
 
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
             keychain_uid=keychain_uid,
@@ -370,7 +390,9 @@ class ContainerStorage:
         self._containers_dir = containers_dir
         self._max_containers_count = max_containers_count
         self._local_key_storage = local_key_storage
-        self._thread_pool_executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="container_worker")
+        self._thread_pool_executor = ThreadPoolExecutor(
+            max_workers=max_workers, thread_name_prefix="container_worker"
+        )
         self._pending_executor_futures = []
         self._lock = threading.Lock()
 
@@ -446,7 +468,9 @@ class ContainerStorage:
             container_filepath, data=container, indent=4
         )  # Note that this might erase an existing file, it's OK
 
-        logger.info("File %r successfully encrypted into storage container", filename_base)
+        logger.info(
+            "File %r successfully encrypted into storage container", filename_base
+        )
         return container_filepath.name
 
     @synchronized
@@ -460,12 +484,19 @@ class ContainerStorage:
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
         self._purge_exceeding_containers()
         self._purge_executor_results()
-        future = self._thread_pool_executor.submit(self._offloaded_process_and_store_file, filename_base=filename_base, data=data, metadata=metadata)
+        future = self._thread_pool_executor.submit(
+            self._offloaded_process_and_store_file,
+            filename_base=filename_base,
+            data=data,
+            metadata=metadata,
+        )
         self._pending_executor_futures.append(future)
 
     def _purge_executor_results(self):
         """Remove futures which are actually over. We don't care about their result/exception here"""
-        still_pending_results = [future for future in self._pending_executor_futures if not future.done()]
+        still_pending_results = [
+            future for future in self._pending_executor_futures if not future.done()
+        ]
         self._pending_executor_futures = still_pending_results
 
     @synchronized
@@ -475,7 +506,7 @@ class ContainerStorage:
         for future in self._pending_executor_futures:
             future.result()  # Should NEVER raise, thanks to the @catch_and_log_exception above, and absence of cancellations
         self._purge_exceeding_containers()  # Good to have now
-        
+
     def decrypt_container_from_storage(self, container_name_or_idx):
         """
         Return the decrypted content of the container `filename` (which must be in `list_container_names()`,
@@ -522,18 +553,36 @@ def get_encryption_configuration_summary(conf_or_container):
         return _escrow
 
     lines = []
-    for idx, data_encryption_stratum in enumerate(conf_or_container["data_encryption_strata"], start=1):
-        lines.append("Data encryption layer %d: %s" % (idx, data_encryption_stratum["data_encryption_algo"]))
+    for idx, data_encryption_stratum in enumerate(
+        conf_or_container["data_encryption_strata"], start=1
+    ):
+        lines.append(
+            "Data encryption layer %d: %s"
+            % (idx, data_encryption_stratum["data_encryption_algo"])
+        )
         lines.append("  Key encryption layers:")
-        for idx2, key_encryption_stratum in enumerate(data_encryption_stratum["key_encryption_strata"], start=1):
+        for idx2, key_encryption_stratum in enumerate(
+            data_encryption_stratum["key_encryption_strata"], start=1
+        ):
             key_escrow = key_encryption_stratum["key_escrow"]
             escrow_id = _get_escrow_identifier(key_escrow)
-            lines.append("    %s (by %s)" % (key_encryption_stratum["key_encryption_algo"], escrow_id))
+            lines.append(
+                "    %s (by %s)"
+                % (key_encryption_stratum["key_encryption_algo"], escrow_id)
+            )
         lines.append("  Signatures:")
-        for idx3, data_signature in enumerate(data_encryption_stratum["data_signatures"], start=1):
+        for idx3, data_signature in enumerate(
+            data_encryption_stratum["data_signatures"], start=1
+        ):
             signature_escrow = data_signature["signature_escrow"]
             escrow_id = _get_escrow_identifier(signature_escrow)
-            lines.append("    %s/%s (by %s)" % (data_signature["message_prehash_algo"],
-                                                      data_signature["signature_algo"], escrow_id))
+            lines.append(
+                "    %s/%s (by %s)"
+                % (
+                    data_signature["message_prehash_algo"],
+                    data_signature["signature_algo"],
+                    escrow_id,
+                )
+            )
     result = "\n".join(lines) + "\n"
     return result

@@ -230,7 +230,9 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
         max_duration_s: int,
     ):
         super().__init__(max_duration_s=max_duration_s)
-        assert isinstance(tarfile_aggregator, TarfileRecordsAggregator), tarfile_aggregator
+        assert isinstance(
+            tarfile_aggregator, TarfileRecordsAggregator
+        ), tarfile_aggregator
         self._tarfile_aggregator = tarfile_aggregator
         self._sensor_name = sensor_name
         self._lock = threading.Lock()
@@ -272,7 +274,9 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
             self._current_dataset or not self._current_start_time
         )  # INVARIANT of our system!
         assert isinstance(data_dict, dict), data_dict
-        logger.debug("New data added to %s json builder: %s", self._sensor_name, data_dict)
+        logger.debug(
+            "New data added to %s json builder: %s", self._sensor_name, data_dict
+        )
         self._notify_aggregation_operation()
         self._current_dataset.append(data_dict)
 
@@ -309,7 +313,9 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
     def _offloaded_run_task(self):
         """This function is meant to be called by secondary thread, to fetch and store data."""
         try:
-            assert self._task_func  # Sanity check, else _offloaded_run_task() should have been overridden
+            assert (
+                self._task_func
+            )  # Sanity check, else _offloaded_run_task() should have been overridden
             result = self._task_func()
             self._offloaded_add_data(result)
         except Exception:

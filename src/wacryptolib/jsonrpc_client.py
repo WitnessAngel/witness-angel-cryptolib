@@ -9,8 +9,12 @@ from wacryptolib.utilities import dump_to_json_str, load_from_json_str
 logger = logging.getLogger(__name__)
 
 
-_exception_classes = StatusSlugsMapper.gather_exception_subclasses(builtins, parent_classes=[Exception])
-status_slugs_to_builtins_mapper = StatusSlugsMapper(_exception_classes, fallback_exception_class=Exception)
+_exception_classes = StatusSlugsMapper.gather_exception_subclasses(
+    builtins, parent_classes=[Exception]
+)
+status_slugs_to_builtins_mapper = StatusSlugsMapper(
+    _exception_classes, fallback_exception_class=Exception
+)
 
 
 def status_slugs_response_error_handler(exc):
@@ -23,7 +27,9 @@ def status_slugs_response_error_handler(exc):
     if error_data:
         status_slugs = error_data["status_slugs"]
         status_message = error_data["message_untranslated"]
-        exception_class = status_slugs_to_builtins_mapper.get_closest_exception_class_for_status_slugs(status_slugs)
+        exception_class = status_slugs_to_builtins_mapper.get_closest_exception_class_for_status_slugs(
+            status_slugs
+        )
         raise exception_class(status_message) from exc
     raise exc from None
 
@@ -82,5 +88,7 @@ class JsonRpcProxy(ServerBase):
         # if len(args) == 1 and isinstance(args[0], collections.Mapping):
         #    args = dict(args[0])
 
-        logger.info("Initiating remote call '%s()' to server %s", method_name, self._url)
+        logger.info(
+            "Initiating remote call '%s()' to server %s", method_name, self._url
+        )
         return self.send_request(method_name, is_notification, args or kwargs)

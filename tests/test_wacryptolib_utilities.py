@@ -17,7 +17,9 @@ from wacryptolib.utilities import (
     dump_to_json_file,
     load_from_json_file,
     generate_uuid0,
-    SUPPORTED_HASH_ALGOS, hash_message)
+    SUPPORTED_HASH_ALGOS,
+    hash_message,
+)
 
 
 def test_check_datetime_is_tz_aware():

@@ -16,7 +16,8 @@ from wacryptolib.container import (
     ContainerStorage,
     extract_metadata_from_container,
     ContainerBase,
-    get_encryption_configuration_summary)
+    get_encryption_configuration_summary,
+)
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_asymmetric_keypair
@@ -29,8 +30,7 @@ SIMPLE_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP",
-                    key_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
                 )
             ],
             data_signatures=[
@@ -51,8 +51,7 @@ COMPLEX_CONTAINER_CONF = dict(
             data_encryption_algo="AES_EAX",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP",
-                    key_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
                 )
             ],
             data_signatures=[],
@@ -61,8 +60,7 @@ COMPLEX_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP",
-                    key_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
                 )
             ],
             data_signatures=[
@@ -77,12 +75,10 @@ COMPLEX_CONTAINER_CONF = dict(
             data_encryption_algo="CHACHA20_POLY1305",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP",
-                    key_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
                 ),
                 dict(
-                    key_encryption_algo="RSA_OAEP",
-                    key_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
                 ),
             ],
             data_signatures=[
@@ -280,26 +276,32 @@ def test_get_encryption_configuration_summary():
 
     summary = get_encryption_configuration_summary(SIMPLE_CONTAINER_CONF)
 
-    assert summary == textwrap.dedent("""\
+    assert summary == textwrap.dedent(
+        """\
         Data encryption layer 1: AES_CBC
           Key encryption layers:
             RSA_OAEP (by local device)
           Signatures:
             SHA256/DSA_DSS (by local device)
-            """)  # Ending by newline!
+            """
+    )  # Ending by newline!
 
     container = encrypt_data_into_container(
-            data=data, conf=SIMPLE_CONTAINER_CONF, keychain_uid=None, metadata=None)
+        data=data, conf=SIMPLE_CONTAINER_CONF, keychain_uid=None, metadata=None
+    )
     summary2 = get_encryption_configuration_summary(container)
     assert summary2 == summary  # Identical summary for conf and generated containers!
 
     # Simulate a conf with remote escrow webservices
 
     CONF_WITH_ESCROW = copy.deepcopy(COMPLEX_CONTAINER_CONF)
-    CONF_WITH_ESCROW["data_encryption_strata"][0]["key_encryption_strata"][0]["key_escrow"] = dict(url="http://www.mydomain.com/json")
+    CONF_WITH_ESCROW["data_encryption_strata"][0]["key_encryption_strata"][0][
+        "key_escrow"
+    ] = dict(url="http://www.mydomain.com/json")
 
     summary = get_encryption_configuration_summary(CONF_WITH_ESCROW)
-    assert summary == textwrap.dedent("""\
+    assert summary == textwrap.dedent(
+        """\
         Data encryption layer 1: AES_EAX
           Key encryption layers:
             RSA_OAEP (by www.mydomain.com)
@@ -316,19 +318,27 @@ def test_get_encryption_configuration_summary():
           Signatures:
             SHA3_256/RSA_PSS (by local device)
             SHA512/ECC_DSS (by local device)
-            """)  # Ending by newline!
+            """
+    )  # Ending by newline!
 
     _public_key = generate_asymmetric_keypair(key_type="RSA_OAEP")["public_key"]
-    with patch.object(JsonRpcProxy, 'get_public_key', return_value=_public_key, create=True) as mock_method:
+    with patch.object(
+        JsonRpcProxy, "get_public_key", return_value=_public_key, create=True
+    ) as mock_method:
         container = encrypt_data_into_container(
-                data=data, conf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
+            data=data, conf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None
+        )
         summary2 = get_encryption_configuration_summary(container)
-        assert summary2 == summary  # Identical summary for conf and generated containers!
+        assert (
+            summary2 == summary
+        )  # Identical summary for conf and generated containers!
 
     # Test unknown escrow structure
 
     CONF_WITH_BROKEN_ESCROW = copy.deepcopy(SIMPLE_CONTAINER_CONF)
-    CONF_WITH_BROKEN_ESCROW["data_encryption_strata"][0]["key_encryption_strata"][0]["key_escrow"] = dict(abc=33)
+    CONF_WITH_BROKEN_ESCROW["data_encryption_strata"][0]["key_encryption_strata"][0][
+        "key_escrow"
+    ] = dict(abc=33)
 
     with pytest.raises(ValueError, match="Unrecognized key escrow"):
         get_encryption_configuration_summary(CONF_WITH_BROKEN_ESCROW)

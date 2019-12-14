@@ -4,6 +4,12 @@ Witness Angel Cryptolib
 .. image:: https://travis-ci.com/WitnessAngel/witness-angel-cryptolib.svg?branch=master
     :target: https://travis-ci.com/WitnessAngel/witness-angel-cryptolib
 
+.. image:: https://readthedocs.org/projects/witness-angel-cryptolib/badge/?version=latest&style=flat
+    :target: https://witness-angel-cryptolib.readthedocs.io/en/latest/
+
+
+`Read full documentation here! <https://witness-angel-cryptolib.readthedocs.io/en/latest/>`_
+
 This lib gathers utilities to generate and store cryptographic keys, and encrypt/decrypt/sign container, for the
 Witness Angel system.
 

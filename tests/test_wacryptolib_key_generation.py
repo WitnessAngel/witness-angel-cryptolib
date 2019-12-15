@@ -55,6 +55,9 @@ def test_rsa_asymmetric_key_generation():
             keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
                 key_type=key_type, **extra_parameters
             )
+            assert isinstance(keypair["private_key"], bytes), keypair
+            assert isinstance(keypair["public_key"], bytes), keypair
+
             key = RSA.import_key(keypair["private_key"])
             assert isinstance(key, RSA.RsaKey)
 
@@ -73,6 +76,9 @@ def test_dsa_asymmetric_key_generation():
         keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
             key_type="DSA_DSS", **extra_parameters
         )
+        assert isinstance(keypair["private_key"], bytes), keypair
+        assert isinstance(keypair["public_key"], bytes), keypair
+
         key = DSA.import_key(keypair["private_key"])
         assert isinstance(key, DSA.DsaKey)
 
@@ -89,6 +95,9 @@ def test_ecc_asymmetric_key_generation():
         keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
             key_type="ECC_DSS", **extra_parameters
         )
+        assert isinstance(keypair["private_key"], bytes), keypair
+        assert isinstance(keypair["public_key"], bytes), keypair
+
         key = ECC.import_key(keypair["private_key"])
         assert isinstance(key, ECC.EccKey)
 

@@ -163,6 +163,7 @@ def generate_free_keypair_for_least_provisioned_key_type(
         (key_storage.get_free_keypairs_count(key_type), key_type)
         for key_type in key_types
     ]
+    logger.debug("Stats of free keys: %s", str(free_keys_counts))
 
     (count, key_type) = min(free_keys_counts)
 

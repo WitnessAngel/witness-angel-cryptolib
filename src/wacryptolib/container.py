@@ -277,7 +277,8 @@ class ContainerReader(ContainerBase):
             "Decryption authorization request result: %s",
             request_result["response_message"],
         )
-
+        # We attempt decryption whatever the result of request_decryption_authorization(), since a previous
+        # decryption authorization might still be valid
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
             keychain_uid=keychain_uid,
             encryption_algo=key_encryption_algo,

@@ -1,93 +1,228 @@
-import win32api
-import wmi
-import win32con
+from sys import platform as _platform
 from pathlib import Path
+from pathlib import PurePath
 from wacryptolib.utilities import dump_to_json_file
 from wacryptolib.utilities import generate_uuid0
 import sys
 
 
-
 def list_available_key_devices() -> list:
-    """Returns a list of (key_device) dictionaries representing mounted partitions of USB keys (or other mobile storage devices).
-
-    Each "key_device" entry has keys 
-    "path" (str, mount point on filesystem), 
-    "label" (str, possibly empty, label of the partition),
-    "format" (str lowercase, like "ext2", "fat32" etc), 
-    "size" (in bytes, of the partition), 
-    and metadata (dict, or None if partition
-    has no ".key_storage/.metadata.json" file at its root.
-    For the format of metadata dict, see initialize_key_device() function.
     """
-   
-   
-            
+
+*The function detects the operating system of the machine to call the correct version
+
+*Returns a list of usb_dev dictionaries representing mounted partitions of USB keys.
+
+    For each USB device, it collects information:
+- "path": character string, mount point on the file system.
+- "label": character string, possibly empty, partition label
+- "format": lowercase character string, such as "ext2", "fat32" ...
+- "size": in bytes
+
+* Also, this function must check if each USB is initialized by the metadata included in ".key_storage / .metadata.json" through the search for this file.
+If the USB device is not initialized, we call the initialize_key_device() function
+    """
+    if _platform == "linux" or _platform == "linux2":
+        # linux
+        return _list_available_key_devices_linux()
+
+    elif _platform == "darwin":
+        # MAC OS X
+        return _list_available_key_devices_linux()
+
+    elif _platform == "win32":
+        # Windows
+        return _list_available_key_devices_win32()
+
+    elif _platform == "win64":
+        # Windows 64-bit
+        return _list_available_key_devices_win32()
+
+
+def _list_available_key_devices_win32():
+    # widows import
+    import pywintypes
+    import win32api
+    import wmi
+    import win32con
+
     usb_dev_list = []
-    for drive in wmi.WMI().Win32_DiskDrive(): 
-        pnp_dev_id = drive.PNPDeviceID.split('\\') 
-        
-        if (pnp_dev_id[0]=='USBSTOR'): # examples :'USBSTOR' for "USB key" # 
+    for drive in wmi.WMI().Win32_DiskDrive():
+        pnp_dev_id = drive.PNPDeviceID.split("\\")
+
+        if pnp_dev_id[0] == "USBSTOR":  # examples :'USBSTOR' for "USB key" #
             usb_dev = {}
-            usb_dev['Drive_type'] = pnp_dev_id[0]#type like 'USBSTOR' 
-            for partition in drive.associators("Win32_DiskDriveToDiskPartition"): 
-                for logical_disk in partition.associators("Win32_LogicalDiskToPartition"): 
-                    if drive.Size != None: 
+            usb_dev["drive_type"] = pnp_dev_id[0]  # type like 'USBSTOR'
+            for partition in drive.associators("Win32_DiskDriveToDiskPartition"):
+                for logical_disk in partition.associators(
+                    "Win32_LogicalDiskToPartition"
+                ):
+                    if drive.Size != None:
                         logical_address = logical_disk.Caption
-                        # The path like : 'E:' 
-                        usb_dev['path']  = logical_address
-                        #'BOURICHI' or '' (!!empty) 
-                        usb_dev['label'] = win32api.GetVolumeInformation(logical_disk.Caption + "\\")[0]
-                        # Size like : 31000166400  
-                        usb_dev['size'] = int(partition.Size) 
-                        # Format like :'FAT32' 
-                        usb_dev['format'] = str(logical_disk.FileSystem)
+                        # The path like : 'E:'
+                        usb_dev["path"] = logical_address
+                        #'BOURICHI' or '' (!!empty)
+                        usb_dev["label"] = str(
+                            win32api.GetVolumeInformation(logical_disk.Caption + "\\")[
+                                0
+                            ]
+                        )
+                        # Size like : 31000166400
+                        usb_dev["size"] = int(partition.Size)
+                        # Format like :'FAT32'
+                        usb_dev["format"] = (str(logical_disk.FileSystem)).lower()
                         # check if there is a directory ".key_storage" in the key storage
-                        if not Path(usb_dev['path']+"\.key_storage").exists():
-                            initialize_key_device(usb_dev, 'akram')
-                        usb_dev_list.append(usb_dev) 
-                        
-                    else: 
+
+                        if not Path(
+                            usb_dev["path"] + "\.key_storage\.metadata.json"
+                        ).exists():
+                            _initialize_key_device_win32(usb_dev, "akram")
+                        else:
+                            print(
+                                "Information device in: '"
+                                + usb_dev["path"]
+                                + "' -device is already initialized"
+                            )
+                        usb_dev_list.append(usb_dev)
+                    else:
                         pass
-    print(usb_dev_list)
-
-                      
-    
-   
+    return usb_dev_list
 
 
-def initialize_key_device(key_device: dict, user: str):
+def _initialize_key_device_win32(usb_dev: dict, user: str):
     """
+    for Windows OS
     Creates a HIDDEN (if possible, eg. at least on fat32/ntfs) ".key_storage/" folder in partition represented by "key_device",
     and .metadata.json file inside, which contains fields "uuid" (autogenerated uuid thanks to wacryptolib function) and "user" as passed as argument.
-	
+    
     A RuntimError is raised if key_device was already initialized.
+    * The argument "user" and "uuid" are the metadata that will be included in the detected USB (will be inserted in the list that will be included in the .starage_key / .metadata.json file.
+    * "Uuid" is returned by a predefined function in the wacryptolib library: generate_uuid0
     """
-    if Path(key_device['path']).exists():
-        hidden_folder =key_device['path']+"\.key_storage"
-        hidden_file = hidden_folder + '\.metadata.json'
-        try:
-            if Path(hidden_folder).exists():
-                raise RuntimeError("File metadata.json already exists")
-            else:
+    import pywintypes
+    import win32api
+    import win32.lib.win32con as win32con
+
+    try:
+        if Path(usb_dev["path"]).exists() and (usb_dev["path"] != ""):
+            hidden_folder = usb_dev["path"] + "\.key_storage"
+            hidden_file = hidden_folder + "\.metadata.json"
+
+            if not Path(hidden_folder).exists():
                 Path(hidden_folder).mkdir()
                 Path(hidden_file).touch()
-        except RuntimeError as err:
-            print(err.args)
-            print('key_device was already initialized', key_device['label'])
-            raise
-            
+            else:
+                Path(hidden_file).touch()
+
+            metadata = {}
+            # create like : {'uuid': UUID('0e7ee05d-07ad-75bc-c1f9-05db3e0680ca'), 'user': 'John Doe'}
+            metadata["uuid"] = generate_uuid0()
+            try:
+                if user == "":
+                    raise RuntimeError("user name not defined")
+                else:
+                    metadata["user"] = user
+            except RuntimeError as err:
+                print(err.args)
+
+            dump_to_json_file(hidden_file, metadata)
+            win32api.SetFileAttributes(hidden_folder, win32con.FILE_ATTRIBUTE_HIDDEN)
+            win32api.SetFileAttributes(hidden_file, win32con.FILE_ATTRIBUTE_HIDDEN)
+            print(
+                "Information device in: "
+                + usb_dev["path"]
+                + " - metadata installed in device "
+            )
+        else:
+            raise RuntimeError("'" + usb_dev["path"] + " : This path doesn't exist")
+    except RuntimeError as erreur_path:
+        print(erreur_path.args)
+
+
+def _list_available_key_devices_linux():
+    # linux import
+    import pyudev
+    import psutil
+
+    context = pyudev.Context()
+    usb_dev_list = []
+    removable = [
+        device
+        for device in context.list_devices(subsystem="block", DEVTYPE="disk")
+        if device.attributes.asstring("removable") == "1"
+    ]
+    for device in removable:
+        partitions = [
+            device.device_node
+            for device in context.list_devices(
+                subsystem="block", DEVTYPE="partition", parent=device
+            )
+        ]
+        # print("All removable partitions: {}".format(", ".join(partitions)))
+        # print("Mounted removable partitions:")
+        for p in psutil.disk_partitions():
+            # check is device is mounted
+            if p.device in partitions:
+                key_device = {}
+                # print("  {}: {}".format(p.device, p.mountpoint))
+                key_device["drive_type"] = "USBSTOR"
+                #'label': 'UBUNTU 20_0'
+                key_device["label"] = str(PurePath(p.mountpoint).name)
+                #'path': '/media/akram/UBUNTU 20_0',
+                key_device["path"] = p.mountpoint
+                #'size': 30986469376
+                key_device["size"] = psutil.disk_usage("/media/akram/UBUNTU 20_0").total
+                #'format': 'vfat'
+                key_device["format"] = p.fstype
+                # partition': '/dev/sda1'
+                key_device["partition"] = p.device
+                # The path like : 'E:'
+                if not Path(
+                    key_device["path"] + "/.key_storage/.metadata.json"
+                ).exists():
+                    _initialize_key_device_linux(key_device, "John Doe")
+                else:
+                    print(
+                        "Information device in: "
+                        + key_device["path"]
+                        + " -device is already initialized"
+                    )
+                usb_dev_list.append(key_device)
+
+            else:
+                pass
+        return usb_dev_list
+
+
+def _initialize_key_device_linux(key_device: dict, user: str):
+    """
+    for Linux OS
+    Creates a HIDDEN (if possible, eg. at least on fat32/ntfs) ".key_storage/" folder in partition represented by "key_device",
+    and .metadata.json file inside, which contains fields "uuid" (autogenerated uuid thanks to wacryptolib function) and "user" as passed as argument.
+    
+    A RuntimError is raised if key_device was already initialized.
+    * The argument "user" and "uuid" are the metadata that will be included in the detected USB (will be inserted in the list that will be included in the .starage_key / .metadata.json file.
+    * "Uuid" is returned by a predefined function in the wacryptolib library: generate_uuid0
+    """
+    if Path(key_device["path"]).exists() and (key_device["path"] != ""):
+        hidden_folder = key_device["path"] + "/.key_storage"
+        hidden_file = hidden_folder + "/.metadata.json"
+        if not Path(hidden_folder).exists():
+            Path(hidden_folder).mkdir()
+            Path(hidden_file).touch()
+        else:
+            Path(hidden_file).touch()
+
         metadata = {}
-        #create like : {'uuid': UUID('0e7ee05d-07ad-75bc-c1f9-05db3e0680ca'), 'user': 'John Doe'}
-        metadata['uuid']=generate_uuid0()
-        metadata['user']= "John Doe"
-        
+        # create uuid like : {'uuid': UUID('0e7ee05d-07ad-75bc-c1f9-05db3e0680ca'), 'user': 'John Doe'}
+        metadata["uuid"] = generate_uuid0()
+        # generate_uuid0()
+        metadata["user"] = user
         dump_to_json_file(hidden_file, metadata)
-        win32api.SetFileAttributes(hidden_folder,win32con.FILE_ATTRIBUTE_HIDDEN)
-        win32api.SetFileAttributes(hidden_file,win32con.FILE_ATTRIBUTE_HIDDEN)
-        print(key_device['path']+" : metadata included in device ")
+        print(
+            "Information device in: "
+            + key_device["path"]
+            + " - metadata installed in device "
+        )
     else:
-        print(key_device['path']+" : This path doesn't exist")
-
-
-list_available_key_devices()
+        print("'" + key_device["path"] + ", : This path doesn't exist")

@@ -12,12 +12,15 @@ def test_list_available_key_devices():
     assert isinstance(usb_dev_list, list)
     for usb_dev in usb_dev_list:
         assert isinstance(usb_dev, dict) or isinstance(usb_dev, None)
-        assert isinstance(usb_dev["path"], str)
+
+        assert isinstance(usb_dev["path"], str)  # FIXME regroup checks for each field
+        assert Path(usb_dev["path"]).exists, "This path doesn't exist"
+
         assert isinstance(usb_dev["label"], str)
         assert isinstance(usb_dev["size"], int)
         assert isinstance(usb_dev["format"], str)
         assert isinstance(usb_dev["drive_type"], str)
-        assert Path(usb_dev["path"]).exists, "This path doesn't exist"
+
         assert usb_dev["size"] >= 0, "must be greater or equal to zero"
         assert usb_dev["drive_type"] == "USBSTOR"
         assert (
@@ -27,11 +30,13 @@ def test_list_available_key_devices():
         )
 
 
-def test_initialize_key_device():
+def test_initialize_key_device(temp_path):  # FIXME use https://docs.pytest.org/en/latest/tmpdir.html#the-tmp-path-fixture
+
+    temp_path = str(temp_path)  # temp_path is a Pathlib.Path, more powerful but tricky
 
     key_device1 = {
         "Drive_type": "USBSTOR",
-        "path": "I:",
+        "path": "I:",  # TODO use temp_path
         "label": "TOSHIBA",
         "size": 31000166400,
         "format": "fat32",
@@ -53,12 +58,12 @@ def test_initialize_key_device():
         "format": "fat32",
     }
 
-    _initialize_key_device_win32(key_device1, "Michel Dupont")
+    _initialize_key_device_win32(key_device1, "Michel Dupont")  # TODO use public API initialize...()
     _initialize_key_device_win32(key_device2, "Michel Dupont")
     _initialize_key_device_win32(key_device3, "")
 
 
-# function commented for the test in the Linux operating system
+# function commented for the test in the Linux operating system  # FIXME tests must be generic!
 """
 def test_initialize_key_device():
 

@@ -5,13 +5,13 @@ from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 from wacryptolib.utilities import generate_uuid0
 
 
-def list_available_key_devices() -> list:  # FIXME use the same docstring format as others of this repository (1 line + 1 block)
+def list_available_key_devices(): 
     """
-    Returns a list of dictionaries representing mounted partitions of USB keys.
+    Generate a list of dictionaries representing mounted partitions of USB keys.
 
-    :return: dictionaries have at least these fields:"path","label","format","size","is_initialized"
-
-    """
+    :return: ( list ) : Dictionaries have at least these fields:'path','label','format','size','is_initialized'.
+    
+    The linux environment has an additional field which is 'partition'."""
     if sys_platform == "win32":  # All Windows versions
         return _list_available_key_devices_win32()
     else:  # We assume a POSIX compatible OS
@@ -20,8 +20,9 @@ def list_available_key_devices() -> list:  # FIXME use the same docstring format
 
 def initialize_key_device(key_device: dict, user: str):
     """
-    :param key_device:mounted partitions of USB keys.
-    :param user:user name."""
+    key_device ( dict ) - mounted partitions of USB keys.
+    
+    user ( str )        - user name."""
 
     if sys_platform == "win32":  # All Windows versions
         return _initialize_key_device_win32(key_device=key_device, user=user)
@@ -30,11 +31,38 @@ def initialize_key_device(key_device: dict, user: str):
 
 
 def _is_key_device_initialized(key_device: dict):
+    """
+    Check if a key device is initialized.
+    
+    key_device ( dict ) -mounted partitions of USB keys.
+    
+    :return: ( bool ) : If 'True', the key device is initialized. Otherwise, it is not initialized."""
+    if sys_platform == "win32":  # All Windows versions
+        return _is_key_device_initialized_win32(key_device)
+    else:  # We assume a POSIX compatible OS
+        return _is_key_device_initialized_linux(key_device)
+
+def _is_key_device_initialized_win32(key_device: dict):
+    
     if not Path(key_device["path"] + "\.key_storage\.metadata.json").exists():
 
         return False
     else:
-        meta = load_from_json_file("D:\.key_storage\.metadata.json")
+        meta = load_from_json_file(key_device["path"]+"\.key_storage\.metadata.json")
+        user = meta["user"]
+        id_uuid = meta["uuid"]
+        if isinstance(user, str) and user != "" and id_uuid != None:
+            return True
+        else:
+            raise ValueError("Username and uuid are not in the correct form")
+
+def _is_key_device_initialized_linux(key_device: dict):
+    
+    if not Path(key_device["path"] + "/.key_storage/.metadata.json").exists():
+
+        return False
+    else:
+        meta = load_from_json_file(key_device["path"]+"/.key_storage/.metadata.json")
         user = meta["user"]
         id_uuid = meta["uuid"]
         if isinstance(user, str) and user != "" and id_uuid != None:
@@ -108,11 +136,13 @@ def _list_available_key_devices_linux():  # Rename as "xxx_posix" ?
                 )  # E.g: 'UBUNTU 20_0'
                 key_device["path"] = p.mountpoint  # E.g: '/media/akram/UBUNTU 20_0',
                 key_device["size"] = psutil.disk_usage(
-                    "/media/akram/UBUNTU 20_0"
+                    key_device["path"]
                 ).total  # E.g: 30986469376
                 key_device["format"] = p.fstype  # E.g: 'vfat'
                 key_device["partition"] = p.device  # E.g: '/dev/sda1'
-                key_device["is_initialized"] = _is_key_device_initialized()
+                key_device["is_initialized"] = _is_key_device_initialized(
+                    key_device
+                )  # E.g 'False'
                 usb_dev_list.append(key_device)
 
             else:
@@ -121,12 +151,12 @@ def _list_available_key_devices_linux():  # Rename as "xxx_posix" ?
 
 
 def _initialize_key_device_win32(key_device: dict, user: str):
-
+    
     import win32api
+    import win32.lib.win32con as win32con
+    
 
     assert isinstance(user, str) and user, repr(user)
-
-    # TODO: if already initialized (use common function), raise RuntimeError
 
     if key_device["is_initialized"] == False:
         hidden_folder = key_device["path"] + "\.key_storage"
@@ -146,7 +176,7 @@ def _initialize_key_device_win32(key_device: dict, user: str):
         win32api.SetFileAttributes(hidden_file, win32con.FILE_ATTRIBUTE_HIDDEN)
         key_device["is_initialized"] = True
     else:
-        raise RuntimeError("'" + key_device["label"] + " : key is already initialized")
+        raise RuntimeError("'" + key_device["path"] + " : key is already initialized")
 
 
 def _initialize_key_device_linux(key_device: dict, user: str):
@@ -167,10 +197,7 @@ def _initialize_key_device_linux(key_device: dict, user: str):
         metadata["user"] = user
         dump_to_json_file(hidden_file, metadata)
         key_device["is_initialized"] = True
-        print(
-            "Information device in: "
-            + key_device["path"]
-            + " - metadata installed in device "
-        )
     else:
-        raise RuntimeError("'" + key_device["label"] + " : key is already initialized")
+        raise RuntimeError("'" + key_device["path"] + " : key is already initialized")
+        
+        

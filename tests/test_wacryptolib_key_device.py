@@ -1,10 +1,7 @@
-import pytest
 from pathlib import Path
 from wacryptolib.key_device import list_available_key_devices
-from wacryptolib.key_device import _initialize_key_device_win32
+from wacryptolib.key_device import initialize_key_device
 
-# import commented for the test in the Linux operating system
-# from wacryptolib.key_device import _initialize_key_device_linux
 
 
 def test_list_available_key_devices():
@@ -13,7 +10,7 @@ def test_list_available_key_devices():
     for usb_dev in usb_dev_list:
         assert isinstance(usb_dev, dict) or isinstance(usb_dev, None)
 
-        assert isinstance(usb_dev["path"], str)  # FIXME regroup checks for each field
+        assert isinstance(usb_dev["path"], str)  
         assert Path(usb_dev["path"]).exists, "This path doesn't exist"
 
         assert isinstance(usb_dev["label"], str)
@@ -30,85 +27,38 @@ def test_list_available_key_devices():
         )
 
 
-def test_initialize_key_device(temp_path):  # FIXME use https://docs.pytest.org/en/latest/tmpdir.html#the-tmp-path-fixture
+def test_initialize_key_device(
+    tmp_path
+):  
 
-    temp_path = str(temp_path)  # temp_path is a Pathlib.Path, more powerful but tricky
-
-    key_device1 = {
-        "Drive_type": "USBSTOR",
-        "path": "I:",  # TODO use temp_path
-        "label": "TOSHIBA",
-        "size": 31000166400,
-        "format": "fat32",
-    }
-    # with empty path
-    key_device2 = {
-        "Drive_type": "USBSTOR",
-        "path": "",
-        "label": "Path empty",
-        "size": 31000166400,
-        "format": "fat32",
-    }
-    # with empty label
-    key_device3 = {
-        "Drive_type": "USBSTOR",
-        "path": "I:",
-        "label": "TOSHIBA",
-        "size": 31000166400,
-        "format": "fat32",
-    }
-
-    _initialize_key_device_win32(key_device1, "Michel Dupont")  # TODO use public API initialize...()
-    _initialize_key_device_win32(key_device2, "Michel Dupont")
-    _initialize_key_device_win32(key_device3, "")
-
-
-# function commented for the test in the Linux operating system  # FIXME tests must be generic!
-"""
-def test_initialize_key_device():
+    temp_path = tmp_path / "sub1"
+    temp_path.mkdir()
+    temp_path=str(temp_path)
 
     key_device1 = {
-        "drive_type": "USBSTOR",
-        "label": "UBUNTU",
-        "path": "/media/akram/UBUNTU",
-        "size": 30986469376,
-        "format": "vfat",
-        "partition": "/dev/sdb1",
-    }
-    # with empty path
-    key_device2 = {
-        "drive_type": "USBSTOR",
-        "label": "UBUNTU 20_0",
-        "path": "",
-        "size": 309864,
-        "format": "vfat",
-        "partition": "/dev/sdb1",
-    }
-    # with empty label
-    key_device3 = {
-        "drive_type": "USBSTOR",
+        "Drive_type": "USBSTOR",
+        "path": temp_path,  
         "label": "TOSHIBA",
-        "path": "/media/akram/DEVICE1",
-        "size": 309864,
-        "format": "vfat",
-        "partition": "/dev/sdb1",
+        "size": 31000166400,
+        "format": "fat32",
+        "is_initialized":False
     }
-
-    # device already initialised, meta_data exist
-    key_device4 = {
-        "drive_type": "USBSTOR",
-        "label": "DEVICE3",
-        "path": "",
-        "size": 30986469376,
+     # with empty label
+    temp_path = tmp_path / "sub2"
+    temp_path.mkdir()
+    temp_path=str(temp_path)
+    key_device2 = {
+        "Drive_type": "USBSTOR",
+        "path": temp_path,
+        "label": "TOSHIBA",
+        "size": 31000166400,
         "format": "vfat",
-        "partition": "/dev/sdb1",
+        "is_initialized":False
     }
+    
 
-    _initialize_key_device_linux(key_device1, "Michel Dupont")
-    _initialize_key_device_linux(key_device2, "Michel Dupont")
-    _initialize_key_device_linux(key_device3, "Michel Dupont")
-    _initialize_key_device_linux(key_device4, "")
+    initialize_key_device(key_device1, "Michel Dupont")
+    initialize_key_device(key_device2, "Michel Dupont")
 
-"""
 
-test_list_available_key_devices()
+   

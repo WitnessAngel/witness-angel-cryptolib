@@ -22,6 +22,7 @@ from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage
+from wacryptolib.utilities import load_from_json_bytes
 
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -42,7 +43,6 @@ SIMPLE_CONTAINER_CONF = dict(
         )
     ]
 )
-
 
 COMPLEX_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -96,12 +96,91 @@ COMPLEX_CONTAINER_CONF = dict(
     ]
 )
 
+SHAMIR_CONTAINER_CONF = dict(
+    data_encryption_strata=[
+        dict(
+            data_encryption_algo="AES_CBC",
+            key_encryption_strata=[
+                dict(
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                ),
+                dict(
+                    key_encryption_algo="SHARED_SECRET",
+                    key_shared_secret_threshold=3,
+                    key_shared_secret_escrow=[
+                        dict(
+                            shared_encryption_algo="RSA_OAEP",
+                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
+                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                        ),
+                        dict(
+                            shared_encryption_algo="RSA_OAEP",
+                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
+                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                        ),
+                        dict(
+                            shared_encryption_algo="RSA_OAEP",
+                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
+                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                        ),
+                        dict(
+                            shared_encryption_algo="RSA_OAEP",
+                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
+                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                        ),
+                        dict(
+                            shared_encryption_algo="RSA_OAEP",
+                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
+                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                        ),
+                    ],
+                ),
+            ],
+            data_signatures=[
+                dict(
+                    message_prehash_algo="SHA256",
+                    signature_algo="DSA_DSS",
+                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                )
+            ],
+        )
+    ]
+)
+
 
 @pytest.mark.parametrize(
-    "container_conf", [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF]
+    "container_conf",
+    [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF, SHAMIR_CONTAINER_CONF],
 )
-def test_container_encryption_and_decryption(container_conf):
+def test_shamir_container(container_conf):
+    data = b"abc"  # get_random_bytes(random.randint(1, 1000))
 
+    keychain_uid = random.choice(
+        [None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")]
+    )
+
+    metadata = random.choice([None, dict(a=[123])])
+
+    container = encrypt_data_into_container(
+        data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata
+    )
+
+    key_ciphertext = container["data_encryption_strata"][0]["key_ciphertext"]
+
+    assert isinstance(key_ciphertext, bytes)
+
+    if container_conf == SHAMIR_CONTAINER_CONF:
+        key_encryption_strata = container["data_encryption_strata"][0][
+            "key_encryption_strata"
+        ][1]
+        assert (
+            len(key_encryption_strata["key_shared_secret_escrow"])
+            > key_encryption_strata["key_shared_secret_threshold"]
+        )
+        assert isinstance(load_from_json_bytes(key_ciphertext), dict)
+
+
+def test_container_encryption_and_decryption(container_conf):
     data = b"abc"  # get_random_bytes(random.randint(1, 1000))
 
     keychain_uid = random.choice(
@@ -132,7 +211,6 @@ def test_container_encryption_and_decryption(container_conf):
 
 
 def test_get_proxy_for_escrow(tmp_path):
-
     container_base1 = ContainerBase()
     proxy1 = container_base1._get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
     assert isinstance(proxy1, EscrowApi)  # Local Escrow
@@ -152,7 +230,6 @@ def test_get_proxy_for_escrow(tmp_path):
     assert isinstance(proxy2._key_storage, FilesystemKeyStorage)
 
     for container_base in (container_base1, container_base2):
-
         proxy = container_base._get_proxy_for_escrow(
             dict(url="http://example.com/jsonrpc")
         )
@@ -171,7 +248,6 @@ def test_get_proxy_for_escrow(tmp_path):
 
 
 def test_container_storage_and_executor(tmp_path, caplog):
-
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
     storage = ContainerStorage(
         encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path
@@ -270,7 +346,6 @@ def test_container_storage_and_executor(tmp_path, caplog):
 
 
 def test_get_encryption_configuration_summary():
-
     data = b"some data whatever"
 
     summary = get_encryption_configuration_summary(SIMPLE_CONTAINER_CONF)

@@ -5,7 +5,7 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union, List
 from urllib.parse import urlparse
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
@@ -16,6 +16,7 @@ from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
 )
 from wacryptolib.key_storage import DummyKeyStorage, KeyStorageBase
+from wacryptolib.shared_secret import split_bytestring_as_shamir_shares
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import (
     dump_to_json_bytes,
@@ -35,7 +36,6 @@ CONTAINER_SUFFIX = ".crypt"
 MEDIUM_SUFFIX = (
     ".medium"
 )  # To construct decrypted filename when no previous extensions are found in container filename
-
 
 DUMMY_KEY_STORAGE = DummyKeyStorage()  # Fallback storage with in-memory keys
 
@@ -159,30 +159,84 @@ class ContainerWriter(ContainerBase):
 
     def _encrypt_symmetric_key(
         self, keychain_uid: uuid.UUID, symmetric_key_data: bytes, conf: dict
-    ) -> dict:
+    ) -> Union[List[dict], dict]:
         assert isinstance(symmetric_key_data, bytes), symmetric_key_data
         key_encryption_algo = conf["key_encryption_algo"]
-        encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
 
-        logger.debug("Generating asymmetric key of type %r", key_encryption_algo)
-        subkey_pem = encryption_proxy.get_public_key(
-            keychain_uid=keychain_uid, key_type=key_encryption_algo
-        )
+        if key_encryption_algo == "SHARED_SECRET":  # Using Shamir
+            escrows = conf["key_shared_secret_escrow"]
+            shares_count = len(escrows)
+            threshold_count = conf["key_shared_secret_threshold"]
 
-        logger.debug(
-            "Encrypting symmetric key with asymmetric key of type %r",
-            key_encryption_algo,
-        )
-        subkey = load_asymmetric_key_from_pem_bytestring(
-            key_pem=subkey_pem, key_type=key_encryption_algo
-        )
+            logger.debug("Generating Shamir's shared secret")
 
-        key_cipherdict = encrypt_bytestring(
-            plaintext=symmetric_key_data,
-            encryption_algo=key_encryption_algo,
-            key=subkey,
-        )
-        return key_cipherdict
+            shares = split_bytestring_as_shamir_shares(
+                secret=symmetric_key_data,
+                shares_count=shares_count,
+                threshold_count=threshold_count,
+            )
+
+            logger.debug("Secret has been shared into %d escrows", shares_count)
+
+            all_encrypted_shards = self._encrypt_shard(
+                shares=shares, conf=conf, keychain_uid=keychain_uid
+            )
+
+            return all_encrypted_shards
+
+        else:  # Using Asymmetric algorithm
+
+            encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
+
+            logger.debug("Generating asymmetric key of type %r", key_encryption_algo)
+            subkey_pem = encryption_proxy.get_public_key(
+                keychain_uid=keychain_uid, key_type=key_encryption_algo
+            )
+
+            logger.debug(
+                "Encrypting symmetric key with asymmetric key of type %r",
+                key_encryption_algo,
+            )
+            subkey = load_asymmetric_key_from_pem_bytestring(
+                key_pem=subkey_pem, key_type=key_encryption_algo
+            )
+
+            key_cipherdict = encrypt_bytestring(
+                plaintext=symmetric_key_data,
+                encryption_algo=key_encryption_algo,
+                key=subkey,
+            )
+            return key_cipherdict
+
+    def _encrypt_shard(self, shares: list, conf: dict, keychain_uid: uuid.UUID) -> dict:
+        key_shared_secret_escrow = conf["key_shared_secret_escrow"]
+
+        all_encrypted_shards = {}
+        counter = 0
+        for shard in shares:
+            shard_value = shard[1]
+            conf_shard = key_shared_secret_escrow[counter]
+            shard_encryption_algo = conf_shard["shared_encryption_algo"]
+            encryption_proxy = self._get_proxy_for_escrow(conf_shard["shared_escrow"])
+
+            logger.debug("Get shard's public key")
+            subkey_pem = encryption_proxy.get_public_key(
+                keychain_uid=keychain_uid, key_type=shard_encryption_algo
+            )
+
+            logger.debug("Get shard's assymetric key")
+            subkey = load_asymmetric_key_from_pem_bytestring(
+                key_pem=subkey_pem, key_type=shard_encryption_algo
+            )
+
+            logger.debug("Encrypting shard")
+            shard_cipherdict = encrypt_bytestring(
+                plaintext=shard_value, encryption_algo=shard_encryption_algo, key=subkey
+            )
+            all_encrypted_shards[counter] = shard_cipherdict
+            counter += 1
+
+        return all_encrypted_shards
 
     def _generate_signature(
         self, keychain_uid: uuid.UUID, data_ciphertext: bytes, conf: dict

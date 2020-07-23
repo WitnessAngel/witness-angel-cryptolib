@@ -152,34 +152,6 @@ SHAMIR_CONTAINER_CONF = dict(
     "container_conf",
     [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF, SHAMIR_CONTAINER_CONF],
 )
-def test_shamir_container(container_conf):
-    data = b"abc"  # get_random_bytes(random.randint(1, 1000))
-
-    keychain_uid = random.choice(
-        [None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")]
-    )
-
-    metadata = random.choice([None, dict(a=[123])])
-
-    container = encrypt_data_into_container(
-        data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata
-    )
-
-    key_ciphertext = container["data_encryption_strata"][0]["key_ciphertext"]
-
-    assert isinstance(key_ciphertext, bytes)
-
-    if container_conf == SHAMIR_CONTAINER_CONF:
-        key_encryption_strata = container["data_encryption_strata"][0][
-            "key_encryption_strata"
-        ][1]
-        assert (
-            len(key_encryption_strata["key_shared_secret_escrow"])
-            > key_encryption_strata["key_shared_secret_threshold"]
-        )
-        assert isinstance(load_from_json_bytes(key_ciphertext), dict)
-
-
 def test_container_encryption_and_decryption(container_conf):
     data = b"abc"  # get_random_bytes(random.randint(1, 1000))
 

@@ -16,7 +16,7 @@ from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
 )
 from wacryptolib.key_storage import DummyKeyStorage, KeyStorageBase
-from wacryptolib.shared_secret import split_bytestring_as_shamir_shares
+from wacryptolib.shared_secret import split_bytestring_as_shamir_shares, recombine_secret_from_samir_shares
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import (
     dump_to_json_bytes,
@@ -290,9 +290,9 @@ class ContainerReader(ContainerBase):
             symmetric_key_data = data_encryption_stratum[
                 "key_ciphertext"
             ]  # We start fully encrypted, and unravel it
-            for key_encryption_stratum in data_encryption_stratum[
+            for key_encryption_stratum in reversed(data_encryption_stratum[
                 "key_encryption_strata"
-            ]:
+            ]):
                 symmetric_key_cipherdict = load_from_json_bytes(
                     symmetric_key_data
                 )  # We remain as bytes all along
@@ -318,27 +318,82 @@ class ContainerReader(ContainerBase):
     ):
         assert isinstance(symmetric_key_cipherdict, dict), symmetric_key_cipherdict
         key_encryption_algo = conf["key_encryption_algo"]
-        encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
 
-        keypair_identifiers = [
-            dict(keychain_uid=keychain_uid, key_type=key_encryption_algo)
-        ]
-        request_result = encryption_proxy.request_decryption_authorization(
-            keypair_identifiers=keypair_identifiers,
-            request_message="Automatic decryption authorization request",
-        )
-        logger.info(
-            "Decryption authorization request result: %s",
-            request_result["response_message"],
-        )
-        # We attempt decryption whatever the result of request_decryption_authorization(), since a previous
-        # decryption authorization might still be valid
-        symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
-            keychain_uid=keychain_uid,
-            encryption_algo=key_encryption_algo,
-            cipherdict=symmetric_key_cipherdict,
-        )
-        return symmetric_key_plaintext
+        if key_encryption_algo == "SHARED_SECRET":  # Using Shamir
+            escrows = conf["key_shared_secret_escrow"]
+            shares_count = len(escrows)
+            threshold_count = conf["key_shared_secret_threshold"]
+
+            logger.debug("Deciphering each shard")
+            shares = self._decrypt_shard(
+                keychain_uid=keychain_uid,
+                symmetric_key_cipherdict=symmetric_key_cipherdict,
+                conf=conf)
+
+            logger.debug("Recombining shards")
+            symmetric_key_plaintext = recombine_secret_from_samir_shares(shares=shares)
+
+            return symmetric_key_plaintext
+
+        else:  # Using asymmetric algorithm
+            encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
+
+            keypair_identifiers = [
+                dict(keychain_uid=keychain_uid, key_type=key_encryption_algo)
+            ]
+            request_result = encryption_proxy.request_decryption_authorization(
+                keypair_identifiers=keypair_identifiers,
+                request_message="Automatic decryption authorization request",
+            )
+            logger.info(
+                "Decryption authorization request result: %s",
+                request_result["response_message"],
+            )
+            # We attempt decryption whatever the result of request_decryption_authorization(), since a previous
+            # decryption authorization might still be valid
+            symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
+                keychain_uid=keychain_uid,
+                encryption_algo=key_encryption_algo,
+                cipherdict=symmetric_key_cipherdict,
+            )
+            return symmetric_key_plaintext
+
+    def _decrypt_shard(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list):
+        key_shared_secret_escrow = conf["key_shared_secret_escrow"]
+        counter = 1
+        shares = []
+        for escrow in key_shared_secret_escrow:
+            ciphered_shard = symmetric_key_cipherdict[str(counter-1)]
+            shared_encryption_algo = escrow["shared_encryption_algo"]
+            encryption_proxy = self._get_proxy_for_escrow(escrow["shared_escrow"])
+
+            keypair_identifiers = [
+                dict(keychain_uid=keychain_uid, key_type=shared_encryption_algo)
+            ]
+
+            request_result = encryption_proxy.request_decryption_authorization(
+                keypair_identifiers=keypair_identifiers,
+                request_message="Automatic decryption authorization request",
+            )
+
+            logger.info(
+                "Decryption authorization request result: %s",
+                request_result["response_message"],
+            )
+
+            # We attempt decryption whatever the result of request_decryption_authorization(), since a previous
+            # decryption authorization might still be valid
+            symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
+                keychain_uid=keychain_uid,
+                encryption_algo=shared_encryption_algo,
+                cipherdict=ciphered_shard,
+            )
+
+            share = (counter, symmetric_key_plaintext)
+            shares.append(share)
+
+            counter += 1
+        return shares
 
     def _verify_message_signature(
         self, keychain_uid: uuid.UUID, message: bytes, conf: dict

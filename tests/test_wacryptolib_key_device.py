@@ -24,6 +24,7 @@ def test_list_available_key_devices():
             (usb_dev["format"] == "fat32")
             or (usb_dev["format"] == "exfat")
             or (usb_dev["format"] == "vfat")
+            or (usb_dev["format"] == "msdos")
         )
 
 

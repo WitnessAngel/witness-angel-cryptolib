@@ -6,29 +6,52 @@ from wacryptolib.utilities import generate_uuid0
 
 
 def list_available_key_devices(): 
+
+    import psutil
+    usb_dev_list = [] 
+    if sys_platform.startswith('linux'):
+        # linux
+        check='rw,nosuid,nodev,'#start with 'rw,nosuid'
+        """E.g :
+            'opts':'rw,nosuid,nodev,relatime,uid=1000,
+        gid=1000,fmask=0022,dmask=0022,codepage=437,
+        iocharset=iso8859-1,shortname=mixed,showexec,utf8,flush,
+        errors=remount-ro'
+        """
+    elif sys_platform == "darwin":
+        # MAC OS X
+        check='rw,nosuid,local,ignore-ownership'
+        #E.g :'opts': 'rw,nosuid,local,ignore-ownership'
+
+    elif sys_platform == "win32":
+        # Windows
+        #E.g :'opts': 'rw,removable'
+        check='rw,removable'
+    else: 
+        raise RuntimeError("'" + sys_platform + " OS not spported")
     """
-    Generate a list of dictionaries representing mounted partitions of USB keys.
-
-    :return: ( list ) : Dictionaries have at least these fields:'path','label','format','size','is_initialized'.
-    
-    The linux environment has an additional field which is 'partition'."""
-    if sys_platform == "win32":  # All Windows versions
-        return _list_available_key_devices_win32()
-    else:  # We assume a POSIX compatible OS
-        return _list_available_key_devices_linux()
-
-
-def initialize_key_device(key_device: dict, user: str):
+    If all parameter is False, disk_partitions(all=False)tries to distinguish 
+    and return physical devices only (e.g. hard disks, cd-rom drives, USB keys) 
+    and ignore all others (e.g. pseudo, memory, duplicate, inaccessible filesystems)
     """
-    key_device ( dict ) - mounted partitions of USB keys.
-    
-    user ( str )        - user name."""
-
-    if sys_platform == "win32":  # All Windows versions
-        return _initialize_key_device_win32(key_device=key_device, user=user)
-    else:  # We assume a POSIX compatible OS
-        return _initialize_key_device_linux(key_device=key_device, user=user)
-
+    for p in psutil.disk_partitions(all=False):
+            if p.opts.startswith(check):
+                key_device = {}
+                key_device["opts"] = p.opts
+                key_device["drive_type"] = "USBSTOR"
+                key_device["label"] = str(
+                    PurePath(p.mountpoint).name
+                )  # E.g: 'UBUNTU 20_0'
+                key_device["path"] = p.mountpoint  # E.g: '/media/akram/UBUNTU 20_0',
+                key_device["size"] = psutil.disk_usage(
+                    key_device["path"]
+                ).total  # E.g: 30986469376
+                key_device["format"] = p.fstype.lower()  # E.g: 'vfat'
+                key_device["partition"] = p.device  # E.g: '/dev/sda1'
+                key_device["is_initialized"] = _is_key_device_initialized(key_device)  # E.g 'False'
+                key_device["mountpoint"] = p.mountpoint
+                usb_dev_list.append(key_device)
+    return usb_dev_list
 
 def _is_key_device_initialized(key_device: dict):
     """
@@ -39,9 +62,9 @@ def _is_key_device_initialized(key_device: dict):
     :return: ( bool ) : If 'True', the key device is initialized. Otherwise, it is not initialized."""
     if sys_platform == "win32":  # All Windows versions
         return _is_key_device_initialized_win32(key_device)
-    else:  # We assume a POSIX compatible OS
-        return _is_key_device_initialized_linux(key_device)
-
+    else:  # darwin and linux
+        return _is_key_device_initialized_posix(key_device)
+    
 def _is_key_device_initialized_win32(key_device: dict):
     
     if not Path(key_device["path"] + "\.key_storage\.metadata.json").exists():
@@ -56,7 +79,7 @@ def _is_key_device_initialized_win32(key_device: dict):
         else:
             raise ValueError("Username and uuid are not in the correct form")
 
-def _is_key_device_initialized_linux(key_device: dict):
+def _is_key_device_initialized_posix(key_device: dict):
     
     if not Path(key_device["path"] + "/.key_storage/.metadata.json").exists():
 
@@ -71,87 +94,19 @@ def _is_key_device_initialized_linux(key_device: dict):
             raise ValueError("Username and uuid are not in the correct form")
 
 
-def _list_available_key_devices_win32():
-    import pywintypes
-    import win32api
-    import wmi
-
-    usb_dev_list = []
-    for drive in wmi.WMI().Win32_DiskDrive():
-        pnp_dev_id = drive.PNPDeviceID.split("\\")
-
-        if pnp_dev_id[0] != "USBSTOR":
-            continue
-
-        for partition in drive.associators("Win32_DiskDriveToDiskPartition"):
-            for logical_disk in partition.associators("Win32_LogicalDiskToPartition"):
-                if drive.Size is None:  # FIXME when does it happen?
-                    continue
-                key_device = {}
-                key_device["drive_type"] = pnp_dev_id[0]  # type like 'USBSTOR'
-                logical_address = logical_disk.Caption
-                key_device["path"] = logical_address  # E.g. 'E:'
-                key_device["label"] = win32api.GetVolumeInformation(
-                    logical_disk.Caption + "\\"
-                )[0]
-                key_device["size"] = int(partition.Size)  # In bytes
-                key_device["format"] = logical_disk.FileSystem.lower()  # E.g 'fat32'
-                key_device["is_initialized"] = _is_key_device_initialized(
-                    key_device
-                )  # E.g 'True'
-                usb_dev_list.append(key_device)
-
-    return usb_dev_list
-
-
-def _list_available_key_devices_linux():  # Rename as "xxx_posix" ?
-
-    # TODO add these to pyproject.tml with https://python-poetry.org/docs/dependency-specification/#using-environment-markers , windows ones too
-
-    # Linux-specific imports
-    import pyudev
-    import psutil
-
-    context = pyudev.Context()
-    usb_dev_list = []
-    removable = [
-        device
-        for device in context.list_devices(subsystem="block", DEVTYPE="disk")
-        if device.attributes.asstring("removable") == "1"
-    ]
-    for device in removable:
-        partitions = [
-            device.device_node
-            for device in context.list_devices(
-                subsystem="block", DEVTYPE="partition", parent=device
-            )
-        ]
-        for p in psutil.disk_partitions():
-            # check is device is mounted
-            if p.device in partitions:
-                key_device = {}
-                key_device["drive_type"] = "USBSTOR"
-                key_device["label"] = str(
-                    PurePath(p.mountpoint).name
-                )  # E.g: 'UBUNTU 20_0'
-                key_device["path"] = p.mountpoint  # E.g: '/media/akram/UBUNTU 20_0',
-                key_device["size"] = psutil.disk_usage(
-                    key_device["path"]
-                ).total  # E.g: 30986469376
-                key_device["format"] = p.fstype  # E.g: 'vfat'
-                key_device["partition"] = p.device  # E.g: '/dev/sda1'
-                key_device["is_initialized"] = _is_key_device_initialized(
-                    key_device
-                )  # E.g 'False'
-                usb_dev_list.append(key_device)
-
-            else:
-                pass
-        return usb_dev_list
-
-
-def _initialize_key_device_win32(key_device: dict, user: str):
+def initialize_key_device(key_device: dict, user: str):
+    """
+    key_device ( dict ) - mounted partitions of USB keys.
     
+    user ( str )        - user name."""
+
+    if sys_platform == "win32":  # All Windows versions
+        return _initialize_key_device_win32(key_device=key_device, user=user)
+    else:  # We assume a POSIX compatible OS
+        return _initialize_key_device_posix(key_device=key_device, user=user)
+    
+def _initialize_key_device_win32(key_device: dict, user: str):
+    import pywintypes
     import win32api
     import win32.lib.win32con as win32con
     
@@ -179,7 +134,7 @@ def _initialize_key_device_win32(key_device: dict, user: str):
         raise RuntimeError("'" + key_device["path"] + " : key is already initialized")
 
 
-def _initialize_key_device_linux(key_device: dict, user: str):
+def _initialize_key_device_posix(key_device: dict, user: str):
 
     if key_device["is_initialized"] == False:
         hidden_folder = key_device["path"] + "/.key_storage"
@@ -199,5 +154,4 @@ def _initialize_key_device_linux(key_device: dict, user: str):
         key_device["is_initialized"] = True
     else:
         raise RuntimeError("'" + key_device["path"] + " : key is already initialized")
-        
         

@@ -16,7 +16,10 @@ from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
 )
 from wacryptolib.key_storage import DummyKeyStorage, KeyStorageBase
-from wacryptolib.shared_secret import split_bytestring_as_shamir_shares, recombine_secret_from_samir_shares
+from wacryptolib.shared_secret import (
+    split_bytestring_as_shamir_shares,
+    recombine_secret_from_samir_shares,
+)
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import (
     dump_to_json_bytes,
@@ -290,9 +293,9 @@ class ContainerReader(ContainerBase):
             symmetric_key_data = data_encryption_stratum[
                 "key_ciphertext"
             ]  # We start fully encrypted, and unravel it
-            for key_encryption_stratum in reversed(data_encryption_stratum[
-                "key_encryption_strata"
-            ]):
+            for key_encryption_stratum in reversed(
+                data_encryption_stratum["key_encryption_strata"]
+            ):
                 symmetric_key_cipherdict = load_from_json_bytes(
                     symmetric_key_data
                 )  # We remain as bytes all along
@@ -328,7 +331,8 @@ class ContainerReader(ContainerBase):
             shares = self._decrypt_shard(
                 keychain_uid=keychain_uid,
                 symmetric_key_cipherdict=symmetric_key_cipherdict,
-                conf=conf)
+                conf=conf,
+            )
 
             logger.debug("Recombining shards")
             symmetric_key_plaintext = recombine_secret_from_samir_shares(shares=shares)
@@ -358,12 +362,14 @@ class ContainerReader(ContainerBase):
             )
             return symmetric_key_plaintext
 
-    def _decrypt_shard(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list):
+    def _decrypt_shard(
+        self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list
+    ):
         key_shared_secret_escrow = conf["key_shared_secret_escrow"]
         counter = 1
         shares = []
         for escrow in key_shared_secret_escrow:
-            ciphered_shard = symmetric_key_cipherdict[str(counter-1)]
+            ciphered_shard = symmetric_key_cipherdict[str(counter - 1)]
             shared_encryption_algo = escrow["shared_encryption_algo"]
             encryption_proxy = self._get_proxy_for_escrow(escrow["shared_escrow"])
 

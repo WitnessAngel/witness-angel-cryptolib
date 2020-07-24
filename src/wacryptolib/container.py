@@ -99,7 +99,6 @@ class ContainerWriter(ContainerBase):
             logger.debug(
                 "Encrypting data with symmetric key of type %r", data_encryption_algo
             )
-
             data_cipherdict = encrypt_bytestring(
                 plaintext=data_current,
                 encryption_algo=data_encryption_algo,
@@ -187,29 +186,40 @@ class ContainerWriter(ContainerBase):
 
             return all_encrypted_shards
 
-        else:  # Using Asymmetric algorithm
-
-            encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
-
-            logger.debug("Generating asymmetric key of type %r", key_encryption_algo)
-            subkey_pem = encryption_proxy.get_public_key(
-                keychain_uid=keychain_uid, key_type=key_encryption_algo
-            )
-
-            logger.debug(
-                "Encrypting symmetric key with asymmetric key of type %r",
-                key_encryption_algo,
-            )
-            subkey = load_asymmetric_key_from_pem_bytestring(
-                key_pem=subkey_pem, key_type=key_encryption_algo
-            )
-
-            key_cipherdict = encrypt_bytestring(
-                plaintext=symmetric_key_data,
+        else:  # Using asymmetric algorithm
+            key_cipherdict = self._assymetric_encryption(
                 encryption_algo=key_encryption_algo,
-                key=subkey,
+                keychain_uid=keychain_uid,
+                data=symmetric_key_data,
+                escrow=conf["key_escrow"]
             )
+
             return key_cipherdict
+
+    def _assymetric_encryption(
+            self, encryption_algo: str, keychain_uid: uuid.UUID, data: bytes, escrow
+    ) -> dict:
+        encryption_proxy = self._get_proxy_for_escrow(escrow)
+
+        logger.debug("Generating assymetric key of type %r", encryption_algo)
+        subkey_pem = encryption_proxy.get_public_key(
+            keychain_uid=keychain_uid, key_type=encryption_algo
+        )
+
+        logger.debug(
+            "Encrypting symmetric key with asymmetric key of type %r",
+            encryption_algo,
+        )
+        subkey = load_asymmetric_key_from_pem_bytestring(
+            key_pem=subkey_pem, key_type=encryption_algo
+        )
+
+        cipherdict = encrypt_bytestring(
+            plaintext=data,
+            encryption_algo=encryption_algo,
+            key=subkey
+        )
+        return cipherdict
 
     def _encrypt_shard(self, shares: list, conf: dict, keychain_uid: uuid.UUID) -> dict:
         key_shared_secret_escrow = conf["key_shared_secret_escrow"]
@@ -220,22 +230,14 @@ class ContainerWriter(ContainerBase):
             shard_value = shard[1]
             conf_shard = key_shared_secret_escrow[counter]
             shard_encryption_algo = conf_shard["shared_encryption_algo"]
-            encryption_proxy = self._get_proxy_for_escrow(conf_shard["shared_escrow"])
 
-            logger.debug("Get shard's public key")
-            subkey_pem = encryption_proxy.get_public_key(
-                keychain_uid=keychain_uid, key_type=shard_encryption_algo
+            shard_cipherdict = self._assymetric_encryption(
+                encryption_algo=shard_encryption_algo,
+                keychain_uid=keychain_uid,
+                data=shard_value,
+                escrow=conf_shard["shared_escrow"]
             )
 
-            logger.debug("Get shard's assymetric key")
-            subkey = load_asymmetric_key_from_pem_bytestring(
-                key_pem=subkey_pem, key_type=shard_encryption_algo
-            )
-
-            logger.debug("Encrypting shard")
-            shard_cipherdict = encrypt_bytestring(
-                plaintext=shard_value, encryption_algo=shard_encryption_algo, key=subkey
-            )
             all_encrypted_shards[counter] = shard_cipherdict
             counter += 1
 

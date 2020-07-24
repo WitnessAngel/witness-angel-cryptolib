@@ -72,9 +72,22 @@ class ContainerBase:
 
 
 class ContainerWriter(ContainerBase):
+    """
+    Contains every method used to write and encrypt a container.
+    """
     def encrypt_data(
         self, data: bytes, *, conf: dict, keychain_uid=None, metadata=None
     ) -> dict:
+        """
+        Browse through configuration tree to apply the right succession of algorithm to data.
+
+        :param data: initial plaintext
+        :param conf: configuration tree
+        :param keychain_uid: uuid which permits to identify container
+        :param metadata: additional data
+
+        :return: container with all information needed to decrypt data
+        """
         assert metadata is None or isinstance(metadata, dict), metadata
         container_format = CONTAINER_FORMAT
         container_uid = generate_uuid0()  # ALWAYS UNIQUE!
@@ -162,6 +175,17 @@ class ContainerWriter(ContainerBase):
     def _encrypt_symmetric_key(
         self, keychain_uid: uuid.UUID, symmetric_key_data: bytes, conf: dict
     ) -> Union[List[dict], dict]:
+        """
+        Function called when encryption of a symmetric key is needed. Encryption may be made by shared secret or
+        by an asymmetric algorithm.
+
+        :param keychain_uid: uuid which permits to identify container
+        :param symmetric_key_data: symmetric key as bytes to encrypt
+        :param conf: dictionary which contain configuration tree
+
+        :return: if the algorithm used is 'shared secret', a list with encrypted shards is returned. If an asymmetric
+        algorithm has been used, a dictionary with all information needed to decipher the symmetric key is returned.
+        """
         assert isinstance(symmetric_key_data, bytes), symmetric_key_data
         key_encryption_algo = conf["key_encryption_algo"]
 
@@ -199,6 +223,16 @@ class ContainerWriter(ContainerBase):
     def _assymetric_encryption(
             self, encryption_algo: str, keychain_uid: uuid.UUID, data: bytes, escrow
     ) -> dict:
+        """
+        Encrypt given data with an asymmetric algorithm.
+
+        :param encryption_algo: string with name of algorithm to use
+        :param keychain_uid: uuid which permits to identify container
+        :param data: data as bytes to encrypt
+        :param escrow: escrow used for encryption (findable in configuration tree)
+
+        :return: dictionary which contains every data needed to decrypt the ciphered data
+        """
         encryption_proxy = self._get_proxy_for_escrow(escrow)
 
         logger.debug("Generating assymetric key of type %r", encryption_algo)
@@ -222,6 +256,15 @@ class ContainerWriter(ContainerBase):
         return cipherdict
 
     def _encrypt_shard(self, shares: list, conf: dict, keychain_uid: uuid.UUID) -> dict:
+        """
+        Make a loop through all shards from shared secret algorithm to encrypt each of them.
+
+        :param shares: list of tuples containing a shard and its place in the list
+        :param conf: configuration tree inside key_encryption_algo
+        :param keychain_uid: uuid which permits to identify container
+
+        :return: dictionary with as key a counter and as value the corresponding encrypted shard
+        """
         key_shared_secret_escrow = conf["key_shared_secret_escrow"]
 
         all_encrypted_shards = {}
@@ -246,6 +289,15 @@ class ContainerWriter(ContainerBase):
     def _generate_signature(
         self, keychain_uid: uuid.UUID, data_ciphertext: bytes, conf: dict
     ) -> dict:
+        """
+        Generate a signature for a specific ciphered data.
+
+        :param keychain_uid: uuid which permits to identify container
+        :param data_ciphertext: data as bytes on which to apply signature
+        :param conf: configuration tree inside data_signatures
+
+        :return: dictionary with information needed to verify signature
+        """
         encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
         message_prehash_algo = conf["message_prehash_algo"]
         signature_algo = conf["signature_algo"]
@@ -265,11 +317,21 @@ class ContainerWriter(ContainerBase):
 
 
 class ContainerReader(ContainerBase):
+    """
+    Contains every method used to read and decrypt a container.
+    """
     def extract_metadata(self, container: dict) -> Optional[dict]:
         assert isinstance(container, dict), container
         return container["metadata"]
 
     def decrypt_data(self, container: dict) -> bytes:
+        """
+        Make a loop through given container to apply right algorithm to decipher data.
+
+        :param container: dictionary get from encrypt_data method
+
+        :return: initial plaintext deciphered as bytes
+        """
         assert isinstance(container, dict), container
 
         container_format = container["container_format"]
@@ -321,6 +383,16 @@ class ContainerReader(ContainerBase):
     def _decrypt_symmetric_key(
         self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list
     ):
+        """
+        Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
+        by a asymmetric algorithm.
+
+        :param keychain_uid: uuid which permits to identify container
+        :param symmetric_key_cipherdict: dictionary which has data needed to decrypt symmetric key
+        :param conf: dictionary which contain configuration tree
+
+        :return: deciphered symmetric key
+        """
         assert isinstance(symmetric_key_cipherdict, dict), symmetric_key_cipherdict
         key_encryption_algo = conf["key_encryption_algo"]
 
@@ -367,6 +439,14 @@ class ContainerReader(ContainerBase):
     def _decrypt_shard(
         self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list
     ):
+        """
+        Make a loop through all encrypted shards to decrypt each of them
+        :param keychain_uid: uuid which permits to identify container
+        :param symmetric_key_cipherdict: dictionary which contains every data needed to decipher each shard
+        :param conf: configuration tree inside key_encryption_algo
+
+        :return: list of tuples of deciphered shards
+        """
         key_shared_secret_escrow = conf["key_shared_secret_escrow"]
         counter = 1
         shares = []
@@ -406,6 +486,13 @@ class ContainerReader(ContainerBase):
     def _verify_message_signature(
         self, keychain_uid: uuid.UUID, message: bytes, conf: dict
     ):
+        """
+        Verify a signature for a specific message. An error is raised if signature isn't correct.
+
+        :param keychain_uid: uuid which permits to identify container
+        :param message: message as bytes on which to verify signature
+        :param conf: configuration tree inside data_signatures
+        """
         message_prehash_algo = conf["message_prehash_algo"]
         signature_algo = conf["signature_algo"]
         encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])

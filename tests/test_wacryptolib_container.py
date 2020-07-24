@@ -147,10 +147,85 @@ SHAMIR_CONTAINER_CONF = dict(
     ]
 )
 
+OTHER_SHAMIR_CONTAINER_CONF = dict(
+    data_encryption_strata=[
+        dict(
+            data_encryption_algo="AES_EAX",
+            key_encryption_strata=[
+                dict(
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                )
+            ],
+            data_signatures=[],
+        ),
+        dict(
+            data_encryption_algo="AES_CBC",
+            key_encryption_strata=[
+                dict(
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                )
+            ],
+            data_signatures=[
+                dict(
+                    message_prehash_algo="SHA3_512",
+                    signature_algo="DSA_DSS",
+                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                )
+            ],
+        ),
+        dict(
+            data_encryption_algo="CHACHA20_POLY1305",
+            key_encryption_strata=[
+                dict(
+                    key_encryption_algo="SHARED_SECRET",
+                    key_shared_secret_threshold=2,
+                    key_shared_secret_escrow=[
+                        dict(
+                            shared_encryption_algo="RSA_OAEP",
+                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
+                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                        ),
+                        dict(
+                            shared_encryption_algo="RSA_OAEP",
+                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
+                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                        ),
+                        dict(
+                            shared_encryption_algo="RSA_OAEP",
+                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
+                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                        ),
+                        dict(
+                            shared_encryption_algo="RSA_OAEP",
+                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
+                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                        )
+                    ]
+                ),
+                dict(
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                ),
+            ],
+            data_signatures=[
+                dict(
+                    message_prehash_algo="SHA3_256",
+                    signature_algo="RSA_PSS",
+                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                ),
+                dict(
+                    message_prehash_algo="SHA512",
+                    signature_algo="ECC_DSS",
+                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                ),
+            ],
+        ),
+    ]
+)
+
 
 @pytest.mark.parametrize(
     "container_conf",
-    [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF, SHAMIR_CONTAINER_CONF],
+    [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF, SHAMIR_CONTAINER_CONF, OTHER_SHAMIR_CONTAINER_CONF],
 )
 def test_container_encryption_and_decryption(container_conf):
     data = b"abc"  # get_random_bytes(random.randint(1, 1000))

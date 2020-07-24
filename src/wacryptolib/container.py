@@ -211,7 +211,7 @@ class ContainerWriter(ContainerBase):
             return all_encrypted_shards
 
         else:  # Using asymmetric algorithm
-            key_cipherdict = self._assymetric_encryption(
+            key_cipherdict = self._asymmetric_encryption(
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid,
                 data=symmetric_key_data,
@@ -220,7 +220,7 @@ class ContainerWriter(ContainerBase):
 
             return key_cipherdict
 
-    def _assymetric_encryption(
+    def _asymmetric_encryption(
             self, encryption_algo: str, keychain_uid: uuid.UUID, data: bytes, escrow
     ) -> dict:
         """
@@ -274,7 +274,7 @@ class ContainerWriter(ContainerBase):
             conf_shard = key_shared_secret_escrow[counter]
             shard_encryption_algo = conf_shard["shared_encryption_algo"]
 
-            shard_cipherdict = self._assymetric_encryption(
+            shard_cipherdict = self._asymmetric_encryption(
                 encryption_algo=shard_encryption_algo,
                 keychain_uid=keychain_uid,
                 data=shard_value,
@@ -414,27 +414,52 @@ class ContainerReader(ContainerBase):
             return symmetric_key_plaintext
 
         else:  # Using asymmetric algorithm
-            encryption_proxy = self._get_proxy_for_escrow(conf["key_escrow"])
-
-            keypair_identifiers = [
-                dict(keychain_uid=keychain_uid, key_type=key_encryption_algo)
-            ]
-            request_result = encryption_proxy.request_decryption_authorization(
-                keypair_identifiers=keypair_identifiers,
-                request_message="Automatic decryption authorization request",
-            )
-            logger.info(
-                "Decryption authorization request result: %s",
-                request_result["response_message"],
-            )
-            # We attempt decryption whatever the result of request_decryption_authorization(), since a previous
-            # decryption authorization might still be valid
-            symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
-                keychain_uid=keychain_uid,
+            symmetric_key_plaintext = self._asymmetric_decryption(
                 encryption_algo=key_encryption_algo,
+                keychain_uid=keychain_uid,
                 cipherdict=symmetric_key_cipherdict,
+                escrow=conf["key_escrow"]
             )
             return symmetric_key_plaintext
+
+    def _asymmetric_decryption(
+            self, encryption_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, escrow
+    ) -> bytes:
+        """
+        Decrypt given cipherdict with an assymetric algorithm
+
+        :param encryption_algo: string with name of algorithm to use
+        :param keychain_uid: uuid which permits to identify container
+        :param cipherdict: dictionary which contains every data needed to decrypt the ciphered data
+        :param escrow: escrow used for encryption (findable in configuration tree)
+
+        :return: decypted data as bytes
+        """
+        encryption_proxy = self._get_proxy_for_escrow(escrow=escrow)
+
+        keypair_identifiers = [
+            dict(keychain_uid=keychain_uid, key_type=encryption_algo)
+        ]
+
+        request_result = encryption_proxy.request_decryption_authorization(
+            keypair_identifiers=keypair_identifiers,
+            request_message="Automatic decryption authorization request",
+        )
+
+        logger.info(
+            "Decryption authorization request result: %s",
+            request_result["response_message"],
+        )
+
+        # We attempt decryption whatever the result of request_decryption_authorization(), since a previous
+        # decryption authorization might still be valid
+        symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
+            keychain_uid=keychain_uid,
+            encryption_algo=encryption_algo,
+            cipherdict=cipherdict,
+        )
+
+        return symmetric_key_plaintext
 
     def _decrypt_shard(
         self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list
@@ -453,28 +478,12 @@ class ContainerReader(ContainerBase):
         for escrow in key_shared_secret_escrow:
             ciphered_shard = symmetric_key_cipherdict[str(counter - 1)]
             shared_encryption_algo = escrow["shared_encryption_algo"]
-            encryption_proxy = self._get_proxy_for_escrow(escrow["shared_escrow"])
 
-            keypair_identifiers = [
-                dict(keychain_uid=keychain_uid, key_type=shared_encryption_algo)
-            ]
-
-            request_result = encryption_proxy.request_decryption_authorization(
-                keypair_identifiers=keypair_identifiers,
-                request_message="Automatic decryption authorization request",
-            )
-
-            logger.info(
-                "Decryption authorization request result: %s",
-                request_result["response_message"],
-            )
-
-            # We attempt decryption whatever the result of request_decryption_authorization(), since a previous
-            # decryption authorization might still be valid
-            symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
-                keychain_uid=keychain_uid,
+            symmetric_key_plaintext = self._asymmetric_decryption(
                 encryption_algo=shared_encryption_algo,
+                keychain_uid=keychain_uid,
                 cipherdict=ciphered_shard,
+                escrow=escrow["shared_escrow"]
             )
 
             share = (counter, symmetric_key_plaintext)

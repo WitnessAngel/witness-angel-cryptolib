@@ -107,31 +107,31 @@ SHAMIR_CONTAINER_CONF = dict(
                 dict(
                     key_encryption_algo="SHARED_SECRET",
                     key_shared_secret_threshold=3,
-                    key_shared_secret_escrow=[
+                    key_shared_secret_escrows=[
                         dict(
-                            shared_encryption_algo="RSA_OAEP",
+                            shard_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shared_encryption_algo="RSA_OAEP",
+                            shard_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shared_encryption_algo="RSA_OAEP",
+                            shard_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shared_encryption_algo="RSA_OAEP",
+                            shard_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shared_encryption_algo="RSA_OAEP",
+                            shard_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                     ],
                 ),
@@ -179,28 +179,28 @@ OTHER_SHAMIR_CONTAINER_CONF = dict(
                 dict(
                     key_encryption_algo="SHARED_SECRET",
                     key_shared_secret_threshold=2,
-                    key_shared_secret_escrow=[
+                    key_shared_secret_escrows=[
                         dict(
-                            shared_encryption_algo="RSA_OAEP",
+                            shard_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shared_encryption_algo="RSA_OAEP",
+                            shard_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shared_encryption_algo="RSA_OAEP",
+                            shard_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shared_encryption_algo="RSA_OAEP",
+                            shard_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shared_escrow=LOCAL_ESCROW_PLACEHOLDER,
-                        )
-                    ]
+                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                        ),
+                    ],
                 ),
                 dict(
                     key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
@@ -224,8 +224,7 @@ OTHER_SHAMIR_CONTAINER_CONF = dict(
 
 
 @pytest.mark.parametrize(
-    "container_conf",
-    [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF, SHAMIR_CONTAINER_CONF, OTHER_SHAMIR_CONTAINER_CONF],
+    "container_conf", [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF]
 )
 def test_container_encryption_and_decryption(container_conf):
     data = b"abc"  # get_random_bytes(random.randint(1, 1000))
@@ -240,6 +239,41 @@ def test_container_encryption_and_decryption(container_conf):
         data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata
     )
     # pprint.pprint(container, width=120)
+
+    assert container["keychain_uid"]
+    if keychain_uid:
+        assert container["keychain_uid"] == keychain_uid
+
+    result_data = decrypt_data_from_container(container=container)
+    # pprint.pprint(result, width=120)
+    assert result_data == data
+
+    result_metadata = extract_metadata_from_container(container=container)
+    assert result_metadata == metadata
+
+    container["container_format"] = "OAJKB"
+    with pytest.raises(ValueError, match="Unknown container format"):
+        decrypt_data_from_container(container=container)
+
+
+@pytest.mark.parametrize(
+    "shamir_container_conf", [SHAMIR_CONTAINER_CONF, OTHER_SHAMIR_CONTAINER_CONF]
+)
+def test_shamir_container_encryption_and_decryption(shamir_container_conf):
+    data = b"abc"  # get_random_bytes(random.randint(1, 1000))
+
+    keychain_uid = random.choice(
+        [None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")]
+    )
+
+    metadata = random.choice([None, dict(a=[123])])
+
+    container = encrypt_data_into_container(
+        data=data,
+        conf=shamir_container_conf,
+        keychain_uid=keychain_uid,
+        metadata=metadata,
+    )
 
     assert container["keychain_uid"]
     if keychain_uid:

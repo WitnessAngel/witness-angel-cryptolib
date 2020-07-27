@@ -75,6 +75,7 @@ class ContainerWriter(ContainerBase):
     """
     Contains every method used to write and encrypt a container.
     """
+
     def encrypt_data(
         self, data: bytes, *, conf: dict, keychain_uid=None, metadata=None
     ) -> dict:
@@ -190,7 +191,7 @@ class ContainerWriter(ContainerBase):
         key_encryption_algo = conf["key_encryption_algo"]
 
         if key_encryption_algo == "SHARED_SECRET":  # Using Shamir
-            escrows = conf["key_shared_secret_escrow"]
+            escrows = conf["key_shared_secret_escrows"]
             shares_count = len(escrows)
             threshold_count = conf["key_shared_secret_threshold"]
 
@@ -215,13 +216,13 @@ class ContainerWriter(ContainerBase):
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid,
                 data=symmetric_key_data,
-                escrow=conf["key_escrow"]
+                escrow=conf["key_escrow"],
             )
 
             return key_cipherdict
 
     def _asymmetric_encryption(
-            self, encryption_algo: str, keychain_uid: uuid.UUID, data: bytes, escrow
+        self, encryption_algo: str, keychain_uid: uuid.UUID, data: bytes, escrow
     ) -> dict:
         """
         Encrypt given data with an asymmetric algorithm.
@@ -241,17 +242,14 @@ class ContainerWriter(ContainerBase):
         )
 
         logger.debug(
-            "Encrypting symmetric key with asymmetric key of type %r",
-            encryption_algo,
+            "Encrypting symmetric key with asymmetric key of type %r", encryption_algo
         )
         subkey = load_asymmetric_key_from_pem_bytestring(
             key_pem=subkey_pem, key_type=encryption_algo
         )
 
         cipherdict = encrypt_bytestring(
-            plaintext=data,
-            encryption_algo=encryption_algo,
-            key=subkey
+            plaintext=data, encryption_algo=encryption_algo, key=subkey
         )
         return cipherdict
 
@@ -265,25 +263,27 @@ class ContainerWriter(ContainerBase):
 
         :return: dictionary with as key a counter and as value the corresponding encrypted shard
         """
-        key_shared_secret_escrow = conf["key_shared_secret_escrow"]
+        key_shared_secret_escrows = conf["key_shared_secret_escrows"]
 
         all_encrypted_shards = {}
         counter = 0
         for shard in shares:
-            shard_value = shard[1]
-            conf_shard = key_shared_secret_escrow[counter]
-            shard_encryption_algo = conf_shard["shared_encryption_algo"]
+            shard_number, shard_value = shard
+            conf_shard = key_shared_secret_escrows[shard_number - 1]
+            shard_encryption_algo = conf_shard["shard_encryption_algo"]
 
-            shard_cipherdict = self._asymmetric_encryption(
-                encryption_algo=shard_encryption_algo,
-                keychain_uid=keychain_uid,
-                data=shard_value,
-                escrow=conf_shard["shared_escrow"]
-            )
+            try:
+                shard_cipherdict = self._asymmetric_encryption(
+                    encryption_algo=shard_encryption_algo,
+                    keychain_uid=keychain_uid,
+                    data=shard_value,
+                    escrow=conf_shard["shard_escrow"],
+                )
 
-            all_encrypted_shards[counter] = shard_cipherdict
-            counter += 1
-
+                all_encrypted_shards[shard_number] = shard_cipherdict
+            except:
+                pass
+            # counter += 1
         return all_encrypted_shards
 
     def _generate_signature(
@@ -320,6 +320,7 @@ class ContainerReader(ContainerBase):
     """
     Contains every method used to read and decrypt a container.
     """
+
     def extract_metadata(self, container: dict) -> Optional[dict]:
         assert isinstance(container, dict), container
         return container["metadata"]
@@ -397,9 +398,7 @@ class ContainerReader(ContainerBase):
         key_encryption_algo = conf["key_encryption_algo"]
 
         if key_encryption_algo == "SHARED_SECRET":  # Using Shamir
-            escrows = conf["key_shared_secret_escrow"]
-            shares_count = len(escrows)
-            threshold_count = conf["key_shared_secret_threshold"]
+            escrows = conf["key_shared_secret_escrows"]
 
             logger.debug("Deciphering each shard")
             shares = self._decrypt_shard(
@@ -418,12 +417,12 @@ class ContainerReader(ContainerBase):
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid,
                 cipherdict=symmetric_key_cipherdict,
-                escrow=conf["key_escrow"]
+                escrow=conf["key_escrow"],
             )
             return symmetric_key_plaintext
 
     def _asymmetric_decryption(
-            self, encryption_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, escrow
+        self, encryption_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, escrow
     ) -> bytes:
         """
         Decrypt given cipherdict with an assymetric algorithm
@@ -472,24 +471,39 @@ class ContainerReader(ContainerBase):
 
         :return: list of tuples of deciphered shards
         """
-        key_shared_secret_escrow = conf["key_shared_secret_escrow"]
-        counter = 1
+        key_shared_secret_escrows = conf["key_shared_secret_escrows"]
+        key_shared_secret_threshold = conf["key_shared_secret_threshold"]
+        counter = 0
         shares = []
-        for escrow in key_shared_secret_escrow:
-            ciphered_shard = symmetric_key_cipherdict[str(counter - 1)]
-            shared_encryption_algo = escrow["shared_encryption_algo"]
 
-            symmetric_key_plaintext = self._asymmetric_decryption(
-                encryption_algo=shared_encryption_algo,
-                keychain_uid=keychain_uid,
-                cipherdict=ciphered_shard,
-                escrow=escrow["shared_escrow"]
-            )
+        list_keys = list(symmetric_key_cipherdict.keys())
+        for escrow in key_shared_secret_escrows:
+            if counter == key_shared_secret_threshold:
+                logger.debug("A sufficient number of shard has been decrypted")
+                break
 
-            share = (counter, symmetric_key_plaintext)
-            shares.append(share)
+            shard_encryption_algo = escrow["shard_encryption_algo"]
+            escrow = escrow["shard_escrow"]
+            ciphered_shard = symmetric_key_cipherdict[list_keys[counter]]
 
-            counter += 1
+            try:
+                symmetric_key_plaintext = self._asymmetric_decryption(
+                    encryption_algo=shard_encryption_algo,
+                    keychain_uid=keychain_uid,
+                    cipherdict=ciphered_shard,
+                    escrow=escrow,
+                )
+
+                share = (int(list_keys[counter]), symmetric_key_plaintext)
+                logger.debug(share)
+                shares.append(share)
+                counter += 1
+            except:  # If actual escrow doesn't work, we can go to next one
+                pass
+
+        assert (
+            counter == key_shared_secret_threshold
+        ), "Insufficient number of valid shards"
         return shares
 
     def _verify_message_signature(

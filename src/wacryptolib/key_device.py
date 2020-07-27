@@ -10,6 +10,8 @@ def list_available_key_devices():
     Generate a list of dictionaries representing mounted partitions of USB keys.
 
     :return: (list) Dictionaries having at least these fields: path, label, format, size, is_initialized.
+
+    # TODO document here the format and meaning of these fields, instead of in the code below
     
     The linux environment has an additional field which is 'partition'.
     """
@@ -46,7 +48,7 @@ def _get_metadata_file_path(key_device: dict):
     return Path(key_device["path"]).joinpath(".key_storage", ".metadata.json")
 
 
-def _is_key_device_initialized(key_device: dict):
+def is_key_device_initialized(key_device: dict):
     """
     Check if a key device is initialized.
 
@@ -94,7 +96,7 @@ def _list_available_key_devices_win32():
                 )[0]
                 key_device["size"] = int(partition.Size)  # In bytes
                 key_device["format"] = logical_disk.FileSystem.lower()  # E.g 'fat32'
-                key_device["is_initialized"] = _is_key_device_initialized(
+                key_device["is_initialized"] = is_key_device_initialized(
                     key_device
                 )  # E.g True
                 key_device_list.append(key_device)
@@ -132,7 +134,7 @@ def _list_available_key_devices_linux():
             key_device["size"] = psutil.disk_usage(key_device["path"]).total  # E.g: 30986469376
             key_device["format"] = p.fstype  # E.g: 'vfat'
             key_device["partition"] = p.device  # E.g: '/dev/sda1'
-            key_device["is_initialized"] = _is_key_device_initialized(key_device)  # E.g 'False'
+            key_device["is_initialized"] = is_key_device_initialized(key_device)  # E.g False
             key_device_list.append(key_device)
 
         return key_device_list

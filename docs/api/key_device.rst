@@ -1,8 +1,7 @@
 Key device
 =============
 
-This module detect usb devices and initialize key device.
-
+This module detects and initializes "key devices", typically USB keys which will store owner information and a set of asymmetric keys.
 
 
 .. autofunction:: wacryptolib.key_device.list_available_key_devices

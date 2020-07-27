@@ -155,7 +155,9 @@ def _serialize_key_object_to_pem_bytestring(
         )
     key_pem = key.export_key(format="PEM", **extra_params)
     if isinstance(key_pem, str):
-        key_pem = key_pem.encode("ascii")  # Some types deliver ascii strings, let's normalize
+        key_pem = key_pem.encode(
+            "ascii"
+        )  # Some types deliver ascii strings, let's normalize
     return key_pem
 
 

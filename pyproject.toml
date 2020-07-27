@@ -40,11 +40,10 @@ decorator = "^4.4"
 multitimer = "^0.2.0"
 uuid0 = "^0.2.7"
 pytz = "^2019.3"
-#Linux and windows dependency
-wmi = { version = "^1.5.1 ", markers = "python_version ~= '3.7' and sys_platform == 'win32'" }
-pywin32 = { version = "^228", markers = "python_version ~= '3.7' and sys_platform == 'win32'" }
-pyudev = { version = "^0.22.0 ", markers = "python_version ~= '3.7' and sys_platform == 'linux3'" }
-psutil = { version = "^5.7.2", markers = "python_version ~= '3.7' and sys_platform == 'linux3'" }
+wmi = { version = "^1.5.1 ", markers = "sys_platform == 'win32'" }
+pywin32 = { version = "^228", markers = "sys_platform == 'win32'" }
+pyudev = { version = "^0.22.0 ", markers = "sys_platform == 'linux3'" }
+psutil = { version = "^5.7.2", markers = "sys_platform == 'linux3'" }
 
 [tool.poetry.dev-dependencies]
 

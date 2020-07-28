@@ -264,9 +264,11 @@ class ContainerWriter(ContainerBase):
         :return: dictionary with as key a counter and as value the corresponding encrypted shard
         """
         key_shared_secret_escrows = conf["key_shared_secret_escrows"]
-
+        key_shared_secret_threshold = conf["key_shared_secret_threshold"]
         all_encrypted_shards = {}
+        error = ""
         counter = 0
+
         for shard in shares:
             shard_number, shard_value = shard
             conf_shard = key_shared_secret_escrows[shard_number - 1]
@@ -281,9 +283,22 @@ class ContainerWriter(ContainerBase):
                 )
 
                 all_encrypted_shards[shard_number] = shard_cipherdict
-            except:
-                pass
-            # counter += 1
+                counter += 1
+
+            except Exception as e:
+                error = error + str(e) + "\n"
+                logger.error(error)
+
+        assert counter >= key_shared_secret_threshold, (
+            "Error during encryption. Insufficient number of escrows. Errors : \n"
+            + error
+            + "At least "
+            + str(key_shared_secret_threshold)
+            + " are needed. "
+            + str(counter)
+            + " only are present."
+        )
+
         return all_encrypted_shards
 
     def _generate_signature(
@@ -475,6 +490,7 @@ class ContainerReader(ContainerBase):
         key_shared_secret_threshold = conf["key_shared_secret_threshold"]
         counter = 0
         shares = []
+        error = ""
 
         list_keys = list(symmetric_key_cipherdict.keys())
         for escrow in key_shared_secret_escrows:
@@ -483,27 +499,34 @@ class ContainerReader(ContainerBase):
                 break
 
             shard_encryption_algo = escrow["shard_encryption_algo"]
-            escrow = escrow["shard_escrow"]
-            ciphered_shard = symmetric_key_cipherdict[list_keys[counter]]
+            shard_escrow = escrow["shard_escrow"]
+            shard_value = list_keys[counter]
+            ciphered_shard = symmetric_key_cipherdict[shard_value]
 
             try:
                 symmetric_key_plaintext = self._asymmetric_decryption(
                     encryption_algo=shard_encryption_algo,
                     keychain_uid=keychain_uid,
                     cipherdict=ciphered_shard,
-                    escrow=escrow,
+                    escrow=shard_escrow,
                 )
 
-                share = (int(list_keys[counter]), symmetric_key_plaintext)
-                logger.debug(share)
+                share = (int(shard_value), symmetric_key_plaintext)
                 shares.append(share)
                 counter += 1
-            except:  # If actual escrow doesn't work, we can go to next one
-                pass
+            except Exception as e:  # If actual escrow doesn't work, we can go to next one
+                error = error + str(e) + "\n"
+                logger.error(error)
 
-        assert (
-            counter == key_shared_secret_threshold
-        ), "Insufficient number of valid shards"
+        assert counter == key_shared_secret_threshold, (
+            "Error during decryption. Insufficient number of valid shards. Errors : \n"
+            + error
+            + "At least "
+            + str(key_shared_secret_threshold)
+            + " are needed. "
+            + str(counter)
+            + " only are valid here."
+        )
         return shares
 
     def _verify_message_signature(

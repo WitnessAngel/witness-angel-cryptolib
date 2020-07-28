@@ -212,12 +212,17 @@ class ContainerWriter(ContainerBase):
             return all_encrypted_shards
 
         else:  # Using asymmetric algorithm
-            key_cipherdict = self._asymmetric_encryption(
-                encryption_algo=key_encryption_algo,
-                keychain_uid=keychain_uid,
-                data=symmetric_key_data,
-                escrow=conf["key_escrow"],
-            )
+            key_cipherdict = {}
+            try:
+                key_cipherdict = self._asymmetric_encryption(
+                    encryption_algo=key_encryption_algo,
+                    keychain_uid=keychain_uid,
+                    data=symmetric_key_data,
+                    escrow=conf["key_escrow"],
+                )
+            except KeyError:  # Unfoundable key in conf["key_escrow"]
+                logger.error("Error in the configuration tree")
+                raise
 
             return key_cipherdict
 

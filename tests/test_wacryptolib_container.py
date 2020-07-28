@@ -279,7 +279,18 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf):
     if keychain_uid:
         assert container["keychain_uid"] == keychain_uid
 
+    assert isinstance(container["data_ciphertext"], bytes)
+
+    using_shamir = False
+    for data_encryption in container["data_encryption_strata"]:
+
+        for key_encryption in data_encryption["key_encryption_strata"]:
+            if key_encryption["key_encryption_algo"] == "SHARED_SECRET":
+                using_shamir = True
+    assert using_shamir
+
     result_data = decrypt_data_from_container(container=container)
+
     # pprint.pprint(result, width=120)
     assert result_data == data
 

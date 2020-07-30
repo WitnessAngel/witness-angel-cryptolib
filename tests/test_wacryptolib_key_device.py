@@ -8,23 +8,32 @@ def test_list_available_key_devices():
     key_devices_list = list_available_key_devices()
     assert isinstance(key_devices_list, list)
 
-    assert key_devices_list, "No USB key detected during test"  # Uncomment this to ensure a REAL usb key is detected during tests
+    assert key_devices_list, "No USB key detected during test"
 
-    for usb_dev in key_devices_list:
-        print(">> USB key detected:", usb_dev)
-        assert isinstance(usb_dev, dict) or isinstance(usb_dev, None)
+    for key_device in key_devices_list:
+        print(">> USB key detected:", key_device)
+        assert isinstance(key_device, dict) or isinstance(key_device, None)
 
-        assert isinstance(usb_dev["path"], str)
-        assert Path(usb_dev["path"]).exists, "This path doesn't exist"
+        assert isinstance(key_device["path"], str)
+        assert Path(key_device["path"]).exists, "This path doesn't exist"
 
-        assert isinstance(usb_dev["label"], str)
-        assert isinstance(usb_dev["size"], int)
-        assert isinstance(usb_dev["format"], str)
-        assert isinstance(usb_dev["drive_type"], str)
+        assert isinstance(key_device["label"], str)
 
-        assert usb_dev["size"] >= 0, "must be greater or equal to zero"
-        assert usb_dev["drive_type"] == "USBSTOR"
-        assert usb_dev["format"] in ("fat32", "exfat", "vfat", "ntfs")
+        assert isinstance(key_device["size"], int)
+        assert key_device["size"] >= 0, "must be greater or equal to zero"
+
+        assert isinstance(key_device["format"], str)
+
+        assert isinstance(key_device["drive_type"], str)
+        assert key_device["drive_type"] == "USBSTOR"
+
+        assert (key_device["is_initialized"] == True) or (
+            key_device["is_initialized"] == False
+        )
+
+        assert isinstance(key_device["initialized_user"], str)
+
+        assert key_device["format"] in ("fat32", "exfat", "vfat", "ntfs")
 
 
 def test_initialize_key_device(tmp_path):
@@ -33,7 +42,7 @@ def test_initialize_key_device(tmp_path):
     temp_path.mkdir()
     temp_path = str(temp_path)
     key_device1 = {
-        "Drive_type": "USBSTOR",
+        "drive_type": "USBSTOR",
         "path": temp_path,
         "label": "TOSHIBA",
         "size": 31000166400,
@@ -45,7 +54,7 @@ def test_initialize_key_device(tmp_path):
     temp_path.mkdir()
     temp_path = str(temp_path)
     key_device2 = {
-        "Drive_type": "USBSTOR",
+        "drive_type": "USBSTOR",
         "path": temp_path,
         "label": "",
         "size": 100166400,
@@ -54,6 +63,34 @@ def test_initialize_key_device(tmp_path):
     }
 
     initialize_key_device(key_device1, "Michel Dupont")
-    initialize_key_device(key_device2, "Michel Dupont")
+    assert isinstance(key_device1["drive_type"], str)
+    assert key_device1["drive_type"] == "USBSTOR"
 
-    # TODO check the result of directories, of key_device2["is_initializd"] etc.
+    assert key_device1["is_initialized"] == True
+
+    assert isinstance(key_device1["initialized_user"], str)
+
+    assert isinstance(key_device1["label"], str)
+
+    assert isinstance(key_device1["size"], int)
+    assert key_device1["size"] >= 0, "must be greater or equal to zero"
+
+    assert isinstance(key_device1["format"], str)
+    assert key_device1["format"] in ("fat32", "exfat", "vfat", "ntfs")
+
+    initialize_key_device(key_device2, "Michel Dupont")
+    assert isinstance(key_device1["drive_type"], str)
+    assert key_device2["drive_type"] == "USBSTOR"
+
+    assert key_device2["is_initialized"] == True
+
+    assert isinstance(key_device1["initialized_user"], str)
+
+    assert key_device2["is_initialized"] == True
+    assert isinstance(key_device1["label"], str)
+
+    assert isinstance(key_device1["size"], int)
+    assert key_device2["size"] >= 0, "must be greater or equal to zero"
+
+    assert isinstance(key_device1["format"], str)
+    assert key_device2["format"] in ("fat32", "exfat", "vfat", "ntfs")

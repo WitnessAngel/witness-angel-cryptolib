@@ -80,14 +80,14 @@ class ContainerWriter(ContainerBase):
         self, data: bytes, *, conf: dict, keychain_uid=None, metadata=None
     ) -> dict:
         """
-        Browse through configuration tree to apply the right succession of algorithm to data.
+        Browse through configuration tree to apply the right succession of algorithms to data.
 
         :param data: initial plaintext
         :param conf: configuration tree
-        :param keychain_uid: uuid which permits to identify container
-        :param metadata: additional data
+        :param keychain_uid: uuid for the set of encryption keys used
+        :param metadata: additional data to store unencrypted in container
 
-        :return: container with all information needed to decrypt data
+        :return: container with all the information needed to attempt data decryption
         """
         assert metadata is None or isinstance(metadata, dict), metadata
         container_format = CONTAINER_FORMAT
@@ -173,19 +173,24 @@ class ContainerWriter(ContainerBase):
             metadata=metadata,
         )
 
+    # FIXME - we had visibly decided to use "shares" instead of "shards",  so let's normalize this here too
+
     def _encrypt_symmetric_key(
         self, keychain_uid: uuid.UUID, symmetric_key_data: bytes, conf: dict
-    ) -> Union[List[dict], dict]:
+    ) -> Union[List[dict], dict]:  # TODO, we return a DICT in every case, it's just that shared secret has a dict(shards=[...])
         """
-        Function called when encryption of a symmetric key is needed. Encryption may be made by shared secret or
-        by an asymmetric algorithm.
+        Encrypt a symmetric key using an asymmetric encryption scheme.
 
-        :param keychain_uid: uuid which permits to identify container
-        :param symmetric_key_data: symmetric key as bytes to encrypt
+        The symmetric key data might already be the result of previous encryption passes.
+        Encryption can use a simple public key algorithm, or rely on a a set of public keys,
+        by using a shared secret scheme.
+
+        :param keychain_uid: uuid for the set of encryption keys used
+        :param symmetric_key_data: symmetric key to encrypt (potentially already encrypted)
         :param conf: dictionary which contain configuration tree
 
-        :return: if the algorithm used is 'shared secret', a list with encrypted shards is returned. If an asymmetric
-        algorithm has been used, a dictionary with all information needed to decipher the symmetric key is returned.
+        :return: if the scheme used is 'SHARED_SECRET', a list of encrypted shards is returned. If an asymmetric
+        algorithm has been used, a dictionary with all the information needed to decipher the symmetric key is returned.
         """
         assert isinstance(symmetric_key_data, bytes), symmetric_key_data
         key_encryption_algo = conf["key_encryption_algo"]
@@ -195,7 +200,7 @@ class ContainerWriter(ContainerBase):
             shares_count = len(escrows)
             threshold_count = conf["key_shared_secret_threshold"]
 
-            logger.debug("Generating Shamir's shared secret")
+            logger.debug("Generating Shamir shared secret shards (%d needed amongst %d)", threshold_count, shares_count)
 
             shares = split_bytestring_as_shamir_shares(
                 secret=symmetric_key_data,
@@ -205,14 +210,14 @@ class ContainerWriter(ContainerBase):
 
             logger.debug("Secret has been shared into %d escrows", shares_count)
 
-            all_encrypted_shards = self._encrypt_shard(
+            all_encrypted_shards = self._encrypt_shard(  # FIXME normalize naming to "shares" for now
                 shares=shares, conf=conf, keychain_uid=keychain_uid
             )
 
             return all_encrypted_shards
 
         else:  # Using asymmetric algorithm
-            key_cipherdict = {}
+            key_cipherdict = {}  # Fixme unused
             try:
                 key_cipherdict = self._asymmetric_encryption(
                     encryption_algo=key_encryption_algo,
@@ -221,15 +226,15 @@ class ContainerWriter(ContainerBase):
                     escrow=conf["key_escrow"],
                 )
             except KeyError:  # Unfoundable key in conf["key_escrow"]
-                logger.error("Error in the configuration tree")
+                logger.error("Error in the configuration tree")  # TODO it's a programming error which should just flow I guess (users don't choose their conf)
                 raise
 
             return key_cipherdict
 
-    def _asymmetric_encryption(
-        self, encryption_algo: str, keychain_uid: uuid.UUID, data: bytes, escrow
+    def _asymmetric_encryption(  # Fixme rename to "_apply_asymmetric_encryption()" (always verbs)
+        self, encryption_algo: str, keychain_uid: uuid.UUID, data: bytes, escrow # FIXME data->symmetric_key_data, let's keep it precise
     ) -> dict:
-        """
+        """ TODO normalize docstring params like above
         Encrypt given data with an asymmetric algorithm.
 
         :param encryption_algo: string with name of algorithm to use
@@ -268,9 +273,12 @@ class ContainerWriter(ContainerBase):
 
         :return: dictionary with as key a counter and as value the corresponding encrypted shard
         """
+        # FIXME this function should receive key_shared_secret_escrows instead of the whole "conf"
+        # ALL escrows must be alive during encryption, else scheme is broken - it's only during decryption that it's OK to have some fail
         key_shared_secret_escrows = conf["key_shared_secret_escrows"]
         key_shared_secret_threshold = conf["key_shared_secret_threshold"]
-        all_encrypted_shards = {}
+        all_encrypted_shards = {}  # FIXME too dangerous, use a simple list instead, and store in it the (shard_number, shard_value) values without touching them
+        # Shards should be treated as opaque objects when possible, and matched to their Escrow via their index in the list
         error = ""
         counter = 0
 
@@ -347,11 +355,11 @@ class ContainerReader(ContainerBase):
 
     def decrypt_data(self, container: dict) -> bytes:
         """
-        Make a loop through given container to apply right algorithm to decipher data.
+        Loop through container layers, to decipher data with the right algorithms.
 
-        :param container: dictionary get from encrypt_data method
+        :param container: dictionary previously built with ContainerWriter method
 
-        :return: initial plaintext deciphered as bytes
+        :return: deciphered plaintext
         """
         assert isinstance(container, dict), container
 

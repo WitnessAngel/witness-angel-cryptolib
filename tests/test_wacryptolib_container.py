@@ -301,6 +301,7 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf):
     with pytest.raises(ValueError, match="Unknown container format"):
         decrypt_data_from_container(container=container)
 
+# TODO test non-nominal shamir cases
 
 def test_get_proxy_for_escrow(tmp_path):
     container_base1 = ContainerBase()

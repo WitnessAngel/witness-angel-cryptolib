@@ -22,7 +22,7 @@ from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage
-from wacryptolib.utilities import load_from_json_bytes
+from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes
 
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -96,7 +96,7 @@ COMPLEX_CONTAINER_CONF = dict(
     ]
 )
 
-SHAMIR_CONTAINER_CONF = dict(
+SIMPLE_SHAMIR_CONTAINER_CONF = dict(
     data_encryption_strata=[
         dict(
             data_encryption_algo="AES_CBC",
@@ -147,7 +147,7 @@ SHAMIR_CONTAINER_CONF = dict(
     ]
 )
 
-OTHER_SHAMIR_CONTAINER_CONF = dict(
+COMPLEX_SHAMIR_CONTAINER_CONF = dict(
     data_encryption_strata=[
         dict(
             data_encryption_algo="AES_EAX",
@@ -202,9 +202,9 @@ OTHER_SHAMIR_CONTAINER_CONF = dict(
                         ),
                     ],
                 ),
-                dict(
-                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
-                ),
+                # dict(
+                #     key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                # ),
             ],
             data_signatures=[
                 dict(
@@ -257,7 +257,8 @@ def test_container_encryption_and_decryption(container_conf):
 
 
 @pytest.mark.parametrize(
-    "shamir_container_conf", [SHAMIR_CONTAINER_CONF, OTHER_SHAMIR_CONTAINER_CONF]
+    "shamir_container_conf",
+    [SIMPLE_SHAMIR_CONTAINER_CONF, COMPLEX_SHAMIR_CONTAINER_CONF],
 )
 def test_shamir_container_encryption_and_decryption(shamir_container_conf):
     data = b"abc"  # get_random_bytes(random.randint(1, 1000))
@@ -281,18 +282,37 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf):
 
     assert isinstance(container["data_ciphertext"], bytes)
 
-    using_shamir = False
-    for data_encryption in container["data_encryption_strata"]:
-
-        for key_encryption in data_encryption["key_encryption_strata"]:
-            if key_encryption["key_encryption_algo"] == "SHARED_SECRET":
-                using_shamir = True
-    assert using_shamir
-
     result_data = decrypt_data_from_container(container=container)
 
     # pprint.pprint(result, width=120)
     assert result_data == data
+
+    # Delete 1, 2 and too many share(s) from cipherdict key
+    for data_encryption in container["data_encryption_strata"]:
+        for key_encryption in data_encryption["key_encryption_strata"]:
+            if key_encryption["key_encryption_algo"] == "SHARED_SECRET":
+                key_ciphertext_shares = load_from_json_bytes(
+                    data_encryption["key_ciphertext"]
+                )
+
+                while True:
+                    index = random.randrange(
+                        start=1, stop=len(key_ciphertext_shares["shares"])
+                    )
+                    key_ciphertext_shares["shares"].remove(
+                        key_ciphertext_shares["shares"][index]
+                    )
+                    data_encryption["key_ciphertext"] = dump_to_json_bytes(
+                        key_ciphertext_shares
+                    )
+                    container.update()
+
+                    try:
+                        result_data = decrypt_data_from_container(container=container)
+                        assert result_data == data
+                    except AssertionError:
+                        assert 1
+                        break
 
     result_metadata = extract_metadata_from_container(container=container)
     assert result_metadata == metadata
@@ -301,7 +321,9 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf):
     with pytest.raises(ValueError, match="Unknown container format"):
         decrypt_data_from_container(container=container)
 
+
 # TODO test non-nominal shamir cases
+
 
 def test_get_proxy_for_escrow(tmp_path):
     container_base1 = ContainerBase()

@@ -173,11 +173,9 @@ class ContainerWriter(ContainerBase):
             metadata=metadata,
         )
 
-    # FIXME - we had visibly decided to use "shares" instead of "shards",  so let's normalize this here too
-
     def _encrypt_symmetric_key(
         self, keychain_uid: uuid.UUID, symmetric_key_data: bytes, conf: dict
-    ) -> Union[List[dict], dict]:  # TODO, we return a DICT in every case, it's just that shared secret has a dict(shards=[...])
+    ) -> dict:
         """
         Encrypt a symmetric key using an asymmetric encryption scheme.
 
@@ -189,7 +187,7 @@ class ContainerWriter(ContainerBase):
         :param symmetric_key_data: symmetric key to encrypt (potentially already encrypted)
         :param conf: dictionary which contain configuration tree
 
-        :return: if the scheme used is 'SHARED_SECRET', a list of encrypted shards is returned. If an asymmetric
+        :return: if the scheme used is 'SHARED_SECRET', a list of encrypted shares is returned. If an asymmetric
         algorithm has been used, a dictionary with all the information needed to decipher the symmetric key is returned.
         """
         assert isinstance(symmetric_key_data, bytes), symmetric_key_data
@@ -200,7 +198,11 @@ class ContainerWriter(ContainerBase):
             shares_count = len(escrows)
             threshold_count = conf["key_shared_secret_threshold"]
 
-            logger.debug("Generating Shamir shared secret shards (%d needed amongst %d)", threshold_count, shares_count)
+            logger.debug(
+                "Generating Shamir shared secret shares (%d needed amongst %d)",
+                threshold_count,
+                shares_count,
+            )
 
             shares = split_bytestring_as_shamir_shares(
                 secret=symmetric_key_data,
@@ -210,36 +212,38 @@ class ContainerWriter(ContainerBase):
 
             logger.debug("Secret has been shared into %d escrows", shares_count)
 
-            all_encrypted_shards = self._encrypt_shard(  # FIXME normalize naming to "shares" for now
-                shares=shares, conf=conf, keychain_uid=keychain_uid
+            all_encrypted_shares = self._encrypt_shard(
+                shares=shares,
+                key_shared_secret_escrows=conf["key_shared_secret_escrows"],
+                keychain_uid=keychain_uid,
             )
-
-            return all_encrypted_shards
+            key_cipherdict = {"shares": all_encrypted_shares}
+            return key_cipherdict
 
         else:  # Using asymmetric algorithm
-            key_cipherdict = {}  # Fixme unused
-            try:
-                key_cipherdict = self._asymmetric_encryption(
-                    encryption_algo=key_encryption_algo,
-                    keychain_uid=keychain_uid,
-                    data=symmetric_key_data,
-                    escrow=conf["key_escrow"],
-                )
-            except KeyError:  # Unfoundable key in conf["key_escrow"]
-                logger.error("Error in the configuration tree")  # TODO it's a programming error which should just flow I guess (users don't choose their conf)
-                raise
+
+            key_cipherdict = self._apply_asymmetric_encryption(
+                encryption_algo=key_encryption_algo,
+                keychain_uid=keychain_uid,
+                symmetric_key_data=symmetric_key_data,
+                escrow=conf["key_escrow"],
+            )
 
             return key_cipherdict
 
-    def _asymmetric_encryption(  # Fixme rename to "_apply_asymmetric_encryption()" (always verbs)
-        self, encryption_algo: str, keychain_uid: uuid.UUID, data: bytes, escrow # FIXME data->symmetric_key_data, let's keep it precise
+    def _apply_asymmetric_encryption(
+        self,
+        encryption_algo: str,
+        keychain_uid: uuid.UUID,
+        symmetric_key_data: bytes,
+        escrow,
     ) -> dict:
-        """ TODO normalize docstring params like above
+        """
         Encrypt given data with an asymmetric algorithm.
 
         :param encryption_algo: string with name of algorithm to use
-        :param keychain_uid: uuid which permits to identify container
-        :param data: data as bytes to encrypt
+        :param keychain_uid: uuid for the set of encryption keys used
+        :param symmetric_key_data: symmetric key as bytes to encrypt
         :param escrow: escrow used for encryption (findable in configuration tree)
 
         :return: dictionary which contains every data needed to decrypt the ciphered data
@@ -259,60 +263,51 @@ class ContainerWriter(ContainerBase):
         )
 
         cipherdict = encrypt_bytestring(
-            plaintext=data, encryption_algo=encryption_algo, key=subkey
+            plaintext=symmetric_key_data, encryption_algo=encryption_algo, key=subkey
         )
         return cipherdict
 
-    def _encrypt_shard(self, shares: list, conf: dict, keychain_uid: uuid.UUID) -> dict:
+    def _encrypt_shard(
+        self, shares: list, key_shared_secret_escrows: dict, keychain_uid: uuid.UUID
+    ) -> list:
         """
-        Make a loop through all shards from shared secret algorithm to encrypt each of them.
+        Make a loop through all shares from shared secret algorithm to encrypt each of them.
 
         :param shares: list of tuples containing a shard and its place in the list
-        :param conf: configuration tree inside key_encryption_algo
-        :param keychain_uid: uuid which permits to identify container
+        :param key_shared_secret_escrows: part of configuration tree where every informations about shared secret
+        escrows are
+        :param keychain_uid: uuid for the set of encryption keys used
 
         :return: dictionary with as key a counter and as value the corresponding encrypted shard
         """
-        # FIXME this function should receive key_shared_secret_escrows instead of the whole "conf"
-        # ALL escrows must be alive during encryption, else scheme is broken - it's only during decryption that it's OK to have some fail
-        key_shared_secret_escrows = conf["key_shared_secret_escrows"]
-        key_shared_secret_threshold = conf["key_shared_secret_threshold"]
-        all_encrypted_shards = {}  # FIXME too dangerous, use a simple list instead, and store in it the (shard_number, shard_value) values without touching them
-        # Shards should be treated as opaque objects when possible, and matched to their Escrow via their index in the list
-        error = ""
-        counter = 0
+
+        all_encrypted_shares = []
+        tested_share_counter = 0
 
         for shard in shares:
-            shard_number, shard_value = shard
-            conf_shard = key_shared_secret_escrows[shard_number - 1]
+            conf_shard = key_shared_secret_escrows[tested_share_counter]
             shard_encryption_algo = conf_shard["shard_encryption_algo"]
+            tested_share_counter += 1
 
             try:
-                shard_cipherdict = self._asymmetric_encryption(
+                shard_cipherdict = self._apply_asymmetric_encryption(
                     encryption_algo=shard_encryption_algo,
                     keychain_uid=keychain_uid,
-                    data=shard_value,
+                    symmetric_key_data=shard[1],
                     escrow=conf_shard["shard_escrow"],
                 )
 
-                all_encrypted_shards[shard_number] = shard_cipherdict
-                counter += 1
+                all_encrypted_shares.append((shard[0], shard_cipherdict))
 
             except Exception as e:
-                error = error + str(e) + "\n"
-                logger.error(error)
+                print(
+                    "Couldn't encrypt the shard n°{} : {}".format(
+                        tested_share_counter, e
+                    )
+                )
+                exit()
 
-        assert counter >= key_shared_secret_threshold, (
-            "Error during encryption. Insufficient number of escrows. Errors : \n"
-            + error
-            + "At least "
-            + str(key_shared_secret_threshold)
-            + " are needed. "
-            + str(counter)
-            + " only are present."
-        )
-
-        return all_encrypted_shards
+        return all_encrypted_shares
 
     def _generate_signature(
         self, keychain_uid: uuid.UUID, data_ciphertext: bytes, conf: dict
@@ -320,7 +315,7 @@ class ContainerWriter(ContainerBase):
         """
         Generate a signature for a specific ciphered data.
 
-        :param keychain_uid: uuid which permits to identify container
+        :param keychain_uid: uuid for the set of encryption keys used
         :param data_ciphertext: data as bytes on which to apply signature
         :param conf: configuration tree inside data_signatures
 
@@ -416,7 +411,7 @@ class ContainerReader(ContainerBase):
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
         by a asymmetric algorithm.
 
-        :param keychain_uid: uuid which permits to identify container
+        :param keychain_uid: uuid for the set of encryption keys used
         :param symmetric_key_cipherdict: dictionary which has data needed to decrypt symmetric key
         :param conf: dictionary which contain configuration tree
 
@@ -426,7 +421,6 @@ class ContainerReader(ContainerBase):
         key_encryption_algo = conf["key_encryption_algo"]
 
         if key_encryption_algo == "SHARED_SECRET":  # Using Shamir
-            escrows = conf["key_shared_secret_escrows"]
 
             logger.debug("Deciphering each shard")
             shares = self._decrypt_shard(
@@ -435,7 +429,7 @@ class ContainerReader(ContainerBase):
                 conf=conf,
             )
 
-            logger.debug("Recombining shards")
+            logger.debug("Recombining shares")
             symmetric_key_plaintext = recombine_secret_from_samir_shares(shares=shares)
 
             return symmetric_key_plaintext
@@ -456,7 +450,7 @@ class ContainerReader(ContainerBase):
         Decrypt given cipherdict with an assymetric algorithm
 
         :param encryption_algo: string with name of algorithm to use
-        :param keychain_uid: uuid which permits to identify container
+        :param keychain_uid: uuid for the set of encryption keys used
         :param cipherdict: dictionary which contains every data needed to decrypt the ciphered data
         :param escrow: escrow used for encryption (findable in configuration tree)
 
@@ -492,53 +486,52 @@ class ContainerReader(ContainerBase):
         self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list
     ):
         """
-        Make a loop through all encrypted shards to decrypt each of them
-        :param keychain_uid: uuid which permits to identify container
+        Make a loop through all encrypted shares to decrypt each of them
+
+        :param keychain_uid: uuid for the set of encryption keys used
         :param symmetric_key_cipherdict: dictionary which contains every data needed to decipher each shard
         :param conf: configuration tree inside key_encryption_algo
 
-        :return: list of tuples of deciphered shards
+        :return: list of tuples of deciphered shares
         """
         key_shared_secret_escrows = conf["key_shared_secret_escrows"]
         key_shared_secret_threshold = conf["key_shared_secret_threshold"]
-        counter = 0
+        valid_share_counter = 0
+        tested_share_counter = 0
         shares = []
-        error = ""
-
-        list_keys = list(symmetric_key_cipherdict.keys())
+        errors = []
         for escrow in key_shared_secret_escrows:
-            if counter == key_shared_secret_threshold:
+            if valid_share_counter == key_shared_secret_threshold:
                 logger.debug("A sufficient number of shard has been decrypted")
                 break
 
             shard_encryption_algo = escrow["shard_encryption_algo"]
             shard_escrow = escrow["shard_escrow"]
-            shard_value = list_keys[counter]
-            ciphered_shard = symmetric_key_cipherdict[shard_value]
 
             try:
                 symmetric_key_plaintext = self._asymmetric_decryption(
                     encryption_algo=shard_encryption_algo,
                     keychain_uid=keychain_uid,
-                    cipherdict=ciphered_shard,
+                    cipherdict=symmetric_key_cipherdict["shares"][tested_share_counter][
+                        1
+                    ],
                     escrow=shard_escrow,
                 )
-
-                share = (int(shard_value), symmetric_key_plaintext)
+                share = (
+                    symmetric_key_cipherdict["shares"][tested_share_counter][0],
+                    symmetric_key_plaintext,
+                )
                 shares.append(share)
-                counter += 1
+                valid_share_counter += 1
             except Exception as e:  # If actual escrow doesn't work, we can go to next one
-                error = error + str(e) + "\n"
-                logger.error(error)
-
-        assert counter == key_shared_secret_threshold, (
-            "Error during decryption. Insufficient number of valid shards. Errors : \n"
-            + error
-            + "At least "
-            + str(key_shared_secret_threshold)
-            + " are needed. "
-            + str(counter)
-            + " only are valid here."
+                errors.append(e)
+                logger.error(e)
+            tested_share_counter += 1
+        assert valid_share_counter == key_shared_secret_threshold, (
+            "Error during decryption. Insufficient number of valid shares. Errors : \n {} At least {} are needed. {} "
+            "only are valid here.".format(
+                errors, key_shared_secret_threshold, valid_share_counter
+            )
         )
         return shares
 
@@ -548,7 +541,7 @@ class ContainerReader(ContainerBase):
         """
         Verify a signature for a specific message. An error is raised if signature isn't correct.
 
-        :param keychain_uid: uuid which permits to identify container
+        :param keychain_uid: uuid for the set of encryption keys used
         :param message: message as bytes on which to verify signature
         :param conf: configuration tree inside data_signatures
         """

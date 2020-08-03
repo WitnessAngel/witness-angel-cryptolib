@@ -295,24 +295,53 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf):
                     data_encryption["key_ciphertext"]
                 )
 
-                while True:
-                    index = random.randrange(
-                        start=1, stop=len(key_ciphertext_shares["shares"])
-                    )
-                    key_ciphertext_shares["shares"].remove(
-                        key_ciphertext_shares["shares"][index]
-                    )
-                    data_encryption["key_ciphertext"] = dump_to_json_bytes(
-                        key_ciphertext_shares
-                    )
-                    container.update()
+                # 1 share is deleted
+                index = random.randrange(
+                    start=1, stop=len(key_ciphertext_shares["shares"])
+                )
+                key_ciphertext_shares["shares"].remove(
+                    key_ciphertext_shares["shares"][index]
+                )
+                data_encryption["key_ciphertext"] = dump_to_json_bytes(
+                    key_ciphertext_shares
+                )
+                container.update()
 
-                    try:
-                        result_data = decrypt_data_from_container(container=container)
-                        assert result_data == data
-                    except AssertionError:
-                        assert 1
-                        break
+                result_data = decrypt_data_from_container(container=container)
+                assert result_data == data
+
+                # another share is deleted
+
+                index = random.randrange(
+                    start=1, stop=len(key_ciphertext_shares["shares"])
+                )
+                key_ciphertext_shares["shares"].remove(
+                    key_ciphertext_shares["shares"][index]
+                )
+                data_encryption["key_ciphertext"] = dump_to_json_bytes(
+                    key_ciphertext_shares
+                )
+                container.update()
+
+                result_data = decrypt_data_from_container(container=container)
+                assert result_data == data
+
+                # another share is deleted but there isn't enough valid ones to decipher data
+
+                index = random.randrange(
+                    start=1, stop=len(key_ciphertext_shares["shares"])
+                )
+                key_ciphertext_shares["shares"].remove(
+                    key_ciphertext_shares["shares"][index]
+                )
+                data_encryption["key_ciphertext"] = dump_to_json_bytes(
+                    key_ciphertext_shares
+                )
+                container.update()
+
+                with pytest.raises(AssertionError):
+                    decrypt_data_from_container(container=container)
+                    break
 
     result_metadata = extract_metadata_from_container(container=container)
     assert result_metadata == metadata
@@ -320,9 +349,6 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf):
     container["container_format"] = "OAJKB"
     with pytest.raises(ValueError, match="Unknown container format"):
         decrypt_data_from_container(container=container)
-
-
-# TODO test non-nominal shamir cases
 
 
 def test_get_proxy_for_escrow(tmp_path):

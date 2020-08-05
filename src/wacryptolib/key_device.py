@@ -5,14 +5,13 @@ from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 from wacryptolib.utilities import generate_uuid0
 
 
-# FIXME - in the rest of the lib we use name_uid everywhere, so let's rename "uuid" to "device_uid" for consistency
 
 def list_available_key_devices():
 
     """
     Generate a list of dictionaries representing mounted partitions of USB keys.
 
-    :return: (list) Dictionaries having at least these fields: path, label, format, size, is_initialized, initialized_user, initialized_uuid
+    :return: (list) Dictionaries having at least these fields: path, label, format, size, is_initialized, initialized_user, initialized_device_uid
     
         - "path"  : string, mount point on the filesystem.
         - "label" : string of characters, possibly empty, label of the partition
@@ -20,7 +19,7 @@ def list_available_key_devices():
         - "size"  : filesystem size in bytes
         - "is_initialized"  : if the device has been initialized with the ".metadata.json" file
         - "initialized_user": empty if device not initialized, otherwise value of “user” from metadata
-        - "initialized_uuid": empty if device not initialized, otherwise value of “uuid” from metadata
+        - "initialized_device_uid": empty if device not initialized, otherwise value of “device_uid” from metadata
    
     
     The linux environment has an additional field which is 'partition'.
@@ -48,19 +47,18 @@ def initialize_key_device(key_device: dict, user: str):
 
     if key_device["is_initialized"]:
         raise RuntimeError("%s : key is already initialized" % key_device["path"])
-    # FIXME these initializations functions are of type "succeed or raise exception", so no need for res, if nothing was raised it means that operation succeeded
     if sys_platform == "win32":  # All Windows versions
-        res = _initialize_key_device_win32(key_device=key_device, user=user)
+        _initialize_key_device_win32(key_device=key_device, user=user)
     elif sys_platform.startswith("linux"):
-        res = _initialize_key_device_linux(key_device=key_device, user=user)
+        _initialize_key_device_linux(key_device=key_device, user=user)
     else:
         raise RuntimeError("%s OS not supported" % sys_platform)
 
-    key_device["is_initialized"] = res  # Always True, by construction
+    key_device["is_initialized"] = True  
     metadata_file = _get_metadata_file_path(key_device)
     meta = load_from_json_file(metadata_file)
     key_device["initialized_user"] = meta["user"]
-    key_device["initialized_uuid"] = meta["uuid"]
+    key_device["initialized_device_uid"] = meta["device_uid"]
 
 
 def is_key_device_initialized(key_device: dict):
@@ -80,7 +78,7 @@ def is_key_device_initialized(key_device: dict):
 
     meta = load_from_json_file(metadata_file)
 
-    if isinstance(meta, dict) and meta.get("user") and meta.get("uuid"):  # Lightweight checkup
+    if isinstance(meta, dict) and meta.get("user") and meta.get("device_uid"):  # Lightweight checkup
         return True
     raise ValueError("Abnormal key device metadata: %s" % str(meta))
 
@@ -115,10 +113,10 @@ def _list_available_key_devices_win32():
                     key_device
                 )  # E.g True
 
-                if not key_device["is_initialized"]:  # FIXME duplicate internally and with code below
-                    key_device["initialized_user"] = ""
-                    key_device["initialized_uuid"] = ""
-                else:
+                key_device["initialized_user"] = ""
+                key_device["initialized_uuid"] = ""
+                
+                if key_device["is_initialized"]:
                     metadata_file = _get_metadata_file_path(key_device)
                     meta = load_from_json_file(metadata_file)
                     key_device["initialized_user"] = meta["user"]
@@ -164,10 +162,9 @@ def _list_available_key_devices_linux():
                 key_device
             )  # E.g False
 
-            if key_device["is_initialized"] == False:  # FIXME duplicate internally and with code above
-                key_device["initialized_user"] = ""
-                key_device["initialized_uuid"] = ""
-            else:
+            key_device["initialized_user"] = ""
+            key_device["initialized_uuid"] = ""
+            if key_device["is_initialized"]:
                 metadata_file = _get_metadata_file_path(key_device)
                 meta = load_from_json_file(metadata_file)
                 key_device["initialized_user"] = meta["user"]
@@ -183,10 +180,12 @@ def _common_key_device_initialization(hidden_file: Path, user: str):
     if not Path(hidden_folder).exists():
         Path(hidden_file.parent).mkdir()
     metadata = {}  # FIXME directly create the whole dict here, no need to insert values later
-    # E.g {'uuid': UUID('0e7ee05d-07ad-75bc-c1f9-05db3e0680ca'), 'user': 'John Doe'}
-    metadata["uuid"] = generate_uuid0()
+    # E.g {'device_uid': device_uid('0e7ee05d-07ad-75bc-c1f9-05db3e0680ca'), 'user': 'John Doe'}
+    metadata["device_uid"] = generate_uuid0()
     metadata["user"] = user
     dump_to_json_file(hidden_file, metadata)
+  
+
 
 
 def _get_metadata_file_path(key_device: dict):
@@ -203,7 +202,7 @@ def _initialize_key_device_win32(key_device: dict, user: str):
 
     win32api.SetFileAttributes(str(hidden_file.parent), win32con.FILE_ATTRIBUTE_HIDDEN)
     win32api.SetFileAttributes(str(hidden_file), win32con.FILE_ATTRIBUTE_HIDDEN)
-    return True  # FIXME - meaningless, so don't return anything
+    
 
 
 def _initialize_key_device_linux(key_device: dict, user: str):
@@ -211,4 +210,5 @@ def _initialize_key_device_linux(key_device: dict, user: str):
     hidden_file = _get_metadata_file_path(key_device)
     _common_key_device_initialization(hidden_file, user)
 
-    return True  # FIXME - meaningless, so don't return anything
+    
+

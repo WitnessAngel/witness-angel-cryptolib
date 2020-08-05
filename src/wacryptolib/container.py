@@ -212,6 +212,8 @@ class ContainerWriter(ContainerBase):
 
             logger.debug("Secret has been shared into %d escrows", shares_count)
 
+            # FIXME - there are still 28 occurrences of "shard(s)", replace them by share(s) #
+
             all_encrypted_shares = self._encrypt_shard(
                 shares=shares,
                 key_shared_secret_escrows=conf["key_shared_secret_escrows"],
@@ -299,7 +301,8 @@ class ContainerWriter(ContainerBase):
 
                 all_encrypted_shares.append((shard[0], shard_cipherdict))
 
-            except Exception as e:
+            except Exception as e:  # Rename to "exc" for consistency with the rest of the lib (and pylint hates singlechar variables)
+                # Nope, but you can wrap like raise RuntimeError("Couldn't ..... (%r)", exc) to enrich info
                 print(
                     "Couldn't encrypt the shard n°{} : {}".format(
                         tested_share_counter, e
@@ -429,7 +432,7 @@ class ContainerReader(ContainerBase):
                 conf=conf,
             )
 
-            logger.debug("Recombining shares")
+            logger.debug("Recombining shared-secret shares")
             symmetric_key_plaintext = recombine_secret_from_samir_shares(shares=shares)
 
             return symmetric_key_plaintext
@@ -527,6 +530,7 @@ class ContainerReader(ContainerBase):
                 errors.append(e)
                 logger.error(e)
             tested_share_counter += 1
+        # FIXME - no assert works in production, raise a proper error (let's use RuntimeError until we define proper Exception subclasses)
         assert valid_share_counter == key_shared_secret_threshold, (
             "Error during decryption. Insufficient number of valid shares. Errors : \n {} At least {} are needed. {} "
             "only are valid here.".format(

@@ -212,9 +212,7 @@ class ContainerWriter(ContainerBase):
 
             logger.debug("Secret has been shared into %d escrows", shares_count)
 
-            # FIXME - there are still 28 occurrences of "shard(s)", replace them by share(s) #
-
-            all_encrypted_shares = self._encrypt_shard(
+            all_encrypted_shares = self._encrypt_share(
                 shares=shares,
                 key_shared_secret_escrows=conf["key_shared_secret_escrows"],
                 keychain_uid=keychain_uid,
@@ -269,46 +267,44 @@ class ContainerWriter(ContainerBase):
         )
         return cipherdict
 
-    def _encrypt_shard(
+    def _encrypt_share(
         self, shares: list, key_shared_secret_escrows: dict, keychain_uid: uuid.UUID
     ) -> list:
         """
         Make a loop through all shares from shared secret algorithm to encrypt each of them.
 
-        :param shares: list of tuples containing a shard and its place in the list
+        :param shares: list of tuples containing a share and its place in the list
         :param key_shared_secret_escrows: part of configuration tree where every informations about shared secret
         escrows are
         :param keychain_uid: uuid for the set of encryption keys used
 
-        :return: dictionary with as key a counter and as value the corresponding encrypted shard
+        :return: dictionary with as key a counter and as value the corresponding encrypted share
         """
 
         all_encrypted_shares = []
         tested_share_counter = 0
 
-        for shard in shares:
-            conf_shard = key_shared_secret_escrows[tested_share_counter]
-            shard_encryption_algo = conf_shard["shard_encryption_algo"]
+        for share in shares:
+            conf_share = key_shared_secret_escrows[tested_share_counter]
+            share_encryption_algo = conf_share["share_encryption_algo"]
             tested_share_counter += 1
 
             try:
-                shard_cipherdict = self._apply_asymmetric_encryption(
-                    encryption_algo=shard_encryption_algo,
+                share_cipherdict = self._apply_asymmetric_encryption(
+                    encryption_algo=share_encryption_algo,
                     keychain_uid=keychain_uid,
-                    symmetric_key_data=shard[1],
-                    escrow=conf_shard["shard_escrow"],
+                    symmetric_key_data=share[1],
+                    escrow=conf_share["share_escrow"],
                 )
 
-                all_encrypted_shares.append((shard[0], shard_cipherdict))
+                all_encrypted_shares.append((share[0], share_cipherdict))
 
-            except Exception as e:  # Rename to "exc" for consistency with the rest of the lib (and pylint hates singlechar variables)
-                # Nope, but you can wrap like raise RuntimeError("Couldn't ..... (%r)", exc) to enrich info
-                print(
-                    "Couldn't encrypt the shard n°{} : {}".format(
-                        tested_share_counter, e
+            except Exception as exc:
+                raise RuntimeError(
+                    "Couldn't encrypt the share n°{} : {}".format(
+                        tested_share_counter, exc
                     )
                 )
-                exit()
 
         return all_encrypted_shares
 
@@ -425,8 +421,8 @@ class ContainerReader(ContainerBase):
 
         if key_encryption_algo == "SHARED_SECRET":  # Using Shamir
 
-            logger.debug("Deciphering each shard")
-            shares = self._decrypt_shard(
+            logger.debug("Deciphering each share")
+            shares = self._decrypt_share(
                 keychain_uid=keychain_uid,
                 symmetric_key_cipherdict=symmetric_key_cipherdict,
                 conf=conf,
@@ -485,14 +481,14 @@ class ContainerReader(ContainerBase):
 
         return symmetric_key_plaintext
 
-    def _decrypt_shard(
+    def _decrypt_share(
         self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list
     ):
         """
         Make a loop through all encrypted shares to decrypt each of them
 
         :param keychain_uid: uuid for the set of encryption keys used
-        :param symmetric_key_cipherdict: dictionary which contains every data needed to decipher each shard
+        :param symmetric_key_cipherdict: dictionary which contains every data needed to decipher each share
         :param conf: configuration tree inside key_encryption_algo
 
         :return: list of tuples of deciphered shares
@@ -505,20 +501,20 @@ class ContainerReader(ContainerBase):
         errors = []
         for escrow in key_shared_secret_escrows:
             if valid_share_counter == key_shared_secret_threshold:
-                logger.debug("A sufficient number of shard has been decrypted")
+                logger.debug("A sufficient number of share has been decrypted")
                 break
 
-            shard_encryption_algo = escrow["shard_encryption_algo"]
-            shard_escrow = escrow["shard_escrow"]
+            share_encryption_algo = escrow["share_encryption_algo"]
+            share_escrow = escrow["share_escrow"]
 
             try:
                 symmetric_key_plaintext = self._asymmetric_decryption(
-                    encryption_algo=shard_encryption_algo,
+                    encryption_algo=share_encryption_algo,
                     keychain_uid=keychain_uid,
                     cipherdict=symmetric_key_cipherdict["shares"][tested_share_counter][
                         1
                     ],
-                    escrow=shard_escrow,
+                    escrow=share_escrow,
                 )
                 share = (
                     symmetric_key_cipherdict["shares"][tested_share_counter][0],
@@ -530,13 +526,9 @@ class ContainerReader(ContainerBase):
                 errors.append(e)
                 logger.error(e)
             tested_share_counter += 1
-        # FIXME - no assert works in production, raise a proper error (let's use RuntimeError until we define proper Exception subclasses)
-        assert valid_share_counter == key_shared_secret_threshold, (
-            "Error during decryption. Insufficient number of valid shares. Errors : \n {} At least {} are needed. {} "
-            "only are valid here.".format(
-                errors, key_shared_secret_threshold, valid_share_counter
-            )
-        )
+
+        if valid_share_counter != key_shared_secret_threshold:
+            raise RuntimeError("valid(s) share(s) missing")
         return shares
 
     def _verify_message_signature(

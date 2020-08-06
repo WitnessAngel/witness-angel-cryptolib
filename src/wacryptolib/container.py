@@ -31,6 +31,8 @@ from wacryptolib.utilities import (
     synchronized,
     catch_and_log_exception,
 )
+from wacryptolib.utilities import dump_to_json_file, load_from_json_file
+
 
 logger = logging.getLogger(__name__)
 
@@ -632,6 +634,7 @@ class ContainerStorage:
         max_containers_count: int = None,
         local_key_storage: KeyStorageBase = None,
         max_workers=1,
+        offload_data_ciphertext = True
     ):
         containers_dir = Path(containers_dir)
         assert containers_dir.is_dir(), containers_dir
@@ -648,6 +651,36 @@ class ContainerStorage:
         )
         self._pending_executor_futures = []
         self._lock = threading.Lock()
+        self._offload_data_ciphertext=offload_data_ciphertext
+    
+    
+    def _load_container(self, container_filepath, include_data_ciphertext = True) -> dict:
+        
+        container = load_from_json_file(container_filepath+'.json')
+        
+
+        if container['data_ciphertext'] == 'DATA_OFFLOADING_MARKER':
+            if include_data_ciphertext == True:
+                data_ciphertext = open(container_filepath + ".data", "r")
+                container['data_ciphertext'] = data_ciphertext.read()
+                dump_to_json_file(container_filepath+'.json', container)
+            else:
+                del container['data_ciphertext']
+   
+        return container
+                
+                
+            
+    def _dump_container(self, container_filepath, container) -> None:
+        
+        if self._offload_data_ciphertext == True:
+            dump_to_json_file(container_filepath+'.data', container['data_ciphertext'])
+            container['data_ciphertext'] = 'DATA_OFFLOADING_MARKER'
+            container_data_bytes = dump_to_json_bytes(container, indent=4)
+            with open(container_filepath+'.json', 'wb') as f:
+                f.write(container_data_bytes)
+    
+    
 
     def __del__(self):
         self._thread_pool_executor.shutdown(wait=False)
@@ -839,3 +872,6 @@ def get_encryption_configuration_summary(conf_or_container):
             )
     result = "\n".join(lines) + "\n"
     return result
+
+
+

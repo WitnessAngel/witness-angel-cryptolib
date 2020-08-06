@@ -109,29 +109,29 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
                     key_shared_secret_threshold=3,
                     key_shared_secret_escrows=[
                         dict(
-                            shard_encryption_algo="RSA_OAEP",
+                            share_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shard_encryption_algo="RSA_OAEP",
+                            share_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shard_encryption_algo="RSA_OAEP",
+                            share_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shard_encryption_algo="RSA_OAEP",
+                            share_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shard_encryption_algo="RSA_OAEP",
+                            share_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                     ],
                 ),
@@ -181,30 +181,27 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
                     key_shared_secret_threshold=2,
                     key_shared_secret_escrows=[
                         dict(
-                            shard_encryption_algo="RSA_OAEP",
+                            share_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shard_encryption_algo="RSA_OAEP",
+                            share_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shard_encryption_algo="RSA_OAEP",
+                            share_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
-                            shard_encryption_algo="RSA_OAEP",
+                            share_encryption_algo="RSA_OAEP",
                             # shared_escrow=dict(url="http://example.com/jsonrpc"),
-                            shard_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                     ],
-                ),
-                # dict(  # In test, use ir or remove this code?
-                #     key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
-                # ),
+                )
             ],
             data_signatures=[
                 dict(
@@ -284,69 +281,47 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf):
 
     result_data = decrypt_data_from_container(container=container)
 
-    # pprint.pprint(result, width=120)
     assert result_data == data
-	
-    # FIXME, confusing test structure : you must FIRST search for the proper key encryption strata, 
-    # by looping, then break, and then do the multi-steps tests
-    # else it looks like the "1, 2, 3" is made by the looping, whereas it's not 
-    # (and here the test would fail if multiple shamir secrets existed in conf)
 
+    data_encryption_shamir = {}
     # Delete 1, 2 and too many share(s) from cipherdict key
     for data_encryption in container["data_encryption_strata"]:
         for key_encryption in data_encryption["key_encryption_strata"]:
             if key_encryption["key_encryption_algo"] == "SHARED_SECRET":
-                key_ciphertext_shares = load_from_json_bytes(
-                    data_encryption["key_ciphertext"]
-                )
+                data_encryption_shamir = data_encryption
 
-                # 1 share is deleted
-                index = random.randrange(
-                    start=1, stop=len(key_ciphertext_shares["shares"])
-                )
-                key_ciphertext_shares["shares"].remove(
-                    key_ciphertext_shares["shares"][index]
-                )
-                data_encryption["key_ciphertext"] = dump_to_json_bytes(
-                    key_ciphertext_shares
-                )
-                container.update()  #Fixme what is this?
+    key_ciphertext_shares = load_from_json_bytes(
+        data_encryption_shamir["key_ciphertext"]
+    )
 
-                result_data = decrypt_data_from_container(container=container)
-                assert result_data == data
+    # 1 share is deleted
+    index = random.randrange(start=1, stop=len(key_ciphertext_shares["shares"]))
+    del key_ciphertext_shares["shares"][index]
 
-                # Another share is deleted
+    data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
 
-                index = random.randrange(
-                    start=1, stop=len(key_ciphertext_shares["shares"])
-                )
-                key_ciphertext_shares["shares"].remove(  # just use del array[idx]
-                    key_ciphertext_shares["shares"][index]
-                )
-                data_encryption["key_ciphertext"] = dump_to_json_bytes(
-                    key_ciphertext_shares
-                )
-                container.update() # Useless
+    result_data = decrypt_data_from_container(container=container)
+    assert result_data == data
 
-                result_data = decrypt_data_from_container(container=container)
-                assert result_data == data
+    # Another share is deleted
 
-                # Another share is deleted and now there aren't enough valid ones to decipher data
+    index = random.randrange(start=1, stop=len(key_ciphertext_shares["shares"]))
+    del key_ciphertext_shares["shares"][index]
 
-                index = random.randrange(
-                    start=1, stop=len(key_ciphertext_shares["shares"])
-                )
-                key_ciphertext_shares["shares"].remove(   just use del array[idx]
-                    key_ciphertext_shares["shares"][index]
-                )
-                data_encryption["key_ciphertext"] = dump_to_json_bytes(
-                    key_ciphertext_shares
-                )
-                container.update() # Useless
+    data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
 
-                with pytest.raises(AssertionError): # Exception shall change now
-                    decrypt_data_from_container(container=container)
-                    break  # This is never met, it raises before
+    result_data = decrypt_data_from_container(container=container)
+    assert result_data == data
+
+    # Another share is deleted and now there aren't enough valid ones to decipher data
+
+    index = random.randrange(start=1, stop=len(key_ciphertext_shares["shares"]))
+    del key_ciphertext_shares["shares"][index]
+
+    data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
+
+    with pytest.raises(RuntimeError):
+        decrypt_data_from_container(container=container)
 
     result_metadata = extract_metadata_from_container(container=container)
     assert result_metadata == metadata

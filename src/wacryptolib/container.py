@@ -634,7 +634,7 @@ class ContainerStorage:
         max_containers_count: int = None,
         local_key_storage: KeyStorageBase = None,
         max_workers=1,
-        offload_data_ciphertext = True
+        offload_data_ciphertext=True,
     ):
         containers_dir = Path(containers_dir)
         assert containers_dir.is_dir(), containers_dir
@@ -651,37 +651,45 @@ class ContainerStorage:
         )
         self._pending_executor_futures = []
         self._lock = threading.Lock()
-        self._offload_data_ciphertext=offload_data_ciphertext
-    
-    
-    def _load_container(self, container_filepath, include_data_ciphertext = True) -> dict:
-        
-        container = load_from_json_file(container_filepath+'.json')
-        
+        self._offload_data_ciphertext = offload_data_ciphertext
 
-        if container['data_ciphertext'] == 'DATA_OFFLOADING_MARKER':
-            if include_data_ciphertext == True:
-                data_ciphertext = open(container_filepath + ".data", "r")
-                container['data_ciphertext'] = data_ciphertext.read()
-                dump_to_json_file(container_filepath+'.json', container)
+    def _load_container(self, container_filepath, include_data_ciphertext=True) -> dict:
+        """
+        Check the value of data_ciphertext in the loaded json tree, and if it's the DATA_OFFLOADING_MARKER, then:
+        -if include_data_ciphertext is true,  load the file container_filepath+".data" and insert it into the json tree.
+        -if include_data_ciphertext is false, delete "data_ciphertext" field in the container object.
+        """
+        container_file_path = self._get_container_file_path(container_filepath)
+        container = load_from_json_file(container_file_path + ".json")
+
+        if container["data_ciphertext"] == "[OFFLOADED]":
+            if include_data_ciphertext:
+                data_cipher_text_c = load_from_json_file(container_file_path + ".data")
+                container["data_ciphertext"] = data_cipher_text_c
+                dump_to_json_file(container_file_path + ".json", container)
             else:
-                del container['data_ciphertext']
-   
-        return container
-                
-                
-            
-    def _dump_container(self, container_filepath, container) -> None:
-        
-        if self._offload_data_ciphertext == True:
-            dump_to_json_file(container_filepath+'.data', container['data_ciphertext'])
-            container['data_ciphertext'] = 'DATA_OFFLOADING_MARKER'
-            container_data_bytes = dump_to_json_bytes(container, indent=4)
-            with open(container_filepath+'.json', 'wb') as f:
-                f.write(container_data_bytes)
-    
-    
+                del container["data_ciphertext"]
 
+        return container
+
+    def _get_container_file_path(self, container_filepath):
+        return str(Path(self._containers_dir).joinpath(container_filepath))
+
+    def _dump_container(self, container_filepath, container) -> None:
+        """
+        Extract data_ciphertext from the container tree, replace it by DATA_OFFLOADING_MARKER,
+        dump the ciphertext separately as a file named container_filepath+'.data',
+        but only if self._offload_data_ciphertext is true. 
+        """
+        container_file_path = self._get_container_file_path(container_filepath)
+
+        if self._offload_data_ciphertext:
+            dump_to_json_file(
+                container_file_path + ".data", container["data_ciphertext"]
+            )
+            container["data_ciphertext"] = "[OFFLOADED]"
+            container_data = dump_to_json_file(container_file_path + ".json", container)
+        
     def __del__(self):
         self._thread_pool_executor.shutdown(wait=False)
 
@@ -872,6 +880,3 @@ def get_encryption_configuration_summary(conf_or_container):
             )
     result = "\n".join(lines) + "\n"
     return result
-
-
-

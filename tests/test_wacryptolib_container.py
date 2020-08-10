@@ -23,6 +23,7 @@ from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error
 from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes
+from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -528,3 +529,67 @@ def test_get_encryption_configuration_summary():
 
     with pytest.raises(ValueError, match="Unrecognized key escrow"):
         get_encryption_configuration_summary(CONF_WITH_BROKEN_ESCROW)
+
+
+@pytest.mark.parametrize(
+    "container_conf", [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF]
+)
+def test_dump_load_container(tmp_path, container_conf):
+
+    data = b"abc"  # get_random_bytes(random.randint(1, 1000))
+
+    keychain_uid = random.choice(
+        [None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")]
+    )
+
+    metadata = random.choice([None, dict(a=[123])])
+
+    container = encrypt_data_into_container(
+        data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata
+    )
+
+    temp_path1 = tmp_path / "sub1"
+    temp_path1.mkdir()
+    temp_path1 = str(temp_path1)
+
+    temp_path2 = tmp_path / "sub2"
+    temp_path2.mkdir()
+    temp_path2 = str(temp_path2)
+
+    container_data_before_dump = container["data_ciphertext"]
+    """self._offload_data_ciphertext==True"""
+    con_stor1 = ContainerStorage(
+        encryption_conf=container_conf, containers_dir=temp_path1
+    )
+    con_stor1._dump_container("MyContainer1", container)
+    container_file_path = con_stor1._get_container_file_path("MyContainer1")
+    # make sure the file is created with '.data' in the same location of the 'container'
+    assert Path(container_file_path + ".data").exists()
+    data = load_from_json_file(container_file_path + ".data")
+    # make sure the file with '.data' contains the 'data_ciphertext' field of the 'container'
+    assert data == container_data_before_dump
+    data_json = load_from_json_file(container_file_path + ".json")
+    # make sure the file with '.json' contains '[OFFLOADED]' instead of the 'data_ciphertext' field of the 'container'
+    assert data_json["data_ciphertext"] == "[OFFLOADED]"
+
+    con_stor1._load_container("MyContainer1", include_data_ciphertext=False)
+    data_json = load_from_json_file(container_file_path + ".json")
+    # no change: make sure the file with '.json' contains '[OFFLOADED]'
+    assert data_json["data_ciphertext"] == "[OFFLOADED]"
+
+    con_stor1._load_container("MyContainer1")
+    data_json = load_from_json_file(container_file_path + ".json")
+    # make sure the file with '.json' contains the 'data_ciphertext' field of the 'container' instead of '[OFFLOADED]'
+    assert data == data_json["data_ciphertext"]
+
+    """self._offload_data_ciphertext==False"""
+    con_stor2 = ContainerStorage(
+        encryption_conf=container_conf,
+        containers_dir=temp_path2,
+        offload_data_ciphertext=False,
+    )
+    con_stor2._dump_container("MyContainer2", container)
+    container_file_path2 = con_stor2._get_container_file_path("MyContainer2")
+    # ensure the absence of the file with '.data' and of the '.json' file
+    assert not Path(container_file_path2 + ".data").exists()
+    assert not Path(container_file_path2 + ".json").exists()

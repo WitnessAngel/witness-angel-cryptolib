@@ -65,6 +65,7 @@ def generate_asymmetric_keypair(
     return keypair
 
 
+                
 def load_asymmetric_key_from_pem_bytestring(
     key_pem: bytes, *, key_type: str, passphrase: bytes = None
 ):
@@ -220,3 +221,5 @@ SUPPORTED_ASYMMETRIC_KEY_TYPES = sorted(ASYMMETRIC_KEY_TYPES_REGISTRY.keys())
 
 #: These values can be used as 'encryption_algo' for symmetric key generation.
 SUPPORTED_SYMMETRIC_KEY_ALGOS = ["AES_CBC", "AES_EAX", "CHACHA20_POLY1305"]
+
+

@@ -5,6 +5,8 @@ import threading
 import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
+from os.path import  join
+import glob
 
 from wacryptolib.utilities import synchronized
 
@@ -320,3 +322,36 @@ class FilesystemKeyStorage(KeyStorageBase):
         # First move the private key, so that it's not shown anymore as "free"
         free_private_key.replace(target_private_key_filename)
         free_public_key.replace(target_public_key_filename)
+
+    def list_keys(self):
+        """
+        For each public key found, it extracts its metadata from the filename (using a regex "* public_key.pem") .
+        
+        Returns a LIST of public keys information dicts.
+        """
+        
+        monRepertoire=self._keys_dir
+        files_grabbed = []
+        types = ('DSA_DSS', 'ECC_DSS', 'RSA_OAEP', 'RSA_PSS')
+        for type_crypt in types:
+            regex_public_key='[a-z0-9]'*8 +'-' +'[a-z0-9]'*4 + '-' + '[a-z0-9]'*4 + '-' +'[a-z0-9]'*4 + '-' + '[a-z0-9]'*12 + '_' + type_crypt +'_public_key.pem'
+            files_grabbed.extend(glob.glob(join(monRepertoire,regex_public_key )))
+            public_key_list=[]
+            for f in files_grabbed:
+                parts_file = f.split("\\")
+                parts_files1 = parts_file[-1].split(".")
+                parts_files = parts_files1[0].split("_")
+                private_public_key_present=parts_files[3]+parts_files[4]
+                if private_public_key_present=='publickey':
+                    public_key={}
+                    public_key['keychain_uid']=parts_files[0]
+                    public_key['key_type']=parts_files[1]+'_'+parts_files[2]
+                    key_private_name=parts_files[0]+'_'+parts_files[1]+'_'+parts_files[2]+'_private_key.pem'
+                    source=join(monRepertoire,key_private_name)
+                    if Path(source).exists():
+                        public_key['private_key_present']=True
+                    else:
+                        public_key['private_key_present']=False
+                    public_key_list.append(public_key)
+        return public_key_list
+            

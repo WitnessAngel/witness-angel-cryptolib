@@ -1,5 +1,6 @@
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
+import os
 
 from wacryptolib.container import (
     LOCAL_ESCROW_PLACEHOLDER,
@@ -8,6 +9,7 @@ from wacryptolib.container import (
     CONTAINER_SUFFIX,
     MEDIUM_SUFFIX,
 )
+from wacryptolib.key_storage import FilesystemKeyStorage
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -15,6 +17,10 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 # TODO - much later, use "schema" for validation of config data and container format!  See https://github.com/keleshev/schema
 # Then export corresponding jsons-chema for the world to see!
 
+local_key_storage_dir = os.path.join(os.getcwd(), ".key_storage")
+if not os.path.exists(local_key_storage_dir):
+    os.mkdir(local_key_storage_dir)
+LOCAL_KEY_STORAGE = FilesystemKeyStorage(keys_dir=local_key_storage_dir)
 
 EXAMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -23,6 +29,18 @@ EXAMPLE_CONTAINER_CONF = dict(
             key_encryption_strata=[
                 dict(
                     key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                ),
+                dict(
+                    key_encryption_algo="SHARED_SECRET",
+                    key_shared_secret_threshold=1,
+                    key_shared_secret_escrows=[
+                        dict(
+                            share_encryption_algo="RSA_OAEP",
+                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                        ),
+                        dict(
+                            share_encryption_algo="RSA_OAEP",
+                            share_escrow=LOCAL_ESCROW_PLACEHOLDER)]
                 )
             ],
             data_signatures=[
@@ -53,7 +71,7 @@ def cli(ctx, config):
 
 def _do_encrypt(data):
     container = encrypt_data_into_container(
-        data, conf=EXAMPLE_CONTAINER_CONF, metadata=None
+        data, conf=EXAMPLE_CONTAINER_CONF, metadata=None, local_key_storage=LOCAL_KEY_STORAGE
     )
     return container
 
@@ -76,7 +94,7 @@ def encrypt(input_medium, output_container):
 
 
 def _do_decrypt(container):
-    data = decrypt_data_from_container(container)
+    data = decrypt_data_from_container(container, local_key_storage=LOCAL_KEY_STORAGE)
     return data
 
 

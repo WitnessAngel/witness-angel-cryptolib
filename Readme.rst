@@ -20,3 +20,14 @@ It also provides utilities for webservices and their error handling, as well as 
 the library may easily check their their own subclasses respect the invariants of this system.
 
 
+CLI interface
+----------------
+
+You can play with containers using this command line interface.
+For now, these CLI-generated containers use a hard-coded and simple cryptographic conf, using only locally-stored keys, so they are insecure.
+
+::
+
+    $ python -m wacryptolib encrypt -i <data-file> -o <container-file>
+
+    $ python -m wacryptolib decrypt -i <container-file> -o <data-file>

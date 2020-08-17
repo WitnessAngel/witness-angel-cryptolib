@@ -66,7 +66,19 @@ def test_key_storages_free_keys_concurrency(tmp_path):
     "key_type", ['DSA_DSS', 'ECC_DSS', 'RSA_OAEP', 'RSA_PSS']
 )
 def test_list_keys(tmp_path,key_type):
-    
+
+    """
+    FIXME it's abnormal to have only one call to list_keys() here
+
+    A normal test is :
+    - try list_keys on an empty key storage
+    - add some keys
+    - test list_keys() and the count+format of dicts (using a local _check_key() utility for example)
+    - remove 1 private key file
+    - retest list_keys(), checking private_key_present value especially (reuse _check_key())
+    - destroy all public key files
+    - check that list_keys() returns empty list
+    """
   
     from wacryptolib.key_generation import generate_asymmetric_keypair
     from wacryptolib.utilities import generate_uuid0
@@ -98,7 +110,7 @@ def test_list_keys(tmp_path,key_type):
         assert isinstance(public_key["keychain_uid"], str)
         
         assert (public_key["private_key_present"] == True) or (
-            public_key["private_key_present"] == False
+            public_key["private_key_present"] == False  # We almost never do "== True/false" in Python
         )
         
         assert public_key["key_type"] in ('DSA_DSS', 'ECC_DSS', 'RSA_OAEP', 'RSA_PSS')

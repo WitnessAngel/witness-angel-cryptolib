@@ -334,7 +334,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         files_grabbed = []
         types = ('DSA_DSS', 'ECC_DSS', 'RSA_OAEP', 'RSA_PSS')
         for type_crypt in types:
-            regex_public_key='[a-z0-9]'*8 +'-' +'[a-z0-9]'*4 + '-' + '[a-z0-9]'*4 + '-' +'[a-z0-9]'*4 + '-' + '[a-z0-9]'*12 + '_' + type_crypt +'_public_key.pem'
+            regex_public_key='[a-z0-9]'*8 +'-' +'[a-z0-9]'*4 + '-' + '[a-z0-9]'*4 + '-' +'[a-z0-9]'*4 + '-' + '[a-z0-9]'*12 + '_' + type_crypt +'_public_key.pem'  # FIXME  Why a regex ,??
             files_grabbed.extend(glob.glob(join(monRepertoire,regex_public_key )))
             public_key_list=[]
             for f in files_grabbed:
@@ -354,4 +354,18 @@ class FilesystemKeyStorage(KeyStorageBase):
                         public_key['private_key_present']=False
                     public_key_list.append(public_key)
         return public_key_list
-            
+
+        """
+        (FORMAT CODE WITH BLACK)
+        
+        Fixme, this is too complicated. Here is approximatively the algo to follow, it can be done in 10-12 lines
+        (there are already example of GLOB above, look at them)
+        
+        public_key_paths = self._free_keys_dir.glob("*" + self._free_public_key_suffix)
+
+        for public_key_path in public_key_paths:
+            # extract components from public_key_path.name using a regex with capture groups (parenthesis), like "([a-z0-9]{4}_[a-z0-9]{4}...)_public_key.pem", see https://docs.python.org/3/howto/regex.html#grouping
+            # create private key name form them using self._free_public_key_suffix
+            public_key['private_key_present'] = Path(private_key_paths).exists()  # Shorter syntax
+            # append dict to public_key_list
+        """

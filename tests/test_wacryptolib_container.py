@@ -110,27 +110,22 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
                     key_shared_secret_escrows=[
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
                             share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
                             share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
                             share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
                             share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
                             share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                     ],
@@ -182,22 +177,18 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
                     key_shared_secret_escrows=[
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
                             share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
                             share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
                             share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            # shared_escrow=dict(url="http://example.com/jsonrpc"),
                             share_escrow=LOCAL_ESCROW_PLACEHOLDER,
                         ),
                     ],

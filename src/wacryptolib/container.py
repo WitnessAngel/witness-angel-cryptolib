@@ -604,6 +604,14 @@ def decrypt_data_from_container(
     return data
 
 
+def load_container_from_filesystem(self, container_filepath: Path, include_data_ciphertext=True) -> dict:
+    "TODO"
+
+
+def dump_container_to_filesystem(self, container_filepath: Path, container: dict, offload_data_ciphertext=True) -> None:
+    "TODO"
+
+
 def extract_metadata_from_container(container: dict) -> Optional[dict]:
     """Read the metadata tree (possibly None) from a container.
 

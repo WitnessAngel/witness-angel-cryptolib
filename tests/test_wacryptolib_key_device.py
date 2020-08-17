@@ -15,7 +15,7 @@ def test_list_available_key_devices():
         assert isinstance(key_device, dict) or isinstance(key_device, None)
 
         assert isinstance(key_device["path"], str)
-        assert Path(key_device["path"]).exists, "This path doesn't exist"
+        assert Path(key_device["path"]).exists(), "This path doesn't exist"
 
         assert isinstance(key_device["label"], str)
 
@@ -73,7 +73,7 @@ def test_initialize_key_device(tmp_path):
     assert isinstance(key_device1["label"], str)
 
     assert isinstance(key_device1["size"], int)
-    assert key_device1["size"] >= 0, "must be greater or equal to zero"
+    assert key_device1["size"] >= 0, "must be greater or equal to zero"  # FIXME comment is useless (especially with Pytest magic asserts)
 
     assert isinstance(key_device1["format"], str)
     assert key_device1["format"] in ("fat32", "exfat", "vfat", "ntfs")
@@ -86,7 +86,7 @@ def test_initialize_key_device(tmp_path):
 
     assert isinstance(key_device1["initialized_user"], str)
 
-    assert key_device2["is_initialized"] == True
+    assert key_device2["is_initialized"] == True  # FIXME duplicated
     assert isinstance(key_device1["label"], str)
 
     assert isinstance(key_device1["size"], int)
@@ -94,3 +94,5 @@ def test_initialize_key_device(tmp_path):
 
     assert isinstance(key_device1["format"], str)
     assert key_device2["format"] in ("fat32", "exfat", "vfat", "ntfs")
+
+    # FIXME use load_device_metadata(folder_path) to check that generated json file is REALLY correct

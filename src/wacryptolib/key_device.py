@@ -6,7 +6,6 @@ from wacryptolib.utilities import generate_uuid0
 
 
 def list_available_key_devices():
-
     """
     Generate a list of dictionaries representing mounted partitions of USB keys.
 
@@ -52,12 +51,11 @@ def initialize_key_device(key_device: dict, user: str):
         _initialize_key_device_linux(key_device=key_device, user=user)
     else:
         raise RuntimeError("%s OS not supported" % sys_platform)
-
     key_device["is_initialized"] = True
     metadata_file = _get_metadata_file_path(key_device)
     meta = load_from_json_file(metadata_file)
-    key_device["initialized_user"] = meta["user"]
-    key_device["initialized_device_uid"] = meta["device_uid"] # FIXME inconsistent with meta["uuid"] below
+    key_device["user"] = meta["user"]
+    key_device["device_uid"] = meta["device_uid"]
 
 
 def is_key_device_initialized(key_device: dict):
@@ -89,7 +87,29 @@ def load_key_device_metadata(path: str) -> dict:
     Return the device metadata stored in the given mountpoint, after checking that it contains at least mandatory
     (user and uuid) fields.
     """
-    pass
+    hidden_file = Path(path).joinpath(".key_storage", ".metadata.json")
+    if sys_platform == "win32":
+        import win32api
+        import win32.lib.win32con as win32con
+        win32api.SetFileAttributes(
+            str(hidden_file.parent), win32con.FILE_ATTRIBUTE_NORMAL
+        )
+        win32api.SetFileAttributes(str(hidden_file), win32con.FILE_ATTRIBUTE_NORMAL)
+        metadata = load_from_json_file(hidden_file)  # hidden_file
+        win32api.SetFileAttributes(
+            str(hidden_file.parent), win32con.FILE_ATTRIBUTE_HIDDEN
+        )
+        win32api.SetFileAttributes(str(hidden_file), win32con.FILE_ATTRIBUTE_HIDDEN)
+    elif sys_platform.startswith("linux"):
+        metadata = load_from_json_file(hidden_file)
+    if (
+        isinstance(metadata, dict)
+        and metadata.get("user")
+        and metadata.get("device_uid")
+    ):
+        return metadata
+    else:
+        raise ValueError("Abnormal key device metadata in : %s" % path)
 
 
 def _list_available_key_devices_win32():
@@ -122,18 +142,21 @@ def _list_available_key_devices_win32():
                     key_device
                 )  # E.g True
 
-                key_device["initialized_user"] = ""
-                key_device["initialized_uuid"] = ""
+                key_device["user"] = ""
+                key_device["device_uid"] = ""
 
                 if key_device["is_initialized"]:
-                    # FIXME deduplicate with load_key_device_metadata
-                    metadata_file = _get_metadata_file_path(key_device)
-                    meta = load_from_json_file(metadata_file)
-                    key_device["initialized_user"] = meta["user"]
-                    key_device["initialized_uuid"] = meta["uuid"]
+                    set_mtadata(key_device)
                 key_device_list.append(key_device)
 
     return key_device_list
+
+
+def set_mtadata(key_device: dict):
+    metadata_file = _get_metadata_file_path(key_device)
+    meta = load_from_json_file(metadata_file)
+    key_device["user"] = meta["user"]
+    key_device["device_uid"] = meta["device_uid"]
 
 
 def _list_available_key_devices_linux():
@@ -172,14 +195,10 @@ def _list_available_key_devices_linux():
                 key_device
             )  # E.g False
 
-            key_device["initialized_user"] = ""
-            key_device["initialized_uuid"] = ""
+            key_device["user"] = ""
+            key_device["device_uid"] = ""
             if key_device["is_initialized"]:
-                # FIXME deduplciate with load_key_device_metadata
-                metadata_file = _get_metadata_file_path(key_device)
-                meta = load_from_json_file(metadata_file)
-                key_device["initialized_user"] = meta["user"]
-                key_device["initialized_uuid"] = meta["uuid"]
+                set_mtadata(key_device)
             key_device_list.append(key_device)
 
         return key_device_list
@@ -190,12 +209,8 @@ def _common_key_device_initialization(hidden_file: Path, user: str):
     hidden_folder = hidden_file.parent
     if not Path(hidden_folder).exists():
         Path(hidden_file.parent).mkdir()
-
-    # FIXME directly create the whole metadata dict here, no need to insert values later
-    metadata = {}
     # E.g {'device_uid': device_uid('0e7ee05d-07ad-75bc-c1f9-05db3e0680ca'), 'user': 'John Doe'}
-    metadata["device_uid"] = generate_uuid0()
-    metadata["user"] = user
+    metadata = {"device_uid": generate_uuid0(), "user": user}
     dump_to_json_file(hidden_file, metadata)
 
 

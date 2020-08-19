@@ -1,26 +1,26 @@
 from pathlib import Path
 from wacryptolib.key_device import list_available_key_devices
-from wacryptolib.key_device import initialize_key_device
+from wacryptolib.key_device import initialize_key_device, load_key_device_metadata
+import re
 
 
 def test_list_available_key_devices():
-
     key_devices_list = list_available_key_devices()
     assert isinstance(key_devices_list, list)
 
-    assert key_devices_list, "No USB key detected during test"
+    assert key_devices_list or not (key_devices_list)
 
     for key_device in key_devices_list:
         print(">> USB key detected:", key_device)
         assert isinstance(key_device, dict) or isinstance(key_device, None)
 
         assert isinstance(key_device["path"], str)
-        assert Path(key_device["path"]).exists(), "This path doesn't exist"
+        assert Path(key_device["path"]).exists()
 
         assert isinstance(key_device["label"], str)
 
         assert isinstance(key_device["size"], int)
-        assert key_device["size"] >= 0, "must be greater or equal to zero"
+        assert key_device["size"] >= 0
 
         assert isinstance(key_device["format"], str)
 
@@ -31,7 +31,7 @@ def test_list_available_key_devices():
             key_device["is_initialized"] == False
         )
 
-        assert isinstance(key_device["initialized_user"], str)
+        assert isinstance(key_device["user"], str)
 
         assert key_device["format"] in ("fat32", "exfat", "vfat", "ntfs")
 
@@ -68,12 +68,12 @@ def test_initialize_key_device(tmp_path):
 
     assert key_device1["is_initialized"] == True
 
-    assert isinstance(key_device1["initialized_user"], str)
+    assert isinstance(key_device1["user"], str)
 
     assert isinstance(key_device1["label"], str)
 
     assert isinstance(key_device1["size"], int)
-    assert key_device1["size"] >= 0, "must be greater or equal to zero"  # FIXME comment is useless (especially with Pytest magic asserts)
+    assert key_device1["size"] >= 0
 
     assert isinstance(key_device1["format"], str)
     assert key_device1["format"] in ("fat32", "exfat", "vfat", "ntfs")
@@ -82,17 +82,32 @@ def test_initialize_key_device(tmp_path):
     assert isinstance(key_device1["drive_type"], str)
     assert key_device2["drive_type"] == "USBSTOR"
 
+    assert isinstance(key_device1["user"], str)
+
     assert key_device2["is_initialized"] == True
-
-    assert isinstance(key_device1["initialized_user"], str)
-
-    assert key_device2["is_initialized"] == True  # FIXME duplicated
     assert isinstance(key_device1["label"], str)
 
     assert isinstance(key_device1["size"], int)
-    assert key_device2["size"] >= 0, "must be greater or equal to zero"
+    assert key_device2["size"] >= 0
 
     assert isinstance(key_device1["format"], str)
     assert key_device2["format"] in ("fat32", "exfat", "vfat", "ntfs")
 
-    # FIXME use load_device_metadata(folder_path) to check that generated json file is REALLY correct
+    metadata = load_key_device_metadata(key_device1["path"])
+    assert isinstance(metadata["user"], str)
+    regex_UUID = (
+        "("
+        + "[a-z0-9]" * 8
+        + "-"
+        + "[a-z0-9]" * 4
+        + "-"
+        + "[a-z0-9]" * 4
+        + "-"
+        + "[a-z0-9]" * 4
+        + "-"
+        + "[a-z0-9]" * 12
+        + ")"
+    )
+    metadata_device_uid = str(metadata["device_uid"])
+    epoch_regex = re.compile(regex_UUID)
+    assert epoch_regex.match(metadata_device_uid)

@@ -16,7 +16,7 @@ from wacryptolib.container import (
     ContainerStorage,
     extract_metadata_from_container,
     ContainerBase,
-    get_encryption_configuration_summary,
+    get_encryption_configuration_summary, dump_container_to_filesystem, load_container_from_filesystem,
 )
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -534,9 +534,9 @@ def test_get_encryption_configuration_summary():
 @pytest.mark.parametrize(
     "container_conf", [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF]
 )
-def test_dump_load_container(tmp_path, container_conf):
+def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
 
-    data = b"abc"  # get_random_bytes(random.randint(1, 1000))
+    data = b"jhf"
 
     keychain_uid = random.choice(
         [None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")]
@@ -547,49 +547,38 @@ def test_dump_load_container(tmp_path, container_conf):
     container = encrypt_data_into_container(
         data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata
     )
+    container_ciphertext_before_dump = container["data_ciphertext"]
 
-    temp_path1 = tmp_path / "sub1"
-    temp_path1.mkdir()
-    temp_path1 = str(temp_path1)
+    container_without_ciphertext = copy.deepcopy(container)
+    del container_without_ciphertext["data_ciphertext"]
 
-    temp_path2 = tmp_path / "sub2"
-    temp_path2.mkdir()
-    temp_path2 = str(temp_path2)
+    # CASE 1 - MONOLITHIC JSON FILE
 
-    container_data_before_dump = container["data_ciphertext"]
-    """self._offload_data_ciphertext==True"""
-    con_stor1 = ContainerStorage(
-        encryption_conf=container_conf, containers_dir=temp_path1
-    )
-    con_stor1._dump_container("MyContainer1", container)
-    container_file_path = con_stor1._get_container_file_path("MyContainer1")
-    # make sure the file is created with '.data' in the same location of the 'container'
-    assert Path(container_file_path + ".data").exists()
-    data = load_from_json_file(container_file_path + ".data")
-    # make sure the file with '.data' contains the 'data_ciphertext' field of the 'container'
-    assert data == container_data_before_dump
-    data_json = load_from_json_file(container_file_path + ".json")
-    # make sure the file with '.json' contains '[OFFLOADED]' instead of the 'data_ciphertext' field of the 'container'
-    assert data_json["data_ciphertext"] == "[OFFLOADED]"
+    container_filepath = tmp_path / "mycontainer_monolithic.crypt"
+    dump_container_to_filesystem(container_filepath, container=container, offload_data_ciphertext=False)
+    container_reloaded = load_from_json_file(container_filepath)
+    assert container_reloaded["data_ciphertext"] == container_ciphertext_before_dump  # NO OFFLOADING
+    assert load_container_from_filesystem(container_filepath) == container  # UNCHANGED from original
 
-    con_stor1._load_container("MyContainer1", include_data_ciphertext=False)
-    data_json = load_from_json_file(container_file_path + ".json")
-    # no change: make sure the file with '.json' contains '[OFFLOADED]'
-    assert data_json["data_ciphertext"] == "[OFFLOADED]"
+    container_truncated = load_container_from_filesystem(container_filepath, include_data_ciphertext=False)
+    assert "data_ciphertext" not in container_truncated
+    assert container_truncated == container_without_ciphertext
 
-    con_stor1._load_container("MyContainer1")
-    data_json = load_from_json_file(container_file_path + ".json")
-    # make sure the file with '.json' contains the 'data_ciphertext' field of the 'container' instead of '[OFFLOADED]'
-    assert data == data_json["data_ciphertext"]
+    assert container["data_ciphertext"] == container_ciphertext_before_dump # Original dict unchanged
 
-    """self._offload_data_ciphertext==False"""
-    con_stor2 = ContainerStorage(
-        encryption_conf=container_conf,
-        containers_dir=temp_path2,
-        offload_data_ciphertext=False,
-    )
-    con_stor2._dump_container("MyContainer2", container)
-    container_file_path2 = con_stor2._get_container_file_path("MyContainer2")
-    # ensure the absence of the file with '.data' and of the '.json' file
-    assert not Path(container_file_path2 + ".data").exists()
-    assert not Path(container_file_path2 + ".json").exists()
+    # CASE 2 - OFFLOADED CIPHERTEXT FILE
+
+    dump_container_to_filesystem(container_filepath, container=container)  # OVERWRITE, with offloading by default
+    container_reloaded = load_from_json_file(container_filepath)
+    assert container_reloaded["data_ciphertext"] == "[OFFLOADED]"
+
+    container_offloaded_filepathstr = str(container_filepath) + ".data"
+    offloaded_data_reloaded = load_from_json_file(container_offloaded_filepathstr)
+    assert offloaded_data_reloaded == container_ciphertext_before_dump  # WELL OFFLOADED
+    assert load_container_from_filesystem(container_filepath) == container  # UNCHANGED from original
+
+    container_truncated = load_container_from_filesystem(container_filepath, include_data_ciphertext=False)
+    assert "data_ciphertext" not in container_truncated
+    assert container_truncated == container_without_ciphertext
+
+    assert container["data_ciphertext"] == container_ciphertext_before_dump # Original dict unchanged

@@ -31,7 +31,6 @@ from wacryptolib.utilities import (
     synchronized,
     catch_and_log_exception,
 )
-from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 
 
 logger = logging.getLogger(__name__)
@@ -41,7 +40,7 @@ CONTAINER_SUFFIX = ".crypt"
 MEDIUM_SUFFIX = (
     ".medium"
 )  # To construct decrypted filename when no previous extensions are found in container filename
-
+OFFLOADED_MARKER = "[OFFLOADED]"
 DUMMY_KEY_STORAGE = DummyKeyStorage()  # Fallback storage with in-memory keys
 
 
@@ -75,7 +74,7 @@ class ContainerBase:
 
 class ContainerWriter(ContainerBase):
     """
-    Contains every method used to write and encrypt a container.
+    Contains every method used to write and encrypt a container, IN MEMORY.
     """
 
     def encrypt_data(
@@ -342,7 +341,7 @@ class ContainerWriter(ContainerBase):
 
 class ContainerReader(ContainerBase):
     """
-    Contains every method used to read and decrypt a container.
+    Contains every method used to read and decrypt a container, IN MEMORY.
     """
 
     def extract_metadata(self, container: dict) -> Optional[dict]:
@@ -604,12 +603,42 @@ def decrypt_data_from_container(
     return data
 
 
-def load_container_from_filesystem(self, container_filepath: Path, include_data_ciphertext=True) -> dict:
-    "TODO"
+def _get_offloaded_file_path(container_filepath):
+    return container_filepath.parent.joinpath(container_filepath.name + ".data")
 
 
-def dump_container_to_filesystem(self, container_filepath: Path, container: dict, offload_data_ciphertext=True) -> None:
-    "TODO"
+def load_container_from_filesystem(container_filepath: Path, include_data_ciphertext=True) -> dict:
+    """Load a json-formatted container from a file path, potentially loading its offloaded ciphertext from a separate nearby file.
+
+    Field `data_ciphertext` is only present in result dict if `include_data_ciphertext` is True.
+    """
+
+    container = load_from_json_file(container_filepath)
+
+    if include_data_ciphertext:
+        if container["data_ciphertext"] == OFFLOADED_MARKER:
+            offloaded_file_path = _get_offloaded_file_path(container_filepath)
+            data_ciphertext = load_from_json_file(offloaded_file_path)
+            container["data_ciphertext"] = data_ciphertext
+    else:
+        del container["data_ciphertext"]
+
+    return container
+
+
+def dump_container_to_filesystem(container_filepath: Path, container: dict, offload_data_ciphertext=True) -> None:
+    """Dump a container to a file path.
+
+    If `offload_data_ciphertext`, actual encrypted data is dumped to a separate file nearby the json-formatted container.
+    """
+    if offload_data_ciphertext:
+        offloaded_file_path = _get_offloaded_file_path(container_filepath)
+        dump_to_json_file(
+                offloaded_file_path, container["data_ciphertext"]
+        )
+        container = container.copy()  # DO NOT touch original dict!
+        container["data_ciphertext"] = OFFLOADED_MARKER
+    dump_to_json_file(container_filepath, container)
 
 
 def extract_metadata_from_container(container: dict) -> Optional[dict]:
@@ -661,43 +690,6 @@ class ContainerStorage:
         self._lock = threading.Lock()
         self._offload_data_ciphertext = offload_data_ciphertext
 
-    def _load_container(self, container_filepath, include_data_ciphertext=True) -> dict:
-        """
-        Check the value of data_ciphertext in the loaded json tree, and if it's the DATA_OFFLOADING_MARKER, then:
-        -if include_data_ciphertext is true,  load the file container_filepath+".data" and insert it into the json tree.
-        -if include_data_ciphertext is false, delete "data_ciphertext" field in the container object.
-        """
-        container_file_path = self._get_container_file_path(container_filepath)
-        container = load_from_json_file(container_file_path + ".json")
-
-        if container["data_ciphertext"] == "[OFFLOADED]":
-            if include_data_ciphertext:
-                data_cipher_text_c = load_from_json_file(container_file_path + ".data")
-                container["data_ciphertext"] = data_cipher_text_c
-                dump_to_json_file(container_file_path + ".json", container)
-            else:
-                del container["data_ciphertext"]
-
-        return container
-
-    def _get_container_file_path(self, container_filepath):
-        return str(Path(self._containers_dir).joinpath(container_filepath))
-
-    def _dump_container(self, container_filepath, container) -> None:
-        """
-        Extract data_ciphertext from the container tree, replace it by DATA_OFFLOADING_MARKER,
-        dump the ciphertext separately as a file named container_filepath+'.data',
-        but only if self._offload_data_ciphertext is true. 
-        """
-        container_file_path = self._get_container_file_path(container_filepath)
-
-        if self._offload_data_ciphertext:
-            dump_to_json_file(
-                container_file_path + ".data", container["data_ciphertext"]
-            )
-            container["data_ciphertext"] = "[OFFLOADED]"
-            container_data = dump_to_json_file(container_file_path + ".json", container)
-        
     def __del__(self):
         self._thread_pool_executor.shutdown(wait=False)
 
@@ -756,7 +748,7 @@ class ContainerStorage:
         )  # Will fail if authorizations are not OK
 
     @catch_and_log_exception
-    def _offloaded_process_and_store_file(self, filename_base, data, metadata):
+    def _offloaded_encrypt_data_and_dump_container(self, filename_base, data, metadata):
         """Task to be called by background thread, which encrypts a payload into a disk container.
 
         Returns the container basename."""
@@ -766,9 +758,9 @@ class ContainerStorage:
 
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
         logger.debug("Writing container data to file %s", container_filepath)
-        dump_to_json_file(
-            container_filepath, data=container, indent=4
-        )  # Note that this might erase an existing file, it's OK
+
+        dump_container_to_filesystem(container_filepath, container=container,
+                                     offload_data_ciphertext=self._offload_data_ciphertext)
 
         logger.info(
             "File %r successfully encrypted into storage container", filename_base
@@ -787,7 +779,7 @@ class ContainerStorage:
         self._purge_exceeding_containers()
         self._purge_executor_results()
         future = self._thread_pool_executor.submit(
-            self._offloaded_process_and_store_file,
+            self._offloaded_encrypt_data_and_dump_container,
             filename_base=filename_base,
             data=data,
             metadata=metadata,
@@ -809,7 +801,7 @@ class ContainerStorage:
             future.result()  # Should NEVER raise, thanks to the @catch_and_log_exception above, and absence of cancellations
         self._purge_exceeding_containers()  # Good to have now
 
-    def decrypt_container_from_storage(self, container_name_or_idx):
+    def decrypt_container_from_storage(self, container_name_or_idx, include_data_ciphertext=True):
         """
         Return the decrypted content of the container `filename` (which must be in `list_container_names()`,
         or an index suitable for this list).
@@ -833,7 +825,7 @@ class ContainerStorage:
         logger.info("Decrypting container %r from storage", container_name)
 
         container_filepath = self._make_absolute(container_name)
-        container = load_from_json_file(container_filepath)
+        container = load_container_from_filesystem(container_filepath, include_data_ciphertext=include_data_ciphertext)
 
         result = self._decrypt_data_from_container(container)
         logger.info("Container %r successfully decrypted", container_name)

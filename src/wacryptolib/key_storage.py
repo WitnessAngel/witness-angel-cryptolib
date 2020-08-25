@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+import re
 import threading
 import uuid
 from abc import ABC, abstractmethod
@@ -188,9 +189,11 @@ class FilesystemKeyStorage(KeyStorageBase):
 
     _lock = threading.Lock()
 
-    _free_private_key_suffix = "_private_key.pem"
-    _free_public_key_suffix = "_public_key.pem"
+    _private_key_suffix = "_private_key.pem"
+    _public_key_suffix = "_public_key.pem"
     _randint_args = (10 ** 10, 10 ** 11 - 1)
+
+    PUBLIC_KEY_FILENAME_REGEX = r"^(?P<keychain_uid>[-0-9a-z]+)_(?P<key_type>[_A-Z]+)%s$" % _public_key_suffix
 
     def __init__(self, keys_dir):
         keys_dir = Path(keys_dir)
@@ -203,10 +206,10 @@ class FilesystemKeyStorage(KeyStorageBase):
         self._free_keys_dir = free_keys_dir
 
     def _get_filename(self, keychain_uid, key_type, is_public: bool):
-        return "%s_%s_%s.pem" % (
+        return "%s_%s%s" % (
             keychain_uid,
             key_type,
-            "public_key" if is_public else "private_key",
+            self._public_key_suffix if is_public else self._private_key_suffix,
         )
 
     def _write_to_storage_file(self, basename: str, data: bytes):
@@ -268,7 +271,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         subdir = self._free_keys_dir.joinpath(key_type)
         if not subdir.is_dir():
             return 0
-        return len(list(subdir.glob("*" + self._free_private_key_suffix)))
+        return len(list(subdir.glob("*" + self._private_key_suffix)))
 
     @synchronized
     def add_free_keypair(self, *, key_type: str, public_key: bytes, private_key: bytes):
@@ -282,17 +285,17 @@ class FilesystemKeyStorage(KeyStorageBase):
         # Two-steps writing is used for increased atomicity
 
         subdir.joinpath(
-            random_name + self._free_public_key_suffix + ".temp"
+            random_name + self._public_key_suffix + ".temp"
         ).write_bytes(public_key)
         subdir.joinpath(
-            random_name + self._free_private_key_suffix + ".temp"
+            random_name + self._private_key_suffix + ".temp"
         ).write_bytes(private_key)
 
-        subdir.joinpath(random_name + self._free_public_key_suffix + ".temp").replace(
-            subdir.joinpath(random_name + self._free_public_key_suffix)
+        subdir.joinpath(random_name + self._public_key_suffix + ".temp").replace(
+            subdir.joinpath(random_name + self._public_key_suffix)
         )
-        subdir.joinpath(random_name + self._free_private_key_suffix + ".temp").replace(
-            subdir.joinpath(random_name + self._free_private_key_suffix)
+        subdir.joinpath(random_name + self._private_key_suffix + ".temp").replace(
+            subdir.joinpath(random_name + self._private_key_suffix)
         )
 
     @synchronized
@@ -307,7 +310,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         )
 
         subdir = self._free_keys_dir.joinpath(key_type)
-        globber = subdir.glob("*" + self._free_private_key_suffix)
+        globber = subdir.glob("*" + self._private_key_suffix)
         try:
             free_private_key = next(globber)
         except StopIteration:
@@ -315,7 +318,7 @@ class FilesystemKeyStorage(KeyStorageBase):
                 "No free keypair of type %s available in filesystem storage" % key_type
             )
         _free_public_key_name = free_private_key.name.replace(
-            self._free_private_key_suffix, self._free_public_key_suffix
+            self._private_key_suffix, self._public_key_suffix
         )
         free_public_key = subdir.joinpath(_free_public_key_name)
 
@@ -323,49 +326,45 @@ class FilesystemKeyStorage(KeyStorageBase):
         free_private_key.replace(target_private_key_filename)
         free_public_key.replace(target_public_key_filename)
 
-    def list_keys(self):
+    def list_keys(self):  # FIXME rename for a more precise semantic
         """
-        For each public key found, it extracts its metadata from the filename (using a regex "* public_key.pem") .
+        List metadata of public keys present in the storage, along with their potential private key existence.
         
-        Returns a LIST of public keys information dicts.
+        Returns a list of key information dicts with standard fields "keychain_uid" and "key_type", as well as
+        a boolean "private_key_present" which is True if the related private key exists in storage.
         """
-        
-        monRepertoire=self._keys_dir
-        files_grabbed = []
-        types = ('DSA_DSS', 'ECC_DSS', 'RSA_OAEP', 'RSA_PSS')
-        for type_crypt in types:
-            regex_public_key='[a-z0-9]'*8 +'-' +'[a-z0-9]'*4 + '-' + '[a-z0-9]'*4 + '-' +'[a-z0-9]'*4 + '-' + '[a-z0-9]'*12 + '_' + type_crypt +'_public_key.pem'  # FIXME  Why a regex ,??
-            files_grabbed.extend(glob.glob(join(monRepertoire,regex_public_key )))
-            public_key_list=[]
-            for f in files_grabbed:
-                parts_file = f.split("\\")
-                parts_files1 = parts_file[-1].split(".")
-                parts_files = parts_files1[0].split("_")
-                private_public_key_present=parts_files[3]+parts_files[4]
-                if private_public_key_present=='publickey':
-                    public_key={}
-                    public_key['keychain_uid']=parts_files[0]
-                    public_key['key_type']=parts_files[1]+'_'+parts_files[2]
-                    key_private_name=parts_files[0]+'_'+parts_files[1]+'_'+parts_files[2]+'_private_key.pem'
-                    source=join(monRepertoire,key_private_name)
-                    if Path(source).exists():
-                        public_key['private_key_present']=True
-                    else:
-                        public_key['private_key_present']=False
-                    public_key_list.append(public_key)
-        return public_key_list
 
-        """
-        (FORMAT CODE WITH BLACK)
-        
-        Fixme, this is too complicated. Here is approximatively the algo to follow, it can be done in 10-12 lines
-        (there are already example of GLOB above, look at them)
-        
-        public_key_paths = self._free_keys_dir.glob("*" + self._free_public_key_suffix)
+        key_information_list = []
 
-        for public_key_path in public_key_paths:
-            # extract components from public_key_path.name using a regex with capture groups (parenthesis), like "([a-z0-9]{4}_[a-z0-9]{4}...)_public_key.pem", see https://docs.python.org/3/howto/regex.html#grouping
-            # create private key name form them using self._free_public_key_suffix
-            public_key['private_key_present'] = Path(private_key_paths).exists()  # Shorter syntax
-            # append dict to public_key_list
-        """
+        public_key_pem_paths = glob.glob(join(self._keys_dir, "*" + self._public_key_suffix))
+
+        for public_key_pem_path in public_key_pem_paths:
+
+            public_key_pem_filename = os.path.basename(public_key_pem_path)
+
+            match = re.match(self.PUBLIC_KEY_FILENAME_REGEX, public_key_pem_filename)
+
+            if not match:
+                logger.warning("Skipping abnormally named PEM file %r when listing public keys", public_key_pem_filename)
+                continue
+
+            #print("MATCH FOUND", public_key_pem_filename, match.groups(), self.PUBLIC_KEY_FILENAME_REGEX)
+
+            keychain_uid = match.group("keychain_uid")
+            key_type = match.group("key_type")
+
+            try:
+                keychain_uid = uuid.UUID(keychain_uid)
+            except ValueError:
+                logger.warning("Skipping PEM file with abnormal UUID %r when listing public keys", public_key_pem_filename)
+                continue
+
+            private_key_pem_filename = public_key_pem_filename.replace(self._public_key_suffix, self._private_key_suffix)
+            private_key_present = os.path.exists(join(self._keys_dir, private_key_pem_filename))
+
+            key_information = dict(keychain_uid=keychain_uid,  # FIXME turn this into UUID, like everywhere else!
+                                   key_type=key_type,
+                                   private_key_present=private_key_present)
+            key_information_list.append(key_information)
+
+        return key_information_list

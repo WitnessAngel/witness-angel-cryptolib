@@ -1,9 +1,8 @@
 from pathlib import Path
 from uuid import UUID
 
-from wacryptolib.key_device import list_available_key_devices
+from wacryptolib.key_device import list_available_key_devices, is_key_device_initialized, _get_metadata_file_path
 from wacryptolib.key_device import initialize_key_device, load_key_device_metadata
-import re
 
 
 def test_list_available_key_devices():  # FIXME add mockups to simulate real USB key?
@@ -35,78 +34,52 @@ def test_list_available_key_devices():  # FIXME add mockups to simulate real USB
         assert isinstance(key_device["device_uid"], (type(None), UUID))  # Might be empty
 
 
-def test_initialize_key_device(tmp_path):
+def test_key_device_initialization_and_checkers(tmp_path):
 
-    temp_path = tmp_path / "sub1"
-    temp_path.mkdir()
-    temp_path = str(temp_path)
-    key_device1 = {
+    key_device = {
         "drive_type": "USBSTOR",
-        "path": temp_path,
+        "path": tmp_path,
         "label": "TOSHIBA",
         "size": 31000166400,
         "format": "fat32",
         "is_initialized": False,
     }
+    key_device_original = key_device.copy()
 
-    temp_path = tmp_path / "sub2"
-    temp_path.mkdir()
-    temp_path = str(temp_path)
-    key_device2 = {
-        "drive_type": "USBSTOR",
-        "path": temp_path,
-        "label": "",
-        "size": 100166400,
-        "format": "vfat",
-        "is_initialized": False,
-    }
+    assert not is_key_device_initialized(key_device)
+    initialize_key_device(key_device, user="Michél Dûpont")
+    assert is_key_device_initialized(key_device)
 
-    initialize_key_device(key_device1, "Michel Dupont")
-    assert isinstance(key_device1["drive_type"], str)
-    assert key_device1["drive_type"] == "USBSTOR"
+    # UNCHANGED fields
+    assert key_device["drive_type"] == "USBSTOR"
+    assert key_device["path"] == tmp_path
+    assert key_device["label"] == "TOSHIBA"
+    assert key_device["size"] == 31000166400
+    assert key_device["format"] == "fat32"
 
-    assert key_device1["is_initialized"] == True
+    # UPDATED fields
+    assert key_device["is_initialized"] == True
+    assert key_device["user"] == "Michél Dûpont"
+    assert isinstance(key_device["device_uid"], UUID)
 
-    assert isinstance(key_device1["user"], str)
+    # REAL metadata file content
+    metadata = load_key_device_metadata(key_device)
+    assert metadata["user"] == "Michél Dûpont"
+    assert isinstance(metadata["device_uid"], UUID)
 
-    assert isinstance(key_device1["label"], str)
+    # We ensure the code doesn't do any weird shortcut
+    key_device["is_initialized"] = False
+    del key_device["user"]
+    del key_device["device_uid"]
+    assert key_device == key_device_original
+    metadata = load_key_device_metadata(key_device)
+    assert key_device == key_device_original  # Untouched
+    assert metadata["user"] == "Michél Dûpont"
+    assert isinstance(metadata["device_uid"], UUID)
 
-    assert isinstance(key_device1["size"], int)
-    assert key_device1["size"] >= 0
-
-    assert isinstance(key_device1["format"], str)
-    assert key_device1["format"] in ("fat32", "exfat", "vfat", "ntfs")
-
-    initialize_key_device(key_device2, "Michel Dupont")
-    assert isinstance(key_device1["drive_type"], str)
-    assert key_device2["drive_type"] == "USBSTOR"
-
-    assert isinstance(key_device1["user"], str)
-
-    assert key_device2["is_initialized"] == True
-    assert isinstance(key_device1["label"], str)
-
-    assert isinstance(key_device1["size"], int)
-    assert key_device2["size"] >= 0
-
-    assert isinstance(key_device1["format"], str)
-    assert key_device2["format"] in ("fat32", "exfat", "vfat", "ntfs")
-
-    metadata = load_key_device_metadata(key_device1["path"])
-    assert isinstance(metadata["user"], str)
-    regex_UUID = (
-        "("
-        + "[a-z0-9]" * 8
-        + "-"
-        + "[a-z0-9]" * 4
-        + "-"
-        + "[a-z0-9]" * 4
-        + "-"
-        + "[a-z0-9]" * 4
-        + "-"
-        + "[a-z0-9]" * 12
-        + ")"
-    )
-    metadata_device_uid = str(metadata["device_uid"])
-    epoch_regex = re.compile(regex_UUID)
-    assert epoch_regex.match(metadata_device_uid)
+    assert is_key_device_initialized(key_device)
+    metadata_file_path = _get_metadata_file_path(key_device)
+    metadata_file_path.unlink()
+    assert not is_key_device_initialized(key_device)
+    metadata_file_path.write_text("ZJSJS")
+    assert is_key_device_initialized(key_device)  # No checkup of json file here!

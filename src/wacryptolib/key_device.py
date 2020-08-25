@@ -17,7 +17,7 @@ def list_available_key_devices():
         - "label" (str): possibly empty, label of the partition
         - "format" (str): lowercase character string for filesystem type, like "ext2", "fat32" ...
         - "size" (int): filesystem size in bytes
-        - "is_initialized" (bool): if the device has been initialized with the ".metadata.json" file
+        - "is_initialized" (bool): if the device has been initialized with metadata
         - "user" (str): empty if device not initialized, otherwise value of “user” from metadata
         - "device_uid" (None or UUID): None if device not initialized, otherwise value of “device_uid” from metadata
 
@@ -52,7 +52,7 @@ def initialize_key_device(key_device: dict, user: str):
     :param key_device: (dict) Mounted partition of USB key.
     :param user: (str) User name to store in device.
 
-    On success, update 'key_device' to mark it as initialized.
+    On success, updates 'key_device' to mark it as initialized, and to contain device metadata.
     """
 
     if key_device["is_initialized"]:
@@ -69,31 +69,28 @@ def initialize_key_device(key_device: dict, user: str):
     key_device.update(metadata)
 
 
-# FIXME assume "is_initialized=True" as soon as metadata dir exists, and then report errors if json or RSA keys are missing/corrupted!
+# FIXME add flags to report errors if json or RSA keys are missing/corrupted?
 def is_key_device_initialized(key_device: dict):
     """
-    Check if a key device is initialized.
+    Check if a key device appears initialized (by ignoring, of course, its "is_initialized" field).
 
-    Raises ValueError if device appears initialized, but has corrupted metadata.
+    Doesn't actually load the device metadata.
+    Dooesn't modify `key_device` content.
     
-    :param key_device: (dict) Mounted partition of USB keys.
+    :param key_device: (dict) Key device information.
     
-    :return: (bool) If True, the key device is initialized. Otherwise, it is not initialized.
+    :return: (bool) True if and only if the key device is initialized.
     """
     metadata_file = _get_metadata_file_path(key_device=key_device)
-
-    if not metadata_file.exists():
-        return False
-
-    metadata = load_from_json_file(metadata_file)
-    _check_key_device_metadata(metadata)  # Raises if troubles
-    return True
+    return metadata_file.exists()
 
 
 def load_key_device_metadata(key_device: dict) -> dict:
     """
     Return the device metadata stored in the given mountpoint, after checking that it contains at least mandatory
-    (user and uuid) fields.
+    (user and device_uid) fields.
+
+    Raises `ValueError` or json decoding exceptions if device appears initialized, but has corrupted metadata.
     """
     metadata_file = _get_metadata_file_path(key_device=key_device)
 
@@ -103,7 +100,7 @@ def load_key_device_metadata(key_device: dict) -> dict:
         win32api.SetFileAttributes(
             str(metadata_file.parent), win32con.FILE_ATTRIBUTE_NORMAL
         )
-        win32api.SetFileAttributes(str(metadata_file), win32con.FILE_ATTRIBUTE_NORMAL)
+        win32api.SetFileAttributes(str(metadata_file), win32con.FILE_ATTRIBUTE_NORMAL)  # FIXME do we really need this??
 
         metadata = load_from_json_file(metadata_file)
 
@@ -115,14 +112,8 @@ def load_key_device_metadata(key_device: dict) -> dict:
     elif sys_platform.startswith("linux"):
         metadata = load_from_json_file(metadata_file)
 
-    if (
-        isinstance(metadata, dict)
-        and metadata.get("user")
-        and metadata.get("device_uid")
-    ):
-        return metadata
-    else:
-        raise ValueError("Abnormal key device metadata in %s" % metadata_file)
+    _check_key_device_metadata(metadata)  # Raises if troubles
+    return metadata
 
 
 def _check_key_device_metadata(metadata: dict):

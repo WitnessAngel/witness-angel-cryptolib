@@ -607,6 +607,21 @@ def _get_offloaded_file_path(container_filepath):
     return container_filepath.parent.joinpath(container_filepath.name + ".data")
 
 
+def dump_container_to_filesystem(container_filepath: Path, container: dict, offload_data_ciphertext=True) -> None:
+    """Dump a container to a file path.
+
+    If `offload_data_ciphertext`, actual encrypted data is dumped to a separate file nearby the json-formatted container.
+    """
+    if offload_data_ciphertext:
+        offloaded_file_path = _get_offloaded_file_path(container_filepath)
+        dump_to_json_file(
+                offloaded_file_path, container["data_ciphertext"]  # FIXME - no need for json here, just dump bytes!
+        )
+        container = container.copy()  # DO NOT touch original dict!
+        container["data_ciphertext"] = OFFLOADED_MARKER
+    dump_to_json_file(container_filepath, container)
+
+
 def load_container_from_filesystem(container_filepath: Path, include_data_ciphertext=True) -> dict:
     """Load a json-formatted container from a file path, potentially loading its offloaded ciphertext from a separate nearby file.
 
@@ -618,27 +633,12 @@ def load_container_from_filesystem(container_filepath: Path, include_data_cipher
     if include_data_ciphertext:
         if container["data_ciphertext"] == OFFLOADED_MARKER:
             offloaded_file_path = _get_offloaded_file_path(container_filepath)
-            data_ciphertext = load_from_json_file(offloaded_file_path)
+            data_ciphertext = load_from_json_file(offloaded_file_path)  # FIXME - no need for json here, just dump bytes!
             container["data_ciphertext"] = data_ciphertext
     else:
         del container["data_ciphertext"]
 
     return container
-
-
-def dump_container_to_filesystem(container_filepath: Path, container: dict, offload_data_ciphertext=True) -> None:
-    """Dump a container to a file path.
-
-    If `offload_data_ciphertext`, actual encrypted data is dumped to a separate file nearby the json-formatted container.
-    """
-    if offload_data_ciphertext:
-        offloaded_file_path = _get_offloaded_file_path(container_filepath)
-        dump_to_json_file(
-                offloaded_file_path, container["data_ciphertext"]
-        )
-        container = container.copy()  # DO NOT touch original dict!
-        container["data_ciphertext"] = OFFLOADED_MARKER
-    dump_to_json_file(container_filepath, container)
 
 
 def extract_metadata_from_container(container: dict) -> Optional[dict]:

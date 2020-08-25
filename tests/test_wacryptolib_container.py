@@ -409,7 +409,9 @@ def test_container_storage_and_executor(tmp_path, caplog):
 
     # Test purge system
 
-    storage = FakeTestContainerStorage(encryption_conf=None, containers_dir=tmp_path)
+    offload_data_ciphertext1 = random.choice((True, False))
+    storage = FakeTestContainerStorage(encryption_conf=None, containers_dir=tmp_path,
+                                       offload_data_ciphertext=offload_data_ciphertext1)
     assert storage._max_containers_count is None
     for i in range(10):
         storage.enqueue_file_for_encryption("file.dat", b"dogs\ncats\n", metadata=None)
@@ -417,8 +419,10 @@ def test_container_storage_and_executor(tmp_path, caplog):
     storage.wait_for_idle_state()
     assert len(storage) == 11  # Still the older file remains
 
+    offload_data_ciphertext2 = random.choice((True, False))
     storage = FakeTestContainerStorage(
-        encryption_conf=None, containers_dir=tmp_path, max_containers_count=3
+        encryption_conf=None, containers_dir=tmp_path, max_containers_count=3,
+            offload_data_ciphertext=offload_data_ciphertext2
     )
     for i in range(3):
         storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
@@ -439,8 +443,10 @@ def test_container_storage_and_executor(tmp_path, caplog):
         Path("xyz.dat.003.crypt"),
     ]
 
+    offload_data_ciphertext3 = random.choice((True, False))
     storage = FakeTestContainerStorage(
-        encryption_conf=None, containers_dir=tmp_path, max_containers_count=4
+        encryption_conf=None, containers_dir=tmp_path, max_containers_count=4,
+            offload_data_ciphertext=offload_data_ciphertext3
     )
     assert len(storage) == 3  # Retrieves existing containers
     storage.enqueue_file_for_encryption("aaa.dat", b"000", metadata=None)

@@ -13,7 +13,7 @@ class FakeTestContainerStorage(ContainerStorage):
         self.increment += 1
 
     def _encrypt_data_into_container(self, data, metadata):
-        return data
+        return dict(a=33, data_ciphertext=data)
 
     def _decrypt_data_from_container(self, container):
-        return container
+        return container["data_ciphertext"]

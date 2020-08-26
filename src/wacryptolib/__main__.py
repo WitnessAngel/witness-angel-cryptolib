@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
 import os
@@ -13,14 +15,19 @@ from wacryptolib.key_storage import FilesystemKeyStorage
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+DEFAULt_KEY_STORAGE_DIRNAME = ".key_storage"
 
 # TODO - much later, use "schema" for validation of config data and container format!  See https://github.com/keleshev/schema
 # Then export corresponding jsons-chema for the world to see!
 
-local_key_storage_dir = os.path.join(os.getcwd(), ".key_storage")
-if not os.path.exists(local_key_storage_dir):
-    os.mkdir(local_key_storage_dir)
-LOCAL_KEY_STORAGE = FilesystemKeyStorage(keys_dir=local_key_storage_dir)
+
+def _get_key_storage(ctx):
+    key_storage_path = ctx.obj["key_storage"]
+    if not key_storage_path:
+        key_storage_path = Path().joinpath(DEFAULt_KEY_STORAGE_DIRNAME)
+        key_storage_path.mkdir(exist_ok=True)
+    return FilesystemKeyStorage(key_storage_path)
+
 
 EXAMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -40,7 +47,7 @@ EXAMPLE_CONTAINER_CONF = dict(
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_PLACEHOLDER)]
+                            share_escrow=LOCAL_ESCROW_PLACEHOLDER)]  # Beware, same escrow for the 2 shares, for now
                 )
             ],
             data_signatures=[
@@ -63,15 +70,28 @@ EXAMPLE_CONTAINER_CONF = dict(
     help="Json configuration file",
     type=click.File("rb"),
 )
+@click.option(
+    "-k",
+    "--key-storage",
+    default=None,
+    help="Folder to get/set crypto keys (else \"./.key_storage\" gets created)",
+    type=click.Path(exists=True,
+                    file_okay=False,
+                    dir_okay=True,
+                    writable=True,
+                    readable=True,
+                    resolve_path=True,
+                    allow_dash=False))
 @click.pass_context
-def cli(ctx, config):
+def cli(ctx, config, key_storage):
     ctx.ensure_object(dict)
     ctx.obj["config"] = config  # TODO read and validate this file later
+    ctx.obj["key_storage"] = key_storage
 
 
-def _do_encrypt(data):
+def _do_encrypt(data, local_key_storage):
     container = encrypt_data_into_container(
-        data, conf=EXAMPLE_CONTAINER_CONF, metadata=None, local_key_storage=LOCAL_KEY_STORAGE
+        data, conf=EXAMPLE_CONTAINER_CONF, metadata=None, local_key_storage=local_key_storage
     )
     return container
 
@@ -79,13 +99,15 @@ def _do_encrypt(data):
 @cli.command()
 @click.option("-i", "--input-medium", type=click.File("rb"), required=True)
 @click.option("-o", "--output-container", type=click.File("wb"))
-def encrypt(input_medium, output_container):
+@click.pass_context
+def encrypt(ctx, input_medium, output_container):
     """Turn a media file into a secure container."""
     if not output_container:
         output_container = LazyFile(input_medium.name + CONTAINER_SUFFIX, "wb")
     click.echo("In encrypt: %s" % str(locals()))
 
-    container_data = _do_encrypt(data=input_medium.read())
+    local_key_storage = _get_key_storage(ctx)
+    container_data = _do_encrypt(data=input_medium.read(), local_key_storage=local_key_storage)
 
     container_data_bytes = dump_to_json_bytes(container_data, indent=4)
 
@@ -93,15 +115,16 @@ def encrypt(input_medium, output_container):
         f.write(container_data_bytes)
 
 
-def _do_decrypt(container):
-    data = decrypt_data_from_container(container, local_key_storage=LOCAL_KEY_STORAGE)
+def _do_decrypt(container, local_key_storage):
+    data = decrypt_data_from_container(container, local_key_storage=local_key_storage)
     return data
 
 
 @cli.command()
 @click.option("-i", "--input-container", type=click.File("rb"), required=True)
 @click.option("-o", "--output-medium", type=click.File("wb"))
-def decrypt(input_container, output_medium):
+@click.pass_context
+def decrypt(ctx, input_container, output_medium):
     """Turn a container file back into its original media file."""
     if not output_medium:
         if input_container.name.endswith(CONTAINER_SUFFIX):
@@ -114,7 +137,8 @@ def decrypt(input_container, output_medium):
 
     container = load_from_json_bytes(input_container.read())
 
-    medium_content = _do_decrypt(container=container)
+    local_key_storage = _get_key_storage(ctx)
+    medium_content = _do_decrypt(container=container, local_key_storage=local_key_storage)
 
     with output_medium:
         output_medium.write(medium_content)

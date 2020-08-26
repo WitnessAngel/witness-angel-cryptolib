@@ -11,5 +11,9 @@ encryption/signing keys of the escrow system.
 
 .. autofunction:: wacryptolib.container.extract_metadata_from_container
 
+.. autofunction:: wacryptolib.container.dump_container_to_filesystem
+
+.. autofunction:: wacryptolib.container.load_container_from_filesystem
+
 .. autoclass:: wacryptolib.container.ContainerStorage
     :members:

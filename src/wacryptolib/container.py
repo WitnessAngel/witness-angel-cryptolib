@@ -9,7 +9,7 @@ from typing import Optional, Union, List
 from urllib.parse import urlparse
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
-from wacryptolib.escrow import EscrowApi as LocalEscrowApi, LOCAL_ESCROW_PLACEHOLDER
+from wacryptolib.escrow import EscrowApi as LocalEscrowApi, LOCAL_ESCROW_MARKER
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import (
     generate_symmetric_key,
@@ -42,6 +42,7 @@ MEDIUM_SUFFIX = (
 )  # To construct decrypted filename when no previous extensions are found in container filename
 OFFLOADED_MARKER = "[OFFLOADED]"
 DUMMY_KEY_STORAGE = DummyKeyStorage()  # Fallback storage with in-memory keys
+SHARED_SECRET_MARKER = "[SHARED_SECRET]"
 
 
 class ContainerBase:
@@ -60,7 +61,7 @@ class ContainerBase:
         self._local_escrow_api = LocalEscrowApi(key_storage=local_key_storage)
 
     def _get_proxy_for_escrow(self, escrow):
-        if escrow == LOCAL_ESCROW_PLACEHOLDER:
+        if escrow == LOCAL_ESCROW_MARKER:
             return self._local_escrow_api
         elif isinstance(escrow, dict):
             if "url" in escrow:
@@ -194,7 +195,7 @@ class ContainerWriter(ContainerBase):
         assert isinstance(symmetric_key_data, bytes), symmetric_key_data
         key_encryption_algo = conf["key_encryption_algo"]
 
-        if key_encryption_algo == "SHARED_SECRET":  # Using Shamir
+        if key_encryption_algo == SHARED_SECRET_MARKER:
             escrows = conf["key_shared_secret_escrows"]
             shares_count = len(escrows)
             threshold_count = conf["key_shared_secret_threshold"]
@@ -420,7 +421,7 @@ class ContainerReader(ContainerBase):
         assert isinstance(symmetric_key_cipherdict, dict), symmetric_key_cipherdict
         key_encryption_algo = conf["key_encryption_algo"]
 
-        if key_encryption_algo == "SHARED_SECRET":  # Using Shamir
+        if key_encryption_algo == SHARED_SECRET_MARKER:
 
             logger.debug("Deciphering each share")
             shares = self._decrypt_share(
@@ -838,7 +839,7 @@ def get_encryption_configuration_summary(conf_or_container):
     """
 
     def _get_escrow_identifier(_escrow):
-        if _escrow == LOCAL_ESCROW_PLACEHOLDER:
+        if _escrow == LOCAL_ESCROW_MARKER:
             _escrow = "local device"
         elif "url" in _escrow:
             _escrow = urlparse(_escrow["url"]).netloc

@@ -10,13 +10,14 @@ import pytest
 
 from _test_mockups import FakeTestContainerStorage
 from wacryptolib.container import (
-    LOCAL_ESCROW_PLACEHOLDER,
+    LOCAL_ESCROW_MARKER,
     encrypt_data_into_container,
     decrypt_data_from_container,
     ContainerStorage,
     extract_metadata_from_container,
     ContainerBase,
     get_encryption_configuration_summary, dump_container_to_filesystem, load_container_from_filesystem,
+    SHARED_SECRET_MARKER,
 )
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -31,14 +32,14 @@ SIMPLE_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
                 )
             ],
             data_signatures=[
                 dict(
                     message_prehash_algo="SHA256",
                     signature_algo="DSA_DSS",
-                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    signature_escrow=LOCAL_ESCROW_MARKER,
                 )
             ],
         )
@@ -51,7 +52,7 @@ COMPLEX_CONTAINER_CONF = dict(
             data_encryption_algo="AES_EAX",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
                 )
             ],
             data_signatures=[],
@@ -60,14 +61,14 @@ COMPLEX_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
                 )
             ],
             data_signatures=[
                 dict(
                     message_prehash_algo="SHA3_512",
                     signature_algo="DSA_DSS",
-                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    signature_escrow=LOCAL_ESCROW_MARKER,
                 )
             ],
         ),
@@ -75,22 +76,22 @@ COMPLEX_CONTAINER_CONF = dict(
             data_encryption_algo="CHACHA20_POLY1305",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
                 ),
                 dict(
-                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
                 ),
             ],
             data_signatures=[
                 dict(
                     message_prehash_algo="SHA3_256",
                     signature_algo="RSA_PSS",
-                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    signature_escrow=LOCAL_ESCROW_MARKER,
                 ),
                 dict(
                     message_prehash_algo="SHA512",
                     signature_algo="ECC_DSS",
-                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    signature_escrow=LOCAL_ESCROW_MARKER,
                 ),
             ],
         ),
@@ -103,31 +104,31 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
                 ),
                 dict(
-                    key_encryption_algo="SHARED_SECRET",
+                    key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=3,
                     key_shared_secret_escrows=[
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_MARKER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_MARKER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_MARKER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_MARKER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_MARKER,
                         ),
                     ],
                 ),
@@ -136,7 +137,7 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
                 dict(
                     message_prehash_algo="SHA256",
                     signature_algo="DSA_DSS",
-                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    signature_escrow=LOCAL_ESCROW_MARKER,
                 )
             ],
         )
@@ -149,7 +150,7 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
             data_encryption_algo="AES_EAX",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
                 )
             ],
             data_signatures=[],
@@ -158,14 +159,14 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
                 )
             ],
             data_signatures=[
                 dict(
                     message_prehash_algo="SHA3_512",
                     signature_algo="DSA_DSS",
-                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    signature_escrow=LOCAL_ESCROW_MARKER,
                 )
             ],
         ),
@@ -173,24 +174,24 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
             data_encryption_algo="CHACHA20_POLY1305",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="SHARED_SECRET",
+                    key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=2,
                     key_shared_secret_escrows=[
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_MARKER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_MARKER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_MARKER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_MARKER,
                         ),
                     ],
                 )
@@ -199,12 +200,12 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
                 dict(
                     message_prehash_algo="SHA3_256",
                     signature_algo="RSA_PSS",
-                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    signature_escrow=LOCAL_ESCROW_MARKER,
                 ),
                 dict(
                     message_prehash_algo="SHA512",
                     signature_algo="ECC_DSS",
-                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    signature_escrow=LOCAL_ESCROW_MARKER,
                 ),
             ],
         ),
@@ -279,7 +280,7 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf):
     # Delete 1, 2 and too many share(s) from cipherdict key
     for data_encryption in container["data_encryption_strata"]:
         for key_encryption in data_encryption["key_encryption_strata"]:
-            if key_encryption["key_encryption_algo"] == "SHARED_SECRET":
+            if key_encryption["key_encryption_algo"] == SHARED_SECRET_MARKER:
                 data_encryption_shamir = data_encryption
 
     key_ciphertext_shares = load_from_json_bytes(
@@ -325,12 +326,12 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf):
 
 def test_get_proxy_for_escrow(tmp_path):
     container_base1 = ContainerBase()
-    proxy1 = container_base1._get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
+    proxy1 = container_base1._get_proxy_for_escrow(LOCAL_ESCROW_MARKER)
     assert isinstance(proxy1, EscrowApi)  # Local Escrow
     assert isinstance(proxy1._key_storage, DummyKeyStorage)  # Default type
 
     container_base1_bis = ContainerBase()
-    proxy1_bis = container_base1_bis._get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
+    proxy1_bis = container_base1_bis._get_proxy_for_escrow(LOCAL_ESCROW_MARKER)
     assert (
         proxy1_bis._key_storage is proxy1_bis._key_storage
     )  # process-local storage is SINGLETON!
@@ -338,7 +339,7 @@ def test_get_proxy_for_escrow(tmp_path):
     container_base2 = ContainerBase(
         local_key_storage=FilesystemKeyStorage(keys_dir=str(tmp_path))
     )
-    proxy2 = container_base2._get_proxy_for_escrow(LOCAL_ESCROW_PLACEHOLDER)
+    proxy2 = container_base2._get_proxy_for_escrow(LOCAL_ESCROW_MARKER)
     assert isinstance(proxy2, EscrowApi)  # Local Escrow
     assert isinstance(proxy2._key_storage, FilesystemKeyStorage)
 

@@ -5,17 +5,17 @@ from click.utils import LazyFile
 import os
 
 from wacryptolib.container import (
-    LOCAL_ESCROW_PLACEHOLDER,
+    LOCAL_ESCROW_MARKER,
     encrypt_data_into_container,
     decrypt_data_from_container,
     CONTAINER_SUFFIX,
-    MEDIUM_SUFFIX,
+    MEDIUM_SUFFIX, SHARED_SECRET_MARKER,
 )
 from wacryptolib.key_storage import FilesystemKeyStorage
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
-DEFAULt_KEY_STORAGE_DIRNAME = ".key_storage"
+DEFAULT_KEY_STORAGE_DIRNAME = ".key_storage"
 
 # TODO - much later, use "schema" for validation of config data and container format!  See https://github.com/keleshev/schema
 # Then export corresponding jsons-chema for the world to see!
@@ -24,7 +24,7 @@ DEFAULt_KEY_STORAGE_DIRNAME = ".key_storage"
 def _get_key_storage(ctx):
     key_storage_path = ctx.obj["key_storage"]
     if not key_storage_path:
-        key_storage_path = Path().joinpath(DEFAULt_KEY_STORAGE_DIRNAME)
+        key_storage_path = Path().joinpath(DEFAULT_KEY_STORAGE_DIRNAME)
         key_storage_path.mkdir(exist_ok=True)
     return FilesystemKeyStorage(key_storage_path)
 
@@ -35,26 +35,26 @@ EXAMPLE_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_PLACEHOLDER
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
                 ),
                 dict(
-                    key_encryption_algo="SHARED_SECRET",
+                    key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_escrows=[
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                            share_escrow=LOCAL_ESCROW_MARKER,
                         ),
                         dict(
                             share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_PLACEHOLDER)]  # Beware, same escrow for the 2 shares, for now
+                            share_escrow=LOCAL_ESCROW_MARKER)]  # Beware, same escrow for the 2 shares, for now
                 )
             ],
             data_signatures=[
                 dict(
                     message_prehash_algo="SHA256",
                     signature_algo="DSA_DSS",
-                    signature_escrow=LOCAL_ESCROW_PLACEHOLDER,
+                    signature_escrow=LOCAL_ESCROW_MARKER,
                 )
             ],
         )
@@ -74,7 +74,7 @@ EXAMPLE_CONTAINER_CONF = dict(
     "-k",
     "--key-storage",
     default=None,
-    help="Folder to get/set crypto keys (else \"./.key_storage\" gets created)",
+    help="Folder to get/set crypto keys (else ./%s gets created)" % DEFAULT_KEY_STORAGE_DIRNAME,
     type=click.Path(exists=True,
                     file_okay=False,
                     dir_okay=True,

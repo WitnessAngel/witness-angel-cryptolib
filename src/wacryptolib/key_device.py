@@ -194,7 +194,7 @@ def _list_available_key_devices_linux():
                 key_device
             )  # E.g False
 
-        return key_device_list
+    return key_device_list
 
 
 def _get_metadata_file_path(key_device: dict):

@@ -42,8 +42,8 @@ uuid0 = "^0.2.7"
 pytz = "^2019.3"
 wmi = { version = "^1.5.1 ", markers = "sys_platform == 'win32'" }
 pywin32 = { version = "^228", markers = "sys_platform == 'win32'" }
-pyudev = { version = "^0.22.0 ", markers = "sys_platform == 'linux3'" }
-psutil = { version = "^5.7.2", markers = "sys_platform == 'linux3'" }
+pyudev = { version = "^0.22.0 ", markers = "sys_platform == 'linux'" }
+psutil = { version = "^5.7.2", markers = "sys_platform == 'linux'" }
 
 [tool.poetry.dev-dependencies]
 

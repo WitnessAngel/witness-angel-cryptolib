@@ -1,4 +1,4 @@
-sphinx
-sphinx-autodoc-typehints
-sphinx_rtd_theme
-toml
+sphinx==2.4.4
+sphinx-autodoc-typehints==1.10.3
+sphinx_rtd_theme==0.4.3
+toml===0.10.1

@@ -611,20 +611,18 @@ def _get_offloaded_file_path(container_filepath):
 def dump_container_to_filesystem(container_filepath: Path, container: dict, offload_data_ciphertext=True) -> None:
     """Dump a container to a file path.
 
-    If `offload_data_ciphertext`, actual encrypted data is dumped to a separate file nearby the json-formatted container.
+    If `offload_data_ciphertext`, actual encrypted data is dumped to a separate bytes file nearby the json-formatted container.
     """
     if offload_data_ciphertext:
         offloaded_file_path = _get_offloaded_file_path(container_filepath)
-        dump_to_json_file(
-                offloaded_file_path, container["data_ciphertext"]  # FIXME - no need for json here, just dump bytes!
-        )
+        offloaded_file_path.write_bytes(container["data_ciphertext"])
         container = container.copy()  # DO NOT touch original dict!
         container["data_ciphertext"] = OFFLOADED_MARKER
     dump_to_json_file(container_filepath, container)
 
 
 def load_container_from_filesystem(container_filepath: Path, include_data_ciphertext=True) -> dict:
-    """Load a json-formatted container from a file path, potentially loading its offloaded ciphertext from a separate nearby file.
+    """Load a json-formatted container from a file path, potentially loading its offloaded ciphertext from a separate nearby bytes file.
 
     Field `data_ciphertext` is only present in result dict if `include_data_ciphertext` is True.
     """
@@ -634,8 +632,7 @@ def load_container_from_filesystem(container_filepath: Path, include_data_cipher
     if include_data_ciphertext:
         if container["data_ciphertext"] == OFFLOADED_MARKER:
             offloaded_file_path = _get_offloaded_file_path(container_filepath)
-            data_ciphertext = load_from_json_file(offloaded_file_path)  # FIXME - no need for json here, just dump bytes!
-            container["data_ciphertext"] = data_ciphertext
+            container["data_ciphertext"] = offloaded_file_path.read_bytes()
     else:
         del container["data_ciphertext"]
 

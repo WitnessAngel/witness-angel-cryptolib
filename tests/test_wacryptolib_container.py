@@ -580,8 +580,8 @@ def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
     assert container_reloaded["data_ciphertext"] == "[OFFLOADED]"
 
     container_offloaded_filepathstr = str(container_filepath) + ".data"
-    offloaded_data_reloaded = load_from_json_file(container_offloaded_filepathstr)
-    assert offloaded_data_reloaded == container_ciphertext_before_dump  # WELL OFFLOADED
+    offloaded_data_reloaded = Path(container_offloaded_filepathstr).read_bytes()
+    assert offloaded_data_reloaded == container_ciphertext_before_dump  # WELL OFFLOADED as DIRECT BYTES
     assert load_container_from_filesystem(container_filepath) == container  # UNCHANGED from original
 
     container_truncated = load_container_from_filesystem(container_filepath, include_data_ciphertext=False)

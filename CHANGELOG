@@ -5,6 +5,7 @@ Version 0.5
 * Add support for Shamir Shared Secrets in container encryption/decryption toolchain
 * Allow listing of keypairs in FilesystemKeyStorage
 * Support offloading of ciphertext in separate file nearby the json container
+* Accept and normalize unicode passphrases as NFKC/UTF8 bytesstrings
 
 Version 0.4
 ==================

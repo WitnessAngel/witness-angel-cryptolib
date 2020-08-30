@@ -1,9 +1,16 @@
 import logging
+from typing import Union
 
+import unicodedata
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Random import get_random_bytes
 
 logger = logging.getLogger(__name__)
+
+
+def encode_passphrase(passphrase: str):
+    """Strip and NFKC-normalize passphrase, then encode it as utf8 bytes."""
+    return unicodedata.normalize("NFKC", passphrase.strip()).encode("utf8")
 
 
 def generate_symmetric_key(encryption_algo: str) -> bytes:
@@ -26,7 +33,7 @@ def generate_asymmetric_keypair(
     serialize=True,
     key_length_bits=2048,
     curve="p521",
-    passphrase: bytes = None
+    passphrase: Union[bytes, str] = None
 ) -> dict:
     """Generate a (public_key, private_key) pair.
 
@@ -38,6 +45,10 @@ def generate_asymmetric_keypair(
 
     :return: dictionary with "private_key" and "public_key" fields as objects or PEM-format strings"""
     assert serialize or passphrase is None
+
+    if isinstance(passphrase, str):
+        passphrase = encode_passphrase(passphrase)
+
     potential_params = dict(key_length_bits=key_length_bits, curve=curve)
 
     key_type = key_type.upper()
@@ -64,10 +75,9 @@ def generate_asymmetric_keypair(
 
     return keypair
 
-
                 
 def load_asymmetric_key_from_pem_bytestring(
-    key_pem: bytes, *, key_type: str, passphrase: bytes = None
+    key_pem: bytes, *, key_type: str, passphrase: Union[bytes, str] = None
 ):
     """Load a key (public or private) from a PEM-formatted bytestring.
 
@@ -76,6 +86,9 @@ def load_asymmetric_key_from_pem_bytestring(
 
     :return: key object
     """
+    if isinstance(passphrase, str):
+        passphrase = encode_passphrase(passphrase)
+
     key_type = key_type.upper()
     if key_type not in SUPPORTED_ASYMMETRIC_KEY_TYPES:
         raise ValueError("Unknown key type %s" % key_pem)
@@ -145,7 +158,7 @@ def _serialize_key_object_to_pem_bytestring(
     The exact encryption of the key depends on its key_type."""
     assert passphrase is None or (isinstance(passphrase, bytes) and passphrase), repr(
         passphrase
-    )  # No implicit encoding
+    )  # No implicit encoding here
     extra_params = {}
     if passphrase:
         extra_params = dict(passphrase=passphrase)

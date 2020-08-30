@@ -95,7 +95,7 @@ def test_key_storage_list_keys(tmp_path: Path):
     key_type = random.choice(SUPPORTED_ASYMMETRIC_KEY_TYPES)
     key_pair = generate_asymmetric_keypair(
                     key_type=key_type,
-                    passphrase="abc".encode(),
+                    passphrase="abcàt".encode("latin1"),
                 )
     keychain_uid = generate_uuid0()
     key_storage.set_keys(

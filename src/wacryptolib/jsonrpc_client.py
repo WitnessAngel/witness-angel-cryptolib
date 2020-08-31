@@ -9,7 +9,7 @@ from wacryptolib.utilities import dump_to_json_str, load_from_json_str
 logger = logging.getLogger(__name__)
 
 
-_exception_classes = StatusSlugsMapper.gather_exception_subclasses(
+_exception_classes = StatusSlugsMapper.gather_exception_subclasses(  # FIXME update with exceptions
     builtins, parent_classes=[Exception]
 )
 status_slugs_to_builtins_mapper = StatusSlugsMapper(

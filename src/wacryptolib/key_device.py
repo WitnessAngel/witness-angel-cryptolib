@@ -59,7 +59,7 @@ def initialize_key_device(key_device: dict, user: str):
     """
 
     if key_device["is_initialized"]:
-        raise RuntimeError("%s : key is already initialized" % key_device["path"])
+        raise RuntimeError("%s key-device is already initialized" % key_device["path"])
 
     if sys_platform == "win32":  # All Windows versions
         metadata = _initialize_key_device_win32(key_device=key_device, user=user)

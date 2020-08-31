@@ -3,6 +3,7 @@ import time
 import uuid
 from concurrent.futures.thread import ThreadPoolExecutor
 
+from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist
 from wacryptolib.utilities import generate_uuid0
 
 
@@ -15,7 +16,8 @@ def check_key_storage_basic_get_set_api(key_storage):
     keychain_uid_other = generate_uuid0()
     key_type = "abxz"
 
-    assert not key_storage.get_public_key(keychain_uid=keychain_uid, key_type="abxz")
+    with pytest.raises(KeyDoesNotExist, match="not found"):
+        key_storage.get_public_key(keychain_uid=keychain_uid, key_type="abxz")
 
     key_storage.set_keys(
         keychain_uid=keychain_uid,
@@ -29,14 +31,14 @@ def check_key_storage_basic_get_set_api(key_storage):
         == b"public_data"
     )  # Well readable even without any kind of "commit"
 
-    with pytest.raises(RuntimeError, match="Already existing"):
+    with pytest.raises(KeyAlreadyExists, match="Already existing"):
         key_storage.set_keys(
             keychain_uid=keychain_uid,
             key_type=key_type,
             public_key=b"public_data",
             private_key=b"private_data",
         )
-    with pytest.raises(RuntimeError, match="Already existing"):
+    with pytest.raises(KeyAlreadyExists, match="Already existing"):
         key_storage.set_keys(
             keychain_uid=keychain_uid,
             key_type=key_type,
@@ -53,23 +55,17 @@ def check_key_storage_basic_get_set_api(key_storage):
         == b"private_data"
     )
 
-    assert (
+    with pytest.raises(KeyDoesNotExist, match="not found"):
         key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type + "_")
-        is None
-    )
-    assert (
-        key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type + "_")
-        is None
-    )
 
-    assert (
+    with pytest.raises(KeyDoesNotExist, match="not found"):
+        key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type + "_")
+
+    with pytest.raises(KeyDoesNotExist, match="not found"):
         key_storage.get_public_key(keychain_uid=keychain_uid_other, key_type=key_type)
-        is None
-    )
-    assert (
+
+    with pytest.raises(KeyDoesNotExist, match="not found"):
         key_storage.get_private_key(keychain_uid=keychain_uid_other, key_type=key_type)
-        is None
-    )
 
     return locals()
 
@@ -105,12 +101,14 @@ def check_key_storage_free_keys_api(key_storage):
     assert key_storage.get_free_keypairs_count("type2") == 1
     assert key_storage.get_free_keypairs_count("type3") == 0
 
-    with pytest.raises(RuntimeError, match="Already existing"):
+    with pytest.raises(KeyAlreadyExists, match="Already existing"):
         key_storage.attach_free_keypair_to_uuid(
             keychain_uid=keychain_uid, key_type="type1"
         )
 
-    assert not key_storage.get_public_key(keychain_uid=keychain_uid, key_type="type2")
+    with pytest.raises(KeyDoesNotExist, match="not found"):
+        key_storage.get_public_key(keychain_uid=keychain_uid, key_type="type2")
+
     key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_type="type2")
     assert b"public_data" in key_storage.get_public_key(
         keychain_uid=keychain_uid, key_type="type2"
@@ -128,12 +126,12 @@ def check_key_storage_free_keys_api(key_storage):
     assert key_storage.get_free_keypairs_count("type2") == 0
     assert key_storage.get_free_keypairs_count("type3") == 0
 
-    with pytest.raises(RuntimeError, match="No free keypair of type"):
+    with pytest.raises(KeyDoesNotExist, match="No free keypair of type"):
         key_storage.attach_free_keypair_to_uuid(
             keychain_uid=keychain_uid_other, key_type="type2"
         )
 
-    with pytest.raises(RuntimeError, match="No free keypair of type"):
+    with pytest.raises(KeyDoesNotExist, match="No free keypair of type"):
         key_storage.attach_free_keypair_to_uuid(
             keychain_uid=keychain_uid, key_type="type3"
         )
@@ -168,7 +166,7 @@ def check_key_storage_free_keys_concurrency(key_storage):
             )
             assert public_key_content == b"whatever1"
             res = True
-        except RuntimeError:
+        except KeyDoesNotExist:
             res = False
         return res
 

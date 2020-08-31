@@ -9,6 +9,7 @@ from pathlib import Path
 from os.path import  join
 import glob
 
+from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist
 from wacryptolib.utilities import synchronized
 
 logger = logging.getLogger(__name__)
@@ -33,11 +34,11 @@ class KeyStorageBase(ABC):
         key_type: str,
         public_key: bytes,
         private_key: bytes,
-    ):  # pragma: no cover
+    ) -> None:  # pragma: no cover
         """
         Store a pair of asymmetric keys into storage, attached to a specific UUID.
 
-        Must raise an exception if a key pair already exists for these uid/type identifiers.
+        Must raise a KeyAlreadyExists exception if a keypair already exists for these uid/type identifiers.
 
         :param keychain_uid: unique ID of the keychain
         :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
@@ -56,7 +57,7 @@ class KeyStorageBase(ABC):
         :param keychain_uid: unique ID of the keychain
         :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
 
-        :return: public key in clear PEM format, or None if unexisting.
+        :return: public key in clear PEM format, or raise KeyDoesNotExist
         """
         raise NotImplementedError("KeyStorageBase.get_public_key()")
 
@@ -70,7 +71,7 @@ class KeyStorageBase(ABC):
         :param keychain_uid: unique ID of the keychain
         :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
 
-        :return: private key in PEM format (potentially encrypted), or None if unexisting.
+        :return: private key in PEM format (potentially encrypted), or raise KeyDoesNotExist
         """
         raise NotImplementedError("KeyStorageBase.get_private_key()")
 
@@ -104,7 +105,7 @@ class KeyStorageBase(ABC):
         """
         Fetch one of the free keypairs of storage of type `key_type`, and attach it to UUID `keychain_uid`.
 
-        If no free keypair is available, a RuntimeError is raised.
+        If no free keypair is available, a KeyDoesNotExist is raised.
 
         :param keychain_uid: unique ID of the keychain
         :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
@@ -131,13 +132,19 @@ class DummyKeyStorage(KeyStorageBase):
     def _get_keypair_or_none(self, *, keychain_uid, key_type):
         return self._cached_keypairs.get((keychain_uid, key_type))
 
+    def _get_keypair_or_raise(self, *, keychain_uid, key_type):
+        keypair = self._get_keypair_or_none(keychain_uid=keychain_uid, key_type=key_type)
+        if keypair:
+            return keypair
+        raise KeyDoesNotExist("Dummy keypair %s/%s not found" % (keychain_uid, key_type))
+
     def _set_keypair(self, *, keychain_uid, key_type, keypair):
         assert isinstance(keypair, dict), keypair
         self._cached_keypairs[(keychain_uid, key_type)] = keypair
 
     def _check_keypair_does_not_exist(self, keychain_uid, key_type):
         if self._get_keypair_or_none(keychain_uid=keychain_uid, key_type=key_type):
-            raise RuntimeError(
+            raise KeyAlreadyExists(
                 "Already existing dummy keypair %s/%s" % (keychain_uid, key_type)
             )
 
@@ -150,12 +157,12 @@ class DummyKeyStorage(KeyStorageBase):
         )
 
     def get_public_key(self, *, keychain_uid, key_type):
-        keypair = self._get_keypair_or_none(keychain_uid=keychain_uid, key_type=key_type)
-        return keypair["public_key"] if keypair else None
+        keypair = self._get_keypair_or_raise(keychain_uid=keychain_uid, key_type=key_type)
+        return keypair["public_key"]
 
     def get_private_key(self, *, keychain_uid, key_type):
-        keypair = self._get_keypair_or_none(keychain_uid=keychain_uid, key_type=key_type)
-        return keypair["private_key"] if keypair else None
+        keypair = self._get_keypair_or_raise(keychain_uid=keychain_uid, key_type=key_type)
+        return keypair["private_key"]
 
     def get_free_keypairs_count(self, key_type):
         return len(self._free_keypairs.get(key_type, []))
@@ -171,7 +178,7 @@ class DummyKeyStorage(KeyStorageBase):
             sublist = self._free_keypairs[key_type]
             keypair = sublist.pop()
         except LookupError:
-            raise RuntimeError(
+            raise KeyDoesNotExist(
                 "No free keypair of type %s available in dummy storage" % key_type
             )
         else:
@@ -221,10 +228,7 @@ class FilesystemKeyStorage(KeyStorageBase):
 
     def _read_from_storage_file(self, basename: str):
         assert os.sep not in basename, basename
-        try:
-            return self._keys_dir.joinpath(basename).read_bytes()
-        except FileNotFoundError:
-            return None
+        return self._keys_dir.joinpath(basename).read_bytes()
 
     def _check_keypair_does_not_exist(self, keychain_uid, key_type):
         # We use PRIVATE key as marker of existence
@@ -232,7 +236,7 @@ class FilesystemKeyStorage(KeyStorageBase):
             keychain_uid, key_type=key_type, is_public=False
         )
         if self._keys_dir.joinpath(target_private_key_filename).exists():
-            raise RuntimeError(
+            raise KeyAlreadyExists(
                 "Already existing filesystem keypair %s/%s" % (keychain_uid, key_type)
             )
 
@@ -248,6 +252,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_type=key_type)
 
         # We override (unexpected) already existing files
+
         self._write_to_storage_file(
             basename=target_public_key_filename, data=public_key
         )
@@ -260,14 +265,20 @@ class FilesystemKeyStorage(KeyStorageBase):
         filename_public_key = self._get_filename(
             keychain_uid, key_type=key_type, is_public=True
         )
-        return self._read_from_storage_file(basename=filename_public_key)
+        try:
+            return self._read_from_storage_file(basename=filename_public_key)
+        except FileNotFoundError:
+            raise KeyDoesNotExist("Public filesystem key %s/%s not found" % (keychain_uid, key_type))
 
     @synchronized
     def get_private_key(self, *, keychain_uid, key_type):
         filename_private_key = self._get_filename(
             keychain_uid, key_type=key_type, is_public=False
         )
-        return self._read_from_storage_file(basename=filename_private_key)
+        try:
+            return self._read_from_storage_file(basename=filename_private_key)
+        except FileNotFoundError:
+            raise KeyDoesNotExist("Private filesystem key %s/%s not found" % (keychain_uid, key_type))
 
     # No need for lock here
     def get_free_keypairs_count(self, key_type):
@@ -317,7 +328,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         try:
             free_private_key = next(globber)
         except StopIteration:
-            raise RuntimeError(
+            raise KeyDoesNotExist(
                 "No free keypair of type %s available in filesystem storage" % key_type
             )
         _free_public_key_name = free_private_key.name.replace(

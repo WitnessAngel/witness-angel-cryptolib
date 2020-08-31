@@ -1,9 +1,12 @@
+import logging
 from sys import platform as sys_platform
 from pathlib import Path
 from pathlib import PurePath
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 from wacryptolib.utilities import generate_uuid0
 
+
+logger = logging.getLogger(__name__)
 
 # FIXME regroup all metadata and is_initialized in single "metadata" field
 
@@ -124,11 +127,9 @@ def _check_key_device_metadata(metadata: dict):
 
 
 def _list_available_key_devices_win32():
-    import pywintypes  # Import needed just to help win32api to load
+    import pywintypes  # Import which also helps win32api to load
     import win32api
     import wmi
-
-    del pywintypes
 
     key_device_list = []
     for drive in wmi.WMI().Win32_DiskDrive():
@@ -139,14 +140,22 @@ def _list_available_key_devices_win32():
 
         for partition in drive.associators("Win32_DiskDriveToDiskPartition"):
             for logical_disk in partition.associators("Win32_LogicalDiskToPartition"):
-                assert drive.Size, drive.Size
+
+                device_path = logical_disk.Caption + "\\"
+
                 key_device = {}
+
+                try:
+                    # This returns (volname, volsernum, maxfilenamlen, sysflags, filesystemtype) on success
+                    key_device["label"] = win32api.GetVolumeInformation(device_path)[0]
+                except pywintypes.error as exc:
+                    # Happens e.g. if filesystem is unknown or missing
+                    logging.warning("Skipping faulty device %s: %r", device_path, exc)
+                    continue
+
                 key_device["drive_type"] = pnp_dev_id[0]  # type like 'USBSTOR'
-                logical_address = logical_disk.Caption
-                key_device["path"] = logical_address  # E.g. 'E:'
-                key_device["label"] = win32api.GetVolumeInformation(
-                    logical_disk.Caption + "\\"
-                )[0]
+                key_device["path"] = device_path  # E.g. 'E:\\'
+                assert drive.Size, drive.Size
                 key_device["size"] = int(partition.Size)  # In bytes
                 key_device["format"] = logical_disk.FileSystem.lower()  # E.g 'fat32'
                 key_device["is_initialized"] = is_key_device_initialized(

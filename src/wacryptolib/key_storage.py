@@ -18,6 +18,9 @@ class KeyStorageBase(ABC):
     """
     Subclasses of this storage interface can be implemented to store/retrieve keys from
     miscellaneous locations (disk, database...), without permission checks.
+
+    By construction for now, a keypair exists entirely or not at all - public and private keys
+    can't exist independently.
     """
 
     # TODO use exceptions in case of key not found or unauthorized, instead of "None"!
@@ -53,7 +56,7 @@ class KeyStorageBase(ABC):
         :param keychain_uid: unique ID of the keychain
         :param key_type: one of SUPPORTED_ASYMMETRIC_KEY_TYPES
 
-        :return: clearpublic key in clear PEM format, or None if unexisting.
+        :return: public key in clear PEM format, or None if unexisting.
         """
         raise NotImplementedError("KeyStorageBase.get_public_key()")
 
@@ -125,7 +128,7 @@ class DummyKeyStorage(KeyStorageBase):
             {}
         )  # Maps key types to lists of dicts of public_key/private_key
 
-    def _get_keypair(self, *, keychain_uid, key_type):
+    def _get_keypair_or_none(self, *, keychain_uid, key_type):
         return self._cached_keypairs.get((keychain_uid, key_type))
 
     def _set_keypair(self, *, keychain_uid, key_type, keypair):
@@ -133,7 +136,7 @@ class DummyKeyStorage(KeyStorageBase):
         self._cached_keypairs[(keychain_uid, key_type)] = keypair
 
     def _check_keypair_does_not_exist(self, keychain_uid, key_type):
-        if self._get_keypair(keychain_uid=keychain_uid, key_type=key_type):
+        if self._get_keypair_or_none(keychain_uid=keychain_uid, key_type=key_type):
             raise RuntimeError(
                 "Already existing dummy keypair %s/%s" % (keychain_uid, key_type)
             )
@@ -147,11 +150,11 @@ class DummyKeyStorage(KeyStorageBase):
         )
 
     def get_public_key(self, *, keychain_uid, key_type):
-        keypair = self._get_keypair(keychain_uid=keychain_uid, key_type=key_type)
+        keypair = self._get_keypair_or_none(keychain_uid=keychain_uid, key_type=key_type)
         return keypair["public_key"] if keypair else None
 
     def get_private_key(self, *, keychain_uid, key_type):
-        keypair = self._get_keypair(keychain_uid=keychain_uid, key_type=key_type)
+        keypair = self._get_keypair_or_none(keychain_uid=keychain_uid, key_type=key_type)
         return keypair["private_key"] if keypair else None
 
     def get_free_keypairs_count(self, key_type):

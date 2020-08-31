@@ -529,8 +529,8 @@ class ContainerReader(ContainerBase):
                 logger.error(e)
             tested_share_counter += 1
 
-        if valid_share_counter != key_shared_secret_threshold:
-            raise RuntimeError("valid(s) share(s) missing")
+        if valid_share_counter < key_shared_secret_threshold:
+            raise RuntimeError("%s valid(s) share(s) missing for reconstitution" % (key_shared_secret_threshold - valid_share_counter))
         return shares
 
     def _verify_message_signature(
@@ -547,8 +547,12 @@ class ContainerReader(ContainerBase):
         signature_algo = conf["signature_algo"]
         encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
         public_key_pem = encryption_proxy.get_public_key(
-            keychain_uid=keychain_uid, key_type=signature_algo
+            keychain_uid=keychain_uid, key_type=signature_algo, must_exist=True
         )
+
+        if not public_key_pem:
+            raise RuntimeError("Missing key %s/%s for signature verification" % (keychain_uid, signature_algo))
+
         public_key = load_asymmetric_key_from_pem_bytestring(
             key_pem=public_key_pem, key_type=signature_algo
         )

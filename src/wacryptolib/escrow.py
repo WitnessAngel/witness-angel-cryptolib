@@ -63,7 +63,7 @@ class EscrowApi:
         except KeyDoesNotExist:
             # Just tweak the error message here
             raise KeyDoesNotExist(
-                "Unexisting sql keypair %s/%s in escrow api" % (keychain_uid, key_type)
+                "Sql keypair %s/%s not found in escrow api" % (keychain_uid, key_type)
             )
 
     # FIXME rename this to differentiate it from KeyStorage API method
@@ -148,6 +148,16 @@ class EscrowApi:
 
         secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key=private_key)
         return secret
+
+
+class ReadonlyEscrowApi(EscrowApi):
+    """
+    Alternative Escrow API which relies on a fixed set of keys (e.g. imported from a key-device).
+
+    This version never generates keys by itself, whatever the values of method parameters like `must_exist`.
+    """
+    def _ensure_keypair_exists(self, keychain_uid: uuid.UUID, key_type: str):
+        self._check_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
 
 
 def generate_free_keypair_for_least_provisioned_key_type(

@@ -10,6 +10,9 @@ API for escrow services
 .. autoclass:: wacryptolib.escrow.EscrowApi
     :members:
 
+.. autoclass:: wacryptolib.escrow.ReadonlyEscrowApi
+    :members:
+
 
 Auto-replenishing of local free keys
 -------------------------------------

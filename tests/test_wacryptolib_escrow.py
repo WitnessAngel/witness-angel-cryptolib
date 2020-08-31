@@ -1,3 +1,4 @@
+import random
 import time
 
 import pytest
@@ -7,10 +8,11 @@ from wacryptolib.encryption import _encrypt_via_rsa_oaep
 from wacryptolib.escrow import (
     EscrowApi,
     generate_free_keypair_for_least_provisioned_key_type,
-    get_free_keys_generator_worker,
+    get_free_keys_generator_worker, ReadonlyEscrowApi,
 )
+from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring, SUPPORTED_ASYMMETRIC_KEY_TYPES, \
+    generate_asymmetric_keypair
 from wacryptolib.exceptions import KeyDoesNotExist
-from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.key_storage import DummyKeyStorage
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import generate_uuid0
@@ -75,8 +77,7 @@ def test_escrow_api_workflow():
 
     with pytest.raises(ValueError, match="too big"):
         escrow_api.get_message_signature(
-            keychain_uid=keychain_uid, message=secret_too_big, signature_algo="DSA_DSS"
-        )
+            keychain_uid=keychain_uid, message=secret_too_big, signature_algo="DSA_DSS")
 
     assert key_storage.get_free_keypairs_count("DSA_DSS") == 0  # Taken
     assert key_storage.get_free_keypairs_count("ECC_DSS") == 0
@@ -123,9 +124,10 @@ def test_escrow_api_workflow():
     decrypted = escrow_api.decrypt_with_private_key(
         keychain_uid=keychain_uid, encryption_algo="RSA_OAEP", cipherdict=cipherdict
     )
+    assert decrypted == secret
 
     # NO auto-creation of keypair in decrypt_with_private_key()
-    with pytest.raises(KeyDoesNotExist, match="Unexisting"):
+    with pytest.raises(KeyDoesNotExist, match="not found"):
         escrow_api.decrypt_with_private_key(
             keychain_uid=keychain_uid_unexisting,
             encryption_algo="RSA_OAEP",
@@ -138,13 +140,12 @@ def test_escrow_api_workflow():
             keychain_uid=keychain_uid, encryption_algo="RSA_OAEP", cipherdict=cipherdict
         )
 
-    assert decrypted == secret
-
+    # Always accepted for now, dummy implementation
     result = escrow_api.request_decryption_authorization(
         keypair_identifiers=[(keychain_uid, "RSA_OAEP")],
         request_message="I need this decryption!",
     )
-    assert result["response_message"]
+    assert "accepted" in result["response_message"]
 
     with pytest.raises(ValueError, match="empty"):
         escrow_api.request_decryption_authorization(
@@ -155,6 +156,75 @@ def test_escrow_api_workflow():
     assert key_storage.get_free_keypairs_count("ECC_DSS") == 0
     assert key_storage.get_free_keypairs_count("RSA_OAEP") == 0
     assert key_storage.get_free_keypairs_count("RSA_PSS") == 0
+
+
+def test_readonly_escrow_api_behaviour():
+
+    key_storage = DummyKeyStorage()
+    escrow_api = ReadonlyEscrowApi(key_storage=key_storage)
+
+    keychain_uid = generate_uuid0()
+    key_type_cipher = "RSA_OAEP"
+    key_type_signature = "RSA_PSS"
+    secret = get_random_bytes(127)
+
+    for must_exist in (True, False):
+        with pytest.raises(KeyDoesNotExist, match="not found"):
+            escrow_api.get_public_key(
+                keychain_uid=keychain_uid, key_type=key_type_signature, must_exist=must_exist)
+
+    with pytest.raises(KeyDoesNotExist, match="not found"):
+        escrow_api.get_message_signature(
+            keychain_uid=keychain_uid, message=secret, signature_algo="RSA_PSS")
+
+    # Always accepted for now, dummy implementation
+    result = escrow_api.request_decryption_authorization(
+        keypair_identifiers=[(keychain_uid, key_type_cipher)],
+        request_message="I need this decryption!",
+    )
+    assert "accepted" in result["response_message"]
+
+    # Still no auto-creation of keypair in decrypt_with_private_key()
+    with pytest.raises(KeyDoesNotExist, match="not found"):
+        escrow_api.decrypt_with_private_key(
+            keychain_uid=keychain_uid,
+            encryption_algo=key_type_cipher,
+            cipherdict={},
+        )
+
+    # Now we generate wanted keys #
+
+    keypair_cipher = generate_asymmetric_keypair(key_type=key_type_cipher, serialize=True)
+    key_storage.set_keys(
+        keychain_uid=keychain_uid,
+        key_type=key_type_cipher,
+        public_key=keypair_cipher["public_key"],
+        private_key=keypair_cipher["private_key"],
+    )
+
+    keypair_signature = generate_asymmetric_keypair(key_type=key_type_signature, serialize=True)
+    key_storage.set_keys(
+        keychain_uid=keychain_uid,
+        key_type=key_type_signature,
+        public_key=keypair_signature["public_key"],
+        private_key=keypair_signature["private_key"],
+    )
+
+    public_key2 = escrow_api.get_public_key(
+        keychain_uid=keychain_uid, key_type=key_type_signature, must_exist=must_exist)
+    assert public_key2 == keypair_signature["public_key"]
+
+    signature = escrow_api.get_message_signature(
+        keychain_uid=keychain_uid, message=secret, signature_algo="RSA_PSS")
+    assert signature and isinstance(signature, dict)
+
+    private_key_cipher = load_asymmetric_key_from_pem_bytestring(
+        key_pem=keypair_cipher["private_key"], key_type=key_type_cipher)
+    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=private_key_cipher)
+    decrypted = escrow_api.decrypt_with_private_key(
+        keychain_uid=keychain_uid, encryption_algo=key_type_cipher, cipherdict=cipherdict
+    )
+    assert decrypted == secret
 
 
 def test_generate_free_keypair_for_least_provisioned_key_type():

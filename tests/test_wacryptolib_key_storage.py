@@ -133,8 +133,9 @@ def test_key_storage_list_keys(tmp_path: Path):
     for bad_filename in (
         "0e896f1d-a4d0-67d6-7286-056f1ec342e8_RSA_OAEP_public_key.dot",
         "0e896f1d-a4d0-67d6-7286-056f1ec342e8_RSA_OAEP_publicX_key.pem",
-        "a4d0-67d6-7286-056f1ec342e8_RSA_OAEP_public_key.pem"):
-        Path(tmp_path.joinpath(bad_filename)).touch()  # These will be ignored thanks to Regex
+        "a4d0-67d6-7286-056f1ec342e8_RSA_OAEP_public_key.pem",
+        "WRONGPREFIX_public_key.pem"):
+        tmp_path.joinpath(bad_filename).touch()  # These will be ignored thanks to Regex
 
     keys_list = key_storage.list_keys()
     assert isinstance(keys_list, list)

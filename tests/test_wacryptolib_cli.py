@@ -31,49 +31,49 @@ def test_cli_encryption_and_decryption(tmp_path):
     data_file = "test_file.txt"
     data_sample = "Héllô\nguÿs"
 
-    base_args = ["-k", tmp_path]  # Store keys outside our code
+    for idx, base_args in enumerate([[], ["-k", tmp_path]]):  # Store keys into cwd or into specific folder
 
-    with runner.isolated_filesystem() as tempdir:
+        with runner.isolated_filesystem() as tempdir:
 
-        print("TEMPORARY TEST DIRECTORY:", tempdir)
+            print("TEMPORARY TEST DIRECTORY:", tempdir)
 
-        with open(data_file, "w") as output_file:
-            output_file.write(data_sample)
+            with open(data_file, "w") as output_file:
+                output_file.write(data_sample)
 
-        result = runner.invoke(cli, base_args + ["encrypt", "-i", "test_file.txt"])
-        assert result.exit_code == 0
-        assert os.path.exists(data_file + ".crypt")
+            result = runner.invoke(cli, base_args + ["encrypt", "-i", "test_file.txt"])
+            assert result.exit_code == 0
+            assert os.path.exists(data_file + ".crypt")
 
-        result = runner.invoke(
-            cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "stuff.dat"]
-        )
-        assert result.exit_code == 0
-        assert os.path.exists("stuff.dat")
+            result = runner.invoke(
+                cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "stuff.dat"]
+            )
+            assert result.exit_code == 0
+            assert os.path.exists("stuff.dat")
 
-        os.remove(data_file)  # CLEANUP
-        assert not os.path.exists(data_file)
+            os.remove(data_file)  # CLEANUP
+            assert not os.path.exists(data_file)
 
-        result = runner.invoke(cli, base_args + ["decrypt", "-i", data_file + ".crypt"])
-        assert result.exit_code == 0
-        assert os.path.exists(data_file)
+            result = runner.invoke(cli, base_args + ["decrypt", "-i", data_file + ".crypt"])
+            assert result.exit_code == 0
+            assert os.path.exists(data_file)
 
-        result = runner.invoke(cli, base_args + ["decrypt", "-i", "stuff.dat"])
-        assert result.exit_code == 0
-        assert os.path.exists("stuff.dat.medium")
+            result = runner.invoke(cli, base_args + ["decrypt", "-i", "stuff.dat"])
+            assert result.exit_code == 0
+            assert os.path.exists("stuff.dat.medium")
 
-        result = runner.invoke(cli, base_args + ["decrypt", "-i", "stuff.dat", "-o", "stuffs.txt"])
-        assert result.exit_code == 0
-        assert os.path.exists("stuffs.txt")
+            result = runner.invoke(cli, base_args + ["decrypt", "-i", "stuff.dat", "-o", "stuffs.txt"])
+            assert result.exit_code == 0
+            assert os.path.exists("stuffs.txt")
 
-        for result_file in (data_file, "stuff.dat.medium", "stuffs.txt"):
-            with open(result_file, "r") as input_file:
-                data = input_file.read()
-                assert data == data_sample
+            for result_file in (data_file, "stuff.dat.medium", "stuffs.txt"):
+                with open(result_file, "r") as input_file:
+                    data = input_file.read()
+                    assert data == data_sample
 
-        empty_storage = tmp_path.joinpath("subdir")
-        empty_storage.mkdir()
-        result = runner.invoke(cli, ["-k", empty_storage,"decrypt", "-i", "stuff.dat", "-o", "stuffs.txt"])
-        assert result.exit_code == 1  # Decryption failed because keypair was regenerated
+            empty_storage = tmp_path.joinpath("subdir_%s" % idx)
+            empty_storage.mkdir()
+            result = runner.invoke(cli, ["-k", empty_storage, "decrypt", "-i", "stuff.dat", "-o", "stuffs.txt"])
+            assert result.exit_code == 1  # Decryption failed because keypair was regenerated
 
 
 def test_cli_subprocess_invocation():

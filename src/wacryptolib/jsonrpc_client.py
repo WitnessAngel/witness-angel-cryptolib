@@ -5,13 +5,18 @@ from jsonrpc_requests import Server as ServerBase, ProtocolError
 
 from wacryptolib.error_handling import StatusSlugsMapper
 from wacryptolib.utilities import dump_to_json_str, load_from_json_str
+from wacryptolib import exceptions as wacryptolib_exceptions
 
 logger = logging.getLogger(__name__)
 
 
-_exception_classes = StatusSlugsMapper.gather_exception_subclasses(  # FIXME update with exceptions
+_exception_classes = StatusSlugsMapper.gather_exception_subclasses(
     builtins, parent_classes=[Exception]
 )
+_exception_classes += StatusSlugsMapper.gather_exception_subclasses(
+        wacryptolib_exceptions, parent_classes=[wacryptolib_exceptions.FunctionalError]
+)
+
 status_slugs_to_builtins_mapper = StatusSlugsMapper(
     _exception_classes, fallback_exception_class=Exception
 )

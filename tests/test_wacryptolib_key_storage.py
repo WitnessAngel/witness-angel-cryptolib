@@ -5,6 +5,7 @@ from uuid import UUID
 
 import pytest
 
+from wacryptolib.escrow import generate_asymmetric_keypair_for_storage
 from wacryptolib.exceptions import KeyStorageDoesNotExist
 from wacryptolib.key_generation import SUPPORTED_ASYMMETRIC_KEY_TYPES
 from wacryptolib.key_storage import (
@@ -19,6 +20,7 @@ from wacryptolib.scaffolding import (
 )
 from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.utilities import generate_uuid0
+
 
 def test_key_storage_basic_get_set_api(tmp_path):
 
@@ -82,17 +84,10 @@ def test_key_storage_list_keys(tmp_path: Path):
     # CASE 1 : only one key in storage
 
     key_type = random.choice(SUPPORTED_ASYMMETRIC_KEY_TYPES)
-    key_pair = generate_asymmetric_keypair(
-                    key_type=key_type,
-                    passphrase="abcàt".encode("latin1"),
-                )
+
     keychain_uid = generate_uuid0()
-    key_storage.set_keys(
-        keychain_uid=keychain_uid,
-        key_type=key_type,
-        public_key=key_pair["public_key"],
-        private_key=key_pair["private_key"],
-    )
+    generate_asymmetric_keypair_for_storage(
+            key_type=key_type, key_storage=key_storage, keychain_uid=keychain_uid)
 
     keys_list = key_storage.list_keys()
     assert isinstance(keys_list, list)
@@ -108,16 +103,8 @@ def test_key_storage_list_keys(tmp_path: Path):
 
     for i in range(3):
         _key_type = random.choice(SUPPORTED_ASYMMETRIC_KEY_TYPES)
-        _key_pair = generate_asymmetric_keypair(  # FIXME create test utility for that
-                        key_type=key_type,
-                        passphrase="xzf".encode(),
-                    )
-        key_storage.set_keys(
-            keychain_uid=generate_uuid0(),
-            key_type=_key_type,
-            public_key=_key_pair["public_key"],
-            private_key=_key_pair["private_key"],
-        )
+        generate_asymmetric_keypair_for_storage(key_type=_key_type, key_storage=key_storage,
+                                                passphrase="xzf".encode())
 
     for bad_filename in (
         "0e896f1d-a4d0-67d6-7286-056f1ec342e8_RSA_OAEP_public_key.dot",
@@ -162,16 +149,8 @@ def test_key_storage_pool(tmp_path: Path):
     assert isinstance(local_key_storage, FilesystemKeyStorage)
     assert not local_key_storage.list_keys()
 
-    _key_pair = generate_asymmetric_keypair(
-                    key_type="RSA_OAEP",
-                    passphrase="xzf".encode(),
-                )
-    local_key_storage.set_keys(
-        keychain_uid=generate_uuid0(),
-        key_type="RSA_OAEP",
-        public_key=_key_pair["public_key"],
-        private_key=_key_pair["private_key"],
-    )
+    keypair = generate_asymmetric_keypair_for_storage(
+            key_type="RSA_OAEP", key_storage=local_key_storage, passphrase="xzf".encode())
 
     assert len(local_key_storage.list_keys()) == 1
 
@@ -197,8 +176,8 @@ def test_key_storage_pool(tmp_path: Path):
     imported_key_storage.set_keys(
         keychain_uid=generate_uuid0(),
         key_type="RSA_OAEP",
-        public_key=_key_pair["public_key"],
-        private_key=_key_pair["private_key"],
+        public_key=keypair["public_key"],
+        private_key=keypair["private_key"],
     )
 
     assert len(local_key_storage.list_keys()) == 1  # Unchanged

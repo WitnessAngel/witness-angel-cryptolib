@@ -9,7 +9,7 @@ from wacryptolib.encryption import _encrypt_via_rsa_oaep
 from wacryptolib.escrow import (
     EscrowApi,
     generate_free_keypair_for_least_provisioned_key_type,
-    get_free_keys_generator_worker, ReadonlyEscrowApi,
+    get_free_keys_generator_worker, ReadonlyEscrowApi, generate_asymmetric_keypair_for_storage,
 )
 from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring, SUPPORTED_ASYMMETRIC_KEY_TYPES, \
     generate_asymmetric_keypair
@@ -159,13 +159,9 @@ def test_escrow_api_workflow():
 
     keychain_uid_passphrased = generate_uuid0()
     good_passphrase = "good_passphrase"
-    keypair_cipher_passphrased = generate_asymmetric_keypair(key_type="RSA_OAEP", serialize=True, passphrase=good_passphrase)
-    key_storage.set_keys(
-        keychain_uid=keychain_uid_passphrased,
-        key_type="RSA_OAEP",
-        public_key=keypair_cipher_passphrased["public_key"],
-        private_key=keypair_cipher_passphrased["private_key"],
-    )
+
+    keypair_cipher_passphrased = generate_asymmetric_keypair_for_storage(
+            key_type="RSA_OAEP", key_storage=key_storage, keychain_uid=keychain_uid_passphrased, passphrase=good_passphrase)
 
     result = escrow_api.request_decryption_authorization(
         keypair_identifiers=[dict(keychain_uid=keychain_uid_passphrased, key_type="RSA_OAEP")],
@@ -265,21 +261,11 @@ def test_readonly_escrow_api_behaviour():
 
     # Now we generate wanted keys #
 
-    keypair_cipher = generate_asymmetric_keypair(key_type=key_type_cipher, serialize=True)
-    key_storage.set_keys(
-        keychain_uid=keychain_uid,
-        key_type=key_type_cipher,
-        public_key=keypair_cipher["public_key"],
-        private_key=keypair_cipher["private_key"],
-    )
+    keypair_cipher = generate_asymmetric_keypair_for_storage(
+            key_type=key_type_cipher, key_storage=key_storage, keychain_uid=keychain_uid)
 
-    keypair_signature = generate_asymmetric_keypair(key_type=key_type_signature, serialize=True)
-    key_storage.set_keys(
-        keychain_uid=keychain_uid,
-        key_type=key_type_signature,
-        public_key=keypair_signature["public_key"],
-        private_key=keypair_signature["private_key"],
-    )
+    keypair_signature = generate_asymmetric_keypair_for_storage(
+            key_type=key_type_signature, key_storage=key_storage, keychain_uid=keychain_uid)
 
     public_key2 = escrow_api.get_public_key(
         keychain_uid=keychain_uid, key_type=key_type_signature, must_exist=must_exist)

@@ -2,6 +2,7 @@ import logging
 import time
 import uuid
 from typing import Optional
+from uuid import UUID
 
 from wacryptolib.encryption import _decrypt_via_rsa_oaep
 from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationPendingError, AuthorizationRejectedError
@@ -12,12 +13,36 @@ from wacryptolib.key_generation import (
 )
 from wacryptolib.key_storage import KeyStorageBase as KeyStorageBase
 from wacryptolib.signature import sign_message
-from wacryptolib.utilities import PeriodicTaskHandler
+from wacryptolib.utilities import PeriodicTaskHandler, generate_uuid0
 
 logger = logging.getLogger(__name__)
 
 
 MAX_PAYLOAD_LENGTH_FOR_SIGNATURE = 128  # Max 2*SHA512 length
+
+
+def generate_asymmetric_keypair_for_storage(key_type: str, *, key_storage,
+                                            keychain_uid: Optional[UUID]=None,
+                                            passphrase: Optional[str]=None) -> dict:
+    """
+    Shortcut to generate an asymmetric keypair and store it into a key storage.
+
+    `keychain_uid` is auto-generated if not provided.
+
+    Returns the generated keypair dict.
+    """
+    from wacryptolib.key_generation import generate_asymmetric_keypair
+    from wacryptolib.key_storage import KeyStorageBase
+
+    keychain_uid = keychain_uid or generate_uuid0()
+    keypair = generate_asymmetric_keypair(key_type=key_type, serialize=True, passphrase=passphrase)
+    key_storage.set_keys(
+        keychain_uid=keychain_uid,
+        key_type=key_type,
+        public_key=keypair["public_key"],
+        private_key=keypair["private_key"],
+    )
+    return keypair
 
 
 class EscrowApi:
@@ -46,13 +71,8 @@ class EscrowApi:
                 keychain_uid=keychain_uid, key_type=key_type
             )
         except KeyDoesNotExist:
-            keypair = generate_asymmetric_keypair(key_type=key_type, serialize=True)
-            self._key_storage.set_keys(
-                keychain_uid=keychain_uid,
-                key_type=key_type,
-                public_key=keypair["public_key"],
-                private_key=keypair["private_key"],
-            )
+            generate_asymmetric_keypair_for_storage(
+                    key_type=key_type, key_storage=self._key_storage, keychain_uid=keychain_uid, passphrase=None)
 
     # FIXME rename this to differentiate it from KeyStorage API method
     def get_public_key(self, *, keychain_uid: uuid.UUID, key_type: str, must_exist: bool=False) -> bytes:

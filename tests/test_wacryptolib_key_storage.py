@@ -5,11 +5,12 @@ from uuid import UUID
 
 import pytest
 
+from wacryptolib.exceptions import KeyStorageDoesNotExist
 from wacryptolib.key_generation import SUPPORTED_ASYMMETRIC_KEY_TYPES
 from wacryptolib.key_storage import (
     FilesystemKeyStorage,
     DummyKeyStorage,
-    KeyStorageBase,
+    KeyStorageBase, KeyStoragePool,
 )
 from wacryptolib.scaffolding import (
     check_key_storage_free_keys_concurrency,
@@ -67,18 +68,6 @@ def test_key_storage_free_keys_concurrency(tmp_path):
 
 
 def test_key_storage_list_keys(tmp_path: Path):
-    """
-    FIXME it's abnormal to have only one call to list_keys() here
-
-    A normal test is :
-    - try list_keys on an empty key storage
-    - add some keys
-    - test list_keys() and the count+format of dicts (using a local _check_key() utility for example)
-    - remove 1 private key file
-    - retest list_keys(), checking private_key_present value especially (reuse _check_key())
-    - destroy all public key files
-    - check that list_keys() returns empty list
-    """
 
     def _check_key_dict_format(key):
         print(">> public key detected:", key)
@@ -119,7 +108,7 @@ def test_key_storage_list_keys(tmp_path: Path):
 
     for i in range(3):
         _key_type = random.choice(SUPPORTED_ASYMMETRIC_KEY_TYPES)
-        _key_pair = generate_asymmetric_keypair(
+        _key_pair = generate_asymmetric_keypair(  # FIXME create test utility for that
                         key_type=key_type,
                         passphrase="xzf".encode(),
                     )
@@ -140,6 +129,7 @@ def test_key_storage_list_keys(tmp_path: Path):
     keys_list = key_storage.list_keys()
     assert isinstance(keys_list, list)
     assert len(keys_list) == 4
+    assert keys_list == sorted(keys_list, key=lambda x: (x["keychain_uid"], x["key_type"]))  # Well sorted
 
     for some_key in keys_list:
         _check_key_dict_format(some_key)
@@ -162,3 +152,58 @@ def test_key_storage_list_keys(tmp_path: Path):
         filepath.unlink()
 
     assert key_storage.list_keys() == []
+
+
+def test_key_storage_pool(tmp_path: Path):
+
+    pool = KeyStoragePool(tmp_path)
+
+    local_key_storage = pool.get_local_key_storage()
+    assert isinstance(local_key_storage, FilesystemKeyStorage)
+    assert not local_key_storage.list_keys()
+
+    _key_pair = generate_asymmetric_keypair(
+                    key_type="RSA_OAEP",
+                    passphrase="xzf".encode(),
+                )
+    local_key_storage.set_keys(
+        keychain_uid=generate_uuid0(),
+        key_type="RSA_OAEP",
+        public_key=_key_pair["public_key"],
+        private_key=_key_pair["private_key"],
+    )
+
+    assert len(local_key_storage.list_keys()) == 1
+
+    assert pool.list_imported_key_storage_uids() == []
+
+    imported_key_storage_uid = generate_uuid0()
+    mirror_path = tmp_path.joinpath(pool.IMPORTED_STORAGES_DIRNAME, pool.IMPORTED_STORAGE_PREFIX + str(imported_key_storage_uid))
+    mirror_path.mkdir(parents=True, exist_ok=False)
+
+    imported_key_storage_uid2 = generate_uuid0()
+    mirror_path2 = tmp_path.joinpath(pool.IMPORTED_STORAGES_DIRNAME, pool.IMPORTED_STORAGE_PREFIX + str(imported_key_storage_uid2))
+    mirror_path2.mkdir(parents=True, exist_ok=False)
+
+    assert pool.list_imported_key_storage_uids() == sorted([imported_key_storage_uid, imported_key_storage_uid2])
+
+    with pytest.raises(KeyStorageDoesNotExist, match="not found"):
+        pool.get_imported_key_storage(generate_uuid0())
+
+    imported_key_storage = pool.get_imported_key_storage(imported_key_storage_uid)
+    assert isinstance(imported_key_storage, FilesystemKeyStorage)
+    assert not imported_key_storage.list_keys()
+
+    imported_key_storage.set_keys(
+        keychain_uid=generate_uuid0(),
+        key_type="RSA_OAEP",
+        public_key=_key_pair["public_key"],
+        private_key=_key_pair["private_key"],
+    )
+
+    assert len(local_key_storage.list_keys()) == 1  # Unchanged
+    assert len(imported_key_storage.list_keys()) == 1
+
+    imported_key_storage2 = pool.get_imported_key_storage(imported_key_storage_uid2)
+    assert isinstance(imported_key_storage2, FilesystemKeyStorage)
+    assert not imported_key_storage2.list_keys()

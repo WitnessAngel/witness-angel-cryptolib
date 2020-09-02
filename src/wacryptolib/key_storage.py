@@ -9,7 +9,7 @@ from pathlib import Path
 from os.path import  join
 import glob
 
-from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist
+from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist, KeyStorageDoesNotExist
 from wacryptolib.utilities import synchronized
 
 logger = logging.getLogger(__name__)
@@ -208,8 +208,7 @@ class FilesystemKeyStorage(KeyStorageBase):
     def __init__(self, keys_dir):
         keys_dir = Path(keys_dir)
         assert keys_dir.is_dir(), keys_dir
-        keys_dir = keys_dir.absolute()
-        self._keys_dir = keys_dir
+        self._keys_dir = keys_dir.absolute()
 
         free_keys_dir = keys_dir.joinpath("free_keys")
         free_keys_dir.mkdir(exist_ok=True)
@@ -346,6 +345,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         
         Returns a list of key information dicts with standard fields "keychain_uid" and "key_type", as well as
         a boolean "private_key_present" which is True if the related private key exists in storage.
+        Sorting is done by keychain_uid and then key_type.
         """
 
         key_information_list = []
@@ -381,4 +381,42 @@ class FilesystemKeyStorage(KeyStorageBase):
                                    private_key_present=private_key_present)
             key_information_list.append(key_information)
 
+        key_information_list.sort(key= lambda x: (x["keychain_uid"], x["key_type"]))
         return key_information_list
+
+
+class KeyStoragePool:
+    """This class handles a set of locally stored key storages.
+
+    The local storage represents the current device/owner, and is expected to be used by read-write escrows,
+    whereas imported key storages are supposed to be readonly, and only filled with keypairs imported from key-devices.
+    """
+
+    LOCAL_STORAGE_DIRNAME = "local_key_storage"
+    IMPORTED_STORAGES_DIRNAME = "imported_key_storages"
+    IMPORTED_STORAGE_PREFIX = "key_storage_"
+
+    def __init__(self, root_dir):
+        root_dir = Path(root_dir)
+        assert root_dir.is_dir(), root_dir
+        self._root_dir = root_dir.absolute()
+
+    def get_local_key_storage(self):
+        """Storage automatically created if unexisting."""
+        local_key_storage_path = self._root_dir.joinpath(self.LOCAL_STORAGE_DIRNAME)
+        local_key_storage_path.mkdir(exist_ok=True)
+        # TODO initialize metadata for key_storage
+        return FilesystemKeyStorage(local_key_storage_path)
+
+    def get_imported_key_storage(self, key_storage_uid):
+        """The selected storage MUST exist, else a KeyStorageDoesNotExist is raised."""
+        imported_key_storage_path = self._root_dir.joinpath(self.IMPORTED_STORAGES_DIRNAME, "%s%s" %
+                                                            (self.IMPORTED_STORAGE_PREFIX, key_storage_uid))
+        if not imported_key_storage_path.exists():
+            raise KeyStorageDoesNotExist("Key storage %s not found" % key_storage_uid)
+        return FilesystemKeyStorage(imported_key_storage_path)
+
+    def list_imported_key_storage_uids(self):
+        imported_key_storages_dir = self._root_dir.joinpath(self.IMPORTED_STORAGES_DIRNAME)
+        paths = imported_key_storages_dir.glob("%s*" % self.IMPORTED_STORAGE_PREFIX)
+        return sorted([uuid.UUID(d.name.replace(self.IMPORTED_STORAGE_PREFIX, "")) for d in paths])

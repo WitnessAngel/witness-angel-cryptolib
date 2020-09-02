@@ -6,13 +6,21 @@ class FunctionalError(Exception):
     pass
 
 
-class KeyExistenceError(FunctionalError):
+class ExistenceError(FunctionalError):
     pass
 
 
-class KeyDoesNotExist(KeyExistenceError):
+class KeyDoesNotExist(ExistenceError):
     pass
 
 
-class KeyAlreadyExists(KeyExistenceError):
+class KeyAlreadyExists(ExistenceError):
+    pass
+
+
+class KeyStorageDoesNotExist(ExistenceError):
+    pass
+
+
+class KeyStorageAlreadyExists(ExistenceError):
     pass

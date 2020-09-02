@@ -143,7 +143,7 @@ class EscrowApi:
         )
 
         private_key = load_asymmetric_key_from_pem_bytestring(
-            key_pem=private_key_pem, key_type=encryption_algo
+            key_pem=private_key_pem, key_type=encryption_algo  # FIXME - use passphrase if needed!
         )
 
         secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key=private_key)

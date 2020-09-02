@@ -140,17 +140,55 @@ def test_escrow_api_workflow():
             keychain_uid=keychain_uid, encryption_algo="RSA_OAEP", cipherdict=cipherdict
         )
 
-    # Always accepted for now, dummy implementation
-    result = escrow_api.request_decryption_authorization(
-        keypair_identifiers=[(keychain_uid, "RSA_OAEP")],
-        request_message="I need this decryption!",
-    )
-    assert "accepted" in result["response_message"]
-
     with pytest.raises(ValueError, match="empty"):
         escrow_api.request_decryption_authorization(
             keypair_identifiers=[], request_message="I need this decryption!"
         )
+    # Authorization always granted for now, in dummy implementation
+    result = escrow_api.request_decryption_authorization(
+        keypair_identifiers=[dict(keychain_uid=keychain_uid, key_type="RSA_OAEP")],
+        request_message="I need this decryption!",
+    )
+    assert "accepted" in result["response_message"]
+    assert not result["has_errors"]
+    assert result["keypair_statuses"]["accepted"]
+
+    # TEST PASSPHRASE PROTECTIONS
+
+    keychain_uid_passphrased = generate_uuid0()
+    keypair_cipher_passphrased = generate_asymmetric_keypair(key_type="RSA_OAEP", serialize=True, passphrase="good_passphrase")
+    key_storage.set_keys(
+        keychain_uid=keychain_uid_passphrased,
+        key_type="RSA_OAEP",
+        public_key=keypair_cipher_passphrased["public_key"],
+        private_key=keypair_cipher_passphrased["private_key"],
+    )
+
+    result = escrow_api.request_decryption_authorization(
+        keypair_identifiers=[dict(keychain_uid=keychain_uid_passphrased, key_type="RSA_OAEP")],
+        request_message="I need this decryption too!",
+    )
+    assert "denied" in result["response_message"]
+    assert result["has_errors"]
+    assert result["keypair_statuses"]["missing_passphrase"]
+
+    result = escrow_api.request_decryption_authorization(
+        keypair_identifiers=[dict(keychain_uid=keychain_uid_passphrased, key_type="RSA_OAEP")],
+        request_message="I need this decryption too!",
+            passphrases=["aaa"]
+    )
+    assert "denied" in result["response_message"]
+    assert result["has_errors"]
+    assert result["keypair_statuses"]["missing_passphrase"]
+
+    result = escrow_api.request_decryption_authorization(
+        keypair_identifiers=[dict(keychain_uid=keychain_uid_passphrased, key_type="RSA_OAEP")],
+        request_message="I need this decryption too!",
+            passphrases=["dsd", "good_passphrase"]
+    )
+    assert "accepted" in result["response_message"]
+    assert not result["has_errors"]
+    assert result["keypair_statuses"]["accepted"]
 
     assert key_storage.get_free_keypairs_count("DSA_DSS") == 0
     assert key_storage.get_free_keypairs_count("ECC_DSS") == 0
@@ -179,10 +217,12 @@ def test_readonly_escrow_api_behaviour():
 
     # Always accepted for now, dummy implementation
     result = escrow_api.request_decryption_authorization(
-        keypair_identifiers=[(keychain_uid, key_type_cipher)],
+        keypair_identifiers=[dict(keychain_uid=keychain_uid, key_type=key_type_cipher)],
         request_message="I need this decryption!",
     )
-    assert "accepted" in result["response_message"]
+    assert "denied" in result["response_message"]
+    assert result["has_errors"]
+    assert result["keypair_statuses"]["missing_private_key"]
 
     # Still no auto-creation of keypair in decrypt_with_private_key()
     with pytest.raises(KeyDoesNotExist, match="not found"):

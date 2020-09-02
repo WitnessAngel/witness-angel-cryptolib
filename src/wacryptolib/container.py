@@ -9,7 +9,7 @@ from typing import Optional, Union, List
 from urllib.parse import urlparse
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
-from wacryptolib.escrow import EscrowApi as LocalEscrowApi
+from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import (
     generate_symmetric_key,
@@ -71,6 +71,10 @@ class ContainerBase:
 
         if escrow_type == LOCAL_ESCROW_MARKER["escrow_type"]:
             return LocalEscrowApi(self._key_storage_pool.get_local_key_storage())
+        elif escrow_type == "key_device":
+            key_device_uid = escrow["key_device_uid"]
+            key_storage = self._key_storage_pool.get_imported_key_storage(key_device_uid)
+            return ReadonlyEscrowApi(key_storage)
         elif escrow_type == "jsonrpc":
             return JsonRpcProxy(
                 url=escrow["url"],

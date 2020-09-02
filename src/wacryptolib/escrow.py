@@ -3,7 +3,7 @@ import time
 import uuid
 
 from wacryptolib.encryption import _decrypt_via_rsa_oaep
-from wacryptolib.exceptions import KeyDoesNotExist
+from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationPendingError, AuthorizationRejectedError
 from wacryptolib.key_generation import (
     generate_asymmetric_keypair,
     load_asymmetric_key_from_pem_bytestring,
@@ -78,7 +78,7 @@ class EscrowApi:
         )  # Let the exception flow if any
 
     def get_message_signature(
-        self, *, keychain_uid: uuid.UUID, message: bytes, signature_algo: str
+        self, *, keychain_uid: uuid.UUID, message: bytes, signature_algo: str  # FIXME name this "key_type" too?
     ) -> dict:
         """
         Return a signature structure corresponding to the provided key and signature types.
@@ -102,8 +102,12 @@ class EscrowApi:
         )
         return signature
 
+    def _check_keypair_authorization(self, *, keychain_uid: uuid.UUID, key_type: str):
+        """raises a proper exception if authorization is not given yet to decrypt with this keypair."""
+        return  # In this base implementation we always allow decryption!
+
     def request_decryption_authorization(
-        self, keypair_identifiers: list, request_message: str
+        self, keypair_identifiers: list, request_message: str, passphrases: list=None
     ) -> dict:
         """
         Send a list of keypairs for which decryption access is requested, with the reason why.
@@ -113,14 +117,73 @@ class EscrowApi:
 
         :param keypair_identifiers: list of dicts with (keychain_uid, key_type) indices to authorize
         :param request_message: user text explaining the reasons for the decryption (and the legal procedures involved)
+        :param passphrases: optional list of passphrases to be tried on private keys
         :return: a dict with at least a string field "response_message" detailing the status of the request.
         """
+
+        passphrases = passphrases or []
+        assert isinstance(passphrases, list), repr(passphrases)
+
         if not keypair_identifiers:
             raise ValueError(
                 "Keypair identifiers must not be empty, when requesting decryption authorization"
             )
+
+        missing_private_key = []
+        authorization_rejected = []
+        authorization_pending = []
+        missing_passphrase = []
+        accepted = []
+
+        for keypair_identifier in keypair_identifiers:
+
+            keychain_uid = keypair_identifier["keychain_uid"]
+            key_type = keypair_identifier["key_type"]
+
+            try:
+                self._check_keypair_authorization(keychain_uid=keychain_uid, key_type=key_type)
+            except AuthorizationPendingError:
+                authorization_pending.append(keypair_identifier)
+                continue
+            except AuthorizationRejectedError:
+                authorization_rejected.append(keypair_identifier)
+                continue
+            else:
+                pass  # It's OK, at least we are authorized now
+
+            try:
+                private_key_pem = self._key_storage.get_private_key(
+                    keychain_uid=keychain_uid, key_type=key_type
+                )
+            except KeyDoesNotExist:
+                missing_private_key.append(keypair_identifier)
+                continue
+
+            for passphrase in [None] + passphrases:
+                try:
+                    load_asymmetric_key_from_pem_bytestring(
+                        key_pem=private_key_pem, key_type=key_type, passphrase=passphrase
+                    )
+                    accepted.append(keypair_identifier)  # Check is OVER for this keypair!!
+                    break
+                except (ValueError, IndexError, TypeError):  # FIXME use custom exception class!!
+                    pass
+            else:
+                missing_passphrase.append(keypair_identifier)
+
+        keypair_statuses = dict(missing_private_key=missing_private_key,
+                            authorization_rejected = authorization_rejected,
+                            authorization_pending = authorization_pending,
+                            missing_passphrase = missing_passphrase,
+                            accepted = accepted)
+
+        has_errors = len(accepted) < len(keypair_identifiers)
+        assert sum(len(x) for x in keypair_statuses.values()) == len(keypair_identifiers), locals()
+
         return dict(
-            response_message="Decryption request accepted"
+            response_message="Decryption request denied" if has_errors else "Decryption request accepted",
+            has_errors=has_errors,
+            keypair_statuses=keypair_statuses
         )  # TODO localize string field!
 
     def decrypt_with_private_key(
@@ -133,7 +196,7 @@ class EscrowApi:
         assert (
             encryption_algo.upper() == "RSA_OAEP"
         )  # Only supported asymmetric cipher for now
-        self._check_keypair_exists(keychain_uid=keychain_uid, key_type=encryption_algo)
+        self._check_keypair_exists(keychain_uid=keychain_uid, key_type=encryption_algo) # FIXME dedupicate this
 
         private_key_pem = self._key_storage.get_private_key(
             keychain_uid=keychain_uid, key_type=encryption_algo

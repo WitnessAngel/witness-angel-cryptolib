@@ -18,7 +18,7 @@ Example
 
 A minimal container configuration in python, with a single encryption layer and its single signature, both backed by the "local" escrow service of the device; this format can't be used in real life of course, since the data is not protected against illegal reads::
 
-    from wacryptolib.escrow import LOCAL_ESCROW_MARKER
+    from wacryptolib.container import LOCAL_ESCROW_MARKER
 
     CONFIG = dict(
         data_encryption_strata=[

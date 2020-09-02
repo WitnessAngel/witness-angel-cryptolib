@@ -7,12 +7,16 @@ This module provides classes for the storage of asymmetric key pairs.
     :members:
 
 .. autoclass:: wacryptolib.key_storage.DummyKeyStorage
-    :show-inheritance:
     :members:
 
 .. autoclass:: wacryptolib.key_storage.FilesystemKeyStorage
-    :show-inheritance:
     :members:
 
-.. autoclass:: wacryptolib.key_storage.KeyStoragePool
+.. autoclass:: wacryptolib.key_storage.KeyStoragePoolBase
+    :members:
+
+.. autoclass:: wacryptolib.key_storage.DummyKeyStoragePool
+    :members:
+
+.. autoclass:: wacryptolib.key_storage.FilesystemKeyStoragePool
     :members:

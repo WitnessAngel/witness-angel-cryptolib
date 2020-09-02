@@ -22,7 +22,7 @@ from wacryptolib.container import (
 from wacryptolib.escrow import EscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_asymmetric_keypair
-from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage
+from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, FilesystemKeyStoragePool
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 
@@ -337,7 +337,7 @@ def test_get_proxy_for_escrow(tmp_path):
     )  # process-local storage is SINGLETON!
 
     container_base2 = ContainerBase(
-        local_key_storage=FilesystemKeyStorage(keys_dir=str(tmp_path))
+            key_storage_pool=FilesystemKeyStoragePool(str(tmp_path))
     )
     proxy2 = container_base2._get_proxy_for_escrow(LOCAL_ESCROW_MARKER)
     assert isinstance(proxy2, EscrowApi)  # Local Escrow
@@ -345,7 +345,7 @@ def test_get_proxy_for_escrow(tmp_path):
 
     for container_base in (container_base1, container_base2):
         proxy = container_base._get_proxy_for_escrow(
-            dict(url="http://example.com/jsonrpc")
+            dict(escrow_type="jsonrpc", url="http://example.com/jsonrpc")
         )
         assert isinstance(
             proxy, JsonRpcProxy
@@ -355,10 +355,10 @@ def test_get_proxy_for_escrow(tmp_path):
         assert proxy._response_error_handler == status_slugs_response_error_handler
 
         with pytest.raises(ValueError):
-            container_base._get_proxy_for_escrow(dict(urn="athena"))
+            container_base._get_proxy_for_escrow(dict(escrow_type="something-wrong"))
 
         with pytest.raises(ValueError):
-            container_base._get_proxy_for_escrow("weird-value")
+            container_base._get_proxy_for_escrow(dict(urn="athena"))
 
 
 def test_container_storage_and_executor(tmp_path, caplog):
@@ -491,7 +491,7 @@ def test_get_encryption_configuration_summary():
     CONF_WITH_ESCROW = copy.deepcopy(COMPLEX_CONTAINER_CONF)
     CONF_WITH_ESCROW["data_encryption_strata"][0]["key_encryption_strata"][0][
         "key_escrow"
-    ] = dict(url="http://www.mydomain.com/json")
+    ] = dict(escrow_type="jsonrpc", url="http://www.mydomain.com/json")
 
     summary = get_encryption_configuration_summary(CONF_WITH_ESCROW)
     assert summary == textwrap.dedent(

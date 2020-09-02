@@ -10,7 +10,7 @@ from wacryptolib.key_generation import SUPPORTED_ASYMMETRIC_KEY_TYPES
 from wacryptolib.key_storage import (
     FilesystemKeyStorage,
     DummyKeyStorage,
-    KeyStorageBase, KeyStoragePool,
+    KeyStorageBase, FilesystemKeyStoragePool,
 )
 from wacryptolib.scaffolding import (
     check_key_storage_free_keys_concurrency,
@@ -156,7 +156,7 @@ def test_key_storage_list_keys(tmp_path: Path):
 
 def test_key_storage_pool(tmp_path: Path):
 
-    pool = KeyStoragePool(tmp_path)
+    pool = FilesystemKeyStoragePool(tmp_path)
 
     local_key_storage = pool.get_local_key_storage()
     assert isinstance(local_key_storage, FilesystemKeyStorage)

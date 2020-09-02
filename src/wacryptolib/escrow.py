@@ -16,9 +16,6 @@ from wacryptolib.utilities import PeriodicTaskHandler
 logger = logging.getLogger(__name__)
 
 
-#: Special value in containers, to invoke a device-local escrow
-LOCAL_ESCROW_MARKER = "[LOCAL]"
-
 MAX_PAYLOAD_LENGTH_FOR_SIGNATURE = 128  # Max 2*SHA512 length
 
 

@@ -11,22 +11,22 @@ from wacryptolib.container import (
     CONTAINER_SUFFIX,
     MEDIUM_SUFFIX, SHARED_SECRET_MARKER,
 )
-from wacryptolib.key_storage import FilesystemKeyStorage
+from wacryptolib.key_storage import FilesystemKeyStoragePool
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
-DEFAULT_KEY_STORAGE_DIRNAME = ".key_storage"
+DEFAULT_KEY_STORAGE_POOl_DIRNAME = ".key_storage_pool"
 
 # TODO - much later, use "schema" for validation of config data and container format!  See https://github.com/keleshev/schema
 # Then export corresponding jsons-chema for the world to see!
 
 
-def _get_key_storage(ctx):
-    key_storage_path = ctx.obj["key_storage"]
-    if not key_storage_path:
-        key_storage_path = Path().joinpath(DEFAULT_KEY_STORAGE_DIRNAME)
-        key_storage_path.mkdir(exist_ok=True)
-    return FilesystemKeyStorage(key_storage_path)
+def _get_key_storage_pool(ctx):
+    key_storage_pool_path = ctx.obj["key_storage_pool"]
+    if not key_storage_pool_path:
+        key_storage_pool_path = Path().joinpath(DEFAULT_KEY_STORAGE_POOl_DIRNAME)
+        key_storage_pool_path.mkdir(exist_ok=True)
+    return FilesystemKeyStoragePool(key_storage_pool_path)
 
 
 EXAMPLE_CONTAINER_CONF = dict(
@@ -72,9 +72,9 @@ EXAMPLE_CONTAINER_CONF = dict(
 )
 @click.option(
     "-k",
-    "--key-storage",
+    "--key-storage-pool",
     default=None,
-    help="Folder to get/set crypto keys (else ./%s gets created)" % DEFAULT_KEY_STORAGE_DIRNAME,
+        help="Folder to get/set crypto keys (else ./%s gets created)" % DEFAULT_KEY_STORAGE_POOl_DIRNAME,
     type=click.Path(exists=True,
                     file_okay=False,
                     dir_okay=True,
@@ -83,15 +83,15 @@ EXAMPLE_CONTAINER_CONF = dict(
                     resolve_path=True,
                     allow_dash=False))
 @click.pass_context
-def cli(ctx, config, key_storage):
+def cli(ctx, config, key_storage_pool):
     ctx.ensure_object(dict)
     ctx.obj["config"] = config  # TODO read and validate this file later
-    ctx.obj["key_storage"] = key_storage
+    ctx.obj["key_storage_pool"] = key_storage_pool
 
 
-def _do_encrypt(data, local_key_storage):
+def _do_encrypt(data, key_storage_pool):
     container = encrypt_data_into_container(
-        data, conf=EXAMPLE_CONTAINER_CONF, metadata=None, local_key_storage=local_key_storage
+        data, conf=EXAMPLE_CONTAINER_CONF, metadata=None, key_storage_pool=key_storage_pool
     )
     return container
 
@@ -106,8 +106,8 @@ def encrypt(ctx, input_medium, output_container):
         output_container = LazyFile(input_medium.name + CONTAINER_SUFFIX, "wb")
     click.echo("In encrypt: %s" % str(locals()))
 
-    local_key_storage = _get_key_storage(ctx)
-    container_data = _do_encrypt(data=input_medium.read(), local_key_storage=local_key_storage)
+    key_storage_pool = _get_key_storage_pool(ctx)
+    container_data = _do_encrypt(data=input_medium.read(), key_storage_pool=key_storage_pool)
 
     container_data_bytes = dump_to_json_bytes(container_data, indent=4)
 
@@ -115,8 +115,8 @@ def encrypt(ctx, input_medium, output_container):
         f.write(container_data_bytes)
 
 
-def _do_decrypt(container, local_key_storage):
-    data = decrypt_data_from_container(container, local_key_storage=local_key_storage)
+def _do_decrypt(container, key_storage_pool):
+    data = decrypt_data_from_container(container, key_storage_pool=key_storage_pool)
     return data
 
 
@@ -137,8 +137,8 @@ def decrypt(ctx, input_container, output_medium):
 
     container = load_from_json_bytes(input_container.read())
 
-    local_key_storage = _get_key_storage(ctx)
-    medium_content = _do_decrypt(container=container, local_key_storage=local_key_storage)
+    key_storage_pool = _get_key_storage_pool(ctx)
+    medium_content = _do_decrypt(container=container, key_storage_pool=key_storage_pool)
 
     with output_medium:
         output_medium.write(medium_content)

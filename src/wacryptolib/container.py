@@ -9,13 +9,13 @@ from typing import Optional, Union, List
 from urllib.parse import urlparse
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
-from wacryptolib.escrow import EscrowApi as LocalEscrowApi, LOCAL_ESCROW_MARKER
+from wacryptolib.escrow import EscrowApi as LocalEscrowApi
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import (
     generate_symmetric_key,
     load_asymmetric_key_from_pem_bytestring,
 )
-from wacryptolib.key_storage import DummyKeyStorage, KeyStorageBase
+from wacryptolib.key_storage import KeyStorageBase, DummyKeyStoragePool, KeyStoragePoolBase
 from wacryptolib.shared_secret import (
     split_bytestring_as_shamir_shares,
     recombine_secret_from_samir_shares,
@@ -41,8 +41,12 @@ MEDIUM_SUFFIX = (
     ".medium"
 )  # To construct decrypted filename when no previous extensions are found in container filename
 OFFLOADED_MARKER = "[OFFLOADED]"
-DUMMY_KEY_STORAGE = DummyKeyStorage()  # Fallback storage with in-memory keys
+DUMMY_KEY_STORAGE_POOL = DummyKeyStoragePool()  # Common fallback storage with in-memory keys
 SHARED_SECRET_MARKER = "[SHARED_SECRET]"
+
+#: Special value in containers, to invoke a device-local escrow
+LOCAL_ESCROW_MARKER = dict(escrow_type="local")
+
 
 
 class ContainerBase:
@@ -50,26 +54,29 @@ class ContainerBase:
     BEWARE - this class-based design is provisional and might change a lot.
     """
 
-    def __init__(self, local_key_storage=None):
-        if not local_key_storage:
+    def __init__(self, key_storage_pool: KeyStoragePoolBase=None):
+        if not key_storage_pool:
             logger.warning(
-                "No local key storage provided for %s instance, falling back to DummyKeyStorage()",
+                "No key storage pool provided for %s instance, falling back to DummyKeyStoragePool()",
                 self.__class__.__name__,
             )
-            local_key_storage = DUMMY_KEY_STORAGE
-        assert isinstance(local_key_storage, KeyStorageBase), local_key_storage
-        self._local_escrow_api = LocalEscrowApi(key_storage=local_key_storage)
+            key_storage_pool = DUMMY_KEY_STORAGE_POOL
+        assert isinstance(key_storage_pool, KeyStoragePoolBase), key_storage_pool
+        self._key_storage_pool = key_storage_pool
 
     def _get_proxy_for_escrow(self, escrow):
-        if escrow == LOCAL_ESCROW_MARKER:
-            return self._local_escrow_api
-        elif isinstance(escrow, dict):
-            if "url" in escrow:
-                return JsonRpcProxy(
-                    url=escrow["url"],
-                    response_error_handler=status_slugs_response_error_handler,
-                )
-            # TODO - Implement escrow lookup in global registry, shared-secret group, etc.
+        assert isinstance(escrow, dict), escrow
+
+        escrow_type = escrow.get("escrow_type")  # Might be None
+
+        if escrow_type == LOCAL_ESCROW_MARKER["escrow_type"]:
+            return LocalEscrowApi(self._key_storage_pool.get_local_key_storage())
+        elif escrow_type == "jsonrpc":
+            return JsonRpcProxy(
+                url=escrow["url"],
+                response_error_handler=status_slugs_response_error_handler,
+            )
+        # TODO - Implement imported storages, escrow lookup in global registry, shared-secret group, etc.
         raise ValueError("Unrecognized escrow identifiers: %s" % str(escrow))
 
 
@@ -444,7 +451,7 @@ class ContainerReader(ContainerBase):
             )
             return symmetric_key_plaintext
 
-    def _asymmetric_decryption(
+    def _asymmetric_decryption(  # FIXME rename method
         self, encryption_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, escrow
     ) -> bytes:
         """
@@ -573,7 +580,7 @@ def encrypt_data_into_container(
     conf: dict,
     metadata: Optional[dict],
     keychain_uid: Optional[uuid.UUID] = None,
-    local_key_storage: Optional[KeyStorageBase] = None
+    key_storage_pool: Optional[KeyStoragePoolBase] = None
 ) -> dict:
     """Turn raw data into a high-security container, which can only be decrypted with
     the agreement of the owner and multiple third-party escrows.
@@ -582,11 +589,11 @@ def encrypt_data_into_container(
     :param conf: tree of format-specific settings
     :param metadata: dict of metadata describing the data
     :param keychain_uid: optional ID of a keychain to reuse
-    :param local_key_storage: optional local key storage
+    :param key_storage_pool: optional key storage pool
 
     :return: dict of container
     """
-    writer = ContainerWriter(local_key_storage=local_key_storage)
+    writer = ContainerWriter(key_storage_pool=key_storage_pool)
     container = writer.encrypt_data(
         data, conf=conf, keychain_uid=keychain_uid, metadata=metadata
     )
@@ -594,16 +601,16 @@ def encrypt_data_into_container(
 
 
 def decrypt_data_from_container(
-    container: dict, local_key_storage: Optional[KeyStorageBase] = None
+    container: dict, key_storage_pool: Optional[KeyStoragePoolBase] = None
 ) -> bytes:
     """Decrypt a container with the help of third-parties.
 
     :param container: the container tree, which holds all information about involved keys
-    :param local_key_storage: optional local key storage
+    :param key_storage_pool: optional key storage pool
 
     :return: raw bytestring
     """
-    reader = ContainerReader(local_key_storage=local_key_storage)
+    reader = ContainerReader(key_storage_pool=key_storage_pool)
     data = reader.decrypt_data(container)
     return data
 
@@ -671,7 +678,7 @@ class ContainerStorage:
         encryption_conf: dict,
         containers_dir: Path,
         max_containers_count: int = None,
-        local_key_storage: KeyStorageBase = None,
+        key_storage_pool: KeyStoragePoolBase = None,
         max_workers=1,
         offload_data_ciphertext=True,
     ):
@@ -684,7 +691,7 @@ class ContainerStorage:
         self._encryption_conf = encryption_conf
         self._containers_dir = containers_dir
         self._max_containers_count = max_containers_count
-        self._local_key_storage = local_key_storage
+        self._key_storage_pool = key_storage_pool
         self._thread_pool_executor = ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="container_worker"
         )
@@ -741,12 +748,12 @@ class ContainerStorage:
             data=data,
             conf=self._encryption_conf,
             metadata=metadata,
-            local_key_storage=self._local_key_storage,
+            key_storage_pool=self._key_storage_pool,
         )
 
     def _decrypt_data_from_container(self, container):
         return decrypt_data_from_container(
-            container, local_key_storage=self._local_key_storage
+            container, key_storage_pool=self._key_storage_pool
         )  # Will fail if authorizations are not OK
 
     @catch_and_log_exception

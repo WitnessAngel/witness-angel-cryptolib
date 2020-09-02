@@ -385,7 +385,38 @@ class FilesystemKeyStorage(KeyStorageBase):
         return key_information_list
 
 
-class KeyStoragePool:
+
+
+class KeyStoragePoolBase:
+    # FIXME fill base class with signatures!! Like in KeyStorageBase!
+    pass
+
+
+class DummyKeyStoragePool(KeyStoragePoolBase):
+    """
+    Dummy key storage pool for use in tests, where keys are kepts only process-locally.
+
+    NOT MEANT TO BE THREAD-SAFE
+    """
+
+    def __init__(self):
+        self._local_key_storage = DummyKeyStorage()
+        self._imported_key_storages = {}
+
+    def get_local_key_storage(self):
+        return self._local_key_storage
+
+    def get_imported_key_storage(self, key_storage_uid):
+        imported_key_storage = self._imported_key_storages.get(key_storage_uid)
+        if not imported_key_storage:
+            raise KeyStorageDoesNotExist("Key storage %s not found" % key_storage_uid)
+        return imported_key_storage
+
+    def list_imported_key_storage_uids(self):
+        return list(self._imported_key_storages.keys())
+
+
+class FilesystemKeyStoragePool(KeyStoragePoolBase):
     """This class handles a set of locally stored key storages.
 
     The local storage represents the current device/owner, and is expected to be used by read-write escrows,
@@ -420,3 +451,6 @@ class KeyStoragePool:
         imported_key_storages_dir = self._root_dir.joinpath(self.IMPORTED_STORAGES_DIRNAME)
         paths = imported_key_storages_dir.glob("%s*" % self.IMPORTED_STORAGE_PREFIX)
         return sorted([uuid.UUID(d.name.replace(self.IMPORTED_STORAGE_PREFIX, "")) for d in paths])
+
+
+

@@ -1,6 +1,7 @@
 import logging
 import time
 import uuid
+from typing import Optional
 
 from wacryptolib.encryption import _decrypt_via_rsa_oaep
 from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationPendingError, AuthorizationRejectedError
@@ -96,7 +97,7 @@ class EscrowApi:
         """raises a proper exception if authorization is not given yet to decrypt with this keypair."""
         return  # In this base implementation we always allow decryption!
 
-    def _decrypt_private_key_pem_with_passphrases(self, *, private_key_pem: bytes, key_type:str, passphrases: list):
+    def _decrypt_private_key_pem_with_passphrases(self, *, private_key_pem: bytes, key_type:str, passphrases: Optional[list]):
         """
         Attempt decryption of key with and without provided passphrases, and raise if all fail.
         """
@@ -111,7 +112,7 @@ class EscrowApi:
         raise ValueError("Could not decrypt private key of type %s (passphrases provided: %d)" % (key_type, len(passphrases)))  # FIXME use custom exception
 
     def request_decryption_authorization(
-        self, keypair_identifiers: list, request_message: str, passphrases: list=None
+        self, keypair_identifiers: list, request_message: str, passphrases: Optional[list]=None
     ) -> dict:
         """
         Send a list of keypairs for which decryption access is requested, with the reason why.
@@ -190,7 +191,7 @@ class EscrowApi:
         )  # TODO localize string field!
 
     def decrypt_with_private_key(
-        self, *, keychain_uid: uuid.UUID, encryption_algo: str, cipherdict: dict, passphrases: list=None
+        self, *, keychain_uid: uuid.UUID, encryption_algo: str, cipherdict: dict, passphrases: Optional[list]=None
     ) -> bytes:
         """
         Return the message (probably a symmetric key) decrypted with the corresponding key,

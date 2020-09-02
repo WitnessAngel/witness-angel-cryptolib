@@ -48,13 +48,20 @@ SHARED_SECRET_MARKER = "[SHARED_SECRET]"
 LOCAL_ESCROW_MARKER = dict(escrow_type="local")
 
 
+def get_escrow_id(escrow_conf: dict) -> str:
+    """Build opaque unique identifier for a specific escrow.
+
+    Remains the same as long as escrow dict is completely unmodified.
+    """
+    return str(sorted(escrow_conf.items()))
+
 
 class ContainerBase:
     """
     BEWARE - this class-based design is provisional and might change a lot.
     """
 
-    def __init__(self, key_storage_pool: KeyStoragePoolBase=None):
+    def __init__(self, key_storage_pool: KeyStoragePoolBase=None, passphrase_mapper: Optional[dict]=None):
         if not key_storage_pool:
             logger.warning(
                 "No key storage pool provided for %s instance, falling back to DummyKeyStoragePool()",
@@ -63,6 +70,7 @@ class ContainerBase:
             key_storage_pool = DUMMY_KEY_STORAGE_POOL
         assert isinstance(key_storage_pool, KeyStoragePoolBase), key_storage_pool
         self._key_storage_pool = key_storage_pool
+        self._passphrase_mapper = passphrase_mapper or {}
 
     def _get_proxy_for_escrow(self, escrow):
         assert isinstance(escrow, dict), escrow
@@ -435,7 +443,7 @@ class ContainerReader(ContainerBase):
         if key_encryption_algo == SHARED_SECRET_MARKER:
 
             logger.debug("Deciphering each share")
-            shares = self._decrypt_share(
+            shares = self._decrypt_symmetric_key_share(
                 keychain_uid=keychain_uid,
                 symmetric_key_cipherdict=symmetric_key_cipherdict,
                 conf=conf,
@@ -447,7 +455,7 @@ class ContainerReader(ContainerBase):
             return symmetric_key_plaintext
 
         else:  # Using asymmetric algorithm
-            symmetric_key_plaintext = self._asymmetric_decryption(
+            symmetric_key_plaintext = self._decrypt_cipherdict_with_asymmetric_cipher(
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid,
                 cipherdict=symmetric_key_cipherdict,
@@ -455,21 +463,22 @@ class ContainerReader(ContainerBase):
             )
             return symmetric_key_plaintext
 
-    def _asymmetric_decryption(  # FIXME rename method
-        self, encryption_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, escrow
+    def _decrypt_cipherdict_with_asymmetric_cipher(
+        self, encryption_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, escrow: dict
     ) -> bytes:
         """
         Decrypt given cipherdict with an assymetric algorithm
 
         :param encryption_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
-        :param cipherdict: dictionary which contains every data needed to decrypt the ciphered data
+        :param cipherdict: dictionary which data components needed to decrypt the ciphered data
         :param escrow: escrow used for encryption (findable in configuration tree)
 
         :return: decypted data as bytes
         """
         encryption_proxy = self._get_proxy_for_escrow(escrow=escrow)
 
+        ''' TODO REMOVE THIS OBSOELTE CALL
         keypair_identifiers = [
             dict(keychain_uid=keychain_uid, key_type=encryption_algo)
         ]
@@ -478,23 +487,28 @@ class ContainerReader(ContainerBase):
             keypair_identifiers=keypair_identifiers,
             request_message="Automatic decryption authorization request",
         )
-
+        
         logger.info(
             "Decryption authorization request result: %s",
             request_result["response_message"],
         )
+        
+        '''
 
-        # We attempt decryption whatever the result of request_decryption_authorization(), since a previous
-        # decryption authorization might still be valid
+        escrow_id = get_escrow_id(escrow)
+        passphrases = self._passphrase_mapper.get(escrow_id)  # Might be None
+
+        # We expect decryption authorization requests to have already been done properly
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
             keychain_uid=keychain_uid,
             encryption_algo=encryption_algo,
             cipherdict=cipherdict,
+            passphrases=passphrases
         )
 
         return symmetric_key_plaintext
 
-    def _decrypt_share(
+    def _decrypt_symmetric_key_share(
         self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list
     ):
         """
@@ -521,7 +535,7 @@ class ContainerReader(ContainerBase):
             share_escrow = escrow["share_escrow"]
 
             try:
-                symmetric_key_plaintext = self._asymmetric_decryption(
+                symmetric_key_plaintext = self._decrypt_cipherdict_with_asymmetric_cipher(
                     encryption_algo=share_encryption_algo,
                     keychain_uid=keychain_uid,
                     cipherdict=symmetric_key_cipherdict["shares"][tested_share_counter][
@@ -605,16 +619,17 @@ def encrypt_data_into_container(
 
 
 def decrypt_data_from_container(
-    container: dict, key_storage_pool: Optional[KeyStoragePoolBase] = None
+    container: dict, key_storage_pool: Optional[KeyStoragePoolBase] = None, passphrase_mapper: Optional[dict]=None
 ) -> bytes:
     """Decrypt a container with the help of third-parties.
 
     :param container: the container tree, which holds all information about involved keys
     :param key_storage_pool: optional key storage pool
+    :param passphrase_mapper: optional dict mapping urls/device_uids to their lists of passphrases
 
     :return: raw bytestring
     """
-    reader = ContainerReader(key_storage_pool=key_storage_pool)
+    reader = ContainerReader(key_storage_pool=key_storage_pool, passphrase_mapper=passphrase_mapper)
     data = reader.decrypt_data(container)
     return data
 

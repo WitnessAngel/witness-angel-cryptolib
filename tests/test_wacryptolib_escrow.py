@@ -1,5 +1,6 @@
 import random
 import time
+import copy
 
 import pytest
 from Crypto.Random import get_random_bytes
@@ -134,10 +135,11 @@ def test_escrow_api_workflow():
             cipherdict=cipherdict,
         )
 
-    cipherdict["digest_list"].append(b"aaabbbccc")
+    wrong_cipherdict = copy.deepcopy(cipherdict)
+    wrong_cipherdict["digest_list"].append(b"aaabbbccc")
     with pytest.raises(ValueError, match="Ciphertext with incorrect length"):
         escrow_api.decrypt_with_private_key(
-            keychain_uid=keychain_uid, encryption_algo="RSA_OAEP", cipherdict=cipherdict
+            keychain_uid=keychain_uid, encryption_algo="RSA_OAEP", cipherdict=wrong_cipherdict
         )
 
     with pytest.raises(ValueError, match="empty"):
@@ -156,7 +158,8 @@ def test_escrow_api_workflow():
     # TEST PASSPHRASE PROTECTIONS
 
     keychain_uid_passphrased = generate_uuid0()
-    keypair_cipher_passphrased = generate_asymmetric_keypair(key_type="RSA_OAEP", serialize=True, passphrase="good_passphrase")
+    good_passphrase = "good_passphrase"
+    keypair_cipher_passphrased = generate_asymmetric_keypair(key_type="RSA_OAEP", serialize=True, passphrase=good_passphrase)
     key_storage.set_keys(
         keychain_uid=keychain_uid_passphrased,
         key_type="RSA_OAEP",
@@ -184,11 +187,39 @@ def test_escrow_api_workflow():
     result = escrow_api.request_decryption_authorization(
         keypair_identifiers=[dict(keychain_uid=keychain_uid_passphrased, key_type="RSA_OAEP")],
         request_message="I need this decryption too!",
-            passphrases=["dsd", "good_passphrase"]
+            passphrases=["dsd", good_passphrase]
     )
     assert "accepted" in result["response_message"]
     assert not result["has_errors"]
     assert result["keypair_statuses"]["accepted"]
+
+    public_key_rsa_oaep2 = load_asymmetric_key_from_pem_bytestring(
+            key_pem=keypair_cipher_passphrased["public_key"], key_type="RSA_OAEP"
+        )
+    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key_rsa_oaep2)
+
+    with pytest.raises(ValueError, match="not decrypt"):
+        escrow_api.decrypt_with_private_key(
+            keychain_uid=keychain_uid_passphrased,
+            encryption_algo="RSA_OAEP",
+            cipherdict=cipherdict,
+        )
+
+    with pytest.raises(ValueError, match="not decrypt"):
+        escrow_api.decrypt_with_private_key(
+            keychain_uid=keychain_uid_passphrased,
+            encryption_algo="RSA_OAEP",
+            cipherdict=cipherdict,
+                passphrases=["something"]
+        )
+
+    decrypted = escrow_api.decrypt_with_private_key(
+        keychain_uid=keychain_uid_passphrased,
+        encryption_algo="RSA_OAEP",
+        cipherdict=cipherdict,
+            passphrases=[good_passphrase]
+    )
+    assert decrypted == secret
 
     assert key_storage.get_free_keypairs_count("DSA_DSS") == 0
     assert key_storage.get_free_keypairs_count("ECC_DSS") == 0

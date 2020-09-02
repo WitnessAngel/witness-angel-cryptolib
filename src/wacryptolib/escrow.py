@@ -53,16 +53,6 @@ class EscrowApi:
                 private_key=keypair["private_key"],
             )
 
-    def _check_keypair_exists(self, keychain_uid: uuid.UUID, key_type: str):
-        """Raise if a keypair doesn't exist."""
-        try:
-            self._key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type)
-        except KeyDoesNotExist:
-            # Just tweak the error message here
-            raise KeyDoesNotExist(
-                "Sql keypair %s/%s not found in escrow api" % (keychain_uid, key_type)
-            )
-
     # FIXME rename this to differentiate it from KeyStorage API method
     def get_public_key(self, *, keychain_uid: uuid.UUID, key_type: str, must_exist: bool=False) -> bytes:
         """
@@ -105,6 +95,20 @@ class EscrowApi:
     def _check_keypair_authorization(self, *, keychain_uid: uuid.UUID, key_type: str):
         """raises a proper exception if authorization is not given yet to decrypt with this keypair."""
         return  # In this base implementation we always allow decryption!
+
+    def _decrypt_private_key_pem_with_passphrases(self, *, private_key_pem: bytes, key_type:str, passphrases: list):
+        """
+        Attempt decryption of key with and without provided passphrases, and raise if all fail.
+        """
+        for passphrase in [None] + passphrases:
+            try:
+                key_obj = load_asymmetric_key_from_pem_bytestring(
+                    key_pem=private_key_pem, key_type=key_type, passphrase=passphrase
+                )
+                return key_obj
+            except (ValueError, IndexError, TypeError):  # FIXME use custom exception class!!
+                pass
+        raise ValueError("Could not decrypt private key of type %s (passphrases provided: %d)" % (key_type, len(passphrases)))  # FIXME use custom exception
 
     def request_decryption_authorization(
         self, keypair_identifiers: list, request_message: str, passphrases: list=None
@@ -159,17 +163,16 @@ class EscrowApi:
                 missing_private_key.append(keypair_identifier)
                 continue
 
-            for passphrase in [None] + passphrases:
-                try:
-                    load_asymmetric_key_from_pem_bytestring(
-                        key_pem=private_key_pem, key_type=key_type, passphrase=passphrase
-                    )
-                    accepted.append(keypair_identifier)  # Check is OVER for this keypair!!
-                    break
-                except (ValueError, IndexError, TypeError):  # FIXME use custom exception class!!
-                    pass
-            else:
+            try:
+                res = self._decrypt_private_key_pem_with_passphrases(private_key_pem=private_key_pem,
+                                                              key_type=key_type,
+                                                              passphrases=passphrases)
+                assert res, repr(res)
+            except ValueError:
                 missing_passphrase.append(keypair_identifier)
+                continue
+
+            accepted.append(keypair_identifier)  # Check is OVER for this keypair!
 
         keypair_statuses = dict(missing_private_key=missing_private_key,
                             authorization_rejected = authorization_rejected,
@@ -187,24 +190,29 @@ class EscrowApi:
         )  # TODO localize string field!
 
     def decrypt_with_private_key(
-        self, *, keychain_uid: uuid.UUID, encryption_algo: str, cipherdict: dict
+        self, *, keychain_uid: uuid.UUID, encryption_algo: str, cipherdict: dict, passphrases: list=None
     ) -> bytes:
         """
         Return the message (probably a symmetric key) decrypted with the corresponding key,
         as bytestring.
+
+        Raises if key existence, authorization or passphrase errors occur.
         """
         assert (
             encryption_algo.upper() == "RSA_OAEP"
         )  # Only supported asymmetric cipher for now
-        self._check_keypair_exists(keychain_uid=keychain_uid, key_type=encryption_algo) # FIXME dedupicate this
+
+        passphrases = passphrases or []
+        assert isinstance(passphrases, list), repr(passphrases)
 
         private_key_pem = self._key_storage.get_private_key(
             keychain_uid=keychain_uid, key_type=encryption_algo
         )
 
-        private_key = load_asymmetric_key_from_pem_bytestring(
-            key_pem=private_key_pem, key_type=encryption_algo  # FIXME - use passphrase if needed!
-        )
+        private_key = self._decrypt_private_key_pem_with_passphrases(
+                private_key_pem=private_key_pem,
+              key_type=encryption_algo,
+              passphrases=passphrases)
 
         secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key=private_key)
         return secret
@@ -217,8 +225,13 @@ class ReadonlyEscrowApi(EscrowApi):
     This version never generates keys by itself, whatever the values of method parameters like `must_exist`.
     """
     def _ensure_keypair_exists(self, keychain_uid: uuid.UUID, key_type: str):
-        self._check_keypair_exists(keychain_uid=keychain_uid, key_type=key_type)
-
+        try:
+            self._key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type)
+        except KeyDoesNotExist:
+            # Just tweak the error message here
+            raise KeyDoesNotExist(
+                "Keypair %s/%s not found in escrow api" % (keychain_uid, key_type)
+            )
 
 def generate_free_keypair_for_least_provisioned_key_type(
     key_storage: KeyStorageBase,

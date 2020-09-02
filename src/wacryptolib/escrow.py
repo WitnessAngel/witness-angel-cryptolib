@@ -147,7 +147,7 @@ class EscrowApi:
         """
 
         passphrases = passphrases or []
-        assert isinstance(passphrases, list), repr(passphrases)
+        assert isinstance(passphrases, (tuple, list)), repr(passphrases)
 
         if not keypair_identifiers:
             raise ValueError(
@@ -224,7 +224,7 @@ class EscrowApi:
         )  # Only supported asymmetric cipher for now
 
         passphrases = passphrases or []
-        assert isinstance(passphrases, list), repr(passphrases)
+        assert isinstance(passphrases, (tuple, list)), repr(passphrases)
 
         private_key_pem = self._key_storage.get_private_key(
             keychain_uid=keychain_uid, key_type=encryption_algo

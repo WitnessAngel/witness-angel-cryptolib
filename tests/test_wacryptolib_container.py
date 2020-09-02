@@ -17,13 +17,13 @@ from wacryptolib.container import (
     extract_metadata_from_container,
     ContainerBase,
     get_encryption_configuration_summary, dump_container_to_filesystem, load_container_from_filesystem,
-    SHARED_SECRET_MARKER,
+    SHARED_SECRET_MARKER, get_escrow_id,
 )
-from wacryptolib.escrow import EscrowApi
+from wacryptolib.escrow import EscrowApi, generate_asymmetric_keypair_for_storage
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_asymmetric_keypair
-from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, FilesystemKeyStoragePool
-from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes
+from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, FilesystemKeyStoragePool, DummyKeyStoragePool
+from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, generate_uuid0
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 
 SIMPLE_CONTAINER_CONF = dict(
@@ -323,6 +323,122 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf):
     with pytest.raises(ValueError, match="Unknown container format"):
         decrypt_data_from_container(container=container)
 
+
+def test_passphrase_mapping_during_decryption():
+
+    keychain_uid = generate_uuid0()
+
+    local_passphrase = "b^yep&ts"
+
+    key_storage_uid1 = generate_uuid0()
+    passphrase1 = "tata"
+
+    key_storage_uid2 = generate_uuid0()
+    passphrase2 = "2çès"
+
+    key_storage_uid3 = generate_uuid0()
+    passphrase3 = "zaizoadsxsnd123"
+
+    all_passphrases = [local_passphrase, passphrase1, passphrase2, passphrase3]
+
+    key_storage_pool = DummyKeyStoragePool()
+    key_storage_pool._register_fake_imported_storage_uids(storage_uids=[key_storage_uid1, key_storage_uid2, key_storage_uid3])
+
+    local_key_storage = key_storage_pool.get_local_key_storage()
+    generate_asymmetric_keypair_for_storage(
+            key_type="RSA_OAEP", key_storage=local_key_storage, keychain_uid=keychain_uid, passphrase=local_passphrase)
+    key_storage1 = key_storage_pool.get_imported_key_storage(key_storage_uid1)
+    generate_asymmetric_keypair_for_storage(
+            key_type="RSA_OAEP", key_storage=key_storage1, keychain_uid=keychain_uid, passphrase=passphrase1)
+    key_storage2 = key_storage_pool.get_imported_key_storage(key_storage_uid2)
+    generate_asymmetric_keypair_for_storage(
+            key_type="RSA_OAEP", key_storage=key_storage2, keychain_uid=keychain_uid, passphrase=passphrase2)
+    key_storage3 = key_storage_pool.get_imported_key_storage(key_storage_uid3)
+    generate_asymmetric_keypair_for_storage(
+            key_type="RSA_OAEP", key_storage=key_storage3, keychain_uid=keychain_uid, passphrase=passphrase3)
+
+    local_escrow_id = get_escrow_id(LOCAL_ESCROW_MARKER)
+
+    share_escrow1 = dict(escrow_type="key_device", key_device_uid=key_storage_uid1)
+    share_escrow1_id = get_escrow_id(share_escrow1)
+
+    share_escrow2 = dict(escrow_type="key_device", key_device_uid=key_storage_uid2)
+    share_escrow2_id = get_escrow_id(share_escrow2)
+
+    share_escrow3 = dict(escrow_type="key_device", key_device_uid=key_storage_uid3)
+    share_escrow3_id = get_escrow_id(share_escrow3)
+
+    container_conf = dict(
+        data_encryption_strata=[
+            dict(
+                data_encryption_algo="AES_CBC",
+                key_encryption_strata=[
+                    dict(
+                        key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
+                    ),
+                    dict(
+                        key_encryption_algo=SHARED_SECRET_MARKER,
+                        key_shared_secret_threshold=2,
+                        key_shared_secret_escrows=[
+                            dict(
+                                share_encryption_algo="RSA_OAEP",
+                                share_escrow=share_escrow1,
+                            ),
+                            dict(
+                                share_encryption_algo="RSA_OAEP",
+                                share_escrow=share_escrow2,
+                            ),
+                            dict(
+                                share_encryption_algo="RSA_OAEP",
+                                share_escrow=share_escrow3,
+                            ),
+                        ],
+                    ),
+                ],
+                data_signatures=[
+                    dict(
+                        message_prehash_algo="SHA256",
+                        signature_algo="DSA_DSS",
+                        signature_escrow=LOCAL_ESCROW_MARKER,  # Uses separate keypair, no passphrase here
+                    )
+                ],
+            )
+        ]
+    )
+
+    data = b"sjzgzj"
+
+    container = encrypt_data_into_container(
+        data=data, conf=container_conf, keychain_uid=keychain_uid, key_storage_pool=key_storage_pool, metadata=None
+    )
+
+    with pytest.raises(RuntimeError, match="2 valid .* missing for reconstitution"):
+        decrypt_data_from_container(container, key_storage_pool=key_storage_pool)
+
+    with pytest.raises(RuntimeError, match="2 valid .* missing for reconstitution"):
+        decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
+                                    passphrase_mapper={local_escrow_id: all_passphrases})  # Doesn't help share escrows
+
+    with pytest.raises(RuntimeError, match="1 valid .* missing for reconstitution"):
+        decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
+                                    passphrase_mapper={share_escrow1_id: all_passphrases})  # Unblocks 1 share escrow
+
+    with pytest.raises(RuntimeError, match="1 valid .* missing for reconstitution"):
+        decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
+                                    passphrase_mapper={share_escrow1_id: all_passphrases, share_escrow2_id: [passphrase3]})  # No changes
+
+    with pytest.raises(ValueError, match="Could not decrypt private key"):
+        decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
+                                    passphrase_mapper={share_escrow1_id: all_passphrases, share_escrow3_id: [passphrase3]})
+
+    with pytest.raises(ValueError, match="Could not decrypt private key"):
+        decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
+                                    passphrase_mapper={local_escrow_id: ["qsdqsd"], share_escrow1_id: all_passphrases, share_escrow3_id: [passphrase3]})
+
+    decrypted =  decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
+                                        passphrase_mapper={local_escrow_id: [local_passphrase], share_escrow1_id: all_passphrases, share_escrow3_id: [passphrase3]})
+    assert decrypted == data
+    
 
 def test_get_proxy_for_escrow(tmp_path):
     container_base1 = ContainerBase()

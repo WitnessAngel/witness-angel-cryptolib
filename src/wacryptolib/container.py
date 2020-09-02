@@ -497,6 +497,7 @@ class ContainerReader(ContainerBase):
 
         escrow_id = get_escrow_id(escrow)
         passphrases = self._passphrase_mapper.get(escrow_id)  # Might be None
+        assert passphrases is None or isinstance(passphrases, list), repr(passphrases)  # No SINGLE passphrase here
 
         # We expect decryption authorization requests to have already been done properly
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
@@ -505,7 +506,6 @@ class ContainerReader(ContainerBase):
             cipherdict=cipherdict,
             passphrases=passphrases
         )
-
         return symmetric_key_plaintext
 
     def _decrypt_symmetric_key_share(
@@ -549,13 +549,15 @@ class ContainerReader(ContainerBase):
                 )
                 shares.append(share)
                 valid_share_counter += 1
+
+            # FIXME use custom exceptions here
             except Exception as e:  # If actual escrow doesn't work, we can go to next one
                 errors.append(e)
                 logger.error(e)
             tested_share_counter += 1
 
         if valid_share_counter < key_shared_secret_threshold:
-            raise RuntimeError("%s valid(s) share(s) missing for reconstitution" % (key_shared_secret_threshold - valid_share_counter))
+            raise RuntimeError("%s valid share(s) missing for reconstitution" % (key_shared_secret_threshold - valid_share_counter))
         return shares
 
     def _verify_message_signature(
@@ -619,7 +621,7 @@ def encrypt_data_into_container(
 
 
 def decrypt_data_from_container(
-    container: dict, key_storage_pool: Optional[KeyStoragePoolBase] = None, passphrase_mapper: Optional[dict]=None
+    container: dict, *, key_storage_pool: Optional[KeyStoragePoolBase]=None, passphrase_mapper: Optional[dict]=None
 ) -> bytes:
     """Decrypt a container with the help of third-parties.
 

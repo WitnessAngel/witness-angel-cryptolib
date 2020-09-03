@@ -308,14 +308,16 @@ class ContainerWriter(ContainerBase):
         for share in shares:
             conf_share = key_shared_secret_escrows[tested_share_counter]
             share_encryption_algo = conf_share["share_encryption_algo"]
+            share_escrow = conf_share["share_escrow"]
+            keychain_uid_share = conf_share.get("keychain_uid") or keychain_uid
             tested_share_counter += 1
 
             try:
                 share_cipherdict = self._apply_asymmetric_encryption(
                     encryption_algo=share_encryption_algo,
-                    keychain_uid=keychain_uid,
+                    keychain_uid=keychain_uid_share,
                     symmetric_key_data=share[1],
-                    escrow=conf_share["share_escrow"],
+                    escrow=share_escrow,
                 )
 
                 all_encrypted_shares.append((share[0], share_cipherdict))
@@ -533,11 +535,12 @@ class ContainerReader(ContainerBase):
 
             share_encryption_algo = escrow["share_encryption_algo"]
             share_escrow = escrow["share_escrow"]
+            keychain_uid_share = escrow.get("keychain_uid") or keychain_uid
 
             try:
                 symmetric_key_plaintext = self._decrypt_cipherdict_with_asymmetric_cipher(
                     encryption_algo=share_encryption_algo,
-                    keychain_uid=keychain_uid,
+                    keychain_uid=keychain_uid_share,
                     cipherdict=symmetric_key_cipherdict["shares"][tested_share_counter][
                         1
                     ],

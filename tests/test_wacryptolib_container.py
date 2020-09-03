@@ -328,9 +328,11 @@ def test_passphrase_mapping_during_decryption():
 
     keychain_uid = generate_uuid0()
 
+    keychain_uid_escrow = generate_uuid0()
+
     local_passphrase = "b^yep&ts"
 
-    key_storage_uid1 = generate_uuid0()
+    key_storage_uid1 = keychain_uid_escrow
     passphrase1 = "tata"
 
     key_storage_uid2 = generate_uuid0()
@@ -349,7 +351,7 @@ def test_passphrase_mapping_during_decryption():
             key_type="RSA_OAEP", key_storage=local_key_storage, keychain_uid=keychain_uid, passphrase=local_passphrase)
     key_storage1 = key_storage_pool.get_imported_key_storage(key_storage_uid1)
     generate_asymmetric_keypair_for_storage(
-            key_type="RSA_OAEP", key_storage=key_storage1, keychain_uid=keychain_uid, passphrase=passphrase1)
+            key_type="RSA_OAEP", key_storage=key_storage1, keychain_uid=keychain_uid_escrow, passphrase=passphrase1)
     key_storage2 = key_storage_pool.get_imported_key_storage(key_storage_uid2)
     generate_asymmetric_keypair_for_storage(
             key_type="RSA_OAEP", key_storage=key_storage2, keychain_uid=keychain_uid, passphrase=passphrase2)
@@ -382,6 +384,7 @@ def test_passphrase_mapping_during_decryption():
                         key_shared_secret_escrows=[
                             dict(
                                 share_encryption_algo="RSA_OAEP",
+                                keychain_uid=keychain_uid_escrow,
                                 share_escrow=share_escrow1,
                             ),
                             dict(

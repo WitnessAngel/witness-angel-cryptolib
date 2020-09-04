@@ -17,7 +17,7 @@ from wacryptolib.container import (
     extract_metadata_from_container,
     ContainerBase,
     get_encryption_configuration_summary, dump_container_to_filesystem, load_container_from_filesystem,
-    SHARED_SECRET_MARKER, get_escrow_id, gather_escrow_dependencies
+    SHARED_SECRET_MARKER, get_escrow_id, gather_escrow_dependencies, get_escrow_proxy
 )
 from wacryptolib.escrow import EscrowApi, generate_asymmetric_keypair_for_storage
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -454,12 +454,12 @@ def test_passphrase_mapping_during_decryption():
 
 def test_get_proxy_for_escrow(tmp_path):
     container_base1 = ContainerBase()
-    proxy1 = container_base1._get_proxy_for_escrow(LOCAL_ESCROW_MARKER)
+    proxy1 = get_escrow_proxy(LOCAL_ESCROW_MARKER, container_base1._key_storage_pool)
     assert isinstance(proxy1, EscrowApi)  # Local Escrow
     assert isinstance(proxy1._key_storage, DummyKeyStorage)  # Default type
 
     container_base1_bis = ContainerBase()
-    proxy1_bis = container_base1_bis._get_proxy_for_escrow(LOCAL_ESCROW_MARKER)
+    proxy1_bis = get_escrow_proxy(LOCAL_ESCROW_MARKER, container_base1_bis._key_storage_pool)
     assert (
         proxy1_bis._key_storage is proxy1_bis._key_storage
     )  # process-local storage is SINGLETON!
@@ -467,13 +467,13 @@ def test_get_proxy_for_escrow(tmp_path):
     container_base2 = ContainerBase(
             key_storage_pool=FilesystemKeyStoragePool(str(tmp_path))
     )
-    proxy2 = container_base2._get_proxy_for_escrow(LOCAL_ESCROW_MARKER)
+    proxy2 = get_escrow_proxy(LOCAL_ESCROW_MARKER, container_base2._key_storage_pool)
     assert isinstance(proxy2, EscrowApi)  # Local Escrow
     assert isinstance(proxy2._key_storage, FilesystemKeyStorage)
 
     for container_base in (container_base1, container_base2):
-        proxy = container_base._get_proxy_for_escrow(
-            dict(escrow_type="jsonrpc", url="http://example.com/jsonrpc")
+        proxy = get_escrow_proxy(
+            dict(escrow_type="jsonrpc", url="http://example.com/jsonrpc"), container_base._key_storage_pool
         )
         assert isinstance(
             proxy, JsonRpcProxy
@@ -483,10 +483,10 @@ def test_get_proxy_for_escrow(tmp_path):
         assert proxy._response_error_handler == status_slugs_response_error_handler
 
         with pytest.raises(ValueError):
-            container_base._get_proxy_for_escrow(dict(escrow_type="something-wrong"))
+            get_escrow_proxy(dict(escrow_type="something-wrong"), container_base._key_storage_pool)
 
         with pytest.raises(ValueError):
-            container_base._get_proxy_for_escrow(dict(urn="athena"))
+            get_escrow_proxy(dict(urn="athena"), container_base._key_storage_pool)
 
 
 def test_container_storage_and_executor(tmp_path, caplog):

@@ -101,6 +101,26 @@ def gather_escrow_dependencies(containers: list) -> dict:
     return {"signature": signature, "encryption": encryption}
 
 
+def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase):
+    assert isinstance(escrow, dict), escrow
+
+    escrow_type = escrow.get("escrow_type")  # Might be None
+
+    if escrow_type == LOCAL_ESCROW_MARKER["escrow_type"]:
+        return LocalEscrowApi(key_storage_pool.get_local_key_storage())
+    elif escrow_type == "key_device":
+        key_device_uid = escrow["key_device_uid"]
+        key_storage = key_storage_pool.get_imported_key_storage(key_device_uid)
+        return ReadonlyEscrowApi(key_storage)
+    elif escrow_type == "jsonrpc":
+        return JsonRpcProxy(
+            url=escrow["url"],
+            response_error_handler=status_slugs_response_error_handler,
+        )
+    # TODO - Implement imported storages, escrow lookup in global registry, shared-secret group, etc.
+    raise ValueError("Unrecognized escrow identifiers: %s" % str(escrow))
+
+
 class ContainerBase:
     """
     BEWARE - this class-based design is provisional and might change a lot.
@@ -116,25 +136,6 @@ class ContainerBase:
         assert isinstance(key_storage_pool, KeyStoragePoolBase), key_storage_pool
         self._key_storage_pool = key_storage_pool
         self._passphrase_mapper = passphrase_mapper or {}
-
-    def _get_proxy_for_escrow(self, escrow):
-        assert isinstance(escrow, dict), escrow
-
-        escrow_type = escrow.get("escrow_type")  # Might be None
-
-        if escrow_type == LOCAL_ESCROW_MARKER["escrow_type"]:
-            return LocalEscrowApi(self._key_storage_pool.get_local_key_storage())
-        elif escrow_type == "key_device":
-            key_device_uid = escrow["key_device_uid"]
-            key_storage = self._key_storage_pool.get_imported_key_storage(key_device_uid)
-            return ReadonlyEscrowApi(key_storage)
-        elif escrow_type == "jsonrpc":
-            return JsonRpcProxy(
-                url=escrow["url"],
-                response_error_handler=status_slugs_response_error_handler,
-            )
-        # TODO - Implement imported storages, escrow lookup in global registry, shared-secret group, etc.
-        raise ValueError("Unrecognized escrow identifiers: %s" % str(escrow))
 
 
 class ContainerWriter(ContainerBase):
@@ -314,7 +315,7 @@ class ContainerWriter(ContainerBase):
 
         :return: dictionary which contains every data needed to decrypt the ciphered data
         """
-        encryption_proxy = self._get_proxy_for_escrow(escrow)
+        encryption_proxy = get_escrow_proxy(escrow=escrow, key_storage_pool=self._key_storage_pool)
 
         logger.debug("Generating assymetric key of type %r", encryption_algo)
         subkey_pem = encryption_proxy.get_public_key(
@@ -388,7 +389,7 @@ class ContainerWriter(ContainerBase):
 
         :return: dictionary with information needed to verify signature
         """
-        encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
+        encryption_proxy = get_escrow_proxy(escrow=conf["signature_escrow"], key_storage_pool=self._key_storage_pool)
         message_prehash_algo = conf["message_prehash_algo"]
         signature_algo = conf["signature_algo"]
 
@@ -523,7 +524,7 @@ class ContainerReader(ContainerBase):
 
         :return: decypted data as bytes
         """
-        encryption_proxy = self._get_proxy_for_escrow(escrow=escrow)
+        encryption_proxy = get_escrow_proxy(escrow=escrow, key_storage_pool=self._key_storage_pool)
 
         ''' TODO REMOVE THIS OBSOELTE CALL
         keypair_identifiers = [
@@ -620,7 +621,7 @@ class ContainerReader(ContainerBase):
         """
         message_prehash_algo = conf["message_prehash_algo"]
         signature_algo = conf["signature_algo"]
-        encryption_proxy = self._get_proxy_for_escrow(conf["signature_escrow"])
+        encryption_proxy = get_escrow_proxy(escrow=conf["signature_escrow"], key_storage_pool=self._key_storage_pool)
         public_key_pem = encryption_proxy.get_public_key(
             keychain_uid=keychain_uid, key_type=signature_algo, must_exist=True
         )

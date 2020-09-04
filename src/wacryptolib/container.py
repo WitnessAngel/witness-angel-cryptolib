@@ -56,6 +56,51 @@ def get_escrow_id(escrow_conf: dict) -> str:
     return str(sorted(escrow_conf.items()))
 
 
+def gather_escrow_dependencies(containers: list) -> dict:
+    signature = {}
+    encryption = {}
+    for container in containers:
+        keychain_uid = container["keychain_uid"]
+        for data_encryption_stratum in reversed(container["data_encryption_strata"]):
+            for signature_conf in data_encryption_stratum["data_signatures"]:
+                key_type = signature_conf["signature_algo"]
+                keychain_uid_signature = signature_conf.get("keychain_uid") or keychain_uid
+                keypair_identifiers_list = dict(keychain_uid=keychain_uid_signature, key_type=key_type)
+
+                escrow_dict = signature_conf["signature_escrow"]
+                escrow_id = get_escrow_id(escrow_conf=escrow_dict)
+
+                signature[escrow_id] = (escrow_dict, keypair_identifiers_list)
+
+            for key_encryption_stratum in reversed(
+                data_encryption_stratum["key_encryption_strata"]
+            ):
+                key_type = key_encryption_stratum["key_encryption_algo"]
+
+                if key_type == SHARED_SECRET_MARKER:
+                    escrows = key_encryption_stratum["key_shared_secret_escrows"]
+
+                    for escrow in escrows:
+                        share_key_type = escrow["share_encryption_algo"]
+                        keychain_uid_escrow = escrow.get("keychain_uid") or keychain_uid
+                        keypair_identifiers_list = dict(keychain_uid=keychain_uid_escrow, key_type=share_key_type)
+
+                        share_escrow = escrow["share_escrow"]
+                        escrow_id = get_escrow_id(escrow_conf=keypair_identifiers_list)
+
+                        encryption[escrow_id] = (share_escrow, keypair_identifiers_list)
+
+                else:
+                    keychain_uid_escrow = key_encryption_stratum.get("keychain_uid") or keychain_uid
+                    keypair_identifiers_list = dict(keychain_uid=keychain_uid_escrow, key_type=key_type)
+
+                    key_escrow = key_encryption_stratum["key_escrow"]
+                    escrow_id = get_escrow_id(escrow_conf=keypair_identifiers_list)
+                    encryption[escrow_id] = (key_escrow, keypair_identifiers_list)
+
+    return {"signature": signature, "encryption": encryption}
+
+
 class ContainerBase:
     """
     BEWARE - this class-based design is provisional and might change a lot.

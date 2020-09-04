@@ -17,7 +17,7 @@ from wacryptolib.container import (
     extract_metadata_from_container,
     ContainerBase,
     get_encryption_configuration_summary, dump_container_to_filesystem, load_container_from_filesystem,
-    SHARED_SECRET_MARKER, get_escrow_id,
+    SHARED_SECRET_MARKER, get_escrow_id, gather_escrow_dependencies
 )
 from wacryptolib.escrow import EscrowApi, generate_asymmetric_keypair_for_storage
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -228,7 +228,11 @@ def test_container_encryption_and_decryption(container_conf):
     container = encrypt_data_into_container(
         data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata
     )
-    # pprint.pprint(container, width=120)
+
+    escrow_dependencies = gather_escrow_dependencies([container])
+    assert isinstance(escrow_dependencies, dict)
+    assert escrow_dependencies.get("signature") is not None
+    assert escrow_dependencies.get("encryption") is not None
 
     assert container["keychain_uid"]
     if keychain_uid:
@@ -265,6 +269,11 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf):
         keychain_uid=keychain_uid,
         metadata=metadata,
     )
+
+    escrow_dependencies = gather_escrow_dependencies([container])
+    assert isinstance(escrow_dependencies, dict)
+    assert escrow_dependencies.get("signature") is not None
+    assert escrow_dependencies.get("encryption") is not None
 
     assert container["keychain_uid"]
     if keychain_uid:

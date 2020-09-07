@@ -93,12 +93,27 @@ def gather_escrow_dependencies(containers: list) -> dict:
                 else:
                     keychain_uid_escrow = key_encryption_stratum.get("keychain_uid") or keychain_uid
                     keypair_identifiers_list = dict(keychain_uid=keychain_uid_escrow, key_type=key_type)
-
                     key_escrow = key_encryption_stratum["key_escrow"]
                     escrow_id = get_escrow_id(escrow_conf=keypair_identifiers_list)
                     encryption[escrow_id] = (key_escrow, keypair_identifiers_list)
 
-    return {"signature": signature, "encryption": encryption}
+    escrow_dependencies = {"signature": signature, "encryption": encryption}
+    return escrow_dependencies
+
+
+def request_decryption_authorizations(escrow_dependencies: dict, key_storage_pool, request_message: str) -> dict:
+    request_authorization_result = {}
+    encryption_escrows_dependencies = escrow_dependencies.get("encryption")
+
+    for escrow_id, escrow_data in encryption_escrows_dependencies.items():
+        key_escrow, keypair_identifiers = escrow_data
+        proxy = get_escrow_proxy(escrow=key_escrow, key_storage_pool=key_storage_pool)
+        result = proxy.request_decryption_authorization(
+            keypair_identifiers=[keypair_identifiers], request_message=request_message
+        )
+        request_authorization_result[escrow_id] = result
+
+    return request_authorization_result
 
 
 def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase):

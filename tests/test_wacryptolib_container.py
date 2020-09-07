@@ -17,9 +17,9 @@ from wacryptolib.container import (
     extract_metadata_from_container,
     ContainerBase,
     get_encryption_configuration_summary, dump_container_to_filesystem, load_container_from_filesystem,
-    SHARED_SECRET_MARKER, get_escrow_id, gather_escrow_dependencies, get_escrow_proxy
+    SHARED_SECRET_MARKER, get_escrow_id, gather_escrow_dependencies, get_escrow_proxy, request_decryption_authorizations
 )
-from wacryptolib.escrow import EscrowApi, generate_asymmetric_keypair_for_storage
+from wacryptolib.escrow import EscrowApi, generate_asymmetric_keypair_for_storage, generate_free_keypair_for_least_provisioned_key_type
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, FilesystemKeyStoragePool, DummyKeyStoragePool
@@ -223,10 +223,10 @@ def test_container_encryption_and_decryption(container_conf):
         [None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")]
     )
 
+    key_storage_container = DummyKeyStoragePool()
     metadata = random.choice([None, dict(a=[123])])
-
     container = encrypt_data_into_container(
-        data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata
+        data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_container
     )
 
     escrow_dependencies = gather_escrow_dependencies([container])
@@ -234,11 +234,15 @@ def test_container_encryption_and_decryption(container_conf):
     assert escrow_dependencies.get("signature") is not None
     assert escrow_dependencies.get("encryption") is not None
 
+    request_decryption_authorizations(
+        escrow_dependencies=escrow_dependencies, request_message="Decryption needed", key_storage_pool=key_storage_container
+    )
+
     assert container["keychain_uid"]
     if keychain_uid:
         assert container["keychain_uid"] == keychain_uid
 
-    result_data = decrypt_data_from_container(container=container)
+    result_data = decrypt_data_from_container(container=container, key_storage_pool=key_storage_container)
     # pprint.pprint(result, width=120)
     assert result_data == data
 

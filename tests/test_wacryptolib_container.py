@@ -345,7 +345,7 @@ def test_passphrase_mapping_during_decryption():
 
     local_passphrase = "b^yep&ts"
 
-    key_storage_uid1 = keychain_uid_escrow
+    key_storage_uid1 = keychain_uid_escrow  # FIXME why mix key and storage uids ?
     passphrase1 = "tata"
 
     key_storage_uid2 = generate_uuid0()
@@ -427,6 +427,8 @@ def test_passphrase_mapping_during_decryption():
     container = encrypt_data_into_container(
         data=data, conf=container_conf, keychain_uid=keychain_uid, key_storage_pool=key_storage_pool, metadata=None
     )
+
+    # FIXME we must TEST that keychain_uid_escrow is necessary for decryption for example by deleting it before a decrypt()
 
     with pytest.raises(RuntimeError, match="2 valid .* missing for reconstitution"):
         decrypt_data_from_container(container, key_storage_pool=key_storage_pool)

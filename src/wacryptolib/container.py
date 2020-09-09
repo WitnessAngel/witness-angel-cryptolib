@@ -61,19 +61,19 @@ def gather_escrow_dependencies(containers: list) -> dict:
     encryption = {}
     for container in containers:
         keychain_uid = container["keychain_uid"]
-        for data_encryption_stratum in reversed(container["data_encryption_strata"]):
+        for data_encryption_stratum in reversed(container["data_encryption_strata"]):  # FIXME - reversed() is not necessary here
             for signature_conf in data_encryption_stratum["data_signatures"]:
                 key_type = signature_conf["signature_algo"]
                 keychain_uid_signature = signature_conf.get("keychain_uid") or keychain_uid
-                keypair_identifiers_list = dict(keychain_uid=keychain_uid_signature, key_type=key_type)
+                keypair_identifiers_list = dict(keychain_uid=keychain_uid_signature, key_type=key_type) # FIXME this must be a list
 
                 escrow_dict = signature_conf["signature_escrow"]
                 escrow_id = get_escrow_id(escrow_conf=escrow_dict)
 
-                signature[escrow_id] = (escrow_dict, keypair_identifiers_list)
+                signature[escrow_id] = (escrow_dict, keypair_identifiers_list)  # FIXME add to keypair_identifiers_list if existing (and TEST this case) instead
 
             for key_encryption_stratum in reversed(
-                data_encryption_stratum["key_encryption_strata"]
+                data_encryption_stratum["key_encryption_strata"]  # FIXME - reversed() is not necessary here
             ):
                 key_type = key_encryption_stratum["key_encryption_algo"]
 
@@ -83,19 +83,19 @@ def gather_escrow_dependencies(containers: list) -> dict:
                     for escrow in escrows:
                         share_key_type = escrow["share_encryption_algo"]
                         keychain_uid_escrow = escrow.get("keychain_uid") or keychain_uid
-                        keypair_identifiers_list = dict(keychain_uid=keychain_uid_escrow, key_type=share_key_type)
+                        keypair_identifiers_list = dict(keychain_uid=keychain_uid_escrow, key_type=share_key_type)  # FIXME this must be a list
 
                         share_escrow = escrow["share_escrow"]
                         escrow_id = get_escrow_id(escrow_conf=keypair_identifiers_list)
 
-                        encryption[escrow_id] = (share_escrow, keypair_identifiers_list)
+                        encryption[escrow_id] = (share_escrow, keypair_identifiers_list)  # FIXME add to keypair_identifiers_list if existing (and TEST this case)
 
                 else:
                     keychain_uid_escrow = key_encryption_stratum.get("keychain_uid") or keychain_uid
-                    keypair_identifiers_list = dict(keychain_uid=keychain_uid_escrow, key_type=key_type)
+                    keypair_identifiers_list = dict(keychain_uid=keychain_uid_escrow, key_type=key_type)  # FIXME this must be a list
                     key_escrow = key_encryption_stratum["key_escrow"]
                     escrow_id = get_escrow_id(escrow_conf=keypair_identifiers_list)
-                    encryption[escrow_id] = (key_escrow, keypair_identifiers_list)
+                    encryption[escrow_id] = (key_escrow, keypair_identifiers_list)   # FIXME add to keypair_identifiers_list if existing (and TEST this case)
 
     escrow_dependencies = {"signature": signature, "encryption": encryption}
     return escrow_dependencies
@@ -589,7 +589,7 @@ class ContainerReader(ContainerBase):
         tested_share_counter = 0
         shares = []
         errors = []
-        for escrow in key_shared_secret_escrows:
+        for escrow in key_shared_secret_escrows:  # FIXME this is improper name
             if valid_share_counter == key_shared_secret_threshold:
                 logger.debug("A sufficient number of share has been decrypted")
                 break

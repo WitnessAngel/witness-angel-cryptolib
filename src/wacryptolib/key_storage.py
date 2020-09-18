@@ -24,8 +24,6 @@ class KeyStorageBase(ABC):
     can't exist independently.
     """
 
-    # TODO use exceptions in case of key not found or unauthorized, instead of "None"!
-
     @abstractmethod
     def set_keys(
         self,
@@ -376,7 +374,7 @@ class FilesystemKeyStorage(KeyStorageBase):
             private_key_pem_filename = public_key_pem_filename.replace(self._public_key_suffix, self._private_key_suffix)
             private_key_present = os.path.exists(join(self._keys_dir, private_key_pem_filename))
 
-            key_information = dict(keychain_uid=keychain_uid,  # FIXME turn this into UUID, like everywhere else!
+            key_information = dict(keychain_uid=keychain_uid,  # FIXME turn this into UUID object, like everywhere else!
                                    key_type=key_type,
                                    private_key_present=private_key_present)
             key_information_list.append(key_information)
@@ -442,7 +440,7 @@ class FilesystemKeyStoragePool(KeyStoragePoolBase):
         """Storage automatically created if unexisting."""
         local_key_storage_path = self._root_dir.joinpath(self.LOCAL_STORAGE_DIRNAME)
         local_key_storage_path.mkdir(exist_ok=True)
-        # TODO initialize metadata for key_storage
+        # TODO initialize metadata for key_storage ??
         return FilesystemKeyStorage(local_key_storage_path)
 
     def get_imported_key_storage(self, key_storage_uid):

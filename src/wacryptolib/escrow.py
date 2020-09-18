@@ -315,7 +315,7 @@ def get_free_keys_generator_worker(
             max_free_keys_per_type=max_free_keys_per_type,
             **extra_generation_kwargs,
         )
-        # FIXME - improve this with refactored multitimer, later
+        # TODO - improve this with refactored multitimer, later
         if not has_generated:
             time.sleep(sleep_on_overflow_s)
         return has_generated

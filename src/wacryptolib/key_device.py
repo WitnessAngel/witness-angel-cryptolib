@@ -72,7 +72,7 @@ def initialize_key_device(key_device: dict, user: str):
     key_device.update(metadata)
 
 
-# FIXME add flags to report errors if json or RSA keys are missing/corrupted?
+# TODO add flags to report errors if json or RSA keys are missing/corrupted?
 def is_key_device_initialized(key_device: dict):
     """
     Check if a key device appears initialized (by ignoring, of course, its "is_initialized" field).

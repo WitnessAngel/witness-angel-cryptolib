@@ -39,7 +39,7 @@ class TimeLimitedAggregatorMixin:
                 self._flush_aggregated_data()
         if self._current_start_time is None:
             self._current_start_time = datetime.now(
-                tz=timezone.utc  # TODO make datetime utility with TZ
+                tz=timezone.utc  # TODO make datetime utility with TZ and factorize datetime.now() calls
             )
 
     def _flush_aggregated_data(self):
@@ -318,11 +318,8 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
             )  # Sanity check, else _offloaded_run_task() should have been overridden
             result = self._task_func()
             self._offloaded_add_data(result)
-        except Exception:
-            # TODO add logging/warnings
-            import traceback
-
-            traceback.print_exc()
+        except Exception as exc:
+            logger.error("Error in PeriodicValuePoller offloaded task: %r" % exc, exc_info=True)
 
 
 class SensorsManager(TaskRunnerStateMachineBase):

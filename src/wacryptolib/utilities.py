@@ -228,8 +228,8 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
 
     from multitimer import RepeatingTimer as _RepeatingTimer
 
-    # FIXME doesn't work, it's daemonic...
     # TODO make PR to ensure that multitimer is a DAEMON thread!
+    assert hasattr(_RepeatingTimer, "daemon")
     _RepeatingTimer.daemon = (
         True
     )  # Do not prevent process shutdown if we forgot to stop...

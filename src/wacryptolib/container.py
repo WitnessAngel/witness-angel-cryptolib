@@ -57,47 +57,46 @@ def get_escrow_id(escrow_conf: dict) -> str:
 
 
 def gather_escrow_dependencies(containers: list) -> dict:
-    signature = {}
-    encryption = {}
+
+    def _add_keypair_identifiers_for_escrow(mapper, escrow_conf, keychain_uid, key_type):
+        escrow_id = get_escrow_id(escrow_conf=escrow_conf)
+        keypair_identifiers = dict(keychain_uid=keychain_uid, key_type=key_type)
+        mapper.setdefault(escrow_id, (escrow_conf, []))
+        mapper[escrow_id][1].append(keypair_identifiers)
+
+    signature_dependencies = {}
+    encryption_dependencies = {}
+
     for container in containers:
         keychain_uid = container["keychain_uid"]
-        for data_encryption_stratum in reversed(container["data_encryption_strata"]):  # FIXME - reversed() is not necessary here
+        for data_encryption_stratum in container["data_encryption_strata"]:
             for signature_conf in data_encryption_stratum["data_signatures"]:
-                key_type = signature_conf["signature_algo"]
+                key_type_signature = signature_conf["signature_algo"]
                 keychain_uid_signature = signature_conf.get("keychain_uid") or keychain_uid
-                keypair_identifiers_list = dict(keychain_uid=keychain_uid_signature, key_type=key_type) # FIXME this must be a list
+                escrow_conf = signature_conf["signature_escrow"]
 
-                escrow_dict = signature_conf["signature_escrow"]
-                escrow_id = get_escrow_id(escrow_conf=escrow_dict)
+                _add_keypair_identifiers_for_escrow(mapper=signature_dependencies, escrow_conf=escrow_conf,
+                                                    keychain_uid=keychain_uid_signature, key_type=key_type_signature)
 
-                signature[escrow_id] = (escrow_dict, keypair_identifiers_list)  # FIXME add to keypair_identifiers_list if existing (and TEST this case) instead
+            for key_encryption_stratum in data_encryption_stratum["key_encryption_strata"]:
+                key_type_encryption = key_encryption_stratum["key_encryption_algo"]
 
-            for key_encryption_stratum in reversed(
-                data_encryption_stratum["key_encryption_strata"]  # FIXME - reversed() is not necessary here
-            ):
-                key_type = key_encryption_stratum["key_encryption_algo"]
-
-                if key_type == SHARED_SECRET_MARKER:
+                if key_type_encryption == SHARED_SECRET_MARKER:
                     escrows = key_encryption_stratum["key_shared_secret_escrows"]
 
                     for escrow in escrows:
-                        share_key_type = escrow["share_encryption_algo"]
-                        keychain_uid_escrow = escrow.get("keychain_uid") or keychain_uid
-                        keypair_identifiers_list = dict(keychain_uid=keychain_uid_escrow, key_type=share_key_type)  # FIXME this must be a list
-
-                        share_escrow = escrow["share_escrow"]
-                        escrow_id = get_escrow_id(escrow_conf=keypair_identifiers_list)
-
-                        encryption[escrow_id] = (share_escrow, keypair_identifiers_list)  # FIXME add to keypair_identifiers_list if existing (and TEST this case)
-
+                        key_type_share = escrow["share_encryption_algo"]
+                        keychain_uid_share = escrow.get("keychain_uid") or keychain_uid
+                        escrow_conf = escrow["share_escrow"]
+                        _add_keypair_identifiers_for_escrow(mapper=encryption_dependencies, escrow_conf=escrow_conf,
+                                                            keychain_uid=keychain_uid_share, key_type=key_type_share)
                 else:
-                    keychain_uid_escrow = key_encryption_stratum.get("keychain_uid") or keychain_uid
-                    keypair_identifiers_list = dict(keychain_uid=keychain_uid_escrow, key_type=key_type)  # FIXME this must be a list
-                    key_escrow = key_encryption_stratum["key_escrow"]
-                    escrow_id = get_escrow_id(escrow_conf=keypair_identifiers_list)
-                    encryption[escrow_id] = (key_escrow, keypair_identifiers_list)   # FIXME add to keypair_identifiers_list if existing (and TEST this case)
+                    keychain_uid_encryption = key_encryption_stratum.get("keychain_uid") or keychain_uid
+                    escrow_conf = key_encryption_stratum["key_escrow"]
+                    _add_keypair_identifiers_for_escrow(mapper=encryption_dependencies, escrow_conf=escrow_conf,
+                                                        keychain_uid=keychain_uid_encryption, key_type=key_type_encryption)
 
-    escrow_dependencies = {"signature": signature, "encryption": encryption}
+    escrow_dependencies = {"signature": signature_dependencies, "encryption": encryption_dependencies}
     return escrow_dependencies
 
 
@@ -109,7 +108,7 @@ def request_decryption_authorizations(escrow_dependencies: dict, key_storage_poo
         key_escrow, keypair_identifiers = escrow_data
         proxy = get_escrow_proxy(escrow=key_escrow, key_storage_pool=key_storage_pool)
         result = proxy.request_decryption_authorization(
-            keypair_identifiers=[keypair_identifiers], request_message=request_message
+            keypair_identifiers=keypair_identifiers, request_message=request_message
         )
         request_authorization_result[escrow_id] = result
 

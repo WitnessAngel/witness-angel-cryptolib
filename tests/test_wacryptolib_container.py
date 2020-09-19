@@ -29,6 +29,9 @@ from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, gene
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 
 
+ENFORCED_UID1 = UUID('0e8e861e-f0f7-e54b-18ea-34798d5daaaa')
+ENFORCED_UID2 = UUID('65dbbe4f-0bd5-4083-a274-3c76efeebbbb')
+
 VOID_CONTAINER_CONF = dict(
     data_encryption_strata=[]  # Authorized, even though it leads to unencrypted data...
 )
@@ -99,7 +102,9 @@ COMPLEX_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[
                 dict(
-                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
+                    key_encryption_algo="RSA_OAEP",
+                    key_escrow=LOCAL_ESCROW_MARKER,
+                    keychain_uid=ENFORCED_UID1,
                 )
             ],
             data_signatures=[
@@ -130,6 +135,7 @@ COMPLEX_CONTAINER_CONF = dict(
                     message_prehash_algo="SHA512",
                     signature_algo="ECC_DSS",
                     signature_escrow=LOCAL_ESCROW_MARKER,
+                    keychain_uid=ENFORCED_UID2
                 ),
             ],
         ),
@@ -139,14 +145,16 @@ COMPLEX_CONTAINER_CONF = dict(
 COMPLEX_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: \
     {'encryption': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
                                                    [{'key_type': 'RSA_OAEP',
-                                                     'keychain_uid': keychain_uid}])},
+                                                     'keychain_uid': keychain_uid},
+                                                    {'key_type': 'RSA_OAEP',
+                                                     'keychain_uid': ENFORCED_UID1}])},
      'signature': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
                                                   [{'key_type': 'DSA_DSS',
                                                     'keychain_uid': keychain_uid},
                                                    {'key_type': 'RSA_PSS',
                                                     'keychain_uid': keychain_uid},
                                                    {'key_type': 'ECC_DSS',
-                                                    'keychain_uid': keychain_uid}])}}
+                                                    'keychain_uid': ENFORCED_UID2}])}}
 
 SIMPLE_SHAMIR_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -179,6 +187,7 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
                         dict(
                             share_encryption_algo="RSA_OAEP",
                             share_escrow=LOCAL_ESCROW_MARKER,
+                            keychain_uid=ENFORCED_UID1,
                         ),
                     ],
                 ),
@@ -197,7 +206,9 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
 SIMPLE_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: \
     {'encryption': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
                                                    [{'key_type': 'RSA_OAEP',
-                                                     'keychain_uid': keychain_uid}])},
+                                                     'keychain_uid': keychain_uid},
+                                                    {'key_type': 'RSA_OAEP',
+                                                     'keychain_uid': ENFORCED_UID1}])},
      'signature': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
                                                   [{'key_type': 'DSA_DSS',
                                                     'keychain_uid': keychain_uid}])}}
@@ -250,6 +261,7 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
                         dict(
                             share_encryption_algo="RSA_OAEP",
                             share_escrow=LOCAL_ESCROW_MARKER,
+                            keychain_uid=ENFORCED_UID2,
                         ),
                     ],
                 )
@@ -259,6 +271,7 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
                     message_prehash_algo="SHA3_256",
                     signature_algo="RSA_PSS",
                     signature_escrow=LOCAL_ESCROW_MARKER,
+                    keychain_uid=ENFORCED_UID1
                 ),
                 dict(
                     message_prehash_algo="SHA512",
@@ -273,12 +286,14 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
 COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: \
     {'encryption': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
                                                    [{'key_type': 'RSA_OAEP',
-                                                     'keychain_uid': keychain_uid}])},
+                                                     'keychain_uid': keychain_uid},
+                                                    {'key_type': 'RSA_OAEP',
+                                                    'keychain_uid': ENFORCED_UID2}])},
      'signature': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
                                                   [{'key_type': 'DSA_DSS',
                                                     'keychain_uid': keychain_uid},
                                                    {'key_type': 'RSA_PSS',
-                                                    'keychain_uid': keychain_uid},
+                                                    'keychain_uid': ENFORCED_UID1},
                                                    {'key_type': 'ECC_DSS',
                                                     'keychain_uid': keychain_uid}])}}
 
@@ -290,7 +305,7 @@ COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: \
             (SIMPLE_CONTAINER_CONF, SIMPLE_CONTAINER_ESCROW_DEPENDENCIES),
             (COMPLEX_CONTAINER_CONF, COMPLEX_CONTAINER_ESCROW_DEPENDENCIES)]
 )
-def test_container_encryption_and_decryption(container_conf, escrow_dependencies_builder):
+def test_standard_container_encryption_and_decryption(container_conf, escrow_dependencies_builder):
     data = b"abc"  # get_random_bytes(random.randint(1, 1000))
 
     keychain_uid = random.choice(
@@ -353,7 +368,6 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf, escro
 
 
     escrow_dependencies = gather_escrow_dependencies(containers=[container])
-    pprint(escrow_dependencies)
     assert escrow_dependencies == escrow_dependencies_builder(container["keychain_uid"])
 
     assert isinstance(container["data_ciphertext"], bytes)
@@ -374,6 +388,7 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf, escro
     )
 
     # 1 share is deleted
+
     index = random.randrange(start=1, stop=len(key_ciphertext_shares["shares"]))
     del key_ciphertext_shares["shares"][index]
 

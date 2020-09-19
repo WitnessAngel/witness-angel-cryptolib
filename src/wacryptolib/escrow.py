@@ -5,7 +5,8 @@ from typing import Optional
 from uuid import UUID
 
 from wacryptolib.encryption import _decrypt_via_rsa_oaep
-from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationPendingError, AuthorizationRejectedError
+from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationPendingError, AuthorizationRejectedError, \
+    SignatureCreationError, DecryptionError, KeyLoadingError
 from wacryptolib.key_generation import (
     generate_asymmetric_keypair,
     load_asymmetric_key_from_pem_bytestring,
@@ -126,9 +127,9 @@ class EscrowApi:
                     key_pem=private_key_pem, key_type=key_type, passphrase=passphrase
                 )
                 return key_obj
-            except (ValueError, IndexError, TypeError):  # FIXME use custom exception class!!
+            except KeyLoadingError:
                 pass
-        raise ValueError("Could not decrypt private key of type %s (passphrases provided: %d)" % (key_type, len(passphrases)))  # FIXME use custom exception
+        raise DecryptionError("Could not decrypt private key of type %s (passphrases provided: %d)" % (key_type, len(passphrases)))
 
     def request_decryption_authorization(
         self, keypair_identifiers: list, request_message: str, passphrases: Optional[list]=None
@@ -188,7 +189,7 @@ class EscrowApi:
                                                               key_type=key_type,
                                                               passphrases=passphrases)
                 assert res, repr(res)
-            except ValueError:
+            except DecryptionError:
                 missing_passphrase.append(keypair_identifier)
                 continue
 

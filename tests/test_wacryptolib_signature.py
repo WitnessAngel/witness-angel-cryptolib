@@ -3,6 +3,7 @@ from datetime import datetime
 import pytest
 
 import wacryptolib
+from wacryptolib.exceptions import SignatureVerificationError
 
 
 def _common_signature_checks(keypair, message, signature, signature_algo):
@@ -19,7 +20,7 @@ def _common_signature_checks(keypair, message, signature, signature_algo):
         signature_algo=signature_algo,
     )
 
-    with pytest.raises(ValueError, match="signature"):
+    with pytest.raises(SignatureVerificationError, match="signature"):
         wacryptolib.signature.verify_message_signature(
             key=keypair["public_key"],
             message=message + b"X",
@@ -29,7 +30,7 @@ def _common_signature_checks(keypair, message, signature, signature_algo):
 
     signature_corrupted = signature.copy()
     signature_corrupted["digest"] += b"x"
-    with pytest.raises(ValueError, match="signature"):
+    with pytest.raises(SignatureVerificationError, match="signature"):
         wacryptolib.signature.verify_message_signature(
             key=keypair["public_key"],
             message=message,
@@ -39,7 +40,7 @@ def _common_signature_checks(keypair, message, signature, signature_algo):
 
     signature_corrupted = signature.copy()
     signature_corrupted["timestamp_utc"] += 1
-    with pytest.raises(ValueError, match="signature"):
+    with pytest.raises(SignatureVerificationError, match="signature"):
         wacryptolib.signature.verify_message_signature(
             key=keypair["public_key"],
             message=message,

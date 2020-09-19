@@ -5,6 +5,8 @@ import unicodedata
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Random import get_random_bytes
 
+from wacryptolib.exceptions import KeyLoadingError
+
 logger = logging.getLogger(__name__)
 
 
@@ -93,8 +95,10 @@ def load_asymmetric_key_from_pem_bytestring(
     if key_type not in SUPPORTED_ASYMMETRIC_KEY_TYPES:
         raise ValueError("Unknown key type %s" % key_pem)
     key_import_function = ASYMMETRIC_KEY_TYPES_REGISTRY[key_type]["pem_import_function"]
-    return key_import_function(key_pem, passphrase=passphrase)
-
+    try:
+        return key_import_function(key_pem, passphrase=passphrase)
+    except (ValueError, IndexError, TypeError) as exc:
+        raise KeyLoadingError("Failed loading %s key from pem bytestring %s passphrase (%s)" % (key_type, "with" if passphrase else "without", exc)) from exc
 
 def _generate_rsa_keypair_as_objects(key_length_bits: int) -> dict:
     """Generate a RSA (public_key, private_key) pair.

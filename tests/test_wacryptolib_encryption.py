@@ -7,6 +7,7 @@ from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 
 import wacryptolib
+from wacryptolib.exceptions import DecryptionError, EncryptionError
 from wacryptolib.key_generation import SUPPORTED_SYMMETRIC_KEY_ALGOS
 
 
@@ -38,12 +39,9 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
     def _check_decryption_fails(new_cipherdict):
         try:
             decrypted_content_bad = decryption_func(cipherdict=new_cipherdict)
-            assert decrypted_content_bad != initial_content
-        except ValueError as exc:
-            msg = str(exc).lower()
-            assert (
-                "mac" in msg or "padded" in msg or "padding" in msg or "length" in msg
-            )
+            assert decrypted_content_bad != initial_content  # Decryption weirdly succeeded but gave bad content
+        except DecryptionError as exc:
+            pass  # Proper failure
 
     for _ in range(5):
 
@@ -108,12 +106,12 @@ def test_symmetric_encryption_and_decryption_for_algo(encryption_algo):
 
     key_too_short = get_random_bytes(16)
 
-    with pytest.raises(ValueError, match="symmetric key length"):
+    with pytest.raises(EncryptionError, match="symmetric key length"):
         wacryptolib.encryption.encrypt_bytestring(
             key=key_too_short, plaintext=binary_content, encryption_algo=encryption_algo
         )
 
-    with pytest.raises(ValueError, match="symmetric key length"):
+    with pytest.raises(DecryptionError, match="symmetric key length"):
         wacryptolib.encryption.decrypt_bytestring(
             key=key_too_short, cipherdict=cipherdict, encryption_algo=encryption_algo
         )
@@ -154,14 +152,14 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
     private_key_too_short = RSA.generate(1024)
     public_key_too_short = private_key_too_short.publickey()
 
-    with pytest.raises(ValueError, match="asymmetric key length"):
+    with pytest.raises(EncryptionError, match="asymmetric key length"):
         wacryptolib.encryption.encrypt_bytestring(
             key=public_key_too_short,
             plaintext=binary_content,
             encryption_algo=encryption_algo,
         )
 
-    with pytest.raises(ValueError, match="asymmetric key length"):
+    with pytest.raises(DecryptionError, match="asymmetric key length"):
         wacryptolib.encryption.decrypt_bytestring(
             key=private_key_too_short,
             cipherdict=cipherdict,

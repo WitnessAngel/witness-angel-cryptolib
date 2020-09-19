@@ -6,6 +6,7 @@ from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import pad, unpad
 
+from wacryptolib.exceptions import EncryptionError, DecryptionError
 from wacryptolib.key_generation import (
     _check_symmetric_key_length_bytes,
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
@@ -36,18 +37,24 @@ def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key) -> dict:
     assert isinstance(plaintext, bytes), repr(plaintext)
     encryption_type_conf = _get_encryption_type_conf(encryption_algo=encryption_algo)
     encryption_function = encryption_type_conf["encryption_function"]
-    cipherdict = encryption_function(key=key, plaintext=plaintext)
+    try:
+        cipherdict = encryption_function(key=key, plaintext=plaintext)
+    except ValueError as exc:
+        raise EncryptionError("Failed %s encryption (%s)" % (encryption_algo, exc)) from exc
     return cipherdict
 
 
-def decrypt_bytestring(cipherdict: dict, *, encryption_algo: str, key) -> bytes:
+def decrypt_bytestring(cipherdict: dict, *, encryption_algo: str, key) -> bytes:  # Fixme rename encryption_algo to decryption_algo? Or normalize?
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
     :return: dictionary with encryption data."""
     encryption_type_conf = _get_encryption_type_conf(encryption_algo)
     decryption_function = encryption_type_conf["decryption_function"]
-    plaintext = decryption_function(key=key, cipherdict=cipherdict)
+    try:
+        plaintext = decryption_function(key=key, cipherdict=cipherdict)
+    except ValueError as exc:
+        raise DecryptionError("Failed %s decryption (%s)" % (encryption_algo, exc)) from exc
     return plaintext
 
 

@@ -4,6 +4,7 @@ from Crypto.PublicKey import RSA, ECC, DSA
 
 import wacryptolib
 from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS
+from wacryptolib.exceptions import KeyLoadingError
 from wacryptolib.key_generation import (
     load_asymmetric_key_from_pem_bytestring,
     SUPPORTED_ASYMMETRIC_KEY_TYPES,
@@ -161,14 +162,14 @@ def test_generate_and_load_passphrase_protected_asymmetric_key():
 
             error_matcher = "key format is not supported|Invalid DER encoding"
 
-            with pytest.raises(ValueError, match=error_matcher):
+            with pytest.raises(KeyLoadingError, match=error_matcher):
                 load_asymmetric_key_from_pem_bytestring(
                     key_pem=keypair["private_key"],
                     key_type=key_type,
                     passphrase=b"wrong passphrase",
                 )
 
-            with pytest.raises(ValueError, match=error_matcher):
+            with pytest.raises(KeyLoadingError, match=error_matcher):
                 load_asymmetric_key_from_pem_bytestring(
                     key_pem=keypair["private_key"],
                     key_type=key_type,

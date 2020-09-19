@@ -36,3 +36,25 @@ class AuthorizationPendingError(FunctionalError):
 
 class AuthorizationRejectedError(FunctionalError):
     pass
+
+# ---
+
+class CryptographyError(FunctionalError):
+    pass
+
+class EncryptionError(CryptographyError):
+    pass
+
+class DecryptionError(CryptographyError):
+    pass
+
+class SignatureCreationError(CryptographyError):
+    pass
+
+class SignatureVerificationError(CryptographyError):
+    pass
+
+class KeyLoadingError(CryptographyError):
+    pass  # Used e.g. when decrypting a private key with a passphrase fails
+
+# TODO add ValidationError class, and/or WorkflowError?

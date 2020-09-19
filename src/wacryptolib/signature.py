@@ -6,6 +6,8 @@ import Crypto.Hash.SHA512
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Signature import pss, DSS
 
+from wacryptolib.exceptions import SignatureCreationError, SignatureVerificationError
+
 KNOWN_KEY_TYPES = Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey]
 SIGNATURE_HASHER = Crypto.Hash.SHA512
 
@@ -30,7 +32,10 @@ def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_TYPES) -
             % (type(key), signature_algo)
         )
     signature_function = signature_conf["signature_function"]
-    signature = signature_function(key=key, message=message)
+    try:
+        signature = signature_function(key=key, message=message)
+    except ValueError as exc:
+        raise SignatureCreationError("Failed %s signature creation (%s)" % (signature_algo, exc)) from exc
     return signature
 
 
@@ -95,7 +100,11 @@ def verify_message_signature(
     hash_payload = _compute_timestamped_hash(
         message=message, timestamp_utc=signature["timestamp_utc"]
     )
-    verifier.verify(hash_payload, signature["digest"])
+
+    try:
+        verifier.verify(hash_payload, signature["digest"])
+    except ValueError as exc:
+        raise SignatureVerificationError("Failed %s signature verification (%s)" % (signature_algo, exc)) from exc
 
 
 def _get_utc_timestamp() -> int:

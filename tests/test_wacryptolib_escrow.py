@@ -13,7 +13,7 @@ from wacryptolib.escrow import (
 )
 from wacryptolib.key_generation import load_asymmetric_key_from_pem_bytestring, SUPPORTED_ASYMMETRIC_KEY_TYPES, \
     generate_asymmetric_keypair
-from wacryptolib.exceptions import KeyDoesNotExist
+from wacryptolib.exceptions import KeyDoesNotExist, SignatureVerificationError, DecryptionError
 from wacryptolib.key_storage import DummyKeyStorage
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import generate_uuid0
@@ -99,7 +99,7 @@ def test_escrow_api_workflow():
         signature_algo="DSA_DSS",
     )
     signature["digest"] += b"xyz"
-    with pytest.raises(ValueError, match="not authentic"):
+    with pytest.raises(SignatureVerificationError, match="Failed.*verification"):
         verify_message_signature(
             message=secret,
             signature=signature,
@@ -194,14 +194,14 @@ def test_escrow_api_workflow():
         )
     cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key_rsa_oaep2)
 
-    with pytest.raises(ValueError, match="not decrypt"):
+    with pytest.raises(DecryptionError, match="not decrypt"):
         escrow_api.decrypt_with_private_key(
             keychain_uid=keychain_uid_passphrased,
             encryption_algo="RSA_OAEP",
             cipherdict=cipherdict,
         )
 
-    with pytest.raises(ValueError, match="not decrypt"):
+    with pytest.raises(DecryptionError, match="not decrypt"):
         escrow_api.decrypt_with_private_key(
             keychain_uid=keychain_uid_passphrased,
             encryption_algo="RSA_OAEP",

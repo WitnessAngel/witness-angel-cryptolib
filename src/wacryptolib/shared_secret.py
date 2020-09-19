@@ -22,7 +22,9 @@ def split_bytestring_as_shamir_shares(
 
         :return: list of full bytestring shares"""
 
-    assert threshold_count < shares_count, (threshold_count, shares_count)
+    if not (threshold_count < shares_count):
+        raise ValueError("Threshold count %s must be strictly lower than shared count %s" %
+                         (threshold_count, shares_count))
 
     all_chunk_shares = []  # List of lists of related 16-bytes shares
 
@@ -42,7 +44,7 @@ def split_bytestring_as_shamir_shares(
     for idx in range(shares_count):
         assert all(
             chunk_share[idx][0] == idx + 1 for chunk_share in all_chunk_shares
-        )  # Share indexes start at 1
+        )  # By construction, share indices start at 1
         idx_shares = (chunk_share[idx][1] for chunk_share in all_chunk_shares)
         complete_share = b"".join(idx_shares)
         full_shares.append((idx + 1, complete_share))
@@ -50,7 +52,7 @@ def split_bytestring_as_shamir_shares(
     return full_shares
 
 
-def recombine_secret_from_samir_shares(shares: list) -> bytes:
+def recombine_secret_from_shamir_shares(shares: list) -> bytes:
     """Permits to reconstruct a key which has its secret shared
     into `shares_count` shares thanks to a list of `shares`
 
@@ -60,18 +62,18 @@ def recombine_secret_from_samir_shares(shares: list) -> bytes:
 
     shares_per_secret = []  # List of lists of same-index 16-bytes shares
 
-    assert len(set(share[0] for share in shares)) == len(
+    if len(set(share[0] for share in shares)) != len(
         shares
-    )  # All shares have unique idx
+    ):
+        raise ValueError("Shamir shares must have unique indices")
 
     for share in shares:
         idx, secret = share
         chunks = split_as_chunks(secret, chunk_size=16, must_pad=False)
         shares_per_secret.append([(idx, chunk) for chunk in chunks])
 
-    assert (
-        len(set(len(chunks) for chunks in shares_per_secret)) == 1
-    )  # Same-length lists
+    if len(set(len(chunks) for chunks in shares_per_secret)) != 1:
+        raise ValueError("Shamir share chunks must have the same length")
 
     all_chunk_shares = list(zip(*shares_per_secret))
 

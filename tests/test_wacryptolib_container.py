@@ -23,6 +23,7 @@ from wacryptolib.container import (
     request_decryption_authorizations, CONTAINER_SUFFIX, OFFLOADED_DATA_SUFFIX
 )
 from wacryptolib.escrow import EscrowApi, generate_asymmetric_keypair_for_storage, generate_free_keypair_for_least_provisioned_key_type
+from wacryptolib.exceptions import DecryptionError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, FilesystemKeyStoragePool, DummyKeyStoragePool
@@ -412,7 +413,7 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf, escro
 
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(DecryptionError, match="share.*missing"):
         decrypt_data_from_container(container=container)
 
     result_metadata = extract_metadata_from_container(container=container)
@@ -516,26 +517,26 @@ def test_passphrase_mapping_during_decryption():
 
     # FIXME we must TEST that keychain_uid_escrow is necessary for decryption for example by deleting it before a decrypt()
 
-    with pytest.raises(RuntimeError, match="2 valid .* missing for reconstitution"):
+    with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
         decrypt_data_from_container(container, key_storage_pool=key_storage_pool)
 
-    with pytest.raises(RuntimeError, match="2 valid .* missing for reconstitution"):
+    with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
         decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
                                     passphrase_mapper={local_escrow_id: all_passphrases})  # Doesn't help share escrows
 
-    with pytest.raises(RuntimeError, match="1 valid .* missing for reconstitution"):
+    with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
         decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
                                     passphrase_mapper={share_escrow1_id: all_passphrases})  # Unblocks 1 share escrow
 
-    with pytest.raises(RuntimeError, match="1 valid .* missing for reconstitution"):
+    with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
         decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
                                     passphrase_mapper={share_escrow1_id: all_passphrases, share_escrow2_id: [passphrase3]})  # No changes
 
-    with pytest.raises(ValueError, match="Could not decrypt private key"):
+    with pytest.raises(DecryptionError, match="Could not decrypt private key"):
         decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
                                     passphrase_mapper={share_escrow1_id: all_passphrases, share_escrow3_id: [passphrase3]})
 
-    with pytest.raises(ValueError, match="Could not decrypt private key"):
+    with pytest.raises(DecryptionError, match="Could not decrypt private key"):
         decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
                                     passphrase_mapper={local_escrow_id: ["qsdqsd"], share_escrow1_id: all_passphrases, share_escrow3_id: [passphrase3]})
 

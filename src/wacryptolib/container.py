@@ -12,6 +12,7 @@ from uuid import UUID
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
 from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi
+from wacryptolib.exceptions import DecryptionError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import (
     generate_symmetric_key,
@@ -20,7 +21,7 @@ from wacryptolib.key_generation import (
 from wacryptolib.key_storage import KeyStorageBase, DummyKeyStoragePool, KeyStoragePoolBase
 from wacryptolib.shared_secret import (
     split_bytestring_as_shamir_shares,
-    recombine_secret_from_samir_shares,
+    recombine_secret_from_shamir_shares,
 )
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import (
@@ -516,7 +517,7 @@ class ContainerReader(ContainerBase):
             )
 
             logger.debug("Recombining shared-secret shares")
-            symmetric_key_plaintext = recombine_secret_from_samir_shares(shares=shares)
+            symmetric_key_plaintext = recombine_secret_from_shamir_shares(shares=shares)
 
             return symmetric_key_plaintext
 
@@ -592,10 +593,6 @@ class ContainerReader(ContainerBase):
         decrypted_shares = []
         decryption_errors = []
 
-        #print("CALLING _decrypt_symmetric_key_share with data:")
-        #pprint(symmetric_key_cipherdict["shares"])
-        #pprint(key_shared_secret_escrows)
-
         assert len(symmetric_key_cipherdict["shares"]) <= len(key_shared_secret_escrows)  # During tests we erase some container shares...
 
         for share_idx, share_conf in enumerate(key_shared_secret_escrows):
@@ -608,7 +605,7 @@ class ContainerReader(ContainerBase):
                 try:
                     encrypted_share = symmetric_key_cipherdict["shares"][share_idx]
                 except IndexError:
-                    raise ValueError("Missing share at index %s" % share_idx)
+                    raise ValueError("Missing share at index %s" % share_idx) from None
 
                 share_plaintext = self._decrypt_cipherdict_with_asymmetric_cipher(
                     encryption_algo=share_encryption_algo,
@@ -622,7 +619,7 @@ class ContainerReader(ContainerBase):
                 )
                 decrypted_shares.append(share)
 
-            # FIXME use custom exceptions here
+            # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
             except Exception as exc:  # If actual escrow doesn't work, we can go to next one
                 decryption_errors.append(exc)
                 logger.error("Error when decrypting share of %s: %r" % (share_escrow, exc), exc_info=True)
@@ -632,7 +629,7 @@ class ContainerReader(ContainerBase):
                 break
 
         if len(decrypted_shares) < key_shared_secret_threshold:
-            raise RuntimeError("%s valid share(s) missing for reconstitution (errors: %r)" %
+            raise DecryptionError("%s valid share(s) missing for reconstitution of symmetric key (errors: %r)" %
                                (key_shared_secret_threshold - len(decrypted_shares), decryption_errors))
         return decrypted_shares
 

@@ -362,11 +362,11 @@ class FilesystemKeyStorage(KeyStorageBase):
 
             #print("MATCH FOUND", public_key_pem_filename, match.groups(), self.PUBLIC_KEY_FILENAME_REGEX)
 
-            keychain_uid = match.group("keychain_uid")
+            keychain_uid_str = match.group("keychain_uid")
             key_type = match.group("key_type")
 
             try:
-                keychain_uid = uuid.UUID(keychain_uid)
+                keychain_uid = uuid.UUID(keychain_uid_str)
             except ValueError:
                 logger.warning("Skipping PEM file with abnormal UUID %r when listing public keys", public_key_pem_filename)
                 continue
@@ -374,7 +374,7 @@ class FilesystemKeyStorage(KeyStorageBase):
             private_key_pem_filename = public_key_pem_filename.replace(self._public_key_suffix, self._private_key_suffix)
             private_key_present = os.path.exists(join(self._keys_dir, private_key_pem_filename))
 
-            key_information = dict(keychain_uid=keychain_uid,  # FIXME turn this into UUID object, like everywhere else!
+            key_information = dict(keychain_uid=keychain_uid,
                                    key_type=key_type,
                                    private_key_present=private_key_present)
             key_information_list.append(key_information)

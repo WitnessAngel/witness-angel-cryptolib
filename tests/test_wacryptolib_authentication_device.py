@@ -30,8 +30,9 @@ def test_list_available_authentication_devices():  # FIXME add mockups to simula
 
         assert isinstance(authentication_device["is_initialized"], bool)
 
-        assert isinstance(authentication_device["user"], str)  # Might be empty
-        assert isinstance(authentication_device["device_uid"], (type(None), UUID))  # Might be empty
+        if authentication_device["metadata"]:
+            assert isinstance(authentication_device["metadata"]["user"], str)  # Might be empty
+            assert isinstance(authentication_device["metadata"]["device_uid"], (type(None), UUID))  # Might be empty
 
 
 def test_authentication_device_initialization_and_checkers(tmp_path):
@@ -43,6 +44,7 @@ def test_authentication_device_initialization_and_checkers(tmp_path):
         "size": 31000166400,
         "format": "fat32",
         "is_initialized": False,
+        "metadata": None,
     }
     authentication_device_original = authentication_device.copy()
 
@@ -59,8 +61,8 @@ def test_authentication_device_initialization_and_checkers(tmp_path):
 
     # UPDATED fields
     assert authentication_device["is_initialized"] == True
-    assert authentication_device["user"] == "Michél Dûpont"
-    assert isinstance(authentication_device["device_uid"], UUID)
+    assert authentication_device["metadata"]["user"] == "Michél Dûpont"
+    assert isinstance(authentication_device["metadata"]["device_uid"], UUID)
 
     # REAL metadata file content
     metadata = load_authentication_device_metadata(authentication_device)
@@ -69,8 +71,7 @@ def test_authentication_device_initialization_and_checkers(tmp_path):
 
     # We ensure the code doesn't do any weird shortcut
     authentication_device["is_initialized"] = False
-    del authentication_device["user"]
-    del authentication_device["device_uid"]
+    authentication_device["metadata"] = None  # Revert to original
     assert authentication_device == authentication_device_original
     metadata = load_authentication_device_metadata(authentication_device)
     assert authentication_device == authentication_device_original  # Untouched

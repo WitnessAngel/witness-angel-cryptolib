@@ -652,10 +652,6 @@ class ContainerReader(ContainerBase):
         public_key_pem = encryption_proxy.fetch_public_key(
             keychain_uid=keychain_uid, key_type=signature_algo, must_exist=True
         )
-
-        if not public_key_pem:
-            raise RuntimeError("Missing key %s/%s for signature verification" % (keychain_uid, signature_algo))
-
         public_key = load_asymmetric_key_from_pem_bytestring(
             key_pem=public_key_pem, key_type=signature_algo
         )

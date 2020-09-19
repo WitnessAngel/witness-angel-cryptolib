@@ -21,8 +21,7 @@ def list_available_authentication_devices():
         - "format" (str): lowercase character string for filesystem type, like "ext2", "fat32" ...
         - "size" (int): filesystem size in bytes
         - "is_initialized" (bool): if the device has been initialized with metadata
-        - "user" (str): empty if device not initialized, otherwise value of “user” from metadata
-        - "device_uid" (None or UUID): None if device not initialized, otherwise value of “device_uid” from metadata
+        - "metadata" (dict): None if device is not initialized, else dict with at least "user" (str) and "device_uid" (UUID) attributes.
 
     The linux environment has an additional field which is 'partition' (str) e.g. "/dev/sda1".
     """
@@ -35,13 +34,10 @@ def list_available_authentication_devices():
         raise RuntimeError("%s OS not supported" % sys_platform)
 
     for authentication_device in authentication_devices:
+        metadata = None
         if authentication_device["is_initialized"]:
-            # FIXME this makes a double metadata file reading, we should factorize it
             metadata = load_authentication_device_metadata(authentication_device)
-            authentication_device.update(metadata)
-        else:
-            authentication_device["user"] = ""
-            authentication_device["device_uid"] = None
+        authentication_device["metadata"] = metadata
 
     return authentication_devices
 
@@ -58,7 +54,7 @@ def initialize_authentication_device(authentication_device: dict, user: str):
     On success, updates 'authentication_device' to mark it as initialized, and to contain device metadata.
     """
 
-    if authentication_device["is_initialized"]:
+    if is_authentication_device_initialized(authentication_device):
         raise RuntimeError("%s key-device is already initialized" % authentication_device["path"])
 
     if sys_platform == "win32":  # All Windows versions
@@ -69,23 +65,23 @@ def initialize_authentication_device(authentication_device: dict, user: str):
         raise RuntimeError("%s OS not supported" % sys_platform)
 
     authentication_device["is_initialized"] = True
-    authentication_device.update(metadata)
+    authentication_device["metadata"] = metadata
 
 
-# TODO add flags to report errors if json or RSA keys are missing/corrupted?
+# TODO go farther, and add flags to report errors if json or RSA keys are missing/corrupted?
 def is_authentication_device_initialized(authentication_device: dict):
     """
-    Check if a key device appears initialized (by ignoring, of course, its "is_initialized" field).
+    Check if a key device seems initialized (by ignoring, of course, its "is_initialized" field).
 
     Doesn't actually load the device metadata.
-    Dooesn't modify `authentication_device` content.
+    Dooesn't modify `authentication_device` dict content.
     
     :param authentication_device: (dict) Key device information.
     
     :return: (bool) True if and only if the key device is initialized.
     """
     metadata_file = _get_metadata_file_path(authentication_device=authentication_device)
-    return metadata_file.exists()
+    return metadata_file.is_file()
 
 
 def load_authentication_device_metadata(authentication_device: dict) -> dict:
@@ -106,7 +102,7 @@ def load_authentication_device_metadata(authentication_device: dict) -> dict:
 def _check_authentication_device_metadata(metadata: dict):
     if not (
         isinstance(metadata, dict) and metadata.get("user") and metadata.get("device_uid")
-    ):  # Lightweight checkup for now
+    ):  # Only lightweight checkup for now
         raise ValueError("Abnormal key device metadata: %s" % str(metadata))
 
 

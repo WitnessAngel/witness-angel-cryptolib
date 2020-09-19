@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from wacryptolib.container import ContainerStorage
 
 
@@ -17,3 +19,9 @@ class FakeTestContainerStorage(ContainerStorage):
 
     def _decrypt_data_from_container(self, container):
         return container["data_ciphertext"]
+
+
+class WildcardUuid(object):
+    """Dummy UUID wildcard to compare data trees containing any UUID"""
+    def __eq__(self, other):
+        return isinstance(other, UUID)

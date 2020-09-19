@@ -4,7 +4,9 @@ import random
 import textwrap
 import uuid
 from pathlib import Path
+from pprint import pprint
 from unittest.mock import patch
+from uuid import UUID
 
 import pytest
 
@@ -26,6 +28,34 @@ from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, Files
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, generate_uuid0
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 
+
+VOID_CONTAINER_CONF = dict(
+    data_encryption_strata=[]  # Authorized, even though it leads to unencrypted data...
+)
+
+VOID_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {'encryption': {}, 'signature': {}}
+
+SIGNATURELESS_CONTAINER_CONF = dict(
+    data_encryption_strata=[
+        dict(
+            data_encryption_algo="AES_EAX",
+            key_encryption_strata=[
+                dict(
+                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
+                )
+            ],
+            data_signatures=[],
+        )
+    ]
+)
+
+
+SIGNATURELESS_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: \
+    {'encryption': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
+                                               [{'key_type': 'RSA_OAEP',
+                                                 'keychain_uid': keychain_uid}])},
+     'signature': {}}
+
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
         dict(
@@ -45,6 +75,14 @@ SIMPLE_CONTAINER_CONF = dict(
         )
     ]
 )
+
+SIMPLE_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: \
+    {'encryption': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
+                                                   [{'key_type': 'RSA_OAEP',
+                                                     'keychain_uid': keychain_uid}])},
+     'signature': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
+                                                  [{'key_type': 'DSA_DSS',
+                                                    'keychain_uid': keychain_uid}])}}
 
 COMPLEX_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -98,6 +136,18 @@ COMPLEX_CONTAINER_CONF = dict(
     ]
 )
 
+COMPLEX_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: \
+    {'encryption': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
+                                                   [{'key_type': 'RSA_OAEP',
+                                                     'keychain_uid': keychain_uid}])},
+     'signature': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
+                                                  [{'key_type': 'DSA_DSS',
+                                                    'keychain_uid': keychain_uid},
+                                                   {'key_type': 'RSA_PSS',
+                                                    'keychain_uid': keychain_uid},
+                                                   {'key_type': 'ECC_DSS',
+                                                    'keychain_uid': keychain_uid}])}}
+
 SIMPLE_SHAMIR_CONTAINER_CONF = dict(
     data_encryption_strata=[
         dict(
@@ -143,6 +193,14 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
         )
     ]
 )
+
+SIMPLE_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: \
+    {'encryption': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
+                                                   [{'key_type': 'RSA_OAEP',
+                                                     'keychain_uid': keychain_uid}])},
+     'signature': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
+                                                  [{'key_type': 'DSA_DSS',
+                                                    'keychain_uid': keychain_uid}])}}
 
 COMPLEX_SHAMIR_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -212,11 +270,27 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
     ]
 )
 
+COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: \
+    {'encryption': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
+                                                   [{'key_type': 'RSA_OAEP',
+                                                     'keychain_uid': keychain_uid}])},
+     'signature': {"[('escrow_type', 'local')]": ({'escrow_type': 'local'},
+                                                  [{'key_type': 'DSA_DSS',
+                                                    'keychain_uid': keychain_uid},
+                                                   {'key_type': 'RSA_PSS',
+                                                    'keychain_uid': keychain_uid},
+                                                   {'key_type': 'ECC_DSS',
+                                                    'keychain_uid': keychain_uid}])}}
+
 
 @pytest.mark.parametrize(
-    "container_conf", [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF]
+    "container_conf,escrow_dependencies_builder", [
+            (VOID_CONTAINER_CONF, VOID_CONTAINER_ESCROW_DEPENDENCIES),
+            (SIGNATURELESS_CONTAINER_CONF, SIGNATURELESS_CONTAINER_ESCROW_DEPENDENCIES),
+            (SIMPLE_CONTAINER_CONF, SIMPLE_CONTAINER_ESCROW_DEPENDENCIES),
+            (COMPLEX_CONTAINER_CONF, COMPLEX_CONTAINER_ESCROW_DEPENDENCIES)]
 )
-def test_container_encryption_and_decryption(container_conf):
+def test_container_encryption_and_decryption(container_conf, escrow_dependencies_builder):
     data = b"abc"  # get_random_bytes(random.randint(1, 1000))
 
     keychain_uid = random.choice(
@@ -229,18 +303,16 @@ def test_container_encryption_and_decryption(container_conf):
         data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_container
     )
 
-    escrow_dependencies = gather_escrow_dependencies([container])
-    assert isinstance(escrow_dependencies, dict)
-    assert escrow_dependencies.get("signature") is not None
-    assert escrow_dependencies.get("encryption") is not None
+    assert container["keychain_uid"]
+    if keychain_uid:
+        assert container["keychain_uid"] == keychain_uid
+
+    escrow_dependencies = gather_escrow_dependencies(containers=[container])
+    assert escrow_dependencies == escrow_dependencies_builder(container["keychain_uid"])
 
     request_decryption_authorizations(
         escrow_dependencies=escrow_dependencies, request_message="Decryption needed", key_storage_pool=key_storage_container
     )
-
-    assert container["keychain_uid"]
-    if keychain_uid:
-        assert container["keychain_uid"] == keychain_uid
 
     result_data = decrypt_data_from_container(container=container, key_storage_pool=key_storage_container)
     # pprint.pprint(result, width=120)
@@ -255,10 +327,11 @@ def test_container_encryption_and_decryption(container_conf):
 
 
 @pytest.mark.parametrize(
-    "shamir_container_conf",
-    [SIMPLE_SHAMIR_CONTAINER_CONF, COMPLEX_SHAMIR_CONTAINER_CONF],
+    "shamir_container_conf, escrow_dependencies_builder",
+    [(SIMPLE_SHAMIR_CONTAINER_CONF, SIMPLE_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES),
+     (COMPLEX_SHAMIR_CONTAINER_CONF, COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES)],
 )
-def test_shamir_container_encryption_and_decryption(shamir_container_conf):
+def test_shamir_container_encryption_and_decryption(shamir_container_conf, escrow_dependencies_builder):
     data = b"abc"  # get_random_bytes(random.randint(1, 1000))
 
     keychain_uid = random.choice(
@@ -274,14 +347,14 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf):
         metadata=metadata,
     )
 
-    escrow_dependencies = gather_escrow_dependencies([container])
-    assert isinstance(escrow_dependencies, dict)
-    assert escrow_dependencies.get("signature") is not None
-    assert escrow_dependencies.get("encryption") is not None
-
     assert container["keychain_uid"]
     if keychain_uid:
         assert container["keychain_uid"] == keychain_uid
+
+
+    escrow_dependencies = gather_escrow_dependencies(containers=[container])
+    pprint(escrow_dependencies)
+    assert escrow_dependencies == escrow_dependencies_builder(container["keychain_uid"])
 
     assert isinstance(container["data_ciphertext"], bytes)
 

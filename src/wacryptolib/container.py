@@ -62,7 +62,9 @@ def gather_escrow_dependencies(containers: list) -> dict:
         escrow_id = get_escrow_id(escrow_conf=escrow_conf)
         keypair_identifiers = dict(keychain_uid=keychain_uid, key_type=key_type)
         mapper.setdefault(escrow_id, (escrow_conf, []))
-        mapper[escrow_id][1].append(keypair_identifiers)
+        keypair_identifiers_list = mapper[escrow_id][1]
+        if keypair_identifiers not in keypair_identifiers_list:
+            keypair_identifiers_list.append(keypair_identifiers)
 
     signature_dependencies = {}
     encryption_dependencies = {}

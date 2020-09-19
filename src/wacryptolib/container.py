@@ -5,8 +5,10 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from pprint import pprint
 from typing import Optional, Union, List
 from urllib.parse import urlparse
+from uuid import UUID
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
 from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi
@@ -145,7 +147,7 @@ class ContainerBase:
     def __init__(self, key_storage_pool: KeyStoragePoolBase=None, passphrase_mapper: Optional[dict]=None):
         if not key_storage_pool:
             logger.warning(
-                "No key storage pool provided for %s instance, falling back to DummyKeyStoragePool()",
+                "No key storage pool provided for %s instance, falling back to common DummyKeyStoragePool()",
                 self.__class__.__name__,
             )
             key_storage_pool = DUMMY_KEY_STORAGE_POOL
@@ -277,9 +279,11 @@ class ContainerWriter(ContainerBase):
         key_encryption_algo = conf["key_encryption_algo"]
 
         if key_encryption_algo == SHARED_SECRET_MARKER:
-            escrows = conf["key_shared_secret_escrows"]
-            shares_count = len(escrows)
+            key_shared_secret_escrows = conf["key_shared_secret_escrows"]
+            shares_count = len(key_shared_secret_escrows)
+
             threshold_count = conf["key_shared_secret_threshold"]
+            assert threshold_count <= shares_count
 
             logger.debug(
                 "Generating Shamir shared secret shares (%d needed amongst %d)",
@@ -293,9 +297,10 @@ class ContainerWriter(ContainerBase):
                 threshold_count=threshold_count,
             )
 
-            logger.debug("Secret has been shared into %d escrows", shares_count)
+            logger.debug("Secret has been shared into %d shares", shares_count)
+            assert len(shares) == shares_count
 
-            all_encrypted_shares = self._encrypt_share(
+            all_encrypted_shares = self._encrypt_shares(
                 shares=shares,
                 key_shared_secret_escrows=conf["key_shared_secret_escrows"],
                 keychain_uid=keychain_uid,
@@ -350,47 +355,42 @@ class ContainerWriter(ContainerBase):
         )
         return cipherdict
 
-    def _encrypt_share(
-        self, shares: list, key_shared_secret_escrows: dict, keychain_uid: uuid.UUID
+    def _encrypt_shares(
+        self, shares: list, key_shared_secret_escrows: list, keychain_uid: uuid.UUID
     ) -> list:
         """
         Make a loop through all shares from shared secret algorithm to encrypt each of them.
 
-        :param shares: list of tuples containing a share and its place in the list
-        :param key_shared_secret_escrows: part of configuration tree where every informations about shared secret
-        escrows are
+        :param shares: list of tuples containing an index and its share data
+        :param key_shared_secret_escrows: conf subtree with share escrow information
         :param keychain_uid: uuid for the set of encryption keys used
 
-        :return: dictionary with as key a counter and as value the corresponding encrypted share
+        :return: list of encrypted shares
         """
 
         all_encrypted_shares = []
-        tested_share_counter = 0
 
-        for share in shares:
-            conf_share = key_shared_secret_escrows[tested_share_counter]
+        assert len(shares) == len(key_shared_secret_escrows)
+
+        for shared_idx, share in enumerate(shares):
+
+            assert isinstance(share[1], bytes), repr(share)
+
+            conf_share = key_shared_secret_escrows[shared_idx]
             share_encryption_algo = conf_share["share_encryption_algo"]
             share_escrow = conf_share["share_escrow"]
             keychain_uid_share = conf_share.get("keychain_uid") or keychain_uid
-            tested_share_counter += 1
 
-            try:
-                share_cipherdict = self._apply_asymmetric_encryption(
-                    encryption_algo=share_encryption_algo,
-                    keychain_uid=keychain_uid_share,
-                    symmetric_key_data=share[1],
-                    escrow=share_escrow,
-                )
+            share_cipherdict = self._apply_asymmetric_encryption(
+                encryption_algo=share_encryption_algo,
+                keychain_uid=keychain_uid_share,
+                symmetric_key_data=share[1],
+                escrow=share_escrow,
+            )
 
-                all_encrypted_shares.append((share[0], share_cipherdict))
+            all_encrypted_shares.append((share[0], share_cipherdict))
 
-            except Exception as exc:
-                raise RuntimeError(
-                    "Couldn't encrypt the share n°{} : {}".format(
-                        tested_share_counter, exc
-                    )
-                )
-
+        assert len(shares) == len(key_shared_secret_escrows)
         return all_encrypted_shares
 
     def _generate_signature(
@@ -496,8 +496,8 @@ class ContainerReader(ContainerBase):
         by a asymmetric algorithm.
 
         :param keychain_uid: uuid for the set of encryption keys used
-        :param symmetric_key_cipherdict: dictionary which has data needed to decrypt symmetric key
-        :param conf: dictionary which contain configuration tree
+        :param symmetric_key_cipherdict: dictionary with input ata needed to decrypt symmetric key
+        :param conf: dictionary which contains crypto configuration tree
 
         :return: deciphered symmetric key
         """
@@ -535,7 +535,7 @@ class ContainerReader(ContainerBase):
 
         :param encryption_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
-        :param cipherdict: dictionary which data components needed to decrypt the ciphered data
+        :param cipherdict: dictionary with data components needed to decrypt the ciphered data
         :param escrow: escrow used for encryption (findable in configuration tree)
 
         :return: decypted data as bytes
@@ -586,44 +586,53 @@ class ContainerReader(ContainerBase):
         """
         key_shared_secret_escrows = conf["key_shared_secret_escrows"]
         key_shared_secret_threshold = conf["key_shared_secret_threshold"]
-        valid_share_counter = 0
-        tested_share_counter = 0
-        shares = []
-        errors = []
-        for escrow in key_shared_secret_escrows:  # FIXME this is improper name
-            if valid_share_counter == key_shared_secret_threshold:
-                logger.debug("A sufficient number of share has been decrypted")
-                break
 
-            share_encryption_algo = escrow["share_encryption_algo"]
-            share_escrow = escrow["share_escrow"]
-            keychain_uid_share = escrow.get("keychain_uid") or keychain_uid
+        decrypted_shares = []
+        decryption_errors = []
+
+        print("CALLING _decrypt_symmetric_key_share with data:")
+        pprint(symmetric_key_cipherdict["shares"])
+        pprint(key_shared_secret_escrows)
+
+        assert len(symmetric_key_cipherdict["shares"]) <= len(key_shared_secret_escrows)  # During tests we erase some container shares...
+
+        for share_idx, share_conf in enumerate(key_shared_secret_escrows):
+
+            share_encryption_algo = share_conf["share_encryption_algo"]
+            share_escrow = share_conf["share_escrow"]
+            keychain_uid_share = share_conf.get("keychain_uid") or keychain_uid
 
             try:
-                symmetric_key_plaintext = self._decrypt_cipherdict_with_asymmetric_cipher(
+                try:
+                    encrypted_share = symmetric_key_cipherdict["shares"][share_idx]
+                except IndexError:
+                    raise ValueError("Missing share at index %s" % share_idx)
+
+                share_plaintext = self._decrypt_cipherdict_with_asymmetric_cipher(
                     encryption_algo=share_encryption_algo,
                     keychain_uid=keychain_uid_share,
-                    cipherdict=symmetric_key_cipherdict["shares"][tested_share_counter][
-                        1
-                    ],
+                    cipherdict=encrypted_share[1],
                     escrow=share_escrow,
                 )
                 share = (
-                    symmetric_key_cipherdict["shares"][tested_share_counter][0],
-                    symmetric_key_plaintext,
+                    encrypted_share[0],
+                    share_plaintext,
                 )
-                shares.append(share)
-                valid_share_counter += 1
+                decrypted_shares.append(share)
 
             # FIXME use custom exceptions here
-            except Exception as e:  # If actual escrow doesn't work, we can go to next one
-                errors.append(e)
-                logger.error(e)
-            tested_share_counter += 1
+            except Exception as exc:  # If actual escrow doesn't work, we can go to next one
+                decryption_errors.append(exc)
+                logger.error("Error when decrypting share of %s: %r" % (share_escrow, exc), exc_info=True)
 
-        if valid_share_counter < key_shared_secret_threshold:
-            raise RuntimeError("%s valid share(s) missing for reconstitution" % (key_shared_secret_threshold - valid_share_counter))
-        return shares
+            if len(decrypted_shares) == key_shared_secret_threshold:
+                logger.debug("A sufficient number of shares has been decrypted")
+                break
+
+        if len(decrypted_shares) < key_shared_secret_threshold:
+            raise RuntimeError("%s valid share(s) missing for reconstitution (errors: %r)" %
+                               (key_shared_secret_threshold - len(decrypted_shares), decryption_errors))
+        return decrypted_shares
 
     def _verify_message_signature(
         self, keychain_uid: uuid.UUID, message: bytes, conf: dict

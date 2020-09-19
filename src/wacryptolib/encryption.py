@@ -33,6 +33,7 @@ def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key) -> dict:
     using the provided key (which must be of a compatible type and length).
 
     :return: dictionary with encryption data"""
+    assert isinstance(plaintext, bytes), repr(plaintext)
     encryption_type_conf = _get_encryption_type_conf(encryption_algo=encryption_algo)
     encryption_function = encryption_type_conf["encryption_function"]
     cipherdict = encryption_function(key=key, plaintext=plaintext)

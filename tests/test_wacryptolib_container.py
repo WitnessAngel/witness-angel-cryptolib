@@ -389,8 +389,7 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf, escro
 
     # 1 share is deleted
 
-    index = random.randrange(start=1, stop=len(key_ciphertext_shares["shares"]))
-    del key_ciphertext_shares["shares"][index]
+    del key_ciphertext_shares["shares"][-1]
 
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
 
@@ -399,8 +398,7 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf, escro
 
     # Another share is deleted
 
-    index = random.randrange(start=1, stop=len(key_ciphertext_shares["shares"]))
-    del key_ciphertext_shares["shares"][index]
+    del key_ciphertext_shares["shares"][-1]
 
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
 
@@ -409,8 +407,7 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf, escro
 
     # Another share is deleted and now there aren't enough valid ones to decipher data
 
-    index = random.randrange(start=1, stop=len(key_ciphertext_shares["shares"]))
-    del key_ciphertext_shares["shares"][index]
+    del key_ciphertext_shares["shares"][-1]
 
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
 

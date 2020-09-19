@@ -7,7 +7,7 @@ API Documentation
 
    api/container
    api/escrow
-   api/key_device
+   api/authentication_device
    api/key_generation
    api/key_storage
    api/signature

@@ -126,9 +126,9 @@ def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase):
 
     if escrow_type == LOCAL_ESCROW_MARKER["escrow_type"]:
         return LocalEscrowApi(key_storage_pool.get_local_key_storage())
-    elif escrow_type == "key_device":
-        key_device_uid = escrow["key_device_uid"]
-        key_storage = key_storage_pool.get_imported_key_storage(key_device_uid)
+    elif escrow_type == "authentication_device":
+        authentication_device_uid = escrow["authentication_device_uid"]
+        key_storage = key_storage_pool.get_imported_key_storage(authentication_device_uid)
         return ReadonlyEscrowApi(key_storage)
     elif escrow_type == "jsonrpc":
         return JsonRpcProxy(

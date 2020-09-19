@@ -19,7 +19,8 @@ from wacryptolib.container import (
     extract_metadata_from_container,
     ContainerBase,
     get_encryption_configuration_summary, dump_container_to_filesystem, load_container_from_filesystem,
-    SHARED_SECRET_MARKER, get_escrow_id, gather_escrow_dependencies, get_escrow_proxy, request_decryption_authorizations
+    SHARED_SECRET_MARKER, get_escrow_id, gather_escrow_dependencies, get_escrow_proxy,
+    request_decryption_authorizations, CONTAINER_SUFFIX, OFFLOADED_DATA_SUFFIX
 )
 from wacryptolib.escrow import EscrowApi, generate_asymmetric_keypair_for_storage, generate_free_keypair_for_least_provisioned_key_type
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -600,6 +601,29 @@ def test_container_storage_and_executor(tmp_path, caplog):
         Path("animals.dat.crypt"),
         Path("empty.txt.crypt"),
     ]
+    assert storage._containers_dir.joinpath("animals.dat.crypt.data").is_file()  # By default, DATA OFFLOADING is activated
+    assert storage._containers_dir.joinpath("empty.txt.crypt.data").is_file()
+    assert len(list(storage._containers_dir.iterdir())) == 4  # 2 files per container
+
+    storage = ContainerStorage(
+        encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path, offload_data_ciphertext=False
+    )
+    storage.enqueue_file_for_encryption("newfile.bmp", b"stuffs", metadata=None)
+    storage.wait_for_idle_state()
+    assert len(storage) == 3
+    assert storage.list_container_names(as_sorted=True) == [
+        Path("animals.dat.crypt"),
+        Path("empty.txt.crypt"),
+        Path("newfile.bmp.crypt"),
+    ]
+    assert not list(storage._containers_dir.glob("newfile*data"))  # Offloading is well disabled now
+    assert len(list(storage._containers_dir.iterdir())) == 5
+
+    # We continue test with a randomly configured storage
+    offload_data_ciphertext = random.choice((True, False))
+    storage = ContainerStorage(
+        encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path, offload_data_ciphertext=offload_data_ciphertext
+    )
 
     # Test proper logging of errors occurring in thread pool executor
     assert storage._make_absolute  # Instance method
@@ -607,13 +631,13 @@ def test_container_storage_and_executor(tmp_path, caplog):
     assert "Caught exception" not in caplog.text, caplog.text
     storage.enqueue_file_for_encryption("something.mpg", b"#########", metadata=None)
     storage.wait_for_idle_state()
-    assert len(storage) == 2  # Unchanged
+    assert len(storage) == 3  # Unchanged
     assert "Caught exception" in caplog.text, caplog.text
     del storage._make_absolute
     assert storage._make_absolute  # Back to the method
 
     abs_entries = storage.list_container_names(as_absolute=True)
-    assert len(abs_entries) == 2  # Unchanged
+    assert len(abs_entries) == 3  # Unchanged
     assert all(entry.is_absolute() for entry in abs_entries)
 
     animals_content = storage.decrypt_container_from_storage("animals.dat.crypt")
@@ -622,10 +646,11 @@ def test_container_storage_and_executor(tmp_path, caplog):
     empty_content = storage.decrypt_container_from_storage("empty.txt.crypt")
     assert empty_content == b""
 
-    assert len(storage) == 2
+    assert len(storage) == 3
     os.remove(os.path.join(tmp_path, "animals.dat.crypt"))
+    os.remove(os.path.join(tmp_path, "newfile.bmp.crypt"))
     assert storage.list_container_names(as_sorted=True) == [Path("empty.txt.crypt")]
-    assert len(storage) == 1
+    assert len(storage) == 1  # Remaining offloaded data file is ignored
 
     # Test purge system
 

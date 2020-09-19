@@ -39,6 +39,8 @@ logger = logging.getLogger(__name__)
 
 CONTAINER_FORMAT = "WA_0.1a"
 CONTAINER_SUFFIX = ".crypt"
+OFFLOADED_DATA_SUFFIX = ".data"  # Added to CONTAINER_SUFFIX
+
 MEDIUM_SUFFIX = (
     ".medium"
 )  # To construct decrypted filename when no previous extensions are found in container filename
@@ -711,7 +713,7 @@ def decrypt_data_from_container(
 
 
 def _get_offloaded_file_path(container_filepath):
-    return container_filepath.parent.joinpath(container_filepath.name + ".data")
+    return container_filepath.parent.joinpath(container_filepath.name + OFFLOADED_DATA_SUFFIX)
 
 
 def dump_container_to_filesystem(container_filepath: Path, container: dict, offload_data_ciphertext=True) -> None:

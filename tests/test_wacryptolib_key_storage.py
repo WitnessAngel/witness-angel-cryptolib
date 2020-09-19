@@ -69,7 +69,7 @@ def test_key_storage_free_keys_concurrency(tmp_path):
         check_key_storage_free_keys_concurrency(key_storage)
 
 
-def test_key_storage_list_keys(tmp_path: Path):
+def test_key_storage_list_keypair_identifiers(tmp_path: Path):
 
     def _check_key_dict_format(key):
         print(">> public key detected:", key)
@@ -79,7 +79,7 @@ def test_key_storage_list_keys(tmp_path: Path):
         assert isinstance(key["private_key_present"], bool)
 
     key_storage = FilesystemKeyStorage(tmp_path)
-    assert key_storage.list_keys() == []
+    assert key_storage.list_keypair_identifiers() == []
 
     # CASE 1 : only one key in storage
 
@@ -89,7 +89,7 @@ def test_key_storage_list_keys(tmp_path: Path):
     generate_asymmetric_keypair_for_storage(
             key_type=key_type, key_storage=key_storage, keychain_uid=keychain_uid)
 
-    keys_list = key_storage.list_keys()
+    keys_list = key_storage.list_keypair_identifiers()
     assert isinstance(keys_list, list)
     assert len(keys_list) == 1
 
@@ -113,7 +113,7 @@ def test_key_storage_list_keys(tmp_path: Path):
         "WRONGPREFIX_public_key.pem"):
         tmp_path.joinpath(bad_filename).touch()  # These will be ignored thanks to Regex
 
-    keys_list = key_storage.list_keys()
+    keys_list = key_storage.list_keypair_identifiers()
     assert isinstance(keys_list, list)
     assert len(keys_list) == 4
     assert keys_list == sorted(keys_list, key=lambda x: (x["keychain_uid"], x["key_type"]))  # Well sorted
@@ -125,7 +125,7 @@ def test_key_storage_list_keys(tmp_path: Path):
     for filepath in tmp_path.glob("*" + FilesystemKeyStorage._private_key_suffix):
         filepath.unlink()
 
-    keys_list = key_storage.list_keys()
+    keys_list = key_storage.list_keypair_identifiers()
     assert isinstance(keys_list, list)
     assert len(keys_list) == 4
 
@@ -138,7 +138,7 @@ def test_key_storage_list_keys(tmp_path: Path):
     for filepath in tmp_path.glob("*.pem"):
         filepath.unlink()
 
-    assert key_storage.list_keys() == []
+    assert key_storage.list_keypair_identifiers() == []
 
 
 def test_key_storage_pool(tmp_path: Path):
@@ -147,12 +147,12 @@ def test_key_storage_pool(tmp_path: Path):
 
     local_key_storage = pool.get_local_key_storage()
     assert isinstance(local_key_storage, FilesystemKeyStorage)
-    assert not local_key_storage.list_keys()
+    assert not local_key_storage.list_keypair_identifiers()
 
     keypair = generate_asymmetric_keypair_for_storage(
             key_type="RSA_OAEP", key_storage=local_key_storage, passphrase="xzf".encode())
 
-    assert len(local_key_storage.list_keys()) == 1
+    assert len(local_key_storage.list_keypair_identifiers()) == 1
 
     assert pool.list_imported_key_storage_uids() == []
 
@@ -171,7 +171,7 @@ def test_key_storage_pool(tmp_path: Path):
 
     imported_key_storage = pool.get_imported_key_storage(imported_key_storage_uid)
     assert isinstance(imported_key_storage, FilesystemKeyStorage)
-    assert not imported_key_storage.list_keys()
+    assert not imported_key_storage.list_keypair_identifiers()
 
     imported_key_storage.set_keys(
         keychain_uid=generate_uuid0(),
@@ -180,9 +180,9 @@ def test_key_storage_pool(tmp_path: Path):
         private_key=keypair["private_key"],
     )
 
-    assert len(local_key_storage.list_keys()) == 1  # Unchanged
-    assert len(imported_key_storage.list_keys()) == 1
+    assert len(local_key_storage.list_keypair_identifiers()) == 1  # Unchanged
+    assert len(imported_key_storage.list_keypair_identifiers()) == 1
 
     imported_key_storage2 = pool.get_imported_key_storage(imported_key_storage_uid2)
     assert isinstance(imported_key_storage2, FilesystemKeyStorage)
-    assert not imported_key_storage2.list_keys()
+    assert not imported_key_storage2.list_keypair_identifiers()

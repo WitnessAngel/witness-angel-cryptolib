@@ -590,9 +590,9 @@ class ContainerReader(ContainerBase):
         decrypted_shares = []
         decryption_errors = []
 
-        print("CALLING _decrypt_symmetric_key_share with data:")
-        pprint(symmetric_key_cipherdict["shares"])
-        pprint(key_shared_secret_escrows)
+        #print("CALLING _decrypt_symmetric_key_share with data:")
+        #pprint(symmetric_key_cipherdict["shares"])
+        #pprint(key_shared_secret_escrows)
 
         assert len(symmetric_key_cipherdict["shares"]) <= len(key_shared_secret_escrows)  # During tests we erase some container shares...
 

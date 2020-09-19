@@ -97,23 +97,7 @@ def load_authentication_device_metadata(authentication_device: dict) -> dict:
     """
     metadata_file = _get_metadata_file_path(authentication_device=authentication_device)
 
-    if sys_platform == "win32":
-        import win32api
-        import win32.lib.win32con as win32con
-        win32api.SetFileAttributes(
-            str(metadata_file.parent), win32con.FILE_ATTRIBUTE_NORMAL
-        )
-        win32api.SetFileAttributes(str(metadata_file), win32con.FILE_ATTRIBUTE_NORMAL)  # FIXME do we really need this??
-
-        metadata = load_from_json_file(metadata_file)
-
-        win32api.SetFileAttributes(
-            str(metadata_file.parent), win32con.FILE_ATTRIBUTE_HIDDEN
-        )
-        win32api.SetFileAttributes(str(metadata_file), win32con.FILE_ATTRIBUTE_HIDDEN)
-
-    elif sys_platform.startswith("linux"):
-        metadata = load_from_json_file(metadata_file)
+    metadata = load_from_json_file(metadata_file)
 
     _check_authentication_device_metadata(metadata)  # Raises if troubles
     return metadata
@@ -229,8 +213,8 @@ def _initialize_authentication_device_win32(authentication_device: dict, user: s
     metadata_file = _get_metadata_file_path(authentication_device)
     metadata = _common_authentication_device_initialization(metadata_file, user)
 
-    win32api.SetFileAttributes(str(metadata_file.parent), win32con.FILE_ATTRIBUTE_HIDDEN)  # FIXME - leak of abstraction regarding metadata_file_path
-    win32api.SetFileAttributes(str(metadata_file), win32con.FILE_ATTRIBUTE_HIDDEN)
+    # Beware, it's a leak of abstraction regarding metadata_file_path structure
+    win32api.SetFileAttributes(str(metadata_file.parent), win32con.FILE_ATTRIBUTE_HIDDEN)
 
     return metadata
 

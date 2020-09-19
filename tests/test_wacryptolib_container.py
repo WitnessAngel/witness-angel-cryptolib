@@ -736,7 +736,7 @@ def test_get_encryption_configuration_summary():
 
     _public_key = generate_asymmetric_keypair(key_type="RSA_OAEP")["public_key"]
     with patch.object(
-        JsonRpcProxy, "get_public_key", return_value=_public_key, create=True
+        JsonRpcProxy, "fetch_public_key", return_value=_public_key, create=True
     ) as mock_method:
         container = encrypt_data_into_container(
             data=data, conf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None

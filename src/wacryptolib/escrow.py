@@ -74,8 +74,7 @@ class EscrowApi:
             generate_asymmetric_keypair_for_storage(
                     key_type=key_type, key_storage=self._key_storage, keychain_uid=keychain_uid, passphrase=None)
 
-    # FIXME rename this to differentiate it from KeyStorage API method
-    def get_public_key(self, *, keychain_uid: uuid.UUID, key_type: str, must_exist: bool=False) -> bytes:
+    def fetch_public_key(self, *, keychain_uid: uuid.UUID, key_type: str, must_exist: bool=False) -> bytes:
         """
         Return a public key in PEM format bytestring, that caller shall use to encrypt its own symmetric keys,
         or to check a signature.

@@ -339,7 +339,7 @@ class ContainerWriter(ContainerBase):
         encryption_proxy = get_escrow_proxy(escrow=escrow, key_storage_pool=self._key_storage_pool)
 
         logger.debug("Generating assymetric key of type %r", encryption_algo)
-        subkey_pem = encryption_proxy.get_public_key(
+        subkey_pem = encryption_proxy.fetch_public_key(
             keychain_uid=keychain_uid, key_type=encryption_algo
         )
 
@@ -647,7 +647,7 @@ class ContainerReader(ContainerBase):
         message_prehash_algo = conf["message_prehash_algo"]
         signature_algo = conf["signature_algo"]
         encryption_proxy = get_escrow_proxy(escrow=conf["signature_escrow"], key_storage_pool=self._key_storage_pool)
-        public_key_pem = encryption_proxy.get_public_key(
+        public_key_pem = encryption_proxy.fetch_public_key(
             keychain_uid=keychain_uid, key_type=signature_algo, must_exist=True
         )
 

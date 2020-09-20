@@ -22,6 +22,7 @@ from wacryptolib.container import (
     SHARED_SECRET_MARKER, get_escrow_id, gather_escrow_dependencies, get_escrow_proxy,
     request_decryption_authorizations, CONTAINER_SUFFIX, OFFLOADED_DATA_SUFFIX
 )
+from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import EscrowApi, generate_asymmetric_keypair_for_storage, generate_free_keypair_for_least_provisioned_key_type
 from wacryptolib.exceptions import DecryptionError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -314,24 +315,49 @@ def test_standard_container_encryption_and_decryption(container_conf, escrow_dep
         [None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")]
     )
 
-    key_storage_container = DummyKeyStoragePool()
+    key_storage_pool = DummyKeyStoragePool()
     metadata = random.choice([None, dict(a=[123])])
     container = encrypt_data_into_container(
-        data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_container
+        data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool
     )
 
     assert container["keychain_uid"]
     if keychain_uid:
         assert container["keychain_uid"] == keychain_uid
 
+    local_keypair_identifiers = key_storage_pool.get_local_key_storage()._cached_keypairs
+    print(">>> Test local_keypair_identifiers ->", list(local_keypair_identifiers.keys()))
+
     escrow_dependencies = gather_escrow_dependencies(containers=[container])
     assert escrow_dependencies == escrow_dependencies_builder(container["keychain_uid"])
 
-    request_decryption_authorizations(
-        escrow_dependencies=escrow_dependencies, request_message="Decryption needed", key_storage_pool=key_storage_container
+    # Check that all referenced keys were really created during encryption (so keychain_uid overriding works fine)
+    for escrow_dependency_structs in escrow_dependencies.values():
+        for escrow_dependency_struct in escrow_dependency_structs.values():
+            escrow_conf, keypairs_identifiers = escrow_dependency_struct
+            escrow = get_escrow_proxy(escrow_conf, key_storage_pool=key_storage_pool)
+            for keypairs_identifier in keypairs_identifiers:
+                assert escrow.fetch_public_key(**keypairs_identifier, must_exist=True)
+
+    all_authorization_results = request_decryption_authorizations(
+        escrow_dependencies=escrow_dependencies, request_message="Decryption needed", key_storage_pool=key_storage_pool
     )
 
-    result_data = decrypt_data_from_container(container=container, key_storage_pool=key_storage_container)
+    # Generic check of data structure
+    for authorization_results in all_authorization_results.values():
+        assert not authorization_results["has_errors"]
+        assert "accepted" in authorization_results["response_message"]
+        keypair_statuses = authorization_results["keypair_statuses"]
+        assert keypair_statuses["accepted"]
+        for keypair_identifiers in keypair_statuses["accepted"]:
+            assert keypair_identifiers["key_type"] in SUPPORTED_ENCRYPTION_ALGOS
+            assert isinstance(keypair_identifiers["keychain_uid"], UUID)
+        assert not keypair_statuses["authorization_pending"]
+        assert not keypair_statuses["authorization_rejected"]
+        assert not keypair_statuses["missing_passphrase"]
+        assert not keypair_statuses["missing_private_key"]
+
+    result_data = decrypt_data_from_container(container=container, key_storage_pool=key_storage_pool)
     # pprint.pprint(result, width=120)
     assert result_data == data
 

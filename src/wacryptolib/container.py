@@ -62,6 +62,11 @@ def get_escrow_id(escrow_conf: dict) -> str:
 
 
 def gather_escrow_dependencies(containers: list) -> dict:
+    """
+    Analyse a container and return the escrows (and their keypairs) used by it.
+
+    :return: dict with lists of keypair identifiers in fields "encryption" and "signature".
+    """
 
     def _add_keypair_identifiers_for_escrow(mapper, escrow_conf, keychain_uid, key_type):
         escrow_id = get_escrow_id(escrow_conf=escrow_conf)
@@ -107,7 +112,12 @@ def gather_escrow_dependencies(containers: list) -> dict:
     return escrow_dependencies
 
 
-def request_decryption_authorizations(escrow_dependencies: dict, key_storage_pool, request_message: str) -> dict:
+def request_decryption_authorizations(escrow_dependencies: dict, key_storage_pool, request_message: str, passphrases: Optional[list]=None) -> dict:
+    """
+    Loop on encryption escrows and request decryption authorization for all the keypairs that they own.
+
+    :return: dict mapping escrow ids to authorization result dicts.
+    """
     request_authorization_result = {}
     encryption_escrows_dependencies = escrow_dependencies.get("encryption")
 
@@ -115,7 +125,7 @@ def request_decryption_authorizations(escrow_dependencies: dict, key_storage_poo
         key_escrow, keypair_identifiers = escrow_data
         proxy = get_escrow_proxy(escrow=key_escrow, key_storage_pool=key_storage_pool)
         result = proxy.request_decryption_authorization(
-            keypair_identifiers=keypair_identifiers, request_message=request_message
+            keypair_identifiers=keypair_identifiers, request_message=request_message, passphrases=passphrases
         )
         request_authorization_result[escrow_id] = result
 
@@ -141,6 +151,8 @@ def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase):
     # TODO - Implement imported storages, escrow lookup in global registry, shared-secret group, etc.
     raise ValueError("Unrecognized escrow identifiers: %s" % str(escrow))
 
+
+# FIXME rename keychain_uid to default_keychain_uid where relevant!!
 
 class ContainerBase:
     """
@@ -313,9 +325,10 @@ class ContainerWriter(ContainerBase):
 
         else:  # Using asymmetric algorithm
 
+            keychain_uid_encryption = conf.get("keychain_uid") or keychain_uid
             key_cipherdict = self._apply_asymmetric_encryption(
                 encryption_algo=key_encryption_algo,
-                keychain_uid=keychain_uid,
+                keychain_uid=keychain_uid_encryption,
                 symmetric_key_data=symmetric_key_data,
                 escrow=conf["key_escrow"],
             )
@@ -341,7 +354,7 @@ class ContainerWriter(ContainerBase):
         """
         encryption_proxy = get_escrow_proxy(escrow=escrow, key_storage_pool=self._key_storage_pool)
 
-        logger.debug("Generating assymetric key of type %r", encryption_algo)
+        logger.debug("Generating asymmetric key of type %r", encryption_algo)
         subkey_pem = encryption_proxy.fetch_public_key(
             keychain_uid=keychain_uid, key_type=encryption_algo
         )
@@ -405,12 +418,12 @@ class ContainerWriter(ContainerBase):
         :param keychain_uid: uuid for the set of encryption keys used
         :param data_ciphertext: data as bytes on which to apply signature
         :param conf: configuration tree inside data_signatures
-
         :return: dictionary with information needed to verify signature
         """
         encryption_proxy = get_escrow_proxy(escrow=conf["signature_escrow"], key_storage_pool=self._key_storage_pool)
         message_prehash_algo = conf["message_prehash_algo"]
         signature_algo = conf["signature_algo"]
+        keychain_uid_signature = conf.get("keychain_uid") or keychain_uid
 
         data_ciphertext_hash = hash_message(
             data_ciphertext, hash_algo=message_prehash_algo
@@ -419,7 +432,7 @@ class ContainerWriter(ContainerBase):
         logger.debug("Signing hash of encrypted data with algo %r", signature_algo)
 
         signature_value = encryption_proxy.get_message_signature(
-            keychain_uid=keychain_uid,
+            keychain_uid=keychain_uid_signature,
             message=data_ciphertext_hash,
             signature_algo=signature_algo,
         )
@@ -522,9 +535,12 @@ class ContainerReader(ContainerBase):
             return symmetric_key_plaintext
 
         else:  # Using asymmetric algorithm
+
+            keychain_uid_encryption = conf.get("keychain_uid") or keychain_uid  # FIXME replace by shorter form everywhere in file
+
             symmetric_key_plaintext = self._decrypt_cipherdict_with_asymmetric_cipher(
                 encryption_algo=key_encryption_algo,
-                keychain_uid=keychain_uid,
+                keychain_uid=keychain_uid_encryption,
                 cipherdict=symmetric_key_cipherdict,
                 escrow=conf["key_escrow"],
             )
@@ -534,7 +550,7 @@ class ContainerReader(ContainerBase):
         self, encryption_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, escrow: dict
     ) -> bytes:
         """
-        Decrypt given cipherdict with an assymetric algorithm
+        Decrypt given cipherdict with an asymmetric algorithm
 
         :param encryption_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
@@ -645,9 +661,10 @@ class ContainerReader(ContainerBase):
         """
         message_prehash_algo = conf["message_prehash_algo"]
         signature_algo = conf["signature_algo"]
+        keychain_uid_signature = conf.get("keychain_uid") or keychain_uid
         encryption_proxy = get_escrow_proxy(escrow=conf["signature_escrow"], key_storage_pool=self._key_storage_pool)
         public_key_pem = encryption_proxy.fetch_public_key(
-            keychain_uid=keychain_uid, key_type=signature_algo, must_exist=True
+            keychain_uid=keychain_uid_signature, key_type=signature_algo, must_exist=True
         )
         public_key = load_asymmetric_key_from_pem_bytestring(
             key_pem=public_key_pem, key_type=signature_algo

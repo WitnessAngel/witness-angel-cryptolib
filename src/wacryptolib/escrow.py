@@ -5,8 +5,7 @@ from typing import Optional
 from uuid import UUID
 
 from wacryptolib.encryption import _decrypt_via_rsa_oaep
-from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationPendingError, AuthorizationRejectedError, \
-    SignatureCreationError, DecryptionError, KeyLoadingError
+from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, DecryptionError, KeyLoadingError
 from wacryptolib.key_generation import (
     generate_asymmetric_keypair,
     load_asymmetric_key_from_pem_bytestring,
@@ -155,8 +154,7 @@ class EscrowApi:
             )
 
         missing_private_key = []
-        authorization_rejected = []
-        authorization_pending = []
+        authorization_missing = []
         missing_passphrase = []
         accepted = []
 
@@ -167,11 +165,8 @@ class EscrowApi:
 
             try:
                 self._check_keypair_authorization(keychain_uid=keychain_uid, key_type=key_type)
-            except AuthorizationPendingError:
-                authorization_pending.append(keypair_identifier)
-                continue
-            except AuthorizationRejectedError:
-                authorization_rejected.append(keypair_identifier)
+            except AuthorizationError:
+                authorization_missing.append(keypair_identifier)
                 continue
             else:
                 pass  # It's OK, at least we are authorized now
@@ -196,10 +191,9 @@ class EscrowApi:
             accepted.append(keypair_identifier)  # Check is OVER for this keypair!
 
         keypair_statuses = dict(missing_private_key=missing_private_key,
-                            authorization_rejected = authorization_rejected,
-                            authorization_pending = authorization_pending,
-                            missing_passphrase = missing_passphrase,
-                            accepted = accepted)
+                                authorization_missing = authorization_missing,
+                                missing_passphrase = missing_passphrase,
+                                accepted = accepted)
 
         has_errors = len(accepted) < len(keypair_identifiers)
         assert sum(len(x) for x in keypair_statuses.values()) == len(keypair_identifiers), locals()

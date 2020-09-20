@@ -352,8 +352,7 @@ def test_standard_container_encryption_and_decryption(container_conf, escrow_dep
         for keypair_identifiers in keypair_statuses["accepted"]:
             assert keypair_identifiers["key_type"] in SUPPORTED_ENCRYPTION_ALGOS
             assert isinstance(keypair_identifiers["keychain_uid"], UUID)
-        assert not keypair_statuses["authorization_pending"]
-        assert not keypair_statuses["authorization_rejected"]
+        assert not keypair_statuses["authorization_missing"]
         assert not keypair_statuses["missing_passphrase"]
         assert not keypair_statuses["missing_private_key"]
 

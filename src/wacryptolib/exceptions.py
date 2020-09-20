@@ -31,12 +31,6 @@ class KeyStorageAlreadyExists(ExistenceError):
 class AuthorizationError(FunctionalError):
     pass
 
-class AuthorizationPendingError(FunctionalError):
-    pass
-
-class AuthorizationRejectedError(FunctionalError):
-    pass
-
 # ---
 
 class CryptographyError(FunctionalError):

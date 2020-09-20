@@ -10,6 +10,8 @@ from wacryptolib import exceptions as wacryptolib_exceptions
 logger = logging.getLogger(__name__)
 
 
+# FIXME create helper tools to simplify this!
+
 _exception_classes = StatusSlugsMapper.gather_exception_subclasses(
     builtins, parent_classes=[Exception]
 )
@@ -17,7 +19,7 @@ _exception_classes += StatusSlugsMapper.gather_exception_subclasses(
         wacryptolib_exceptions, parent_classes=[wacryptolib_exceptions.FunctionalError]
 )
 
-status_slugs_to_builtins_mapper = StatusSlugsMapper(
+exception_mapper = StatusSlugsMapper(
     _exception_classes, fallback_exception_class=Exception
 )
 
@@ -32,7 +34,7 @@ def status_slugs_response_error_handler(exc):
     if error_data:
         status_slugs = error_data["status_slugs"]
         status_message = error_data["message_untranslated"]
-        exception_class = status_slugs_to_builtins_mapper.get_closest_exception_class_for_status_slugs(
+        exception_class = exception_mapper.get_closest_exception_class_for_status_slugs(
             status_slugs
         )
         raise exception_class(status_message) from exc

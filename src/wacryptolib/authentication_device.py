@@ -2,6 +2,8 @@ import logging
 from sys import platform as sys_platform
 from pathlib import Path
 from pathlib import PurePath
+from typing import Optional
+
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 from wacryptolib.utilities import generate_uuid0
 
@@ -28,10 +30,8 @@ def list_available_authentication_devices():
 
     if sys_platform == "win32":
         authentication_devices = _list_available_authentication_devices_win32()
-    elif sys_platform.startswith("linux"):
+    else:  # Linux, MacOS etc.
         authentication_devices = _list_available_authentication_devices_linux()
-    else:
-        raise RuntimeError("%s OS not supported" % sys_platform)
 
     for authentication_device in authentication_devices:
         metadata = None
@@ -42,7 +42,7 @@ def list_available_authentication_devices():
     return authentication_devices
 
 
-def initialize_authentication_device(authentication_device: dict, user: str):
+def initialize_authentication_device(authentication_device: dict, user: str, extra_metadata: Optional[dict]=None):
     """
     Initialize a specific USB key, by creating an internal structure with key device metadata.
 
@@ -53,16 +53,18 @@ def initialize_authentication_device(authentication_device: dict, user: str):
 
     On success, updates 'authentication_device' to mark it as initialized, and to contain device metadata.
     """
+    extra_metadata = extra_metadata or {}
+
+    assert user and isinstance(user, str), user
+    assert not extra_metadata or isinstance(extra_metadata, dict), extra_metadata
 
     if is_authentication_device_initialized(authentication_device):
         raise RuntimeError("%s key-device is already initialized" % authentication_device["path"])
 
     if sys_platform == "win32":  # All Windows versions
-        metadata = _initialize_authentication_device_win32(authentication_device=authentication_device, user=user)
-    elif sys_platform.startswith("linux"):
-        metadata = _initialize_authentication_device_linux(authentication_device=authentication_device, user=user)
-    else:
-        raise RuntimeError("%s OS not supported" % sys_platform)
+        metadata = _initialize_authentication_device_win32(authentication_device=authentication_device, user=user, extra_metadata=extra_metadata)
+    else:  # Linux, MacOS etc.
+        metadata = _initialize_authentication_device_linux(authentication_device=authentication_device, user=user, extra_metadata=extra_metadata)
 
     authentication_device["is_initialized"] = True
     authentication_device["metadata"] = metadata
@@ -186,36 +188,38 @@ def _list_available_authentication_devices_linux():
     return authentication_device_list
 
 
+def _get_key_storage_folder_path(authentication_device: dict):
+    return Path(authentication_device["path"]).joinpath(".key_storage")
+
+
 def _get_metadata_file_path(authentication_device: dict):
-    return Path(authentication_device["path"]).joinpath(".key_storage", ".metadata.json")
+    return _get_key_storage_folder_path(authentication_device).joinpath(".metadata.json")
 
 
-def _common_authentication_device_initialization(hidden_file: Path, user: str):
+def _common_authentication_device_initialization(authentication_device: dict, user: str, extra_metadata: dict):
     assert isinstance(user, str) and user, repr(user)
-    hidden_folder = hidden_file.parent
-    if not Path(hidden_folder).exists():
-        Path(hidden_file.parent).mkdir()
-    # E.g {'device_uid': device_uid('0e7ee05d-07ad-75bc-c1f9-05db3e0680ca'), 'user': 'John Doe'}
-    metadata = {"device_uid": generate_uuid0(), "user": user}
-    dump_to_json_file(hidden_file, metadata)
+    metadata_file = _get_metadata_file_path(authentication_device)
+    metadata_file.parent.mkdir(parents=True, exist_ok=True)
+    metadata = extra_metadata.copy()
+    metadata.update({"device_uid": generate_uuid0(), "user": user})  # Override keys!
+    dump_to_json_file(metadata_file, metadata)
     return metadata
 
 
-def _initialize_authentication_device_win32(authentication_device: dict, user: str):
+def _initialize_authentication_device_win32(authentication_device: dict, user: str, extra_metadata: dict):
 
     import win32api
     import win32.lib.win32con as win32con
 
-    metadata_file = _get_metadata_file_path(authentication_device)
-    metadata = _common_authentication_device_initialization(metadata_file, user)
 
-    # Beware, it's a leak of abstraction regarding metadata_file_path structure
-    win32api.SetFileAttributes(str(metadata_file.parent), win32con.FILE_ATTRIBUTE_HIDDEN)
+    metadata = _common_authentication_device_initialization(authentication_device, user=user, extra_metadata=extra_metadata)
+
+    # Hide the root folder specific to cryptolib stuffs, on this device
+    key_storage_folder = _get_key_storage_folder_path(authentication_device)
+    win32api.SetFileAttributes(str(key_storage_folder), win32con.FILE_ATTRIBUTE_HIDDEN)
 
     return metadata
 
 
-def _initialize_authentication_device_linux(authentication_device: dict, user: str):
-    metadata_file = _get_metadata_file_path(authentication_device)
-    metadata = _common_authentication_device_initialization(metadata_file, user)
-    return metadata
+def _initialize_authentication_device_linux(authentication_device: dict, user: str, extra_metadata: dict):
+    return _common_authentication_device_initialization(authentication_device, user=user, extra_metadata=extra_metadata)  # Unchanged for now

@@ -61,11 +61,13 @@ def test_authentication_device_initialization_and_checkers(tmp_path):
 
     # UPDATED fields
     assert authentication_device["is_initialized"] == True
+    assert len(authentication_device["metadata"]) ==2
     assert authentication_device["metadata"]["user"] == "Michél Dûpont"
     assert isinstance(authentication_device["metadata"]["device_uid"], UUID)
 
     # REAL metadata file content
     metadata = load_authentication_device_metadata(authentication_device)
+    assert len(metadata) == 2
     assert metadata["user"] == "Michél Dûpont"
     assert isinstance(metadata["device_uid"], UUID)
 
@@ -84,3 +86,16 @@ def test_authentication_device_initialization_and_checkers(tmp_path):
     assert not is_authentication_device_initialized(authentication_device)
     metadata_file_path.write_text("ZJSJS")
     assert is_authentication_device_initialized(authentication_device)  # No checkup of json file here!
+
+    # Test extra metadata
+
+    metadata_file_path.unlink()
+    assert not is_authentication_device_initialized(authentication_device)
+    initialize_authentication_device(authentication_device, user="Johnny", extra_metadata=dict(passphrase_hint="big passphrâse \n aboùt bïrds"))
+    assert is_authentication_device_initialized(authentication_device)
+
+    metadata = load_authentication_device_metadata(authentication_device)
+    assert len(metadata) == 3
+    assert metadata["user"] == "Johnny"
+    assert isinstance(metadata["device_uid"], UUID)
+    assert metadata["passphrase_hint"] == "big passphrâse \n aboùt bïrds"

@@ -209,7 +209,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         self._keys_dir = keys_dir.absolute()
 
         free_keys_dir = keys_dir.joinpath("free_keys")
-        free_keys_dir.mkdir(exist_ok=True)
+        free_keys_dir.mkdir(exist_ok=True)  # FIXMe - lazy-initialize this dir, instead? (useless e.g. on authentication devices)
         self._free_keys_dir = free_keys_dir
 
     def _get_filename(self, keychain_uid, key_type, is_public: bool):

@@ -1,6 +1,9 @@
 import abc
 import importlib
 import logging
+import os
+from pathlib import Path
+import shutil
 from typing import List, Optional
 
 import multitimer
@@ -180,6 +183,27 @@ def generate_uuid0(ts: Optional[int] = None):
     :return: uuid0 object (subclass of UUID)
     """
     return uuid0.generate(ts)
+
+
+def safe_copy_directory(from_dir: Path, to_dir: Path, temp_prefix="__", **extra_params):
+    """
+    Copy a file tree to a destination directory (which must not exist) in a kinda-safe way,
+    using a temporary directory and an atomic rename.
+
+    `extra_params` are passed as keyword arguments to `shutil.copytree()`.
+    """
+    if to_dir.exists():
+        raise FileExistsError("Target %s already exists" % to_dir)
+    to_dir_tmp = to_dir.with_name(temp_prefix + to_dir.name)
+    if to_dir_tmp.exists():
+        shutil.rmtree(to_dir_tmp)
+    try:
+        shutil.copytree(from_dir, dst=to_dir_tmp, **extra_params)
+    except Exception:
+        if to_dir_tmp.exists():
+            shutil.rmtree(to_dir_tmp)
+        raise
+    os.rename(to_dir_tmp, to_dir)
 
 
 class TaskRunnerStateMachineBase(abc.ABC):

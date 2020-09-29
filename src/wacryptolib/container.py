@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
-from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi
+from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi, EscrowApi
 from wacryptolib.exceptions import DecryptionError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import (
@@ -132,7 +132,10 @@ def request_decryption_authorizations(escrow_dependencies: dict, key_storage_poo
     return request_authorization_result
 
 
-def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase):
+def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase) -> EscrowApi:
+    """
+    Return an EscrowApi subclass instance (or proxy) depending on the content of `escrow` dict.
+    """
     assert isinstance(escrow, dict), escrow
 
     escrow_type = escrow.get("escrow_type")  # Might be None

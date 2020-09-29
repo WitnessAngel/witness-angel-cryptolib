@@ -17,4 +17,6 @@ API Documentation
    api/jsonrpc_client
    api/utilities
    api/error_handling
+   api/exceptions
    api/scaffolding
+

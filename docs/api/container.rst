@@ -17,3 +17,9 @@ encryption/signing keys of the escrow system.
 
 .. autoclass:: wacryptolib.container.ContainerStorage
     :members:
+
+.. autofunction:: wacryptolib.container.get_escrow_proxy
+
+.. autofunction:: wacryptolib.container.gather_escrow_dependencies
+
+.. autofunction:: wacryptolib.container.request_decryption_authorizations

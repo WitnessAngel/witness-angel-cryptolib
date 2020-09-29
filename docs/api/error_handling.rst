@@ -6,7 +6,6 @@ client can handle them in a hierarchical and forward-compatible manner.
 
 
 .. autoclass:: wacryptolib.error_handling.StatusSlugsMapper
-    :members:
 
 .. autofunction:: wacryptolib.error_handling.gather_exception_subclasses
 

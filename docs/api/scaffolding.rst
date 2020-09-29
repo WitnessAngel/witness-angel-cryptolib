@@ -7,6 +7,7 @@ witness-angel related classes.
 This is a provisional API, which may change without deprecation period, and which requires test dependencies
 like `pytest`.
 
+
 .. autofunction:: wacryptolib.scaffolding.check_key_storage_basic_get_set_api
 
 .. autofunction:: wacryptolib.scaffolding.check_key_storage_free_keys_api

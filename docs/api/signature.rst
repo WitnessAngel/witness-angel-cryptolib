@@ -4,7 +4,6 @@ Signature
 This module allows one to sign messages, and then verify the signature.
 
 
-
 Public API
 --------------
 
@@ -13,7 +12,6 @@ Public API
 .. autofunction:: wacryptolib.signature.sign_message
 
 .. autofunction:: wacryptolib.signature.verify_message_signature
-
 
 
 Private API

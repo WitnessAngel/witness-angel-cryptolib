@@ -185,6 +185,13 @@ def generate_uuid0(ts: Optional[int] = None):
     return uuid0.generate(ts)
 
 
+def get_metadata_file_path(storage_folder: Path):
+    """
+    Return path of standard metadata file for key/container storage.
+    """
+    return storage_folder.joinpath(".metadata.json")
+
+
 def safe_copy_directory(from_dir: Path, to_dir: Path, temp_prefix="__", **extra_params):
     """
     Copy a file tree to a destination directory (which must not exist) in a kinda-safe way,

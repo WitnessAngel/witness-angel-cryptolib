@@ -5,7 +5,7 @@ from pathlib import PurePath
 from typing import Optional
 
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
-from wacryptolib.utilities import generate_uuid0
+from wacryptolib.utilities import generate_uuid0, get_metadata_file_path as _utilities_get_metadata_file_path
 
 
 logger = logging.getLogger(__name__)
@@ -193,7 +193,7 @@ def _get_key_storage_folder_path(authentication_device: dict):
 
 
 def _get_metadata_file_path(authentication_device: dict):
-    return _get_key_storage_folder_path(authentication_device).joinpath(".metadata.json")
+    return _utilities_get_metadata_file_path(_get_key_storage_folder_path(authentication_device))
 
 
 def _common_authentication_device_initialization(authentication_device: dict, user: str, extra_metadata: dict):

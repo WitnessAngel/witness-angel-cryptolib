@@ -1,12 +1,15 @@
 import os
 import random
+import shutil
 from pathlib import Path
 from uuid import UUID
 
 import pytest
 
+from _test_mockups import get_fake_authentication_device
+from wacryptolib.authentication_device import _get_key_storage_folder_path, initialize_authentication_device
 from wacryptolib.escrow import generate_asymmetric_keypair_for_storage
-from wacryptolib.exceptions import KeyStorageDoesNotExist
+from wacryptolib.exceptions import KeyStorageDoesNotExist, KeyStorageAlreadyExists
 from wacryptolib.key_generation import SUPPORTED_ASYMMETRIC_KEY_TYPES
 from wacryptolib.key_storage import (
     FilesystemKeyStorage,
@@ -141,7 +144,7 @@ def test_key_storage_list_keypair_identifiers(tmp_path: Path):
     assert key_storage.list_keypair_identifiers() == []
 
 
-def test_key_storage_pool(tmp_path: Path):
+def test_key_storage_pool_basics(tmp_path: Path):
 
     pool = FilesystemKeyStoragePool(tmp_path)
 
@@ -186,3 +189,53 @@ def test_key_storage_pool(tmp_path: Path):
     imported_key_storage2 = pool.get_imported_key_storage(imported_key_storage_uid2)
     assert isinstance(imported_key_storage2, FilesystemKeyStorage)
     assert not imported_key_storage2.list_keypair_identifiers()
+
+
+def test_key_storage_import_key_storage_from_folder(tmp_path: Path):
+
+    pool_path = tmp_path / "pool"
+    pool_path.mkdir()
+    pool = FilesystemKeyStoragePool(pool_path)
+    assert pool.list_imported_key_storage_uids() == []
+    assert pool.list_imported_key_storage_metadata() == {}
+
+    authentication_device_path = tmp_path / "device"
+    authentication_device_path.mkdir()
+    authentication_device = get_fake_authentication_device(authentication_device_path)
+    initialize_authentication_device(authentication_device, user="Jean-Jâcques")
+
+    keychain_uid = generate_uuid0()
+    key_type = "RSA_OAEP"
+
+    remote_key_storage_path = _get_key_storage_folder_path(authentication_device)
+    remote_key_storage = FilesystemKeyStorage(remote_key_storage_path)
+    remote_key_storage.set_keys(keychain_uid=keychain_uid, key_type=key_type, public_key=b"555", private_key=b"okj")
+
+    # Still untouched of course
+    assert pool.list_imported_key_storage_uids() == []
+    assert pool.list_imported_key_storage_metadata() == {}
+
+    pool.import_key_storage_from_folder(remote_key_storage_path)
+
+    (key_storage_uid,) = pool.list_imported_key_storage_uids()
+    metadata_mapper = pool.list_imported_key_storage_metadata()
+    assert tuple(metadata_mapper) == (key_storage_uid,)
+
+    metadata = metadata_mapper[key_storage_uid]
+    assert metadata["device_uid"] == key_storage_uid
+    assert metadata["user"] == "Jean-Jâcques"
+
+    with pytest.raises(KeyStorageAlreadyExists, match=str(key_storage_uid)):
+        pool.import_key_storage_from_folder(remote_key_storage_path)
+
+    shutil.rmtree(authentication_device_path)  # Not important anymore
+
+    assert pool.list_imported_key_storage_uids() == [key_storage_uid,]
+    metadata_mapper2 = pool.list_imported_key_storage_metadata()
+    assert metadata_mapper2 == metadata_mapper
+
+    key_storage = pool.get_imported_key_storage(key_storage_uid)
+    assert key_storage.list_keypair_identifiers() == [dict(keychain_uid=keychain_uid, key_type=key_type, private_key_present=True)]
+    assert key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type) == b"555"
+    assert key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type) == b"okj"
+

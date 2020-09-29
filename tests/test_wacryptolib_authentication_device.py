@@ -1,6 +1,7 @@
 from pathlib import Path
 from uuid import UUID
 
+from _test_mockups import get_fake_authentication_device
 from wacryptolib.authentication_device import list_available_authentication_devices, is_authentication_device_initialized, _get_metadata_file_path
 from wacryptolib.authentication_device import initialize_authentication_device, load_authentication_device_metadata
 
@@ -37,15 +38,7 @@ def test_list_available_authentication_devices():  # FIXME add mockups to simula
 
 def test_authentication_device_initialization_and_checkers(tmp_path):
 
-    authentication_device = {
-        "drive_type": "USBSTOR",
-        "path": tmp_path,
-        "label": "TOSHIBA",
-        "size": 31000166400,
-        "format": "fat32",
-        "is_initialized": False,
-        "metadata": None,
-    }
+    authentication_device = get_fake_authentication_device(tmp_path)
     authentication_device_original = authentication_device.copy()
 
     assert not is_authentication_device_initialized(authentication_device)

@@ -192,4 +192,4 @@ def test_safe_copy_directory(tmp_path: Path):
     safe_copy_directory(src, tmp_path / "other_target")
     assert not (tmp_path / "__other_target").exists()
     assert (tmp_path / "other_target").exists()
-    assert [i.name for i in (tmp_path / "other_target").iterdir()] == [str(i) for i in range(10)]
+    assert set(i.name for i in (tmp_path / "other_target").iterdir()) == set(str(i) for i in range(10))

@@ -9,8 +9,8 @@ from pathlib import Path
 from os.path import  join
 import glob
 
-from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist, KeyStorageDoesNotExist
-from wacryptolib.utilities import synchronized
+from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist, KeyStorageDoesNotExist, KeyStorageAlreadyExists
+from wacryptolib.utilities import synchronized, load_from_json_file, get_metadata_file_path, safe_copy_directory
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +184,11 @@ class DummyKeyStorage(KeyStorageBase):
                 keychain_uid=keychain_uid, key_type=key_type, keypair=keypair
             )
 
+    #def __TODO_later_list_keypair_identifiers(self):
+    #    keypair_identifiers = []
+    #    for keypair_identifier in keypair_identifiers:
+    #        pass
+
 
 class FilesystemKeyStorage(KeyStorageBase):
     """
@@ -203,7 +208,7 @@ class FilesystemKeyStorage(KeyStorageBase):
 
     PUBLIC_KEY_FILENAME_REGEX = r"^(?P<keychain_uid>[-0-9a-z]+)_(?P<key_type>[_A-Z]+)%s$" % _public_key_suffix
 
-    def __init__(self, keys_dir):
+    def __init__(self, keys_dir: Path):
         keys_dir = Path(keys_dir)
         assert keys_dir.is_dir(), keys_dir
         self._keys_dir = keys_dir.absolute()
@@ -238,7 +243,7 @@ class FilesystemKeyStorage(KeyStorageBase):
             )
 
     @synchronized
-    def set_keys(self, *, keychain_uid, key_type, public_key, private_key):
+    def set_keys(self, *, keychain_uid, key_type, public_key: bytes, private_key: bytes):
         target_public_key_filename = self._get_filename(
             keychain_uid, key_type=key_type, is_public=True
         )
@@ -258,7 +263,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         )
 
     @synchronized
-    def get_public_key(self, *, keychain_uid, key_type):
+    def get_public_key(self, *, keychain_uid: uuid.UUID, key_type: str) -> bytes:
         filename_public_key = self._get_filename(
             keychain_uid, key_type=key_type, is_public=True
         )
@@ -268,7 +273,7 @@ class FilesystemKeyStorage(KeyStorageBase):
             raise KeyDoesNotExist("Public filesystem key %s/%s not found" % (keychain_uid, key_type))
 
     @synchronized
-    def get_private_key(self, *, keychain_uid, key_type):
+    def get_private_key(self, *, keychain_uid: uuid.UUID, key_type: str) -> bytes:
         filename_private_key = self._get_filename(
             keychain_uid, key_type=key_type, is_public=False
         )
@@ -278,7 +283,7 @@ class FilesystemKeyStorage(KeyStorageBase):
             raise KeyDoesNotExist("Private filesystem key %s/%s not found" % (keychain_uid, key_type))
 
     # No need for lock here
-    def get_free_keypairs_count(self, key_type):
+    def get_free_keypairs_count(self, key_type: str):
         subdir = self._free_keys_dir.joinpath(key_type)
         if not subdir.is_dir():
             return 0
@@ -443,18 +448,58 @@ class FilesystemKeyStoragePool(KeyStoragePoolBase):
         # TODO initialize metadata for key_storage ??
         return FilesystemKeyStorage(local_key_storage_path)
 
-    def get_imported_key_storage(self, key_storage_uid):
-        """The selected storage MUST exist, else a KeyStorageDoesNotExist is raised."""
+    def _get_imported_key_storage_path(self, key_storage_uid):
         imported_key_storage_path = self._root_dir.joinpath(self.IMPORTED_STORAGES_DIRNAME, "%s%s" %
                                                             (self.IMPORTED_STORAGE_PREFIX, key_storage_uid))
+        return imported_key_storage_path
+
+    def get_imported_key_storage(self, key_storage_uid):
+        """The selected storage MUST exist, else a KeyStorageDoesNotExist is raised."""
+        imported_key_storage_path = self._get_imported_key_storage_path(key_storage_uid=key_storage_uid)
         if not imported_key_storage_path.exists():
             raise KeyStorageDoesNotExist("Key storage %s not found" % key_storage_uid)
         return FilesystemKeyStorage(imported_key_storage_path)
 
     def list_imported_key_storage_uids(self):
+        """Return a sorted list of UUIDs of key storages, corresponding
+        to the device_uid of their origin authentication devices."""
         imported_key_storages_dir = self._root_dir.joinpath(self.IMPORTED_STORAGES_DIRNAME)
-        paths = imported_key_storages_dir.glob("%s*" % self.IMPORTED_STORAGE_PREFIX)
+        paths = imported_key_storages_dir.glob("%s*" % self.IMPORTED_STORAGE_PREFIX)  # This excludes TEMP folders
         return sorted([uuid.UUID(d.name.replace(self.IMPORTED_STORAGE_PREFIX, "")) for d in paths])
+
+    def list_imported_key_storage_metadata(self) -> dict:
+        """Return a dict mapping key storage UUIDs to the dicts of their metadata.
+
+        Raises if any metadata loading fails.
+        """
+        key_storage_uids = self.list_imported_key_storage_uids()
+
+        metadata_mapper = {}
+        for key_storage_uid in key_storage_uids:
+            _key_storage_path = self._get_imported_key_storage_path(key_storage_uid=key_storage_uid)
+            metadata = load_from_json_file(get_metadata_file_path(_key_storage_path))  # TODO Factorize this ?
+            metadata_mapper[key_storage_uid] = metadata
+
+        return metadata_mapper
+
+    def import_key_storage_from_folder(self, key_storage_path: Path):
+        """
+        Create a local import of a remote key storage folder (which must have a proper metadata file).
+
+        Raises KeyStorageAlreadyExists if this key storage was already imported.
+        """
+        assert key_storage_path.exists(), key_storage_path
+
+        metadata = load_from_json_file(get_metadata_file_path(key_storage_path))
+        key_storage_uid = metadata["device_uid"]  # Fails badly if metadata file is corrupted
+
+        if key_storage_uid in self.list_imported_key_storage_uids():
+            raise KeyStorageAlreadyExists("Key storage with UUID %s was already imported locally" % key_storage_uid)
+
+        imported_key_storage_path = self._get_imported_key_storage_path(key_storage_uid=key_storage_uid)
+        safe_copy_directory(key_storage_path, imported_key_storage_path)  # Must not fail, due to previous checks
+        assert imported_key_storage_path.exists()
+
 
 
 

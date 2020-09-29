@@ -33,7 +33,8 @@ Hashing
 
 Cryptographic hash functions take arbitrary binary strings as input, and produce a random-like fixed-length output (called digest or hash value). It is practically infeasible to derive the original input data from the digest. In other words, the cryptographic hash function is one-way (pre-image resistance). Given the digest of one message, it is also practically infeasible to find another message (second pre-image) with the same digest (weak collision resistance).
 
-.. SHA256 : SHA-256 belongs to the SHA-2 family of cryptographic hashes. It produces the 256 bit digest of a message.
+.. autodata:: wacryptolib.utilities.SUPPORTED_HASH_ALGOS
+   :noindex:
 
 
 Signature

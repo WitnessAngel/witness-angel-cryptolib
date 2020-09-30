@@ -637,13 +637,24 @@ def test_container_storage_and_executor(tmp_path, caplog):
     storage.enqueue_file_for_encryption("newfile.bmp", b"stuffs", metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 3
-    assert storage.list_container_names(as_sorted=True) == [
+    expected_container_names = [
         Path("animals.dat.crypt"),
         Path("empty.txt.crypt"),
         Path("newfile.bmp.crypt"),
     ]
+    assert storage.list_container_names(as_sorted=True) == expected_container_names
+    assert sorted(storage.list_container_names(as_sorted=False)) == expected_container_names
+
     assert not list(storage._containers_dir.glob("newfile*data"))  # Offloading is well disabled now
     assert len(list(storage._containers_dir.iterdir())) == 5
+
+    _container_for_txt = storage.load_container_from_storage("empty.txt.crypt")
+    assert storage.load_container_from_storage(1) == _container_for_txt
+    assert _container_for_txt["data_ciphertext"]
+
+    _container_for_txt2 = storage.load_container_from_storage("empty.txt.crypt", include_data_ciphertext=False)
+    assert storage.load_container_from_storage(1, include_data_ciphertext=False) == _container_for_txt2
+    assert not hasattr(_container_for_txt2, "data_ciphertext")
 
     # We continue test with a randomly configured storage
     offload_data_ciphertext = random.choice((True, False))

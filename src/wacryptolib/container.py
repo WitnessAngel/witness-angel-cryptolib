@@ -825,7 +825,7 @@ class ContainerStorage:
         )  # As list, for multiple looping on it
         assert all(p.is_absolute() for p in paths), paths
         if as_sorted:
-            paths = sorted(p for p in paths)
+            paths = sorted(paths)
         if not as_absolute:
             paths = (Path(p.name) for p in paths)
         return list(paths)
@@ -861,7 +861,7 @@ class ContainerStorage:
             key_storage_pool=self._key_storage_pool,
         )
 
-    def _decrypt_data_from_container(self, container):
+    def _decrypt_data_from_container(self, container: dict) -> bytes:
         return decrypt_data_from_container(
             container, key_storage_pool=self._key_storage_pool
         )  # Will fail if authorizations are not OK
@@ -920,10 +920,10 @@ class ContainerStorage:
             future.result()  # Should NEVER raise, thanks to the @catch_and_log_exception above, and absence of cancellations
         self._purge_exceeding_containers()  # Good to have now
 
-    def decrypt_container_from_storage(self, container_name_or_idx, include_data_ciphertext=True):
+    def load_container_from_storage(self, container_name_or_idx, include_data_ciphertext=True) -> dict:
         """
-        Return the decrypted content of the container `filename` (which must be in `list_container_names()`,
-        or an index suitable for this list).
+        Return the encrypted container dict for `container_name_or_idx` (which must be in `list_container_names()`,
+        or an index suitable for this sorted list).
         """
         if isinstance(container_name_or_idx, int):
             container_names = self.list_container_names(
@@ -933,21 +933,28 @@ class ContainerStorage:
                 container_name_or_idx
             ]  # Will break if idx is out of bounds
         else:
-
             assert isinstance(container_name_or_idx, (Path, str)), repr(
                 container_name_or_idx
             )
             container_name = Path(container_name_or_idx)
-
         assert not container_name.is_absolute(), container_name
 
-        logger.info("Decrypting container %r from storage", container_name)
-
+        logger.info("Loading container %r from storage", container_name)
         container_filepath = self._make_absolute(container_name)
         container = load_container_from_filesystem(container_filepath, include_data_ciphertext=include_data_ciphertext)
+        return container
+
+    def decrypt_container_from_storage(self, container_name_or_idx) -> bytes:
+        """
+        Return the decrypted content of the container `container_name_or_idx` (which must be in `list_container_names()`,
+        or an index suitable for this sorted list).
+        """
+        logger.info("Decrypting container %r from storage", container_name_or_idx)
+
+        container = self.load_container_from_storage(container_name_or_idx, include_data_ciphertext=True)
 
         result = self._decrypt_data_from_container(container)
-        logger.info("Container %r successfully decrypted", container_name)
+        logger.info("Container %r successfully decrypted", container_name_or_idx)
         return result
 
 

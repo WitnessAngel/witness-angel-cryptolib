@@ -760,6 +760,19 @@ def load_container_from_filesystem(container_filepath: Path, include_data_cipher
     return container
 
 
+def delete_container_from_filesystem(container_filepath):
+    """Delete a container file and its potential offloaded data file."""
+    os.remove(
+        container_filepath
+    )  # TODO - additional retries if file access errors?
+    offloaded_file_path = _get_offloaded_file_path(container_filepath)
+    if offloaded_file_path.exists():
+        # We don't care about OFFLOADED_MARKER here, we go the quick way
+        os.remove(
+                offloaded_file_path
+        )
+
+
 def extract_metadata_from_container(container: dict) -> Optional[dict]:
     """Read the metadata tree (possibly None) from a container.
 
@@ -843,9 +856,11 @@ class ContainerStorage:
 
     def _delete_container(self, container_name):
         container_filepath = self._make_absolute(container_name)
-        os.remove(
-            container_filepath
-        )  # TODO - additional retries if file access errors?
+        delete_container_from_filesystem(container_filepath)
+
+    def delete_container(self, container_name):
+        logger.info("Deleting container %s" % container_name)
+        self._delete_container(container_name=container_name)
 
     def _purge_exceeding_containers(self):
         if self._max_containers_count:

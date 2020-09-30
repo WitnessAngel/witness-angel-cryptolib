@@ -20,7 +20,7 @@ from wacryptolib.container import (
     ContainerBase,
     get_encryption_configuration_summary, dump_container_to_filesystem, load_container_from_filesystem,
     SHARED_SECRET_MARKER, get_escrow_id, gather_escrow_dependencies, get_escrow_proxy,
-    request_decryption_authorizations, CONTAINER_SUFFIX, OFFLOADED_DATA_SUFFIX
+    request_decryption_authorizations, CONTAINER_SUFFIX, OFFLOADED_DATA_SUFFIX, delete_container_from_filesystem
 )
 from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import EscrowApi, generate_asymmetric_keypair_for_storage, generate_free_keypair_for_least_provisioned_key_type
@@ -745,6 +745,14 @@ def test_container_storage_and_executor(tmp_path, caplog):
         Path("zzz.dat.001.crypt"),
     ]
 
+    storage.delete_container(Path("xyz.dat.002.crypt"))
+
+    assert storage.list_container_names(as_sorted=True) == [
+        Path("xyz.dat.001.crypt"),
+        Path("xyz.dat.003.crypt"),
+        Path("zzz.dat.001.crypt"),
+    ]
+
 
 def test_container_storage_encryption_conf_precedence(tmp_path):
 
@@ -886,14 +894,18 @@ def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
 
     assert container["data_ciphertext"] == container_ciphertext_before_dump # Original dict unchanged
 
+    assert container_filepath.exists()
+    delete_container_from_filesystem(container_filepath)
+    assert not container_filepath.exists()
+
     # CASE 2 - OFFLOADED CIPHERTEXT FILE
 
     dump_container_to_filesystem(container_filepath, container=container)  # OVERWRITE, with offloading by default
     container_reloaded = load_from_json_file(container_filepath)
     assert container_reloaded["data_ciphertext"] == "[OFFLOADED]"
 
-    container_offloaded_filepathstr = str(container_filepath) + ".data"
-    offloaded_data_reloaded = Path(container_offloaded_filepathstr).read_bytes()
+    container_offloaded_filepath = Path(str(container_filepath) + ".data")
+    offloaded_data_reloaded = container_offloaded_filepath.read_bytes()
     assert offloaded_data_reloaded == container_ciphertext_before_dump  # WELL OFFLOADED as DIRECT BYTES
     assert load_container_from_filesystem(container_filepath) == container  # UNCHANGED from original
 
@@ -902,3 +914,9 @@ def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
     assert container_truncated == container_without_ciphertext
 
     assert container["data_ciphertext"] == container_ciphertext_before_dump # Original dict unchanged
+
+    assert container_filepath.exists()
+    assert container_offloaded_filepath.exists()
+    delete_container_from_filesystem(container_filepath)
+    assert not container_filepath.exists()
+    assert not container_offloaded_filepath.exists()

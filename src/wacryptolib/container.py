@@ -695,10 +695,10 @@ def encrypt_data_into_container(
     the agreement of the owner and multiple third-party escrows.
 
     :param data: bytestring of media (image, video, sound...) to protect
-    :param conf: tree of format-specific settings
+    :param conf: tree of specific encryption settings
     :param metadata: dict of metadata describing the data
     :param keychain_uid: optional ID of a keychain to reuse
-    :param key_storage_pool: optional key storage pool
+    :param key_storage_pool: optional key storage pool, might be required by encryption conf
 
     :return: dict of container
     """
@@ -781,15 +781,22 @@ class ContainerStorage:
     Exceeding containers are automatically purged when enqueuing new files or waiting for idle state.
 
     A thread pool is used to encrypt files in the background.
+
+    :param containers_dir: the folder where container files are stored
+    :param default_encryption_conf: encryption conf to use when none is provided when enqueuing data
+    :param max_containers_count: if set, oldest exceeding containers (when sorted by name) are automatcially erased
+    :param key_storage_pool: optional KeyStoragePool, which might be required by current encryption conf
+    :param max_workers: count of worker threads to use in parallel
+    :param offload_data_ciphertext: whether actual encrypted data must be kept separated from structured container file
     """
 
     def __init__(
         self,
-        encryption_conf: dict,
         containers_dir: Path,
-        max_containers_count: int = None,
-        key_storage_pool: KeyStoragePoolBase = None,
-        max_workers=1,
+        default_encryption_conf: Optional[dict]=None,
+        max_containers_count: Optional[int]=None,
+        key_storage_pool: Optional[KeyStoragePoolBase]=None,
+        max_workers: int=1,
         offload_data_ciphertext=True,
     ):
         containers_dir = Path(containers_dir)
@@ -798,7 +805,7 @@ class ContainerStorage:
         assert (
             max_containers_count is None or max_containers_count > 0
         ), max_containers_count
-        self._encryption_conf = encryption_conf
+        self._default_encryption_conf = default_encryption_conf
         self._containers_dir = containers_dir
         self._max_containers_count = max_containers_count
         self._key_storage_pool = key_storage_pool
@@ -853,10 +860,11 @@ class ContainerStorage:
                 for container_name in containers_to_delete:
                     self._delete_container(container_name)
 
-    def _encrypt_data_into_container(self, data, metadata):
+    def _encrypt_data_into_container(self, data, metadata, encryption_conf):
+        assert encryption_conf, encryption_conf
         return encrypt_data_into_container(
             data=data,
-            conf=self._encryption_conf,
+            conf=encryption_conf,
             metadata=metadata,
             key_storage_pool=self._key_storage_pool,
         )
@@ -867,13 +875,13 @@ class ContainerStorage:
         )  # Will fail if authorizations are not OK
 
     @catch_and_log_exception
-    def _offloaded_encrypt_data_and_dump_container(self, filename_base, data, metadata):
+    def _offloaded_encrypt_data_and_dump_container(self, filename_base, data, metadata, encryption_conf):
         """Task to be called by background thread, which encrypts a payload into a disk container.
 
         Returns the container basename."""
 
         logger.debug("Encrypting file %s", filename_base)
-        container = self._encrypt_data_into_container(data, metadata=metadata)
+        container = self._encrypt_data_into_container(data, metadata=metadata, encryption_conf=encryption_conf)
 
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
         logger.debug("Writing container data to file %s", container_filepath)
@@ -887,14 +895,23 @@ class ContainerStorage:
         return container_filepath.name
 
     @synchronized
-    def enqueue_file_for_encryption(self, filename_base, data, metadata):
+    def enqueue_file_for_encryption(self, filename_base, data, metadata, encryption_conf=None):
         """Enqueue a data file for encryption and storage, with its metadata tree.
 
         Default implementation does the encryption/output job synchronously.
 
-        `filename` of the final container might be different from provided one.
+        The filename of final container might be different from provided one.
+
+        `encryption_conf`, if provided, replaces default encryption conf for this data item.
         """
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
+
+        encryption_conf = encryption_conf or self._default_encryption_conf
+
+        if not encryption_conf:
+            raise RuntimeError("Either default or file-specific encryption conf must be provided to ContainerStorage")
+
+
         self._purge_exceeding_containers()
         self._purge_executor_results()
         future = self._thread_pool_executor.submit(
@@ -902,6 +919,7 @@ class ContainerStorage:
             filename_base=filename_base,
             data=data,
             metadata=metadata,
+            encryption_conf=encryption_conf
         )
         self._pending_executor_futures.append(future)
 

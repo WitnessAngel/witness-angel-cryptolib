@@ -8,13 +8,13 @@ class FakeTestContainerStorage(ContainerStorage):
 
     increment = 0
 
-    def enqueue_file_for_encryption(self, filename_base, data, metadata):
+    def enqueue_file_for_encryption(self, filename_base, data, metadata, encryption_conf=None):
         super().enqueue_file_for_encryption(
-            filename_base + (".%03d" % self.increment), data, metadata=metadata
+            filename_base + (".%03d" % self.increment), data, metadata=metadata, encryption_conf=encryption_conf
         )
         self.increment += 1
 
-    def _encrypt_data_into_container(self, data, metadata):
+    def _encrypt_data_into_container(self, data, metadata, encryption_conf):
         return dict(a=33, data_ciphertext=data)
 
     def _decrypt_data_from_container(self, container):

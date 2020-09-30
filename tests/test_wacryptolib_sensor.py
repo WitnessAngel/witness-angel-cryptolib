@@ -55,8 +55,8 @@ def test_tarfile_aggregator(tmp_path):
 
     offload_data_ciphertext = random.choice((True, False))
     container_storage = FakeTestContainerStorage(
-        encryption_conf=None, containers_dir=tmp_path,
-            offload_data_ciphertext=offload_data_ciphertext
+        default_encryption_conf={"whatever": True}, containers_dir=tmp_path,
+        offload_data_ciphertext=offload_data_ciphertext
     )
 
     tarfile_aggregator = TarfileRecordsAggregator(
@@ -240,7 +240,7 @@ def test_json_aggregator(tmp_path):
 
     offload_data_ciphertext = random.choice((True, False))
     container_storage = FakeTestContainerStorage(
-        encryption_conf=None, containers_dir=tmp_path, offload_data_ciphertext=offload_data_ciphertext
+        default_encryption_conf={"qsdqsdsd": True}, containers_dir=tmp_path, offload_data_ciphertext=offload_data_ciphertext
     )
 
     tarfile_aggregator = TarfileRecordsAggregator(
@@ -337,7 +337,7 @@ def test_aggregators_thread_safety(tmp_path):
 
     offload_data_ciphertext = random.choice((True, False))
     container_storage = FakeTestContainerStorage(
-        encryption_conf=None, containers_dir=tmp_path, offload_data_ciphertext=offload_data_ciphertext
+        default_encryption_conf={"zesvscc": True}, containers_dir=tmp_path, offload_data_ciphertext=offload_data_ciphertext
     )
 
     tarfile_aggregator = TarfileRecordsAggregator(
@@ -429,7 +429,7 @@ def test_periodic_value_poller(tmp_path):
 
     offload_data_ciphertext = random.choice((True, False))
     container_storage = FakeTestContainerStorage(
-        encryption_conf=None, containers_dir=tmp_path, offload_data_ciphertext=offload_data_ciphertext
+        default_encryption_conf={"zexcsc": True}, containers_dir=tmp_path, offload_data_ciphertext=offload_data_ciphertext
     )
 
     tarfile_aggregator = TarfileRecordsAggregator(

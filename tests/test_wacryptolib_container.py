@@ -610,7 +610,7 @@ def test_get_proxy_for_escrow(tmp_path):
 def test_container_storage_and_executor(tmp_path, caplog):
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
     storage = ContainerStorage(
-        encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path
+        default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path
     )
     assert storage._max_containers_count is None
     assert len(storage) == 0
@@ -632,7 +632,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     assert len(list(storage._containers_dir.iterdir())) == 4  # 2 files per container
 
     storage = ContainerStorage(
-        encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path, offload_data_ciphertext=False
+        default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path, offload_data_ciphertext=False
     )
     storage.enqueue_file_for_encryption("newfile.bmp", b"stuffs", metadata=None)
     storage.wait_for_idle_state()
@@ -659,7 +659,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     # We continue test with a randomly configured storage
     offload_data_ciphertext = random.choice((True, False))
     storage = ContainerStorage(
-        encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path, offload_data_ciphertext=offload_data_ciphertext
+        default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path, offload_data_ciphertext=offload_data_ciphertext
     )
 
     # Test proper logging of errors occurring in thread pool executor
@@ -692,7 +692,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     # Test purge system
 
     offload_data_ciphertext1 = random.choice((True, False))
-    storage = FakeTestContainerStorage(encryption_conf=None, containers_dir=tmp_path,
+    storage = FakeTestContainerStorage(default_encryption_conf={"smth": True}, containers_dir=tmp_path,
                                        offload_data_ciphertext=offload_data_ciphertext1)
     assert storage._max_containers_count is None
     for i in range(10):
@@ -703,8 +703,8 @@ def test_container_storage_and_executor(tmp_path, caplog):
 
     offload_data_ciphertext2 = random.choice((True, False))
     storage = FakeTestContainerStorage(
-        encryption_conf=None, containers_dir=tmp_path, max_containers_count=3,
-            offload_data_ciphertext=offload_data_ciphertext2
+        default_encryption_conf={"stuffs": True}, containers_dir=tmp_path, max_containers_count=3,
+        offload_data_ciphertext=offload_data_ciphertext2
     )
     for i in range(3):
         storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
@@ -727,8 +727,8 @@ def test_container_storage_and_executor(tmp_path, caplog):
 
     offload_data_ciphertext3 = random.choice((True, False))
     storage = FakeTestContainerStorage(
-        encryption_conf=None, containers_dir=tmp_path, max_containers_count=4,
-            offload_data_ciphertext=offload_data_ciphertext3
+        default_encryption_conf={"randomthings": True}, containers_dir=tmp_path, max_containers_count=4,
+        offload_data_ciphertext=offload_data_ciphertext3
     )
     assert len(storage) == 3  # Retrieves existing containers
     storage.enqueue_file_for_encryption("aaa.dat", b"000", metadata=None)
@@ -744,6 +744,38 @@ def test_container_storage_and_executor(tmp_path, caplog):
         Path("xyz.dat.003.crypt"),
         Path("zzz.dat.001.crypt"),
     ]
+
+
+def test_container_storage_encryption_conf_precedence(tmp_path):
+
+    # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
+
+    storage = ContainerStorage(
+        default_encryption_conf=None, containers_dir=tmp_path
+    )
+
+    assert storage.list_container_names() == []
+
+    with pytest.raises(RuntimeError, match="encryption conf"):
+        storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
+    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None, encryption_conf=SIMPLE_CONTAINER_CONF)
+
+    storage.wait_for_idle_state()
+    assert storage.list_container_names() == [Path("animals.dat.crypt")]
+
+    # ---
+
+    storage = ContainerStorage(
+        default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path
+    )
+    storage.enqueue_file_for_encryption("stuff_simple.txt", b"aaa", metadata=None)
+    storage.enqueue_file_for_encryption("stuff_complex.txt", b"xxx", metadata=None, encryption_conf=COMPLEX_CONTAINER_CONF)
+    storage.wait_for_idle_state()
+
+    container_simple = storage.load_container_from_storage("stuff_simple.txt.crypt")
+    assert len(container_simple["data_encryption_strata"]) == 1
+    container_complex = storage.load_container_from_storage("stuff_complex.txt.crypt")
+    assert len(container_complex["data_encryption_strata"]) == 3
 
 
 def test_get_encryption_configuration_summary():

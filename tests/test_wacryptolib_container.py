@@ -449,7 +449,7 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf, escro
         decrypt_data_from_container(container=container)
 
 
-def test_passphrase_mapping_during_decryption():
+def test_passphrase_mapping_during_decryption(tmp_path):
 
     keychain_uid = generate_uuid0()
 
@@ -565,10 +565,30 @@ def test_passphrase_mapping_during_decryption():
         decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
                                     passphrase_mapper={local_escrow_id: ["qsdqsd"], share_escrow1_id: all_passphrases, share_escrow3_id: [passphrase3]})
 
-    decrypted =  decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
+    decrypted = decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
                                         passphrase_mapper={local_escrow_id: [local_passphrase], share_escrow1_id: all_passphrases, share_escrow3_id: [passphrase3]})
     assert decrypted == data
-    
+
+    # Passphrases of `None` key are always used
+    decrypted = decrypt_data_from_container(container, key_storage_pool=key_storage_pool,
+                                        passphrase_mapper={local_escrow_id: [local_passphrase], share_escrow1_id: ["dummy-passphrase"], share_escrow3_id: [passphrase3], None: all_passphrases})
+    assert decrypted == data
+
+    # Proper forwarding of parameters in container storage class
+
+    storage = ContainerStorage(tmp_path, key_storage_pool=key_storage_pool)
+    storage.enqueue_file_for_encryption("beauty.txt", data=data, metadata=None, keychain_uid=keychain_uid, encryption_conf=container_conf)
+    storage.wait_for_idle_state()
+
+    container_names = storage.list_container_names(as_sorted=True)
+    print(">> container_names", container_names)
+
+    with pytest.raises(DecryptionError):
+        storage.decrypt_container_from_storage("beauty.txt.crypt")
+
+    decrypted = storage.decrypt_container_from_storage("beauty.txt.crypt", passphrase_mapper={None: all_passphrases})
+    assert decrypted == data
+
 
 def test_get_proxy_for_escrow(tmp_path):
     container_base1 = ContainerBase()

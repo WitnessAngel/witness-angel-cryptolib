@@ -160,6 +160,11 @@ def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase) -> Escr
 class ContainerBase:
     """
     BEWARE - this class-based design is provisional and might change a lot.
+
+    `key_storage_pool` will be used to fetch local/imported escrows necessary to encryption/decryption operations.
+
+    `passphrase_mapper` maps escrows IDs to potential passphrase; a None key can be used to provide additional
+    passphrases for all escrows.
     """
 
     def __init__(self, key_storage_pool: KeyStoragePoolBase=None, passphrase_mapper: Optional[dict]=None):
@@ -553,7 +558,7 @@ class ContainerReader(ContainerBase):
         self, encryption_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, escrow: dict
     ) -> bytes:
         """
-        Decrypt given cipherdict with an asymmetric algorithm
+        Decrypt given cipherdict with an asymmetric algorithm.
 
         :param encryption_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
@@ -564,26 +569,11 @@ class ContainerReader(ContainerBase):
         """
         encryption_proxy = get_escrow_proxy(escrow=escrow, key_storage_pool=self._key_storage_pool)
 
-        ''' TODO REMOVE THIS OBSOELTE CALL
-        keypair_identifiers = [
-            dict(keychain_uid=keychain_uid, key_type=encryption_algo)
-        ]
-
-        request_result = encryption_proxy.request_decryption_authorization(
-            keypair_identifiers=keypair_identifiers,
-            request_message="Automatic decryption authorization request",
-        )
-        
-        logger.info(
-            "Decryption authorization request result: %s",
-            request_result["response_message"],
-        )
-        
-        '''
-
         escrow_id = get_escrow_id(escrow)
-        passphrases = self._passphrase_mapper.get(escrow_id)  # Might be None
-        assert passphrases is None or isinstance(passphrases, list), repr(passphrases)  # No SINGLE passphrase here
+        passphrases = self._passphrase_mapper.get(escrow_id) or []
+        assert isinstance(passphrases, list), repr(passphrases)  # No SINGLE passphrase here
+
+        passphrases += self._passphrase_mapper.get(None) or []  # Add COMMON passphrases
 
         # We expect decryption authorization requests to have already been done properly
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
@@ -875,28 +865,29 @@ class ContainerStorage:
                 for container_name in containers_to_delete:
                     self._delete_container(container_name)
 
-    def _encrypt_data_into_container(self, data, metadata, encryption_conf):
+    def _encrypt_data_into_container(self, data, metadata, keychain_uid, encryption_conf):
         assert encryption_conf, encryption_conf
         return encrypt_data_into_container(
             data=data,
             conf=encryption_conf,
             metadata=metadata,
+            keychain_uid=keychain_uid,
             key_storage_pool=self._key_storage_pool,
         )
 
-    def _decrypt_data_from_container(self, container: dict) -> bytes:
+    def _decrypt_data_from_container(self, container: dict, passphrase_mapper: dict) -> bytes:
         return decrypt_data_from_container(
-            container, key_storage_pool=self._key_storage_pool
+            container, key_storage_pool=self._key_storage_pool, passphrase_mapper=passphrase_mapper
         )  # Will fail if authorizations are not OK
 
     @catch_and_log_exception
-    def _offloaded_encrypt_data_and_dump_container(self, filename_base, data, metadata, encryption_conf):
+    def _offloaded_encrypt_data_and_dump_container(self, filename_base, data, metadata, keychain_uid, encryption_conf):
         """Task to be called by background thread, which encrypts a payload into a disk container.
 
         Returns the container basename."""
 
         logger.debug("Encrypting file %s", filename_base)
-        container = self._encrypt_data_into_container(data, metadata=metadata, encryption_conf=encryption_conf)
+        container = self._encrypt_data_into_container(data, metadata=metadata, keychain_uid=keychain_uid, encryption_conf=encryption_conf)
 
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
         logger.debug("Writing container data to file %s", container_filepath)
@@ -910,13 +901,14 @@ class ContainerStorage:
         return container_filepath.name
 
     @synchronized
-    def enqueue_file_for_encryption(self, filename_base, data, metadata, encryption_conf=None):
+    def enqueue_file_for_encryption(self, filename_base, data, metadata, keychain_uid=None, encryption_conf=None):
         """Enqueue a data file for encryption and storage, with its metadata tree.
 
         Default implementation does the encryption/output job synchronously.
 
         The filename of final container might be different from provided one.
 
+        `keychain_uid`, if provided, replaces autogenerated keychain_uid for this data item.
         `encryption_conf`, if provided, replaces default encryption conf for this data item.
         """
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
@@ -934,7 +926,8 @@ class ContainerStorage:
             filename_base=filename_base,
             data=data,
             metadata=metadata,
-            encryption_conf=encryption_conf
+            keychain_uid=keychain_uid,
+            encryption_conf=encryption_conf,
         )
         self._pending_executor_futures.append(future)
 
@@ -977,7 +970,7 @@ class ContainerStorage:
         container = load_container_from_filesystem(container_filepath, include_data_ciphertext=include_data_ciphertext)
         return container
 
-    def decrypt_container_from_storage(self, container_name_or_idx) -> bytes:
+    def decrypt_container_from_storage(self, container_name_or_idx, passphrase_mapper: Optional[dict]=None) -> bytes:
         """
         Return the decrypted content of the container `container_name_or_idx` (which must be in `list_container_names()`,
         or an index suitable for this sorted list).
@@ -986,7 +979,7 @@ class ContainerStorage:
 
         container = self.load_container_from_storage(container_name_or_idx, include_data_ciphertext=True)
 
-        result = self._decrypt_data_from_container(container)
+        result = self._decrypt_data_from_container(container, passphrase_mapper=passphrase_mapper)
         logger.info("Container %r successfully decrypted", container_name_or_idx)
         return result
 

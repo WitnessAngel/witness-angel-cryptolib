@@ -346,7 +346,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         """
         List metadata of public keys present in the storage, along with their potential private key existence.
         
-        Returns a list of key information dicts with standard fields "keychain_uid" and "key_type", as well as
+        Returns a SORTED list of key information dicts with standard fields "keychain_uid" and "key_type", as well as
         a boolean "private_key_present" which is True if the related private key exists in storage.
         Sorting is done by keychain_uid and then key_type.
         """

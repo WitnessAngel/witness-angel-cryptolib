@@ -188,7 +188,9 @@ def _list_available_authentication_devices_linux():
     return authentication_device_list
 
 
-def _get_key_storage_folder_path(authentication_device: dict):
+# FIXME introduce an AuthenticationDevice class to normalize and lazify API
+
+def _get_key_storage_folder_path(authentication_device: dict):  # FIXME make this PUBLIC API
     return Path(authentication_device["path"]).joinpath(".key_storage")
 
 

@@ -1,11 +1,17 @@
 Version 0.5
 ==================
 
-* Add API to list and initialize USB "key devices"
+* Add API to list and initialize USB "authentication devices"
+* Introduce KeyStorage pool, containing local and imported key storages
+* Allow importing keypairs from authentication devices
 * Add support for Shamir Shared Secrets in container encryption/decryption toolchain
 * Allow listing of keypairs in FilesystemKeyStorage
 * Support offloading of ciphertext in separate file nearby the json container
 * Accept and normalize unicode passphrases as NFKC/UTF8 bytesstrings
+* Begin using custom functional exceptions in APIs
+* Extend ContainerStorage API to load containers or override encryption parameters per-file
+* Allow overriding keychain_uid at different levels of encryption configuration
+
 
 Version 0.4
 ==================

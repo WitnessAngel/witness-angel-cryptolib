@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 MAX_PAYLOAD_LENGTH_FOR_SIGNATURE = 128  # Max 2*SHA512 length
 
 
-def generate_asymmetric_keypair_for_storage(key_type: str, *, key_storage,
-                                            keychain_uid: Optional[UUID]=None,
-                                            passphrase: Optional[str]=None) -> dict:
+def generate_asymmetric_keypair_for_storage(
+    key_type: str, *, key_storage, keychain_uid: Optional[UUID] = None, passphrase: Optional[str] = None
+) -> dict:
     """
     Shortcut to generate an asymmetric keypair and store it into a key storage.
 
@@ -67,14 +67,13 @@ class EscrowApi:
             return  # Ok the key is available!
 
         try:
-            self._key_storage.attach_free_keypair_to_uuid(
-                keychain_uid=keychain_uid, key_type=key_type
-            )
+            self._key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_type=key_type)
         except KeyDoesNotExist:
             generate_asymmetric_keypair_for_storage(
-                    key_type=key_type, key_storage=self._key_storage, keychain_uid=keychain_uid, passphrase=None)
+                key_type=key_type, key_storage=self._key_storage, keychain_uid=keychain_uid, passphrase=None
+            )
 
-    def fetch_public_key(self, *, keychain_uid: uuid.UUID, key_type: str, must_exist: bool=False) -> bytes:
+    def fetch_public_key(self, *, keychain_uid: uuid.UUID, key_type: str, must_exist: bool = False) -> bytes:
         """
         Return a public key in PEM format bytestring, that caller shall use to encrypt its own symmetric keys,
         or to check a signature.
@@ -99,24 +98,20 @@ class EscrowApi:
 
         self._ensure_keypair_exists(keychain_uid=keychain_uid, key_type=signature_algo)
 
-        private_key_pem = self._key_storage.get_private_key(
-            keychain_uid=keychain_uid, key_type=signature_algo
-        )
+        private_key_pem = self._key_storage.get_private_key(keychain_uid=keychain_uid, key_type=signature_algo)
 
-        private_key = load_asymmetric_key_from_pem_bytestring(
-            key_pem=private_key_pem, key_type=signature_algo
-        )
+        private_key = load_asymmetric_key_from_pem_bytestring(key_pem=private_key_pem, key_type=signature_algo)
 
-        signature = sign_message(
-            message=message, signature_algo=signature_algo, key=private_key
-        )
+        signature = sign_message(message=message, signature_algo=signature_algo, key=private_key)
         return signature
 
     def _check_keypair_authorization(self, *, keychain_uid: uuid.UUID, key_type: str):
         """raises a proper exception if authorization is not given yet to decrypt with this keypair."""
         return  # In this base implementation we always allow decryption!
 
-    def _decrypt_private_key_pem_with_passphrases(self, *, private_key_pem: bytes, key_type:str, passphrases: Optional[list]):
+    def _decrypt_private_key_pem_with_passphrases(
+        self, *, private_key_pem: bytes, key_type: str, passphrases: Optional[list]
+    ):
         """
         Attempt decryption of key with and without provided passphrases, and raise if all fail.
         """
@@ -128,10 +123,12 @@ class EscrowApi:
                 return key_obj
             except KeyLoadingError:
                 pass
-        raise DecryptionError("Could not decrypt private key of type %s (passphrases provided: %d)" % (key_type, len(passphrases)))
+        raise DecryptionError(
+            "Could not decrypt private key of type %s (passphrases provided: %d)" % (key_type, len(passphrases))
+        )
 
     def request_decryption_authorization(
-        self, keypair_identifiers: list, request_message: str, passphrases: Optional[list]=None
+        self, keypair_identifiers: list, request_message: str, passphrases: Optional[list] = None
     ) -> dict:
         """
         Send a list of keypairs for which decryption access is requested, with the reason why.
@@ -149,9 +146,7 @@ class EscrowApi:
         assert isinstance(passphrases, (tuple, list)), repr(passphrases)
 
         if not keypair_identifiers:
-            raise ValueError(
-                "Keypair identifiers must not be empty, when requesting decryption authorization"
-            )
+            raise ValueError("Keypair identifiers must not be empty, when requesting decryption authorization")
 
         missing_private_key = []
         authorization_missing = []
@@ -172,17 +167,15 @@ class EscrowApi:
                 pass  # It's OK, at least we are authorized now
 
             try:
-                private_key_pem = self._key_storage.get_private_key(
-                    keychain_uid=keychain_uid, key_type=key_type
-                )
+                private_key_pem = self._key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type)
             except KeyDoesNotExist:
                 missing_private_key.append(keypair_identifier)
                 continue
 
             try:
-                res = self._decrypt_private_key_pem_with_passphrases(private_key_pem=private_key_pem,
-                                                              key_type=key_type,
-                                                              passphrases=passphrases)
+                res = self._decrypt_private_key_pem_with_passphrases(
+                    private_key_pem=private_key_pem, key_type=key_type, passphrases=passphrases
+                )
                 assert res, repr(res)
             except DecryptionError:
                 missing_passphrase.append(keypair_identifier)
@@ -190,10 +183,12 @@ class EscrowApi:
 
             accepted.append(keypair_identifier)  # Check is OVER for this keypair!
 
-        keypair_statuses = dict(missing_private_key=missing_private_key,
-                                authorization_missing = authorization_missing,
-                                missing_passphrase = missing_passphrase,
-                                accepted = accepted)
+        keypair_statuses = dict(
+            missing_private_key=missing_private_key,
+            authorization_missing=authorization_missing,
+            missing_passphrase=missing_passphrase,
+            accepted=accepted,
+        )
 
         has_errors = len(accepted) < len(keypair_identifiers)
         assert sum(len(x) for x in keypair_statuses.values()) == len(keypair_identifiers), locals()
@@ -201,11 +196,11 @@ class EscrowApi:
         return dict(
             response_message="Decryption request denied" if has_errors else "Decryption request accepted",
             has_errors=has_errors,
-            keypair_statuses=keypair_statuses
+            keypair_statuses=keypair_statuses,
         )  # TODO localize string field!
 
     def decrypt_with_private_key(
-        self, *, keychain_uid: uuid.UUID, encryption_algo: str, cipherdict: dict, passphrases: Optional[list]=None
+        self, *, keychain_uid: uuid.UUID, encryption_algo: str, cipherdict: dict, passphrases: Optional[list] = None
     ) -> bytes:
         """
         Return the message (probably a symmetric key) decrypted with the corresponding key,
@@ -213,21 +208,16 @@ class EscrowApi:
 
         Raises if key existence, authorization or passphrase errors occur.
         """
-        assert (
-            encryption_algo.upper() == "RSA_OAEP"
-        )  # Only supported asymmetric cipher for now
+        assert encryption_algo.upper() == "RSA_OAEP"  # Only supported asymmetric cipher for now
 
         passphrases = passphrases or []
         assert isinstance(passphrases, (tuple, list)), repr(passphrases)
 
-        private_key_pem = self._key_storage.get_private_key(
-            keychain_uid=keychain_uid, key_type=encryption_algo
-        )
+        private_key_pem = self._key_storage.get_private_key(keychain_uid=keychain_uid, key_type=encryption_algo)
 
         private_key = self._decrypt_private_key_pem_with_passphrases(
-                private_key_pem=private_key_pem,
-              key_type=encryption_algo,
-              passphrases=passphrases)
+            private_key_pem=private_key_pem, key_type=encryption_algo, passphrases=passphrases
+        )
 
         secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key=private_key)
         return secret
@@ -239,14 +229,14 @@ class ReadonlyEscrowApi(EscrowApi):
 
     This version never generates keys by itself, whatever the values of method parameters like `must_exist`.
     """
+
     def _ensure_keypair_exists(self, keychain_uid: uuid.UUID, key_type: str):
         try:
             self._key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type)
         except KeyDoesNotExist:
             # Just tweak the error message here
-            raise KeyDoesNotExist(
-                "Keypair %s/%s not found in escrow api" % (keychain_uid, key_type)
-            )
+            raise KeyDoesNotExist("Keypair %s/%s not found in escrow api" % (keychain_uid, key_type))
+
 
 def generate_free_keypair_for_least_provisioned_key_type(
     key_storage: KeyStorageBase,
@@ -265,10 +255,7 @@ def generate_free_keypair_for_least_provisioned_key_type(
     :return: True iff a key was generated (i.e. the free keys pool was not full)
     """
     assert key_types, key_types
-    free_keys_counts = [
-        (key_storage.get_free_keypairs_count(key_type), key_type)
-        for key_type in key_types
-    ]
+    free_keys_counts = [(key_storage.get_free_keypairs_count(key_type), key_type) for key_type in key_types]
     logger.debug("Stats of free keys: %s", str(free_keys_counts))
 
     (count, key_type) = min(free_keys_counts)
@@ -278,19 +265,14 @@ def generate_free_keypair_for_least_provisioned_key_type(
 
     keypair = key_generation_func(key_type=key_type, serialize=True)
     key_storage.add_free_keypair(
-        key_type=key_type,
-        public_key=keypair["public_key"],
-        private_key=keypair["private_key"],
+        key_type=key_type, public_key=keypair["public_key"], private_key=keypair["private_key"]
     )
     logger.debug("New free key of type %s pregenerated" % key_type)
     return True
 
 
 def get_free_keys_generator_worker(
-    key_storage: KeyStorageBase,
-    max_free_keys_per_type: int,
-    sleep_on_overflow_s: float,
-    **extra_generation_kwargs,
+    key_storage: KeyStorageBase, max_free_keys_per_type: int, sleep_on_overflow_s: float, **extra_generation_kwargs
 ) -> PeriodicTaskHandler:
     """
     Return a periodic task handler which will gradually fill the pools of free keys of the key storage,
@@ -305,16 +287,12 @@ def get_free_keys_generator_worker(
 
     def free_keypair_generator_task():
         has_generated = generate_free_keypair_for_least_provisioned_key_type(
-            key_storage=key_storage,
-            max_free_keys_per_type=max_free_keys_per_type,
-            **extra_generation_kwargs,
+            key_storage=key_storage, max_free_keys_per_type=max_free_keys_per_type, **extra_generation_kwargs
         )
         # TODO - improve this with refactored multitimer, later
         if not has_generated:
             time.sleep(sleep_on_overflow_s)
         return has_generated
 
-    periodic_task_handler = PeriodicTaskHandler(
-        interval_s=0.001, task_func=free_keypair_generator_task
-    )
+    periodic_task_handler = PeriodicTaskHandler(interval_s=0.001, task_func=free_keypair_generator_task)
     return periodic_task_handler

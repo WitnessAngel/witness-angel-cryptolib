@@ -85,8 +85,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
             assert not self._current_records_count, self._current_bytesio
             self._current_bytesio = io.BytesIO()
             self._current_tarfile = tarfile.open(
-                mode=self.tarfile_writing_mode,
-                fileobj=self._current_bytesio,  # TODO - add compression?
+                mode=self.tarfile_writing_mode, fileobj=self._current_bytesio  # TODO - add compression?
             )
             self._current_metadata = {"members": {}}
 
@@ -105,19 +104,13 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
             assert not self._current_records_count
             return
 
-        assert (
-            self._current_tarfile
-        )  # Since start time is only set on new aggregation...
+        assert self._current_tarfile  # Since start time is only set on new aggregation...
         self._current_tarfile.close()
         result_bytestring = self._current_bytesio.getvalue()
         end_time = datetime.now(tz=timezone.utc)
-        filename_base = self._build_tarfile_filename(
-            from_datetime=self._current_start_time, to_datetime=end_time
-        )
+        filename_base = self._build_tarfile_filename(from_datetime=self._current_start_time, to_datetime=end_time)
         self._container_storage.enqueue_file_for_encryption(
-            filename_base=filename_base,
-            data=result_bytestring,
-            metadata=self._current_metadata,
+            filename_base=filename_base, data=result_bytestring, metadata=self._current_metadata
         )
 
         self._current_tarfile = None
@@ -127,9 +120,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
 
         super()._flush_aggregated_data()
 
-    def _build_record_filename(
-        self, sensor_name, from_datetime, to_datetime, extension
-    ):
+    def _build_record_filename(self, sensor_name, from_datetime, to_datetime, extension):
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(self.DATETIME_FORMAT)
         to_ts = to_datetime.strftime(self.DATETIME_FORMAT)
@@ -138,14 +129,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         return filename
 
     @synchronized
-    def add_record(
-        self,
-        sensor_name: str,
-        from_datetime: datetime,
-        to_datetime: datetime,
-        extension: str,
-        data: bytes,
-    ):
+    def add_record(self, sensor_name: str, from_datetime: datetime, to_datetime: datetime, extension: str, data: bytes):
         """Add the provided data to the tarfile, using associated metadata.
 
         If, despite included timestamps, several records end up having the exact same name, the last one will have
@@ -157,9 +141,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         :param extension: file extension, starting with a dot
         :param data: bytestring of audio/video/other data
         """
-        assert (
-            self._current_records_count or not self._current_start_time
-        )  # INVARIANT of our system!
+        assert self._current_records_count or not self._current_start_time  # INVARIANT of our system!
         assert isinstance(data, bytes), repr(data)  # For now, only format supported
         assert extension.startswith("."), extension
         assert from_datetime <= to_datetime, (from_datetime, to_datetime)
@@ -169,19 +151,14 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         self._notify_aggregation_operation()
 
         filename = self._build_record_filename(
-            sensor_name=sensor_name,
-            from_datetime=from_datetime,
-            to_datetime=to_datetime,
-            extension=extension,
+            sensor_name=sensor_name, from_datetime=from_datetime, to_datetime=to_datetime, extension=extension
         )
         logger.info("Adding record %r to tarfile builder" % filename)
 
         mtime = to_datetime.timestamp()
 
         member_metadata = dict(size=len(data), mtime=to_datetime)
-        self._current_metadata["members"][
-            filename
-        ] = member_metadata  # Overridden if existing
+        self._current_metadata["members"][filename] = member_metadata  # Overridden if existing
 
         tarinfo = tarfile.TarInfo(filename)
         tarinfo.size = len(data)  # this is crucial
@@ -195,9 +172,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         """
         Return the content of current tarfile as a bytestring, possibly empty, and reset the current tarfile.
         """
-        assert (
-            self._current_records_count or not self._current_start_time
-        )  # INVARIANT of our system!
+        assert self._current_records_count or not self._current_start_time  # INVARIANT of our system!
         self._flush_aggregated_data()
 
     @staticmethod
@@ -205,9 +180,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         """
         Create a readonly TarFile instance from the provided bytestring.
         """
-        assert (
-            data_bytestring
-        ), data_bytestring  # Empty bytestrings must already have been filtered out
+        assert data_bytestring, data_bytestring  # Empty bytestrings must already have been filtered out
         return tarfile.open(mode="r", fileobj=io.BytesIO(data_bytestring))
 
 
@@ -223,16 +196,9 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
     _current_dataset = None
     _lock = None
 
-    def __init__(
-        self,
-        tarfile_aggregator: TarfileRecordsAggregator,
-        sensor_name: str,
-        max_duration_s: int,
-    ):
+    def __init__(self, tarfile_aggregator: TarfileRecordsAggregator, sensor_name: str, max_duration_s: int):
         super().__init__(max_duration_s=max_duration_s)
-        assert isinstance(
-            tarfile_aggregator, TarfileRecordsAggregator
-        ), tarfile_aggregator
+        assert isinstance(tarfile_aggregator, TarfileRecordsAggregator), tarfile_aggregator
         self._tarfile_aggregator = tarfile_aggregator
         self._sensor_name = sensor_name
         self._lock = threading.Lock()
@@ -270,13 +236,9 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
         """
         Flush current data to the tarfile if needed, and append `data_dict` to the queue.
         """
-        assert (
-            self._current_dataset or not self._current_start_time
-        )  # INVARIANT of our system!
+        assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
         assert isinstance(data_dict, dict), data_dict
-        logger.debug(
-            "New data added to %s json builder: %s", self._sensor_name, data_dict
-        )
+        logger.debug("New data added to %s json builder: %s", self._sensor_name, data_dict)
         self._notify_aggregation_operation()
         self._current_dataset.append(data_dict)
 
@@ -285,9 +247,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
         """
         Force the flushing of current data to the tarfile (e.g. when terminating the service).
         """
-        assert (
-            self._current_dataset or not self._current_start_time
-        )  # INVARIANT of our system!
+        assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
         self._flush_aggregated_data()
 
 
@@ -313,9 +273,7 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
     def _offloaded_run_task(self):
         """This function is meant to be called by secondary thread, to fetch and store data."""
         try:
-            assert (
-                self._task_func
-            )  # Sanity check, else _offloaded_run_task() should have been overridden
+            assert self._task_func  # Sanity check, else _offloaded_run_task() should have been overridden
             result = self._task_func()
             self._offloaded_add_data(result)
         except Exception as exc:
@@ -341,9 +299,7 @@ class SensorsManager(TaskRunnerStateMachineBase):
             try:
                 sensor.start()
             except Exception as exc:
-                logger.error(
-                    f"Failed starting sensor {sensor.__class__.__name__} ({exc!r})"
-                )
+                logger.error(f"Failed starting sensor {sensor.__class__.__name__} ({exc!r})")
             else:
                 success_count += 1
         return success_count
@@ -356,9 +312,7 @@ class SensorsManager(TaskRunnerStateMachineBase):
             try:
                 sensor.stop()
             except Exception as exc:
-                logger.error(
-                    f"Failed stopping sensor {sensor.__class__.__name__} ({exc!r})"
-                )
+                logger.error(f"Failed stopping sensor {sensor.__class__.__name__} ({exc!r})")
             else:
                 success_count += 1
         return success_count
@@ -371,9 +325,7 @@ class SensorsManager(TaskRunnerStateMachineBase):
             try:
                 sensor.join()
             except Exception as exc:
-                logger.error(
-                    f"Failed joining sensor {sensor.__class__.__name__} ({exc!r})"
-                )
+                logger.error(f"Failed joining sensor {sensor.__class__.__name__} ({exc!r})")
             else:
                 success_count += 1
         return success_count

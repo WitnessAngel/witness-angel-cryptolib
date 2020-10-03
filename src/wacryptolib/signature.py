@@ -27,10 +27,7 @@ def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_TYPES) -
     if signature_conf is None:
         raise ValueError("Unknown signature algorithm '%s'" % signature_algo)
     if not isinstance(key, signature_conf["compatible_key_type"]):
-        raise ValueError(
-            "Incompatible key type %s for signature algorithm %s"
-            % (type(key), signature_algo)
-        )
+        raise ValueError("Incompatible key type %s for signature algorithm %s" % (type(key), signature_algo))
     signature_function = signature_conf["signature_function"]
     try:
         signature = signature_function(key=key, message=message)
@@ -48,9 +45,7 @@ def _sign_with_pss(message: bytes, key: RSA.RsaKey) -> dict:
     :return: signature dict with keys "digest" (bytestring) and "timestamp_utc" (integer)"""
 
     timestamp_utc = _get_utc_timestamp()
-    hash_payload = _compute_timestamped_hash(
-        message=message, timestamp_utc=timestamp_utc
-    )
+    hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=timestamp_utc)
     signer = pss.new(key)
     digest = signer.sign(hash_payload)
     signature = {"timestamp_utc": timestamp_utc, "digest": digest}
@@ -76,9 +71,7 @@ def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey]) -> dict:
     return signature
 
 
-def verify_message_signature(
-    *, message: bytes, signature_algo: str, signature: dict, key: Union[KNOWN_KEY_TYPES]
-):
+def verify_message_signature(*, message: bytes, signature_algo: str, signature: dict, key: Union[KNOWN_KEY_TYPES]):
     """Verify the authenticity of a signature.
 
     Raises if signature is invalid.
@@ -97,9 +90,7 @@ def verify_message_signature(
     else:
         raise ValueError("Unknown signature algorithm %s" % signature_algo)
 
-    hash_payload = _compute_timestamped_hash(
-        message=message, timestamp_utc=signature["timestamp_utc"]
-    )
+    hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=signature["timestamp_utc"])
 
     try:
         verifier.verify(hash_payload, signature["digest"])

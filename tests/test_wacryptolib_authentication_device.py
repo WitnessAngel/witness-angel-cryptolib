@@ -2,7 +2,11 @@ from pathlib import Path
 from uuid import UUID
 
 from _test_mockups import get_fake_authentication_device
-from wacryptolib.authentication_device import list_available_authentication_devices, is_authentication_device_initialized, _get_metadata_file_path
+from wacryptolib.authentication_device import (
+    list_available_authentication_devices,
+    is_authentication_device_initialized,
+    _get_metadata_file_path,
+)
 from wacryptolib.authentication_device import initialize_authentication_device, load_authentication_device_metadata
 
 
@@ -54,7 +58,7 @@ def test_authentication_device_initialization_and_checkers(tmp_path):
 
     # UPDATED fields
     assert authentication_device["is_initialized"] == True
-    assert len(authentication_device["metadata"]) ==2
+    assert len(authentication_device["metadata"]) == 2
     assert authentication_device["metadata"]["user"] == "Michél Dûpont"
     assert isinstance(authentication_device["metadata"]["device_uid"], UUID)
 
@@ -84,7 +88,9 @@ def test_authentication_device_initialization_and_checkers(tmp_path):
 
     metadata_file_path.unlink()
     assert not is_authentication_device_initialized(authentication_device)
-    initialize_authentication_device(authentication_device, user="Johnny", extra_metadata=dict(passphrase_hint="big passphrâse \n aboùt bïrds"))
+    initialize_authentication_device(
+        authentication_device, user="Johnny", extra_metadata=dict(passphrase_hint="big passphrâse \n aboùt bïrds")
+    )
     assert is_authentication_device_initialized(authentication_device)
 
     metadata = load_authentication_device_metadata(authentication_device)

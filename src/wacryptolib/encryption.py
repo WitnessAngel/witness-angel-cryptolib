@@ -44,7 +44,9 @@ def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key) -> dict:
     return cipherdict
 
 
-def decrypt_bytestring(cipherdict: dict, *, encryption_algo: str, key) -> bytes:  # Fixme rename encryption_algo to decryption_algo? Or normalize?
+def decrypt_bytestring(
+    cipherdict: dict, *, encryption_algo: str, key
+) -> bytes:  # Fixme rename encryption_algo to decryption_algo? Or normalize?
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
@@ -119,9 +121,7 @@ def _decrypt_via_aes_eax(cipherdict: dict, key: bytes) -> bytes:
     return plaintext
 
 
-def _encrypt_via_chacha20_poly1305(
-    plaintext: bytes, key: bytes, aad: bytes = b"header"
-) -> dict:
+def _encrypt_via_chacha20_poly1305(plaintext: bytes, key: bytes, aad: bytes = b"header") -> dict:
     """Encrypt a bytestring with the stream cipher ChaCha20.
 
     Additional cleartext data can be provided so that the
@@ -151,9 +151,7 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key: bytes) -> bytes:
     _check_symmetric_key_length_bytes(len(key))
     decipher = ChaCha20_Poly1305.new(key=key, nonce=cipherdict["nonce"])
     decipher.update(cipherdict["aad"])
-    plaintext = decipher.decrypt_and_verify(
-        ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"]
-    )
+    plaintext = decipher.decrypt_and_verify(ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"])
     return plaintext
 
 
@@ -167,12 +165,7 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key: RSA.RsaKey) -> dict:
     _check_asymmetric_key_length_bits(key.size_in_bits())
 
     cipher = PKCS1_OAEP.new(key=key, hashAlgo=RSA_OAEP_HASHER)
-    chunks = split_as_chunks(
-        plaintext,
-        chunk_size=RSA_OAEP_CHUNKS_SIZE,
-        must_pad=False,
-        accept_incomplete_chunk=True,
-    )
+    chunks = split_as_chunks(plaintext, chunk_size=RSA_OAEP_CHUNKS_SIZE, must_pad=False, accept_incomplete_chunk=True)
 
     encrypted_chunks = []
     for chunk in chunks:
@@ -203,23 +196,14 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key: RSA.RsaKey) -> bytes:
 
 ENCRYPTION_ALGOS_REGISTRY = dict(
     ## SYMMETRIC ENCRYPTION ##
-    AES_CBC={
-        "encryption_function": _encrypt_via_aes_cbc,
-        "decryption_function": _decrypt_via_aes_cbc,
-    },
-    AES_EAX={
-        "encryption_function": _encrypt_via_aes_eax,
-        "decryption_function": _decrypt_via_aes_eax,
-    },
+    AES_CBC={"encryption_function": _encrypt_via_aes_cbc, "decryption_function": _decrypt_via_aes_cbc},
+    AES_EAX={"encryption_function": _encrypt_via_aes_eax, "decryption_function": _decrypt_via_aes_eax},
     CHACHA20_POLY1305={
         "encryption_function": _encrypt_via_chacha20_poly1305,
         "decryption_function": _decrypt_via_chacha20_poly1305,
     },
     ## ASYMMETRIC ENCRYPTION ##
-    RSA_OAEP={
-        "encryption_function": _encrypt_via_rsa_oaep,
-        "decryption_function": _decrypt_via_rsa_oaep,
-    },
+    RSA_OAEP={"encryption_function": _encrypt_via_rsa_oaep, "decryption_function": _decrypt_via_rsa_oaep},
 )
 
 #: These values can be used as 'encryption_algo'.

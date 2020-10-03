@@ -22,14 +22,10 @@ def test_generic_encryption_and_decryption_errors():
     binary_content = _get_binary_content()
 
     with pytest.raises(ValueError, match="Unknown cipher type"):
-        wacryptolib.encryption.encrypt_bytestring(
-            key=key, plaintext=binary_content, encryption_algo="EXHD"
-        )
+        wacryptolib.encryption.encrypt_bytestring(key=key, plaintext=binary_content, encryption_algo="EXHD")
 
     with pytest.raises(ValueError, match="Unknown cipher type"):
-        wacryptolib.encryption.decrypt_bytestring(
-            key=key, cipherdict={}, encryption_algo="EXHD"
-        )
+        wacryptolib.encryption.decrypt_bytestring(key=key, cipherdict={}, encryption_algo="EXHD")
 
 
 def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_content):
@@ -57,9 +53,7 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
             original_ciphertext = encryption["ciphertext"]
             editable_ciphertext = bytearray(original_ciphertext)
             idx = random.randint(0, len(editable_ciphertext) - 1)
-            editable_ciphertext[idx] = (
-                editable_ciphertext[idx] + random.randint(1, 100)
-            ) % 256
+            editable_ciphertext[idx] = (editable_ciphertext[idx] + random.randint(1, 100)) % 256
             corrupted_ciphertext = bytes(editable_ciphertext)
             encryption["ciphertext"] = corrupted_ciphertext
 
@@ -96,13 +90,9 @@ def test_symmetric_encryption_and_decryption_for_algo(encryption_algo):
     assert decrypted_content == binary_content
 
     decryption_func = functools.partial(
-        wacryptolib.encryption.decrypt_bytestring,
-        key=key,
-        encryption_algo=encryption_algo,
+        wacryptolib.encryption.decrypt_bytestring, key=key, encryption_algo=encryption_algo
     )
-    _test_random_ciphertext_corruption(
-        decryption_func, cipherdict=cipherdict, initial_content=binary_content
-    )
+    _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
 
     key_too_short = get_random_bytes(16)
 
@@ -127,41 +117,29 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
     binary_content = _get_binary_content()
 
     cipherdict = wacryptolib.encryption.encrypt_bytestring(
-        key=keypair["public_key"],
-        plaintext=binary_content,
-        encryption_algo=encryption_algo,
+        key=keypair["public_key"], plaintext=binary_content, encryption_algo=encryption_algo
     )
 
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
-        key=keypair["private_key"],
-        cipherdict=cipherdict,
-        encryption_algo=encryption_algo,
+        key=keypair["private_key"], cipherdict=cipherdict, encryption_algo=encryption_algo
     )
 
     assert decrypted_content == binary_content
 
     decryption_func = functools.partial(
-        wacryptolib.encryption.decrypt_bytestring,
-        key=keypair["private_key"],
-        encryption_algo="RSA_OAEP",
+        wacryptolib.encryption.decrypt_bytestring, key=keypair["private_key"], encryption_algo="RSA_OAEP"
     )
-    _test_random_ciphertext_corruption(
-        decryption_func, cipherdict=cipherdict, initial_content=binary_content
-    )
+    _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
 
     private_key_too_short = RSA.generate(1024)
     public_key_too_short = private_key_too_short.publickey()
 
     with pytest.raises(EncryptionError, match="asymmetric key length"):
         wacryptolib.encryption.encrypt_bytestring(
-            key=public_key_too_short,
-            plaintext=binary_content,
-            encryption_algo=encryption_algo,
+            key=public_key_too_short, plaintext=binary_content, encryption_algo=encryption_algo
         )
 
     with pytest.raises(DecryptionError, match="asymmetric key length"):
         wacryptolib.encryption.decrypt_bytestring(
-            key=private_key_too_short,
-            cipherdict=cipherdict,
-            encryption_algo=encryption_algo,
+            key=private_key_too_short, cipherdict=cipherdict, encryption_algo=encryption_algo
         )

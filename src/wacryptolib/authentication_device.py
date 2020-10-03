@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 # FIXME regroup all metadata and is_initialized in single "metadata" field
 
+
 def list_available_authentication_devices():
     """
     Generate a list of dictionaries representing mounted partitions of USB keys.
@@ -42,7 +43,7 @@ def list_available_authentication_devices():
     return authentication_devices
 
 
-def initialize_authentication_device(authentication_device: dict, user: str, extra_metadata: Optional[dict]=None):
+def initialize_authentication_device(authentication_device: dict, user: str, extra_metadata: Optional[dict] = None):
     """
     Initialize a specific USB key, by creating an internal structure with key device metadata.
 
@@ -62,9 +63,13 @@ def initialize_authentication_device(authentication_device: dict, user: str, ext
         raise RuntimeError("%s key-device is already initialized" % authentication_device["path"])
 
     if sys_platform == "win32":  # All Windows versions
-        metadata = _initialize_authentication_device_win32(authentication_device=authentication_device, user=user, extra_metadata=extra_metadata)
+        metadata = _initialize_authentication_device_win32(
+            authentication_device=authentication_device, user=user, extra_metadata=extra_metadata
+        )
     else:  # Linux, MacOS etc.
-        metadata = _initialize_authentication_device_linux(authentication_device=authentication_device, user=user, extra_metadata=extra_metadata)
+        metadata = _initialize_authentication_device_linux(
+            authentication_device=authentication_device, user=user, extra_metadata=extra_metadata
+        )
 
     authentication_device["is_initialized"] = True
     authentication_device["metadata"] = metadata
@@ -162,10 +167,7 @@ def _list_available_authentication_devices_linux():
     ]
     for device in removable:
         partitions = [
-            device.device_node
-            for device in context.list_devices(
-                subsystem="block", DEVTYPE="partition", parent=device
-            )
+            device.device_node for device in context.list_devices(subsystem="block", DEVTYPE="partition", parent=device)
         ]
         for p in psutil.disk_partitions():
 
@@ -176,9 +178,7 @@ def _list_available_authentication_devices_linux():
             authentication_device["drive_type"] = "USBSTOR"
             authentication_device["label"] = str(PurePath(p.mountpoint).name)  # E.g: 'UBUNTU 20_0'
             authentication_device["path"] = p.mountpoint  # E.g: '/media/akram/UBUNTU 20_0',
-            authentication_device["size"] = psutil.disk_usage(
-                authentication_device["path"]
-            ).total  # E.g: 30986469376
+            authentication_device["size"] = psutil.disk_usage(authentication_device["path"]).total  # E.g: 30986469376
             authentication_device["format"] = p.fstype  # E.g: 'vfat'
             authentication_device["partition"] = p.device  # E.g: '/dev/sda1'
             authentication_device["is_initialized"] = is_authentication_device_initialized(
@@ -189,6 +189,7 @@ def _list_available_authentication_devices_linux():
 
 
 # FIXME introduce an AuthenticationDevice class to normalize and lazify API
+
 
 def _get_key_storage_folder_path(authentication_device: dict):  # FIXME make this PUBLIC API
     return Path(authentication_device["path"]).joinpath(".key_storage")
@@ -213,8 +214,9 @@ def _initialize_authentication_device_win32(authentication_device: dict, user: s
     import win32api
     import win32.lib.win32con as win32con
 
-
-    metadata = _common_authentication_device_initialization(authentication_device, user=user, extra_metadata=extra_metadata)
+    metadata = _common_authentication_device_initialization(
+        authentication_device, user=user, extra_metadata=extra_metadata
+    )
 
     # Hide the root folder specific to cryptolib stuffs, on this device
     key_storage_folder = _get_key_storage_folder_path(authentication_device)
@@ -224,4 +226,6 @@ def _initialize_authentication_device_win32(authentication_device: dict, user: s
 
 
 def _initialize_authentication_device_linux(authentication_device: dict, user: str, extra_metadata: dict):
-    return _common_authentication_device_initialization(authentication_device, user=user, extra_metadata=extra_metadata)  # Unchanged for now
+    return _common_authentication_device_initialization(
+        authentication_device, user=user, extra_metadata=extra_metadata
+    )  # Unchanged for now

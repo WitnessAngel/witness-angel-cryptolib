@@ -20,7 +20,8 @@ from wacryptolib.utilities import (
     load_from_json_file,
     generate_uuid0,
     SUPPORTED_HASH_ALGOS,
-    hash_message, safe_copy_directory,
+    hash_message,
+    safe_copy_directory,
 )
 
 
@@ -68,9 +69,7 @@ def test_split_as_chunks_and_recombine():
     with pytest.raises(ValueError, match="size multiple of chunk_size"):
         split_as_chunks(bytestring, chunk_size=22, must_pad=False)
 
-    chunks = split_as_chunks(
-        bytestring, chunk_size=22, must_pad=False, accept_incomplete_chunk=True
-    )
+    chunks = split_as_chunks(bytestring, chunk_size=22, must_pad=False, accept_incomplete_chunk=True)
     assert not all(len(x) == 22 for x in chunks)
     result = recombine_chunks(chunks, chunk_size=22, must_unpad=False)
     assert result == bytestring
@@ -90,9 +89,7 @@ def test_serialization_utilities(tmp_path):
     deserialized = load_from_json_str(serialized_str)
     assert deserialized == data
 
-    serialized_str = dump_to_json_str(
-        data, ensure_ascii=False
-    )  # Json arguments well propagated
+    serialized_str = dump_to_json_str(data, ensure_ascii=False)  # Json arguments well propagated
     assert (
         serialized_str
         == r'{"a": "hêllo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
@@ -109,9 +106,7 @@ def test_serialization_utilities(tmp_path):
     deserialized = load_from_json_bytes(serialized_str)
     assert deserialized == data
 
-    serialized_str = dump_to_json_bytes(
-        data, ensure_ascii=False
-    )  # Json arguments well propagated
+    serialized_str = dump_to_json_bytes(data, ensure_ascii=False)  # Json arguments well propagated
     assert (
         serialized_str
         == b'{"a": "h\xc3\xaallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
@@ -120,9 +115,7 @@ def test_serialization_utilities(tmp_path):
     assert deserialized == data
 
     tmp_filepath = os.path.join(tmp_path, "dummy_temp_file.dat")
-    serialized_str = dump_to_json_file(
-        tmp_filepath, data=data, ensure_ascii=True
-    )  # Json arguments well propagated
+    serialized_str = dump_to_json_file(tmp_filepath, data=data, ensure_ascii=True)  # Json arguments well propagated
     assert (
         serialized_str
         == b'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
@@ -140,9 +133,7 @@ def test_generate_uuid0():
 
     uuid0 = generate_uuid0(some_timestamp)
     assert utc.localize(uuid0.datetime) == some_date
-    assert uuid0.datetime_local != some_date.replace(
-        tzinfo=None
-    )  # Local TZ is used here
+    assert uuid0.datetime_local != some_date.replace(tzinfo=None)  # Local TZ is used here
     assert uuid0.unix_ts == some_timestamp
 
     uuids = [generate_uuid0().int for _ in range(1000)]
@@ -177,10 +168,11 @@ def test_safe_copy_directory(tmp_path: Path):
     assert not (tmp_path / "target" / "whatever").touch()  # Temp dir well deleted BEFORE copy operation
 
     counter = 0
+
     def broken_copy(*args, **kwargs):
         nonlocal counter
         if counter < 2:
-            counter+= 1
+            counter += 1
             return shutil.copy2(*args, **kwargs)
         raise RuntimeError("Dummy breakage of copy operation")
 

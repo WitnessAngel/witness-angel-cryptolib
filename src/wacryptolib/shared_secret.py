@@ -10,9 +10,7 @@ logger = logging.getLogger(__name__)
 SHAMIR_CHUNK_LENGTH = 16
 
 
-def split_bytestring_as_shamir_shares(
-    secret: bytes, *, shares_count: int, threshold_count: int
-) -> list:
+def split_bytestring_as_shamir_shares(secret: bytes, *, shares_count: int, threshold_count: int) -> list:
     """Generate a shared secret of `shares_count` subkeys, with `threshold_count`
         of them required to recompute the initial `bytestring`.
 
@@ -23,8 +21,9 @@ def split_bytestring_as_shamir_shares(
         :return: list of full bytestring shares"""
 
     if not (threshold_count < shares_count):
-        raise ValueError("Threshold count %s must be strictly lower than shared count %s" %
-                         (threshold_count, shares_count))
+        raise ValueError(
+            "Threshold count %s must be strictly lower than shared count %s" % (threshold_count, shares_count)
+        )
 
     all_chunk_shares = []  # List of lists of related 16-bytes shares
 
@@ -33,9 +32,7 @@ def split_bytestring_as_shamir_shares(
 
     # Separate each chunk into share
     for chunk in chunks:
-        shares = _split_128b_bytestring_into_shares(
-            chunk, shares_count, threshold_count
-        )
+        shares = _split_128b_bytestring_into_shares(chunk, shares_count, threshold_count)
         all_chunk_shares.append(shares)
         del shares
 
@@ -62,9 +59,7 @@ def recombine_secret_from_shamir_shares(shares: list) -> bytes:
 
     shares_per_secret = []  # List of lists of same-index 16-bytes shares
 
-    if len(set(share[0] for share in shares)) != len(
-        shares
-    ):
+    if len(set(share[0] for share in shares)) != len(shares):
         raise ValueError("Shamir shares must have unique indices")
 
     for share in shares:
@@ -87,9 +82,7 @@ def recombine_secret_from_shamir_shares(shares: list) -> bytes:
     return secret
 
 
-def _split_128b_bytestring_into_shares(
-    secret: bytes, shares_count: int, threshold_count: int
-) -> list:
+def _split_128b_bytestring_into_shares(secret: bytes, shares_count: int, threshold_count: int) -> list:
     """Split a bytestring of exactly 128 bits into shares.
 
         :param bytestring: bytestring to split

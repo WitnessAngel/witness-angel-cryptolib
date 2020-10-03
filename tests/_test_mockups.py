@@ -9,9 +9,7 @@ class FakeTestContainerStorage(ContainerStorage):
     increment = 0
 
     def enqueue_file_for_encryption(self, filename_base, data, **kwargs):
-        super().enqueue_file_for_encryption(
-            filename_base + (".%03d" % self.increment), data, **kwargs
-        )
+        super().enqueue_file_for_encryption(filename_base + (".%03d" % self.increment), data, **kwargs)
         self.increment += 1
 
     def _encrypt_data_into_container(self, data, **kwargs):
@@ -23,6 +21,7 @@ class FakeTestContainerStorage(ContainerStorage):
 
 class WildcardUuid(object):
     """Dummy UUID wildcard to compare data trees containing any UUID"""
+
     def __eq__(self, other):
         return isinstance(other, UUID)
 

@@ -9,7 +9,8 @@ from wacryptolib.container import (
     encrypt_data_into_container,
     decrypt_data_from_container,
     CONTAINER_SUFFIX,
-    MEDIUM_SUFFIX, SHARED_SECRET_MARKER,
+    MEDIUM_SUFFIX,
+    SHARED_SECRET_MARKER,
 )
 from wacryptolib.key_storage import FilesystemKeyStoragePool
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
@@ -34,28 +35,18 @@ EXAMPLE_CONTAINER_CONF = dict(
         dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[
-                dict(
-                    key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER
-                ),
+                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_escrows=[
-                        dict(
-                            share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_MARKER,
-                        ),
-                        dict(
-                            share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_MARKER)]  # Beware, same escrow for the 2 shares, for now
-                )
+                        dict(share_encryption_algo="RSA_OAEP", share_escrow=LOCAL_ESCROW_MARKER),
+                        dict(share_encryption_algo="RSA_OAEP", share_escrow=LOCAL_ESCROW_MARKER),
+                    ],  # Beware, same escrow for the 2 shares, for now
+                ),
             ],
             data_signatures=[
-                dict(
-                    message_prehash_algo="SHA256",
-                    signature_algo="DSA_DSS",
-                    signature_escrow=LOCAL_ESCROW_MARKER,
-                )
+                dict(message_prehash_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]
@@ -63,25 +54,16 @@ EXAMPLE_CONTAINER_CONF = dict(
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
-@click.option(
-    "-c",
-    "--config",
-    default=None,
-    help="Json configuration file",
-    type=click.File("rb"),
-)
+@click.option("-c", "--config", default=None, help="Json configuration file", type=click.File("rb"))
 @click.option(
     "-k",
     "--key-storage-pool",
     default=None,
-        help="Folder to get/set crypto keys (else ./%s gets created)" % DEFAULT_KEY_STORAGE_POOl_DIRNAME,
-    type=click.Path(exists=True,
-                    file_okay=False,
-                    dir_okay=True,
-                    writable=True,
-                    readable=True,
-                    resolve_path=True,
-                    allow_dash=False))
+    help="Folder to get/set crypto keys (else ./%s gets created)" % DEFAULT_KEY_STORAGE_POOl_DIRNAME,
+    type=click.Path(
+        exists=True, file_okay=False, dir_okay=True, writable=True, readable=True, resolve_path=True, allow_dash=False
+    ),
+)
 @click.pass_context
 def cli(ctx, config, key_storage_pool):
     ctx.ensure_object(dict)

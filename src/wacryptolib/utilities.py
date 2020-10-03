@@ -61,11 +61,7 @@ def hash_message(message: bytes, hash_algo: str):
 
 
 def split_as_chunks(
-    bytestring: bytes,
-    *,
-    chunk_size: int,
-    must_pad: bool,
-    accept_incomplete_chunk: bool = False,
+    bytestring: bytes, *, chunk_size: int, must_pad: bool, accept_incomplete_chunk: bool = False
 ) -> List[bytes]:
     """Split a `bytestring` into chunks (or blocks)
 
@@ -81,9 +77,7 @@ def split_as_chunks(
     if must_pad:
         bytestring = pad(bytestring, block_size=chunk_size)
     if len(bytestring) % chunk_size and not accept_incomplete_chunk:
-        raise ValueError(
-            "If no padding occurs, bytestring must have a size multiple of chunk_size"
-        )
+        raise ValueError("If no padding occurs, bytestring must have a size multiple of chunk_size")
 
     chunks_count = (len(bytestring) + chunk_size - 1) // chunk_size
 
@@ -95,9 +89,7 @@ def split_as_chunks(
     return chunks
 
 
-def recombine_chunks(
-    chunks: List[bytes], *, chunk_size: int, must_unpad: bool
-) -> bytes:
+def recombine_chunks(chunks: List[bytes], *, chunk_size: int, must_unpad: bool) -> bytes:
     """Recombine chunks which were previously separated.
 
         :param chunks: sequence of bytestring parts
@@ -120,9 +112,7 @@ def dump_to_json_str(data, **extra_options):
 
     sort_keys = extra_options.pop("sort_keys", True)
 
-    json_str = dumps(
-        data, sort_keys=sort_keys, json_options=CANONICAL_JSON_OPTIONS, **extra_options
-    )
+    json_str = dumps(data, sort_keys=sort_keys, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
     return json_str
 
 
@@ -261,9 +251,7 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
 
     # TODO make PR to ensure that multitimer is a DAEMON thread!
     assert hasattr(_RepeatingTimer, "daemon")
-    _RepeatingTimer.daemon = (
-        True
-    )  # Do not prevent process shutdown if we forgot to stop...
+    _RepeatingTimer.daemon = True  # Do not prevent process shutdown if we forgot to stop...
 
     _task_func = None  # Might be overridden as a method too!
 
@@ -273,10 +261,7 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
         if task_func:  # Important
             self._task_func = task_func
         self._multitimer = multitimer.MultiTimer(
-            interval=interval_s,
-            function=self._offloaded_run_task,
-            count=count,
-            runonstart=runonstart,
+            interval=interval_s, function=self._offloaded_run_task, count=count, runonstart=runonstart
         )
 
     def _offloaded_run_task(self):

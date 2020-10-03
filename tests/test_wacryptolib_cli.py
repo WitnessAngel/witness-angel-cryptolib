@@ -44,9 +44,7 @@ def test_cli_encryption_and_decryption(tmp_path):
             assert result.exit_code == 0
             assert os.path.exists(data_file + ".crypt")
 
-            result = runner.invoke(
-                cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "stuff.dat"]
-            )
+            result = runner.invoke(cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "stuff.dat"])
             assert result.exit_code == 0
             assert os.path.exists("stuff.dat")
 
@@ -83,15 +81,10 @@ def test_cli_subprocess_invocation():
     env["PYTHONPATH"] = env.get("PYTHONPATH", "") + os.pathsep + src_dir
 
     proc = subprocess.Popen(
-        [sys.executable, "-m", "wacryptolib", "-h"],
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        [sys.executable, "-m", "wacryptolib", "-h"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     stdout, stderr = proc.communicate(timeout=15)
     assert b"Options:" in stdout
     assert b"Commands:" in stdout
-    assert (
-        not stderr or b"debugger" in stderr
-    )  # For when pydev debugger connects to process...
+    assert not stderr or b"debugger" in stderr  # For when pydev debugger connects to process...
     assert proc.returncode == 0

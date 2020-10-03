@@ -9,12 +9,7 @@ from freezegun import freeze_time
 
 from _test_mockups import FakeTestContainerStorage
 from wacryptolib.scaffolding import check_sensor_state_machine
-from wacryptolib.sensor import (
-    TarfileRecordsAggregator,
-    JsonDataAggregator,
-    PeriodicValuePoller,
-    SensorsManager,
-)
+from wacryptolib.sensor import TarfileRecordsAggregator, JsonDataAggregator, PeriodicValuePoller, SensorsManager
 from wacryptolib.sensor import TimeLimitedAggregatorMixin
 from wacryptolib.utilities import load_from_json_bytes, TaskRunnerStateMachineBase
 
@@ -55,13 +50,12 @@ def test_tarfile_aggregator(tmp_path):
 
     offload_data_ciphertext = random.choice((True, False))
     container_storage = FakeTestContainerStorage(
-        default_encryption_conf={"whatever": True}, containers_dir=tmp_path,
-        offload_data_ciphertext=offload_data_ciphertext
+        default_encryption_conf={"whatever": True},
+        containers_dir=tmp_path,
+        offload_data_ciphertext=offload_data_ciphertext,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(
-        container_storage=container_storage, max_duration_s=10
-    )
+    tarfile_aggregator = TarfileRecordsAggregator(container_storage=container_storage, max_duration_s=10)
     assert len(tarfile_aggregator) == 0
     assert not tarfile_aggregator._current_start_time
     assert len(container_storage) == 0
@@ -77,15 +71,7 @@ def test_tarfile_aggregator(tmp_path):
         data1 = "hêllö".encode("utf8")
         tarfile_aggregator.add_record(
             sensor_name="smartphone_front_camera",
-            from_datetime=datetime(
-                year=2014,
-                month=1,
-                day=2,
-                hour=22,
-                minute=11,
-                second=55,
-                tzinfo=timezone.utc,
-            ),
+            from_datetime=datetime(year=2014, month=1, day=2, hour=22, minute=11, second=55, tzinfo=timezone.utc),
             to_datetime=datetime(year=2015, month=2, day=3, tzinfo=timezone.utc),
             extension=".txt",
             data=data1,
@@ -108,12 +94,8 @@ def test_tarfile_aggregator(tmp_path):
         tarfile_aggregator.finalize_tarfile()
         container_storage.wait_for_idle_state()
         assert len(container_storage) == 1
-        tarfile_bytestring = container_storage.decrypt_container_from_storage(
-            container_name_or_idx=-1
-        )
-        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(
-            tarfile_bytestring
-        )
+        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
 
@@ -148,12 +130,8 @@ def test_tarfile_aggregator(tmp_path):
         tarfile_aggregator.finalize_tarfile()
         container_storage.wait_for_idle_state()
         assert len(container_storage) == 2
-        tarfile_bytestring = container_storage.decrypt_container_from_storage(
-            container_name_or_idx=-1
-        )
-        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(
-            tarfile_bytestring
-        )
+        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
 
@@ -183,9 +161,7 @@ def test_tarfile_aggregator(tmp_path):
         current_start_time_saved = tarfile_aggregator._current_start_time
 
         frozen_datetime.tick(delta=timedelta(seconds=9))
-        assert datetime.now(
-            tz=timezone.utc
-        ) - tarfile_aggregator._current_start_time == timedelta(seconds=9)
+        assert datetime.now(tz=timezone.utc) - tarfile_aggregator._current_start_time == timedelta(seconds=9)
 
         simple_add_record()
         assert len(tarfile_aggregator) == 2
@@ -196,9 +172,7 @@ def test_tarfile_aggregator(tmp_path):
         simple_add_record()
         assert len(tarfile_aggregator) == 1
         assert tarfile_aggregator._current_start_time
-        assert (
-            tarfile_aggregator._current_start_time != current_start_time_saved
-        )  # AUTO FLUSH occurred
+        assert tarfile_aggregator._current_start_time != current_start_time_saved  # AUTO FLUSH occurred
         container_storage.wait_for_idle_state()
 
         assert len(container_storage) == 3
@@ -212,9 +186,7 @@ def test_tarfile_aggregator(tmp_path):
         for i in range(3):  # Three times the same file name!
             tarfile_aggregator.add_record(
                 sensor_name="smartphone_recorder",
-                from_datetime=datetime(
-                    year=2017, month=10, day=11, tzinfo=timezone.utc
-                ),
+                from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
                 to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
                 extension=".mp3",
                 data=bytes([i] * 500),
@@ -224,12 +196,8 @@ def test_tarfile_aggregator(tmp_path):
         tarfile_aggregator.finalize_tarfile()
         container_storage.wait_for_idle_state()
         assert len(container_storage) == 5
-        tarfile_bytestring = container_storage.decrypt_container_from_storage(
-            container_name_or_idx=-1
-        )
-        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(
-            tarfile_bytestring
-        )
+        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tar_file.getmembers()) == 3
         assert len(tar_file.getnames()) == 3
         # The LAST record has priority over others with the same name
@@ -240,19 +208,17 @@ def test_json_aggregator(tmp_path):
 
     offload_data_ciphertext = random.choice((True, False))
     container_storage = FakeTestContainerStorage(
-        default_encryption_conf={"qsdqsdsd": True}, containers_dir=tmp_path, offload_data_ciphertext=offload_data_ciphertext
+        default_encryption_conf={"qsdqsdsd": True},
+        containers_dir=tmp_path,
+        offload_data_ciphertext=offload_data_ciphertext,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(
-        container_storage=container_storage, max_duration_s=100
-    )
+    tarfile_aggregator = TarfileRecordsAggregator(container_storage=container_storage, max_duration_s=100)
 
     assert len(tarfile_aggregator) == 0
 
     json_aggregator = JsonDataAggregator(
-        max_duration_s=2,
-        tarfile_aggregator=tarfile_aggregator,
-        sensor_name="some_sensors",
+        max_duration_s=2, tarfile_aggregator=tarfile_aggregator, sensor_name="some_sensors"
     )
     assert len(json_aggregator) == 0
     assert json_aggregator.sensor_name == "some_sensors"
@@ -303,12 +269,8 @@ def test_json_aggregator(tmp_path):
         tarfile_aggregator.finalize_tarfile()
         container_storage.wait_for_idle_state()
         assert len(container_storage) == 1
-        tarfile_bytestring = container_storage.decrypt_container_from_storage(
-            container_name_or_idx=-1
-        )
-        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(
-            tarfile_bytestring
-        )
+        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
 
         filenames = sorted(tar_file.getnames())
@@ -319,10 +281,7 @@ def test_json_aggregator(tmp_path):
             assert filename.endswith(".json")
 
         data = tar_file.extractfile(filenames[0]).read()
-        assert (
-            data
-            == b'[{"pulse": {"$numberInt": "42"}}, {"timing": true}, {"abc": {"$numberDouble": "2.2"}}]'
-        )
+        assert data == b'[{"pulse": {"$numberInt": "42"}}, {"timing": true}, {"abc": {"$numberDouble": "2.2"}}]'
 
         data = tar_file.extractfile(filenames[1]).read()
         assert data == b'[{"x": "abc"}]'
@@ -337,16 +296,14 @@ def test_aggregators_thread_safety(tmp_path):
 
     offload_data_ciphertext = random.choice((True, False))
     container_storage = FakeTestContainerStorage(
-        default_encryption_conf={"zesvscc": True}, containers_dir=tmp_path, offload_data_ciphertext=offload_data_ciphertext
+        default_encryption_conf={"zesvscc": True},
+        containers_dir=tmp_path,
+        offload_data_ciphertext=offload_data_ciphertext,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(
-        container_storage=container_storage, max_duration_s=100
-    )
+    tarfile_aggregator = TarfileRecordsAggregator(container_storage=container_storage, max_duration_s=100)
     json_aggregator = JsonDataAggregator(
-        max_duration_s=1,
-        tarfile_aggregator=tarfile_aggregator,
-        sensor_name="some_sensors",
+        max_duration_s=1, tarfile_aggregator=tarfile_aggregator, sensor_name="some_sensors"
     )
 
     misc_futures = []
@@ -356,27 +313,19 @@ def test_aggregators_thread_safety(tmp_path):
     with ThreadPoolExecutor(max_workers=30) as executor:
         for burst in range(10):
             for idx in range(100):
-                misc_futures.append(
-                    executor.submit(json_aggregator.add_data, dict(res=idx))
-                )
+                misc_futures.append(executor.submit(json_aggregator.add_data, dict(res=idx)))
                 misc_futures.append(executor.submit(json_aggregator.flush_dataset))
                 misc_futures.append(
                     executor.submit(
                         tarfile_aggregator.add_record,
                         sensor_name="some_recorder_%s_%s" % (burst, idx),
-                        from_datetime=datetime(
-                            year=2017, month=10, day=11, tzinfo=timezone.utc
-                        ),
-                        to_datetime=datetime(
-                            year=2017, month=12, day=1, tzinfo=timezone.utc
-                        ),
+                        from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
+                        to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
                         extension=".txt",
                         data=record_data,
                     )
                 )
-                misc_futures.append(
-                    executor.submit(tarfile_aggregator.finalize_tarfile)
-                )
+                misc_futures.append(executor.submit(tarfile_aggregator.finalize_tarfile))
             time.sleep(0.2)
 
     json_aggregator.flush_dataset()
@@ -389,14 +338,11 @@ def test_aggregators_thread_safety(tmp_path):
     container_names = container_storage.list_container_names(as_sorted=True)
 
     tarfiles_bytes = [
-        container_storage.decrypt_container_from_storage(container_name)
-        for container_name in container_names
+        container_storage.decrypt_container_from_storage(container_name) for container_name in container_names
     ]
 
     tarfiles = [
-        TarfileRecordsAggregator.read_tarfile_from_bytestring(bytestring)
-        for bytestring in tarfiles_bytes
-        if bytestring
+        TarfileRecordsAggregator.read_tarfile_from_bytestring(bytestring) for bytestring in tarfiles_bytes if bytestring
     ]
 
     tarfiles_count = len(tarfiles)
@@ -429,27 +375,23 @@ def test_periodic_value_poller(tmp_path):
 
     offload_data_ciphertext = random.choice((True, False))
     container_storage = FakeTestContainerStorage(
-        default_encryption_conf={"zexcsc": True}, containers_dir=tmp_path, offload_data_ciphertext=offload_data_ciphertext
+        default_encryption_conf={"zexcsc": True},
+        containers_dir=tmp_path,
+        offload_data_ciphertext=offload_data_ciphertext,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(
-        container_storage=container_storage, max_duration_s=100
-    )
+    tarfile_aggregator = TarfileRecordsAggregator(container_storage=container_storage, max_duration_s=100)
 
     assert len(tarfile_aggregator) == 0
 
     json_aggregator = JsonDataAggregator(
-        max_duration_s=100,
-        tarfile_aggregator=tarfile_aggregator,
-        sensor_name="some_sensors",
+        max_duration_s=100, tarfile_aggregator=tarfile_aggregator, sensor_name="some_sensors"
     )
 
     def task_func():
         return dict(time=int(time.time()), type="current time")
 
-    poller = PeriodicValuePoller(
-        interval_s=0.1, task_func=task_func, json_aggregator=json_aggregator
-    )
+    poller = PeriodicValuePoller(interval_s=0.1, task_func=task_func, json_aggregator=json_aggregator)
 
     check_sensor_state_machine(poller, run_duration=0.45)
 
@@ -467,9 +409,7 @@ def test_periodic_value_poller(tmp_path):
         time.sleep(0.2)
         return dict(time=int(time.time()), type="current time 2")
 
-    poller = PeriodicValuePoller(
-        interval_s=0.05, task_func=task_func_slow, json_aggregator=json_aggregator
-    )
+    poller = PeriodicValuePoller(interval_s=0.05, task_func=task_func_slow, json_aggregator=json_aggregator)
     poller.start()
     time.sleep(0.3)
     poller.stop()
@@ -491,9 +431,7 @@ def test_periodic_value_poller(tmp_path):
         broken_iterations += 1
         ABCDE
 
-    poller = PeriodicValuePoller(
-        interval_s=0.05, task_func=task_func_broken, json_aggregator=json_aggregator
-    )
+    poller = PeriodicValuePoller(interval_s=0.05, task_func=task_func_broken, json_aggregator=json_aggregator)
 
     check_sensor_state_machine(poller, run_duration=0.5)
     assert broken_iterations > 5

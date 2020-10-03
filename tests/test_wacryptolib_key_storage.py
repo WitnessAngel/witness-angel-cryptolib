@@ -11,11 +11,7 @@ from wacryptolib.authentication_device import _get_key_storage_folder_path, init
 from wacryptolib.escrow import generate_asymmetric_keypair_for_storage
 from wacryptolib.exceptions import KeyStorageDoesNotExist, KeyStorageAlreadyExists
 from wacryptolib.key_generation import SUPPORTED_ASYMMETRIC_KEY_TYPES
-from wacryptolib.key_storage import (
-    FilesystemKeyStorage,
-    DummyKeyStorage,
-    KeyStorageBase, FilesystemKeyStoragePool,
-)
+from wacryptolib.key_storage import FilesystemKeyStorage, DummyKeyStorage, KeyStorageBase, FilesystemKeyStoragePool
 from wacryptolib.scaffolding import (
     check_key_storage_free_keys_concurrency,
     check_key_storage_basic_get_set_api,
@@ -44,14 +40,10 @@ def test_key_storage_basic_get_set_api(tmp_path):
     keychain_uid = filesystem_key_storage_test_locals["keychain_uid"]
 
     is_public = random.choice([True, False])
-    basename = filesystem_key_storage._get_filename(
-        keychain_uid, key_type="abxz", is_public=is_public
-    )
+    basename = filesystem_key_storage._get_filename(keychain_uid, key_type="abxz", is_public=is_public)
     with open(os.path.join(str(tmp_path), basename), "rb") as f:
         key_data = f.read()
-        assert key_data == (
-            b"public_data" if is_public else b"private_data"
-        )  # IMPORTANT no exchange of keys in files!
+        assert key_data == (b"public_data" if is_public else b"private_data")  # IMPORTANT no exchange of keys in files!
 
 
 def test_key_storage_free_keys_api(tmp_path):
@@ -73,7 +65,6 @@ def test_key_storage_free_keys_concurrency(tmp_path):
 
 
 def test_key_storage_list_keypair_identifiers(tmp_path: Path):
-
     def _check_key_dict_format(key):
         print(">> public key detected:", key)
 
@@ -89,8 +80,7 @@ def test_key_storage_list_keypair_identifiers(tmp_path: Path):
     key_type = random.choice(SUPPORTED_ASYMMETRIC_KEY_TYPES)
 
     keychain_uid = generate_uuid0()
-    generate_asymmetric_keypair_for_storage(
-            key_type=key_type, key_storage=key_storage, keychain_uid=keychain_uid)
+    generate_asymmetric_keypair_for_storage(key_type=key_type, key_storage=key_storage, keychain_uid=keychain_uid)
 
     keys_list = key_storage.list_keypair_identifiers()
     assert isinstance(keys_list, list)
@@ -106,14 +96,14 @@ def test_key_storage_list_keypair_identifiers(tmp_path: Path):
 
     for i in range(3):
         _key_type = random.choice(SUPPORTED_ASYMMETRIC_KEY_TYPES)
-        generate_asymmetric_keypair_for_storage(key_type=_key_type, key_storage=key_storage,
-                                                passphrase="xzf".encode())
+        generate_asymmetric_keypair_for_storage(key_type=_key_type, key_storage=key_storage, passphrase="xzf".encode())
 
     for bad_filename in (
         "0e896f1d-a4d0-67d6-7286-056f1ec342e8_RSA_OAEP_public_key.dot",
         "0e896f1d-a4d0-67d6-7286-056f1ec342e8_RSA_OAEP_publicX_key.pem",
         "a4d0-67d6-7286-056f1ec342e8_RSA_OAEP_public_key.pem",
-        "WRONGPREFIX_public_key.pem"):
+        "WRONGPREFIX_public_key.pem",
+    ):
         tmp_path.joinpath(bad_filename).touch()  # These will be ignored thanks to Regex
 
     keys_list = key_storage.list_keypair_identifiers()
@@ -153,18 +143,23 @@ def test_key_storage_pool_basics(tmp_path: Path):
     assert not local_key_storage.list_keypair_identifiers()
 
     keypair = generate_asymmetric_keypair_for_storage(
-            key_type="RSA_OAEP", key_storage=local_key_storage, passphrase="xzf".encode())
+        key_type="RSA_OAEP", key_storage=local_key_storage, passphrase="xzf".encode()
+    )
 
     assert len(local_key_storage.list_keypair_identifiers()) == 1
 
     assert pool.list_imported_key_storage_uids() == []
 
     imported_key_storage_uid = generate_uuid0()
-    mirror_path = tmp_path.joinpath(pool.IMPORTED_STORAGES_DIRNAME, pool.IMPORTED_STORAGE_PREFIX + str(imported_key_storage_uid))
+    mirror_path = tmp_path.joinpath(
+        pool.IMPORTED_STORAGES_DIRNAME, pool.IMPORTED_STORAGE_PREFIX + str(imported_key_storage_uid)
+    )
     mirror_path.mkdir(parents=True, exist_ok=False)
 
     imported_key_storage_uid2 = generate_uuid0()
-    mirror_path2 = tmp_path.joinpath(pool.IMPORTED_STORAGES_DIRNAME, pool.IMPORTED_STORAGE_PREFIX + str(imported_key_storage_uid2))
+    mirror_path2 = tmp_path.joinpath(
+        pool.IMPORTED_STORAGES_DIRNAME, pool.IMPORTED_STORAGE_PREFIX + str(imported_key_storage_uid2)
+    )
     mirror_path2.mkdir(parents=True, exist_ok=False)
 
     assert pool.list_imported_key_storage_uids() == sorted([imported_key_storage_uid, imported_key_storage_uid2])
@@ -230,12 +225,13 @@ def test_key_storage_import_key_storage_from_folder(tmp_path: Path):
 
     shutil.rmtree(authentication_device_path)  # Not important anymore
 
-    assert pool.list_imported_key_storage_uids() == [key_storage_uid,]
+    assert pool.list_imported_key_storage_uids() == [key_storage_uid]
     metadata_mapper2 = pool.list_imported_key_storage_metadata()
     assert metadata_mapper2 == metadata_mapper
 
     key_storage = pool.get_imported_key_storage(key_storage_uid)
-    assert key_storage.list_keypair_identifiers() == [dict(keychain_uid=keychain_uid, key_type=key_type, private_key_present=True)]
+    assert key_storage.list_keypair_identifiers() == [
+        dict(keychain_uid=keychain_uid, key_type=key_type, private_key_present=True)
+    ]
     assert key_storage.get_public_key(keychain_uid=keychain_uid, key_type=key_type) == b"555"
     assert key_storage.get_private_key(keychain_uid=keychain_uid, key_type=key_type) == b"okj"
-

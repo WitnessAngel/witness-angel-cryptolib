@@ -9,7 +9,7 @@ description = "Witness Angel Cryptolib"
 version = "0.5"
 license = "MIT"
 readme = "Readme.rst"
-authors = ["Pascal Chambon", "Manon Michelet"]
+authors = ["Pascal Chambon", "Manon Michelet", "Akram Bourichi"]
 homepage = "https://github.com/WitnessAngel/witness-angel-cryptolib"
 classifiers = [
     "Development Status :: 3 - Alpha",

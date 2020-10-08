@@ -414,14 +414,14 @@ class FilesystemKeyStoragePool(KeyStoragePoolBase):
             raise KeyStorageDoesNotExist("Key storage %s not found" % key_storage_uid)
         return FilesystemKeyStorage(imported_key_storage_path)
 
-    def list_imported_key_storage_uids(self):
+    def list_imported_key_storage_uids(self):  # FIXME setup signature
         """Return a sorted list of UUIDs of key storages, corresponding
         to the device_uid of their origin authentication devices."""
         imported_key_storages_dir = self._root_dir.joinpath(self.IMPORTED_STORAGES_DIRNAME)
         paths = imported_key_storages_dir.glob("%s*" % self.IMPORTED_STORAGE_PREFIX)  # This excludes TEMP folders
         return sorted([uuid.UUID(d.name.replace(self.IMPORTED_STORAGE_PREFIX, "")) for d in paths])
 
-    def list_imported_key_storage_metadata(self) -> dict:
+    def list_imported_key_storage_metadata(self) -> dict:  # FIXME doesn't return a list??
         """Return a dict mapping key storage UUIDs to the dicts of their metadata.
 
         Raises if any metadata loading fails.

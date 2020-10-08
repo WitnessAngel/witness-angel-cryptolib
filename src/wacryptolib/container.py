@@ -655,6 +655,7 @@ def dump_container_to_filesystem(container_filepath: Path, container: dict, offl
     """
     if offload_data_ciphertext:
         offloaded_file_path = _get_offloaded_file_path(container_filepath)
+        assert isinstance(container["data_ciphertext"], bytes), container["data_ciphertext"]
         offloaded_file_path.write_bytes(container["data_ciphertext"])
         container = container.copy()  # DO NOT touch original dict!
         container["data_ciphertext"] = OFFLOADED_MARKER

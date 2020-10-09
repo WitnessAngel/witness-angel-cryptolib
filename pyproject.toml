@@ -6,7 +6,7 @@ build-backend = "poetry.masonry.api"
 [tool.poetry]
 name = "wacryptolib"
 description = "Witness Angel Cryptolib"
-version = "0.5.1"
+version = "0.5.2"
 license = "MIT"
 readme = "Readme.rst"
 authors = ["Pascal Chambon", "Manon Michelet", "Akram Bourichi"]

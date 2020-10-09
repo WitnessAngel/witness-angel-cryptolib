@@ -160,30 +160,41 @@ def _list_available_authentication_devices_linux():
 
     context = pyudev.Context()
     authentication_device_list = []
-    removable = [
+    removable_devices = [
         device
         for device in context.list_devices(subsystem="block", DEVTYPE="disk")
         if device.attributes.asstring("removable") == "1"
     ]
-    for device in removable:
-        partitions = [
-            device.device_node for device in context.list_devices(subsystem="block", DEVTYPE="partition", parent=device)
-        ]
-        for p in psutil.disk_partitions():
+    logger.debug("Removable pyudev devices found: %s", str(removable_devices))
 
-            if p.device not in partitions:  # Check if device is mounted
-                continue
+    removable_devices_partitions = [
+        device.device_node
+        for removable_device in removable_devices
+        for device in context.list_devices(subsystem="block", DEVTYPE="partition", parent=removable_device)
+    ]
+    logger.debug("Removable pyudev partitions found: %s", str(removable_devices_partitions))
 
-            authentication_device = {}
-            authentication_device["drive_type"] = "USBSTOR"
-            authentication_device["label"] = str(PurePath(p.mountpoint).name)  # E.g: 'UBUNTU 20_0'
-            authentication_device["path"] = p.mountpoint  # E.g: '/media/akram/UBUNTU 20_0',
-            authentication_device["size"] = psutil.disk_usage(authentication_device["path"]).total  # E.g: 30986469376
-            authentication_device["format"] = p.fstype  # E.g: 'vfat'
-            authentication_device["partition"] = p.device  # E.g: '/dev/sda1'
-            authentication_device["is_initialized"] = is_authentication_device_initialized(
-                authentication_device
-            )  # E.g False
+    all_existing_partitions = psutil.disk_partitions()
+    logger.debug("All mounted psutil partitions found: %s", str(all_existing_partitions))
+
+    for p in all_existing_partitions:
+
+        if p.device not in removable_devices_partitions:
+            #logger.warning("REJECTED %s", p)
+            continue
+        #logger.warning("FOUND USB %s", p)
+
+        authentication_device = {}
+        authentication_device["drive_type"] = "USBSTOR"
+        authentication_device["label"] = str(PurePath(p.mountpoint).name)  # E.g: 'UBUNTU 20_0'
+        authentication_device["path"] = p.mountpoint  # E.g: '/media/akram/UBUNTU 20_0',
+        authentication_device["size"] = psutil.disk_usage(authentication_device["path"]).total  # E.g: 30986469376
+        authentication_device["format"] = p.fstype  # E.g: 'vfat'
+        authentication_device["partition"] = p.device  # E.g: '/dev/sda1'
+        authentication_device["is_initialized"] = is_authentication_device_initialized(
+            authentication_device
+        )  # E.g False
+        authentication_device_list.append(authentication_device)
 
     return authentication_device_list
 

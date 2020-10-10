@@ -58,3 +58,13 @@ def test_shared_secret_corner_cases():
 
     with pytest.raises(ValueError):
         wacryptolib.shared_secret.recombine_secret_from_shamir_shares([])
+
+    shares = wacryptolib.shared_secret.split_bytestring_as_shamir_shares(secret=secret, shares_count=3, threshold_count=3)
+    assert wacryptolib.shared_secret.recombine_secret_from_shamir_shares(shares) == secret
+
+    try:
+        secret_reconstructed = wacryptolib.shared_secret.recombine_secret_from_shamir_shares(shares[:-1])
+    except ValueError:  # Bad reconstructed padding etc.
+        pass
+    else:
+        assert secret_reconstructed != secret  # We MIGHT get a wrong bytestring unknowingly

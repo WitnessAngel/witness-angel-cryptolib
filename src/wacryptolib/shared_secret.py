@@ -20,9 +20,12 @@ def split_bytestring_as_shamir_shares(secret: bytes, *, shares_count: int, thres
 
         :return: list of full bytestring shares"""
 
-    if not (threshold_count < shares_count):
+    if not shares_count:
+        raise ValueError("Shares count must be strictly positive")
+
+    if threshold_count > shares_count:
         raise ValueError(
-            "Threshold count %s must be strictly lower than shared count %s" % (threshold_count, shares_count)
+            "Threshold count %s can't be higher than shared count %s" % (threshold_count, shares_count)
         )
 
     all_chunk_shares = []  # List of lists of related 16-bytes shares

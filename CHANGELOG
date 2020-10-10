@@ -1,4 +1,10 @@
 
+Development
+=============
+
+* Allow shamir shared secrets where threshold==shares_count
+
+
 Version 0.5.2
 ==================
 

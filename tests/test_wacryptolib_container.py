@@ -616,13 +616,23 @@ def test_get_proxy_for_escrow(tmp_path):
 
 
 def test_container_storage_and_executor(tmp_path, caplog):
+
+    side_tmp = tmp_path / "side_tmp"
+    side_tmp.mkdir()
+
+    containers_dir = tmp_path / "containers_dir"
+    containers_dir.mkdir()
+
+    animals_file_path = side_tmp / "animals"
+    animals_file_path.write_bytes(b"dogs\ncats\n")
+
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
-    storage = ContainerStorage(default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path)
+    storage = ContainerStorage(default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=containers_dir)
     assert storage._max_containers_count is None
     assert len(storage) == 0
     assert storage.list_container_names() == []
 
-    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
+    storage.enqueue_file_for_encryption("animals.dat", animals_file_path.open("rb"), metadata=None)
     storage.enqueue_file_for_encryption("empty.txt", b"", metadata=dict(somevalue=True))
     assert len(storage) == 0  # Container threads are just beginning to work!
 
@@ -637,7 +647,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     assert len(list(storage._containers_dir.iterdir())) == 4  # 2 files per container
 
     storage = ContainerStorage(
-        default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path, offload_data_ciphertext=False
+        default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=containers_dir, offload_data_ciphertext=False
     )
     storage.enqueue_file_for_encryption("newfile.bmp", b"stuffs", metadata=None)
     storage.wait_for_idle_state()
@@ -661,7 +671,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     offload_data_ciphertext = random.choice((True, False))
     storage = ContainerStorage(
         default_encryption_conf=SIMPLE_CONTAINER_CONF,
-        containers_dir=tmp_path,
+        containers_dir=containers_dir,
         offload_data_ciphertext=offload_data_ciphertext,
     )
 
@@ -687,8 +697,8 @@ def test_container_storage_and_executor(tmp_path, caplog):
     assert empty_content == b""
 
     assert len(storage) == 3
-    os.remove(os.path.join(tmp_path, "animals.dat.crypt"))
-    os.remove(os.path.join(tmp_path, "newfile.bmp.crypt"))
+    os.remove(os.path.join(containers_dir, "animals.dat.crypt"))
+    os.remove(os.path.join(containers_dir, "newfile.bmp.crypt"))
     assert storage.list_container_names(as_sorted=True) == [Path("empty.txt.crypt")]
     assert len(storage) == 1  # Remaining offloaded data file is ignored
 
@@ -697,7 +707,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     offload_data_ciphertext1 = random.choice((True, False))
     storage = FakeTestContainerStorage(
         default_encryption_conf={"smth": True},
-        containers_dir=tmp_path,
+        containers_dir=containers_dir,
         offload_data_ciphertext=offload_data_ciphertext1,
     )
     assert storage._max_containers_count is None
@@ -710,7 +720,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     offload_data_ciphertext2 = random.choice((True, False))
     storage = FakeTestContainerStorage(
         default_encryption_conf={"stuffs": True},
-        containers_dir=tmp_path,
+        containers_dir=containers_dir,
         max_containers_count=3,
         offload_data_ciphertext=offload_data_ciphertext2,
     )
@@ -736,7 +746,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     offload_data_ciphertext3 = random.choice((True, False))
     storage = FakeTestContainerStorage(
         default_encryption_conf={"randomthings": True},
-        containers_dir=tmp_path,
+        containers_dir=containers_dir,
         max_containers_count=4,
         offload_data_ciphertext=offload_data_ciphertext3,
     )

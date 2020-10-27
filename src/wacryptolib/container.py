@@ -196,7 +196,7 @@ class ContainerWriter(ContainerBase):
         """
         Browse through configuration tree to apply the right succession of algorithms to data.
 
-        :param data: initial plaintext
+        :param data: initial plaintext, or file pointer (file immediately deleted then)
         :param conf: configuration tree
         :param keychain_uid: uuid for the set of encryption keys used
         :param metadata: additional data to store unencrypted in container
@@ -211,9 +211,13 @@ class ContainerWriter(ContainerBase):
         conf = copy.deepcopy(conf)  # So that we can manipulate it
 
         if hasattr(data, "read"):  # File-like object
+            logger.debug("Reading and deleting open file handle %s", data)
             _data = data
             data = _data.read()
             _data.close()
+            filename = getattr(_data, "name", None)
+            if filename and os.path.exists(filename):
+                os.remove(filename)  # We let errors flow here!
 
         assert isinstance(data, bytes), data
         assert isinstance(conf, dict), conf
@@ -622,7 +626,7 @@ def encrypt_data_into_container(
     """Turn raw data into a high-security container, which can only be decrypted with
     the agreement of the owner and multiple third-party escrows.
 
-    :param data: bytestring of media (image, video, sound...) or readable file object as input
+    :param data: bytestring of media (image, video, sound...) or readable file object (file immediately deleted then)
     :param conf: tree of specific encryption settings
     :param metadata: dict of metadata describing the data
     :param keychain_uid: optional ID of a keychain to reuse

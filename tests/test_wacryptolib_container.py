@@ -625,6 +625,16 @@ def test_container_storage_and_executor(tmp_path, caplog):
 
     animals_file_path = side_tmp / "animals"
     animals_file_path.write_bytes(b"dogs\ncats\n")
+    assert animals_file_path.is_file()
+
+    animals_file_handle = animals_file_path.open("rb")
+
+    already_deleted_file_input = random.choice((True, False))
+    if already_deleted_file_input:
+        try:
+            animals_file_path.unlink()
+        except PermissionError:
+            pass  # Win32 doesn't allow that
 
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
     storage = ContainerStorage(default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=containers_dir)
@@ -632,11 +642,13 @@ def test_container_storage_and_executor(tmp_path, caplog):
     assert len(storage) == 0
     assert storage.list_container_names() == []
 
-    storage.enqueue_file_for_encryption("animals.dat", animals_file_path.open("rb"), metadata=None)
+    storage.enqueue_file_for_encryption("animals.dat", animals_file_handle, metadata=None)
     storage.enqueue_file_for_encryption("empty.txt", b"", metadata=dict(somevalue=True))
     assert len(storage) == 0  # Container threads are just beginning to work!
 
     storage.wait_for_idle_state()
+
+    assert not animals_file_path.is_file()  # AUTO-DELETED!
 
     assert len(storage) == 2
     assert storage.list_container_names(as_sorted=True) == [Path("animals.dat.crypt"), Path("empty.txt.crypt")]

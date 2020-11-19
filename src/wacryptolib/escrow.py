@@ -1,7 +1,7 @@
 import logging
 import time
 import uuid
-from typing import Optional, Union, AnyStr
+from typing import Optional, Union, AnyStr, Sequence
 from uuid import UUID
 
 from wacryptolib.encryption import _decrypt_via_rsa_oaep
@@ -128,7 +128,7 @@ class EscrowApi:
         )
 
     def request_decryption_authorization(
-        self, keypair_identifiers: list, request_message: str, passphrases: Optional[list] = None
+        self, keypair_identifiers: Sequence, request_message: str, passphrases: Optional[Sequence] = None
     ) -> dict:
         """
         Send a list of keypairs for which decryption access is requested, with the reason why.

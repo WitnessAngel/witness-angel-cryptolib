@@ -1,3 +1,5 @@
+from collections import Sequence
+
 import logging
 import os
 import random
@@ -371,7 +373,7 @@ class DummyKeyStoragePool(KeyStoragePoolBase):
     def list_imported_key_storage_uids(self):
         return list(self._imported_key_storages.keys())
 
-    def _register_fake_imported_storage_uids(self, storage_uids: list):
+    def _register_fake_imported_storage_uids(self, storage_uids: Sequence):
         """Test-specific API"""
         assert not (set(storage_uids) & set(self._imported_key_storages.keys()))
         new_storages = {storage_uid: DummyKeyStorage() for storage_uid in storage_uids}

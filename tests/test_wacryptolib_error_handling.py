@@ -42,7 +42,7 @@ def test_status_slugs_utilities():
 
     this_module = sys.modules[MyExc.__module__]
 
-    selected_classes = gather_exception_subclasses(module=this_module, parent_classes=MyExc)
+    selected_classes = gather_exception_subclasses(module=this_module, parent_classes=[MyExc])
     assert set(selected_classes) == set([MyExc, MyExcChild1, MyExcChild2, MyExcChild1GrandChild]), selected_classes
 
     assert _fully_qualified_name(LookupError) == "LookupError"  # Builtins don't keep their module prefix

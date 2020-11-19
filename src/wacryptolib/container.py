@@ -8,7 +8,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from pprint import pprint
-from typing import Optional, Union, List, Sequence
+from typing import Optional, Union, List, Sequence, BinaryIO
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -57,7 +57,7 @@ def get_escrow_id(escrow_conf: dict) -> str:
     return str(sorted(escrow_conf.items()))
 
 
-def gather_escrow_dependencies(containers: list) -> dict:
+def gather_escrow_dependencies(containers: Sequence) -> dict:
     """
     Analyse a container and return the escrows (and their keypairs) used by it.
 
@@ -142,7 +142,7 @@ def request_decryption_authorizations(
     return request_authorization_result
 
 
-def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase) -> EscrowApi:
+def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase):
     """
     Return an EscrowApi subclass instance (or proxy) depending on the content of `escrow` dict.
     """
@@ -192,7 +192,7 @@ class ContainerWriter(ContainerBase):
     Contains every method used to write and encrypt a container, IN MEMORY.
     """
 
-    def encrypt_data(self, data: Union[bytes, io.RawIOBase], *, conf: dict, keychain_uid=None, metadata=None) -> dict:
+    def encrypt_data(self, data: Union[bytes, BinaryIO], *, conf: dict, keychain_uid=None, metadata=None) -> dict:
         """
         Browse through configuration tree to apply the right succession of algorithms to data.
 
@@ -352,7 +352,7 @@ class ContainerWriter(ContainerBase):
         cipherdict = encrypt_bytestring(plaintext=symmetric_key_data, encryption_algo=encryption_algo, key=subkey)
         return cipherdict
 
-    def _encrypt_shares(self, shares: list, key_shared_secret_escrows: Sequence, keychain_uid: uuid.UUID) -> list:
+    def _encrypt_shares(self, shares: Sequence, key_shared_secret_escrows: Sequence, keychain_uid: uuid.UUID) -> list:
         """
         Make a loop through all shares from shared secret algorithm to encrypt each of them.
 
@@ -467,7 +467,7 @@ class ContainerReader(ContainerBase):
         data = data_current  # Now decrypted
         return data
 
-    def _decrypt_symmetric_key(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list):
+    def _decrypt_symmetric_key(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: dict):
         """
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
         by a asymmetric algorithm.
@@ -534,7 +534,7 @@ class ContainerReader(ContainerBase):
         )
         return symmetric_key_plaintext
 
-    def _decrypt_symmetric_key_share(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: list):
+    def _decrypt_symmetric_key_share(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: dict):
         """
         Make a loop through all encrypted shares to decrypt each of them
 
@@ -616,7 +616,7 @@ class ContainerReader(ContainerBase):
 
 
 def encrypt_data_into_container(
-    data: Union[bytes, io.RawIOBase],
+    data: Union[bytes, BinaryIO],
     *,
     conf: dict,
     metadata: Optional[dict],
@@ -804,7 +804,7 @@ class ContainerStorage:
             key_storage_pool=self._key_storage_pool,
         )
 
-    def _decrypt_data_from_container(self, container: dict, passphrase_mapper: dict) -> bytes:
+    def _decrypt_data_from_container(self, container: dict, passphrase_mapper: Optional[dict]) -> bytes:
         return decrypt_data_from_container(
             container, key_storage_pool=self._key_storage_pool, passphrase_mapper=passphrase_mapper
         )  # Will fail if authorizations are not OK

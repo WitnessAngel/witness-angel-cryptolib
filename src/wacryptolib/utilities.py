@@ -4,7 +4,7 @@ import logging
 import os
 from pathlib import Path
 import shutil
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 import multitimer
 import uuid0
@@ -89,7 +89,7 @@ def split_as_chunks(
     return chunks
 
 
-def recombine_chunks(chunks: List[bytes], *, chunk_size: int, must_unpad: bool) -> bytes:
+def recombine_chunks(chunks: Sequence[bytes], *, chunk_size: int, must_unpad: bool) -> bytes:
     """Recombine chunks which were previously separated.
 
         :param chunks: sequence of bytestring parts

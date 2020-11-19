@@ -26,7 +26,7 @@ class TimeLimitedAggregatorMixin:
 
     _current_start_time = None
 
-    def __init__(self, max_duration_s: int):
+    def __init__(self, max_duration_s: float):
         assert max_duration_s > 0, max_duration_s
         self._max_duration_s = max_duration_s
         self._lock = threading.Lock()
@@ -69,7 +69,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
     _current_records_count = 0
     _current_metadata = None
 
-    def __init__(self, container_storage: ContainerStorage, max_duration_s: int):
+    def __init__(self, container_storage: ContainerStorage, max_duration_s: float):
         super().__init__(max_duration_s=max_duration_s)
         self._container_storage = container_storage
         self._lock = threading.Lock()
@@ -196,7 +196,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
     _current_dataset = None
     _lock = None
 
-    def __init__(self, tarfile_aggregator: TarfileRecordsAggregator, sensor_name: str, max_duration_s: int):
+    def __init__(self, tarfile_aggregator: TarfileRecordsAggregator, sensor_name: str, max_duration_s: float):
         super().__init__(max_duration_s=max_duration_s)
         assert isinstance(tarfile_aggregator, TarfileRecordsAggregator), tarfile_aggregator
         self._tarfile_aggregator = tarfile_aggregator

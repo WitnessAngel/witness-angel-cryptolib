@@ -27,7 +27,7 @@ def test_key_storage_basic_get_set_api(tmp_path):
         KeyStorageBase()
 
     dummy_key_storage = DummyKeyStorage()
-    filesystem_key_storage = FilesystemKeyStorage(keys_dir=str(tmp_path))
+    filesystem_key_storage = FilesystemKeyStorage(keys_dir=tmp_path)
 
     filesystem_key_storage_test_locals = None
     for key_storage in (dummy_key_storage, filesystem_key_storage):
@@ -49,7 +49,7 @@ def test_key_storage_basic_get_set_api(tmp_path):
 def test_key_storage_free_keys_api(tmp_path):
 
     dummy_key_storage = DummyKeyStorage()
-    filesystem_key_storage = FilesystemKeyStorage(keys_dir=str(tmp_path))
+    filesystem_key_storage = FilesystemKeyStorage(keys_dir=tmp_path)
 
     for key_storage in (dummy_key_storage, filesystem_key_storage):
         check_key_storage_free_keys_api(key_storage)
@@ -58,7 +58,7 @@ def test_key_storage_free_keys_api(tmp_path):
 def test_key_storage_free_keys_concurrency(tmp_path):
 
     dummy_key_storage = DummyKeyStorage()
-    filesystem_key_storage = FilesystemKeyStorage(keys_dir=str(tmp_path))
+    filesystem_key_storage = FilesystemKeyStorage(keys_dir=tmp_path)
 
     for key_storage in (dummy_key_storage, filesystem_key_storage):
         check_key_storage_free_keys_concurrency(key_storage)

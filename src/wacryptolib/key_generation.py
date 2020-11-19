@@ -1,5 +1,5 @@
 import logging
-from typing import Union
+from typing import Union, Optional, AnyStr
 
 import unicodedata
 from Crypto.PublicKey import RSA, DSA, ECC
@@ -28,7 +28,7 @@ def generate_symmetric_key(encryption_algo: str) -> bytes:
 
 
 def generate_asymmetric_keypair(
-    *, key_type: str, serialize=True, key_length_bits=2048, curve="p521", passphrase: Union[bytes, str] = None
+    *, key_type: str, serialize=True, key_length_bits=2048, curve="p521", passphrase: Optional[AnyStr] = None
 ) -> dict:
     """Generate a (public_key, private_key) pair.
 
@@ -67,7 +67,7 @@ def generate_asymmetric_keypair(
     return keypair
 
 
-def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_type: str, passphrase: Union[bytes, str] = None):
+def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_type: str, passphrase: Optional[AnyStr] = None):
     """Load a key (public or private) from a PEM-formatted bytestring.
 
     :param key_pem: the key bytrestring
@@ -141,7 +141,7 @@ def _generate_ecc_keypair_as_objects(curve: str) -> dict:
     return keypair
 
 
-def _serialize_key_object_to_pem_bytestring(key, key_type: str, passphrase: bytes = None) -> str:
+def _serialize_key_object_to_pem_bytestring(key, key_type: str, passphrase: Optional[AnyStr] = None) -> bytes:
     """Convert a private or public key to PEM-formatted bytestring.
 
     If a passphrase is provided, the key (which must be PRIVATE) is encrypted with it.

@@ -255,7 +255,7 @@ def test_generate_free_keypair_for_least_provisioned_key_type():
     def key_generation_func(key_type, serialize):
         nonlocal generated_keys_count
         generated_keys_count += 1
-        return dict(private_key="someprivatekey", public_key="somepublickey")
+        return dict(private_key=b"someprivatekey", public_key=b"somepublickey")
 
     # Check the fallback on "all types of keys" for key_types parameter
 
@@ -364,7 +364,7 @@ def test_get_free_keys_generator_worker():
         nonlocal generate_keys_count
         generate_keys_count += 1
         time.sleep(0.01)
-        return dict(private_key="someprivatekey", public_key="somepublickey")
+        return dict(private_key=b"someprivatekey2", public_key=b"somepublickey2")
 
     worker = get_free_keys_generator_worker(
         key_storage=key_storage,

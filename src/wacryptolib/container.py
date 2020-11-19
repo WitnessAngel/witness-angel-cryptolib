@@ -8,7 +8,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from pprint import pprint
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Sequence
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -352,7 +352,7 @@ class ContainerWriter(ContainerBase):
         cipherdict = encrypt_bytestring(plaintext=symmetric_key_data, encryption_algo=encryption_algo, key=subkey)
         return cipherdict
 
-    def _encrypt_shares(self, shares: list, key_shared_secret_escrows: list, keychain_uid: uuid.UUID) -> list:
+    def _encrypt_shares(self, shares: list, key_shared_secret_escrows: Sequence, keychain_uid: uuid.UUID) -> list:
         """
         Make a loop through all shares from shared secret algorithm to encrypt each of them.
 

@@ -1,9 +1,11 @@
+from typing import Sequence
+
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-def gather_exception_subclasses(module, parent_classes: list):
+def gather_exception_subclasses(module, parent_classes: Sequence):
     """
     Browse the module's variables, and return all found exception classes
     which are subclasses of `parent_classes` (including these, if found in module).
@@ -12,7 +14,7 @@ def gather_exception_subclasses(module, parent_classes: list):
     :param parent_classes: list of exception classes (or single exception class)
     :return: list of exception subclasses
     """
-    parent_classes = tuple(parent_classes) if isinstance(parent_classes, list) else parent_classes
+    parent_classes = tuple(parent_classes)
     selected_classes = []
     for (key, value) in vars(module).items():
         if isinstance(value, type):

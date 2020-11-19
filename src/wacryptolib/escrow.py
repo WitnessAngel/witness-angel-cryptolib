@@ -1,7 +1,7 @@
 import logging
 import time
 import uuid
-from typing import Optional
+from typing import Optional, Union, AnyStr
 from uuid import UUID
 
 from wacryptolib.encryption import _decrypt_via_rsa_oaep
@@ -22,7 +22,7 @@ MAX_PAYLOAD_LENGTH_FOR_SIGNATURE = 128  # Max 2*SHA512 length
 
 
 def generate_asymmetric_keypair_for_storage(
-    key_type: str, *, key_storage, keychain_uid: Optional[UUID] = None, passphrase: Optional[str] = None
+    key_type: str, *, key_storage, keychain_uid: Optional[UUID] = None, passphrase: Optional[AnyStr] = None
 ) -> dict:
     """
     Shortcut to generate an asymmetric keypair and store it into a key storage.

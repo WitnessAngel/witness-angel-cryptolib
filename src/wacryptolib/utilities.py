@@ -163,7 +163,7 @@ def load_from_json_file(filepath, **extra_options):
     return load_from_json_bytes(json_bytes, **extra_options)
 
 
-def generate_uuid0(ts: Optional[int] = None):
+def generate_uuid0(ts: Optional[float] = None):
     """
     Generate a random UUID partly based on Unix timestamp (not part of official "variants").
 

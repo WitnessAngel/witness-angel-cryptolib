@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import List, Sequence
 
 from Crypto.Protocol.SecretSharing import Shamir
 
@@ -52,7 +52,7 @@ def split_bytestring_as_shamir_shares(secret: bytes, *, shares_count: int, thres
     return full_shares
 
 
-def recombine_secret_from_shamir_shares(shares: list) -> bytes:
+def recombine_secret_from_shamir_shares(shares: Sequence) -> bytes:
     """Permits to reconstruct a key which has its secret shared
     into `shares_count` shares thanks to a list of `shares`
 
@@ -100,7 +100,7 @@ def _split_128b_bytestring_into_shares(secret: bytes, shares_count: int, thresho
     return shares
 
 
-def _recombine_128b_shares_into_bytestring(shares: List[tuple]) -> bytes:
+def _recombine_128b_shares_into_bytestring(shares: Sequence[tuple]) -> bytes:
     """Recombine shares of exactly 128 bits into a bytestring.
 
         :param bytestring: bytestring to split

@@ -441,6 +441,7 @@ class ContainerReader(ContainerBase):
         keychain_uid = container["keychain_uid"]
 
         data_current = container["data_ciphertext"]
+        assert isinstance(data_current, bytes), repr(data_current)  # Else it's still a special marker for example...
 
         for data_encryption_stratum in reversed(container["data_encryption_strata"]):
 
@@ -655,7 +656,7 @@ def decrypt_data_from_container(
     return data
 
 
-def _get_offloaded_file_path(container_filepath):
+def _get_offloaded_file_path(container_filepath: Path):
     return container_filepath.parent.joinpath(container_filepath.name + OFFLOADED_DATA_SUFFIX)
 
 

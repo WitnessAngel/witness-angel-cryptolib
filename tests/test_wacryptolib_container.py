@@ -638,7 +638,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
 
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
     storage = ContainerStorage(default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=containers_dir)
-    assert storage._max_containers_count is None
+    assert storage._max_container_count is None
     assert len(storage) == 0
     assert storage.list_container_names() == []
 
@@ -722,7 +722,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
         containers_dir=containers_dir,
         offload_data_ciphertext=offload_data_ciphertext1,
     )
-    assert storage._max_containers_count is None
+    assert storage._max_container_count is None
     for i in range(10):
         storage.enqueue_file_for_encryption("file.dat", b"dogs\ncats\n", metadata=None)
     assert len(storage) < 11  # In progress
@@ -733,7 +733,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     storage = FakeTestContainerStorage(
         default_encryption_conf={"stuffs": True},
         containers_dir=containers_dir,
-        max_containers_count=3,
+        max_container_count=3,
         offload_data_ciphertext=offload_data_ciphertext2,
     )
     for i in range(3):
@@ -759,7 +759,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     storage = FakeTestContainerStorage(
         default_encryption_conf={"randomthings": True},
         containers_dir=containers_dir,
-        max_containers_count=4,
+        max_container_count=4,
         offload_data_ciphertext=offload_data_ciphertext3,
     )
     assert len(storage) == 3  # Retrieves existing containers

@@ -725,7 +725,7 @@ class ContainerStorage:
 
     :param containers_dir: the folder where container files are stored
     :param default_encryption_conf: encryption conf to use when none is provided when enqueuing data
-    :param max_containers_count: if set, oldest exceeding containers (when sorted by name) are automatcially erased
+    :param max_container_count: if set, oldest exceeding containers (when sorted by name) are automatically erased
     :param key_storage_pool: optional KeyStoragePool, which might be required by current encryption conf
     :param max_workers: count of worker threads to use in parallel
     :param offload_data_ciphertext: whether actual encrypted data must be kept separated from structured container file
@@ -735,7 +735,7 @@ class ContainerStorage:
         self,
         containers_dir: Path,
         default_encryption_conf: Optional[dict] = None,
-        max_containers_count: Optional[int] = None,
+        max_container_count: Optional[int] = None,
         key_storage_pool: Optional[KeyStoragePoolBase] = None,
         max_workers: int = 1,
         offload_data_ciphertext=True,
@@ -743,10 +743,10 @@ class ContainerStorage:
         containers_dir = Path(containers_dir)
         assert containers_dir.is_dir(), containers_dir
         containers_dir = containers_dir.absolute()
-        assert max_containers_count is None or max_containers_count > 0, max_containers_count
+        assert max_container_count is None or max_container_count > 0, max_container_count
         self._default_encryption_conf = default_encryption_conf
         self._containers_dir = containers_dir
-        self._max_containers_count = max_containers_count
+        self._max_container_count = max_container_count
         self._key_storage_pool = key_storage_pool
         self._thread_pool_executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="container_worker")
         self._pending_executor_futures = []
@@ -785,12 +785,12 @@ class ContainerStorage:
         self._delete_container(container_name=container_name)
 
     def _purge_exceeding_containers(self):
-        if self._max_containers_count:
+        if self._max_container_count:
             # BEWARE, due to the way we name files, alphabetical and start-datetime sorts are the same!
             container_names = self.list_container_names(as_sorted=True, as_absolute=False)
             containers_count = len(container_names)
-            if containers_count > self._max_containers_count:
-                excess_count = containers_count - self._max_containers_count
+            if containers_count > self._max_container_count:
+                excess_count = containers_count - self._max_container_count
                 containers_to_delete = container_names[:excess_count]
                 for container_name in containers_to_delete:
                     self._delete_container(container_name)

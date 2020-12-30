@@ -78,7 +78,7 @@ SIMPLE_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
             data_signatures=[
-                dict(message_prehash_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]
@@ -112,7 +112,7 @@ COMPLEX_CONTAINER_CONF = dict(
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)
             ],
             data_signatures=[
-                dict(message_prehash_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(message_digest_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         ),
         dict(
@@ -122,9 +122,9 @@ COMPLEX_CONTAINER_CONF = dict(
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
             ],
             data_signatures=[
-                dict(message_prehash_algo="SHA3_256", signature_algo="RSA_PSS", signature_escrow=LOCAL_ESCROW_MARKER),
+                dict(message_digest_algo="SHA3_256", signature_algo="RSA_PSS", signature_escrow=LOCAL_ESCROW_MARKER),
                 dict(
-                    message_prehash_algo="SHA512",
+                    message_digest_algo="SHA512",
                     signature_algo="ECC_DSS",
                     signature_escrow=LOCAL_ESCROW_MARKER,
                     keychain_uid=ENFORCED_UID2,
@@ -179,7 +179,7 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
                 ),
             ],
             data_signatures=[
-                dict(message_prehash_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]
@@ -214,7 +214,7 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
             data_encryption_algo="AES_CBC",
             key_encryption_strata=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
             data_signatures=[
-                dict(message_prehash_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(message_digest_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         ),
         dict(
@@ -237,12 +237,12 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
             ],
             data_signatures=[
                 dict(
-                    message_prehash_algo="SHA3_256",
+                    message_digest_algo="SHA3_256",
                     signature_algo="RSA_PSS",
                     signature_escrow=LOCAL_ESCROW_MARKER,
                     keychain_uid=ENFORCED_UID1,
                 ),
-                dict(message_prehash_algo="SHA512", signature_algo="ECC_DSS", signature_escrow=LOCAL_ESCROW_MARKER),
+                dict(message_digest_algo="SHA512", signature_algo="ECC_DSS", signature_escrow=LOCAL_ESCROW_MARKER),
             ],
         ),
     ]
@@ -487,7 +487,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                 ],
                 data_signatures=[
                     dict(
-                        message_prehash_algo="SHA256",
+                        message_digest_algo="SHA256",
                         signature_algo="DSA_DSS",
                         signature_escrow=LOCAL_ESCROW_MARKER,  # Uses separate keypair, no passphrase here
                     )

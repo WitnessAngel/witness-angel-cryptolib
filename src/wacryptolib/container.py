@@ -398,11 +398,11 @@ class ContainerWriter(ContainerBase):
         :return: dictionary with information needed to verify signature
         """
         encryption_proxy = get_escrow_proxy(escrow=conf["signature_escrow"], key_storage_pool=self._key_storage_pool)
-        message_prehash_algo = conf["message_prehash_algo"]
+        message_digest_algo = conf["message_digest_algo"]
         signature_algo = conf["signature_algo"]
         keychain_uid_signature = conf.get("keychain_uid") or keychain_uid
 
-        data_ciphertext_hash = hash_message(data_ciphertext, hash_algo=message_prehash_algo)
+        data_ciphertext_hash = hash_message(data_ciphertext, hash_algo=message_digest_algo)
 
         logger.debug("Signing hash of encrypted data with algo %r", signature_algo)
 
@@ -600,7 +600,7 @@ class ContainerReader(ContainerBase):
         :param message: message as bytes on which to verify signature
         :param conf: configuration tree inside data_signatures
         """
-        message_prehash_algo = conf["message_prehash_algo"]
+        message_digest_algo = conf["message_digest_algo"]
         signature_algo = conf["signature_algo"]
         keychain_uid_signature = conf.get("keychain_uid") or keychain_uid
         encryption_proxy = get_escrow_proxy(escrow=conf["signature_escrow"], key_storage_pool=self._key_storage_pool)
@@ -609,7 +609,7 @@ class ContainerReader(ContainerBase):
         )
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_type=signature_algo)
 
-        message_hash = hash_message(message, hash_algo=message_prehash_algo)
+        message_hash = hash_message(message, hash_algo=message_digest_algo)
 
         verify_message_signature(
             message=message_hash, signature_algo=signature_algo, signature=conf["signature_value"], key=public_key
@@ -935,7 +935,7 @@ def get_encryption_configuration_summary(conf_or_container):
             escrow_id = _get_escrow_identifier(signature_escrow)
             lines.append(
                 "    %s/%s (by %s)"
-                % (data_signature["message_prehash_algo"], data_signature["signature_algo"], escrow_id)
+                % (data_signature["message_digest_algo"], data_signature["signature_algo"], escrow_id)
             )
     result = "\n".join(lines) + "\n"
     return result

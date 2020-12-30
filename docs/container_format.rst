@@ -35,7 +35,7 @@ A minimal container configuration in python, with a single encryption layer and 
                 ],
                 data_signatures=[
                     dict(
-                        message_prehash_algo="SHA256",
+                        message_digest_algo="SHA256",
                         signature_algo="DSA_DSS",
                         signature_escrow=LOCAL_ESCROW_MARKER,
                     )
@@ -67,7 +67,7 @@ The corresponding container content, in Pymongo's Extended Json format::
               "data_encryption_algo": "AES_CBC",
               "data_signatures": [
                   {
-                      "message_prehash_algo": "SHA256",
+                      "message_digest_algo": "SHA256",
                       "signature_algo": "DSA_DSS",
                       "signature_escrow": "_local_",
                       "signature_value": {

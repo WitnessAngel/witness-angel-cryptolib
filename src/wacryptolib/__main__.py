@@ -46,7 +46,7 @@ EXAMPLE_CONTAINER_CONF = dict(
                 ),
             ],
             data_signatures=[
-                dict(message_prehash_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]

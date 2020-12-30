@@ -2,7 +2,10 @@ import copy
 import os
 import random
 import textwrap
+import time
 import uuid
+from datetime import timedelta, datetime, timezone
+from itertools import product
 from pathlib import Path
 from pprint import pprint
 from unittest.mock import patch
@@ -28,7 +31,7 @@ from wacryptolib.container import (
     request_decryption_authorizations,
     CONTAINER_SUFFIX,
     OFFLOADED_DATA_SUFFIX,
-    delete_container_from_filesystem,
+    delete_container_from_filesystem, CONTAINER_DATETIME_FORMAT, get_container_size_on_filesystem,
 )
 from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import (
@@ -714,8 +717,6 @@ def test_container_storage_and_executor(tmp_path, caplog):
     assert storage.list_container_names(as_sorted=True) == [Path("empty.txt.crypt")]
     assert len(storage) == 1  # Remaining offloaded data file is ignored
 
-    # Test purge system
-
     offload_data_ciphertext1 = random.choice((True, False))
     storage = FakeTestContainerStorage(
         default_encryption_conf={"smth": True},
@@ -729,12 +730,17 @@ def test_container_storage_and_executor(tmp_path, caplog):
     storage.wait_for_idle_state()
     assert len(storage) == 11  # Still the older file remains
 
-    offload_data_ciphertext2 = random.choice((True, False))
+
+def test_container_storage_purge_by_max_count(tmp_path):
+
+    containers_dir = tmp_path
+
+    offload_data_ciphertext = random.choice((True, False))
     storage = FakeTestContainerStorage(
         default_encryption_conf={"stuffs": True},
         containers_dir=containers_dir,
         max_container_count=3,
-        offload_data_ciphertext=offload_data_ciphertext2,
+        offload_data_ciphertext=offload_data_ciphertext,
     )
     for i in range(3):
         storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
@@ -771,7 +777,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     assert len(storage) == 4  # Purge occurred
     # Entry "aaa.dat.000.crypt" was ejected because it's a sorting by NAMES for now!
     assert storage.list_container_names(as_sorted=True) == [
-        Path("xyz.dat.001.crypt"),
+        Path('aaa.dat.000.crypt'),  # It's the file timestamps that counts, not the name!
         Path("xyz.dat.002.crypt"),
         Path("xyz.dat.003.crypt"),
         Path("zzz.dat.001.crypt"),
@@ -780,10 +786,194 @@ def test_container_storage_and_executor(tmp_path, caplog):
     storage.delete_container(Path("xyz.dat.002.crypt"))
 
     assert storage.list_container_names(as_sorted=True) == [
-        Path("xyz.dat.001.crypt"),
+        Path("aaa.dat.000.crypt"),
         Path("xyz.dat.003.crypt"),
         Path("zzz.dat.001.crypt"),
     ]
+
+    storage.enqueue_file_for_encryption("20201121222727_whatever.dat", b"000", metadata=None)
+    storage.wait_for_idle_state()
+
+    assert storage.list_container_names(as_sorted=True) == [
+        Path("20201121222727_whatever.dat.002.crypt"),
+        Path('aaa.dat.000.crypt'),
+        Path("xyz.dat.003.crypt"),
+        Path("zzz.dat.001.crypt"),
+    ]
+
+    storage.enqueue_file_for_encryption("21201121222729_smth.dat", b"000", metadata=None)
+    storage.enqueue_file_for_encryption("lmn.dat", b"000", metadata=None)
+    storage.wait_for_idle_state()
+
+    assert storage.list_container_names(as_sorted=True) == [
+        Path('21201121222729_smth.dat.003.crypt'),
+        Path('aaa.dat.000.crypt'),
+        Path('lmn.dat.004.crypt'),
+        Path('zzz.dat.001.crypt')
+    ]
+
+    assert storage._max_container_count
+    storage._max_container_count = 0
+
+    storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
+    storage.wait_for_idle_state()
+    assert storage.list_container_names(as_sorted=True) == []  # ALL PURGED
+
+
+def test_container_storage_purge_by_age(tmp_path):
+
+    containers_dir = tmp_path
+    now = datetime.now(tz=timezone.utc)
+
+    (containers_dir / "20201021222700_oldfile.dat.crypt").touch()
+    (containers_dir / "20301021222711_oldfile.dat.crypt").touch()
+
+    offload_data_ciphertext = random.choice((True, False))
+    storage = FakeTestContainerStorage(
+        default_encryption_conf={"stuffs": True},
+        containers_dir=containers_dir,
+        max_container_age=timedelta(days=2),
+        offload_data_ciphertext=offload_data_ciphertext,
+    )
+
+    assert storage.list_container_names(as_sorted=True) == [
+        Path('20201021222700_oldfile.dat.crypt'),
+        Path('20301021222711_oldfile.dat.crypt'),
+    ]
+
+    dt = now - timedelta(seconds=1)
+    for i in range(5):
+        storage.enqueue_file_for_encryption("%s_stuff.dat" % dt.strftime(CONTAINER_DATETIME_FORMAT),
+                                            b"abc", metadata=None)
+        dt -= timedelta(days=1)
+    storage.enqueue_file_for_encryption("whatever_stuff.dat", b"xxx", metadata=None)  # File timestamp with be used instead
+    storage.wait_for_idle_state()
+
+    container_names = storage.list_container_names(as_sorted=True)
+
+    assert Path('20201021222700_oldfile.dat.crypt') not in container_names
+
+    assert Path('20301021222711_oldfile.dat.crypt') in container_names
+    assert Path('whatever_stuff.dat.005.crypt') in container_names
+
+    assert len(storage) == 4  # 2 listed just above + 2 recent "<date>_stuff.dat" from loop
+
+    # Change mtime to VERY old!
+    os.utime(storage._make_absolute(Path('whatever_stuff.dat.005.crypt')), (1000, 1000))
+
+    storage.enqueue_file_for_encryption("abcde.dat", b"xxx", metadata=None)
+    storage.wait_for_idle_state()
+
+    container_names = storage.list_container_names(as_sorted=True)
+    assert Path('whatever_stuff.dat.005.crypt') not in container_names
+    assert Path('abcde.dat.006.crypt') in container_names
+
+    assert len(storage) == 4
+
+    assert storage._max_container_age
+    storage._max_container_age = timedelta(days=-1)
+
+    storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
+    storage.wait_for_idle_state()
+    assert storage.list_container_names(as_sorted=True) == [Path('20301021222711_oldfile.dat.crypt')]  # ALL PURGED
+
+
+def test_container_storage_purge_by_quota(tmp_path):
+
+    containers_dir = tmp_path
+
+    offload_data_ciphertext = random.choice((True, False))
+    storage = FakeTestContainerStorage(
+        default_encryption_conf={"stuffs": True},
+        containers_dir=containers_dir,
+        max_container_quota=8000,  # Beware of overhead of encryption and json structs!
+        offload_data_ciphertext=offload_data_ciphertext,
+    )
+    assert not len(storage)
+
+    storage.enqueue_file_for_encryption("20101021222711_stuff.dat", b"a"*2000, metadata=None)
+    storage.enqueue_file_for_encryption("20301021222711_stuff.dat", b"z"*2000, metadata=None)
+
+    for i in range(10):
+        storage.enqueue_file_for_encryption("some_stuff.dat", b"m"*1000, metadata=None)
+    storage.wait_for_idle_state()
+
+    container_names = storage.list_container_names(as_sorted=True)
+
+    print(container_names)
+
+    if offload_data_ciphertext:  # Offloaded containers are smaller due to skipping of base64 encoding of ciphertext
+        assert container_names == [
+            Path('20301021222711_stuff.dat.001.crypt'),
+            Path('some_stuff.dat.007.crypt'),
+            Path('some_stuff.dat.008.crypt'),
+            Path('some_stuff.dat.009.crypt'),
+            Path('some_stuff.dat.010.crypt'),
+            Path('some_stuff.dat.011.crypt')]
+    else:
+        assert container_names == [
+            Path('20301021222711_stuff.dat.001.crypt'),
+            Path('some_stuff.dat.009.crypt'),
+            Path('some_stuff.dat.010.crypt'),
+            Path('some_stuff.dat.011.crypt')]
+
+    assert storage._max_container_quota
+    storage._max_container_quota = 0
+
+    storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
+    storage.wait_for_idle_state()
+    assert storage.list_container_names(as_sorted=True) == []  # ALL PURGED
+
+
+def test_container_storage_purge_parameter_combinations(tmp_path):
+
+    containers_dir = tmp_path
+    now = datetime.now(tz=timezone.utc) - timedelta(seconds=1)
+
+    recent_big_file_name = "%s_recent_big_stuff.dat" % now.strftime(CONTAINER_DATETIME_FORMAT)
+
+    params_sets = product([None, 2],[None, 1000], [None, timedelta(days=3)])
+
+    for max_container_count, max_container_quota, max_container_age in params_sets:
+
+        offload_data_ciphertext = random.choice((True, False))
+        storage = FakeTestContainerStorage(
+            default_encryption_conf={"stuffs": True},
+            containers_dir=containers_dir,
+            max_container_count=max_container_count,
+            max_container_quota=max_container_quota,
+            max_container_age=max_container_age,
+            offload_data_ciphertext=offload_data_ciphertext,
+        )
+
+        storage.enqueue_file_for_encryption("20001121222729_smth.dat", b"000", metadata=None)
+        storage.enqueue_file_for_encryption(recent_big_file_name, b"0"*2000, metadata=None)
+        storage.enqueue_file_for_encryption("recent_small_file.dat", b"0"*50, metadata=None)
+
+        storage.wait_for_idle_state()
+
+        container_names = storage.list_container_names(as_sorted=True)
+
+        assert (Path("20001121222729_smth.dat.000.crypt") in container_names) == (not (max_container_count or max_container_quota or max_container_age))
+        assert (Path(recent_big_file_name +".001.crypt") in container_names) == (not max_container_quota)
+        assert (Path("recent_small_file.dat.002.crypt") in container_names) == True
+
+
+    # Special case of "everything restricted"
+
+    storage = FakeTestContainerStorage(
+        default_encryption_conf={"stuffs": True},
+        containers_dir=containers_dir,
+        max_container_count=0,
+        max_container_quota=0,
+        max_container_age=timedelta(days=0),
+        offload_data_ciphertext=False,
+    )
+    storage.enqueue_file_for_encryption("some_small_file.dat", b"0"*50, metadata=None)
+    storage.wait_for_idle_state()
+
+    container_names = storage.list_container_names(as_sorted=True)
+    assert container_names == []
 
 
 def test_container_storage_encryption_conf_precedence(tmp_path):
@@ -884,7 +1074,7 @@ def test_get_encryption_configuration_summary():
 @pytest.mark.parametrize("container_conf", [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF])
 def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
 
-    data = b"jhf"
+    data = b"jhf" * 200
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
 
@@ -912,11 +1102,16 @@ def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
 
     assert container["data_ciphertext"] == container_ciphertext_before_dump  # Original dict unchanged
 
+    size1 = get_container_size_on_filesystem(container_filepath)
+    assert size1
+
     assert container_filepath.exists()
-    delete_container_from_filesystem(container_filepath)
-    assert not container_filepath.exists()
+    #delete_container_from_filesystem(container_filepath)
+    #assert not container_filepath.exists()
 
     # CASE 2 - OFFLOADED CIPHERTEXT FILE
+
+    container_filepath = tmp_path / "mycontainer_offloaded.crypt"
 
     dump_container_to_filesystem(container_filepath, container=container)  # OVERWRITE, with offloading by default
     container_reloaded = load_from_json_file(container_filepath)
@@ -932,6 +1127,10 @@ def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
     assert container_truncated == container_without_ciphertext
 
     assert container["data_ciphertext"] == container_ciphertext_before_dump  # Original dict unchanged
+
+    size2 = get_container_size_on_filesystem(container_filepath)
+    assert size2 < size1   # Overhead of base64 encoding in monolithic file!
+    assert size1 < size2 + 1000  # Overhead remaings limited though
 
     assert container_filepath.exists()
     assert container_offloaded_filepath.exists()

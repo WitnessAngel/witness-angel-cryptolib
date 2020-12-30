@@ -382,7 +382,7 @@ def test_get_free_keys_generator_worker():
         assert 10 < generate_keys_count < 50, generate_keys_count  # Not enough time to generate all
 
         worker.start()
-        time.sleep(4)
+        time.sleep(6)
         worker.stop()
         worker.join()
 

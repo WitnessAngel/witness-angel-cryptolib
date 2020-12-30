@@ -6,6 +6,7 @@ import os
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from pprint import pprint
 from typing import Optional, Union, List, Sequence, BinaryIO
@@ -36,12 +37,16 @@ logger = logging.getLogger(__name__)
 
 CONTAINER_FORMAT = "WA_0.1a"
 CONTAINER_SUFFIX = ".crypt"
+CONTAINER_DATETIME_FORMAT = "%Y%m%d%H%M%S"  # For use in container names and their records
+
+OFFLOADED_MARKER = "[OFFLOADED]"
 OFFLOADED_DATA_SUFFIX = ".data"  # Added to CONTAINER_SUFFIX
 
 MEDIUM_SUFFIX = ".medium"  # To construct decrypted filename when no previous extensions are found in container filename
-OFFLOADED_MARKER = "[OFFLOADED]"
-DUMMY_KEY_STORAGE_POOL = DummyKeyStoragePool()  # Common fallback storage with in-memory keys
+
 SHARED_SECRET_MARKER = "[SHARED_SECRET]"
+
+DUMMY_KEY_STORAGE_POOL = DummyKeyStoragePool()  # Common fallback storage with in-memory keys
 
 #: Special value in containers, to invoke a device-local escrow
 LOCAL_ESCROW_MARKER = dict(escrow_type="local")  # FIXME CHANGE THIS
@@ -701,6 +706,16 @@ def delete_container_from_filesystem(container_filepath):
         os.remove(offloaded_file_path)
 
 
+def get_container_size_on_filesystem(container_filepath):
+    """Return the total size in bytes occupied by a container and its potential offloaded data file."""
+    size = container_filepath.stat().st_size  # Might fail if file got deleted concurrently
+    offloaded_file_path = _get_offloaded_file_path(container_filepath)
+    if offloaded_file_path.exists():
+        # We don't care about OFFLOADED_MARKER here, we go the quick way
+        size += offloaded_file_path.stat().st_size
+    return size
+
+
 def extract_metadata_from_container(container: dict) -> Optional[dict]:
     """Read the metadata tree (possibly None) from a container.
 
@@ -725,7 +740,9 @@ class ContainerStorage:
 
     :param containers_dir: the folder where container files are stored
     :param default_encryption_conf: encryption conf to use when none is provided when enqueuing data
-    :param max_container_count: if set, oldest exceeding containers (when sorted by name) are automatically erased
+    :param max_container_quota: if set, containers are deleted if they exceed this size in bytes
+    :param max_container_count: if set, oldest exceeding containers (time taken from their name, else their file-stats) are automatically erased
+    :param max_container_age: if set, containers exceeding this age (taken from their name, else their file-stats) in days are automatically erased
     :param key_storage_pool: optional KeyStoragePool, which might be required by current encryption conf
     :param max_workers: count of worker threads to use in parallel
     :param offload_data_ciphertext: whether actual encrypted data must be kept separated from structured container file
@@ -735,7 +752,9 @@ class ContainerStorage:
         self,
         containers_dir: Path,
         default_encryption_conf: Optional[dict] = None,
+        max_container_quota: Optional[int] = None,
         max_container_count: Optional[int] = None,
+        max_container_age: Optional[timedelta] = None,
         key_storage_pool: Optional[KeyStoragePoolBase] = None,
         max_workers: int = 1,
         offload_data_ciphertext=True,
@@ -743,10 +762,14 @@ class ContainerStorage:
         containers_dir = Path(containers_dir)
         assert containers_dir.is_dir(), containers_dir
         containers_dir = containers_dir.absolute()
-        assert max_container_count is None or max_container_count > 0, max_container_count
+        assert max_container_quota is None or max_container_quota >= 0, max_container_quota
+        assert max_container_count is None or max_container_count >= 0, max_container_count
+        assert max_container_age is None or max_container_age >= timedelta(seconds=0), max_container_age
         self._default_encryption_conf = default_encryption_conf
         self._containers_dir = containers_dir
+        self._max_container_quota = max_container_quota
         self._max_container_count = max_container_count
+        self._max_container_age = max_container_age
         self._key_storage_pool = key_storage_pool
         self._thread_pool_executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="container_worker")
         self._pending_executor_futures = []
@@ -762,21 +785,53 @@ class ContainerStorage:
 
     def list_container_names(self, as_sorted=False, as_absolute=False):
         """Returns the list of encrypted containers present in storage,
-        sorted or not, absolute or not, as Path objects."""
+        sorted by name or not, absolute or not, as Path objects."""
         assert self._containers_dir.is_absolute(), self._containers_dir
         paths = list(self._containers_dir.glob("*" + CONTAINER_SUFFIX))  # As list, for multiple looping on it
         assert all(p.is_absolute() for p in paths), paths
         if as_sorted:
             paths = sorted(paths)
         if not as_absolute:
-            paths = (Path(p.name) for p in paths)
+            paths = (Path(p.name) for p in paths)  # beware, only works since we don't have subfolders for now!
         return list(paths)
+
+    def _get_container_datetime(self, container_name):
+        """Returns an UTC datetime corresponding to the creation time stored in filename, or else the file-stat mtime"""
+        try:
+            dt = datetime.strptime(container_name.name.split("_")[0], CONTAINER_DATETIME_FORMAT)
+            dt = dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            mtime = self._make_absolute(container_name).stat().st_mtime  # Might fail if file got deleted concurrently
+            dt = datetime.fromtimestamp(mtime, tz=timezone.utc)
+        return dt
+
+    def _get_container_size(self, container_name):
+        """Returns a size in bytes"""
+        return get_container_size_on_filesystem(self._make_absolute(container_name))
+
+    def list_container_properties(self, with_age=False, with_size=False):
+        """Returns an unsorted list of dicts having the fields "name", [age] and [size], depending on requested properties."""
+        container_names = self.list_container_names(as_sorted=False, as_absolute=False)
+
+        now = datetime.now(tz=timezone.utc)
+
+        result = []
+        for container_name in container_names:
+            entry = dict(name=container_name)
+            if with_age:
+                container_datetime = self._get_container_datetime(container_name)
+                entry["age"] = now - container_datetime   # We keep as timedelta
+            if with_size:
+                entry["size"] = self._get_container_size(container_name)
+            result.append(entry)
+        return result
 
     def _make_absolute(self, container_name):
         assert not Path(container_name).is_absolute()
         return self._containers_dir.joinpath(container_name)
 
     def _delete_container(self, container_name):
+        print("Deleting", container_name)
         container_filepath = self._make_absolute(container_name)
         delete_container_from_filesystem(container_filepath)
 
@@ -785,15 +840,40 @@ class ContainerStorage:
         self._delete_container(container_name=container_name)
 
     def _purge_exceeding_containers(self):
-        if self._max_container_count:
-            # BEWARE, due to the way we name files, alphabetical and start-datetime sorts are the same!
-            container_names = self.list_container_names(as_sorted=True, as_absolute=False)
-            containers_count = len(container_names)
+        """Purge containers first by date, then total quota, then count, depending on instance settings"""
+
+        if self._max_container_age is not None:  # FIRST these, since their deletion is unconditional
+            container_dicts = self.list_container_properties(with_age=True)
+            print(container_dicts, self._max_container_age)
+            for container_dict in container_dicts:
+                if container_dict["age"] > self._max_container_age:
+                    self._delete_container(container_dict["name"])
+
+        if self._max_container_quota is not None:
+            max_container_quota = self._max_container_quota
+
+            container_dicts = self.list_container_properties(with_size=True, with_age=True)
+            container_dicts.sort(key=lambda x: (-x["age"], x["name"]), reverse=True)  # Oldest last
+
+            total_space_consumed = sum(x["size"] for x in container_dicts)
+
+            while total_space_consumed > max_container_quota:
+                print (container_dicts, total_space_consumed, "vs", max_container_quota)
+                deleted_container_dict = container_dicts.pop()
+                self._delete_container(deleted_container_dict["name"])
+                total_space_consumed -= deleted_container_dict["size"]
+
+        if self._max_container_count is not None:
+            container_dicts = self.list_container_properties(with_age=True)
+            containers_count = len(container_dicts)
+
             if containers_count > self._max_container_count:
+                assert containers_count > 0, containers_count
                 excess_count = containers_count - self._max_container_count
-                containers_to_delete = container_names[:excess_count]
-                for container_name in containers_to_delete:
-                    self._delete_container(container_name)
+                container_dicts.sort(key=lambda x: (-x["age"], x["name"]))  # Oldest first
+                deleted_container_dicts = container_dicts[:excess_count]
+                for deleted_container_dict in deleted_container_dicts:
+                    self._delete_container(deleted_container_dict["name"])
 
     def _encrypt_data_into_container(self, data, metadata, keychain_uid, encryption_conf):
         assert encryption_conf, encryption_conf

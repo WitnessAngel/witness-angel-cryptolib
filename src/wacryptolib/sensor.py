@@ -4,7 +4,7 @@ import tarfile
 import threading
 from datetime import datetime, timezone
 
-from wacryptolib.container import ContainerStorage
+from wacryptolib.container import ContainerStorage, CONTAINER_DATETIME_FORMAT
 from wacryptolib.utilities import (
     dump_to_json_bytes,
     synchronized,
@@ -56,8 +56,6 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
     Public methods of this class are thread-safe.
     """
 
-    DATETIME_FORMAT = "%Y%m%d%H%M%S"
-
     _lock = None
 
     # Keep these in sync if you add bz/gz compression later
@@ -92,8 +90,8 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
     def _build_tarfile_filename(self, from_datetime, to_datetime):
         extension = self.tarfile_extension
         assert extension.startswith("."), extension
-        from_ts = from_datetime.strftime(self.DATETIME_FORMAT)
-        to_ts = to_datetime.strftime(self.DATETIME_FORMAT)
+        from_ts = from_datetime.strftime(CONTAINER_DATETIME_FORMAT)
+        to_ts = to_datetime.strftime(CONTAINER_DATETIME_FORMAT)
         filename = "{from_ts}_{to_ts}_container{extension}".format(**locals())
         assert " " not in filename, repr(filename)
         return filename
@@ -122,8 +120,8 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
 
     def _build_record_filename(self, sensor_name, from_datetime, to_datetime, extension):
         assert extension.startswith("."), extension
-        from_ts = from_datetime.strftime(self.DATETIME_FORMAT)
-        to_ts = to_datetime.strftime(self.DATETIME_FORMAT)
+        from_ts = from_datetime.strftime(CONTAINER_DATETIME_FORMAT)
+        to_ts = to_datetime.strftime(CONTAINER_DATETIME_FORMAT)
         filename = "{from_ts}_{to_ts}_{sensor_name}{extension}".format(**locals())
         assert " " not in filename, repr(filename)
         return filename

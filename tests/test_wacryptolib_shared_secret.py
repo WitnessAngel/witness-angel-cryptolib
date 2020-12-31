@@ -42,6 +42,9 @@ def test_shared_secret_normal_cases():
             else:
                 assert secret_reconstructed != secret  # We MIGHT get a wrong bytestring unknowingly
 
+        with pytest.raises(ValueError, match="unique indices"):
+            wacryptolib.shared_secret.recombine_secret_from_shamir_shares(selected_shares + [selected_shares[0]])
+
 
 def test_shared_secret_corner_cases():
 

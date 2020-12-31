@@ -221,7 +221,7 @@ class ContainerWriter(ContainerBase):
             data = _data.read()
             _data.close()
             filename = getattr(_data, "name", None)
-            if filename and os.path.exists(filename):
+            if filename and os.path.exists(filename):  # Can't be false on Win32, since files are not deletable when open
                 os.remove(filename)  # We let errors flow here!
 
         assert isinstance(data, bytes), data

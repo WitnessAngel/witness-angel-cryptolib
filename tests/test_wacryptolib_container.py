@@ -349,7 +349,7 @@ def test_standard_container_encryption_and_decryption(container_conf, escrow_dep
     ],
 )
 def test_shamir_container_encryption_and_decryption(shamir_container_conf, escrow_dependencies_builder):
-    data = b"abc"  # get_random_bytes(random.randint(1, 1000))
+    data = b"abc"  # get_random_bytes(random.randint(1, 1000))   # FIXME reactivate ???
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
 
@@ -414,6 +414,49 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf, escro
     container["container_format"] = "OAJKB"
     with pytest.raises(ValueError, match="Unknown container format"):
         decrypt_data_from_container(container=container)
+
+
+# FIXME move that elsewhere and complete it
+RECURSIVE_CONTAINER_CONF = dict(
+    data_encryption_strata=[
+        dict(
+            data_encryption_algo="AES_CBC",
+            key_encryption_strata=[
+                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
+                dict(
+                    key_encryption_algo=SHARED_SECRET_MARKER,
+                    key_shared_secret_threshold=1,
+                    key_shared_secret_escrows=[
+                        dict(##share_escrow=LOCAL_ESCROW_MARKER,
+                             key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                        dict(###share_escrow=LOCAL_ESCROW_MARKER,
+                             key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
+                    ],  # Beware, same escrow for the 2 shares, for now
+                ),
+            ],
+            data_signatures=[
+                dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+            ],
+        )
+    ]
+)
+
+def test_recursive_shamir_secrets_and_strata():
+
+    keychain_uid = generate_uuid0()
+    data = b"qssd apk_$82"
+
+    container = encrypt_data_into_container(
+        data=data, conf=RECURSIVE_CONTAINER_CONF, keychain_uid=keychain_uid, metadata=None
+    )
+
+    data_decrypted = decrypt_data_from_container(
+            container=container,
+    )
+
+    assert data_decrypted == data
 
 
 def test_passphrase_mapping_during_decryption(tmp_path):

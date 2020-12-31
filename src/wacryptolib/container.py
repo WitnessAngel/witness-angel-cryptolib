@@ -15,7 +15,7 @@ from uuid import UUID
 
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
 from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi, EscrowApi
-from wacryptolib.exceptions import DecryptionError
+from wacryptolib.exceptions import DecryptionError, ConfigurationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_symmetric_key, load_asymmetric_key_from_pem_bytestring
 from wacryptolib.key_storage import KeyStorageBase, DummyKeyStoragePool, KeyStoragePoolBase
@@ -230,6 +230,9 @@ class ContainerWriter(ContainerBase):
         data_current = data  # Initially unencrypted, might remain so if no strata
         result_data_encryption_strata = []
 
+        if not conf["data_encryption_strata"]:
+            raise ConfigurationError("Empty data_encryption_strata list is forbidden in encryption conf")
+
         for data_encryption_stratum in conf["data_encryption_strata"]:
             data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
 
@@ -243,19 +246,16 @@ class ContainerWriter(ContainerBase):
             assert isinstance(data_cipherdict, dict), data_cipherdict
             data_current = dump_to_json_bytes(data_cipherdict)
 
-            symmetric_key_data = symmetric_key  # Initially unencrypted, might remain so if no strata
+            key_encryption_strata = data_encryption_stratum["key_encryption_strata"]
 
-            result_key_encryption_strata = []
-            for key_encryption_stratum in data_encryption_stratum["key_encryption_strata"]:
-                symmetric_key_cipherdict = self._encrypt_symmetric_key(
-                    keychain_uid=keychain_uid, symmetric_key_data=symmetric_key_data, conf=key_encryption_stratum
-                )
-                symmetric_key_data = dump_to_json_bytes(symmetric_key_cipherdict)  # Remain as bytes all along
-                result_key_encryption_strata.append(key_encryption_stratum)  # Unmodified for now
+            key_ciphertext = self._encrypt_key_through_multiple_strata(
+                    keychain_uid=keychain_uid,
+                    key_bytes=symmetric_key,
+                    key_encryption_strata=key_encryption_strata)
 
             data_signatures = []
             for signature_conf in data_encryption_stratum["data_signatures"]:
-                signature_value = self._generate_signature(
+                signature_value = self._generate_message_signature(
                     keychain_uid=keychain_uid, data_ciphertext=data_current, conf=signature_conf
                 )
                 signature_conf["signature_value"] = signature_value
@@ -264,8 +264,8 @@ class ContainerWriter(ContainerBase):
             result_data_encryption_strata.append(
                 dict(
                     data_encryption_algo=data_encryption_algo,
-                    key_ciphertext=symmetric_key_data,
-                    key_encryption_strata=result_key_encryption_strata,
+                    key_ciphertext=key_ciphertext,
+                    key_encryption_strata=key_encryption_strata,  # Untouched
                     data_signatures=data_signatures,
                 )
             )
@@ -281,7 +281,23 @@ class ContainerWriter(ContainerBase):
             metadata=metadata,
         )
 
-    def _encrypt_symmetric_key(self, keychain_uid: uuid.UUID, symmetric_key_data: bytes, conf: dict) -> dict:
+    def _encrypt_key_through_multiple_strata(self, keychain_uid: uuid.UUID, key_bytes: bytes, key_encryption_strata: list) -> bytes:
+        # HERE KEY IS REAL KEY OR SHARE !!!
+
+        if not key_encryption_strata:
+            raise ConfigurationError("Empty key_encryption_strata list is forbidden in encryption conf")
+
+        key_ciphertext = key_bytes
+        for key_encryption_stratum in key_encryption_strata:
+            key_ciphertext_dict = self._encrypt_key_through_single_stratum(
+                keychain_uid=keychain_uid, key_bytes=key_ciphertext, key_encryption_stratum=key_encryption_stratum
+            )
+            key_ciphertext = dump_to_json_bytes(key_ciphertext_dict)  # Thus its remains as bytes all along
+
+        return key_ciphertext
+
+
+    def _encrypt_key_through_single_stratum(self, keychain_uid: uuid.UUID, key_bytes: bytes, key_encryption_stratum: dict) -> dict:
         """
         Encrypt a symmetric key using an asymmetric encryption scheme.
 
@@ -296,44 +312,52 @@ class ContainerWriter(ContainerBase):
         :return: if the scheme used is 'SHARED_SECRET', a list of encrypted shares is returned. If an asymmetric
         algorithm has been used, a dictionary with all the information needed to decipher the symmetric key is returned.
         """
-        assert isinstance(symmetric_key_data, bytes), symmetric_key_data
-        key_encryption_algo = conf["key_encryption_algo"]
+        assert isinstance(key_bytes, bytes), key_bytes
+        key_encryption_algo = key_encryption_stratum["key_encryption_algo"]
 
         if key_encryption_algo == SHARED_SECRET_MARKER:
-            key_shared_secret_escrows = conf["key_shared_secret_escrows"]
+
+            key_shared_secret_escrows = key_encryption_stratum["key_shared_secret_escrows"]
             shares_count = len(key_shared_secret_escrows)
 
-            threshold_count = conf["key_shared_secret_threshold"]
+            threshold_count = key_encryption_stratum["key_shared_secret_threshold"]
             assert threshold_count <= shares_count
 
             logger.debug("Generating Shamir shared secret shares (%d needed amongst %d)", threshold_count, shares_count)
 
             shares = split_bytestring_as_shamir_shares(
-                secret=symmetric_key_data, shares_count=shares_count, threshold_count=threshold_count
+                secret=key_bytes, shares_count=shares_count, threshold_count=threshold_count
             )
 
             logger.debug("Secret has been shared into %d shares", shares_count)
             assert len(shares) == shares_count
 
-            all_encrypted_shares = self._encrypt_shares(
-                shares=shares, key_shared_secret_escrows=conf["key_shared_secret_escrows"], keychain_uid=keychain_uid
-            )
-            key_cipherdict = {"shares": all_encrypted_shares}
+            shares_ciphertexts = []
+
+            for share, escrow_conf in zip(shares, key_shared_secret_escrows):
+
+                share_bytes = dump_to_json_bytes(share)  # The tuple (idx, data) of each share thus becomes encryptable
+                shares_ciphertext = self._encrypt_key_through_multiple_strata(  # FIXME rename singular
+                        keychain_uid=keychain_uid,
+                        key_bytes=share_bytes,
+                        key_encryption_strata=escrow_conf["key_encryption_strata"])  # Recursive structure
+                shares_ciphertexts.append(shares_ciphertext)
+
+            key_cipherdict = {"shares": shares_ciphertexts}  # A dict is more future-proof
             return key_cipherdict
 
         else:  # Using asymmetric algorithm
 
-            keychain_uid_encryption = conf.get("keychain_uid") or keychain_uid
-            key_cipherdict = self._apply_asymmetric_encryption(
+            keychain_uid_encryption = key_encryption_stratum.get("keychain_uid") or keychain_uid
+            key_cipherdict = self._encrypt_with_asymmetric_cipher(
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid_encryption,
-                symmetric_key_data=symmetric_key_data,
-                escrow=conf["key_escrow"],
+                symmetric_key_data=key_bytes,
+                escrow=key_encryption_stratum["key_escrow"],
             )
-
             return key_cipherdict
 
-    def _apply_asymmetric_encryption(
+    def _encrypt_with_asymmetric_cipher(
         self, encryption_algo: str, keychain_uid: uuid.UUID, symmetric_key_data: bytes, escrow
     ) -> dict:
         """
@@ -357,7 +381,7 @@ class ContainerWriter(ContainerBase):
         cipherdict = encrypt_bytestring(plaintext=symmetric_key_data, encryption_algo=encryption_algo, key=subkey)
         return cipherdict
 
-    def _encrypt_shares(self, shares: Sequence, key_shared_secret_escrows: Sequence, keychain_uid: uuid.UUID) -> list:
+    def _________encrypt_shares(self, shares: Sequence, key_shared_secret_escrows: Sequence, keychain_uid: uuid.UUID) -> list:
         """
         Make a loop through all shares from shared secret algorithm to encrypt each of them.
 
@@ -381,7 +405,7 @@ class ContainerWriter(ContainerBase):
             share_escrow = conf_share["share_escrow"]
             keychain_uid_share = conf_share.get("keychain_uid") or keychain_uid
 
-            share_cipherdict = self._apply_asymmetric_encryption(
+            share_cipherdict = self._encrypt_with_asymmetric_cipher(
                 encryption_algo=share_encryption_algo,
                 keychain_uid=keychain_uid_share,
                 symmetric_key_data=share[1],
@@ -393,7 +417,7 @@ class ContainerWriter(ContainerBase):
         assert len(shares) == len(key_shared_secret_escrows)
         return all_encrypted_shares
 
-    def _generate_signature(self, keychain_uid: uuid.UUID, data_ciphertext: bytes, conf: dict) -> dict:
+    def _generate_message_signature(self, keychain_uid: uuid.UUID, data_ciphertext: bytes, conf: dict) -> dict:
         """
         Generate a signature for a specific ciphered data.
 
@@ -440,7 +464,7 @@ class ContainerReader(ContainerBase):
         if container_format != CONTAINER_FORMAT:
             raise ValueError("Unknown container format %s" % container_format)
 
-        container_uid = container["container_format"]
+        container_uid = container["container_uid"]
         del container_uid  # Might be used for logging etc, later...
 
         keychain_uid = container["keychain_uid"]
@@ -448,32 +472,43 @@ class ContainerReader(ContainerBase):
         data_current = container["data_ciphertext"]
         assert isinstance(data_current, bytes), repr(data_current)  # Else it's still a special marker for example...
 
-        for data_encryption_stratum in reversed(container["data_encryption_strata"]):
+        for data_encryption_stratum in reversed(container["data_encryption_strata"]):  # Non-emptiness of this will be checked by validator
 
             data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
 
             for signature_conf in data_encryption_stratum["data_signatures"]:
                 self._verify_message_signature(keychain_uid=keychain_uid, message=data_current, conf=signature_conf)
 
-            symmetric_key_data = data_encryption_stratum["key_ciphertext"]  # We start fully encrypted, and unravel it
-            for key_encryption_stratum in reversed(data_encryption_stratum["key_encryption_strata"]):
-                symmetric_key_cipherdict = load_from_json_bytes(symmetric_key_data)  # We remain as bytes all along
-                symmetric_key_data = self._decrypt_symmetric_key(
-                    keychain_uid=keychain_uid,
-                    symmetric_key_cipherdict=symmetric_key_cipherdict,
-                    conf=key_encryption_stratum,
-                )
+            key_ciphertext = data_encryption_stratum["key_ciphertext"]  # We start fully encrypted, and unravel it
 
-            assert isinstance(symmetric_key_data, bytes), symmetric_key_data
+            key_bytes = self._decrypt_key_through_multiple_strata(
+                keychain_uid=keychain_uid,
+                key_ciphertext=key_ciphertext,
+                encryption_strata=data_encryption_stratum["key_encryption_strata"])
+
+            assert isinstance(key_bytes, bytes), key_bytes
             data_cipherdict = load_from_json_bytes(data_current)
             data_current = decrypt_bytestring(
-                cipherdict=data_cipherdict, key=symmetric_key_data, encryption_algo=data_encryption_algo
+                cipherdict=data_cipherdict, key=key_bytes, encryption_algo=data_encryption_algo
             )
 
         data = data_current  # Now decrypted
         return data
 
-    def _decrypt_symmetric_key(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: dict):
+    def _decrypt_key_through_multiple_strata(self, keychain_uid: uuid.UUID, key_ciphertext: bytes, encryption_strata: list) -> bytes:
+        key_bytes = key_ciphertext
+
+        for key_encryption_stratum in reversed(encryption_strata):  # Non-emptiness of this will be checked by validator
+            key_cipherdict = load_from_json_bytes(key_bytes)  # We remain as bytes all along
+            key_bytes = self._decrypt_key_through_single_stratum(
+                keychain_uid=keychain_uid,
+                key_cipherdict=key_cipherdict,
+                encryption_stratum=key_encryption_stratum,
+            )
+
+        return key_bytes
+
+    def _decrypt_key_through_single_stratum(self, keychain_uid: uuid.UUID, key_cipherdict: dict, encryption_stratum: dict) -> bytes:
         """
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
         by a asymmetric algorithm.
@@ -484,36 +519,45 @@ class ContainerReader(ContainerBase):
 
         :return: deciphered symmetric key
         """
-        assert isinstance(symmetric_key_cipherdict, dict), symmetric_key_cipherdict
-        key_encryption_algo = conf["key_encryption_algo"]
+        assert isinstance(key_cipherdict, dict), key_cipherdict
+        key_encryption_algo = encryption_stratum["key_encryption_algo"]
 
         if key_encryption_algo == SHARED_SECRET_MARKER:
 
+            key_shared_secret_escrows = encryption_stratum["key_shared_secret_escrows"]  # FIXMe rename twice
+            shares_ciphertexts = key_cipherdict["shares"]  # FIXME rename to share_ciphertexts
+
+            shares_objs = []
+
             logger.debug("Deciphering each share")
-            shares = self._decrypt_symmetric_key_share(
-                keychain_uid=keychain_uid, symmetric_key_cipherdict=symmetric_key_cipherdict, conf=conf
-            )
+
+            for share_ciphertext, escrow_conf in zip(shares_ciphertexts, key_shared_secret_escrows):
+
+                share_bytes = self._decrypt_key_through_multiple_strata(
+                        keychain_uid=keychain_uid,
+                        key_ciphertext=share_ciphertext,
+                        encryption_strata=escrow_conf["key_encryption_strata"])  # Recursive structure
+                share_obj = load_from_json_bytes(share_bytes)  # The tuple (idx, data) of each share thus becomes encryptable
+                shares_objs.append(share_obj)
 
             logger.debug("Recombining shared-secret shares")
-            symmetric_key_plaintext = recombine_secret_from_shamir_shares(shares=shares)
-
-            return symmetric_key_plaintext
+            key_bytes = recombine_secret_from_shamir_shares(shares=shares_objs)
+            return key_bytes
 
         else:  # Using asymmetric algorithm
 
-            keychain_uid_encryption = (
-                conf.get("keychain_uid") or keychain_uid
-            )  # FIXME replace by shorter form everywhere in file
+            # FIXME replace by shorter form everywhere in file
+            keychain_uid_encryption = (encryption_stratum.get("keychain_uid") or keychain_uid)
 
-            symmetric_key_plaintext = self._decrypt_cipherdict_with_asymmetric_cipher(
+            key_bytes = self._decrypt_with_asymmetric_cipher(
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid_encryption,
-                cipherdict=symmetric_key_cipherdict,
-                escrow=conf["key_escrow"],
+                cipherdict=key_cipherdict,
+                escrow=encryption_stratum["key_escrow"],
             )
-            return symmetric_key_plaintext
+            return key_bytes
 
-    def _decrypt_cipherdict_with_asymmetric_cipher(
+    def _decrypt_with_asymmetric_cipher(
         self, encryption_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, escrow: dict
     ) -> bytes:
         """
@@ -540,7 +584,7 @@ class ContainerReader(ContainerBase):
         )
         return symmetric_key_plaintext
 
-    def _decrypt_symmetric_key_share(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: dict):
+    def ________decrypt_symmetric_key_share(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, conf: dict):
         """
         Make a loop through all encrypted shares to decrypt each of them
 
@@ -572,7 +616,7 @@ class ContainerReader(ContainerBase):
                 except IndexError:
                     raise ValueError("Missing share at index %s" % share_idx) from None
 
-                share_plaintext = self._decrypt_cipherdict_with_asymmetric_cipher(
+                share_plaintext = self._decrypt_with_asymmetric_cipher(
                     encryption_algo=share_encryption_algo,
                     keychain_uid=keychain_uid_share,
                     cipherdict=encrypted_share[1],

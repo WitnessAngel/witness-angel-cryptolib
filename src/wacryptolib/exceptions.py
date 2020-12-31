@@ -61,4 +61,9 @@ class KeyLoadingError(CryptographyError):
     pass  # Used e.g. when decrypting a private key with a passphrase fails
 
 
+# ---
+
+class ConfigurationError(FunctionalError):
+    pass  # used e.g. if encryption strata list is empty, thus endangering confidentiality
+
 # TODO add ValidationError class, and/or WorkflowError?

@@ -744,6 +744,7 @@ def test_container_storage_purge_by_max_count(tmp_path):
     )
     for i in range(3):
         storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
+
     storage.wait_for_idle_state()
     assert len(storage) == 3  # Purged
     assert storage.list_container_names(as_sorted=True) == [
@@ -761,12 +762,14 @@ def test_container_storage_purge_by_max_count(tmp_path):
         Path("xyz.dat.003.crypt"),
     ]
 
-    offload_data_ciphertext3 = random.choice((True, False))
+    time.sleep(0.2)  # Leave delay, else if files have exactly same timestamp, it's the filename that matters
+
+    offload_data_ciphertext2 = random.choice((True, False))
     storage = FakeTestContainerStorage(
         default_encryption_conf={"randomthings": True},
         containers_dir=containers_dir,
         max_container_count=4,
-        offload_data_ciphertext=offload_data_ciphertext3,
+        offload_data_ciphertext=offload_data_ciphertext2,
     )
     assert len(storage) == 3  # Retrieves existing containers
     storage.enqueue_file_for_encryption("aaa.dat", b"000", metadata=None)
@@ -775,7 +778,6 @@ def test_container_storage_purge_by_max_count(tmp_path):
     storage.enqueue_file_for_encryption("zzz.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 4  # Purge occurred
-    # Entry "aaa.dat.000.crypt" was ejected because it's a sorting by NAMES for now!
     assert storage.list_container_names(as_sorted=True) == [
         Path('aaa.dat.000.crypt'),  # It's the file timestamps that counts, not the name!
         Path("xyz.dat.002.crypt"),
@@ -805,11 +807,12 @@ def test_container_storage_purge_by_max_count(tmp_path):
     storage.enqueue_file_for_encryption("lmn.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
 
+    print(">>>>>>>", storage.list_container_names(as_sorted=True))
     assert storage.list_container_names(as_sorted=True) == [
         Path('21201121222729_smth.dat.003.crypt'),
-        Path('aaa.dat.000.crypt'),
+        Path('aaa.dat.000.crypt'),  # It's the file timestamps that counts, not the name!
         Path('lmn.dat.004.crypt'),
-        Path('zzz.dat.001.crypt')
+        Path('zzz.dat.001.crypt'),
     ]
 
     assert storage._max_container_count

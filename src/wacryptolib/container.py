@@ -831,7 +831,6 @@ class ContainerStorage:
         return self._containers_dir.joinpath(container_name)
 
     def _delete_container(self, container_name):
-        print("Deleting", container_name)
         container_filepath = self._make_absolute(container_name)
         delete_container_from_filesystem(container_filepath)
 
@@ -844,7 +843,6 @@ class ContainerStorage:
 
         if self._max_container_age is not None:  # FIRST these, since their deletion is unconditional
             container_dicts = self.list_container_properties(with_age=True)
-            print(container_dicts, self._max_container_age)
             for container_dict in container_dicts:
                 if container_dict["age"] > self._max_container_age:
                     self._delete_container(container_dict["name"])
@@ -858,7 +856,6 @@ class ContainerStorage:
             total_space_consumed = sum(x["size"] for x in container_dicts)
 
             while total_space_consumed > max_container_quota:
-                print (container_dicts, total_space_consumed, "vs", max_container_quota)
                 deleted_container_dict = container_dicts.pop()
                 self._delete_container(deleted_container_dict["name"])
                 total_space_consumed -= deleted_container_dict["size"]

@@ -69,6 +69,9 @@ def gather_escrow_dependencies(containers: Sequence) -> dict:
     :return: dict with lists of keypair identifiers in fields "encryption" and "signature".
     """
 
+    signature_dependencies = {}
+    encryption_dependencies = {}
+
     def _add_keypair_identifiers_for_escrow(mapper, escrow_conf, keychain_uid, key_type):
         escrow_id = get_escrow_id(escrow_conf=escrow_conf)
         keypair_identifiers = dict(keychain_uid=keychain_uid, key_type=key_type)
@@ -77,8 +80,23 @@ def gather_escrow_dependencies(containers: Sequence) -> dict:
         if keypair_identifiers not in keypair_identifiers_list:
             keypair_identifiers_list.append(keypair_identifiers)
 
-    signature_dependencies = {}
-    encryption_dependencies = {}
+    def _grab_key_encryption_strata_dependencies(key_encryption_strata):
+        for key_encryption_stratum in key_encryption_strata:
+            key_type_encryption = key_encryption_stratum["key_encryption_algo"]
+
+            if key_type_encryption == SHARED_SECRET_MARKER:
+                escrows = key_encryption_stratum["key_shared_secret_escrows"]
+                for escrow in escrows:
+                    _grab_key_encryption_strata_dependencies(escrow["key_encryption_strata"])  # Recursive call
+            else:
+                keychain_uid_encryption = key_encryption_stratum.get("keychain_uid") or keychain_uid
+                escrow_conf = key_encryption_stratum["key_escrow"]
+                _add_keypair_identifiers_for_escrow(
+                    mapper=encryption_dependencies,
+                    escrow_conf=escrow_conf,
+                    keychain_uid=keychain_uid_encryption,
+                    key_type=key_type_encryption,
+                )
 
     for container in containers:
         keychain_uid = container["keychain_uid"]
@@ -95,31 +113,7 @@ def gather_escrow_dependencies(containers: Sequence) -> dict:
                     key_type=key_type_signature,
                 )
 
-            for key_encryption_stratum in data_encryption_stratum["key_encryption_strata"]:
-                key_type_encryption = key_encryption_stratum["key_encryption_algo"]
-
-                if key_type_encryption == SHARED_SECRET_MARKER:
-                    escrows = key_encryption_stratum["key_shared_secret_escrows"]
-
-                    for escrow in escrows:
-                        key_type_share = escrow["share_encryption_algo"]
-                        keychain_uid_share = escrow.get("keychain_uid") or keychain_uid
-                        escrow_conf = escrow["share_escrow"]
-                        _add_keypair_identifiers_for_escrow(
-                            mapper=encryption_dependencies,
-                            escrow_conf=escrow_conf,
-                            keychain_uid=keychain_uid_share,
-                            key_type=key_type_share,
-                        )
-                else:
-                    keychain_uid_encryption = key_encryption_stratum.get("keychain_uid") or keychain_uid
-                    escrow_conf = key_encryption_stratum["key_escrow"]
-                    _add_keypair_identifiers_for_escrow(
-                        mapper=encryption_dependencies,
-                        escrow_conf=escrow_conf,
-                        keychain_uid=keychain_uid_encryption,
-                        key_type=key_type_encryption,
-                    )
+            _grab_key_encryption_strata_dependencies(data_encryption_stratum["key_encryption_strata"])
 
     escrow_dependencies = {"signature": signature_dependencies, "encryption": encryption_dependencies}
     return escrow_dependencies
@@ -176,7 +170,7 @@ class ContainerBase:
 
     `key_storage_pool` will be used to fetch local/imported escrows necessary to encryption/decryption operations.
 
-    `passphrase_mapper` maps escrows IDs to potential passphrase; a None key can be used to provide additional
+    `passphrase_mapper` maps escrows IDs to potential passphrases; a None key can be used to provide additional
     passphrases for all escrows.
     """
 
@@ -227,11 +221,11 @@ class ContainerWriter(ContainerBase):
         assert isinstance(data, bytes), data
         assert isinstance(conf, dict), conf
 
-        data_current = data  # Initially unencrypted, might remain so if no strata
-        result_data_encryption_strata = []
-
         if not conf["data_encryption_strata"]:
             raise ConfigurationError("Empty data_encryption_strata list is forbidden in encryption conf")
+
+        data_current = data
+        result_data_encryption_strata = []
 
         for data_encryption_stratum in conf["data_encryption_strata"]:
             data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
@@ -358,7 +352,7 @@ class ContainerWriter(ContainerBase):
             return key_cipherdict
 
     def _encrypt_with_asymmetric_cipher(
-        self, encryption_algo: str, keychain_uid: uuid.UUID, symmetric_key_data: bytes, escrow
+        self, encryption_algo: str, keychain_uid: uuid.UUID, symmetric_key_data: bytes, escrow  # FIXME change symmetric_key_data
     ) -> dict:
         """
         Encrypt given data with an asymmetric algorithm.
@@ -524,24 +518,43 @@ class ContainerReader(ContainerBase):
 
         if key_encryption_algo == SHARED_SECRET_MARKER:
 
+            decrypted_shares = []
+            decryption_errors = []
             key_shared_secret_escrows = encryption_stratum["key_shared_secret_escrows"]  # FIXMe rename twice
-            shares_ciphertexts = key_cipherdict["shares"]  # FIXME rename to share_ciphertexts
+            key_shared_secret_threshold = encryption_stratum["key_shared_secret_threshold"]
 
-            shares_objs = []
+            shares_ciphertexts = key_cipherdict["shares"]  # FIXME rename to share_ciphertexts
 
             logger.debug("Deciphering each share")
 
+            # If some shares are missing, we won't detect it here because zip() stops at shortest list
             for share_ciphertext, escrow_conf in zip(shares_ciphertexts, key_shared_secret_escrows):
 
-                share_bytes = self._decrypt_key_through_multiple_strata(
-                        keychain_uid=keychain_uid,
-                        key_ciphertext=share_ciphertext,
-                        encryption_strata=escrow_conf["key_encryption_strata"])  # Recursive structure
-                share_obj = load_from_json_bytes(share_bytes)  # The tuple (idx, data) of each share thus becomes encryptable
-                shares_objs.append(share_obj)
+                try:
+                    share_bytes = self._decrypt_key_through_multiple_strata(
+                            keychain_uid=keychain_uid,
+                            key_ciphertext=share_ciphertext,
+                            encryption_strata=escrow_conf["key_encryption_strata"])  # Recursive structure
+                    share = load_from_json_bytes(share_bytes)  # The tuple (idx, data) of each share thus becomes encryptable
+                    decrypted_shares.append(share)
+
+                # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
+                except Exception as exc:  # If actual escrow doesn't work, we can go to next one
+                    decryption_errors.append(exc)
+                    logger.error("Error when decrypting share of %s: %r" % (escrow_conf, exc), exc_info=True)
+
+                if len(decrypted_shares) == key_shared_secret_threshold:
+                    logger.debug("A sufficient number of shares has been decrypted")
+                    break
+
+            if len(decrypted_shares) < key_shared_secret_threshold:
+                raise DecryptionError(
+                    "%s valid share(s) missing for reconstitution of symmetric key (errors: %r)"
+                    % (key_shared_secret_threshold - len(decrypted_shares), decryption_errors)
+                )
 
             logger.debug("Recombining shared-secret shares")
-            key_bytes = recombine_secret_from_shamir_shares(shares=shares_objs)
+            key_bytes = recombine_secret_from_shamir_shares(shares=decrypted_shares)
             return key_bytes
 
         else:  # Using asymmetric algorithm
@@ -696,7 +709,7 @@ def decrypt_data_from_container(
 
     :param container: the container tree, which holds all information about involved keys
     :param key_storage_pool: optional key storage pool
-    :param passphrase_mapper: optional dict mapping urls/device_uids to their lists of passphrases
+    :param passphrase_mapper: optional dict mapping escrow IDs to their lists of passphrases
 
     :return: raw bytestring
     """

@@ -39,7 +39,7 @@ from wacryptolib.escrow import (
     generate_asymmetric_keypair_for_storage,
     generate_free_keypair_for_least_provisioned_key_type,
 )
-from wacryptolib.exceptions import DecryptionError
+from wacryptolib.exceptions import DecryptionError, ConfigurationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, FilesystemKeyStoragePool, DummyKeyStoragePool
@@ -50,9 +50,19 @@ from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 ENFORCED_UID1 = UUID("0e8e861e-f0f7-e54b-18ea-34798d5daaaa")
 ENFORCED_UID2 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeebbbb")
 
-VOID_CONTAINER_CONF = dict(data_encryption_strata=[])  # Authorized, even though it leads to unencrypted data...
+VOID_CONTAINER_CONF_REGARDING_DATA_ENCRYPTION_STRATA = dict(data_encryption_strata=[])  # Forbidden
 
-VOID_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {"encryption": {}, "signature": {}}
+VOID_CONTAINER_CONF_REGARDING_KEY_ENCRYPTION_STRATA = dict(  # Forbidden
+    data_encryption_strata=[
+        dict(
+            data_encryption_algo="AES_CBC",
+            key_encryption_strata=[],
+            data_signatures=[
+                dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+            ],
+        )
+    ]
+)
 
 SIGNATURELESS_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -169,15 +179,16 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=3,
                     key_shared_secret_escrows=[
-                        dict(share_encryption_algo="RSA_OAEP", share_escrow=LOCAL_ESCROW_MARKER),
-                        dict(share_encryption_algo="RSA_OAEP", share_escrow=LOCAL_ESCROW_MARKER),
-                        dict(share_encryption_algo="RSA_OAEP", share_escrow=LOCAL_ESCROW_MARKER),
-                        dict(share_encryption_algo="RSA_OAEP", share_escrow=LOCAL_ESCROW_MARKER),
-                        dict(
-                            share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_MARKER,
-                            keychain_uid=ENFORCED_UID1,
-                        ),
+                        dict(key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                        dict(key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                        dict(key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                        dict(key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                        dict(key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)],),
                     ],
                 ),
             ],
@@ -227,14 +238,15 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=2,
                     key_shared_secret_escrows=[
-                        dict(share_encryption_algo="RSA_OAEP", share_escrow=LOCAL_ESCROW_MARKER),
-                        dict(share_encryption_algo="RSA_OAEP", share_escrow=LOCAL_ESCROW_MARKER),
-                        dict(share_encryption_algo="RSA_OAEP", share_escrow=LOCAL_ESCROW_MARKER),
-                        dict(
-                            share_encryption_algo="RSA_OAEP",
-                            share_escrow=LOCAL_ESCROW_MARKER,
-                            keychain_uid=ENFORCED_UID2,
-                        ),
+                        dict(key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                        dict(key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                        dict(key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                        dict(key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID2)],),
                     ],
                 )
             ],
@@ -275,9 +287,25 @@ COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
 
 
 @pytest.mark.parametrize(
+    "container_conf",
+    [
+        VOID_CONTAINER_CONF_REGARDING_DATA_ENCRYPTION_STRATA,
+        VOID_CONTAINER_CONF_REGARDING_KEY_ENCRYPTION_STRATA,
+    ],
+)
+def test_void_container_confs(container_conf):
+
+    key_storage_pool = DummyKeyStoragePool()
+
+    with pytest.raises(ConfigurationError, match="Empty .* list"):
+        encrypt_data_into_container(
+            data=b"stuffs", conf=container_conf, keychain_uid=None, metadata=None, key_storage_pool=key_storage_pool
+        )
+
+
+@pytest.mark.parametrize(
     "container_conf,escrow_dependencies_builder",
     [
-        (VOID_CONTAINER_CONF, VOID_CONTAINER_ESCROW_DEPENDENCIES),
         (SIGNATURELESS_CONTAINER_CONF, SIGNATURELESS_CONTAINER_ESCROW_DEPENDENCIES),
         (SIMPLE_CONTAINER_CONF, SIMPLE_CONTAINER_ESCROW_DEPENDENCIES),
         (COMPLEX_CONTAINER_CONF, COMPLEX_CONTAINER_ESCROW_DEPENDENCIES),
@@ -302,6 +330,11 @@ def test_standard_container_encryption_and_decryption(container_conf, escrow_dep
     print(">>> Test local_keypair_identifiers ->", list(local_keypair_identifiers.keys()))
 
     escrow_dependencies = gather_escrow_dependencies(containers=[container])
+    print("GOTTEN DEPENDENCIES:")
+    pprint(escrow_dependencies)
+    print("THEORETICAL DEPENDENCIES:")
+    pprint(escrow_dependencies_builder(container["keychain_uid"]))
+
     assert escrow_dependencies == escrow_dependencies_builder(container["keychain_uid"])
 
     # Check that all referenced keys were really created during encryption (so keychain_uid overriding works fine)
@@ -427,10 +460,10 @@ RECURSIVE_CONTAINER_CONF = dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_escrows=[
-                        dict(##share_escrow=LOCAL_ESCROW_MARKER,
+                        dict(
                              key_encryption_strata=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
-                        dict(###share_escrow=LOCAL_ESCROW_MARKER,
+                        dict(
                              key_encryption_strata=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
                     ],  # Beware, same escrow for the 2 shares, for now
@@ -521,13 +554,12 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                         key_encryption_algo=SHARED_SECRET_MARKER,
                         key_shared_secret_threshold=2,
                         key_shared_secret_escrows=[
-                            dict(
-                                share_encryption_algo="RSA_OAEP",
-                                keychain_uid=keychain_uid_escrow,
-                                share_escrow=share_escrow1,
-                            ),
-                            dict(share_encryption_algo="RSA_OAEP", share_escrow=share_escrow2),
-                            dict(share_encryption_algo="RSA_OAEP", share_escrow=share_escrow3),
+                            dict(key_encryption_strata=[
+                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow1, keychain_uid=keychain_uid_escrow)],),
+                            dict(key_encryption_strata=[
+                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow2)],),
+                            dict(key_encryption_strata=[
+                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow3)],),
                         ],
                     ),
                 ],

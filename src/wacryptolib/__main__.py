@@ -40,8 +40,10 @@ EXAMPLE_CONTAINER_CONF = dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_escrows=[
-                        dict(share_encryption_algo="RSA_OAEP", share_escrow=LOCAL_ESCROW_MARKER),
-                        dict(share_encryption_algo="RSA_OAEP", share_escrow=LOCAL_ESCROW_MARKER),
+                        dict(key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
+                        dict(key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
                     ],  # Beware, same escrow for the 2 shares, for now
                 ),
             ],

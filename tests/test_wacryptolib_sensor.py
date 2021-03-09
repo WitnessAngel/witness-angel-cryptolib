@@ -11,7 +11,7 @@ from _test_mockups import FakeTestContainerStorage
 from wacryptolib.scaffolding import check_sensor_state_machine
 from wacryptolib.sensor import TarfileRecordsAggregator, JsonDataAggregator, PeriodicValuePoller, SensorsManager
 from wacryptolib.sensor import TimeLimitedAggregatorMixin
-from wacryptolib.utilities import load_from_json_bytes, TaskRunnerStateMachineBase
+from wacryptolib.utilities import load_from_json_bytes, TaskRunnerStateMachineBase, get_utc_now_date
 
 
 def test_time_limited_aggregator_mixin():
@@ -161,7 +161,7 @@ def test_tarfile_aggregator(tmp_path):
         current_start_time_saved = tarfile_aggregator._current_start_time
 
         frozen_datetime.tick(delta=timedelta(seconds=9))
-        assert datetime.now(tz=timezone.utc) - tarfile_aggregator._current_start_time == timedelta(seconds=9)
+        assert get_utc_now_date() - tarfile_aggregator._current_start_time == timedelta(seconds=9)
 
         simple_add_record()
         assert len(tarfile_aggregator) == 2

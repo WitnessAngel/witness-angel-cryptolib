@@ -10,7 +10,7 @@ from wacryptolib.utilities import (
     synchronized,
     check_datetime_is_tz_aware,
     PeriodicTaskHandler,
-    TaskRunnerStateMachineBase,
+    TaskRunnerStateMachineBase, get_utc_now_date,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,13 +34,11 @@ class TimeLimitedAggregatorMixin:
     def _notify_aggregation_operation(self):
         """Call this before every "data append" operation, to flush AND renew inner aggregator if needed."""
         if self._current_start_time is not None:
-            delay_s = datetime.now(tz=timezone.utc) - self._current_start_time
+            delay_s = get_utc_now_date() - self._current_start_time
             if delay_s.total_seconds() >= self._max_duration_s:
                 self._flush_aggregated_data()
         if self._current_start_time is None:
-            self._current_start_time = datetime.now(
-                tz=timezone.utc  # TODO make datetime utility with TZ and factorize datetime.now() calls
-            )
+            self._current_start_time = get_utc_now_date()
 
     def _flush_aggregated_data(self):
         """Call this AFTER really flushing data to the next step of the pipeline"""
@@ -105,7 +103,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         assert self._current_tarfile  # Since start time is only set on new aggregation...
         self._current_tarfile.close()
         result_bytestring = self._current_bytesio.getvalue()
-        end_time = datetime.now(tz=timezone.utc)
+        end_time = get_utc_now_date()
         filename_base = self._build_tarfile_filename(from_datetime=self._current_start_time, to_datetime=end_time)
         self._container_storage.enqueue_file_for_encryption(
             filename_base=filename_base, data=result_bytestring, metadata=self._current_metadata
@@ -217,7 +215,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
         if not self._current_start_time:
             assert not self._current_dataset
             return
-        end_time = datetime.now(tz=timezone.utc)
+        end_time = get_utc_now_date()
         dataset_bytes = dump_to_json_bytes(self._current_dataset)
         self._tarfile_aggregator.add_record(
             data=dataset_bytes,

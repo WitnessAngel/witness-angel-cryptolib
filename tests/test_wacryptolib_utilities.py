@@ -21,14 +21,14 @@ from wacryptolib.utilities import (
     generate_uuid0,
     SUPPORTED_HASH_ALGOS,
     hash_message,
-    safe_copy_directory,
+    safe_copy_directory, get_utc_now_date,
 )
 
 
 def test_check_datetime_is_tz_aware():
     with pytest.raises(ValueError):
         check_datetime_is_tz_aware(datetime.now())
-    check_datetime_is_tz_aware(datetime.now(tz=timezone.utc))
+    check_datetime_is_tz_aware(get_utc_now_date())
 
 
 def test_hash_message():

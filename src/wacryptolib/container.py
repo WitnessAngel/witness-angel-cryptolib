@@ -29,7 +29,7 @@ from wacryptolib.utilities import (
     generate_uuid0,
     hash_message,
     synchronized,
-    catch_and_log_exception,
+    catch_and_log_exception, get_utc_now_date,
 )
 
 
@@ -870,7 +870,7 @@ class ContainerStorage:
         """Returns an unsorted list of dicts having the fields "name", [age] and [size], depending on requested properties."""
         container_names = self.list_container_names(as_sorted=False, as_absolute=False)
 
-        now = datetime.now(tz=timezone.utc)
+        now = get_utc_now_date()
 
         result = []
         for container_name in container_names:

@@ -2,6 +2,7 @@ import abc
 import importlib
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 import shutil
 from typing import List, Optional, Sequence
@@ -19,8 +20,13 @@ UTF8_ENCODING = "utf8"
 ### Private utilities ###
 
 
+def get_utc_now_date():
+    """Return current datetime with UTC timezone."""
+    return datetime.now(tz=timezone.utc)
+
+
 def check_datetime_is_tz_aware(dt):
-    """Raise if datetime is naive regarding timezones"""
+    """Raise if datetime is naive regarding timezones."""
     is_aware = dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
     if not is_aware:
         raise ValueError("Naive datetime was encountered: %s" % dt)

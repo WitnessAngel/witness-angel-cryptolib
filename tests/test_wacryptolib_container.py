@@ -43,7 +43,7 @@ from wacryptolib.exceptions import DecryptionError, ConfigurationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, FilesystemKeyStoragePool, DummyKeyStoragePool
-from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, generate_uuid0
+from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, generate_uuid0, get_utc_now_date
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 
 
@@ -902,7 +902,7 @@ def test_container_storage_purge_by_max_count(tmp_path):
 def test_container_storage_purge_by_age(tmp_path):
 
     containers_dir = tmp_path
-    now = datetime.now(tz=timezone.utc)
+    now = get_utc_now_date()
 
     (containers_dir / "20201021222700_oldfile.dat.crypt").touch()
     (containers_dir / "20301021222711_oldfile.dat.crypt").touch()
@@ -1007,7 +1007,7 @@ def test_container_storage_purge_by_quota(tmp_path):
 def test_container_storage_purge_parameter_combinations(tmp_path):
 
     containers_dir = tmp_path
-    now = datetime.now(tz=timezone.utc) - timedelta(seconds=1)
+    now = get_utc_now_date() - timedelta(seconds=1)
 
     recent_big_file_name = "%s_recent_big_stuff.dat" % now.strftime(CONTAINER_DATETIME_FORMAT)
 

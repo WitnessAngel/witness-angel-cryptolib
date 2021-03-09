@@ -85,6 +85,7 @@ SIGNATURELESS_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
     "signature": {},
 }
 
+
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
         dict(

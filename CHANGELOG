@@ -2,7 +2,18 @@
 Development
 =============
 
+TODO
+
+
+Version 0.6
+==================
+
 * Allow shamir shared secrets where threshold==shares_count
+* Allow open file handles in enqueue_file_for_encryption()
+* Rename message "prehash" as "digest"
+* Rename max_containers_count as max_container_count
+* Implement container purges based on total disk quota and container ages
+* Make containers a recursive structure of "shamir" and "normal" strata
 
 
 Version 0.5.2

@@ -6,7 +6,7 @@ build-backend = "poetry.masonry.api"
 [tool.poetry]
 name = "wacryptolib"
 description = "Witness Angel Cryptolib"
-version = "0.5.2"
+version = "0.6"
 license = "MIT"
 readme = "Readme.rst"
 authors = ["Pascal Chambon", "Manon Michelet", "Akram Bourichi"]
@@ -19,6 +19,8 @@ classifiers = [
     "Natural Language :: English",
     "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: Unix",

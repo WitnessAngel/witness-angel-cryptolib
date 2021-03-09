@@ -8,7 +8,7 @@ Instead of pip, we use `poetry <https://github.com/sdispater/poetry>`_ to manage
 
 Use `pip install poetry` to install poetry (or follow its official docs to install it system-wide).
 
-Use `poetry install` to install python dependencies (poetry will create its own virtualenv if you don't have one activated).
+Use `poetry install` from repository root, to install python dependencies (poetry will create its own virtualenv if you don't have one activated).
 
 Use `pytest` to launch unit-tests (default pytest arguments are in `setup.cfg`). Use `poetry run pytest` instead, if poetry created its own virtualenv.
 

@@ -6,6 +6,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist
 from wacryptolib.utilities import generate_uuid0
 
+# SEE https://docs.pytest.org/en/stable/writing_plugins.html#assertion-rewriting and register_assert_rewrite()
 
 def check_key_storage_basic_get_set_api(key_storage):
     """Test the workflow of getters/setters of the storage API, for uid-attached keys."""

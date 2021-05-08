@@ -67,6 +67,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
 
     def __init__(self, container_storage: ContainerStorage, max_duration_s: float):
         super().__init__(max_duration_s=max_duration_s)
+        assert container_storage is not None, container_storage
         self._container_storage = container_storage
         self._lock = threading.Lock()
 
@@ -276,11 +277,12 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
             logger.error("Error in PeriodicValuePoller offloaded task: %r" % exc, exc_info=True)
 
 
-class SensorsManager(TaskRunnerStateMachineBase):
+class SensorsManager(TaskRunnerStateMachineBase):  # FIXME deprecate this in favor of whole recording toolchain
     """
     Manage a group of sensors for simultaneous starts/stops.
 
-    The underlying aggregators are not supposed to be impacted by these changes.
+    The underlying aggregators are not supposed to be directly impacted 
+    by these operations - they must be flushed separately.
     """
 
     def __init__(self, sensors):

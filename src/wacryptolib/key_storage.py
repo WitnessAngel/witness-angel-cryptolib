@@ -350,7 +350,7 @@ class KeyStoragePoolBase:
     pass
 
 
-class DummyKeyStoragePool(KeyStoragePoolBase):
+class DummyKeyStoragePool(KeyStoragePoolBase):  # FIXME rename to InMemoryKeyStoragePool
     """
     Dummy key storage pool for use in tests, where keys are kepts only process-locally.
 

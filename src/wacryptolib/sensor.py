@@ -20,6 +20,8 @@ class TimeLimitedAggregatorMixin:
     """
     This class provides utilities to flush underlying data after a defined `max_duration_s`
     delay has been exceeded.
+
+    The timer starts when the first record is added.
     """
 
     _max_duration_s = None
@@ -160,7 +162,11 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         tarinfo = tarfile.TarInfo(filename)
         tarinfo.size = len(data)  # this is crucial
         tarinfo.mtime = mtime
-        self._current_tarfile.addfile(tarinfo, io.BytesIO(data))
+
+        fileobj = io.BytesIO(data)  # Does NOT copy data until write, since Python3.5
+
+        # Memory warning : duplicates data to bytesio tarfile
+        self._current_tarfile.addfile(tarinfo, fileobj=fileobj)  
 
         self._current_records_count += 1
 

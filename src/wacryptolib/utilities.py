@@ -49,6 +49,13 @@ def catch_and_log_exception(f, *args, **kwargs):
         logger.error(f"Caught exception when calling {f!r}(): {exc!r}", exc_info=True)
 
 
+def get_memory_rss_bytes():
+    import psutil
+    process = psutil.Process(os.getpid())
+    rss = process.memory_info().rss  # in bytes
+    return rss
+
+
 ### Public utilities ###
 
 

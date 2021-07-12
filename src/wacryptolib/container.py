@@ -951,6 +951,8 @@ class ContainerStorage:
         Returns the container basename."""
 
         logger.debug("Encrypting file %s", filename_base)
+
+        # Memory warning : duplicates data to json-compatible container
         container = self._encrypt_data_into_container(
             data, metadata=metadata, keychain_uid=keychain_uid, encryption_conf=encryption_conf
         )

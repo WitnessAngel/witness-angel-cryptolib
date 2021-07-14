@@ -13,6 +13,8 @@ from typing import Optional, Union, List, Sequence, BinaryIO
 from urllib.parse import urlparse
 from uuid import UUID
 
+#from memory_profiler import profile
+
 from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
 from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi, EscrowApi
 from wacryptolib.exceptions import DecryptionError, ConfigurationError
@@ -191,6 +193,7 @@ class ContainerWriter(ContainerBase):
     Contains every method used to write and encrypt a container, IN MEMORY.
     """
 
+    @profile(precision=4)
     def encrypt_data(self, data: Union[bytes, BinaryIO], *, conf: dict, keychain_uid=None, metadata=None) -> dict:
         """
         Browse through configuration tree to apply the right succession of algorithms to data.
@@ -275,6 +278,7 @@ class ContainerWriter(ContainerBase):
             metadata=metadata,
         )
 
+    @profile(precision=4)
     def _encrypt_key_through_multiple_strata(self, keychain_uid: uuid.UUID, key_bytes: bytes, key_encryption_strata: list) -> bytes:
         # HERE KEY IS REAL KEY OR SHARE !!!
 
@@ -291,6 +295,7 @@ class ContainerWriter(ContainerBase):
         return key_ciphertext
 
 
+    @profile(precision=4)
     def _encrypt_key_through_single_stratum(self, keychain_uid: uuid.UUID, key_bytes: bytes, key_encryption_stratum: dict) -> dict:
         """
         Encrypt a symmetric key using an asymmetric encryption scheme.
@@ -351,6 +356,7 @@ class ContainerWriter(ContainerBase):
             )
             return key_cipherdict
 
+    @profile(precision=4)
     def _encrypt_with_asymmetric_cipher(
         self, encryption_algo: str, keychain_uid: uuid.UUID, symmetric_key_data: bytes, escrow  # FIXME change symmetric_key_data
     ) -> dict:
@@ -411,6 +417,7 @@ class ContainerWriter(ContainerBase):
         assert len(shares) == len(key_shared_secret_escrows)
         return all_encrypted_shares
 
+    @profile(precision=4)
     def _generate_message_signature(self, keychain_uid: uuid.UUID, data_ciphertext: bytes, conf: dict) -> dict:
         """
         Generate a signature for a specific ciphered data.
@@ -678,6 +685,7 @@ class ContainerReader(ContainerBase):
         )  # Raises if troubles
 
 
+@profile(precision=4)
 def encrypt_data_into_container(
     data: Union[bytes, BinaryIO],
     *,
@@ -945,6 +953,7 @@ class ContainerStorage:
         )  # Will fail if authorizations are not OK
 
     @catch_and_log_exception
+    @profile(precision=4)
     def _offloaded_encrypt_data_and_dump_container(self, filename_base, data, metadata, keychain_uid, encryption_conf):
         """Task to be called by background thread, which encrypts a payload into a disk container.
 
@@ -989,7 +998,7 @@ class ContainerStorage:
         self._purge_exceeding_containers()
         self._purge_executor_results()
         future = self._thread_pool_executor.submit(
-            self._offloaded_encrypt_data_and_dump_container,
+            self._offloaded_encrypt_data_and_dump_container,  # FIXME this naming is confused with offloaded data
             filename_base=filename_base,
             data=data,
             metadata=metadata,

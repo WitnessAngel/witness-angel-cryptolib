@@ -29,6 +29,7 @@ def _get_encryption_type_conf(encryption_algo):
     return encryption_type_conf
 
 
+@profile(precision=4)
 def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key) -> dict:
     """Encrypt a bytestring with the selected algorithm for the given payload,
     using the provided key (which must be of a compatible type and length).
@@ -91,6 +92,8 @@ def _decrypt_via_aes_cbc(cipherdict: dict, key: bytes) -> bytes:
     return plaintext
 
 
+from memory_profiler import profile
+@profile()
 def _encrypt_via_aes_eax(plaintext: bytes, key: bytes) -> dict:
     """Encrypt a bytestring using AES (EAX mode).
 

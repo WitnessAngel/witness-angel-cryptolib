@@ -15,6 +15,7 @@ def encode_passphrase(passphrase: str):
     return unicodedata.normalize("NFKC", passphrase.strip()).encode("utf8")
 
 
+@profile(precision=4)
 def generate_symmetric_key(encryption_algo: str) -> bytes:
     """
     Generate the strongest key possible for the wanted symmetric cipher,

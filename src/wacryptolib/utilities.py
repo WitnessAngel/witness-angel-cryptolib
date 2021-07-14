@@ -140,6 +140,7 @@ def load_from_json_str(data, **extra_options):
     return loads(data, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
 
 
+@profile(precision=4)
 def dump_to_json_bytes(data, **extra_options):
     """
     Same as `dump_to_json_str`, but returns UTF8-encoded bytes.

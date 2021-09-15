@@ -4,15 +4,13 @@ from pathlib import Path
 from pathlib import PurePath
 from typing import Optional
 
-from wacryptolib.utilities import dump_to_json_file, load_from_json_file
-from wacryptolib.utilities import generate_uuid0, get_metadata_file_path as _utilities_get_metadata_file_path
-
+from wacryptolib.authenticator import is_authenticator_initialized, initialize_authenticator, load_authenticator_metadata
 
 logger = logging.getLogger(__name__)
 
 # FIXME regroup all metadata and is_initialized in single "metadata" field
 
-
+# FIXME change "format" here, bad wording!!!!
 def list_available_authentication_devices():
     """
     Generate a list of dictionaries representing mounted partitions of USB keys.
@@ -37,7 +35,7 @@ def list_available_authentication_devices():
     for authentication_device in authentication_devices:
         metadata = None
         if authentication_device["is_initialized"]:
-            metadata = load_authentication_device_metadata(authentication_device)
+            metadata = load_authentication_device_metadata(authentication_device)  #FIXME - might crash concurrently here??
         authentication_device["metadata"] = metadata
 
     return authentication_devices
@@ -54,22 +52,13 @@ def initialize_authentication_device(authentication_device: dict, user: str, ext
 
     On success, updates 'authentication_device' to mark it as initialized, and to contain device metadata.
     """
-    extra_metadata = extra_metadata or {}
+    assert not authentication_device["is_initialized"]  # Will be doubled with actual check of filesystem
 
-    assert user and isinstance(user, str), user
-    assert not extra_metadata or isinstance(extra_metadata, dict), extra_metadata
+    authenticator_path = _get_authenticator_path(authentication_device)
 
-    if is_authentication_device_initialized(authentication_device):
-        raise RuntimeError("%s key-device is already initialized" % authentication_device["path"])
-
-    if sys_platform == "win32":  # All Windows versions
-        metadata = _initialize_authentication_device_win32(
-            authentication_device=authentication_device, user=user, extra_metadata=extra_metadata
-        )
-    else:  # Linux, MacOS etc.
-        metadata = _initialize_authentication_device_linux(
-            authentication_device=authentication_device, user=user, extra_metadata=extra_metadata
-        )
+    metadata = initialize_authenticator(
+        authenticator_path=authenticator_path, user=user, extra_metadata=extra_metadata
+    )
 
     authentication_device["is_initialized"] = True
     authentication_device["metadata"] = metadata
@@ -82,13 +71,13 @@ def is_authentication_device_initialized(authentication_device: dict):
 
     Doesn't actually load the device metadata.
     Dooesn't modify `authentication_device` dict content.
-    
+
     :param authentication_device: (dict) Key device information.
-    
+
     :return: (bool) True if and only if the key device is initialized.
     """
-    metadata_file = _get_metadata_file_path(authentication_device=authentication_device)
-    return metadata_file.is_file()
+    authenticator_path = _get_authenticator_path(authentication_device)
+    return is_authenticator_initialized(authenticator_path)
 
 
 def load_authentication_device_metadata(authentication_device: dict) -> dict:
@@ -98,19 +87,8 @@ def load_authentication_device_metadata(authentication_device: dict) -> dict:
 
     Raises `ValueError` or json decoding exceptions if device appears initialized, but has corrupted metadata.
     """
-    metadata_file = _get_metadata_file_path(authentication_device=authentication_device)
-
-    metadata = load_from_json_file(metadata_file)
-
-    _check_authentication_device_metadata(metadata)  # Raises if troubles
-    return metadata
-
-
-def _check_authentication_device_metadata(metadata: dict):
-    if not (
-        isinstance(metadata, dict) and metadata.get("user") and metadata.get("device_uid")
-    ):  # Only lightweight checkup for now
-        raise ValueError("Abnormal key device metadata: %s" % str(metadata))
+    authenticator_path = _get_authenticator_path(authentication_device)
+    return load_authenticator_metadata(authenticator_path)
 
 
 def _list_available_authentication_devices_win32():
@@ -201,42 +179,6 @@ def _list_available_authentication_devices_linux():
 
 # FIXME introduce an AuthenticationDevice class to normalize and lazify API
 
-
-def _get_key_storage_folder_path(authentication_device: dict):  # FIXME make this PUBLIC API
+def _get_authenticator_path(authentication_device: dict):  # FIXME make this PUBLIC API?
     return Path(authentication_device["path"]).joinpath(".key_storage")
-
-
-def _get_metadata_file_path(authentication_device: dict):
-    return _utilities_get_metadata_file_path(_get_key_storage_folder_path(authentication_device))
-
-
-def _common_authentication_device_initialization(authentication_device: dict, user: str, extra_metadata: dict):
-    assert isinstance(user, str) and user, repr(user)
-    metadata_file = _get_metadata_file_path(authentication_device)
-    metadata_file.parent.mkdir(parents=True, exist_ok=True)
-    metadata = extra_metadata.copy()
-    metadata.update({"device_uid": generate_uuid0(), "user": user})  # Override keys!
-    dump_to_json_file(metadata_file, metadata)
-    return metadata
-
-
-def _initialize_authentication_device_win32(authentication_device: dict, user: str, extra_metadata: dict):
-
-    import win32api
-    import win32.lib.win32con as win32con
-
-    metadata = _common_authentication_device_initialization(
-        authentication_device, user=user, extra_metadata=extra_metadata
-    )
-
-    # Hide the root folder specific to cryptolib stuffs, on this device
-    key_storage_folder = _get_key_storage_folder_path(authentication_device)
-    win32api.SetFileAttributes(str(key_storage_folder), win32con.FILE_ATTRIBUTE_HIDDEN)
-
-    return metadata
-
-
-def _initialize_authentication_device_linux(authentication_device: dict, user: str, extra_metadata: dict):
-    return _common_authentication_device_initialization(
-        authentication_device, user=user, extra_metadata=extra_metadata
-    )  # Unchanged for now
+_get_key_storage_folder_path = _get_authenticator_path  # FIXME temporary alias for compatibility!

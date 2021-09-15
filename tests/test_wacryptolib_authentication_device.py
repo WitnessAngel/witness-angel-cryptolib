@@ -5,9 +5,10 @@ from _test_mockups import get_fake_authentication_device
 from wacryptolib.authentication_device import (
     list_available_authentication_devices,
     is_authentication_device_initialized,
-    _get_metadata_file_path,
+    _get_authenticator_path,
 )
 from wacryptolib.authentication_device import initialize_authentication_device, load_authentication_device_metadata
+from wacryptolib.utilities import get_metadata_file_path
 
 
 def test_list_available_authentication_devices():  # FIXME add mockups to simulate real USB key?
@@ -78,7 +79,7 @@ def test_authentication_device_initialization_and_checkers(tmp_path):
     assert isinstance(metadata["device_uid"], UUID)
 
     assert is_authentication_device_initialized(authentication_device)
-    metadata_file_path = _get_metadata_file_path(authentication_device)
+    metadata_file_path = get_metadata_file_path(_get_authenticator_path(authentication_device))
     metadata_file_path.unlink()
     assert not is_authentication_device_initialized(authentication_device)
     metadata_file_path.write_text("ZJSJS")

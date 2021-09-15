@@ -895,7 +895,7 @@ class ContainerStorage:
         logger.info("Deleting container %s" % container_name)
         self._delete_container(container_name=container_name)
 
-    def _purge_exceeding_containers(self):
+    def _purge_exceeding_containers(self):  # TODO LOG WHEN PURGING
         """Purge containers first by date, then total quota, then count, depending on instance settings"""
 
         if self._max_container_age is not None:  # FIRST these, since their deletion is unconditional
@@ -1024,7 +1024,7 @@ class ContainerStorage:
             container_name = Path(container_name_or_idx)
         assert not container_name.is_absolute(), container_name
 
-        logger.info("Loading container %r from storage", container_name)
+        logger.info("Loading container %s from storage", container_name)
         container_filepath = self._make_absolute(container_name)
         container = load_container_from_filesystem(container_filepath, include_data_ciphertext=include_data_ciphertext)
         return container
@@ -1039,7 +1039,7 @@ class ContainerStorage:
         container = self.load_container_from_storage(container_name_or_idx, include_data_ciphertext=True)
 
         result = self._decrypt_data_from_container(container, passphrase_mapper=passphrase_mapper)
-        logger.info("Container %r successfully decrypted", container_name_or_idx)
+        logger.info("Container %s successfully decrypted", container_name_or_idx)
         return result
 
 

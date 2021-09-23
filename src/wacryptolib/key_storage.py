@@ -293,7 +293,7 @@ class FilesystemKeyStorage(KeyStorageBase):
         free_private_key.replace(target_private_key_filename)
         free_public_key.replace(target_public_key_filename)
 
-    def list_keypair_identifiers(self):
+    def list_keypair_identifiers(self) -> list:
         """
         List metadata of public keys present in the storage, along with their potential private key existence.
         

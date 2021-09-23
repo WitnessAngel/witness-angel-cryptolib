@@ -41,6 +41,7 @@ def list_available_authentication_devices():
     return authentication_devices
 
 
+# FIXME deprecated
 def initialize_authentication_device(authentication_device: dict, user: str, extra_metadata: Optional[dict] = None):
     """
     Initialize a specific USB key, by creating an internal structure with key device metadata.
@@ -64,6 +65,7 @@ def initialize_authentication_device(authentication_device: dict, user: str, ext
     authentication_device["metadata"] = metadata
 
 
+# FIXME deprecated
 # TODO go farther, and add flags to report errors if json or RSA keys are missing/corrupted?
 def is_authentication_device_initialized(authentication_device: dict):
     """
@@ -80,6 +82,7 @@ def is_authentication_device_initialized(authentication_device: dict):
     return is_authenticator_initialized(authenticator_path)
 
 
+# FIXME deprecated
 def load_authentication_device_metadata(authentication_device: dict) -> dict:
     """
     Return the device metadata stored in the given mountpoint, after checking that it contains at least mandatory
@@ -182,3 +185,6 @@ def _list_available_authentication_devices_linux():
 def _get_authenticator_path(authentication_device: dict):  # FIXME make this PUBLIC API?
     return Path(authentication_device["path"]).joinpath(".key_storage")
 _get_key_storage_folder_path = _get_authenticator_path  # FIXME temporary alias for compatibility!
+
+# FIXME use this everywhere ??
+get_authenticator_path_for_authentication_device = _get_authenticator_path

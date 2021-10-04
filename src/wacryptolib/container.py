@@ -202,12 +202,6 @@ class ContainerWriter(ContainerBase):
 
         :return: container with all the information needed to attempt data decryption
         """
-        assert metadata is None or isinstance(metadata, dict), metadata
-        container_format = CONTAINER_FORMAT
-        container_uid = generate_uuid0()  # ALWAYS UNIQUE!
-        keychain_uid = keychain_uid or generate_uuid0()  # Might be shared by lots of containers
-
-        conf = copy.deepcopy(conf)  # So that we can manipulate it
 
         if hasattr(data, "read"):  # File-like object
             logger.debug("Reading and deleting open file handle %s", data)
@@ -219,10 +213,6 @@ class ContainerWriter(ContainerBase):
                 os.remove(filename)  # We let errors flow here!
 
         assert isinstance(data, bytes), data
-        assert isinstance(conf, dict), conf
-
-        if not conf["data_encryption_strata"]:
-            raise ConfigurationError("Empty data_encryption_strata list is forbidden in encryption conf")
 
         data_current = data
         result_data_encryption_strata = []
@@ -274,6 +264,93 @@ class ContainerWriter(ContainerBase):
             data_encryption_strata=result_data_encryption_strata,
             metadata=metadata,
         )
+
+    def _generate_container_base_and_secrets(self, conf: dict, keychain_uid=None, metadata=None) -> tuple:
+        """
+        Build a data-less and signature-less container, preconfigured with a set of symmetric keys
+        under their final form (encrypted by escrows). A separate extract, with symmetric keys as well as algo names, is returned so that actual data encryption and signature can be performed separately.
+
+        :param conf: configuration tree
+        :param keychain_uid: uuid for the set of encryption keys used
+        :param metadata: additional data to store unencrypted in container
+
+        :return: a (container: dict, secrets: list) tuple, where each secret has keys encryption_algo, symmetric_key and message_digest_algos.
+        """
+
+        assert metadata is None or isinstance(metadata, dict), metadata
+        container_format = CONTAINER_FORMAT
+        container_uid = generate_uuid0()  # ALWAYS UNIQUE!
+        keychain_uid = keychain_uid or generate_uuid0()  # Might be shared by lots of containers
+
+        assert isinstance(conf, dict), conf
+        container = copy.deepcopy(conf)  # So that we can manipulate it as new container
+        del conf
+
+        if not container["data_encryption_strata"]:
+            raise ConfigurationError("Empty data_encryption_strata list is forbidden in encryption conf")
+
+        data_encryption_strata_extracts = []  # Sensitive info with secret keys!
+
+        for data_encryption_stratum in container["data_encryption_strata"]:
+            data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
+
+            logger.debug("Generating symmetric key of type %r", data_encryption_algo)
+            symmetric_key = generate_symmetric_key(encryption_algo=data_encryption_algo)
+
+            '''
+            logger.debug("Encrypting data with symmetric key of type %r", data_encryption_algo)
+            data_cipherdict = encrypt_bytestring(
+                plaintext=data_current, encryption_algo=data_encryption_algo, key=symmetric_key
+            )
+            assert isinstance(data_cipherdict, dict), data_cipherdict
+            data_current = dump_to_json_bytes(data_cipherdict)
+            '''
+
+            key_encryption_strata = data_encryption_stratum["key_encryption_strata"]
+
+            key_ciphertext = self._encrypt_key_through_multiple_strata(
+                    keychain_uid=keychain_uid,
+                    key_bytes=symmetric_key,
+                    key_encryption_strata=key_encryption_strata)
+            data_encryption_stratum["key_ciphertext"] = key_ciphertext
+
+            data_encryption_stratum_extract = dict(
+                encryption_algo=data_encryption_algo,
+                symmetric_key=symmetric_key,
+                message_digest_algos=[signature["message_digest_algo"] for signature in data_encryption_stratum["data_signatures"]]
+            )
+            data_encryption_strata_extracts.append(data_encryption_stratum_extract)
+
+            '''
+            data_signatures = []
+            for signature_conf in data_encryption_stratum["data_signatures"]:
+                signature_value = self._generate_message_signature(
+                    keychain_uid=keychain_uid, data_ciphertext=data_current, conf=signature_conf
+                )
+                signature_conf["signature_value"] = signature_value
+                data_signatures.append(signature_conf)
+            '''
+
+            ''' USELESS
+            data_encryption_strata.append(
+                dict(
+                    data_encryption_algo=data_encryption_algo,
+                    key_ciphertext=key_ciphertext,
+                    key_encryption_strata=key_encryption_strata,  # Untouched
+                    data_signatures=data_encryption_stratum["data_signatures"],
+                )
+            )
+            '''
+
+        ######data_ciphertext = data_current  # New fully encrypted (unless data_encryption_strata is empty)
+
+        container.update(
+            container_format=container_format,
+            container_uid=container_uid,
+            keychain_uid=keychain_uid,
+            metadata=metadata,
+        )
+        return container, data_encryption_strata_extracts
 
     def _encrypt_key_through_multiple_strata(self, keychain_uid: uuid.UUID, key_bytes: bytes, key_encryption_strata: list) -> bytes:
         # HERE KEY IS REAL KEY OR SHARE !!!

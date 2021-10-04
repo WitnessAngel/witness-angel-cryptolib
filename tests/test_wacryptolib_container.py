@@ -31,7 +31,7 @@ from wacryptolib.container import (
     request_decryption_authorizations,
     CONTAINER_SUFFIX,
     OFFLOADED_DATA_SUFFIX,
-    delete_container_from_filesystem, CONTAINER_DATETIME_FORMAT, get_container_size_on_filesystem,
+    delete_container_from_filesystem, CONTAINER_DATETIME_FORMAT, get_container_size_on_filesystem, ContainerWriter,
 )
 from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import (
@@ -1216,3 +1216,20 @@ def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
     delete_container_from_filesystem(container_filepath)
     assert not container_filepath.exists()
     assert not container_offloaded_filepath.exists()
+
+
+def test_generate_container_and_symmetric_keys():
+
+    container_writer = ContainerWriter()
+    container, extracts = container_writer._generate_container_base_and_secrets(COMPLEX_CONTAINER_CONF)
+
+    for data_encryption_stratum in extracts:
+        symmetric_key = data_encryption_stratum["symmetric_key"]
+        assert isinstance(symmetric_key, bytes) and len(symmetric_key) ==  32 # For now
+        del data_encryption_stratum["symmetric_key"]
+
+    assert extracts == [
+        {'encryption_algo': 'AES_EAX', 'message_digest_algos': []},
+        {'encryption_algo': 'AES_CBC', 'message_digest_algos': ['SHA3_512']},
+        {'encryption_algo': 'CHACHA20_POLY1305', 'message_digest_algos': ['SHA3_256', 'SHA512']}
+    ]

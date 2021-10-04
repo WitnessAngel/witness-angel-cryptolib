@@ -30,7 +30,7 @@ include = ["CHANGELOG", "tox.ini", "docs/*", "docs/api/*", "tests/*.py"]
 exclude = ["_build"]
 
 [tool.poetry.dependencies]
-python = ">=3.6,<4"
+python = ">=3.7,<4"
 
 # Cryptography & transports
 pycryptodome = "^3.9.9"
@@ -76,3 +76,6 @@ sphinx-autodoc-typehints = "^1.11.1"
 sphinx_rtd_theme = "^0.5.0"
 toml = "^0.10.2"
 
+# Benchmarks
+memory-profiler = "^0.58.0"
+matplotlib = "^3.4.3"

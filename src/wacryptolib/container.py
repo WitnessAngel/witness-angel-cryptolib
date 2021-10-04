@@ -203,6 +203,23 @@ class ContainerWriter(ContainerBase):
         :return: container with all the information needed to attempt data decryption
         """
 
+        data = self._load_data_bytes(data)  # Ensure we get the whole data buffer
+
+        container, data_encryption_strata_extracts = self._generate_container_base_and_secrets(
+            conf=conf, keychain_uid=keychain_uid, metadata=metadata
+        )
+
+        data_ciphertext, message_digests_per_stratum = \
+            self._encrypt_and_hash_data(data, data_encryption_strata_extracts)
+
+        container["data_ciphertext"] = data_ciphertext
+
+        self._add_signatures_to_container(container, message_digests_per_stratum)
+
+        return container
+
+    @staticmethod
+    def _load_data_bytes(data: Union[bytes, BinaryIO]):
         if hasattr(data, "read"):  # File-like object
             logger.debug("Reading and deleting open file handle %s", data)
             _data = data
@@ -211,59 +228,35 @@ class ContainerWriter(ContainerBase):
             filename = getattr(_data, "name", None)
             if filename and os.path.exists(filename):  # Can't be false on Win32, since files are not deletable when open
                 os.remove(filename)  # We let errors flow here!
-
         assert isinstance(data, bytes), data
+        return data
 
+    def _encrypt_and_hash_data(self, data, data_encryption_strata_extracts):
+        """TODO"""
         data_current = data
-        result_data_encryption_strata = []
+        message_digests_per_stratum = []
 
-        for data_encryption_stratum in conf["data_encryption_strata"]:
-            data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
-
-            logger.debug("Generating symmetric key of type %r", data_encryption_algo)
-            symmetric_key = generate_symmetric_key(encryption_algo=data_encryption_algo)
+        for data_encryption_stratum_extract in data_encryption_strata_extracts:
+            data_encryption_algo = data_encryption_stratum_extract["encryption_algo"]  # FIXME RENAME THIS
+            symmetric_key = data_encryption_stratum_extract["symmetric_key"]
+            message_digest_algos = data_encryption_stratum_extract["message_digest_algos"]
 
             logger.debug("Encrypting data with symmetric key of type %r", data_encryption_algo)
             data_cipherdict = encrypt_bytestring(
                 plaintext=data_current, encryption_algo=data_encryption_algo, key=symmetric_key
             )
             assert isinstance(data_cipherdict, dict), data_cipherdict
-            data_current = dump_to_json_bytes(data_cipherdict)
+            data_ciphertext = dump_to_json_bytes(data_cipherdict)
 
-            key_encryption_strata = data_encryption_stratum["key_encryption_strata"]
+            message_digests = {
+                message_digest_algo: hash_message(data_ciphertext, hash_algo=message_digest_algo)
+                for message_digest_algo in message_digest_algos
+            }
+            message_digests_per_stratum.append(message_digests)
 
-            key_ciphertext = self._encrypt_key_through_multiple_strata(
-                    keychain_uid=keychain_uid,
-                    key_bytes=symmetric_key,
-                    key_encryption_strata=key_encryption_strata)
+            data_current = data_ciphertext
 
-            data_signatures = []
-            for signature_conf in data_encryption_stratum["data_signatures"]:
-                signature_value = self._generate_message_signature(
-                    keychain_uid=keychain_uid, data_ciphertext=data_current, conf=signature_conf
-                )
-                signature_conf["signature_value"] = signature_value
-                data_signatures.append(signature_conf)
-
-            result_data_encryption_strata.append(
-                dict(
-                    data_encryption_algo=data_encryption_algo,
-                    key_ciphertext=key_ciphertext,
-                    key_encryption_strata=key_encryption_strata,  # Untouched
-                    data_signatures=data_signatures,
-                )
-            )
-
-        data_ciphertext = data_current  # New fully encrypted (unless data_encryption_strata is empty)
-
-        return dict(
-            container_format=container_format,
-            container_uid=container_uid,
-            keychain_uid=keychain_uid,
-            data_ciphertext=data_ciphertext,
-            data_encryption_strata=result_data_encryption_strata,
-            metadata=metadata,
-        )
+        return data_current, message_digests_per_stratum
 
     def _generate_container_base_and_secrets(self, conf: dict, keychain_uid=None, metadata=None) -> tuple:
         """
@@ -320,29 +313,6 @@ class ContainerWriter(ContainerBase):
                 message_digest_algos=[signature["message_digest_algo"] for signature in data_encryption_stratum["data_signatures"]]
             )
             data_encryption_strata_extracts.append(data_encryption_stratum_extract)
-
-            '''
-            data_signatures = []
-            for signature_conf in data_encryption_stratum["data_signatures"]:
-                signature_value = self._generate_message_signature(
-                    keychain_uid=keychain_uid, data_ciphertext=data_current, conf=signature_conf
-                )
-                signature_conf["signature_value"] = signature_value
-                data_signatures.append(signature_conf)
-            '''
-
-            ''' USELESS
-            data_encryption_strata.append(
-                dict(
-                    data_encryption_algo=data_encryption_algo,
-                    key_ciphertext=key_ciphertext,
-                    key_encryption_strata=key_encryption_strata,  # Untouched
-                    data_signatures=data_encryption_stratum["data_signatures"],
-                )
-            )
-            '''
-
-        ######data_ciphertext = data_current  # New fully encrypted (unless data_encryption_strata is empty)
 
         container.update(
             container_format=container_format,
@@ -452,7 +422,7 @@ class ContainerWriter(ContainerBase):
         cipherdict = encrypt_bytestring(plaintext=symmetric_key_data, encryption_algo=encryption_algo, key=subkey)
         return cipherdict
 
-    def _________encrypt_shares(self, shares: Sequence, key_shared_secret_escrows: Sequence, keychain_uid: uuid.UUID) -> list:
+    def ____obsolete_____encrypt_shares(self, shares: Sequence, key_shared_secret_escrows: Sequence, keychain_uid: uuid.UUID) -> list:
         """
         Make a loop through all shares from shared secret algorithm to encrypt each of them.
 
@@ -488,26 +458,48 @@ class ContainerWriter(ContainerBase):
         assert len(shares) == len(key_shared_secret_escrows)
         return all_encrypted_shares
 
-    def _generate_message_signature(self, keychain_uid: uuid.UUID, data_ciphertext: bytes, conf: dict) -> dict:
+    def _add_signatures_to_container(self, container: dict, message_digests_per_stratum: list):
+        keychain_uid = container["keychain_uid"]
+
+        data_encryption_strata = container["data_encryption_strata"]
+        assert len(data_encryption_strata) == len(message_digests_per_stratum)  # Sanity check
+
+        for data_encryption_stratum, message_digests in zip(container["data_encryption_strata"], message_digests_per_stratum):
+
+            _encountered_message_digest_algos = set()
+            for signature_conf in data_encryption_stratum["data_signatures"]:
+                message_digest_algo = signature_conf["message_digest_algo"]
+
+                signature_conf["message_digest"] = message_digests[message_digest_algo]  # MUST exist, else incoherence
+                # FIXME ADD THIS NEW FIELD TO SCHEMA VALIDATOR!!!!
+
+                signature_value = self._generate_message_signature(
+                    keychain_uid=keychain_uid,
+                    conf=signature_conf)
+                signature_conf["signature_value"] = signature_value
+
+                _encountered_message_digest_algos.add(message_digest_algo)
+            assert _encountered_message_digest_algos == set(message_digests)  # No abnormal extra digest
+
+    def _generate_message_signature(self, keychain_uid: uuid.UUID, conf: dict) -> dict:
         """
         Generate a signature for a specific ciphered data.
 
         :param keychain_uid: uuid for the set of encryption keys used
-        :param data_ciphertext: data as bytes on which to apply signature
-        :param conf: configuration tree inside data_signatures
+        :param conf: configuration tree inside data_signatures, which MUST already contain the message digest
         :return: dictionary with information needed to verify signature
         """
-        encryption_proxy = get_escrow_proxy(escrow=conf["signature_escrow"], key_storage_pool=self._key_storage_pool)
-        message_digest_algo = conf["message_digest_algo"]
         signature_algo = conf["signature_algo"]
+        message_digest = conf["message_digest"]  # Must have been set before, using message_digest_algo field
+        assert message_digest, message_digest
+
+        encryption_proxy = get_escrow_proxy(escrow=conf["signature_escrow"], key_storage_pool=self._key_storage_pool)
+
         keychain_uid_signature = conf.get("keychain_uid") or keychain_uid
 
-        data_ciphertext_hash = hash_message(data_ciphertext, hash_algo=message_digest_algo)
-
         logger.debug("Signing hash of encrypted data with algo %r", signature_algo)
-
         signature_value = encryption_proxy.get_message_signature(
-            keychain_uid=keychain_uid_signature, message=data_ciphertext_hash, signature_algo=signature_algo
+            keychain_uid=keychain_uid_signature, message=message_digest, signature_algo=signature_algo
         )
         return signature_value
 

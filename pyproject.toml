@@ -43,7 +43,7 @@ multitimer = "^0.3"
 uuid0 = "^0.2.7"
 pytz = "^2020.5"
 wmi = { version = "^1.5.1 ", platform = 'win32' }
-pywin32 = { version = "^300", platform = 'win32' }
+pywin32 = { version = ">=300,<302", platform = 'win32' }
 pyudev = { version = "^0.22.0 ", platform = 'linux' }
 psutil = { version = "^5.8.0", platform = 'linux' }
 

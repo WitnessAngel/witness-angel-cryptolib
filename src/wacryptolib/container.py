@@ -191,9 +191,51 @@ class ContainerWriter(ContainerBase):
     Contains every method used to write and encrypt a container, IN MEMORY.
     """
 
+    def build_container_and_stream_encryptor(self, *, conf: dict, output_stream: BinaryIO, keychain_uid=None, metadata=None) -> dict:
+        """
+        Build a base container to store encrypted keys, as well as a stream encryptor
+        meant to process heavy data chunk by chunk.
+
+        Signatures, and final ciphertext (if not offloaded), will have to be added
+        later to the container.
+
+        :param conf: configuration tree
+        :param output_stream: open file where the stream encryptor should write to
+        :param keychain_uid: uuid for the set of encryption keys used
+        :param metadata: additional data to store unencrypted in container
+
+        :return: container with all the information needed to attempt data decryption
+        """
+
+        container, data_encryption_strata_extracts = self._generate_container_base_and_secrets(
+            conf=conf, keychain_uid=keychain_uid, metadata=metadata
+        )
+
+        # HERE INSTANTIATE REAL ENCRYPTOR USING data_encryption_strata_extracts
+        class FakeStreamEncryptor:
+            def __init__(self):
+                for data_encryption_stratum_extract in data_encryption_strata_extracts:
+                    data_encryption_algo = data_encryption_stratum_extract["encryption_algo"]  # FIXME RENAME THIS
+                    symmetric_key = data_encryption_stratum_extract["symmetric_key"]
+                    message_digest_algos = data_encryption_stratum_extract["message_digest_algos"]
+                    # DO SOMETHING WITH THESE
+            def encrypt_chunk(self, chunk):
+                return b"abc"
+            def finalize(self):
+                return b"xxx"
+            def get_metadata(self):
+                return {}
+
+        stream_encryptor = FakeStreamEncryptor()
+        ############################################################################
+
+        return container, stream_encryptor
+
     def encrypt_data(self, data: Union[bytes, BinaryIO], *, conf: dict, keychain_uid=None, metadata=None) -> dict:
         """
-        Browse through configuration tree to apply the right succession of algorithms to data.
+        Shortcut when data is already available.
+
+        This method browses through configuration tree to apply the right succession of encryption+signature algorithms to data.
 
         :param data: initial plaintext, or file pointer (file immediately deleted then)
         :param conf: configuration tree
@@ -214,7 +256,7 @@ class ContainerWriter(ContainerBase):
 
         container["data_ciphertext"] = data_ciphertext
 
-        self._add_signatures_to_container(container, message_digests_per_stratum)
+        self.add_signatures_to_container(container, message_digests_per_stratum)
 
         return container
 
@@ -229,6 +271,7 @@ class ContainerWriter(ContainerBase):
             if filename and os.path.exists(filename):  # Can't be false on Win32, since files are not deletable when open
                 os.remove(filename)  # We let errors flow here!
         assert isinstance(data, bytes), data
+        ## FIXME LATER ADD THIS - assert data, data  # No encryption must be launched if we have no data to process!
         return data
 
     def _encrypt_and_hash_data(self, data, data_encryption_strata_extracts):
@@ -458,7 +501,7 @@ class ContainerWriter(ContainerBase):
         assert len(shares) == len(key_shared_secret_escrows)
         return all_encrypted_shares
 
-    def _add_signatures_to_container(self, container: dict, message_digests_per_stratum: list):
+    def add_signatures_to_container(self, container: dict, message_digests_per_stratum: list):
         keychain_uid = container["keychain_uid"]
 
         data_encryption_strata = container["data_encryption_strata"]
@@ -1018,6 +1061,12 @@ class ContainerStorage:
         """Task to be called by background thread, which encrypts a payload into a disk container.
 
         Returns the container basename."""
+
+        """ TODO later ass a SKIP here!
+        if not data:
+            logger.warning("Skipping encryption of empty data payload for file %s", filename_base)
+            return
+        """
 
         logger.debug("Encrypting file %s", filename_base)
 

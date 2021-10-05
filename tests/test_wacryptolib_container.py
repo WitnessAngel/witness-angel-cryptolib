@@ -32,6 +32,7 @@ from wacryptolib.container import (
     CONTAINER_SUFFIX,
     OFFLOADED_DATA_SUFFIX,
     delete_container_from_filesystem, CONTAINER_DATETIME_FORMAT, get_container_size_on_filesystem, ContainerWriter,
+    encrypt_data_and_dump_container_to_filesystem,
 )
 from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import (
@@ -1233,3 +1234,18 @@ def test_generate_container_and_symmetric_keys():
         {'encryption_algo': 'AES_CBC', 'message_digest_algos': ['SHA3_512']},
         {'encryption_algo': 'CHACHA20_POLY1305', 'message_digest_algos': ['SHA3_256', 'SHA512']}
     ]
+
+
+def test_encrypt_data_and_dump_container_to_filesystem(tmp_path):
+    data_plaintext = b"abcd1234" * 10
+    container_filepath = tmp_path / "my_streamed_container.crypt"
+
+    encrypt_data_and_dump_container_to_filesystem(
+        data_plaintext,
+        container_filepath=container_filepath,
+        conf=SIMPLE_CONTAINER_CONF,
+        metadata=None)
+
+    container = load_container_from_filesystem(container_filepath)  # Fetches offloaded content too
+    assert container["data_ciphertext"] == data_plaintext  # TEMPORARY FOR FAKE STREAM ENCRYPTOR
+

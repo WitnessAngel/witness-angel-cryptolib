@@ -29,7 +29,7 @@ from wacryptolib.utilities import (
     generate_uuid0,
     hash_message,
     synchronized,
-    catch_and_log_exception, get_utc_now_date,
+    catch_and_log_exception, get_utc_now_date, iterate_bytes_as_chunks,
 )
 
 
@@ -41,6 +41,8 @@ CONTAINER_DATETIME_FORMAT = "%Y%m%d%H%M%S"  # For use in container names and the
 
 OFFLOADED_MARKER = "[OFFLOADED]"
 OFFLOADED_DATA_SUFFIX = ".data"  # Added to CONTAINER_SUFFIX
+
+DATA_CHUNK_SIZE = 1024 ** 2  # E.g. when streaming a big payload through encryptors
 
 MEDIUM_SUFFIX = ".medium"  # To construct decrypted filename when no previous extensions are found in container filename
 
@@ -220,11 +222,13 @@ class ContainerWriter(ContainerBase):
                     message_digest_algos = data_encryption_stratum_extract["message_digest_algos"]
                     # DO SOMETHING WITH THESE
             def encrypt_chunk(self, chunk):
-                return b"abc"
+                output_stream.write(chunk)
+                return None
             def finalize(self):
-                return b"xxx"
+                output_stream.flush()
+                return None
             def get_metadata(self):
-                return {}
+                return [{"SHA256": b"a"*32}]  # Matches SIMPLE_CONTAINER_CONF of unit test
 
         stream_encryptor = FakeStreamEncryptor()
         ############################################################################
@@ -361,6 +365,7 @@ class ContainerWriter(ContainerBase):
             container_format=container_format,
             container_uid=container_uid,
             keychain_uid=keychain_uid,
+            data_ciphertext = None,  # Must be filled asap, by OFFLOADED_MARKER if needed!
             metadata=metadata,
         )
         return container, data_encryption_strata_extracts
@@ -788,6 +793,41 @@ class ContainerReader(ContainerBase):
         verify_message_signature(
             message=message_hash, signature_algo=signature_algo, signature=conf["signature_value"], key=public_key
         )  # Raises if troubles
+
+
+def encrypt_data_and_dump_container_to_filesystem(
+    data: Union[bytes, BinaryIO],
+    *,
+    container_filepath,
+    conf: dict,
+    metadata: Optional[dict],
+    keychain_uid: Optional[uuid.UUID] = None,
+    key_storage_pool: Optional[KeyStoragePoolBase] = None
+) -> dict:
+    """
+    Optimized version which directly streams encrypted data to offloaded file,
+    instead of creating a whole container and then dumping it to disk.
+    """
+    writer = ContainerWriter(key_storage_pool=key_storage_pool)
+
+    offloaded_file_path = _get_offloaded_file_path(container_filepath)
+
+    with open(offloaded_file_path, mode='wb') as f:
+        container, stream_encryptor = writer.build_container_and_stream_encryptor(output_stream=f, conf=conf, keychain_uid=keychain_uid, metadata=metadata)
+
+        container["data_ciphertext"] = OFFLOADED_MARKER  # Important
+
+        # No need to dump initial (signature-less) container here, this is all a quick operation...
+        for chunk in iterate_bytes_as_chunks(data, chunk_size=DATA_CHUNK_SIZE):
+            stream_encryptor.encrypt_chunk(chunk)
+        stream_encryptor.finalize()
+
+    metadata = stream_encryptor.get_metadata()
+    message_digests_per_stratum = metadata  #FIXME
+    writer.add_signatures_to_container(container, message_digests_per_stratum)
+
+    dump_container_to_filesystem(container_filepath, container,
+                                 offload_data_ciphertext=False)  # ALREADY offloaded!!
 
 
 def encrypt_data_into_container(

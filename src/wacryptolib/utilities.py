@@ -73,6 +73,11 @@ def hash_message(message: bytes, hash_algo: str):
     return digest
 
 
+def iterate_bytes_as_chunks(data, chunk_size):  # FIXME DOCUMENT AND TEST ME
+    for i in range(0, len(data), chunk_size):
+        yield data[i:i+chunk_size]  # TODO use memoryview to optimize?
+
+
 def split_as_chunks(
     bytestring: bytes, *, chunk_size: int, must_pad: bool, accept_incomplete_chunk: bool = False
 ) -> List[bytes]:

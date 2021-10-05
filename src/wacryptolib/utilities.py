@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 import shutil
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Union, BinaryIO
 
 import multitimer
 import uuid0
@@ -73,9 +73,26 @@ def hash_message(message: bytes, hash_algo: str):
     return digest
 
 
-def iterate_bytes_as_chunks(data, chunk_size):  # FIXME DOCUMENT AND TEST ME
-    for i in range(0, len(data), chunk_size):
-        yield data[i:i+chunk_size]  # TODO use memoryview to optimize?
+def delete_filesystem_node_for_stream(stream: BinaryIO):
+    """Deletes the corresponding filesystem node of it exists."""
+    filename = getattr(stream, "name", None)
+    if filename and os.path.exists(filename):  # Can't be false on Win32, since files are not deletable when open
+        os.remove(filename)  # We let errors flow here!
+
+
+def consume_bytes_as_chunks(data: Union[bytes, BinaryIO], chunk_size: int):  # FIXME DOCUMENT AND TEST ME
+    """Automatically deletes filesystem entry if it exists!"""
+    if hasattr(data, "read"):  # File-like BinaryIO object
+        while True:
+            chunk = data.read(chunk_size)
+            if not chunk:
+                break;
+            yield chunk
+        data.close()
+        delete_filesystem_node_for_stream(data)
+    else:  # Object with a len()
+        for i in range(0, len(data), chunk_size):
+            yield data[i:i+chunk_size]  # TODO use memoryview to optimize?
 
 
 def split_as_chunks(

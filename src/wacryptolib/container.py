@@ -29,7 +29,7 @@ from wacryptolib.utilities import (
     generate_uuid0,
     hash_message,
     synchronized,
-    catch_and_log_exception, get_utc_now_date, iterate_bytes_as_chunks,
+    catch_and_log_exception, get_utc_now_date, consume_bytes_as_chunks, delete_filesystem_node_for_stream,
 )
 
 
@@ -249,7 +249,7 @@ class ContainerWriter(ContainerBase):
         :return: container with all the information needed to attempt data decryption
         """
 
-        data = self._load_data_bytes(data)  # Ensure we get the whole data buffer
+        data = self._load_data_bytes_and_cleanup(data)  # Ensure we get the whole data buffer
 
         container, data_encryption_strata_extracts = self._generate_container_base_and_secrets(
             conf=conf, keychain_uid=keychain_uid, metadata=metadata
@@ -265,15 +265,14 @@ class ContainerWriter(ContainerBase):
         return container
 
     @staticmethod
-    def _load_data_bytes(data: Union[bytes, BinaryIO]):
+    def _load_data_bytes_and_cleanup(data: Union[bytes, BinaryIO]):
+        """Automatically deletes filesystem entry if it exists!"""
         if hasattr(data, "read"):  # File-like object
             logger.debug("Reading and deleting open file handle %s", data)
-            _data = data
-            data = _data.read()
-            _data.close()
-            filename = getattr(_data, "name", None)
-            if filename and os.path.exists(filename):  # Can't be false on Win32, since files are not deletable when open
-                os.remove(filename)  # We let errors flow here!
+            data_stream = data
+            data = data_stream.read()
+            data_stream.close()
+            delete_filesystem_node_for_stream(data_stream)
         assert isinstance(data, bytes), data
         ## FIXME LATER ADD THIS - assert data, data  # No encryption must be launched if we have no data to process!
         return data
@@ -818,7 +817,7 @@ def encrypt_data_and_dump_container_to_filesystem(
         container["data_ciphertext"] = OFFLOADED_MARKER  # Important
 
         # No need to dump initial (signature-less) container here, this is all a quick operation...
-        for chunk in iterate_bytes_as_chunks(data, chunk_size=DATA_CHUNK_SIZE):
+        for chunk in consume_bytes_as_chunks(data, chunk_size=DATA_CHUNK_SIZE):
             stream_encryptor.encrypt_chunk(chunk)
         stream_encryptor.finalize()
 
@@ -1081,6 +1080,17 @@ class ContainerStorage:
                 for deleted_container_dict in deleted_container_dicts:
                     self._delete_container(deleted_container_dict["name"])
 
+    def _encrypt_data_and_dump_container_to_filesystem(self, data, container_filepath, metadata, keychain_uid, encryption_conf):
+        assert encryption_conf, encryption_conf
+        return encrypt_data_and_dump_container_to_filesystem(
+            data=data,
+            container_filepath=container_filepath,
+            conf=encryption_conf,
+            metadata=metadata,
+            keychain_uid=keychain_uid,
+            key_storage_pool=self._key_storage_pool,
+        )
+
     def _encrypt_data_into_container(self, data, metadata, keychain_uid, encryption_conf):
         assert encryption_conf, encryption_conf
         return encrypt_data_into_container(
@@ -1108,21 +1118,29 @@ class ContainerStorage:
             return
         """
 
-        logger.debug("Encrypting file %s", filename_base)
-
-        # Memory warning : duplicates data to json-compatible container
-        container = self._encrypt_data_into_container(
-            data, metadata=metadata, keychain_uid=keychain_uid, encryption_conf=encryption_conf
-        )
-
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
-        logger.debug("Writing container data to file %s", container_filepath)
 
-        dump_container_to_filesystem(
-            container_filepath, container=container, offload_data_ciphertext=self._offload_data_ciphertext
-        )
+        if self._offload_data_ciphertext:
+            # We can use newer, low-memory, streamed API
+            logger.debug("Encrypting data file %s into offloaded container directly written to storage file %s", filename_base, container_filepath)
+            self._encrypt_data_and_dump_container_to_filesystem(
+                data, container_filepath=container_filepath, metadata=metadata, keychain_uid=keychain_uid, encryption_conf=encryption_conf
+            )
 
-        logger.info("File %r successfully encrypted into storage container", filename_base)
+        else:
+            # We use legacy API which encrypts all and then dumps all
+
+            logger.debug("Encrypting data file to self-sufficient container %s", filename_base)
+            # Memory warning : duplicates data to json-compatible container
+            container = self._encrypt_data_into_container(
+                data, metadata=metadata, keychain_uid=keychain_uid, encryption_conf=encryption_conf
+            )
+            logger.debug("Writing self-sufficient container data to storage file %s", container_filepath)
+            dump_container_to_filesystem(
+                container_filepath, container=container, offload_data_ciphertext=self._offload_data_ciphertext
+            )
+
+        logger.info("Data file %r successfully encrypted into storage container", filename_base)
         return container_filepath.name
 
     @synchronized

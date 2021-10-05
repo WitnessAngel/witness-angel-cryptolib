@@ -728,7 +728,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
 
     storage.wait_for_idle_state()
 
-    assert not animals_file_path.is_file()  # AUTO-DELETED!
+    assert not animals_file_path.is_file()  # AUTO-DELETED after encryption!
 
     assert len(storage) == 2
     assert storage.list_container_names(as_sorted=True) == [Path("animals.dat.crypt"), Path("empty.txt.crypt")]

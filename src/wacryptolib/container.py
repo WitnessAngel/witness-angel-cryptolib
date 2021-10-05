@@ -1156,7 +1156,7 @@ class ContainerStorage:
 
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
 
-        if False: ###self._offload_data_ciphertext:
+        if self._offload_data_ciphertext:
             # We can use newer, low-memory, streamed API
             logger.debug("Encrypting data file %s into offloaded container directly written to storage file %s", filename_base, container_filepath)
             self._encrypt_data_and_dump_container_to_filesystem(

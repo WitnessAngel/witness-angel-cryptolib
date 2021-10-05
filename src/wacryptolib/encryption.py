@@ -29,23 +29,25 @@ def _get_encryption_type_conf(encryption_algo):
     return encryption_type_conf
 
 
-def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key) -> dict:
+#FIXME make it return BYTESTRING ALWAYS, no need to jsonify them!
+#FIXME key_dict name is wrong in the case of RSA_OAEP!!
+def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key_dict: dict) -> dict:
     """Encrypt a bytestring with the selected algorithm for the given payload,
-    using the provided key (which must be of a compatible type and length).
+    using the provided key dict (which must contain keys/initializers of proper types and lengths).
 
     :return: dictionary with encryption data"""
     assert isinstance(plaintext, bytes), repr(plaintext)
     encryption_type_conf = _get_encryption_type_conf(encryption_algo=encryption_algo)
     encryption_function = encryption_type_conf["encryption_function"]
     try:
-        cipherdict = encryption_function(key=key, plaintext=plaintext)
+        cipherdict = encryption_function(key_dict=key_dict, plaintext=plaintext)
     except ValueError as exc:
         raise EncryptionError("Failed %s encryption (%s)" % (encryption_algo, exc)) from exc
     return cipherdict
 
 
 def decrypt_bytestring(
-    cipherdict: dict, *, encryption_algo: str, key
+    cipherdict: dict, *, encryption_algo: str, key_dict: dict
 ) -> bytes:  # Fixme rename encryption_algo to decryption_algo? Or normalize?
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
@@ -54,114 +56,125 @@ def decrypt_bytestring(
     encryption_type_conf = _get_encryption_type_conf(encryption_algo)
     decryption_function = encryption_type_conf["decryption_function"]
     try:
-        plaintext = decryption_function(key=key, cipherdict=cipherdict)
+        plaintext = decryption_function(key_dict=key_dict, cipherdict=cipherdict)
     except ValueError as exc:
         raise DecryptionError("Failed %s decryption (%s)" % (encryption_algo, exc)) from exc
     return plaintext
 
 
-def _encrypt_via_aes_cbc(plaintext: bytes, key: bytes) -> dict:
+def _encrypt_via_aes_cbc(plaintext: bytes, key_dict: dict) -> dict:
     """Encrypt a bytestring using AES (CBC mode).
 
     :param plaintext: the bytes to cipher
-    :param key: AES cryptographic key. It must be 16, 24 or 32 bytes long
+    :param key_dict: dict with AES cryptographic main key and iv.
+         Main key must be 16, 24 or 32 bytes long
         (respectively for *AES-128*, *AES-192* or *AES-256*).
 
-    :return: dict with fields "iv" and "ciphertext" as bytestrings"""
-    _check_symmetric_key_length_bytes(len(key))
-    iv = get_random_bytes(AES.block_size)
-    cipher = AES.new(key, AES.MODE_CBC, iv)
+    :return: dict with field "ciphertext" as bytestring"""
+    main_key = key_dict["key"]
+    iv = key_dict["iv"]
+    _check_symmetric_key_length_bytes(len(main_key))
+    cipher = AES.new(main_key, AES.MODE_CBC, iv=iv)
     ciphertext = cipher.encrypt(pad(plaintext, block_size=AES.block_size))
-    cipherdict = {"iv": iv, "ciphertext": ciphertext}
+    cipherdict = {"ciphertext": ciphertext}
     return cipherdict
 
 
-def _decrypt_via_aes_cbc(cipherdict: dict, key: bytes) -> bytes:
+def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict) -> bytes:
     """Decrypt a bytestring using AES (CBC mode).
 
-    :param cipherdict: dict with fields "iv" and "ciphertext" as bytestrings
-    :param key: the cryptographic key used to decipher
+    :param cipherdict: dict with field "ciphertext" as bytestring
+    :param key_dict: dict with AES cryptographic main key and nonce.
 
     :return: the decrypted bytestring"""
-    _check_symmetric_key_length_bytes(len(key))
-    iv = cipherdict["iv"]
+    main_key = key_dict["key"]
+    iv = key_dict["iv"]
+    _check_symmetric_key_length_bytes(len(main_key))
     ciphertext = cipherdict["ciphertext"]
-    decipher = AES.new(key, AES.MODE_CBC, iv)
+    decipher = AES.new(main_key, AES.MODE_CBC, iv=iv)
     plaintext = unpad(decipher.decrypt(ciphertext), block_size=AES.block_size)
     return plaintext
 
 
-def _encrypt_via_aes_eax(plaintext: bytes, key: bytes) -> dict:
+def _encrypt_via_aes_eax(plaintext: bytes, key_dict: dict) -> dict:
     """Encrypt a bytestring using AES (EAX mode).
 
     :param plaintext: the bytes to cipher
-    :param key: AES cryptographic key. It must be 16, 24 or 32 bytes long
+    :param key_dict: dict with AES cryptographic main key and nonce.
+         Main key must be 16, 24 or 32 bytes long
         (respectively for *AES-128*, *AES-192* or *AES-256*).
 
-    :return: dict with fields "ciphertext", "tag" and "nonce" as bytestrings"""
-    _check_symmetric_key_length_bytes(len(key))
-    cipher = AES.new(key, AES.MODE_EAX)
-    nonce = cipher.nonce
+    :return: dict with fields "ciphertext" and "tag" as bytestrings"""
+    main_key = key_dict["key"]
+    nonce = key_dict["nonce"]
+    _check_symmetric_key_length_bytes(len(main_key))
+    cipher = AES.new(main_key, AES.MODE_EAX, nonce=nonce)
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
-    cipherdict = {"ciphertext": ciphertext, "tag": tag, "nonce": nonce}
+    cipherdict = {"ciphertext": ciphertext, "tag": tag}
     return cipherdict
 
 
-def _decrypt_via_aes_eax(cipherdict: dict, key: bytes) -> bytes:
+def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict) -> bytes:
     """Decrypt a bytestring using AES (EAX mode).
 
-    :param cipherdict: dict with fields "ciphertext", "tag" and "nonce" as bytestrings
-    :param key: the cryptographic key used to decipher
+    :param cipherdict: dict with fields "ciphertext", "tag" as bytestrings
+    :param key_dict: dict with AES cryptographic main key and nonce.
 
     :return: the decrypted bytestring"""
-    _check_symmetric_key_length_bytes(len(key))
-    decipher = AES.new(key, AES.MODE_EAX, nonce=cipherdict["nonce"])
+    main_key = key_dict["key"]
+    nonce = key_dict["nonce"]
+    _check_symmetric_key_length_bytes(len(main_key))
+    decipher = AES.new(main_key, AES.MODE_EAX, nonce=nonce)
     plaintext = decipher.decrypt(cipherdict["ciphertext"])
     decipher.verify(cipherdict["tag"])
     return plaintext
 
 
-def _encrypt_via_chacha20_poly1305(plaintext: bytes, key: bytes, aad: bytes = b"header") -> dict:
+def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict, aad: bytes = b"header") -> dict:
     """Encrypt a bytestring with the stream cipher ChaCha20.
 
     Additional cleartext data can be provided so that the
     generated mac tag also verifies its integrity.
 
     :param plaintext: the bytes to cipher
-    :param key: 32 bytes long cryptographic key
+    :param key_dict: 32 bytes long cryptographic key and nonce
     :param aad: optional "additional authenticated data"
 
-    :return: dict with fields "ciphertext", "tag", "nonce" and "header" as bytestrings"""
-    _check_symmetric_key_length_bytes(len(key))
-    cipher = ChaCha20_Poly1305.new(key=key)
+    :return: dict with fields "ciphertext", "tag", and "header" as bytestrings"""
+    main_key = key_dict["key"]
+    nonce = key_dict["nonce"]
+    _check_symmetric_key_length_bytes(len(main_key))
+    cipher = ChaCha20_Poly1305.new(key=main_key, nonce=nonce)
     cipher.update(aad)
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
-    nonce = cipher.nonce
-    encryption = {"ciphertext": ciphertext, "tag": tag, "nonce": nonce, "aad": aad}
+    encryption = {"ciphertext": ciphertext, "tag": tag, "aad": aad}
     return encryption
 
 
-def _decrypt_via_chacha20_poly1305(cipherdict: dict, key: bytes) -> bytes:
+def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict) -> bytes:
     """Decrypt a bytestring with the stream cipher ChaCha20.
 
     :param cipherdict: dict with fields "ciphertext", "tag", "nonce" and "header" as bytestrings
-    :param key: the cryptographic key used to decipher
+    :param key_dict: 32 bytes long cryptographic key and nonce
 
     :return: the decrypted bytestring"""
-    _check_symmetric_key_length_bytes(len(key))
-    decipher = ChaCha20_Poly1305.new(key=key, nonce=cipherdict["nonce"])
+    main_key = key_dict["key"]
+    nonce = key_dict["nonce"]
+    _check_symmetric_key_length_bytes(len(main_key))
+    decipher = ChaCha20_Poly1305.new(key=main_key, nonce=nonce)
     decipher.update(cipherdict["aad"])
     plaintext = decipher.decrypt_and_verify(ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"])
     return plaintext
 
 
-def _encrypt_via_rsa_oaep(plaintext: bytes, key: RSA.RsaKey) -> dict:
+def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
     """Encrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
     :param plaintext: the bytes to cipher
-    :param key: public RSA key
+    :param key_dict: dict with public RSA key object (RSA.RsaKey)
 
     :return: a dict with field `digest_list`, containing bytestring chunks of variable width."""
+    key = key_dict["key"]
     _check_asymmetric_key_length_bits(key.size_in_bits())
 
     cipher = PKCS1_OAEP.new(key=key, hashAlgo=RSA_OAEP_HASHER)
@@ -174,13 +187,14 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key: RSA.RsaKey) -> dict:
     return dict(digest_list=encrypted_chunks)
 
 
-def _decrypt_via_rsa_oaep(cipherdict: dict, key: RSA.RsaKey) -> bytes:
+def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict) -> bytes:
     """Decrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
     :param cipherdict: list of ciphertext chunks
-    :param key: private RSA key
+    :param key_dict: dict with public RSA key object (RSA.RsaKey)
 
     :return: the decrypted bytestring"""
+    key = key_dict["key"]
     _check_asymmetric_key_length_bits(key.size_in_bits())
 
     decipher = PKCS1_OAEP.new(key, hashAlgo=RSA_OAEP_HASHER)

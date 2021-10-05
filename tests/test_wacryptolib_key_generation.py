@@ -33,14 +33,15 @@ def test_keypair_unicity(key_type):
 
 @pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
 def test_symmetric_key_generation(encryption_algo):
-    key = wacryptolib.key_generation.generate_symmetric_key(encryption_algo=encryption_algo)
-    assert isinstance(key, bytes)
-    assert len(key) == 32  # Always max size
+    key_dict = wacryptolib.key_generation.generate_symmetric_key_dict(encryption_algo=encryption_algo)
+    main_key = key_dict["key"]
+    assert isinstance(main_key, bytes)
+    assert len(main_key) == 32  # Always max size
 
 
 def test_generic_symmetric_key_generation_errors():
     with pytest.raises(ValueError, match="Unknown symmetric key algorithm"):
-        wacryptolib.key_generation.generate_symmetric_key(encryption_algo="AXSX")
+        wacryptolib.key_generation.generate_symmetric_key_dict(encryption_algo="AXSX")
 
 
 def test_generic_asymmetric_key_generation_errors():

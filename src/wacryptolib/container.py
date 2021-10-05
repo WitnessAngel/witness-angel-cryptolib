@@ -17,7 +17,7 @@ from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
 from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi, EscrowApi
 from wacryptolib.exceptions import DecryptionError, ConfigurationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
-from wacryptolib.key_generation import generate_symmetric_key, load_asymmetric_key_from_pem_bytestring
+from wacryptolib.key_generation import generate_symmetric_key_dict, load_asymmetric_key_from_pem_bytestring
 from wacryptolib.key_storage import KeyStorageBase, DummyKeyStoragePool, KeyStoragePoolBase
 from wacryptolib.shared_secret import split_bytestring_as_shamir_shares, recombine_secret_from_shamir_shares
 from wacryptolib.signature import verify_message_signature
@@ -188,7 +188,7 @@ class ContainerBase:
         self._passphrase_mapper = passphrase_mapper or {}
 
 
-class ContainerWriter(ContainerBase):
+class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
     """
     Contains every method used to write and encrypt a container, IN MEMORY.
     """
@@ -218,7 +218,7 @@ class ContainerWriter(ContainerBase):
             def __init__(self):
                 for data_encryption_stratum_extract in data_encryption_strata_extracts:
                     data_encryption_algo = data_encryption_stratum_extract["encryption_algo"]  # FIXME RENAME THIS
-                    symmetric_key = data_encryption_stratum_extract["symmetric_key"]
+                    symmetric_key_dict = data_encryption_stratum_extract["symmetric_key_dict"]
                     message_digest_algos = data_encryption_stratum_extract["message_digest_algos"]
                     # DO SOMETHING WITH THESE
             def encrypt_chunk(self, chunk):
@@ -284,12 +284,12 @@ class ContainerWriter(ContainerBase):
 
         for data_encryption_stratum_extract in data_encryption_strata_extracts:
             data_encryption_algo = data_encryption_stratum_extract["encryption_algo"]  # FIXME RENAME THIS
-            symmetric_key = data_encryption_stratum_extract["symmetric_key"]
+            symmetric_key_dict = data_encryption_stratum_extract["symmetric_key_dict"]
             message_digest_algos = data_encryption_stratum_extract["message_digest_algos"]
 
             logger.debug("Encrypting data with symmetric key of type %r", data_encryption_algo)
             data_cipherdict = encrypt_bytestring(
-                plaintext=data_current, encryption_algo=data_encryption_algo, key=symmetric_key
+                plaintext=data_current, encryption_algo=data_encryption_algo, key_dict=symmetric_key_dict
             )
             assert isinstance(data_cipherdict, dict), data_cipherdict
             data_ciphertext = dump_to_json_bytes(data_cipherdict)
@@ -334,33 +334,25 @@ class ContainerWriter(ContainerBase):
             data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
 
             logger.debug("Generating symmetric key of type %r", data_encryption_algo)
-            symmetric_key = generate_symmetric_key(encryption_algo=data_encryption_algo)
-
-            '''
-            logger.debug("Encrypting data with symmetric key of type %r", data_encryption_algo)
-            data_cipherdict = encrypt_bytestring(
-                plaintext=data_current, encryption_algo=data_encryption_algo, key=symmetric_key
-            )
-            assert isinstance(data_cipherdict, dict), data_cipherdict
-            data_current = dump_to_json_bytes(data_cipherdict)
-            '''
-
+            symmetric_key_dict = generate_symmetric_key_dict(encryption_algo=data_encryption_algo)
+            symmetric_key_bytes = dump_to_json_bytes(symmetric_key_dict)
             key_encryption_strata = data_encryption_stratum["key_encryption_strata"]
 
             key_ciphertext = self._encrypt_key_through_multiple_strata(
                     keychain_uid=keychain_uid,
-                    key_bytes=symmetric_key,
+                    key_bytes=symmetric_key_bytes,
                     key_encryption_strata=key_encryption_strata)
             data_encryption_stratum["key_ciphertext"] = key_ciphertext
 
             data_encryption_stratum_extract = dict(
                 encryption_algo=data_encryption_algo,
-                symmetric_key=symmetric_key,
+                symmetric_key_dict=symmetric_key_dict,
                 message_digest_algos=[signature["message_digest_algo"] for signature in data_encryption_stratum["data_signatures"]]
             )
             data_encryption_strata_extracts.append(data_encryption_stratum_extract)
 
         container.update(
+            # FIXME add container status, PENDING/COMPLETE!!!
             container_format=container_format,
             container_uid=container_uid,
             keychain_uid=keychain_uid,
@@ -466,7 +458,7 @@ class ContainerWriter(ContainerBase):
         logger.debug("Encrypting symmetric key with asymmetric key of type %r", encryption_algo)
         subkey = load_asymmetric_key_from_pem_bytestring(key_pem=subkey_pem, key_type=encryption_algo)
 
-        cipherdict = encrypt_bytestring(plaintext=symmetric_key_data, encryption_algo=encryption_algo, key=subkey)
+        cipherdict = encrypt_bytestring(plaintext=symmetric_key_data, encryption_algo=encryption_algo, key_dict={"key": subkey})
         return cipherdict
 
     def ____obsolete_____encrypt_shares(self, shares: Sequence, key_shared_secret_escrows: Sequence, keychain_uid: uuid.UUID) -> list:
@@ -551,7 +543,7 @@ class ContainerWriter(ContainerBase):
         return signature_value
 
 
-class ContainerReader(ContainerBase):
+class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
     """
     Contains every method used to read and decrypt a container, IN MEMORY.
     """
@@ -591,15 +583,17 @@ class ContainerReader(ContainerBase):
 
             key_ciphertext = data_encryption_stratum["key_ciphertext"]  # We start fully encrypted, and unravel it
 
+            # FIXME rename to symmetric_key_bytes
             key_bytes = self._decrypt_key_through_multiple_strata(
                 keychain_uid=keychain_uid,
                 key_ciphertext=key_ciphertext,
                 encryption_strata=data_encryption_stratum["key_encryption_strata"])
+            symmetric_key_dict = load_from_json_bytes(key_bytes)
 
             assert isinstance(key_bytes, bytes), key_bytes
             data_cipherdict = load_from_json_bytes(data_current)
             data_current = decrypt_bytestring(
-                cipherdict=data_cipherdict, key=key_bytes, encryption_algo=data_encryption_algo
+                cipherdict=data_cipherdict, key_dict=symmetric_key_dict, encryption_algo=data_encryption_algo
             )
 
         data = data_current  # Now decrypted
@@ -794,6 +788,57 @@ class ContainerReader(ContainerBase):
         )  # Raises if troubles
 
 
+class ContainerEncryptionStream:
+    """
+    Helper which prebuilds a container without signatures nor data,
+    affords to fill its offloaded ciphertext file chunk by chunk, and then
+    dumps the final container now containing signatures.
+    """
+
+    def __init__(self,
+                 container_filepath,
+                 *,
+                conf: dict,
+                metadata: Optional[dict],
+                keychain_uid: Optional[uuid.UUID] = None,
+                key_storage_pool: Optional[KeyStoragePoolBase] = None,
+                dump_initial_container=True):
+
+        self._container_filepath = container_filepath
+
+        offloaded_file_path = _get_offloaded_file_path(container_filepath)
+        self._output_data_stream = open(offloaded_file_path, mode='wb')
+
+        self._container_writer = ContainerWriter(key_storage_pool=key_storage_pool)
+        self._wip_container, self._stream_encryptor = self._container_writer.build_container_and_stream_encryptor(output_stream=self._output_data_stream , conf=conf, keychain_uid=keychain_uid, metadata=metadata)
+        self._wip_container["data_ciphertext"] = OFFLOADED_MARKER  # Important
+
+        if dump_initial_container:  # Savegame in case the stream is broken before finalization
+            self._dump_current_container_to_filesystem()
+
+    def _dump_current_container_to_filesystem(self):
+        dump_container_to_filesystem(self._container_filepath, container=self._wip_container,
+                                     offload_data_ciphertext=False)  # ALREADY offloaded
+
+    def encrypt_chunk(self, chunk: bytes):
+        self._stream_encryptor.encrypt_chunk(chunk)
+
+    def finalize(self):
+        self._stream_encryptor.finalize()
+        self._output_data_stream.close()  # Important
+
+        metadata = self._stream_encryptor.get_metadata()
+        message_digests_per_stratum = metadata  # FIXME correct this fetching
+        self._container_writer.add_signatures_to_container(self._wip_container, message_digests_per_stratum)
+        self._dump_current_container_to_filesystem()
+
+    def __del__(self):
+        # Emergency closing of open file on deletion
+        if not self._output_data_stream.closed:
+            logger.error("Encountered abnormal open file in __del__ of ContainerEncryptionStream: %s" % self._output_data_stream)
+            self._output_data_stream.close()
+
+
 def encrypt_data_and_dump_container_to_filesystem(
     data: Union[bytes, BinaryIO],
     *,
@@ -807,26 +852,17 @@ def encrypt_data_and_dump_container_to_filesystem(
     Optimized version which directly streams encrypted data to offloaded file,
     instead of creating a whole container and then dumping it to disk.
     """
-    writer = ContainerWriter(key_storage_pool=key_storage_pool)
 
-    offloaded_file_path = _get_offloaded_file_path(container_filepath)
+    # No need to dump initial (signature-less) container here, this is all a quick operation...
+    encryptor = ContainerEncryptionStream(container_filepath,
+                 conf=conf, keychain_uid=keychain_uid, metadata=metadata,
+                key_storage_pool=key_storage_pool,
+                dump_initial_container=False)
 
-    with open(offloaded_file_path, mode='wb') as f:
-        container, stream_encryptor = writer.build_container_and_stream_encryptor(output_stream=f, conf=conf, keychain_uid=keychain_uid, metadata=metadata)
+    for chunk in consume_bytes_as_chunks(data, chunk_size=DATA_CHUNK_SIZE):
+        encryptor.encrypt_chunk(chunk)
 
-        container["data_ciphertext"] = OFFLOADED_MARKER  # Important
-
-        # No need to dump initial (signature-less) container here, this is all a quick operation...
-        for chunk in consume_bytes_as_chunks(data, chunk_size=DATA_CHUNK_SIZE):
-            stream_encryptor.encrypt_chunk(chunk)
-        stream_encryptor.finalize()
-
-    metadata = stream_encryptor.get_metadata()
-    message_digests_per_stratum = metadata  #FIXME
-    writer.add_signatures_to_container(container, message_digests_per_stratum)
-
-    dump_container_to_filesystem(container_filepath, container,
-                                 offload_data_ciphertext=False)  # ALREADY offloaded!!
+    encryptor.finalize()  # Handles the dumping to disk
 
 
 def encrypt_data_into_container(
@@ -1120,7 +1156,7 @@ class ContainerStorage:
 
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
 
-        if self._offload_data_ciphertext:
+        if False: ###self._offload_data_ciphertext:
             # We can use newer, low-memory, streamed API
             logger.debug("Encrypting data file %s into offloaded container directly written to storage file %s", filename_base, container_filepath)
             self._encrypt_data_and_dump_container_to_filesystem(

@@ -32,7 +32,6 @@ def generate_asymmetric_keypair_for_storage(
     Returns the generated keypair dict.
     """
     from wacryptolib.key_generation import generate_asymmetric_keypair
-    from wacryptolib.key_storage import KeyStorageBase
 
     keychain_uid = keychain_uid or generate_uuid0()
     keypair = generate_asymmetric_keypair(key_type=key_type, serialize=True, passphrase=passphrase)
@@ -219,7 +218,7 @@ class EscrowApi:
             private_key_pem=private_key_pem, key_type=encryption_algo, passphrases=passphrases
         )
 
-        secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key=private_key)
+        secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key_dict=dict(key=private_key))
         return secret
 
 

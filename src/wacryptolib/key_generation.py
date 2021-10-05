@@ -4,6 +4,7 @@ from typing import Union, Optional, AnyStr
 import unicodedata
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Random import get_random_bytes
+from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
 
 from wacryptolib.exceptions import KeyLoadingError
 
@@ -15,16 +16,41 @@ def encode_passphrase(passphrase: str):
     return unicodedata.normalize("NFKC", passphrase.strip()).encode("utf8")
 
 
-def generate_symmetric_key(encryption_algo: str) -> bytes:
+def generate_symmetric_key_dict(encryption_algo: str) -> dict:
     """
-    Generate the strongest key possible for the wanted symmetric cipher,
-    as a bytestring.
+    Generate the strongest dict of keys/initializers possible for the wanted symmetric cipher,
+    as a dict.
     """
+
     encryption_algo = encryption_algo.upper()
     if encryption_algo not in SUPPORTED_SYMMETRIC_KEY_ALGOS:
         raise ValueError("Unknown symmetric key algorithm '%s'" % encryption_algo)
 
-    return get_random_bytes(32)  # Same (big) length for all currently supported symmetric ciphers
+    descriptors = SYMMETRIC_KEY_TYPES_REGISTRY[encryption_algo]
+    generation_function = descriptors["generation_function"]
+
+    key_dict = generation_function()
+    return key_dict
+
+
+def _generate_aes_cbc_key_dict():
+    return dict(
+        key=get_random_bytes(32),
+        iv=get_random_bytes(AES.block_size)
+    )
+
+
+def _generate_aes_eax_key_dict():
+    return dict(
+        key=get_random_bytes(32),
+        nonce=get_random_bytes(16)  # Recommended length, could be bigger
+    )
+
+def _generate_chacha20_poly1305_key_dict():
+    return dict(
+        key=get_random_bytes(32),
+        nonce=get_random_bytes(12)  # We could switch to 24 for XChaCha20
+    )
 
 
 def generate_asymmetric_keypair(
@@ -171,6 +197,12 @@ def _check_symmetric_key_length_bytes(key_length_bytes):
         raise ValueError("The symmetric key length must be superior or equal to 32 bits")
 
 
+SYMMETRIC_KEY_TYPES_REGISTRY = dict(
+    AES_CBC={"generation_function": _generate_aes_cbc_key_dict},
+    AES_EAX={"generation_function": _generate_aes_eax_key_dict},
+    CHACHA20_POLY1305={"generation_function": _generate_chacha20_poly1305_key_dict},
+)
+
 ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
     ## KEYS FOR ASYMMETRIC ENCRYPTION ##
     RSA_OAEP={
@@ -205,4 +237,4 @@ ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
 SUPPORTED_ASYMMETRIC_KEY_TYPES = sorted(ASYMMETRIC_KEY_TYPES_REGISTRY.keys())
 
 #: These values can be used as 'encryption_algo' for symmetric key generation.
-SUPPORTED_SYMMETRIC_KEY_ALGOS = ["AES_CBC", "AES_EAX", "CHACHA20_POLY1305"]
+SUPPORTED_SYMMETRIC_KEY_ALGOS = sorted(SYMMETRIC_KEY_TYPES_REGISTRY.keys())

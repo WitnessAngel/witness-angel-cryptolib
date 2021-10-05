@@ -91,7 +91,7 @@ def test_escrow_api_workflow():
     public_key_pem = escrow_api.fetch_public_key(keychain_uid=keychain_uid_other, key_type="DSA_DSS")
     assert public_key_pem
 
-    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key_rsa_oaep)
+    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key_dict=dict(key=public_key_rsa_oaep))
 
     # Works even without decryption authorization request, by default:
     decrypted = escrow_api.decrypt_with_private_key(
@@ -161,7 +161,7 @@ def test_escrow_api_workflow():
     public_key_rsa_oaep2 = load_asymmetric_key_from_pem_bytestring(
         key_pem=keypair_cipher_passphrased["public_key"], key_type="RSA_OAEP"
     )
-    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=public_key_rsa_oaep2)
+    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key_dict=dict(key=public_key_rsa_oaep2))
 
     with pytest.raises(DecryptionError, match="not decrypt"):
         escrow_api.decrypt_with_private_key(
@@ -241,7 +241,7 @@ def test_readonly_escrow_api_behaviour():
     private_key_cipher = load_asymmetric_key_from_pem_bytestring(
         key_pem=keypair_cipher["private_key"], key_type=key_type_cipher
     )
-    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key=private_key_cipher)
+    cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key_dict=dict(key=private_key_cipher))
     decrypted = escrow_api.decrypt_with_private_key(
         keychain_uid=keychain_uid, encryption_algo=key_type_cipher, cipherdict=cipherdict
     )

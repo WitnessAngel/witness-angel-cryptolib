@@ -8,7 +8,7 @@ from Crypto.Random import get_random_bytes
 
 import wacryptolib
 from wacryptolib.exceptions import DecryptionError, EncryptionError
-from wacryptolib.key_generation import SUPPORTED_SYMMETRIC_KEY_ALGOS
+from wacryptolib.key_generation import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symmetric_key_dict
 
 
 def _get_binary_content():
@@ -17,15 +17,14 @@ def _get_binary_content():
 
 
 def test_generic_encryption_and_decryption_errors():
-    key = get_random_bytes(32)
-
+    key_dict = {"key": get_random_bytes(32)}
     binary_content = _get_binary_content()
 
     with pytest.raises(ValueError, match="Unknown cipher type"):
-        wacryptolib.encryption.encrypt_bytestring(key=key, plaintext=binary_content, encryption_algo="EXHD")
+        wacryptolib.encryption.encrypt_bytestring(key_dict=key_dict, plaintext=binary_content, encryption_algo="EXHD")
 
     with pytest.raises(ValueError, match="Unknown cipher type"):
-        wacryptolib.encryption.decrypt_bytestring(key=key, cipherdict={}, encryption_algo="EXHD")
+        wacryptolib.encryption.decrypt_bytestring(key_dict=key_dict, cipherdict={}, encryption_algo="EXHD")
 
 
 def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_content):
@@ -75,35 +74,38 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
 @pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
 def test_symmetric_encryption_and_decryption_for_algo(encryption_algo):
 
-    key = get_random_bytes(32)  # ALWAYS this length as a minimum
+    key_dict = generate_symmetric_key_dict(encryption_algo)
 
     binary_content = _get_binary_content()
 
     cipherdict = wacryptolib.encryption.encrypt_bytestring(
-        key=key, plaintext=binary_content, encryption_algo=encryption_algo
+        key_dict=key_dict, plaintext=binary_content, encryption_algo=encryption_algo
     )
 
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
-        key=key, cipherdict=cipherdict, encryption_algo=encryption_algo
+        key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo
     )
 
     assert decrypted_content == binary_content
 
     decryption_func = functools.partial(
-        wacryptolib.encryption.decrypt_bytestring, key=key, encryption_algo=encryption_algo
+        wacryptolib.encryption.decrypt_bytestring, key_dict=key_dict, encryption_algo=encryption_algo
     )
     _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
 
-    key_too_short = get_random_bytes(16)
+    main_key_too_short = get_random_bytes(16)
+
+    main_key_too_short_dict = key_dict.copy()
+    main_key_too_short_dict["key"] = main_key_too_short
 
     with pytest.raises(EncryptionError, match="symmetric key length"):
         wacryptolib.encryption.encrypt_bytestring(
-            key=key_too_short, plaintext=binary_content, encryption_algo=encryption_algo
+            key_dict=main_key_too_short_dict, plaintext=binary_content, encryption_algo=encryption_algo
         )
 
     with pytest.raises(DecryptionError, match="symmetric key length"):
         wacryptolib.encryption.decrypt_bytestring(
-            key=key_too_short, cipherdict=cipherdict, encryption_algo=encryption_algo
+            key_dict=main_key_too_short_dict, cipherdict=cipherdict, encryption_algo=encryption_algo
         )
 
 
@@ -117,17 +119,17 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
     binary_content = _get_binary_content()
 
     cipherdict = wacryptolib.encryption.encrypt_bytestring(
-        key=keypair["public_key"], plaintext=binary_content, encryption_algo=encryption_algo
+        key_dict=dict(key=keypair["public_key"]), plaintext=binary_content, encryption_algo=encryption_algo
     )
 
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
-        key=keypair["private_key"], cipherdict=cipherdict, encryption_algo=encryption_algo
+        key_dict=dict(key=keypair["private_key"]), cipherdict=cipherdict, encryption_algo=encryption_algo
     )
 
     assert decrypted_content == binary_content
 
     decryption_func = functools.partial(
-        wacryptolib.encryption.decrypt_bytestring, key=keypair["private_key"], encryption_algo="RSA_OAEP"
+        wacryptolib.encryption.decrypt_bytestring, key_dict=dict(key=keypair["private_key"]), encryption_algo="RSA_OAEP"
     )
     _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
 
@@ -136,10 +138,10 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
 
     with pytest.raises(EncryptionError, match="asymmetric key length"):
         wacryptolib.encryption.encrypt_bytestring(
-            key=public_key_too_short, plaintext=binary_content, encryption_algo=encryption_algo
+            key_dict=dict(key=public_key_too_short), plaintext=binary_content, encryption_algo=encryption_algo
         )
 
     with pytest.raises(DecryptionError, match="asymmetric key length"):
         wacryptolib.encryption.decrypt_bytestring(
-            key=private_key_too_short, cipherdict=cipherdict, encryption_algo=encryption_algo
+            key_dict=dict(key=private_key_too_short), cipherdict=cipherdict, encryption_algo=encryption_algo
         )

@@ -1225,9 +1225,10 @@ def test_generate_container_and_symmetric_keys():
     container, extracts = container_writer._generate_container_base_and_secrets(COMPLEX_CONTAINER_CONF)
 
     for data_encryption_stratum in extracts:
-        symmetric_key = data_encryption_stratum["symmetric_key"]
-        assert isinstance(symmetric_key, bytes) and len(symmetric_key) ==  32 # For now
-        del data_encryption_stratum["symmetric_key"]
+        symmetric_key_dict = data_encryption_stratum["symmetric_key_dict"]
+        assert isinstance(symmetric_key_dict, dict)
+        assert symmetric_key_dict["key"]  # actual main key
+        del data_encryption_stratum["symmetric_key_dict"]
 
     assert extracts == [
         {'encryption_algo': 'AES_EAX', 'message_digest_algos': []},

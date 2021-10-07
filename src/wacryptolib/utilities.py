@@ -92,11 +92,11 @@ def consume_bytes_as_chunks(data: Union[bytes, BinaryIO], chunk_size: int):  # F
         delete_filesystem_node_for_stream(data)
     else:  # Object with a len()
         for i in range(0, len(data), chunk_size):
-            yield data[i:i+chunk_size]  # TODO use memoryview to optimize?
+            yield data[i:i + chunk_size]  # TODO use memoryview to optimize?
 
 
 def split_as_chunks(
-    bytestring: bytes, *, chunk_size: int, must_pad: bool, accept_incomplete_chunk: bool = False
+        bytestring: bytes, *, chunk_size: int, must_pad: bool, accept_incomplete_chunk: bool = False
 ) -> List[bytes]:
     """Split a `bytestring` into chunks (or blocks)
 
@@ -119,7 +119,7 @@ def split_as_chunks(
     chunks = []
 
     for i in range(chunks_count):
-        chunk = bytestring[i * chunk_size : (i + 1) * chunk_size]
+        chunk = bytestring[i * chunk_size: (i + 1) * chunk_size]
         chunks.append(chunk)
     return chunks
 
@@ -236,6 +236,23 @@ def safe_copy_directory(from_dir: Path, to_dir: Path, temp_prefix="__", **extra_
             shutil.rmtree(to_dir_tmp)
         raise
     os.rename(to_dir_tmp, to_dir)
+
+
+def split_as_formatted_data(first_data: bytes, second_data: bytes, block_size: int):
+    """ split the sum of two data into formatted data(multiple of block size)
+
+    :param block_size: size of which we want a multiple
+    :param formatted_data: data whose length is a multiple of the block size
+
+    :return: memory view of formatted data and remainder
+    """
+    assert block_size > 0, block_size
+    full_data = first_data + second_data
+    formatted_length = (len(full_data) // block_size) * block_size
+    formatted_data = memoryview(full_data[0:formatted_length])
+    remainder = full_data[formatted_length:]
+
+    return formatted_data, remainder
 
 
 class TaskRunnerStateMachineBase(abc.ABC):

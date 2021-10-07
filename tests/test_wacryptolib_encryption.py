@@ -1,5 +1,6 @@
 import copy
 import functools
+import io
 import random
 
 import pytest
@@ -28,7 +29,6 @@ def test_generic_encryption_and_decryption_errors():
 
 
 def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_content):
-
     initial_cipherdict = copy.deepcopy(cipherdict)
 
     def _check_decryption_fails(new_cipherdict):
@@ -73,7 +73,6 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
 
 @pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
 def test_symmetric_encryption_and_decryption_for_algo(encryption_algo):
-
     key_dict = generate_symmetric_key_dict(encryption_algo)
 
     binary_content = _get_binary_content()
@@ -145,3 +144,29 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
         wacryptolib.encryption.decrypt_bytestring(
             key_dict=dict(key=private_key_too_short), cipherdict=cipherdict, encryption_algo=encryption_algo
         )
+
+
+def test_stream_manager():
+    data_encryption_strata_extracts = [
+        {'encryption_algo': 'AES_CBC',
+         'symmetric_key_dict': {
+             'key': b'\xab\x83\x01i\x14\xd9\t\xed0o\xf2\x9fW+T \xf5n\x84\x8d\x19RO\x18\xa2\xb0\xf4$c\xbf\x86\x90',
+             'iv': b'\xdd\xda\xe0\xabx3\xdc\xfc\xac\xb4\x99\xd1"\xd3n\xf8'},
+         'message_digest_algos': ['SHA3_512']}
+    ]
+    output_stream = io.BytesIO()
+    streammanager = wacryptolib.encryption.StreamManager(
+        data_encryption_strata_extracts=data_encryption_strata_extracts, output_stream=output_stream)
+    plaintext = get_random_bytes(64)
+    streammanager.encrypt_chunk(plaintext)
+    streammanager.finalize()
+    cipherdict = {"ciphertext": output_stream.getvalue(),
+                  "iv": data_encryption_strata_extracts[0]["symmetric_key_dict"]["iv"]}
+    print(cipherdict)
+
+    decrypted_ciphertext = wacryptolib.encryption.decrypt_bytestring(cipherdict=cipherdict,
+                                                                     encryption_algo=data_encryption_strata_extracts[0][
+                                                                         "encryption_algo"],
+                                                                     key_dict= data_encryption_strata_extracts[0]["symmetric_key_dict"])
+
+    assert decrypted_ciphertext == plaintext

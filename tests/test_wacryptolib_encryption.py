@@ -81,6 +81,9 @@ def test_symmetric_encryption_and_decryption_for_algo(encryption_algo):
         key_dict=key_dict, plaintext=binary_content, encryption_algo=encryption_algo
     )
 
+    assert "ciphertext" in cipherdict  # Mandatory field
+    assert isinstance(cipherdict["ciphertext"], bytes)
+
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
         key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo
     )

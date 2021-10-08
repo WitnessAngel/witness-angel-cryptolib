@@ -255,12 +255,12 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
             conf=conf, keychain_uid=keychain_uid, metadata=metadata
         )
 
-        data_ciphertext, message_digests_per_stratum = \
+        data_ciphertext, integrity_tags_per_stratum, message_digests_per_stratum = \
             self._encrypt_and_hash_data(data, data_encryption_strata_extracts)
 
         container["data_ciphertext"] = data_ciphertext
 
-        self.add_signatures_to_container(container, message_digests_per_stratum)
+        self.add_signatures_to_container(container, integrity_tags_per_stratum, message_digests_per_stratum)
 
         return container
 
@@ -280,6 +280,8 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
     def _encrypt_and_hash_data(self, data, data_encryption_strata_extracts):
         """TODO"""
         data_current = data
+
+        integrity_tags_per_stratum = []
         message_digests_per_stratum = []
 
         for data_encryption_stratum_extract in data_encryption_strata_extracts:
@@ -291,8 +293,11 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
             data_cipherdict = encrypt_bytestring(
                 plaintext=data_current, encryption_algo=data_encryption_algo, key_dict=symmetric_key_dict
             )
-            assert isinstance(data_cipherdict, dict), data_cipherdict
-            data_ciphertext = dump_to_json_bytes(data_cipherdict)
+            assert isinstance(data_cipherdict, dict), data_cipherdict  # Might contain integrity/authentication data
+
+            data_ciphertext = data_cipherdict.pop("ciphertext")  # Mandatory field
+            assert isinstance(data_ciphertext, bytes), data_ciphertext  # Same raw content as would be in offloaded data file
+            integrity_tags_per_stratum.append(data_cipherdict)  # Only remains tags, macs etc.
 
             message_digests = {
                 message_digest_algo: hash_message(data_ciphertext, hash_algo=message_digest_algo)
@@ -302,7 +307,7 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
 
             data_current = data_ciphertext
 
-        return data_current, message_digests_per_stratum
+        return data_current, integrity_tags_per_stratum, message_digests_per_stratum
 
     def _generate_container_base_and_secrets(self, conf: dict, keychain_uid=None, metadata=None) -> tuple:
         """
@@ -332,6 +337,8 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
 
         for data_encryption_stratum in container["data_encryption_strata"]:
             data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
+
+            data_encryption_stratum["integrity_tags"] = None  # Will be filled later with tags/macs etc.
 
             logger.debug("Generating symmetric key of type %r", data_encryption_algo)
             symmetric_key_dict = generate_symmetric_key_dict(encryption_algo=data_encryption_algo)
@@ -497,13 +504,17 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         assert len(shares) == len(key_shared_secret_escrows)
         return all_encrypted_shares
 
-    def add_signatures_to_container(self, container: dict, message_digests_per_stratum: list):
+    def add_signatures_to_container(self, container: dict, integrity_tags_per_stratum: list, message_digests_per_stratum: list):
         keychain_uid = container["keychain_uid"]
 
         data_encryption_strata = container["data_encryption_strata"]
+        assert len(data_encryption_strata) == len(integrity_tags_per_stratum)  # Sanity check
         assert len(data_encryption_strata) == len(message_digests_per_stratum)  # Sanity check
 
-        for data_encryption_stratum, message_digests in zip(container["data_encryption_strata"], message_digests_per_stratum):
+        for data_encryption_stratum, integrity_tags, message_digests in zip(container["data_encryption_strata"], integrity_tags_per_stratum, message_digests_per_stratum):
+
+            assert data_encryption_stratum["integrity_tags"] is None  # Set at container build time
+            data_encryption_stratum["integrity_tags"] = integrity_tags
 
             _encountered_message_digest_algos = set()
             for signature_conf in data_encryption_stratum["data_signatures"]:
@@ -588,10 +599,11 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
                 keychain_uid=keychain_uid,
                 key_ciphertext=key_ciphertext,
                 encryption_strata=data_encryption_stratum["key_encryption_strata"])
+            assert isinstance(key_bytes, bytes), key_bytes
             symmetric_key_dict = load_from_json_bytes(key_bytes)
 
-            assert isinstance(key_bytes, bytes), key_bytes
-            data_cipherdict = load_from_json_bytes(data_current)
+            integrity_tags = data_encryption_stratum["integrity_tags"]  # Shall be a DICT, FIXME handle if it's still None
+            data_cipherdict = dict(ciphertext=data_current, **integrity_tags)
             data_current = decrypt_bytestring(
                 cipherdict=data_cipherdict, key_dict=symmetric_key_dict, encryption_algo=data_encryption_algo
             )
@@ -1156,7 +1168,7 @@ class ContainerStorage:
 
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
 
-        if self._offload_data_ciphertext:
+        if False:  ## self._offload_data_ciphertext:
             # We can use newer, low-memory, streamed API
             logger.debug("Encrypting data file %s into offloaded container directly written to storage file %s", filename_base, container_filepath)
             self._encrypt_data_and_dump_container_to_filesystem(

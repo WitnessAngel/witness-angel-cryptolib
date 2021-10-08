@@ -377,6 +377,7 @@ class StreamManager:
 
 ENCRYPTION_ALGOS_REGISTRY = dict(
     ## SYMMETRIC ENCRYPTION ##
+    # ALL encryption/decryption routines must handle a "ciphertext" attribute on their cipherdict
     AES_CBC={"encryption_function": _encrypt_via_aes_cbc, "decryption_function": _decrypt_via_aes_cbc,
              "encryption_node_class": AesCbcEncryptionNode},
     AES_EAX={"encryption_function": _encrypt_via_aes_eax, "decryption_function": _decrypt_via_aes_eax,

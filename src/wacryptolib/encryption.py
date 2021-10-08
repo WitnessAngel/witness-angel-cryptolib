@@ -285,7 +285,9 @@ class EncryptionStreamBase:
     def _get_message_digests(self) -> dict:
         hashes = {}
         for hash_algo, hasher_instance in self._hashers_dict.items():
-            hashes[hash_algo] = hasher_instance.digest()
+            digest = hasher_instance.digest()
+            assert 32 <= len(digest) <= 64, len(digest)
+            hashes[hash_algo] = digest
         return hashes
 
     def _get_integrity_tags(self) -> dict:
@@ -356,7 +358,7 @@ class StreamManager:
             encryption_class = encryption_algo_conf["encryption_node_class"]
 
             if encryption_class is None:
-                raise ValueError("node class is not implement")
+                raise ValueError("Node class %s is not implemented" % data_encryption_algo)  # FIXME use custom exception class
 
             self._cipher_streams.append(
                 encryption_class(key_dict=symmetric_key_dict, message_digest_algo=message_digest_algos))
@@ -406,3 +408,6 @@ ENCRYPTION_ALGOS_REGISTRY = dict(
 #: These values can be used as 'encryption_algo'.
 SUPPORTED_ENCRYPTION_ALGOS = sorted(ENCRYPTION_ALGOS_REGISTRY.keys())
 assert set(SUPPORTED_SYMMETRIC_KEY_ALGOS) <= set(SUPPORTED_ENCRYPTION_ALGOS)
+
+STREAMABLE_ENCRYPTION_ALGOS = sorted(k for (k, v) in ENCRYPTION_ALGOS_REGISTRY.items() if v["encryption_node_class"])
+assert set(STREAMABLE_ENCRYPTION_ALGOS) < set(SUPPORTED_ENCRYPTION_ALGOS)

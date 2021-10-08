@@ -29,10 +29,8 @@ from wacryptolib.container import (
     gather_escrow_dependencies,
     get_escrow_proxy,
     request_decryption_authorizations,
-    CONTAINER_SUFFIX,
-    OFFLOADED_DATA_SUFFIX,
     delete_container_from_filesystem, CONTAINER_DATETIME_FORMAT, get_container_size_on_filesystem, ContainerWriter,
-    encrypt_data_and_dump_container_to_filesystem,
+    encrypt_data_and_dump_container_to_filesystem, is_container_encryption_conf_streamable,
 )
 from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import (
@@ -322,16 +320,16 @@ def test_standard_container_encryption_and_decryption(tmp_path, container_conf, 
     key_storage_pool = DummyKeyStoragePool()
     metadata = random.choice([None, dict(a=[123])])
 
-    if not use_streaming_encryption:
-        container = encrypt_data_into_container(
-            data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool
-        )
-    else:
+    if use_streaming_encryption and is_container_encryption_conf_streamable(container_conf):
         container_filepath = tmp_path / "mygoodcontainer.crypt"
         encrypt_data_and_dump_container_to_filesystem(
                 data=data, container_filepath=container_filepath,
                 conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool)
         container = load_container_from_filesystem(include_data_ciphertext=True)
+    else:
+        container = encrypt_data_into_container(
+            data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool
+        )
 
     assert container["keychain_uid"]
     if keychain_uid:
@@ -1075,6 +1073,7 @@ def test_container_storage_encryption_conf_precedence(tmp_path):
 
     with pytest.raises(RuntimeError, match="encryption conf"):
         storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
+
     storage.enqueue_file_for_encryption(
         "animals.dat", b"dogs\ncats\n", metadata=None, encryption_conf=SIMPLE_CONTAINER_CONF
     )
@@ -1246,7 +1245,7 @@ def test_generate_container_and_symmetric_keys():
     ]
 
 
-def test_encrypt_data_and_dump_container_to_filesystem(tmp_path):
+def ___obsolete_test_encrypt_data_and_dump_container_to_filesystem(tmp_path):
     data_plaintext = b"abcd1234" * 10
     container_filepath = tmp_path / "my_streamed_container.crypt"
 

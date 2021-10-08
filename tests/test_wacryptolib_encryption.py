@@ -167,6 +167,8 @@ def test_stream_manager():
                   "iv": data_encryption_strata_extracts[0]["symmetric_key_dict"]["iv"]}
     print(cipherdict)
 
+    # FIXME : make this test generic, so that it tests each STREAMABLE cipher individually, and then a big stack with ALL ciphers!
+
     decrypted_ciphertext = wacryptolib.encryption.decrypt_bytestring(cipherdict=cipherdict,
                                                                      encryption_algo=data_encryption_strata_extracts[0][
                                                                          "encryption_algo"],

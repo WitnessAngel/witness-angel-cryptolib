@@ -13,7 +13,7 @@ from typing import Optional, Union, List, Sequence, BinaryIO
 from urllib.parse import urlparse
 from uuid import UUID
 
-from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring, StreamManager
+from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring, StreamManager, STREAMABLE_ENCRYPTION_ALGOS
 from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi, EscrowApi
 from wacryptolib.exceptions import DecryptionError, ConfigurationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -804,9 +804,11 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_type=signature_algo)
 
         message_hash = hash_message(message, hash_algo=message_digest_algo)
+        assert message_hash == conf["message_digest"]  # Sanity check!!
+        signature_value = conf["signature_value"]
 
         verify_message_signature(
-            message=message_hash, signature_algo=signature_algo, signature=conf["signature_value"], key=public_key
+            message=message_hash, signature_algo=signature_algo, signature=signature_value, key=public_key
         )  # Raises if troubles
 
 
@@ -861,6 +863,14 @@ class ContainerEncryptionStream:
             self._output_data_stream.close()
 
 
+def is_container_encryption_conf_streamable(conf):
+    # FIXME test separately!
+    for data_encryption_stratum in conf["data_encryption_strata"]:
+        if data_encryption_stratum["data_encryption_algo"] not in STREAMABLE_ENCRYPTION_ALGOS:
+            return False
+    return True
+
+
 def encrypt_data_and_dump_container_to_filesystem(
     data: Union[bytes, BinaryIO],
     *,
@@ -874,7 +884,6 @@ def encrypt_data_and_dump_container_to_filesystem(
     Optimized version which directly streams encrypted data to offloaded file,
     instead of creating a whole container and then dumping it to disk.
     """
-
     # No need to dump initial (signature-less) container here, this is all a quick operation...
     encryptor = ContainerEncryptionStream(container_filepath,
                  conf=conf, keychain_uid=keychain_uid, metadata=metadata,
@@ -1140,14 +1149,14 @@ class ContainerStorage:
 
     def _encrypt_data_and_dump_container_to_filesystem(self, data, container_filepath, metadata, keychain_uid, encryption_conf):
         assert encryption_conf, encryption_conf
-        return encrypt_data_and_dump_container_to_filesystem(
-            data=data,
-            container_filepath=container_filepath,
-            conf=encryption_conf,
-            metadata=metadata,
-            keychain_uid=keychain_uid,
-            key_storage_pool=self._key_storage_pool,
-        )
+        encrypt_data_and_dump_container_to_filesystem(
+                container_filepath=container_filepath,
+                    data=data,
+                    conf=encryption_conf,
+                    metadata=metadata,
+                    keychain_uid=keychain_uid,
+                    key_storage_pool=self._key_storage_pool,
+                )
 
     def _encrypt_data_into_container(self, data, metadata, keychain_uid, encryption_conf):
         assert encryption_conf, encryption_conf
@@ -1178,9 +1187,9 @@ class ContainerStorage:
 
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
 
-        if False:  ## self._offload_data_ciphertext:
+        if self._offload_data_ciphertext and is_container_encryption_conf_streamable(encryption_conf):
             # We can use newer, low-memory, streamed API
-            logger.debug("Encrypting data file %s into offloaded container directly written to storage file %s", filename_base, container_filepath)
+            logger.debug("Encrypting data file %s into offloaded container directly streamed to storage file %s", filename_base, container_filepath)
             self._encrypt_data_and_dump_container_to_filesystem(
                 data, container_filepath=container_filepath, metadata=metadata, keychain_uid=keychain_uid, encryption_conf=encryption_conf
             )

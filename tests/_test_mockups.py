@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from wacryptolib.container import ContainerStorage
+from wacryptolib.container import ContainerStorage, dump_container_to_filesystem
 
 
 class FakeTestContainerStorage(ContainerStorage):
@@ -11,6 +11,14 @@ class FakeTestContainerStorage(ContainerStorage):
     def enqueue_file_for_encryption(self, filename_base, data, **kwargs):
         super().enqueue_file_for_encryption(filename_base + (".%03d" % self.increment), data, **kwargs)
         self.increment += 1
+
+    def _encrypt_data_and_dump_container_to_filesystem(self, data, container_filepath, metadata, keychain_uid, encryption_conf):
+        container = self._encrypt_data_into_container(
+            data, metadata=metadata, keychain_uid=keychain_uid, encryption_conf=encryption_conf
+        )
+        dump_container_to_filesystem(
+            container_filepath, container=container, offload_data_ciphertext=True
+        )
 
     def _encrypt_data_into_container(self, data, **kwargs):
         return dict(a=33, data_ciphertext=data)

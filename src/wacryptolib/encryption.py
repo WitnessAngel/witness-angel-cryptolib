@@ -133,7 +133,7 @@ def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict) -> bytes:
     return plaintext
 
 
-def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict, aad: bytes = b"header") -> dict:
+def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict) -> dict:
     """Encrypt a bytestring with the stream cipher ChaCha20.
 
     Additional cleartext data can be provided so that the
@@ -148,9 +148,9 @@ def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict, aad: bytes 
     nonce = key_dict["nonce"]
     _check_symmetric_key_length_bytes(len(main_key))
     cipher = ChaCha20_Poly1305.new(key=main_key, nonce=nonce)
-    cipher.update(aad)
+    #cipher.update(aad)  UNUSED
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
-    encryption = {"ciphertext": ciphertext, "tag": tag, "aad": aad}
+    encryption = {"ciphertext": ciphertext, "tag": tag}
     return encryption
 
 
@@ -165,7 +165,7 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict) -> bytes:
     nonce = key_dict["nonce"]
     _check_symmetric_key_length_bytes(len(main_key))
     decipher = ChaCha20_Poly1305.new(key=main_key, nonce=nonce)
-    decipher.update(cipherdict["aad"])
+    #decipher.update(cipherdict["aad"])  UNUSED
     plaintext = decipher.decrypt_and_verify(ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"])
     return plaintext
 
@@ -269,7 +269,7 @@ class EncryptionStreamBase:
 
         return ciphertext
 
-    def get_message_digest(self) -> dict:
+    def get_authentication_data(self) -> dict:
         """ Get metadata
         Digest all hash instance in a dictionnary , and return the hash as bytes.
 
@@ -279,11 +279,19 @@ class EncryptionStreamBase:
         """
         assert self._is_finished
 
-        hash_metadata = {}
-        for hash_algo, hasher_instance in self._hashers_dict.items():
-            hash_metadata[hash_algo] = hasher_instance.digest()
+        return dict(integrity_tags=self._get_integrity_tags(),
+                    message_digests=self._get_message_digests())
 
-        return hash_metadata
+    def _get_message_digests(self) -> dict:
+        hashes = {}
+        for hash_algo, hasher_instance in self._hashers_dict.items():
+            hashes[hash_algo] = hasher_instance.digest()
+        return hashes
+
+    def _get_integrity_tags(self) -> dict:
+        return {}
+
+
 
 
 class AesCbcEncryptionNode(EncryptionStreamBase):
@@ -324,6 +332,9 @@ class Chacha20Poly1305EncryptionNode(EncryptionStreamBase):
         self._key = key_dict["key"]
         self._nonce = key_dict["nonce"]
         self._cipher = ChaCha20_Poly1305.new(key=self._key, nonce=self._nonce)
+
+    def _get_integrity_tags(self) -> dict:
+        return {"tag": self._cipher.digest()}
 
 
 class StreamManager:
@@ -368,11 +379,11 @@ class StreamManager:
         self._output_stream.write(ciphertext)
         self._output_stream.flush()
 
-    def get_metadata(self) -> list:
-        all_metadata = []
+    def get_authentication_data(self) -> list:
+        authentication_data_list = []
         for cipher in self._cipher_streams:
-            all_metadata.append(cipher.get_message_digest())
-        return all_metadata
+            authentication_data_list.append(cipher.get_authentication_data())
+        return authentication_data_list
 
 
 ENCRYPTION_ALGOS_REGISTRY = dict(

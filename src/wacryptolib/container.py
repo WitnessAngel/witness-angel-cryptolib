@@ -13,7 +13,7 @@ from typing import Optional, Union, List, Sequence, BinaryIO
 from urllib.parse import urlparse
 from uuid import UUID
 
-from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring
+from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring, StreamManager
 from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi, EscrowApi
 from wacryptolib.exceptions import DecryptionError, ConfigurationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -214,6 +214,7 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         )
 
         # HERE INSTANTIATE REAL ENCRYPTOR USING data_encryption_strata_extracts
+        '''
         class FakeStreamEncryptor:
             def __init__(self):
                 for data_encryption_stratum_extract in data_encryption_strata_extracts:
@@ -227,11 +228,17 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
             def finalize(self):
                 output_stream.flush()
                 return None
-            def get_metadata(self):
+            def get_authentication_data(self):
                 return [{"SHA256": b"a"*32}]  # Matches SIMPLE_CONTAINER_CONF of unit test
 
         stream_encryptor = FakeStreamEncryptor()
+        '''
         ############################################################################
+
+        stream_encryptor = StreamManager(
+                output_stream=output_stream,
+                data_encryption_strata_extracts=data_encryption_strata_extracts,
+        )
 
         return container, stream_encryptor
 
@@ -255,12 +262,12 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
             conf=conf, keychain_uid=keychain_uid, metadata=metadata
         )
 
-        data_ciphertext, integrity_tags_per_stratum, message_digests_per_stratum = \
+        data_ciphertext, authentication_data_list = \
             self._encrypt_and_hash_data(data, data_encryption_strata_extracts)
 
         container["data_ciphertext"] = data_ciphertext
 
-        self.add_signatures_to_container(container, integrity_tags_per_stratum, message_digests_per_stratum)
+        self.add_authentication_data_to_container(container, authentication_data_list)
 
         return container
 
@@ -281,8 +288,7 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         """TODO"""
         data_current = data
 
-        integrity_tags_per_stratum = []
-        message_digests_per_stratum = []
+        authentication_data_list = []
 
         for data_encryption_stratum_extract in data_encryption_strata_extracts:
             data_encryption_algo = data_encryption_stratum_extract["encryption_algo"]  # FIXME RENAME THIS
@@ -297,17 +303,20 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
 
             data_ciphertext = data_cipherdict.pop("ciphertext")  # Mandatory field
             assert isinstance(data_ciphertext, bytes), data_ciphertext  # Same raw content as would be in offloaded data file
-            integrity_tags_per_stratum.append(data_cipherdict)  # Only remains tags, macs etc.
 
             message_digests = {
                 message_digest_algo: hash_message(data_ciphertext, hash_algo=message_digest_algo)
                 for message_digest_algo in message_digest_algos
             }
-            message_digests_per_stratum.append(message_digests)
+
+            authentication_data_list.append(dict(
+                    integrity_tags=data_cipherdict,  # Only remains tags, macs etc.
+                    message_digests=message_digests,
+            ))
 
             data_current = data_ciphertext
 
-        return data_current, integrity_tags_per_stratum, message_digests_per_stratum
+        return data_current, authentication_data_list
 
     def _generate_container_base_and_secrets(self, conf: dict, keychain_uid=None, metadata=None) -> tuple:
         """
@@ -504,17 +513,18 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         assert len(shares) == len(key_shared_secret_escrows)
         return all_encrypted_shares
 
-    def add_signatures_to_container(self, container: dict, integrity_tags_per_stratum: list, message_digests_per_stratum: list):
+    def add_authentication_data_to_container(self, container: dict, authentication_data_list: list):
         keychain_uid = container["keychain_uid"]
 
         data_encryption_strata = container["data_encryption_strata"]
-        assert len(data_encryption_strata) == len(integrity_tags_per_stratum)  # Sanity check
-        assert len(data_encryption_strata) == len(message_digests_per_stratum)  # Sanity check
+        assert len(data_encryption_strata) == len(authentication_data_list)  # Sanity check
 
-        for data_encryption_stratum, integrity_tags, message_digests in zip(container["data_encryption_strata"], integrity_tags_per_stratum, message_digests_per_stratum):
+        for data_encryption_stratum, authentication_data_list in zip(container["data_encryption_strata"], authentication_data_list):
 
             assert data_encryption_stratum["integrity_tags"] is None  # Set at container build time
-            data_encryption_stratum["integrity_tags"] = integrity_tags
+            data_encryption_stratum["integrity_tags"] = authentication_data_list["integrity_tags"]
+
+            message_digests = authentication_data_list["message_digests"]
 
             _encountered_message_digest_algos = set()
             for signature_conf in data_encryption_stratum["data_signatures"]:
@@ -839,9 +849,9 @@ class ContainerEncryptionStream:
         self._stream_encryptor.finalize()
         self._output_data_stream.close()  # Important
 
-        metadata = self._stream_encryptor.get_metadata()
-        message_digests_per_stratum = metadata  # FIXME correct this fetching
-        self._container_writer.add_signatures_to_container(self._wip_container, message_digests_per_stratum)
+        authentication_data_list = self._stream_encryptor.get_authentication_data()
+
+        self._container_writer.add_authentication_data_to_container(self._wip_container, authentication_data_list)
         self._dump_current_container_to_filesystem()
 
     def __del__(self):
@@ -859,7 +869,7 @@ def encrypt_data_and_dump_container_to_filesystem(
     metadata: Optional[dict],
     keychain_uid: Optional[uuid.UUID] = None,
     key_storage_pool: Optional[KeyStoragePoolBase] = None
-) -> dict:
+) -> None:
     """
     Optimized version which directly streams encrypted data to offloaded file,
     instead of creating a whole container and then dumping it to disk.

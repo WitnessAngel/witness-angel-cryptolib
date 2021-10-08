@@ -313,16 +313,25 @@ def test_void_container_confs(container_conf):
         (COMPLEX_CONTAINER_CONF, COMPLEX_CONTAINER_ESCROW_DEPENDENCIES),
     ],
 )
-def test_standard_container_encryption_and_decryption(container_conf, escrow_dependencies_builder):
+def test_standard_container_encryption_and_decryption(tmp_path, container_conf, escrow_dependencies_builder):
     data = b"abc"  # get_random_bytes(random.randint(1, 1000))
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
+    use_streaming_encryption = random.choice([True, False])
 
     key_storage_pool = DummyKeyStoragePool()
     metadata = random.choice([None, dict(a=[123])])
-    container = encrypt_data_into_container(
-        data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool
-    )
+
+    if not use_streaming_encryption:
+        container = encrypt_data_into_container(
+            data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool
+        )
+    else:
+        container_filepath = tmp_path / "mygoodcontainer.crypt"
+        encrypt_data_and_dump_container_to_filesystem(
+                data=data, container_filepath=container_filepath,
+                conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool)
+        container = load_container_from_filesystem(include_data_ciphertext=True)
 
     assert container["keychain_uid"]
     if keychain_uid:

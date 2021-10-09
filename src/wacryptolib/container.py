@@ -1187,7 +1187,7 @@ class ContainerStorage:
 
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
 
-        if self._offload_data_ciphertext and is_container_encryption_conf_streamable(encryption_conf):
+        if self._use_streaming_encryption_for_conf(encryption_conf):
             # We can use newer, low-memory, streamed API
             logger.debug("Encrypting data file %s into offloaded container directly streamed to storage file %s", filename_base, container_filepath)
             self._encrypt_data_and_dump_container_to_filesystem(
@@ -1209,6 +1209,9 @@ class ContainerStorage:
 
         logger.info("Data file %r successfully encrypted into storage container", filename_base)
         return container_filepath.name
+
+    def _use_streaming_encryption_for_conf(self, encryption_conf):  # FIXME rename to cryptoconf
+        return self._offload_data_ciphertext and is_container_encryption_conf_streamable(encryption_conf)
 
     @synchronized
     def enqueue_file_for_encryption(self, filename_base, data, metadata, keychain_uid=None, encryption_conf=None):

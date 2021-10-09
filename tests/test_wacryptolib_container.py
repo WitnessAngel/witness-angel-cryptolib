@@ -325,7 +325,7 @@ def test_standard_container_encryption_and_decryption(tmp_path, container_conf, 
         encrypt_data_and_dump_container_to_filesystem(
                 data=data, container_filepath=container_filepath,
                 conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool)
-        container = load_container_from_filesystem(include_data_ciphertext=True)
+        container = load_container_from_filesystem(container_filepath, include_data_ciphertext=True)
     else:
         container = encrypt_data_into_container(
             data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool

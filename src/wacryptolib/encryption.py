@@ -236,18 +236,23 @@ class EncryptionStreamBase:
 
         self._hashers_dict = hashers_dict
 
-    def encrypt(self, plaintext) -> bytes:
-        """ Encrypt a bytestring and Hash a result (ciphertext) with the selected hash algorithm.
-
-            return : a ciphertext
-        """
-        assert not self._is_finished
+    def _encrypt_aligned_data(self, plaintext):
         ciphertext = self._cipher.encrypt(plaintext)
         assert isinstance(ciphertext, bytes), repr(ciphertext)
 
         for hash_algo, hasher_instance in self._hashers_dict.items():
             hasher_instance.update(ciphertext)
 
+        return ciphertext
+
+
+    def encrypt(self, plaintext) -> bytes:
+        """ Encrypt a bytestring and Hash a result (ciphertext) with the selected hash algorithm.
+
+            return : a ciphertext
+        """
+        assert not self._is_finished
+        ciphertext = self._encrypt_aligned_data(plaintext)
         return ciphertext
 
     def finalize(self) -> bytes:
@@ -264,7 +269,7 @@ class EncryptionStreamBase:
 
         if self._remainder is not None:
             padded_remainder = pad(self._remainder, block_size=self.BLOCK_SIZE)
-            ciphertext = self._cipher.encrypt(padded_remainder)
+            ciphertext = self._encrypt_aligned_data(padded_remainder)
             self._remainder = b""
 
         return ciphertext
@@ -319,6 +324,7 @@ class AesCbcEncryptionNode(EncryptionStreamBase):
 
         """
 
+        # FIXME move that up to BASE class, with class variable ENCRYPTIOn_CHUNK_SIZE = N
         formatted_plaintext, self._remainder = utilities.split_as_formatted_data(self._remainder, plaintext,
                                                                                  block_size=self.BLOCK_SIZE)
         ciphertext = super().encrypt(formatted_plaintext)

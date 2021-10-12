@@ -70,7 +70,7 @@ def _encrypt_via_aes_cbc(plaintext: bytes, key_dict: dict) -> dict:
 
     :param plaintext: the bytes to cipher
     :param key_dict: dict with AES cryptographic main key and iv.
-         Main key must be 16, 24 or 32 bytes long
+        Main key must be 16, 24 or 32 bytes long
         (respectively for *AES-128*, *AES-192* or *AES-256*).
 
     :return: dict with field "ciphertext" as bytestring"""

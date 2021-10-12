@@ -6,10 +6,15 @@ import random
 import pytest
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
+from Crypto.Random.random import randint
 
 import wacryptolib
-from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError
-from wacryptolib.key_generation import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symmetric_key_dict
+from wacryptolib.container import ContainerWriter
+from wacryptolib.encryption import STREAMABLE_ENCRYPTION_ALGOS
+from wacryptolib.exceptions import DecryptionError, EncryptionError
+from wacryptolib.key_generation import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symmetric_key_dict, \
+    SYMMETRIC_KEY_TYPES_REGISTRY
+from wacryptolib.utilities import SUPPORTED_HASH_ALGOS, hash_message
 from wacryptolib.encryption import AUTHENTICATED_ENCRYPTION_ALGOS
 
 
@@ -150,32 +155,58 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
         )
 
 
-def test_stream_manager():
-    data_encryption_strata_extracts = [
-        {'encryption_algo': 'AES_CBC',
-         'symmetric_key_dict': {
-             'key': b'\xab\x83\x01i\x14\xd9\t\xed0o\xf2\x9fW+T \xf5n\x84\x8d\x19RO\x18\xa2\xb0\xf4$c\xbf\x86\x90',
-             'iv': b'\xdd\xda\xe0\xabx3\xdc\xfc\xac\xb4\x99\xd1"\xd3n\xf8'},
-         'message_digest_algos': ['SHA3_512']}
-    ]
+_stream_algo_nodes = [[algo] for algo in STREAMABLE_ENCRYPTION_ALGOS] + [STREAMABLE_ENCRYPTION_ALGOS]
+
+
+@pytest.mark.parametrize("encryption_algo_list", _stream_algo_nodes)
+def test_stream_manager(encryption_algo_list):
+
     output_stream = io.BytesIO()
+
+    data_encryption_strata_extracts = []
+    for encryption_algo in encryption_algo_list:
+        data_encryption_strata_extract = {'encryption_algo': encryption_algo,
+                                          'symmetric_key_dict': generate_symmetric_key_dict(encryption_algo),
+                                          'message_digest_algos': random.choices(SUPPORTED_HASH_ALGOS, k=randint(1,
+                                                                                                                 len(SUPPORTED_HASH_ALGOS)))}
+        data_encryption_strata_extracts.append(data_encryption_strata_extract)
+    print(data_encryption_strata_extracts)
+
     streammanager = wacryptolib.encryption.StreamManager(
-        data_encryption_strata_extracts=data_encryption_strata_extracts, output_stream=output_stream)
-    plaintext = get_random_bytes(64)
-    streammanager.encrypt_chunk(plaintext)
+        data_encryption_strata_extracts=data_encryption_strata_extracts,
+        output_stream=output_stream)
+
+    plaintext_full = get_random_bytes(randint(10, 10000))
+    plaintext_current = plaintext_full
+    while plaintext_current:     # TODO factorize this utility
+        chunk_length = randint(1, 300)
+        chunk = plaintext_current[0:chunk_length]
+        plaintext_current = plaintext_current[chunk_length:]
+        streammanager.encrypt_chunk(chunk)
+
     streammanager.finalize()
-    cipherdict = {"ciphertext": output_stream.getvalue(),
-                  "iv": data_encryption_strata_extracts[0]["symmetric_key_dict"]["iv"]}
-    print(cipherdict)
 
-    # FIXME : make this test generic, so that it tests each STREAMABLE cipher individually, and then a big stack with ALL ciphers!
+    current_ciphertext = output_stream.getvalue()
 
-    decrypted_ciphertext = wacryptolib.encryption.decrypt_bytestring(cipherdict=cipherdict,
-                                                                     encryption_algo=data_encryption_strata_extracts[0][
-                                                                         "encryption_algo"],
-                                                                     key_dict= data_encryption_strata_extracts[0]["symmetric_key_dict"])
+    for data_encryption_node, authentication_data in zip(reversed(data_encryption_strata_extracts),
+                                                         reversed(streammanager.get_authentication_data())):
 
-    assert decrypted_ciphertext == plaintext
+        for hash_algo in data_encryption_node['message_digest_algos']:
+            assert (hash_message(message=current_ciphertext, hash_algo=hash_algo) ==  # TODO NOW create local vars
+                    authentication_data['message_digests'][hash_algo])
+
+        cipherdict = {"ciphertext": current_ciphertext}
+        cipherdict.update(authentication_data["integrity_tags"])
+
+        decrypted_ciphertext = wacryptolib.encryption.decrypt_bytestring(cipherdict=cipherdict,
+                                                                         encryption_algo=data_encryption_node[
+                                                                             'encryption_algo'],
+                                                                         key_dict=data_encryption_node[
+                                                                             "symmetric_key_dict"])
+
+        current_ciphertext = decrypted_ciphertext
+
+    assert decrypted_ciphertext == plaintext_full
 
 
 @pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)

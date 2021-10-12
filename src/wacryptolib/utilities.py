@@ -239,7 +239,7 @@ def safe_copy_directory(from_dir: Path, to_dir: Path, temp_prefix="__", **extra_
 
 
 def split_as_formatted_data(first_data: bytes, second_data: bytes, block_size: int):
-    """ split the sum of two data into formatted data(multiple of block size)
+    """Split the sum of two data into formatted data (multiple of block size)
 
     :param block_size: size of which we want a multiple
     :param formatted_data: data whose length is a multiple of the block size

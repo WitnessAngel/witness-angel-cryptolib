@@ -2,13 +2,30 @@
 Getting started
 ===================
 
-The interpreter for `python3.7` (see `pyproject.toml` for full version) must be installed.
+The interpreter for `python3.7` or later must be installed (see `pyproject.toml` for version details).
 
 Instead of pip, we use `poetry <https://github.com/sdispater/poetry>`_ to manage dependencies.
+
+
+Quick setup
+-----------
+
+Launch `python wacryptolib_installer.py` from inside a python virtual environment.
+
+This will update pip, install a local version of poetry, install the python modules required by wacryptolib, and then launch unit-tests.
+
+
+Manual setup
+------------
+
 
 Use `pip install poetry` to install poetry (or follow its official docs to install it system-wide).
 
 Use `poetry install` from repository root, to install python dependencies (poetry will create its own virtualenv if you don't have one activated).
+
+
+Handy commands
+--------------
 
 Use `pytest` to launch unit-tests (default pytest arguments are in `setup.cfg`). Use `poetry run pytest` instead, if poetry created its own virtualenv.
 

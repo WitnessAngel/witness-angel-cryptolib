@@ -580,11 +580,12 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
         assert isinstance(container, dict), container
         return container["metadata"]
 
-    def decrypt_data(self, container: dict) -> bytes:
+    def decrypt_data(self, container: dict, verify: bool = True) -> bytes:
         """
         Loop through container layers, to decipher data with the right algorithms.
 
         :param container: dictionary previously built with ContainerWriter method
+        :param verify: whether to check tag/mac values of the ciphertext
 
         :return: deciphered plaintext
         """
@@ -622,7 +623,7 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
             integrity_tags = data_encryption_stratum["integrity_tags"]  # Shall be a DICT, FIXME handle if it's still None
             data_cipherdict = dict(ciphertext=data_current, **integrity_tags)
             data_current = decrypt_bytestring(
-                cipherdict=data_cipherdict, key_dict=symmetric_key_dict, encryption_algo=data_encryption_algo
+                cipherdict=data_cipherdict, key_dict=symmetric_key_dict, encryption_algo=data_encryption_algo, verify=verify
             )
 
         data = data_current  # Now decrypted
@@ -928,18 +929,19 @@ def encrypt_data_into_container(
 
 
 def decrypt_data_from_container(
-    container: dict, *, key_storage_pool: Optional[KeyStoragePoolBase] = None, passphrase_mapper: Optional[dict] = None
+    container: dict, *, key_storage_pool: Optional[KeyStoragePoolBase] = None, passphrase_mapper: Optional[dict] = None, verify: bool = True
 ) -> bytes:
     """Decrypt a container with the help of third-parties.
 
     :param container: the container tree, which holds all information about involved keys
     :param key_storage_pool: optional key storage pool
     :param passphrase_mapper: optional dict mapping escrow IDs to their lists of passphrases
+    :param verify: whether to check tag/mac values of the ciphertext
 
     :return: raw bytestring
     """
     reader = ContainerReader(key_storage_pool=key_storage_pool, passphrase_mapper=passphrase_mapper)
-    data = reader.decrypt_data(container)
+    data = reader.decrypt_data(container=container, verify=verify)
     return data
 
 

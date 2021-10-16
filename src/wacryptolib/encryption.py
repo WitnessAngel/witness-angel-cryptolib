@@ -50,16 +50,23 @@ def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key_dict: dict
 
 
 def decrypt_bytestring(
-        cipherdict: dict, *, encryption_algo: str, key_dict: dict
+        cipherdict: dict, *, encryption_algo: str, key_dict: dict, verify: bool = True
 ) -> bytes:  # Fixme rename encryption_algo to decryption_algo? Or normalize?
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
+
+    :param cipherdict: dict with field "ciphertext" as bytestring and (depending
+        on the encryption_algo) some other fields : "tag", "nonce" and "header"
+        as bytestrings
+    :param encryption_algo: string of one of the supported encryption algorithms
+    :param key_dict: dict with cryptographic keys and nonce
+    :param verify: whether to check tag/mac values of the ciphertext
 
     :return: dictionary with encryption data."""
     encryption_type_conf = _get_encryption_type_conf(encryption_algo)
     decryption_function = encryption_type_conf["decryption_function"]
     try:
-        plaintext = decryption_function(key_dict=key_dict, cipherdict=cipherdict)
+        plaintext = decryption_function(key_dict=key_dict, cipherdict=cipherdict, verify=verify)
     except ValueError as exc:
         raise DecryptionError("Failed %s decryption (%s)" % (encryption_algo, exc)) from exc
     return plaintext
@@ -83,11 +90,13 @@ def _encrypt_via_aes_cbc(plaintext: bytes, key_dict: dict) -> dict:
     return cipherdict
 
 
-def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict) -> bytes:
+def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring using AES (CBC mode).
 
     :param cipherdict: dict with field "ciphertext" as bytestring
     :param key_dict: dict with AES cryptographic main key and nonce.
+    :param verify: whether to check tag/mac values of the ciphertext
+        (not applicable for this cipher)
 
     :return: the decrypted bytestring"""
     main_key = key_dict["key"]
@@ -104,7 +113,7 @@ def _encrypt_via_aes_eax(plaintext: bytes, key_dict: dict) -> dict:
 
     :param plaintext: the bytes to cipher
     :param key_dict: dict with AES cryptographic main key and nonce.
-         Main key must be 16, 24 or 32 bytes long
+        Main key must be 16, 24 or 32 bytes long
         (respectively for *AES-128*, *AES-192* or *AES-256*).
 
     :return: dict with fields "ciphertext" and "tag" as bytestrings"""
@@ -117,11 +126,12 @@ def _encrypt_via_aes_eax(plaintext: bytes, key_dict: dict) -> dict:
     return cipherdict
 
 
-def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict) -> bytes:
+def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring using AES (EAX mode).
 
     :param cipherdict: dict with fields "ciphertext", "tag" as bytestrings
     :param key_dict: dict with AES cryptographic main key and nonce.
+    :param verify: whether to check tag/mac values of the ciphertext
 
     :return: the decrypted bytestring"""
     main_key = key_dict["key"]
@@ -129,7 +139,8 @@ def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict) -> bytes:
     _check_symmetric_key_length_bytes(len(main_key))
     decipher = AES.new(main_key, AES.MODE_EAX, nonce=nonce)
     plaintext = decipher.decrypt(cipherdict["ciphertext"])
-    decipher.verify(cipherdict["tag"])
+    if verify:
+        decipher.verify(cipherdict["tag"])
     return plaintext
 
 
@@ -154,11 +165,12 @@ def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict) -> dict:
     return encryption
 
 
-def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict) -> bytes:
+def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring with the stream cipher ChaCha20.
 
     :param cipherdict: dict with fields "ciphertext", "tag", "nonce" and "header" as bytestrings
     :param key_dict: 32 bytes long cryptographic key and nonce
+    :param verify: whether to check tag/mac values of the ciphertext
 
     :return: the decrypted bytestring"""
     main_key = key_dict["key"]
@@ -166,7 +178,10 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict) -> bytes:
     _check_symmetric_key_length_bytes(len(main_key))
     decipher = ChaCha20_Poly1305.new(key=main_key, nonce=nonce)
     #decipher.update(cipherdict["aad"])  UNUSED
-    plaintext = decipher.decrypt_and_verify(ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"])
+    if verify:
+        plaintext = decipher.decrypt_and_verify(ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"])
+    else:
+        plaintext = decipher.decrypt(ciphertext=cipherdict["ciphertext"])
     return plaintext
 
 
@@ -190,11 +205,13 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
     return dict(digest_list=encrypted_chunks)
 
 
-def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict) -> bytes:
+def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
     :param cipherdict: list of ciphertext chunks
     :param key_dict: dict with public RSA key object (RSA.RsaKey)
+    :param verify: whether to check tag/mac values of the ciphertext
+        (not applicable for this cipher)
 
     :return: the decrypted bytestring"""
     key = key_dict["key"]
@@ -320,7 +337,7 @@ class AesCbcEncryptionNode(EncryptionStreamBase):
     def encrypt(self, plaintext):
         """Cut the plaintext and encrypt each block using AES
 
-            :retrurn : a ciphertext
+            :return : a ciphertext
 
         """
 
@@ -398,22 +415,26 @@ ENCRYPTION_ALGOS_REGISTRY = dict(
     ## SYMMETRIC ENCRYPTION ##
     # ALL encryption/decryption routines must handle a "ciphertext" attribute on their cipherdict
     AES_CBC={"encryption_function": _encrypt_via_aes_cbc, "decryption_function": _decrypt_via_aes_cbc,
-             "encryption_node_class": AesCbcEncryptionNode},
+             "encryption_node_class": AesCbcEncryptionNode, "is_authenticated": False},
     AES_EAX={"encryption_function": _encrypt_via_aes_eax, "decryption_function": _decrypt_via_aes_eax,
-             "encryption_node_class": None},
+             "encryption_node_class": None, "is_authenticated": True},
     CHACHA20_POLY1305={
         "encryption_function": _encrypt_via_chacha20_poly1305,
         "decryption_function": _decrypt_via_chacha20_poly1305,
-        "encryption_node_class": Chacha20Poly1305EncryptionNode
+        "encryption_node_class": Chacha20Poly1305EncryptionNode,
+        "is_authenticated": True
     },
     ## ASYMMETRIC ENCRYPTION ##
     RSA_OAEP={"encryption_function": _encrypt_via_rsa_oaep, "decryption_function": _decrypt_via_rsa_oaep,
-              "encryption_node_class": None},
+              "encryption_node_class": None, "is_authenticated": False},
 )
 
 #: These values can be used as 'encryption_algo'.
 SUPPORTED_ENCRYPTION_ALGOS = sorted(ENCRYPTION_ALGOS_REGISTRY.keys())
 assert set(SUPPORTED_SYMMETRIC_KEY_ALGOS) <= set(SUPPORTED_ENCRYPTION_ALGOS)
+
+AUTHENTICATED_ENCRYPTION_ALGOS = sorted(k for (k, v) in ENCRYPTION_ALGOS_REGISTRY.items() if v["is_authenticated"])
+assert set(AUTHENTICATED_ENCRYPTION_ALGOS) <= set(SUPPORTED_ENCRYPTION_ALGOS)
 
 STREAMABLE_ENCRYPTION_ALGOS = sorted(k for (k, v) in ENCRYPTION_ALGOS_REGISTRY.items() if v["encryption_node_class"])
 assert set(STREAMABLE_ENCRYPTION_ALGOS) < set(SUPPORTED_ENCRYPTION_ALGOS)

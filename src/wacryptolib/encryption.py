@@ -93,7 +93,7 @@ def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict, verify: bool = True) 
 
     :param cipherdict: dict with field "ciphertext" as bytestring
     :param key_dict: dict with AES cryptographic main key and nonce.
-    :param verify: boolean to tell if some signature/tag/mac checks have to done
+    :param verify: whether to check tag/mac values of the ciphertext
         (not applicable for this cipher)
 
     :return: the decrypted bytestring"""
@@ -129,7 +129,7 @@ def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify: bool = True) 
 
     :param cipherdict: dict with fields "ciphertext", "tag" as bytestrings
     :param key_dict: dict with AES cryptographic main key and nonce.
-    :param verify: boolean to tell if signature/tag/mac checks have to done
+    :param verify: whether to check tag/mac values of the ciphertext
 
     :return: the decrypted bytestring"""
     main_key = key_dict["key"]
@@ -168,7 +168,7 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify: boo
 
     :param cipherdict: dict with fields "ciphertext", "tag", "nonce" and "header" as bytestrings
     :param key_dict: 32 bytes long cryptographic key and nonce
-    :param verify: boolean to tell if some signature/tag/mac checks have to done
+    :param verify: whether to check tag/mac values of the ciphertext
 
     :return: the decrypted bytestring"""
     main_key = key_dict["key"]
@@ -208,7 +208,7 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool = True)
 
     :param cipherdict: list of ciphertext chunks
     :param key_dict: dict with public RSA key object (RSA.RsaKey)
-    :param verify: boolean to tell if some signature/tag/mac checks have to done
+    :param verify: whether to check tag/mac values of the ciphertext
         (not applicable for this cipher)
 
     :return: the decrypted bytestring"""

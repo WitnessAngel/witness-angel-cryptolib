@@ -573,11 +573,12 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
         assert isinstance(container, dict), container
         return container["metadata"]
 
-    def decrypt_data(self, container: dict) -> bytes:
+    def decrypt_data(self, container: dict, verify: bool = True) -> bytes:
         """
         Loop through container layers, to decipher data with the right algorithms.
 
         :param container: dictionary previously built with ContainerWriter method
+        :param verify: boolean to tell if the signature/tag/mac checks have to done
 
         :return: deciphered plaintext
         """
@@ -615,7 +616,7 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
             integrity_tags = data_encryption_stratum["integrity_tags"]  # Shall be a DICT, FIXME handle if it's still None
             data_cipherdict = dict(ciphertext=data_current, **integrity_tags)
             data_current = decrypt_bytestring(
-                cipherdict=data_cipherdict, key_dict=symmetric_key_dict, encryption_algo=data_encryption_algo
+                cipherdict=data_cipherdict, key_dict=symmetric_key_dict, encryption_algo=data_encryption_algo, verify=verify
             )
 
         data = data_current  # Now decrypted

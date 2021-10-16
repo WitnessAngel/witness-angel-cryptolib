@@ -56,7 +56,7 @@ def decrypt_bytestring(
     using the provided key (which must be of a compatible type and length).
 
     If verify parameter is passed and set to false (it's true by default), signature and
-    tag/mac checks will be skipped when applicable
+    tag/mac checks will be skipped (when applicable)
 
     :return: dictionary with encryption data."""
     encryption_type_conf = _get_encryption_type_conf(encryption_algo)

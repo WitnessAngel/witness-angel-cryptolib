@@ -177,7 +177,7 @@ def test_stream_manager():
 
     assert decrypted_ciphertext == plaintext
 
-@pytest.mark.parametrize("encryption_algo", AUTHENTICATED_ENCRYPTION_ALGOS)
+@pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
 def test_symmetric_decryption_verify_for_authenticated_algo(encryption_algo):
 
     key_dict = generate_symmetric_key_dict(encryption_algo)
@@ -187,16 +187,18 @@ def test_symmetric_decryption_verify_for_authenticated_algo(encryption_algo):
         key_dict=key_dict, plaintext=binary_content, encryption_algo=encryption_algo
     )
 
-    # We change the order of bytes of the tag, to make it wrong
-    cipherdict["tag"] = cipherdict["tag"][1:] + bytes(cipherdict["tag"][0])
+    if encryption_algo in AUTHENTICATED_ENCRYPTION_ALGOS and "tag" in cipherdict:
+        # We change the order of bytes of the tag, to make it wrong
+        cipherdict["tag"] = cipherdict["tag"][1:] + bytes(cipherdict["tag"][0])
 
     # Decryption should not fail if verify==False
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
         key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo, verify=False
     )
 
-    # Decryption should fail if verify==True
-    with pytest.raises(DecryptionError):
-        wacryptolib.encryption.decrypt_bytestring(
-            key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo, verify=True
-        )
+    if encryption_algo in AUTHENTICATED_ENCRYPTION_ALGOS:
+        # Decryption should fail if verify==True
+        with pytest.raises(DecryptionError):
+            wacryptolib.encryption.decrypt_bytestring(
+                key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo, verify=True
+                )

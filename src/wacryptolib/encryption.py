@@ -335,7 +335,7 @@ class AesCbcEncryptionNode(EncryptionStreamBase):
     def encrypt(self, plaintext):
         """Cut the plaintext and encrypt each block using AES
 
-            :retrurn : a ciphertext
+            :return : a ciphertext
 
         """
 

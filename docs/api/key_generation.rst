@@ -18,7 +18,7 @@ Public API
 
 .. autodata:: wacryptolib.key_generation.SUPPORTED_SYMMETRIC_KEY_ALGOS
 
-.. autofunction:: wacryptolib.key_generation.generate_symmetric_key
+.. autofunction:: wacryptolib.key_generation.generate_symmetric_key_dict
 
 
 Private API
@@ -42,4 +42,3 @@ ECC
 ~~~~~~~~
 
 .. autofunction:: wacryptolib.key_generation._generate_ecc_keypair_as_objects
-

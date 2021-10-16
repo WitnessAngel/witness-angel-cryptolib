@@ -55,10 +55,11 @@ def decrypt_bytestring(
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
-    :param cipherdict: dict with field "ciphertext" as bytestring and, depending
-        on the encryption_algo, other fields : "tag", "nonce" and "header" as bytestrings
+    :param cipherdict: dict with field "ciphertext" as bytestring and (depending
+        on the encryption_algo) some other fields : "tag", "nonce" and "header"
+        as bytestrings
     :param encryption_algo: string of one of the supported encryption algorithms
-    :param key_dict: dict with AES cryptographic main key and nonce.
+    :param key_dict: dict with cryptographic keys and nonce
     :param verify: whether to check tag/mac values of the ciphertext
 
     :return: dictionary with encryption data."""

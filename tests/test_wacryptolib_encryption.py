@@ -10,6 +10,7 @@ from Crypto.Random import get_random_bytes
 import wacryptolib
 from wacryptolib.exceptions import DecryptionError, EncryptionError
 from wacryptolib.key_generation import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symmetric_key_dict
+from wacryptolib.encryption import AUTHENTIFIED_ENCRYPTION_ALGOS
 
 
 def _get_binary_content():
@@ -175,3 +176,28 @@ def test_stream_manager():
                                                                      key_dict= data_encryption_strata_extracts[0]["symmetric_key_dict"])
 
     assert decrypted_ciphertext == plaintext
+
+@pytest.mark.parametrize("encryption_algo", AUTHENTIFIED_ENCRYPTION_ALGOS)
+def test_symmetric_decryption_verify_for_authentified_algo(encryption_algo):
+
+#    key_dict = generate_symmetric_key_dict(encryption_algo)
+#
+#    binary_content = _get_binary_content()
+#
+#    cipherdict = wacryptolib.encryption.encrypt_bytestring(
+#        key_dict=key_dict, plaintext=binary_content, encryption_algo=encryption_algo
+#    )
+#
+#    assert "ciphertext" in cipherdict  # Mandatory field
+#    assert isinstance(cipherdict["ciphertext"], bytes)
+#
+#    if encryption_algo == "AES_EAX":
+#        cipherdict["tag"] =
+#
+#    decrypted_content = wacryptolib.encryption.decrypt_bytestring(
+#        key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo, verify=False
+#    )
+#
+#    assert decrypted_content == binary_content
+#
+#    if

@@ -415,22 +415,26 @@ ENCRYPTION_ALGOS_REGISTRY = dict(
     ## SYMMETRIC ENCRYPTION ##
     # ALL encryption/decryption routines must handle a "ciphertext" attribute on their cipherdict
     AES_CBC={"encryption_function": _encrypt_via_aes_cbc, "decryption_function": _decrypt_via_aes_cbc,
-             "encryption_node_class": AesCbcEncryptionNode},
+             "encryption_node_class": AesCbcEncryptionNode, "is_authenticated": False},
     AES_EAX={"encryption_function": _encrypt_via_aes_eax, "decryption_function": _decrypt_via_aes_eax,
-             "encryption_node_class": None},
+             "encryption_node_class": None, "is_authenticated": True},
     CHACHA20_POLY1305={
         "encryption_function": _encrypt_via_chacha20_poly1305,
         "decryption_function": _decrypt_via_chacha20_poly1305,
-        "encryption_node_class": Chacha20Poly1305EncryptionNode
+        "encryption_node_class": Chacha20Poly1305EncryptionNode,
+        "is_authenticated": True
     },
     ## ASYMMETRIC ENCRYPTION ##
     RSA_OAEP={"encryption_function": _encrypt_via_rsa_oaep, "decryption_function": _decrypt_via_rsa_oaep,
-              "encryption_node_class": None},
+              "encryption_node_class": None, "is_authenticated": False},
 )
 
 #: These values can be used as 'encryption_algo'.
 SUPPORTED_ENCRYPTION_ALGOS = sorted(ENCRYPTION_ALGOS_REGISTRY.keys())
 assert set(SUPPORTED_SYMMETRIC_KEY_ALGOS) <= set(SUPPORTED_ENCRYPTION_ALGOS)
+
+AUTHENTIFIED_ENCRYPTION_ALGOS = sorted(k for (k, v) in ENCRYPTION_ALGOS_REGISTRY.items() if v["is_authenticated"] == True)
+assert set(AUTHENTIFIED_ENCRYPTION_ALGOS) <= set(SUPPORTED_ENCRYPTION_ALGOS)
 
 STREAMABLE_ENCRYPTION_ALGOS = sorted(k for (k, v) in ENCRYPTION_ALGOS_REGISTRY.items() if v["encryption_node_class"])
 assert set(STREAMABLE_ENCRYPTION_ALGOS) < set(SUPPORTED_ENCRYPTION_ALGOS)

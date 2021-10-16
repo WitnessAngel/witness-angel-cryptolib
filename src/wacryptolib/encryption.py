@@ -55,8 +55,10 @@ def decrypt_bytestring(
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
-    If verify parameter is passed and set to false (it's true by default), signature and
-    tag/mac checks will be skipped (when applicable)
+    :param cipherdict: dict with field "ciphertext" as bytestring
+    :param encryption_algo: string of one of the supported encryption algorithms
+    :param key_dict: dict with AES cryptographic main key and nonce.
+    :param verify: whether to check tag/mac values of the ciphertext
 
     :return: dictionary with encryption data."""
     encryption_type_conf = _get_encryption_type_conf(encryption_algo)

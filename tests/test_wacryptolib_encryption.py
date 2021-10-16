@@ -189,16 +189,16 @@ def test_symmetric_decryption_verify_for_authenticated_algo(encryption_algo, att
     )
 
     if encryption_algo in AUTHENTICATED_ENCRYPTION_ALGOS and attribute_to_corrupt in cipherdict:
-        # We change the order of bytes of the tag, to make it wrong
-        cipherdict[attribute_to_corrupt] = cipherdict[attribute_to_corrupt][1:] + bytes(cipherdict[attribute_to_corrupt][0])
+        # Replace the attribute with random bytes
+        cipherdict[attribute_to_corrupt] = get_random_bytes(len(cipherdict[attribute_to_corrupt]))
 
     # Decryption should not fail if verify==False
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
         key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo, verify=False
     )
 
+    # Decryption should fail if verify==True, for algorithms that enforce a check
     if encryption_algo in AUTHENTICATED_ENCRYPTION_ALGOS:
-        # Decryption should fail if verify==True
         with pytest.raises(DecryptionError):
             wacryptolib.encryption.decrypt_bytestring(
                 key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo, verify=True

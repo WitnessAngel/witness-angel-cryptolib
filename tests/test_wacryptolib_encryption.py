@@ -178,7 +178,8 @@ def test_stream_manager():
     assert decrypted_ciphertext == plaintext
 
 @pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
-def test_symmetric_decryption_verify_for_authenticated_algo(encryption_algo):
+@pytest.mark.parametrize("attribute_to_corrupt", ["tag"])
+def test_symmetric_decryption_verify_for_authenticated_algo(encryption_algo, attribute_to_corrupt):
 
     key_dict = generate_symmetric_key_dict(encryption_algo)
     binary_content = _get_binary_content()
@@ -187,9 +188,9 @@ def test_symmetric_decryption_verify_for_authenticated_algo(encryption_algo):
         key_dict=key_dict, plaintext=binary_content, encryption_algo=encryption_algo
     )
 
-    if encryption_algo in AUTHENTICATED_ENCRYPTION_ALGOS and "tag" in cipherdict:
+    if encryption_algo in AUTHENTICATED_ENCRYPTION_ALGOS and attribute_to_corrupt in cipherdict:
         # We change the order of bytes of the tag, to make it wrong
-        cipherdict["tag"] = cipherdict["tag"][1:] + bytes(cipherdict["tag"][0])
+        cipherdict[attribute_to_corrupt] = cipherdict[attribute_to_corrupt][1:] + bytes(cipherdict[attribute_to_corrupt][0])
 
     # Decryption should not fail if verify==False
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(

@@ -922,18 +922,19 @@ def encrypt_data_into_container(
 
 
 def decrypt_data_from_container(
-    container: dict, *, key_storage_pool: Optional[KeyStoragePoolBase] = None, passphrase_mapper: Optional[dict] = None
+    container: dict, *, key_storage_pool: Optional[KeyStoragePoolBase] = None, passphrase_mapper: Optional[dict] = None, verify: bool = True
 ) -> bytes:
     """Decrypt a container with the help of third-parties.
 
     :param container: the container tree, which holds all information about involved keys
     :param key_storage_pool: optional key storage pool
     :param passphrase_mapper: optional dict mapping escrow IDs to their lists of passphrases
+    :param verify: boolean to tell if the signature/tag/mac checks have to done
 
     :return: raw bytestring
     """
     reader = ContainerReader(key_storage_pool=key_storage_pool, passphrase_mapper=passphrase_mapper)
-    data = reader.decrypt_data(container)
+    data = reader.decrypt_data(container=container, verify=verify)
     return data
 
 

@@ -50,16 +50,19 @@ def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key_dict: dict
 
 
 def decrypt_bytestring(
-        cipherdict: dict, *, encryption_algo: str, key_dict: dict
+        cipherdict: dict, *, encryption_algo: str, key_dict: dict, verify: bool = True
 ) -> bytes:  # Fixme rename encryption_algo to decryption_algo? Or normalize?
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
+
+    If verify parameter is passed and set to false (it's true by default), signature and
+    tag/mac checks will be skipped when applicable
 
     :return: dictionary with encryption data."""
     encryption_type_conf = _get_encryption_type_conf(encryption_algo)
     decryption_function = encryption_type_conf["decryption_function"]
     try:
-        plaintext = decryption_function(key_dict=key_dict, cipherdict=cipherdict)
+        plaintext = decryption_function(key_dict=key_dict, cipherdict=cipherdict, verify=verify)
     except ValueError as exc:
         raise DecryptionError("Failed %s decryption (%s)" % (encryption_algo, exc)) from exc
     return plaintext
@@ -83,11 +86,13 @@ def _encrypt_via_aes_cbc(plaintext: bytes, key_dict: dict) -> dict:
     return cipherdict
 
 
-def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict) -> bytes:
+def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring using AES (CBC mode).
 
     :param cipherdict: dict with field "ciphertext" as bytestring
     :param key_dict: dict with AES cryptographic main key and nonce.
+    :param verify: boolean to tell if some signature/tag/mac checks have to done
+        (not applicable for this cipher)
 
     :return: the decrypted bytestring"""
     main_key = key_dict["key"]
@@ -117,11 +122,12 @@ def _encrypt_via_aes_eax(plaintext: bytes, key_dict: dict) -> dict:
     return cipherdict
 
 
-def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict) -> bytes:
+def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring using AES (EAX mode).
 
     :param cipherdict: dict with fields "ciphertext", "tag" as bytestrings
     :param key_dict: dict with AES cryptographic main key and nonce.
+    :param verify: boolean to tell if signature/tag/mac checks have to done
 
     :return: the decrypted bytestring"""
     main_key = key_dict["key"]
@@ -129,7 +135,8 @@ def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict) -> bytes:
     _check_symmetric_key_length_bytes(len(main_key))
     decipher = AES.new(main_key, AES.MODE_EAX, nonce=nonce)
     plaintext = decipher.decrypt(cipherdict["ciphertext"])
-    decipher.verify(cipherdict["tag"])
+    if verify == True:
+        decipher.verify(cipherdict["tag"])
     return plaintext
 
 
@@ -154,11 +161,12 @@ def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict) -> dict:
     return encryption
 
 
-def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict) -> bytes:
+def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring with the stream cipher ChaCha20.
 
     :param cipherdict: dict with fields "ciphertext", "tag", "nonce" and "header" as bytestrings
     :param key_dict: 32 bytes long cryptographic key and nonce
+    :param verify: boolean to tell if some signature/tag/mac checks have to done
 
     :return: the decrypted bytestring"""
     main_key = key_dict["key"]
@@ -166,7 +174,10 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict) -> bytes:
     _check_symmetric_key_length_bytes(len(main_key))
     decipher = ChaCha20_Poly1305.new(key=main_key, nonce=nonce)
     #decipher.update(cipherdict["aad"])  UNUSED
-    plaintext = decipher.decrypt_and_verify(ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"])
+    if verify == True:
+        plaintext = decipher.decrypt_and_verify(ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"])
+    else:
+        plaintext = decipher.decrypt(ciphertext=cipherdict["ciphertext"])
     return plaintext
 
 
@@ -190,11 +201,13 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
     return dict(digest_list=encrypted_chunks)
 
 
-def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict) -> bytes:
+def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
     :param cipherdict: list of ciphertext chunks
     :param key_dict: dict with public RSA key object (RSA.RsaKey)
+    :param verify: boolean to tell if some signature/tag/mac checks have to done
+        (not applicable for this cipher)
 
     :return: the decrypted bytestring"""
     key = key_dict["key"]

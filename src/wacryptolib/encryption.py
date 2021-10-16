@@ -139,7 +139,7 @@ def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify: bool = True) 
     _check_symmetric_key_length_bytes(len(main_key))
     decipher = AES.new(main_key, AES.MODE_EAX, nonce=nonce)
     plaintext = decipher.decrypt(cipherdict["ciphertext"])
-    if verify == True:
+    if verify:
         decipher.verify(cipherdict["tag"])
     return plaintext
 
@@ -178,7 +178,7 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify: boo
     _check_symmetric_key_length_bytes(len(main_key))
     decipher = ChaCha20_Poly1305.new(key=main_key, nonce=nonce)
     #decipher.update(cipherdict["aad"])  UNUSED
-    if verify == True:
+    if verify:
         plaintext = decipher.decrypt_and_verify(ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"])
     else:
         plaintext = decipher.decrypt(ciphertext=cipherdict["ciphertext"])
@@ -433,8 +433,8 @@ ENCRYPTION_ALGOS_REGISTRY = dict(
 SUPPORTED_ENCRYPTION_ALGOS = sorted(ENCRYPTION_ALGOS_REGISTRY.keys())
 assert set(SUPPORTED_SYMMETRIC_KEY_ALGOS) <= set(SUPPORTED_ENCRYPTION_ALGOS)
 
-AUTHENTIFIED_ENCRYPTION_ALGOS = sorted(k for (k, v) in ENCRYPTION_ALGOS_REGISTRY.items() if v["is_authenticated"] == True)
-assert set(AUTHENTIFIED_ENCRYPTION_ALGOS) <= set(SUPPORTED_ENCRYPTION_ALGOS)
+AUTHENTICATED_ENCRYPTION_ALGOS = sorted(k for (k, v) in ENCRYPTION_ALGOS_REGISTRY.items() if v["is_authenticated"])
+assert set(AUTHENTICATED_ENCRYPTION_ALGOS) <= set(SUPPORTED_ENCRYPTION_ALGOS)
 
 STREAMABLE_ENCRYPTION_ALGOS = sorted(k for (k, v) in ENCRYPTION_ALGOS_REGISTRY.items() if v["encryption_node_class"])
 assert set(STREAMABLE_ENCRYPTION_ALGOS) < set(SUPPORTED_ENCRYPTION_ALGOS)

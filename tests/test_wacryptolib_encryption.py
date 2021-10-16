@@ -10,7 +10,7 @@ from Crypto.Random import get_random_bytes
 import wacryptolib
 from wacryptolib.exceptions import DecryptionError, EncryptionError
 from wacryptolib.key_generation import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symmetric_key_dict
-from wacryptolib.encryption import AUTHENTIFIED_ENCRYPTION_ALGOS
+from wacryptolib.encryption import AUTHENTICATED_ENCRYPTION_ALGOS
 
 
 def _get_binary_content():
@@ -177,11 +177,12 @@ def test_stream_manager():
 
     assert decrypted_ciphertext == plaintext
 
-@pytest.mark.parametrize("encryption_algo", AUTHENTIFIED_ENCRYPTION_ALGOS)
-def test_symmetric_decryption_verify_for_authentified_algo(encryption_algo):
+@pytest.mark.parametrize("encryption_algo", AUTHENTICATED_ENCRYPTION_ALGOS)
+def test_symmetric_decryption_verify_for_authenticated_algo(encryption_algo):
+
+    print(encryption_algo)
 
 #    key_dict = generate_symmetric_key_dict(encryption_algo)
-#
 #    binary_content = _get_binary_content()
 #
 #    cipherdict = wacryptolib.encryption.encrypt_bytestring(
@@ -199,5 +200,3 @@ def test_symmetric_decryption_verify_for_authentified_algo(encryption_algo):
 #    )
 #
 #    assert decrypted_content == binary_content
-#
-#    if

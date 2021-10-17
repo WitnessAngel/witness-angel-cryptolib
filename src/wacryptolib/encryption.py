@@ -161,7 +161,7 @@ def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict) -> dict:
     nonce = key_dict["nonce"]
     _check_symmetric_key_length_bytes(len(main_key))
     cipher = ChaCha20_Poly1305.new(key=main_key, nonce=nonce)
-    #cipher.update(aad)  UNUSED
+    # cipher.update(aad)  UNUSED
     ciphertext, tag = cipher.encrypt_and_digest(plaintext)
     encryption = {"ciphertext": ciphertext, "tag": tag}
     return encryption
@@ -179,7 +179,7 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify: boo
     nonce = key_dict["nonce"]
     _check_symmetric_key_length_bytes(len(main_key))
     decipher = ChaCha20_Poly1305.new(key=main_key, nonce=nonce)
-    #decipher.update(cipherdict["aad"])  UNUSED
+    # decipher.update(cipherdict["aad"])  UNUSED
     if verify:
         plaintext = decipher.decrypt_and_verify(ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"])
     else:
@@ -237,7 +237,7 @@ class EncryptionStreamBase:
 
     """
     _is_finished = False
-    BLOCK_SIZE = AES.block_size
+    BLOCK_SIZE = 1
     _remainder = None
     _cipher = None
     _hashers_dict = None
@@ -264,13 +264,16 @@ class EncryptionStreamBase:
 
         return ciphertext
 
-
     def encrypt(self, plaintext) -> bytes:
         """ Encrypt a bytestring and Hash a result (ciphertext) with the selected hash algorithm.
 
             return : a ciphertext
         """
         assert not self._is_finished
+        if self.BLOCK_SIZE != 1:
+            formatted_plaintext, self._remainder = utilities.split_as_formatted_data(self._remainder, plaintext,
+                                                                                     block_size=self.BLOCK_SIZE)
+            plaintext = formatted_plaintext
         ciphertext = self._encrypt_aligned_data(plaintext)
         return ciphertext
 
@@ -318,13 +321,12 @@ class EncryptionStreamBase:
         return {}
 
 
-
-
 class AesCbcEncryptionNode(EncryptionStreamBase):
     """Encrypt a bytestring using AES (CBC mode).
 
     """
     _remainder = b""
+    BLOCK_SIZE = AES.block_size
 
     def __init__(self, key_dict: dict, message_digest_algo=()):
         """Extends parent class, create an instance of AES encrption and defines metadata
@@ -332,22 +334,10 @@ class AesCbcEncryptionNode(EncryptionStreamBase):
         """
         # TODO init AES instance with this proper
         super().__init__(message_digest_algo=message_digest_algo)
+
         self._key = key_dict["key"]
         self._iv = key_dict["iv"]
         self._cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
-
-    def encrypt(self, plaintext):
-        """Cut the plaintext and encrypt each block using AES
-
-            :return : a ciphertext
-
-        """
-
-        # FIXME move that up to BASE class, with class variable ENCRYPTIOn_CHUNK_SIZE = N
-        formatted_plaintext, self._remainder = utilities.split_as_formatted_data(self._remainder, plaintext,
-                                                                                 block_size=self.BLOCK_SIZE)
-        ciphertext = super().encrypt(formatted_plaintext)
-        return ciphertext
 
 
 class Chacha20Poly1305EncryptionNode(EncryptionStreamBase):
@@ -383,7 +373,8 @@ class StreamManager:
             encryption_class = encryption_algo_conf["encryption_node_class"]
 
             if encryption_class is None:
-                raise ValueError("Node class %s is not implemented" % data_encryption_algo)  # FIXME use custom exception class
+                raise ValueError(
+                    "Node class %s is not implemented" % data_encryption_algo)  # FIXME use custom exception class
 
             self._cipher_streams.append(
                 encryption_class(key_dict=symmetric_key_dict, message_digest_algo=message_digest_algos))

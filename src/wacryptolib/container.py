@@ -55,6 +55,10 @@ LOCAL_ESCROW_MARKER = dict(escrow_type="local")  # FIXME CHANGE THIS
 
 AUTHENTICATION_DEVICE_ESCROW_MARKER = dict(escrow_type="authentication_device")  # FIXME CHANGE THIS
 
+class CONTAINER_STATES:
+    STARTED = "STARTED"
+    FINISHED = "FINISHED"
+
 
 def get_escrow_id(escrow_conf: dict) -> str:
     """Build opaque unique identifier for a specific escrow.
@@ -369,6 +373,7 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
 
         container.update(
             # FIXME add container status, PENDING/COMPLETE!!!
+            container_state=CONTAINER_STATES.STARTED,
             container_format=container_format,
             container_uid=container_uid,
             keychain_uid=keychain_uid,
@@ -540,6 +545,8 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
 
                 _encountered_message_digest_algos.add(message_digest_algo)
             assert _encountered_message_digest_algos == set(message_digests)  # No abnormal extra digest
+
+        container["container_state"] = CONTAINER_STATES.FINISHED
 
     def _generate_message_signature(self, keychain_uid: uuid.UUID, conf: dict) -> dict:
         """

@@ -1258,12 +1258,16 @@ def test_create_container_encryption_stream(tmp_path):
     container_encryption_stream = storage.create_container_encryption_stream(
         filename_base, metadata={"mymetadata": True}, encryption_conf=SIMPLE_CONTAINER_CONF, dump_initial_container=True)
 
+    container_started = storage.load_container_from_storage("20200101_container_example.crypt")
+    assert container_started["container_state"] == "STARTED"
+
     container_encryption_stream.encrypt_chunk(b"bonjour")
     container_encryption_stream.encrypt_chunk(b"everyone")
     container_encryption_stream.finalize()
 
     container = storage.load_container_from_storage("20200101_container_example.crypt")
     assert container["metadata"] == {"mymetadata": True}
+    assert container["container_state"] == "FINISHED"
 
     plaintext = storage.decrypt_container_from_storage("20200101_container_example.crypt")
     assert plaintext == b"bonjoureveryone"

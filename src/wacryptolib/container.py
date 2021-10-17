@@ -1226,7 +1226,7 @@ class ContainerStorage:
         return encryption_conf
 
     @synchronized
-    def create_container_encryption_stream(self, filename_base, data, metadata, keychain_uid=None, encryption_conf=None, dump_initial_container=True):
+    def create_container_encryption_stream(self, filename_base, metadata, keychain_uid=None, encryption_conf=None, dump_initial_container=True):
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
         encryption_conf = self._prepare_for_new_record_encryption(encryption_conf)

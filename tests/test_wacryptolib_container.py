@@ -1251,13 +1251,12 @@ def test_create_container_encryption_stream(tmp_path):
     containers_dir.mkdir()
 
     filename_base = "20200101_container_example"
-    data_plaintext = b"xabcd1234x" * 20
 
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
     storage = ContainerStorage(default_encryption_conf=None, containers_dir=containers_dir)
 
     container_encryption_stream = storage.create_container_encryption_stream(
-        filename_base, data=data_plaintext, metadata={"mymetadata": True}, encryption_conf=SIMPLE_CONTAINER_CONF, dump_initial_container=True)
+        filename_base, metadata={"mymetadata": True}, encryption_conf=SIMPLE_CONTAINER_CONF, dump_initial_container=True)
 
     container_encryption_stream.encrypt_chunk(b"bonjour")
     container_encryption_stream.encrypt_chunk(b"everyone")

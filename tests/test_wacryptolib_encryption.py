@@ -8,7 +8,7 @@ from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 
 import wacryptolib
-from wacryptolib.exceptions import DecryptionError, EncryptionError
+from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError
 from wacryptolib.key_generation import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symmetric_key_dict
 from wacryptolib.encryption import AUTHENTICATED_ENCRYPTION_ALGOS
 
@@ -200,12 +200,13 @@ def test_symmetric_decryption_verify(encryption_algo):
     decrypted_content = wacryptolib.encryption.decrypt_bytestring(
         key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo, verify=False
     )
+    assert decrypted_content == binary_content
 
     decryption_callable = lambda: wacryptolib.encryption.decrypt_bytestring(key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo, verify=True)
 
     # Decryption should fail if verify==True, but only for algorithms that enforce an authentication check
     if is_corruptable:
-        with pytest.raises(DecryptionError):
+        with pytest.raises(DecryptionIntegrityError):
             decryption_callable()
     else:
         decryption_callable()

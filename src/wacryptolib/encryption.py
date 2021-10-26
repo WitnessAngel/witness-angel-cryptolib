@@ -9,7 +9,7 @@ from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import pad, unpad
 
 from wacryptolib import utilities
-from wacryptolib.exceptions import EncryptionError, DecryptionError
+from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionIntegrityError
 from wacryptolib.key_generation import (
     _check_symmetric_key_length_bytes,
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
@@ -68,6 +68,8 @@ def decrypt_bytestring(
     try:
         plaintext = decryption_function(key_dict=key_dict, cipherdict=cipherdict, verify=verify)
     except ValueError as exc:
+        if "MAC check failed" in str(exc):  # Hackish check for pycryptodome
+            raise DecryptionIntegrityError("Failed %s decryption authentication (%s)" % (encryption_algo, exc)) from exc
         raise DecryptionError("Failed %s decryption (%s)" % (encryption_algo, exc)) from exc
     return plaintext
 

@@ -38,7 +38,7 @@ from wacryptolib.escrow import (
     generate_asymmetric_keypair_for_storage,
     generate_free_keypair_for_least_provisioned_key_type,
 )
-from wacryptolib.exceptions import DecryptionError, ConfigurationError
+from wacryptolib.exceptions import DecryptionError, ConfigurationError, DecryptionIntegrityError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, FilesystemKeyStoragePool, DummyKeyStoragePool
@@ -503,7 +503,7 @@ def test_recursive_shamir_secrets_and_strata():
     assert data_decrypted == data
 
 
-def test_authenticated_decryption_verify():
+def test_decrypt_data_from_container_with_authenticated_algo_and_verify():
 
     data_encryption_algo = random.choice(AUTHENTICATED_ENCRYPTION_ALGOS)
     container_conf = copy.deepcopy(SIMPLE_CONTAINER_CONF)
@@ -517,7 +517,7 @@ def test_authenticated_decryption_verify():
     result = decrypt_data_from_container(container, verify=False)
     assert result == b"1234"
 
-    with pytest.raises(DecryptionError):
+    with pytest.raises(DecryptionIntegrityError):
         decrypt_data_from_container(container, verify=True)
 
 

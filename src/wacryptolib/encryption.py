@@ -50,16 +50,16 @@ def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key_dict: dict
 
 
 def decrypt_bytestring(
-        cipherdict: dict, *, encryption_algo: str, key_dict: dict, verify: bool = True
+        cipherdict: dict, *, encryption_algo: str, key_dict: dict, verify: bool=True
 ) -> bytes:  # Fixme rename encryption_algo to decryption_algo? Or normalize?
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
     :param cipherdict: dict with field "ciphertext" as bytestring and (depending
-        on the encryption_algo) some other fields : "tag", "nonce" and "header"
+        on the encryption_algo) some other fields like "tag" or "nonce"
         as bytestrings
-    :param encryption_algo: string of one of the supported encryption algorithms
-    :param key_dict: dict with cryptographic keys and nonce
+    :param encryption_algo: one of the supported encryption algorithms
+    :param key_dict: dict with secret key fields
     :param verify: whether to check tag/mac values of the ciphertext
 
     :return: dictionary with encryption data."""
@@ -90,7 +90,7 @@ def _encrypt_via_aes_cbc(plaintext: bytes, key_dict: dict) -> dict:
     return cipherdict
 
 
-def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
+def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict, verify: bool=True) -> bytes:
     """Decrypt a bytestring using AES (CBC mode).
 
     :param cipherdict: dict with field "ciphertext" as bytestring
@@ -126,7 +126,7 @@ def _encrypt_via_aes_eax(plaintext: bytes, key_dict: dict) -> dict:
     return cipherdict
 
 
-def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
+def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify: bool=True) -> bytes:
     """Decrypt a bytestring using AES (EAX mode).
 
     :param cipherdict: dict with fields "ciphertext", "tag" as bytestrings
@@ -165,10 +165,10 @@ def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict) -> dict:
     return encryption
 
 
-def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
+def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify: bool=True) -> bytes:
     """Decrypt a bytestring with the stream cipher ChaCha20.
 
-    :param cipherdict: dict with fields "ciphertext", "tag", "nonce" and "header" as bytestrings
+    :param cipherdict: dict with fields "ciphertext", "tag" and "nonce" as bytestrings
     :param key_dict: 32 bytes long cryptographic key and nonce
     :param verify: whether to check tag/mac values of the ciphertext
 
@@ -205,7 +205,7 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
     return dict(digest_list=encrypted_chunks)
 
 
-def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
+def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool=True) -> bytes:
     """Decrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
     :param cipherdict: list of ciphertext chunks

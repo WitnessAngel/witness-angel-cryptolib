@@ -580,7 +580,7 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
         assert isinstance(container, dict), container
         return container["metadata"]
 
-    def decrypt_data(self, container: dict, verify: bool = True) -> bytes:
+    def decrypt_data(self, container: dict, verify: bool=True) -> bytes:
         """
         Loop through container layers, to decipher data with the right algorithms.
 
@@ -929,7 +929,7 @@ def encrypt_data_into_container(
 
 
 def decrypt_data_from_container(
-    container: dict, *, key_storage_pool: Optional[KeyStoragePoolBase] = None, passphrase_mapper: Optional[dict] = None, verify: bool = True
+    container: dict, *, key_storage_pool: Optional[KeyStoragePoolBase] = None, passphrase_mapper: Optional[dict] = None, verify: bool=True
 ) -> bytes:
     """Decrypt a container with the help of third-parties.
 

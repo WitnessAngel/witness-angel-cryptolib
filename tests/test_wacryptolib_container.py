@@ -32,7 +32,7 @@ from wacryptolib.container import (
     delete_container_from_filesystem, CONTAINER_DATETIME_FORMAT, get_container_size_on_filesystem, ContainerWriter,
     encrypt_data_and_dump_container_to_filesystem, is_container_encryption_conf_streamable,
 )
-from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS
+from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS, AUTHENTICATED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import (
     EscrowApi,
     generate_asymmetric_keypair_for_storage,
@@ -371,7 +371,8 @@ def test_standard_container_encryption_and_decryption(tmp_path, container_conf, 
         assert not keypair_statuses["missing_passphrase"]
         assert not keypair_statuses["missing_private_key"]
 
-    result_data = decrypt_data_from_container(container=container, key_storage_pool=key_storage_pool)
+    verify = random.choice((True, False))
+    result_data = decrypt_data_from_container(container=container, key_storage_pool=key_storage_pool, verify=verify)
     # pprint.pprint(result, width=120)
     assert result_data == data
 
@@ -429,7 +430,8 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf, escro
 
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
 
-    result_data = decrypt_data_from_container(container=container)
+    verify = random.choice((True, False))
+    result_data = decrypt_data_from_container(container=container, verify=verify)
     assert result_data == data
 
     # Another share is deleted
@@ -499,6 +501,24 @@ def test_recursive_shamir_secrets_and_strata():
     )
 
     assert data_decrypted == data
+
+
+def test_authenticated_decryption_verify():
+
+    data_encryption_algo = random.choice(AUTHENTICATED_ENCRYPTION_ALGOS)
+    container_conf = copy.deepcopy(SIMPLE_CONTAINER_CONF)
+    container_conf["data_encryption_strata"][0]["data_encryption_algo"] = data_encryption_algo
+
+    container = encrypt_data_into_container(
+        data=b"1234", conf=container_conf, metadata=None
+    )
+    container["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION
+
+    result = decrypt_data_from_container(container, verify=False)
+    assert result == b"1234"
+
+    with pytest.raises(DecryptionError):
+        decrypt_data_from_container(container, verify=True)
 
 
 def test_passphrase_mapping_during_decryption(tmp_path):

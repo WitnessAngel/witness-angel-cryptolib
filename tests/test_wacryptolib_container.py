@@ -1,17 +1,21 @@
 import copy
+import json
 import os
 import random
 import textwrap
 import time
 import uuid
+import jsonschema
+import pytest
+import schema
+
 from datetime import timedelta, datetime, timezone
 from itertools import product
 from pathlib import Path
 from pprint import pprint
 from unittest.mock import patch
 from uuid import UUID
-
-import pytest
+from jsonschema import validate as jsonschema_validate
 
 from _test_mockups import FakeTestContainerStorage
 from wacryptolib.container import (
@@ -30,7 +34,8 @@ from wacryptolib.container import (
     get_escrow_proxy,
     request_decryption_authorizations,
     delete_container_from_filesystem, CONTAINER_DATETIME_FORMAT, get_container_size_on_filesystem, ContainerWriter,
-    encrypt_data_and_dump_container_to_filesystem, is_container_encryption_conf_streamable,
+    encrypt_data_and_dump_container_to_filesystem, is_container_encryption_conf_streamable, CONF_SCHEMA_PYTHON,
+    CONF_SCHEMA_JSON, CONTAINER_SCHEMA_PYTHON, CONTAINER_SCHEMA_JSON,
 )
 from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS, AUTHENTICATED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import (
@@ -42,9 +47,9 @@ from wacryptolib.exceptions import DecryptionError, ConfigurationError, Decrypti
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, FilesystemKeyStoragePool, DummyKeyStoragePool
-from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, generate_uuid0, get_utc_now_date
+from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, generate_uuid0, get_utc_now_date, \
+    dump_to_json_str
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
-
 
 ENFORCED_UID1 = UUID("0e8e861e-f0f7-e54b-18ea-34798d5daaaa")
 ENFORCED_UID2 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeebbbb")
@@ -73,7 +78,6 @@ SIGNATURELESS_CONTAINER_CONF = dict(
     ]
 )
 
-
 SIGNATURELESS_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
         "[('escrow_type', 'local')]": (
@@ -83,7 +87,6 @@ SIGNATURELESS_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
     },
     "signature": {},
 }
-
 
 SIMPLE_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -180,15 +183,16 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
                     key_shared_secret_threshold=3,
                     key_shared_secret_escrows=[
                         dict(key_encryption_strata=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
                         dict(key_encryption_strata=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
                         dict(key_encryption_strata=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
                         dict(key_encryption_strata=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
                         dict(key_encryption_strata=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)],),
+                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER,
+                                 keychain_uid=ENFORCED_UID1)], ),
                     ],
                 ),
             ],
@@ -239,14 +243,15 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
                     key_shared_secret_threshold=2,
                     key_shared_secret_escrows=[
                         dict(key_encryption_strata=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
+                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
                         dict(key_encryption_strata=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
                         dict(key_encryption_strata=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
                         dict(key_encryption_strata=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID2)],),
+                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER,
+                                 keychain_uid=ENFORCED_UID2)], ),
                     ],
                 )
             ],
@@ -294,7 +299,6 @@ COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
     ],
 )
 def test_void_container_confs(container_conf):
-
     key_storage_pool = DummyKeyStoragePool()
 
     with pytest.raises(ConfigurationError, match="Empty .* list"):
@@ -323,12 +327,13 @@ def test_standard_container_encryption_and_decryption(tmp_path, container_conf, 
     if use_streaming_encryption and is_container_encryption_conf_streamable(container_conf):
         container_filepath = tmp_path / "mygoodcontainer.crypt"
         encrypt_data_and_dump_container_to_filesystem(
-                data=data, container_filepath=container_filepath,
-                conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool)
+            data=data, container_filepath=container_filepath,
+            conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool)
         container = load_container_from_filesystem(container_filepath, include_data_ciphertext=True)
     else:
         container = encrypt_data_into_container(
-            data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool
+            data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata,
+            key_storage_pool=key_storage_pool
         )
 
     assert container["keychain_uid"]
@@ -472,11 +477,11 @@ RECURSIVE_CONTAINER_CONF = dict(
                     key_shared_secret_threshold=1,
                     key_shared_secret_escrows=[
                         dict(
-                             key_encryption_strata=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                            key_encryption_strata=[
+                                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
                         dict(
-                             key_encryption_strata=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
+                            key_encryption_strata=[
+                                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
                     ],  # Beware, same escrow for the 2 shares, for now
                 ),
             ],
@@ -487,8 +492,8 @@ RECURSIVE_CONTAINER_CONF = dict(
     ]
 )
 
-def test_recursive_shamir_secrets_and_strata():
 
+def test_recursive_shamir_secrets_and_strata():
     keychain_uid = generate_uuid0()
     data = b"qssd apk_$82"
 
@@ -497,14 +502,13 @@ def test_recursive_shamir_secrets_and_strata():
     )
 
     data_decrypted = decrypt_data_from_container(
-            container=container,
+        container=container,
     )
 
     assert data_decrypted == data
 
 
 def test_decrypt_data_from_container_with_authenticated_algo_and_verify():
-
     data_encryption_algo = random.choice(AUTHENTICATED_ENCRYPTION_ALGOS)
     container_conf = copy.deepcopy(SIMPLE_CONTAINER_CONF)
     container_conf["data_encryption_strata"][0]["data_encryption_algo"] = data_encryption_algo
@@ -522,7 +526,6 @@ def test_decrypt_data_from_container_with_authenticated_algo_and_verify():
 
 
 def test_passphrase_mapping_during_decryption(tmp_path):
-
     keychain_uid = generate_uuid0()
 
     keychain_uid_escrow = generate_uuid0()
@@ -584,11 +587,12 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                         key_shared_secret_threshold=2,
                         key_shared_secret_escrows=[
                             dict(key_encryption_strata=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow1, keychain_uid=keychain_uid_escrow)],),
+                                dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow1,
+                                     keychain_uid=keychain_uid_escrow)], ),
                             dict(key_encryption_strata=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow2)],),
+                                dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow2)], ),
                             dict(key_encryption_strata=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow3)],),
+                                dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow3)], ),
                         ],
                     ),
                 ],
@@ -724,7 +728,6 @@ def test_get_proxy_for_escrow(tmp_path):
 
 
 def test_container_storage_and_executor(tmp_path, caplog):
-
     side_tmp = tmp_path / "side_tmp"
     side_tmp.mkdir()
 
@@ -837,7 +840,6 @@ def test_container_storage_and_executor(tmp_path, caplog):
 
 
 def test_container_storage_purge_by_max_count(tmp_path):
-
     containers_dir = tmp_path
 
     offload_data_ciphertext = random.choice((True, False))
@@ -929,7 +931,6 @@ def test_container_storage_purge_by_max_count(tmp_path):
 
 
 def test_container_storage_purge_by_age(tmp_path):
-
     containers_dir = tmp_path
     now = get_utc_now_date()
 
@@ -954,7 +955,8 @@ def test_container_storage_purge_by_age(tmp_path):
         storage.enqueue_file_for_encryption("%s_stuff.dat" % dt.strftime(CONTAINER_DATETIME_FORMAT),
                                             b"abc", metadata=None)
         dt -= timedelta(days=1)
-    storage.enqueue_file_for_encryption("whatever_stuff.dat", b"xxx", metadata=None)  # File timestamp with be used instead
+    storage.enqueue_file_for_encryption("whatever_stuff.dat", b"xxx",
+                                        metadata=None)  # File timestamp with be used instead
     storage.wait_for_idle_state()
 
     container_names = storage.list_container_names(as_sorted=True)
@@ -987,7 +989,6 @@ def test_container_storage_purge_by_age(tmp_path):
 
 
 def test_container_storage_purge_by_quota(tmp_path):
-
     containers_dir = tmp_path
 
     offload_data_ciphertext = random.choice((True, False))
@@ -999,11 +1000,11 @@ def test_container_storage_purge_by_quota(tmp_path):
     )
     assert not len(storage)
 
-    storage.enqueue_file_for_encryption("20101021222711_stuff.dat", b"a"*2000, metadata=None)
-    storage.enqueue_file_for_encryption("20301021222711_stuff.dat", b"z"*2000, metadata=None)
+    storage.enqueue_file_for_encryption("20101021222711_stuff.dat", b"a" * 2000, metadata=None)
+    storage.enqueue_file_for_encryption("20301021222711_stuff.dat", b"z" * 2000, metadata=None)
 
     for i in range(10):
-        storage.enqueue_file_for_encryption("some_stuff.dat", b"m"*1000, metadata=None)
+        storage.enqueue_file_for_encryption("some_stuff.dat", b"m" * 1000, metadata=None)
     storage.wait_for_idle_state()
 
     container_names = storage.list_container_names(as_sorted=True)
@@ -1034,16 +1035,14 @@ def test_container_storage_purge_by_quota(tmp_path):
 
 
 def test_container_storage_purge_parameter_combinations(tmp_path):
-
     containers_dir = tmp_path
     now = get_utc_now_date() - timedelta(seconds=1)
 
     recent_big_file_name = "%s_recent_big_stuff.dat" % now.strftime(CONTAINER_DATETIME_FORMAT)
 
-    params_sets = product([None, 2],[None, 1000], [None, timedelta(days=3)])
+    params_sets = product([None, 2], [None, 1000], [None, timedelta(days=3)])
 
     for max_container_count, max_container_quota, max_container_age in params_sets:
-
         offload_data_ciphertext = random.choice((True, False))
         storage = FakeTestContainerStorage(
             default_encryption_conf={"stuffs": True},
@@ -1055,17 +1054,17 @@ def test_container_storage_purge_parameter_combinations(tmp_path):
         )
 
         storage.enqueue_file_for_encryption("20001121222729_smth.dat", b"000", metadata=None)
-        storage.enqueue_file_for_encryption(recent_big_file_name, b"0"*2000, metadata=None)
-        storage.enqueue_file_for_encryption("recent_small_file.dat", b"0"*50, metadata=None)
+        storage.enqueue_file_for_encryption(recent_big_file_name, b"0" * 2000, metadata=None)
+        storage.enqueue_file_for_encryption("recent_small_file.dat", b"0" * 50, metadata=None)
 
         storage.wait_for_idle_state()
 
         container_names = storage.list_container_names(as_sorted=True)
 
-        assert (Path("20001121222729_smth.dat.000.crypt") in container_names) == (not (max_container_count or max_container_quota or max_container_age))
-        assert (Path(recent_big_file_name +".001.crypt") in container_names) == (not max_container_quota)
+        assert (Path("20001121222729_smth.dat.000.crypt") in container_names) == (
+            not (max_container_count or max_container_quota or max_container_age))
+        assert (Path(recent_big_file_name + ".001.crypt") in container_names) == (not max_container_quota)
         assert (Path("recent_small_file.dat.002.crypt") in container_names) == True
-
 
     # Special case of "everything restricted"
 
@@ -1077,7 +1076,7 @@ def test_container_storage_purge_parameter_combinations(tmp_path):
         max_container_age=timedelta(days=0),
         offload_data_ciphertext=False,
     )
-    storage.enqueue_file_for_encryption("some_small_file.dat", b"0"*50, metadata=None)
+    storage.enqueue_file_for_encryption("some_small_file.dat", b"0" * 50, metadata=None)
     storage.wait_for_idle_state()
 
     container_names = storage.list_container_names(as_sorted=True)
@@ -1085,7 +1084,6 @@ def test_container_storage_purge_parameter_combinations(tmp_path):
 
 
 def test_container_storage_encryption_conf_precedence(tmp_path):
-
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
 
     storage = ContainerStorage(default_encryption_conf=None, containers_dir=tmp_path)
@@ -1204,7 +1202,6 @@ def test_get_encryption_configuration_summary():
 
 @pytest.mark.parametrize("container_conf", [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF])
 def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
-
     data = b"jhf" * 200
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
@@ -1237,8 +1234,8 @@ def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
     assert size1
 
     assert container_filepath.exists()
-    #delete_container_from_filesystem(container_filepath)
-    #assert not container_filepath.exists()
+    # delete_container_from_filesystem(container_filepath)
+    # assert not container_filepath.exists()
 
     # CASE 2 - OFFLOADED CIPHERTEXT FILE
 
@@ -1260,7 +1257,7 @@ def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
     assert container["data_ciphertext"] == container_ciphertext_before_dump  # Original dict unchanged
 
     size2 = get_container_size_on_filesystem(container_filepath)
-    assert size2 < size1   # Overhead of base64 encoding in monolithic file!
+    assert size2 < size1  # Overhead of base64 encoding in monolithic file!
     assert size1 < size2 + 1000  # Overhead remaings limited though
 
     assert container_filepath.exists()
@@ -1271,7 +1268,6 @@ def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
 
 
 def test_generate_container_and_symmetric_keys():
-
     container_writer = ContainerWriter()
     container, extracts = container_writer._generate_container_base_and_secrets(COMPLEX_CONTAINER_CONF)
 
@@ -1329,3 +1325,116 @@ def ___obsolete_test_encrypt_data_and_dump_container_to_filesystem(tmp_path):
     container = load_container_from_filesystem(container_filepath)  # Fetches offloaded content too
     assert container["data_ciphertext"] == data_plaintext  # TEMPORARY FOR FAKE STREAM ENCRYPTOR
 
+
+@pytest.mark.parametrize(
+    "conf",
+    [
+        SIMPLE_CONTAINER_CONF,
+        COMPLEX_CONTAINER_CONF,
+        SIMPLE_SHAMIR_CONTAINER_CONF,
+        COMPLEX_SHAMIR_CONTAINER_CONF
+
+    ])
+def test_conf_schema(conf):
+    validate_via_pythonschema(conf, CONF_SCHEMA_PYTHON)
+    dump_and_validate_via_jsonschema(conf, CONF_SCHEMA_JSON)
+
+
+def generate_corrupted_conf(CONTAINER_CONF):
+    corrupted_confs = []
+
+    # Add a false information to config
+    corrupted_conf1 = copy.deepcopy(CONTAINER_CONF)
+    corrupted_conf1["data_encryption_strata"][0]["keychain_uid"] = ENFORCED_UID2
+    corrupted_confs.append(corrupted_conf1)
+
+    # Delete a "key_encryption_strata" in an element of conf
+    corrupted_conf2 = copy.deepcopy(CONTAINER_CONF)
+    del corrupted_conf2["data_encryption_strata"][0]["key_encryption_strata"]
+    corrupted_confs.append(corrupted_conf2)
+
+    # Update data_encryption_algo with a value algo that does not exist
+    corrupted_conf3 = copy.deepcopy(CONTAINER_CONF)
+    corrupted_conf3["data_encryption_strata"][0]["data_encryption_algo"] = "AES_AES"
+    corrupted_confs.append(corrupted_conf3)
+
+    # Update a "key_encryption_strata" with a string instead of list
+    corrupted_conf4 = copy.deepcopy(CONTAINER_CONF)
+    corrupted_conf4["data_encryption_strata"][0]["key_encryption_strata"] = " "
+    corrupted_confs.append(corrupted_conf4)
+
+    return corrupted_confs
+
+
+@pytest.mark.parametrize("corrupted_conf", generate_corrupted_conf(COMPLEX_SHAMIR_CONTAINER_CONF))
+def test_corrupted_conf(corrupted_conf):
+    with pytest.raises(schema.SchemaError):
+        validate_via_pythonschema(corrupted_conf, CONF_SCHEMA_PYTHON)
+
+    with pytest.raises(jsonschema.exceptions.ValidationError):
+        dump_and_validate_via_jsonschema(corrupted_conf, CONF_SCHEMA_JSON)
+
+
+@pytest.mark.parametrize("conf", [SIMPLE_CONTAINER_CONF,
+                                  COMPLEX_CONTAINER_CONF,
+                                  SIMPLE_SHAMIR_CONTAINER_CONF,
+                                  COMPLEX_SHAMIR_CONTAINER_CONF])
+def test_container_schema(conf):
+    container = encrypt_data_into_container(
+        data=b"stuffs", conf=conf, keychain_uid=None, metadata=None
+    )
+    validate_via_pythonschema(container, CONTAINER_SCHEMA_PYTHON)
+
+    dump_and_validate_via_jsonschema(container, CONTAINER_SCHEMA_JSON)
+
+
+def test_corrupted_container():
+    container = encrypt_data_into_container(
+        data=b"stuffs", conf=SIMPLE_CONTAINER_CONF, keychain_uid=None, metadata=None
+    )
+    corrupted_containers = []
+    corrupted_container1 = copy.deepcopy(container)
+    corrupted_container1["data_encryption_strata"][0]["keychain_uid"] = ENFORCED_UID1
+    corrupted_containers.append(corrupted_container1)
+
+    corrupted_container2 = copy.deepcopy(container)
+    del corrupted_container2["data_encryption_strata"][0]["integrity_tags"]
+    corrupted_containers.append(corrupted_container2)
+
+    corrupted_container3 = copy.deepcopy(container)
+    corrupted_container3["data_encryption_strata"][0]["key_ciphertext"] = []
+    corrupted_containers.append(corrupted_container3)
+
+    for corrupted_container in corrupted_containers:
+        with pytest.raises(schema.SchemaError):
+            validate_via_pythonschema(corrupted_container, CONTAINER_SCHEMA_PYTHON)
+
+        with pytest.raises(jsonschema.exceptions.ValidationError):
+            dump_and_validate_via_jsonschema(corrupted_container, CONTAINER_SCHEMA_JSON)
+
+
+# "Utilities"
+
+def dump_and_validate_via_jsonschema(data, schema):
+    """
+    Validating Python data structures, such as those obtained from configuration or container files with the current
+    schema via json schema.
+    """
+    # Exporting schema in jsonschema format
+    container_json_schema_tree = schema.json_schema("my_schema_test")
+
+    # Exporting conf in pymongo extended json format
+    json_std_lib = dump_to_json_str(data)
+
+    # Parsing Json from string
+    json_str_lib = json.loads(json_std_lib)
+
+    jsonschema_validate(instance=json_str_lib, schema=container_json_schema_tree)
+
+
+def validate_via_pythonschema(data, schema):
+    """
+    Validating Python data structures, such as those obtained from configuration or container files with the current
+    schema via python schema.
+    """
+    schema.validate(data)

@@ -11,7 +11,7 @@ from wacryptolib.exceptions import KeyLoadingError
 logger = logging.getLogger(__name__)
 
 
-def encode_passphrase(passphrase: str):
+def encode_passphrase(passphrase: str):  # FIXME move to generic utilities??
     """Strip and NFKC-normalize passphrase, then encode it as utf8 bytes."""
     return unicodedata.normalize("NFKC", passphrase.strip()).encode("utf8")
 
@@ -237,4 +237,4 @@ ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
 SUPPORTED_ASYMMETRIC_KEY_TYPES = sorted(ASYMMETRIC_KEY_TYPES_REGISTRY.keys())
 
 #: These values can be used as 'encryption_algo' for symmetric key generation.
-SUPPORTED_SYMMETRIC_KEY_ALGOS = sorted(SYMMETRIC_KEY_TYPES_REGISTRY.keys())
+SUPPORTED_SYMMETRIC_KEY_ALGOS = sorted(SYMMETRIC_KEY_TYPES_REGISTRY.keys())  # FIXME rename for coherence

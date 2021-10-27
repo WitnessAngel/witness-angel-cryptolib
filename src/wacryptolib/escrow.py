@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 MAX_PAYLOAD_LENGTH_FOR_SIGNATURE = 128  # Max 2*SHA512 length
 
 
-def generate_asymmetric_keypair_for_storage(
+def generate_asymmetric_keypair_for_storage(  # FIXME rename and add to docs
     key_type: str, *, key_storage, keychain_uid: Optional[UUID] = None, passphrase: Optional[AnyStr] = None
 ) -> dict:
     """

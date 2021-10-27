@@ -1,9 +1,9 @@
 
 
-Overview of Algorithms
+Selected Algorithms
 ===============================
 
-This document describes the different technologies available in modern cryptography, in particular the selected algorithms and their worthy or obsolete alternatives.
+Here are the processes and algorithms that have been cherry-picked to build our secure containers.
 
 
 Invariants
@@ -51,7 +51,7 @@ Asymmetric ciphers
 -------------------
 
 - RSA (Rivest–Shamir–Adleman) is one of the first public-key cryptosystems and is widely used for secure data transmission. In such a cryptosystem, the encryption key is public and it is different from the decryption key which is kept secret (private). In RSA, this asymmetry is based on the practical difficulty of the factorization of the product of two large prime numbers, the "factoring problem".
-  A user of RSA creates and then publishes a public key based on two large prime numbers, along with an auxiliary value. The prime numbers must be kept secret. Anyone can use the public key to encrypt a message, but with currently published methods, and if the public key is large enough, only someone with knowledge of the prime numbers can decode the message feasibly. Breaking RSA encryption is known as the RSA problem. Whether it is as difficult as the factoring problem remains an open question. OAEP (Optimal Asymmetric Encryption Padding) is the padding scheme we use together with RSA encryption.
+  A user of RSA creates and then publishes a public key based on two large prime numbers, along with an auxiliary value. The prime numbers must be kept secret. Anyone can use the public key to encrypt a message, but with currently published methods, and if the public key is large enough, only someone with knowledge of the prime numbers can decode the message feasibly. We use OAEP (Optimal Asymmetric Encryption Padding) as padding scheme to strengthen RSA encryption.
 
 
 Symmetric ciphers

@@ -851,7 +851,7 @@ class ContainerEncryptionStream:
             self._output_data_stream.close()
 
 
-def is_container_encryption_conf_streamable(conf):
+def is_container_encryption_conf_streamable(conf):  #FIXME rename and add to docs
     # FIXME test separately!
     for data_encryption_stratum in conf["data_encryption_strata"]:
         if data_encryption_stratum["data_encryption_algo"] not in STREAMABLE_ENCRYPTION_ALGOS:
@@ -980,7 +980,7 @@ def get_container_size_on_filesystem(container_filepath):
     return size
 
 
-def extract_metadata_from_container(container: dict) -> Optional[dict]:
+def extract_metadata_from_container(container: dict) -> Optional[dict]:  # FIXME move that up, like in docs
     """Read the metadata tree (possibly None) from a container.
 
     CURRENTLY METADATA IS NOT ENCRYPTED.
@@ -1305,7 +1305,7 @@ class ContainerStorage:
         check_container_sanity(container=container, jsonschema_mode=False)
 
 
-def get_encryption_configuration_summary(conf_or_container):
+def get_encryption_configuration_summary(conf_or_container):  # FIXME move up like in docs
     """
     Returns a string summary of the layers of encryption/signature of a container or a configuration tree.
     """

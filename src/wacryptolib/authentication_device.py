@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 # FIXME regroup all metadata and is_initialized in single "metadata" field
 
+# FIXME DELETE ALMOST ALL APIS OF THIS MODULE, now authenticator does it all
+
 # FIXME change "format" here, bad wording!!!!
 def list_available_authentication_devices():
     """

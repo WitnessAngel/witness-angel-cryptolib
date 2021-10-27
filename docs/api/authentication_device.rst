@@ -12,6 +12,6 @@ This module detects and initializes "key devices", typically USB keys which will
 
 .. autofunction:: wacryptolib.authentication_device.load_authentication_device_metadata
     
-
+.. autofunction:: wacryptolib.authentication_device.get_authenticator_path_for_authentication_device
 
    

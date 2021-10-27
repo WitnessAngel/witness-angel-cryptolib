@@ -56,6 +56,42 @@ def get_memory_rss_bytes():
     return rss
 
 
+def delete_filesystem_node_for_stream(stream: BinaryIO):
+    """Deletes the corresponding filesystem node if it exists."""
+    filename = getattr(stream, "name", None)
+    if filename and os.path.exists(filename):  # Can't be false on Win32, since files are not deletable when open
+        os.remove(filename)  # We let errors flow here!
+
+
+def get_metadata_file_path(storage_folder: Path):  # FIXME move to AUTHENTICATOR and disambiguate wrt container's metadata!!
+    """
+    Return path of standard metadata file for key/container storage.
+    """
+    return storage_folder.joinpath(".metadata.json")
+
+
+def safe_copy_directory(from_dir: Path, to_dir: Path, temp_prefix="__", **extra_params):
+    """
+    Copy a file tree to a destination directory (which must not exist) in a kinda-safe way,
+    using a temporary directory and an atomic rename.
+
+    `extra_params` are passed as keyword arguments to `shutil.copytree()`.
+    """
+    if to_dir.exists():
+        raise FileExistsError("Target %s already exists" % to_dir)
+    to_dir_tmp = to_dir.with_name(temp_prefix + to_dir.name)
+    if to_dir_tmp.exists():
+        shutil.rmtree(to_dir_tmp)
+    try:
+        shutil.copytree(from_dir, dst=to_dir_tmp, **extra_params)
+    except Exception:
+        if to_dir_tmp.exists():
+            shutil.rmtree(to_dir_tmp)
+        raise
+    os.rename(to_dir_tmp, to_dir)
+
+
+
 ### Public utilities ###
 
 
@@ -71,13 +107,6 @@ def hash_message(message: bytes, hash_algo: str):
     digest = module.new(message).digest()
     assert 32 <= len(digest) <= 64, len(digest)
     return digest
-
-
-def delete_filesystem_node_for_stream(stream: BinaryIO):
-    """Deletes the corresponding filesystem node of it exists."""
-    filename = getattr(stream, "name", None)
-    if filename and os.path.exists(filename):  # Can't be false on Win32, since files are not deletable when open
-        os.remove(filename)  # We let errors flow here!
 
 
 def consume_bytes_as_chunks(data: Union[bytes, BinaryIO], chunk_size: int):  # FIXME DOCUMENT AND TEST ME
@@ -208,34 +237,6 @@ def generate_uuid0(ts: Optional[float] = None):
     :return: uuid0 object (subclass of UUID)
     """
     return uuid0.generate(ts)
-
-
-def get_metadata_file_path(storage_folder: Path):
-    """
-    Return path of standard metadata file for key/container storage.
-    """
-    return storage_folder.joinpath(".metadata.json")
-
-
-def safe_copy_directory(from_dir: Path, to_dir: Path, temp_prefix="__", **extra_params):
-    """
-    Copy a file tree to a destination directory (which must not exist) in a kinda-safe way,
-    using a temporary directory and an atomic rename.
-
-    `extra_params` are passed as keyword arguments to `shutil.copytree()`.
-    """
-    if to_dir.exists():
-        raise FileExistsError("Target %s already exists" % to_dir)
-    to_dir_tmp = to_dir.with_name(temp_prefix + to_dir.name)
-    if to_dir_tmp.exists():
-        shutil.rmtree(to_dir_tmp)
-    try:
-        shutil.copytree(from_dir, dst=to_dir_tmp, **extra_params)
-    except Exception:
-        if to_dir_tmp.exists():
-            shutil.rmtree(to_dir_tmp)
-        raise
-    os.rename(to_dir_tmp, to_dir)
 
 
 def split_as_formatted_data(first_data: bytes, second_data: bytes, block_size: int):

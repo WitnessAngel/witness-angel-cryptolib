@@ -2,7 +2,7 @@
 Encrypted container format
 ==========================
 
-The data recorded by a Witness Angel data is processed and stored into a flexible container format. The idea is to allow each payload (media data, metadata, symmetric and asymmetric keys...) to be encrypted/signed by several entities, one after the other.
+The data recorded by a WitnessAngel device is encrypted and stored into a flexible container format. The idea is to allow each payload (media data, metadata, symmetric and asymmetric keys...) to be encrypted/signed by several entities, one after the other.
 
 A configuration tree, with a structure similar to the container tree, is used to specify which algorithms and escrows the encryption/signing process must use.
 Escrows can be the local filesystem, or USB keys used as authentication devices, or remote webservices...

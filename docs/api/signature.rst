@@ -17,7 +17,7 @@ Public API
 Private API
 ---------------
 
-The functions below are only documented for the details they give on specific arguments.
+The functions below are only documented for the details that they give on specific arguments.
 
 
 PSS

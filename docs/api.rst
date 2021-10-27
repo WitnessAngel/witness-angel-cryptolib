@@ -7,6 +7,7 @@ API Documentation
 
    api/container
    api/escrow
+   api/authenticator
    api/authentication_device
    api/key_generation
    api/key_storage
@@ -16,7 +17,7 @@ API Documentation
    api/sensor
    api/jsonrpc_client
    api/utilities
-   api/error_handling
    api/exceptions
+   api/error_handling
    api/scaffolding
 

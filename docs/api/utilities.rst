@@ -36,22 +36,21 @@ Serialization
 .. autofunction:: wacryptolib.utilities.load_from_json_file
 
 
-Storage metadata handling
-------------------------------
-
-.. autofunction:: wacryptolib.utilities.get_metadata_file_path
-
-
 Miscellaneous
 ----------------------
 
 .. autofunction:: wacryptolib.utilities.generate_uuid0
+
+.. autofunction:: wacryptolib.utilities.split_as_formatted_data
+
+.. autofunction:: wacryptolib.utilities.consume_bytes_as_chunks
 
 .. autofunction:: wacryptolib.utilities.split_as_chunks
 
 .. autofunction:: wacryptolib.utilities.recombine_chunks
 
 .. autofunction:: wacryptolib.utilities.safe_copy_directory
+
 
 
 

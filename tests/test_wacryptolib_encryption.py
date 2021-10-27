@@ -11,7 +11,7 @@ from Crypto.Random.random import randint
 import wacryptolib
 from wacryptolib.container import ContainerWriter
 from wacryptolib.encryption import STREAMABLE_ENCRYPTION_ALGOS
-from wacryptolib.exceptions import DecryptionError, EncryptionError
+from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError
 from wacryptolib.key_generation import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symmetric_key_dict, \
     SYMMETRIC_KEY_TYPES_REGISTRY
 from wacryptolib.utilities import SUPPORTED_HASH_ALGOS, hash_message

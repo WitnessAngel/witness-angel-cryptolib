@@ -201,23 +201,24 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
     ]
 )
 
-SIMPLE_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
-    "encryption": {
-        "[('escrow_type', 'local')]": (
-            {"escrow_type": "local"},
-            [
-                {"key_type": "RSA_OAEP", "keychain_uid": keychain_uid},
-                {"key_type": "RSA_OAEP", "keychain_uid": ENFORCED_UID1},
-            ],
-        )
-    },
-    "signature": {
-        "[('escrow_type', 'local')]": (
-            {"escrow_type": "local"},
-            [{"key_type": "DSA_DSS", "keychain_uid": keychain_uid}],
-        )
-    },
-}
+def SIMPLE_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES(keychain_uid):
+    return {
+        "encryption": {
+            "[('escrow_type', 'local')]": (
+                {"escrow_type": "local"},
+                [
+                    {"key_type": "RSA_OAEP", "keychain_uid": keychain_uid},
+                    {"key_type": "RSA_OAEP", "keychain_uid": ENFORCED_UID1},
+                ],
+            )
+        },
+        "signature": {
+            "[('escrow_type', 'local')]": (
+                {"escrow_type": "local"},
+                [{"key_type": "DSA_DSS", "keychain_uid": keychain_uid}],
+            )
+        },
+    }
 
 COMPLEX_SHAMIR_CONTAINER_CONF = dict(
     data_encryption_strata=[
@@ -265,27 +266,29 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
     ]
 )
 
-COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
-    "encryption": {
-        "[('escrow_type', 'local')]": (
-            {"escrow_type": "local"},
-            [
-                {"key_type": "RSA_OAEP", "keychain_uid": keychain_uid},
-                {"key_type": "RSA_OAEP", "keychain_uid": ENFORCED_UID2},
-            ],
-        )
-    },
-    "signature": {
-        "[('escrow_type', 'local')]": (
-            {"escrow_type": "local"},
-            [
-                {"key_type": "DSA_DSS", "keychain_uid": keychain_uid},
-                {"key_type": "RSA_PSS", "keychain_uid": ENFORCED_UID1},
-                {"key_type": "ECC_DSS", "keychain_uid": keychain_uid},
-            ],
-        )
-    },
-}
+
+def COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES(keychain_uid):
+     return {
+        "encryption": {
+            "[('escrow_type', 'local')]": (
+                {"escrow_type": "local"},
+                [
+                    {"key_type": "RSA_OAEP", "keychain_uid": keychain_uid},
+                    {"key_type": "RSA_OAEP", "keychain_uid": ENFORCED_UID2},
+                ],
+            )
+        },
+        "signature": {
+            "[('escrow_type', 'local')]": (
+                {"escrow_type": "local"},
+                [
+                    {"key_type": "DSA_DSS", "keychain_uid": keychain_uid},
+                    {"key_type": "RSA_PSS", "keychain_uid": ENFORCED_UID1},
+                    {"key_type": "ECC_DSS", "keychain_uid": keychain_uid},
+                ],
+            )
+        },
+    }
 
 
 def _dump_to_json_schema(data):

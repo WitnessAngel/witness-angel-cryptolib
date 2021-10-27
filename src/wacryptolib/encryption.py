@@ -42,6 +42,7 @@ def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key_dict: dict
     assert isinstance(plaintext, bytes), repr(plaintext)
     encryption_type_conf = _get_encryption_type_conf(encryption_algo=encryption_algo)
     encryption_function = encryption_type_conf["encryption_function"]
+    #### _check_symmetric_key_length_bytes(len(main_key))
     try:
         cipherdict = encryption_function(key_dict=key_dict, plaintext=plaintext)
     except ValueError as exc:
@@ -231,15 +232,13 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool=True) -
 
 
 class EncryptionStreamBase:
-    """General class of Encrytion Stream Node"
-
-        :contains all the functions common to the different nodes
-
-    """
+    """General class of Encrytion Stream Node"""
     _is_finished = False
+
     BLOCK_SIZE = 1
-    _remainder = None
-    _cipher = None
+    _remainder = b""  # Used when BLOCK_SIZE != 1
+
+    _cipher = None  # Created by subclasses
     _hashers_dict = None
 
     def __init__(self, message_digest_algo=()):
@@ -278,7 +277,7 @@ class EncryptionStreamBase:
         return ciphertext
 
     def finalize(self) -> bytes:
-        """ Finalize by the encryption the remainder
+        """ Finalize by the encryption the remainder?????????
 
             : block_size : The output length is guaranteed to be a multiple of block_size
 
@@ -289,7 +288,7 @@ class EncryptionStreamBase:
 
         ciphertext = b""
 
-        if self._remainder is not None:
+        if self._remainder:
             padded_remainder = pad(self._remainder, block_size=self.BLOCK_SIZE)
             ciphertext = self._encrypt_aligned_data(padded_remainder)
             self._remainder = b""
@@ -322,22 +321,27 @@ class EncryptionStreamBase:
 
 
 class AesCbcEncryptionNode(EncryptionStreamBase):
-    """Encrypt a bytestring using AES (CBC mode).
-
-    """
-    _remainder = b""
+    """Encrypt a bytestring using AES (CBC mode)."""
     BLOCK_SIZE = AES.block_size
 
     def __init__(self, key_dict: dict, message_digest_algo=()):
-        """Extends parent class, create an instance of AES encrption and defines metadata
-
-        """
-        # TODO init AES instance with this proper
         super().__init__(message_digest_algo=message_digest_algo)
-
         self._key = key_dict["key"]
         self._iv = key_dict["iv"]
         self._cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
+
+
+class AesEaxEncryptionNode(EncryptionStreamBase):
+    """Encrypt a bytestring using AES (CBC mode)."""
+
+    def __init__(self, key_dict: dict, message_digest_algo=()):
+        super().__init__(message_digest_algo=message_digest_algo)
+        self._key = key_dict["key"]
+        self._nonce = key_dict["nonce"]
+        self._cipher = AES.new(self._key, AES.MODE_EAX, nonce=self._nonce)
+
+    def _get_integrity_tags(self) -> dict:
+        return {"tag": self._cipher.digest()}
 
 
 class Chacha20Poly1305EncryptionNode(EncryptionStreamBase):
@@ -410,7 +414,7 @@ ENCRYPTION_ALGOS_REGISTRY = dict(
     AES_CBC={"encryption_function": _encrypt_via_aes_cbc, "decryption_function": _decrypt_via_aes_cbc,
              "encryption_node_class": AesCbcEncryptionNode, "is_authenticated": False},
     AES_EAX={"encryption_function": _encrypt_via_aes_eax, "decryption_function": _decrypt_via_aes_eax,
-             "encryption_node_class": None, "is_authenticated": True},
+             "encryption_node_class": AesEaxEncryptionNode, "is_authenticated": True},
     CHACHA20_POLY1305={
         "encryption_function": _encrypt_via_chacha20_poly1305,
         "decryption_function": _decrypt_via_chacha20_poly1305,

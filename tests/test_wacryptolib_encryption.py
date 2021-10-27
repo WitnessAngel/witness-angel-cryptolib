@@ -155,6 +155,7 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
         )
 
 
+# test each node separately, then a pipeline with all nodes
 _stream_algo_nodes = [[algo] for algo in STREAMABLE_ENCRYPTION_ALGOS] + [STREAMABLE_ENCRYPTION_ALGOS]
 
 

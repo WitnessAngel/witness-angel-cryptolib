@@ -1177,9 +1177,9 @@ class ContainerStorage:
             key_storage_pool=self._key_storage_pool,
         )
 
-    def _decrypt_data_from_container(self, container: dict, passphrase_mapper: Optional[dict]) -> bytes:
+    def _decrypt_data_from_container(self, container: dict, passphrase_mapper: Optional[dict], verify: bool) -> bytes:
         return decrypt_data_from_container(
-            container, key_storage_pool=self._key_storage_pool, passphrase_mapper=passphrase_mapper
+            container, key_storage_pool=self._key_storage_pool, passphrase_mapper=passphrase_mapper, verify=verify
         )  # Will fail if authorizations are not OK
 
     @catch_and_log_exception
@@ -1308,7 +1308,7 @@ class ContainerStorage:
         container = load_container_from_filesystem(container_filepath, include_data_ciphertext=include_data_ciphertext)
         return container
 
-    def decrypt_container_from_storage(self, container_name_or_idx, passphrase_mapper: Optional[dict] = None) -> bytes:
+    def decrypt_container_from_storage(self, container_name_or_idx, passphrase_mapper: Optional[dict]=None, verify: bool=True) -> bytes:
         """
         Return the decrypted content of the container `container_name_or_idx` (which must be in `list_container_names()`,
         or an index suitable for this sorted list).
@@ -1317,7 +1317,7 @@ class ContainerStorage:
 
         container = self.load_container_from_storage(container_name_or_idx, include_data_ciphertext=True)
 
-        result = self._decrypt_data_from_container(container, passphrase_mapper=passphrase_mapper)
+        result = self._decrypt_data_from_container(container, passphrase_mapper=passphrase_mapper, verify=verify)
         logger.info("Container %s successfully decrypted", container_name_or_idx)
         return result
 

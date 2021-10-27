@@ -687,7 +687,8 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     with pytest.raises(DecryptionError):
         storage.decrypt_container_from_storage("beauty.txt.crypt")
 
-    decrypted = storage.decrypt_container_from_storage("beauty.txt.crypt", passphrase_mapper={None: all_passphrases})
+    verify = random.choice((True, False))
+    decrypted = storage.decrypt_container_from_storage("beauty.txt.crypt", passphrase_mapper={None: all_passphrases}, verify=verify)
     assert decrypted == data
 
 
@@ -1114,6 +1115,28 @@ def test_container_storage_encryption_conf_precedence(tmp_path):
     assert len(container_simple["data_encryption_strata"]) == 1
     container_complex = storage.load_container_from_storage("stuff_complex.txt.crypt")
     assert len(container_complex["data_encryption_strata"]) == 3
+
+
+def test_container_storage_decryption_authenticated_algo_verify(tmp_path):
+    storage = ContainerStorage(default_encryption_conf=COMPLEX_CONTAINER_CONF, containers_dir=tmp_path)
+
+    storage.enqueue_file_for_encryption(
+        "animals.dat", b"dogs\ncats\n", metadata=None
+    )
+    storage.wait_for_idle_state()
+    container_name, = storage.list_container_names()
+
+    container = storage.load_container_from_storage(container_name)
+    container["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION of EAX
+
+    container_filepath = storage._make_absolute(container_name)
+    dump_container_to_filesystem(container_filepath, container=container, offload_data_ciphertext=False)  # Don't touch existing offloaded data
+
+    result = storage.decrypt_container_from_storage(container_name, verify=False)
+    assert result == b"dogs\ncats\n"
+
+    with pytest.raises(DecryptionIntegrityError):
+        storage.decrypt_container_from_storage(container_name, verify=True)
 
 
 def test_get_encryption_configuration_summary():

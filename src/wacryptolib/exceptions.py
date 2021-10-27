@@ -49,7 +49,7 @@ class DecryptionError(CryptographyError):
     pass
 
 
-class DecryptionIntegrityError(CryptographyError):
+class DecryptionIntegrityError(DecryptionError):
     pass  # E.g. MAC/tag check failed
 
 

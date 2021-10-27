@@ -15,6 +15,9 @@ from pprint import pprint
 from unittest.mock import patch
 from uuid import UUID
 
+import pytest
+from Crypto.Random import get_random_bytes
+
 from _test_mockups import FakeTestContainerStorage
 from wacryptolib.container import (
     LOCAL_ESCROW_MARKER,
@@ -48,6 +51,13 @@ from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, Files
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, generate_uuid0, get_utc_now_date, \
     dump_to_json_str
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
+
+def _get_binary_or_empty_content():
+    if random.choice((True, False)):
+        bytes_length = random.randint(1, 1000)
+        return get_random_bytes(bytes_length)
+    return b""
+
 
 ENFORCED_UID1 = UUID("0e8e861e-f0f7-e54b-18ea-34798d5daaaa")
 ENFORCED_UID2 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeebbbb")
@@ -182,13 +192,13 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
                     key_shared_secret_threshold=3,
                     key_shared_secret_escrows=[
                         dict(key_encryption_strata=[
-                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_strata=[
-                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_strata=[
-                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_strata=[
-                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_strata=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)],),
                     ],
@@ -242,12 +252,12 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
                     key_shared_secret_threshold=2,
                     key_shared_secret_escrows=[
                         dict(key_encryption_strata=[
-                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
-                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_strata=[
-                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_strata=[
-                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_strata=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID2)],),
                     ],
@@ -340,7 +350,7 @@ def test_void_container_confs(container_conf):
     ],
 )
 def test_standard_container_encryption_and_decryption(tmp_path, container_conf, escrow_dependencies_builder):
-    data = b"abc"  # get_random_bytes(random.randint(1, 1000))
+    data = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
     use_streaming_encryption = random.choice([True, False])
@@ -352,7 +362,7 @@ def test_standard_container_encryption_and_decryption(tmp_path, container_conf, 
         container_filepath = tmp_path / "mygoodcontainer.crypt"
         encrypt_data_and_dump_container_to_filesystem(
                 data=data, container_filepath=container_filepath,
-            conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool)
+                conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool)
         container = load_container_from_filesystem(container_filepath, include_data_ciphertext=True)
     else:
         container = encrypt_data_into_container(
@@ -420,7 +430,7 @@ def test_standard_container_encryption_and_decryption(tmp_path, container_conf, 
     ],
 )
 def test_shamir_container_encryption_and_decryption(shamir_container_conf, escrow_dependencies_builder):
-    data = b"abc"  # get_random_bytes(random.randint(1, 1000))   # FIXME reactivate ???
+    data = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
 
@@ -517,14 +527,14 @@ RECURSIVE_CONTAINER_CONF = dict(
 
 def test_recursive_shamir_secrets_and_strata():
     keychain_uid = generate_uuid0()
-    data = b"qssd apk_$82"
+    data = _get_binary_or_empty_content()
 
     container = encrypt_data_into_container(
         data=data, conf=RECURSIVE_CONTAINER_CONF, keychain_uid=keychain_uid, metadata=None
     )
 
     data_decrypted = decrypt_data_from_container(
-        container=container,
+            container=container,
     )
 
     assert data_decrypted == data
@@ -611,9 +621,9 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                             dict(key_encryption_strata=[
                                      dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow1, keychain_uid=keychain_uid_escrow)],),
                             dict(key_encryption_strata=[
-                                dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow2)], ),
+                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow2)],),
                             dict(key_encryption_strata=[
-                                dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow3)], ),
+                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow3)],),
                         ],
                     ),
                 ],
@@ -805,7 +815,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
 
     _container_for_txt = storage.load_container_from_storage("empty.txt.crypt")
     assert storage.load_container_from_storage(1) == _container_for_txt
-    assert _container_for_txt["data_ciphertext"]
+    assert _container_for_txt["data_ciphertext"]   # Padding occurs for AES_CBC
 
     _container_for_txt2 = storage.load_container_from_storage("empty.txt.crypt", include_data_ciphertext=False)
     assert storage.load_container_from_storage(1, include_data_ciphertext=False) == _container_for_txt2
@@ -1020,11 +1030,11 @@ def test_container_storage_purge_by_quota(tmp_path):
     )
     assert not len(storage)
 
-    storage.enqueue_file_for_encryption("20101021222711_stuff.dat", b"a" * 2000, metadata=None)
-    storage.enqueue_file_for_encryption("20301021222711_stuff.dat", b"z" * 2000, metadata=None)
+    storage.enqueue_file_for_encryption("20101021222711_stuff.dat", b"a"*2000, metadata=None)
+    storage.enqueue_file_for_encryption("20301021222711_stuff.dat", b"z"*2000, metadata=None)
 
     for i in range(10):
-        storage.enqueue_file_for_encryption("some_stuff.dat", b"m" * 1000, metadata=None)
+        storage.enqueue_file_for_encryption("some_stuff.dat", b"m"*1000, metadata=None)
     storage.wait_for_idle_state()
 
     container_names = storage.list_container_names(as_sorted=True)
@@ -1074,8 +1084,8 @@ def test_container_storage_purge_parameter_combinations(tmp_path):
         )
 
         storage.enqueue_file_for_encryption("20001121222729_smth.dat", b"000", metadata=None)
-        storage.enqueue_file_for_encryption(recent_big_file_name, b"0" * 2000, metadata=None)
-        storage.enqueue_file_for_encryption("recent_small_file.dat", b"0" * 50, metadata=None)
+        storage.enqueue_file_for_encryption(recent_big_file_name, b"0"*2000, metadata=None)
+        storage.enqueue_file_for_encryption("recent_small_file.dat", b"0"*50, metadata=None)
 
         storage.wait_for_idle_state()
 
@@ -1276,7 +1286,7 @@ def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
     assert container["data_ciphertext"] == container_ciphertext_before_dump  # Original dict unchanged
 
     size2 = get_container_size_on_filesystem(container_filepath)
-    assert size2 < size1  # Overhead of base64 encoding in monolithic file!
+    assert size2 < size1   # Overhead of base64 encoding in monolithic file!
     assert size1 < size2 + 1000  # Overhead remaings limited though
 
     assert container_filepath.exists()

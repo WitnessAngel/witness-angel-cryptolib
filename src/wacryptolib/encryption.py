@@ -288,7 +288,7 @@ class EncryptionStreamBase:
 
         ciphertext = b""
 
-        if self._remainder:
+        if self.BLOCK_SIZE != 1:
             padded_remainder = pad(self._remainder, block_size=self.BLOCK_SIZE)
             ciphertext = self._encrypt_aligned_data(padded_remainder)
             self._remainder = b""
@@ -332,7 +332,7 @@ class AesCbcEncryptionNode(EncryptionStreamBase):
 
 
 class AesEaxEncryptionNode(EncryptionStreamBase):
-    """Encrypt a bytestring using AES (CBC mode)."""
+    """Encrypt a bytestring using AES (EAX mode)."""
 
     def __init__(self, key_dict: dict, message_digest_algo=()):
         super().__init__(message_digest_algo=message_digest_algo)
@@ -345,6 +345,7 @@ class AesEaxEncryptionNode(EncryptionStreamBase):
 
 
 class Chacha20Poly1305EncryptionNode(EncryptionStreamBase):
+    """Encrypt a bytestring using ChaCha20 with Poly1305 authentication."""
 
     def __init__(self, key_dict: dict, message_digest_algo=()):
         # TODO init CHACHA instance with this proper
@@ -359,9 +360,7 @@ class Chacha20Poly1305EncryptionNode(EncryptionStreamBase):
 
 
 class StreamManager:
-    """" Allows data to be encrypted across all encryption nodes
-
-    """
+    """"Pipeline to encrypt data through several encryption nodes, down to an outout stream (e.g. file or ByteIO)"""
 
     def __init__(self, output_stream: BinaryIO, data_encryption_strata_extracts: list):
 

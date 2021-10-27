@@ -78,10 +78,11 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
 
 
 @pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
-def test_symmetric_encryption_and_decryption_for_algo(encryption_algo):
+@pytest.mark.parametrize("use_empty_data", [True, False])
+def test_symmetric_encryption_and_decryption_for_algo(encryption_algo, use_empty_data):
     key_dict = generate_symmetric_key_dict(encryption_algo)
 
-    binary_content = _get_binary_content()
+    binary_content = b"" if use_empty_data else _get_binary_content()
 
     cipherdict = wacryptolib.encryption.encrypt_bytestring(
         key_dict=key_dict, plaintext=binary_content, encryption_algo=encryption_algo
@@ -96,10 +97,11 @@ def test_symmetric_encryption_and_decryption_for_algo(encryption_algo):
 
     assert decrypted_content == binary_content
 
-    decryption_func = functools.partial(
-        wacryptolib.encryption.decrypt_bytestring, key_dict=key_dict, encryption_algo=encryption_algo
-    )
-    _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
+    if not use_empty_data:
+        decryption_func = functools.partial(
+            wacryptolib.encryption.decrypt_bytestring, key_dict=key_dict, encryption_algo=encryption_algo
+        )
+        _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
 
     main_key_too_short = get_random_bytes(16)
 

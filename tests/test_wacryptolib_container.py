@@ -35,7 +35,7 @@ from wacryptolib.container import (
     request_decryption_authorizations,
     delete_container_from_filesystem, CONTAINER_DATETIME_FORMAT, get_container_size_on_filesystem, ContainerWriter,
     encrypt_data_and_dump_container_to_filesystem, is_container_encryption_conf_streamable, CONF_SCHEMA_PYTHON,
-    CONF_SCHEMA_JSON, CONTAINER_SCHEMA_PYTHON, CONTAINER_SCHEMA_JSON,
+    CONF_SCHEMA_JSON, CONTAINER_SCHEMA_PYTHON, CONTAINER_SCHEMA_JSON, check_conf_sanity, check_container_sanity,
 )
 from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS, AUTHENTICATED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import (
@@ -43,7 +43,7 @@ from wacryptolib.escrow import (
     generate_asymmetric_keypair_for_storage,
     generate_free_keypair_for_least_provisioned_key_type,
 )
-from wacryptolib.exceptions import DecryptionError, ConfigurationError, DecryptionIntegrityError
+from wacryptolib.exceptions import DecryptionError, ConfigurationError, DecryptionIntegrityError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_asymmetric_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, FilesystemKeyStoragePool, DummyKeyStoragePool
@@ -692,7 +692,8 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         storage.decrypt_container_from_storage("beauty.txt.crypt")
 
     verify = random.choice((True, False))
-    decrypted = storage.decrypt_container_from_storage("beauty.txt.crypt", passphrase_mapper={None: all_passphrases}, verify=verify)
+    decrypted = storage.decrypt_container_from_storage("beauty.txt.crypt", passphrase_mapper={None: all_passphrases},
+                                                       verify=verify)
     assert decrypted == data
 
 
@@ -1128,7 +1129,8 @@ def test_container_storage_decryption_authenticated_algo_verify(tmp_path):
     container["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION of EAX
 
     container_filepath = storage._make_absolute(container_name)
-    dump_container_to_filesystem(container_filepath, container=container, offload_data_ciphertext=False)  # Don't touch existing offloaded data
+    dump_container_to_filesystem(container_filepath, container=container,
+                                 offload_data_ciphertext=False)  # Don't touch existing offloaded data
 
     result = storage.decrypt_container_from_storage(container_name, verify=False)
     assert result == b"dogs\ncats\n"
@@ -1285,7 +1287,6 @@ def test_generate_container_and_symmetric_keys():
 
 
 def test_create_container_encryption_stream(tmp_path):
-
     containers_dir = tmp_path / "containers_dir"
     containers_dir.mkdir()
 
@@ -1295,7 +1296,8 @@ def test_create_container_encryption_stream(tmp_path):
     storage = ContainerStorage(default_encryption_conf=None, containers_dir=containers_dir)
 
     container_encryption_stream = storage.create_container_encryption_stream(
-        filename_base, metadata={"mymetadata": True}, encryption_conf=SIMPLE_CONTAINER_CONF, dump_initial_container=True)
+        filename_base, metadata={"mymetadata": True}, encryption_conf=SIMPLE_CONTAINER_CONF,
+        dump_initial_container=True)
 
     container_started = storage.load_container_from_storage("20200101_container_example.crypt")
     assert container_started["container_state"] == "STARTED"
@@ -1333,11 +1335,11 @@ def ___obsolete_test_encrypt_data_and_dump_container_to_filesystem(tmp_path):
         COMPLEX_CONTAINER_CONF,
         SIMPLE_SHAMIR_CONTAINER_CONF,
         COMPLEX_SHAMIR_CONTAINER_CONF
-
     ])
 def test_conf_schema(conf):
-    validate_via_pythonschema(conf, CONF_SCHEMA_PYTHON)
-    dump_and_validate_via_jsonschema(conf, CONF_SCHEMA_JSON)
+    check_conf_sanity(conf=conf, jsonschema_mode=False)
+
+    check_conf_sanity(conf=conf, jsonschema_mode=True)
 
 
 def generate_corrupted_conf(CONTAINER_CONF):
@@ -1368,11 +1370,11 @@ def generate_corrupted_conf(CONTAINER_CONF):
 
 @pytest.mark.parametrize("corrupted_conf", generate_corrupted_conf(COMPLEX_SHAMIR_CONTAINER_CONF))
 def test_corrupted_conf(corrupted_conf):
-    with pytest.raises(schema.SchemaError):
-        validate_via_pythonschema(corrupted_conf, CONF_SCHEMA_PYTHON)
+    with pytest.raises(ValidationError):
+        check_conf_sanity(conf=corrupted_conf, jsonschema_mode=False)
 
-    with pytest.raises(jsonschema.exceptions.ValidationError):
-        dump_and_validate_via_jsonschema(corrupted_conf, CONF_SCHEMA_JSON)
+    with pytest.raises(ValidationError):
+        check_conf_sanity(conf=corrupted_conf, jsonschema_mode=True)
 
 
 @pytest.mark.parametrize("conf", [SIMPLE_CONTAINER_CONF,
@@ -1383,15 +1385,16 @@ def test_container_schema(conf):
     container = encrypt_data_into_container(
         data=b"stuffs", conf=conf, keychain_uid=None, metadata=None
     )
-    validate_via_pythonschema(container, CONTAINER_SCHEMA_PYTHON)
+    check_container_sanity(container=container, jsonschema_mode=False)
 
-    dump_and_validate_via_jsonschema(container, CONTAINER_SCHEMA_JSON)
+    check_container_sanity(container=container, jsonschema_mode=True)
 
 
 def test_corrupted_container():
     container = encrypt_data_into_container(
         data=b"stuffs", conf=SIMPLE_CONTAINER_CONF, keychain_uid=None, metadata=None
     )
+
     corrupted_containers = []
     corrupted_container1 = copy.deepcopy(container)
     corrupted_container1["data_encryption_strata"][0]["keychain_uid"] = ENFORCED_UID1
@@ -1406,35 +1409,21 @@ def test_corrupted_container():
     corrupted_containers.append(corrupted_container3)
 
     for corrupted_container in corrupted_containers:
-        with pytest.raises(schema.SchemaError):
-            validate_via_pythonschema(corrupted_container, CONTAINER_SCHEMA_PYTHON)
+        with pytest.raises(ValidationError):
+            check_container_sanity(container=corrupted_container, jsonschema_mode=True)
 
-        with pytest.raises(jsonschema.exceptions.ValidationError):
-            dump_and_validate_via_jsonschema(corrupted_container, CONTAINER_SCHEMA_JSON)
-
-
-# "Utilities"
-
-def dump_and_validate_via_jsonschema(data, schema):
-    """
-    Validating Python data structures, such as those obtained from configuration or container files with the current
-    schema via json schema.
-    """
-    # Exporting schema in jsonschema format
-    container_json_schema_tree = schema.json_schema("my_schema_test")
-
-    # Exporting conf in pymongo extended json format
-    json_std_lib = dump_to_json_str(data)
-
-    # Parsing Json from string
-    json_str_lib = json.loads(json_std_lib)
-
-    jsonschema_validate(instance=json_str_lib, schema=container_json_schema_tree)
+        with pytest.raises(ValidationError):
+            check_container_sanity(container=corrupted_container, jsonschema_mode=False)
 
 
-def validate_via_pythonschema(data, schema):
-    """
-    Validating Python data structures, such as those obtained from configuration or container files with the current
-    schema via python schema.
-    """
-    schema.validate(data)
+def test_check_container_sanity():
+
+    data_encryption_algo = random.choice(AUTHENTICATED_ENCRYPTION_ALGOS)
+    container_conf = copy.deepcopy(SIMPLE_CONTAINER_CONF)
+    container_conf["data_encryption_strata"][0]["data_encryption_algo"] = data_encryption_algo
+
+    container = encrypt_data_into_container(
+        data=b"1234", conf=container_conf, metadata=None
+    )
+    container["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION
+

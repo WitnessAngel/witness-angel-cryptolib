@@ -76,6 +76,7 @@ SIGNATURELESS_CONTAINER_CONF = dict(
     ]
 )
 
+
 SIGNATURELESS_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
         "[('escrow_type', 'local')]": (
@@ -189,8 +190,7 @@ SIMPLE_SHAMIR_CONTAINER_CONF = dict(
                         dict(key_encryption_strata=[
                             dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
                         dict(key_encryption_strata=[
-                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER,
-                                 keychain_uid=ENFORCED_UID1)], ),
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)],),
                     ],
                 ),
             ],
@@ -248,8 +248,7 @@ COMPLEX_SHAMIR_CONTAINER_CONF = dict(
                         dict(key_encryption_strata=[
                             dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
                         dict(key_encryption_strata=[
-                            dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER,
-                                 keychain_uid=ENFORCED_UID2)], ),
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID2)],),
                     ],
                 )
             ],
@@ -349,13 +348,12 @@ def test_standard_container_encryption_and_decryption(tmp_path, container_conf, 
     if use_streaming_encryption and is_container_encryption_conf_streamable(container_conf):
         container_filepath = tmp_path / "mygoodcontainer.crypt"
         encrypt_data_and_dump_container_to_filesystem(
-            data=data, container_filepath=container_filepath,
+                data=data, container_filepath=container_filepath,
             conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool)
         container = load_container_from_filesystem(container_filepath, include_data_ciphertext=True)
     else:
         container = encrypt_data_into_container(
-            data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata,
-            key_storage_pool=key_storage_pool
+            data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool
         )
 
     assert container["keychain_uid"]
@@ -499,11 +497,11 @@ RECURSIVE_CONTAINER_CONF = dict(
                     key_shared_secret_threshold=1,
                     key_shared_secret_escrows=[
                         dict(
-                            key_encryption_strata=[
-                                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)], ),
+                             key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(
-                            key_encryption_strata=[
-                                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
+                             key_encryption_strata=[
+                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
                     ],  # Beware, same escrow for the 2 shares, for now
                 ),
             ],
@@ -513,7 +511,6 @@ RECURSIVE_CONTAINER_CONF = dict(
         )
     ]
 )
-
 
 def test_recursive_shamir_secrets_and_strata():
     keychain_uid = generate_uuid0()
@@ -609,8 +606,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                         key_shared_secret_threshold=2,
                         key_shared_secret_escrows=[
                             dict(key_encryption_strata=[
-                                dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow1,
-                                     keychain_uid=keychain_uid_escrow)], ),
+                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow1, keychain_uid=keychain_uid_escrow)],),
                             dict(key_encryption_strata=[
                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow2)], ),
                             dict(key_encryption_strata=[
@@ -714,8 +710,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         storage.decrypt_container_from_storage("beauty.txt.crypt")
 
     verify = random.choice((True, False))
-    decrypted = storage.decrypt_container_from_storage("beauty.txt.crypt", passphrase_mapper={None: all_passphrases},
-                                                       verify=verify)
+    decrypted = storage.decrypt_container_from_storage("beauty.txt.crypt", passphrase_mapper={None: all_passphrases}, verify=verify)
     assert decrypted == data
 
 
@@ -978,8 +973,7 @@ def test_container_storage_purge_by_age(tmp_path):
         storage.enqueue_file_for_encryption("%s_stuff.dat" % dt.strftime(CONTAINER_DATETIME_FORMAT),
                                             b"abc", metadata=None)
         dt -= timedelta(days=1)
-    storage.enqueue_file_for_encryption("whatever_stuff.dat", b"xxx",
-                                        metadata=None)  # File timestamp with be used instead
+    storage.enqueue_file_for_encryption("whatever_stuff.dat", b"xxx", metadata=None)  # File timestamp with be used instead
     storage.wait_for_idle_state()
 
     container_names = storage.list_container_names(as_sorted=True)
@@ -1063,7 +1057,7 @@ def test_container_storage_purge_parameter_combinations(tmp_path):
 
     recent_big_file_name = "%s_recent_big_stuff.dat" % now.strftime(CONTAINER_DATETIME_FORMAT)
 
-    params_sets = product([None, 2], [None, 1000], [None, timedelta(days=3)])
+    params_sets = product([None, 2],[None, 1000], [None, timedelta(days=3)])
 
     for max_container_count, max_container_quota, max_container_age in params_sets:
         offload_data_ciphertext = random.choice((True, False))
@@ -1084,9 +1078,8 @@ def test_container_storage_purge_parameter_combinations(tmp_path):
 
         container_names = storage.list_container_names(as_sorted=True)
 
-        assert (Path("20001121222729_smth.dat.000.crypt") in container_names) == (
-            not (max_container_count or max_container_quota or max_container_age))
-        assert (Path(recent_big_file_name + ".001.crypt") in container_names) == (not max_container_quota)
+        assert (Path("20001121222729_smth.dat.000.crypt") in container_names) == (not (max_container_count or max_container_quota or max_container_age))
+        assert (Path(recent_big_file_name +".001.crypt") in container_names) == (not max_container_quota)
         assert (Path("recent_small_file.dat.002.crypt") in container_names) == True
 
     # Special case of "everything restricted"
@@ -1099,7 +1092,7 @@ def test_container_storage_purge_parameter_combinations(tmp_path):
         max_container_age=timedelta(days=0),
         offload_data_ciphertext=False,
     )
-    storage.enqueue_file_for_encryption("some_small_file.dat", b"0" * 50, metadata=None)
+    storage.enqueue_file_for_encryption("some_small_file.dat", b"0"*50, metadata=None)
     storage.wait_for_idle_state()
 
     container_names = storage.list_container_names(as_sorted=True)
@@ -1151,8 +1144,7 @@ def test_container_storage_decryption_authenticated_algo_verify(tmp_path):
     container["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION of EAX
 
     container_filepath = storage._make_absolute(container_name)
-    dump_container_to_filesystem(container_filepath, container=container,
-                                 offload_data_ciphertext=False)  # Don't touch existing offloaded data
+    dump_container_to_filesystem(container_filepath, container=container, offload_data_ciphertext=False)  # Don't touch existing offloaded data
 
     result = storage.decrypt_container_from_storage(container_name, verify=False)
     assert result == b"dogs\ncats\n"
@@ -1258,8 +1250,8 @@ def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
     assert size1
 
     assert container_filepath.exists()
-    # delete_container_from_filesystem(container_filepath)
-    # assert not container_filepath.exists()
+    #delete_container_from_filesystem(container_filepath)
+    #assert not container_filepath.exists()
 
     # CASE 2 - OFFLOADED CIPHERTEXT FILE
 
@@ -1318,8 +1310,7 @@ def test_create_container_encryption_stream(tmp_path):
     storage = ContainerStorage(default_encryption_conf=None, containers_dir=containers_dir)
 
     container_encryption_stream = storage.create_container_encryption_stream(
-        filename_base, metadata={"mymetadata": True}, encryption_conf=SIMPLE_CONTAINER_CONF,
-        dump_initial_container=True)
+        filename_base, metadata={"mymetadata": True}, encryption_conf=SIMPLE_CONTAINER_CONF, dump_initial_container=True)
 
     container_started = storage.load_container_from_storage("20200101_container_example.crypt")
     assert container_started["container_state"] == "STARTED"

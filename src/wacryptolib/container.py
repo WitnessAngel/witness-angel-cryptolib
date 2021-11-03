@@ -78,8 +78,8 @@ def get_escrow_id(escrow_conf: dict) -> str:
 
 
 def gather_escrow_dependencies(containers: Sequence) -> dict:
-    """
-    Analyse a container and return the escrows (and their keypairs) used by it.
+    """Analyse a container and return the escrows (and their keypairs) used by it.
+
     :return: dict with lists of keypair identifiers in fields "encryption" and "signature".
     """
 
@@ -136,8 +136,8 @@ def gather_escrow_dependencies(containers: Sequence) -> dict:
 def request_decryption_authorizations(
         escrow_dependencies: dict, key_storage_pool, request_message: str, passphrases: Optional[list] = None
 ) -> dict:
-    """
-    Loop on encryption escrows and request decryption authorization for all the keypairs that they own.
+    """Loop on encryption escrows and request decryption authorization for all the keypairs that they own.
+
     :return: dict mapping escrow ids to authorization result dicts.
     """
     request_authorization_result = {}
@@ -197,13 +197,12 @@ class ContainerBase:
         self._passphrase_mapper = passphrase_mapper or {}
 
 
-class ContainerWriter(ContainerBase):  # FIXME rename to ContainerEncryptor
+class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
     """
     Contains every method used to write and encrypt a container, IN MEMORY.
     """
 
-    def build_container_and_stream_encryptor(self, *, conf: dict, output_stream: BinaryIO, keychain_uid=None,
-                                             metadata=None) -> dict:
+    def build_container_and_stream_encryptor(self, *, conf: dict, output_stream: BinaryIO, keychain_uid=None, metadata=None) -> dict:
         """
         Build a base container to store encrypted keys, as well as a stream encryptor
         meant to process heavy data chunk by chunk.
@@ -305,8 +304,7 @@ class ContainerWriter(ContainerBase):  # FIXME rename to ContainerEncryptor
             assert isinstance(data_cipherdict, dict), data_cipherdict  # Might contain integrity/authentication data
 
             data_ciphertext = data_cipherdict.pop("ciphertext")  # Mandatory field
-            assert isinstance(data_ciphertext,
-                              bytes), data_ciphertext  # Same raw content as would be in offloaded data file
+            assert isinstance(data_ciphertext, bytes), data_ciphertext  # Same raw content as would be in offloaded data file
 
             message_digests = {
                 message_digest_algo: hash_message(data_ciphertext, hash_algo=message_digest_algo)
@@ -314,8 +312,8 @@ class ContainerWriter(ContainerBase):  # FIXME rename to ContainerEncryptor
             }
 
             authentication_data_list.append(dict(
-                integrity_tags=data_cipherdict,  # Only remains tags, macs etc.
-                message_digests=message_digests,
+                    integrity_tags=data_cipherdict,  # Only remains tags, macs etc.
+                    message_digests=message_digests,
             ))
 
             data_current = data_ciphertext
@@ -357,9 +355,9 @@ class ContainerWriter(ContainerBase):  # FIXME rename to ContainerEncryptor
             key_encryption_strata = data_encryption_stratum["key_encryption_strata"]
 
             key_ciphertext = self._encrypt_key_through_multiple_strata(
-                keychain_uid=keychain_uid,
-                key_bytes=symmetric_key_bytes,
-                key_encryption_strata=key_encryption_strata)
+                    keychain_uid=keychain_uid,
+                    key_bytes=symmetric_key_bytes,
+                    key_encryption_strata=key_encryption_strata)
             data_encryption_stratum["key_ciphertext"] = key_ciphertext
 
             data_encryption_stratum_extract = dict(
@@ -376,7 +374,7 @@ class ContainerWriter(ContainerBase):  # FIXME rename to ContainerEncryptor
             container_format=container_format,
             container_uid=container_uid,
             keychain_uid=keychain_uid,
-            data_ciphertext=None,  # Must be filled asap, by OFFLOADED_MARKER if needed!
+            data_ciphertext = None,  # Must be filled asap, by OFFLOADED_MARKER if needed!
             metadata=metadata,
         )
         return container, data_encryption_strata_extracts
@@ -397,10 +395,11 @@ class ContainerWriter(ContainerBase):  # FIXME rename to ContainerEncryptor
 
         return key_ciphertext
 
-    def _encrypt_key_through_single_stratum(self, keychain_uid: uuid.UUID, key_bytes: bytes,
-                                            key_encryption_stratum: dict) -> dict:
+
+    def _encrypt_key_through_single_stratum(self, keychain_uid: uuid.UUID, key_bytes: bytes, key_encryption_stratum: dict) -> dict:
         """
         Encrypt a symmetric key using an asymmetric encryption scheme.
+
         The symmetric key data might already be the result of previous encryption passes.
         Encryption can use a simple public key algorithm, or rely on a a set of public keys,
         by using a shared secret scheme.
@@ -435,9 +434,9 @@ class ContainerWriter(ContainerBase):  # FIXME rename to ContainerEncryptor
             for share, escrow_conf in zip(shares, key_shared_secret_escrows):
                 share_bytes = dump_to_json_bytes(share)  # The tuple (idx, data) of each share thus becomes encryptable
                 shares_ciphertext = self._encrypt_key_through_multiple_strata(  # FIXME rename singular
-                    keychain_uid=keychain_uid,
-                    key_bytes=share_bytes,
-                    key_encryption_strata=escrow_conf["key_encryption_strata"])  # Recursive structure
+                        keychain_uid=keychain_uid,
+                        key_bytes=share_bytes,
+                        key_encryption_strata=escrow_conf["key_encryption_strata"])  # Recursive structure
                 shares_ciphertexts.append(shares_ciphertext)
 
             key_cipherdict = {"shares": shares_ciphertexts}  # A dict is more future-proof
@@ -455,8 +454,7 @@ class ContainerWriter(ContainerBase):  # FIXME rename to ContainerEncryptor
             return key_cipherdict
 
     def _encrypt_with_asymmetric_cipher(
-            self, encryption_algo: str, keychain_uid: uuid.UUID, symmetric_key_data: bytes, escrow
-            # FIXME change symmetric_key_data
+        self, encryption_algo: str, keychain_uid: uuid.UUID, symmetric_key_data: bytes, escrow  # FIXME change symmetric_key_data
     ) -> dict:
         """
         Encrypt given data with an asymmetric algorithm.
@@ -474,12 +472,10 @@ class ContainerWriter(ContainerBase):  # FIXME rename to ContainerEncryptor
         logger.debug("Encrypting symmetric key with asymmetric key of type %r", encryption_algo)
         subkey = load_asymmetric_key_from_pem_bytestring(key_pem=subkey_pem, key_type=encryption_algo)
 
-        cipherdict = encrypt_bytestring(plaintext=symmetric_key_data, encryption_algo=encryption_algo,
-                                        key_dict={"key": subkey})
+        cipherdict = encrypt_bytestring(plaintext=symmetric_key_data, encryption_algo=encryption_algo, key_dict={"key": subkey})
         return cipherdict
 
-    def ____obsolete_____encrypt_shares(self, shares: Sequence, key_shared_secret_escrows: Sequence,
-                                        keychain_uid: uuid.UUID) -> list:
+    def ____obsolete_____encrypt_shares(self, shares: Sequence, key_shared_secret_escrows: Sequence, keychain_uid: uuid.UUID) -> list:
         """
         Make a loop through all shares from shared secret algorithm to encrypt each of them.
         :param shares: list of tuples containing an index and its share data
@@ -518,8 +514,7 @@ class ContainerWriter(ContainerBase):  # FIXME rename to ContainerEncryptor
         data_encryption_strata = container["data_encryption_strata"]
         assert len(data_encryption_strata) == len(authentication_data_list)  # Sanity check
 
-        for data_encryption_stratum, authentication_data_list in zip(container["data_encryption_strata"],
-                                                                     authentication_data_list):
+        for data_encryption_stratum, authentication_data_list in zip(container["data_encryption_strata"], authentication_data_list):
 
             assert data_encryption_stratum["integrity_tags"] is None  # Set at container build time
             data_encryption_stratum["integrity_tags"] = authentication_data_list["integrity_tags"]
@@ -565,7 +560,7 @@ class ContainerWriter(ContainerBase):  # FIXME rename to ContainerEncryptor
         return signature_value
 
 
-class ContainerReader(ContainerBase):  # FIXME rename to ContainerDecryptor
+class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
     """
     Contains every method used to read and decrypt a container, IN MEMORY.
     """
@@ -574,7 +569,7 @@ class ContainerReader(ContainerBase):  # FIXME rename to ContainerDecryptor
         assert isinstance(container, dict), container
         return container["metadata"]
 
-    def decrypt_data(self, container: dict, verify: bool = True) -> bytes:
+    def decrypt_data(self, container: dict, verify: bool=True) -> bytes:
         """
         Loop through container layers, to decipher data with the right algorithms.
         :param container: dictionary previously built with ContainerWriter method
@@ -595,8 +590,7 @@ class ContainerReader(ContainerBase):  # FIXME rename to ContainerDecryptor
         data_current = container["data_ciphertext"]
         assert isinstance(data_current, bytes), repr(data_current)  # Else it's still a special marker for example...
 
-        for data_encryption_stratum in reversed(
-                container["data_encryption_strata"]):  # Non-emptiness of this will be checked by validator
+        for data_encryption_stratum in reversed(container["data_encryption_strata"]):  # Non-emptiness of this will be checked by validator
 
             data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
 
@@ -613,19 +607,16 @@ class ContainerReader(ContainerBase):  # FIXME rename to ContainerDecryptor
             assert isinstance(key_bytes, bytes), key_bytes
             symmetric_key_dict = load_from_json_bytes(key_bytes)
 
-            integrity_tags = data_encryption_stratum[
-                "integrity_tags"]  # Shall be a DICT, FIXME handle if it's still None
+            integrity_tags = data_encryption_stratum["integrity_tags"]  # Shall be a DICT, FIXME handle if it's still None
             data_cipherdict = dict(ciphertext=data_current, **integrity_tags)
             data_current = decrypt_bytestring(
-                cipherdict=data_cipherdict, key_dict=symmetric_key_dict, encryption_algo=data_encryption_algo,
-                verify=verify
+                cipherdict=data_cipherdict, key_dict=symmetric_key_dict, encryption_algo=data_encryption_algo, verify=verify
             )
 
         data = data_current  # Now decrypted
         return data
 
-    def _decrypt_key_through_multiple_strata(self, keychain_uid: uuid.UUID, key_ciphertext: bytes,
-                                             encryption_strata: list) -> bytes:
+    def _decrypt_key_through_multiple_strata(self, keychain_uid: uuid.UUID, key_ciphertext: bytes, encryption_strata: list) -> bytes:
         key_bytes = key_ciphertext
 
         for key_encryption_stratum in reversed(encryption_strata):  # Non-emptiness of this will be checked by validator
@@ -638,8 +629,7 @@ class ContainerReader(ContainerBase):  # FIXME rename to ContainerDecryptor
 
         return key_bytes
 
-    def _decrypt_key_through_single_stratum(self, keychain_uid: uuid.UUID, key_cipherdict: dict,
-                                            encryption_stratum: dict) -> bytes:
+    def _decrypt_key_through_single_stratum(self, keychain_uid: uuid.UUID, key_cipherdict: dict, encryption_stratum: dict) -> bytes:
         """
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
         by a asymmetric algorithm.
@@ -667,11 +657,10 @@ class ContainerReader(ContainerBase):  # FIXME rename to ContainerDecryptor
 
                 try:
                     share_bytes = self._decrypt_key_through_multiple_strata(
-                        keychain_uid=keychain_uid,
-                        key_ciphertext=share_ciphertext,
-                        encryption_strata=escrow_conf["key_encryption_strata"])  # Recursive structure
-                    share = load_from_json_bytes(
-                        share_bytes)  # The tuple (idx, data) of each share thus becomes encryptable
+                            keychain_uid=keychain_uid,
+                            key_ciphertext=share_ciphertext,
+                            encryption_strata=escrow_conf["key_encryption_strata"])  # Recursive structure
+                    share = load_from_json_bytes(share_bytes)  # The tuple (idx, data) of each share thus becomes encryptable
                     decrypted_shares.append(share)
 
                 # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
@@ -821,11 +810,11 @@ class ContainerEncryptionStream:
     def __init__(self,
                  container_filepath,
                  *,
-                 conf: dict,
-                 metadata: Optional[dict],
-                 keychain_uid: Optional[uuid.UUID] = None,
-                 key_storage_pool: Optional[KeyStoragePoolBase] = None,
-                 dump_initial_container=True):
+                conf: dict,
+                metadata: Optional[dict],
+                keychain_uid: Optional[uuid.UUID] = None,
+                key_storage_pool: Optional[KeyStoragePoolBase] = None,
+                dump_initial_container=True):
 
         self._container_filepath = container_filepath
 
@@ -833,8 +822,7 @@ class ContainerEncryptionStream:
         self._output_data_stream = open(offloaded_file_path, mode='wb')
 
         self._container_writer = ContainerWriter(key_storage_pool=key_storage_pool)
-        self._wip_container, self._stream_encryptor = self._container_writer.build_container_and_stream_encryptor(
-            output_stream=self._output_data_stream, conf=conf, keychain_uid=keychain_uid, metadata=metadata)
+        self._wip_container, self._stream_encryptor = self._container_writer.build_container_and_stream_encryptor(output_stream=self._output_data_stream , conf=conf, keychain_uid=keychain_uid, metadata=metadata)
         self._wip_container["data_ciphertext"] = OFFLOADED_MARKER  # Important
 
         if dump_initial_container:  # Savegame in case the stream is broken before finalization
@@ -859,8 +847,7 @@ class ContainerEncryptionStream:
     def __del__(self):
         # Emergency closing of open file on deletion
         if not self._output_data_stream.closed:
-            logger.error(
-                "Encountered abnormal open file in __del__ of ContainerEncryptionStream: %s" % self._output_data_stream)
+            logger.error("Encountered abnormal open file in __del__ of ContainerEncryptionStream: %s" % self._output_data_stream)
             self._output_data_stream.close()
 
 
@@ -873,13 +860,13 @@ def is_container_encryption_conf_streamable(conf):
 
 
 def encrypt_data_and_dump_container_to_filesystem(
-        data: Union[bytes, BinaryIO],
-        *,
-        container_filepath,
-        conf: dict,
-        metadata: Optional[dict],
-        keychain_uid: Optional[uuid.UUID] = None,
-        key_storage_pool: Optional[KeyStoragePoolBase] = None
+    data: Union[bytes, BinaryIO],
+    *,
+    container_filepath,
+    conf: dict,
+    metadata: Optional[dict],
+    keychain_uid: Optional[uuid.UUID] = None,
+    key_storage_pool: Optional[KeyStoragePoolBase] = None
 ) -> None:
     """
     Optimized version which directly streams encrypted data to offloaded file,
@@ -887,9 +874,9 @@ def encrypt_data_and_dump_container_to_filesystem(
     """
     # No need to dump initial (signature-less) container here, this is all a quick operation...
     encryptor = ContainerEncryptionStream(container_filepath,
-                                          conf=conf, keychain_uid=keychain_uid, metadata=metadata,
-                                          key_storage_pool=key_storage_pool,
-                                          dump_initial_container=False)
+                 conf=conf, keychain_uid=keychain_uid, metadata=metadata,
+                key_storage_pool=key_storage_pool,
+                dump_initial_container=False)
 
     for chunk in consume_bytes_as_chunks(data, chunk_size=DATA_CHUNK_SIZE):
         encryptor.encrypt_chunk(chunk)
@@ -898,20 +885,22 @@ def encrypt_data_and_dump_container_to_filesystem(
 
 
 def encrypt_data_into_container(
-        data: Union[bytes, BinaryIO],
-        *,
-        conf: dict,
-        metadata: Optional[dict],
-        keychain_uid: Optional[uuid.UUID] = None,
-        key_storage_pool: Optional[KeyStoragePoolBase] = None
+    data: Union[bytes, BinaryIO],
+    *,
+    conf: dict,
+    metadata: Optional[dict],
+    keychain_uid: Optional[uuid.UUID] = None,
+    key_storage_pool: Optional[KeyStoragePoolBase] = None
 ) -> dict:
     """Turn raw data into a high-security container, which can only be decrypted with
     the agreement of the owner and multiple third-party escrows.
+
     :param data: bytestring of media (image, video, sound...) or readable file object (file immediately deleted then)
     :param conf: tree of specific encryption settings
     :param metadata: dict of metadata describing the data
     :param keychain_uid: optional ID of a keychain to reuse
     :param key_storage_pool: optional key storage pool, might be required by encryption conf
+
     :return: dict of container
     """
     writer = ContainerWriter(key_storage_pool=key_storage_pool)
@@ -920,14 +909,15 @@ def encrypt_data_into_container(
 
 
 def decrypt_data_from_container(
-        container: dict, *, key_storage_pool: Optional[KeyStoragePoolBase] = None,
-        passphrase_mapper: Optional[dict] = None, verify: bool = True
+    container: dict, *, key_storage_pool: Optional[KeyStoragePoolBase] = None, passphrase_mapper: Optional[dict] = None, verify: bool=True
 ) -> bytes:
     """Decrypt a container with the help of third-parties.
+
     :param container: the container tree, which holds all information about involved keys
     :param key_storage_pool: optional key storage pool
     :param passphrase_mapper: optional dict mapping escrow IDs to their lists of passphrases
     :param verify: whether to check tag/mac values of the ciphertext
+
     :return: raw bytestring
     """
     reader = ContainerReader(key_storage_pool=key_storage_pool, passphrase_mapper=passphrase_mapper)
@@ -941,6 +931,7 @@ def _get_offloaded_file_path(container_filepath: Path):
 
 def dump_container_to_filesystem(container_filepath: Path, container: dict, offload_data_ciphertext=True) -> None:
     """Dump a container to a file path, overwritting it if existing.
+
     If `offload_data_ciphertext`, actual encrypted data is dumped to a separate bytes file nearby the json-formatted container.
     """
     if offload_data_ciphertext:
@@ -954,6 +945,7 @@ def dump_container_to_filesystem(container_filepath: Path, container: dict, offl
 
 def load_container_from_filesystem(container_filepath: Path, include_data_ciphertext=True) -> dict:
     """Load a json-formatted container from a file path, potentially loading its offloaded ciphertext from a separate nearby bytes file.
+
     Field `data_ciphertext` is only present in result dict if `include_data_ciphertext` is True.
     """
 
@@ -990,8 +982,11 @@ def get_container_size_on_filesystem(container_filepath):
 
 def extract_metadata_from_container(container: dict) -> Optional[dict]:
     """Read the metadata tree (possibly None) from a container.
+
     CURRENTLY METADATA IS NOT ENCRYPTED.
+
     :param container: the container tree, which also holds metadata about encrypted content
+
     :return: dict
     """
     reader = ContainerReader()
@@ -1002,8 +997,11 @@ def extract_metadata_from_container(container: dict) -> Optional[dict]:
 class ContainerStorage:
     """
     This class encrypts file streams and stores them into filesystem, in a thread-safe way.
+
     Exceeding containers are automatically purged when enqueuing new files or waiting for idle state.
+
     A thread pool is used to encrypt files in the background.
+
     :param containers_dir: the folder where container files are stored
     :param default_encryption_conf: encryption conf to use when none is provided when enqueuing data
     :param max_container_quota: if set, containers are deleted if they exceed this size in bytes
@@ -1015,15 +1013,15 @@ class ContainerStorage:
     """
 
     def __init__(
-            self,
-            containers_dir: Path,
-            default_encryption_conf: Optional[dict] = None,
-            max_container_quota: Optional[int] = None,
-            max_container_count: Optional[int] = None,
-            max_container_age: Optional[timedelta] = None,
-            key_storage_pool: Optional[KeyStoragePoolBase] = None,
-            max_workers: int = 1,
-            offload_data_ciphertext=True,
+        self,
+        containers_dir: Path,
+        default_encryption_conf: Optional[dict] = None,
+        max_container_quota: Optional[int] = None,
+        max_container_count: Optional[int] = None,
+        max_container_age: Optional[timedelta] = None,
+        key_storage_pool: Optional[KeyStoragePoolBase] = None,
+        max_workers: int = 1,
+        offload_data_ciphertext=True,
     ):
         containers_dir = Path(containers_dir)
         assert containers_dir.is_dir(), containers_dir
@@ -1076,8 +1074,7 @@ class ContainerStorage:
         return get_container_size_on_filesystem(self._make_absolute(container_name))
 
     def list_container_properties(self, with_age=False, with_size=False):
-        """Returns an unsorted list of dicts having the fields "name", [age] and [size], depending on requested
-        properties. """
+        """Returns an unsorted list of dicts having the fields "name", [age] and [size], depending on requested properties."""
         container_names = self.list_container_names(as_sorted=False, as_absolute=False)
 
         now = get_utc_now_date()
@@ -1087,7 +1084,7 @@ class ContainerStorage:
             entry = dict(name=container_name)
             if with_age:
                 container_datetime = self._get_container_datetime(container_name)
-                entry["age"] = now - container_datetime  # We keep as timedelta
+                entry["age"] = now - container_datetime   # We keep as timedelta
             if with_size:
                 entry["size"] = self._get_container_size(container_name)
             result.append(entry)
@@ -1139,17 +1136,16 @@ class ContainerStorage:
                 for deleted_container_dict in deleted_container_dicts:
                     self._delete_container(deleted_container_dict["name"])
 
-    def _encrypt_data_and_dump_container_to_filesystem(self, data, container_filepath, metadata, keychain_uid,
-                                                       encryption_conf):
+    def _encrypt_data_and_dump_container_to_filesystem(self, data, container_filepath, metadata, keychain_uid, encryption_conf):
         assert encryption_conf, encryption_conf
         encrypt_data_and_dump_container_to_filesystem(
-            container_filepath=container_filepath,
-            data=data,
-            conf=encryption_conf,
-            metadata=metadata,
-            keychain_uid=keychain_uid,
-            key_storage_pool=self._key_storage_pool,
-        )
+                container_filepath=container_filepath,
+                    data=data,
+                    conf=encryption_conf,
+                    metadata=metadata,
+                    keychain_uid=keychain_uid,
+                    key_storage_pool=self._key_storage_pool,
+                )
 
     def _encrypt_data_into_container(self, data, metadata, keychain_uid, encryption_conf):
         assert encryption_conf, encryption_conf
@@ -1181,11 +1177,9 @@ class ContainerStorage:
 
         if self._use_streaming_encryption_for_conf(encryption_conf):
             # We can use newer, low-memory, streamed API
-            logger.debug("Encrypting data file %s into offloaded container directly streamed to storage file %s",
-                         filename_base, container_filepath)
+            logger.debug("Encrypting data file %s into offloaded container directly streamed to storage file %s", filename_base, container_filepath)
             self._encrypt_data_and_dump_container_to_filesystem(
-                data, container_filepath=container_filepath, metadata=metadata, keychain_uid=keychain_uid,
-                encryption_conf=encryption_conf
+                data, container_filepath=container_filepath, metadata=metadata, keychain_uid=keychain_uid, encryption_conf=encryption_conf
             )
 
         else:
@@ -1220,26 +1214,29 @@ class ContainerStorage:
         return encryption_conf
 
     @synchronized
-    def create_container_encryption_stream(self, filename_base, metadata, keychain_uid=None, encryption_conf=None,
-                                           dump_initial_container=True):
+    def create_container_encryption_stream(self, filename_base, metadata, keychain_uid=None, encryption_conf=None, dump_initial_container=True):
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
         encryption_conf = self._prepare_for_new_record_encryption(encryption_conf)
         container_encryption_stream = ContainerEncryptionStream(container_filepath,
-                                                                conf=encryption_conf,
-                                                                metadata=metadata,
-                                                                keychain_uid=keychain_uid,
-                                                                key_storage_pool=self._key_storage_pool,
-                                                                dump_initial_container=dump_initial_container)
+                     conf=encryption_conf,
+                     metadata=metadata,
+                     keychain_uid=keychain_uid,
+                     key_storage_pool=self._key_storage_pool,
+                     dump_initial_container=dump_initial_container)
         return container_encryption_stream
 
     @synchronized
     def enqueue_file_for_encryption(self, filename_base, data, metadata, keychain_uid=None, encryption_conf=None):
         """        FIXME update docstring
+
         Enqueue a data payload for asynchronous encryption and storage, with its metadata tree.
+
         The filename of final container might be different from provided one.
         And beware, target container with the same constructed name might be overwritten.
+
         `data` can be a bytes string or a file-like object open for reading, which will be automatically closed.
+
         `keychain_uid`, if provided, replaces autogenerated keychain_uid for this data item.
         `encryption_conf`, if provided, replaces default encryption conf for this data item.
         """
@@ -1288,8 +1285,7 @@ class ContainerStorage:
         container = load_container_from_filesystem(container_filepath, include_data_ciphertext=include_data_ciphertext)
         return container
 
-    def decrypt_container_from_storage(self, container_name_or_idx, passphrase_mapper: Optional[dict] = None,
-                                       verify: bool = True) -> bytes:
+    def decrypt_container_from_storage(self, container_name_or_idx, passphrase_mapper: Optional[dict]=None, verify: bool=True) -> bytes:
         """
         Return the decrypted content of the container `container_name_or_idx` (which must be in `list_container_names()`,
         or an index suitable for this sorted list).

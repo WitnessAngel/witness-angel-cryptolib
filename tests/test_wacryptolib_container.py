@@ -5,9 +5,8 @@ import random
 import textwrap
 import time
 import uuid
-import jsonschema
 import pytest
-import schema
+
 
 from datetime import timedelta, datetime, timezone
 from itertools import product
@@ -15,7 +14,6 @@ from pathlib import Path
 from pprint import pprint
 from unittest.mock import patch
 from uuid import UUID
-from jsonschema import validate as jsonschema_validate
 
 from _test_mockups import FakeTestContainerStorage
 from wacryptolib.container import (
@@ -289,6 +287,30 @@ COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
         )
     },
 }
+
+
+def _dump_to_json_schema(data):
+    # Exporting schema in jsonschema format
+    # container_json_schema_tree = schema.json_schema("my_schema_test")
+
+    # Exporting conf in pymongo extended json format
+    json_std_lib = dump_to_json_str(data)
+
+    # Parsing Json from string
+    json_str_lib = json.loads(json_std_lib)
+
+    return json_str_lib
+
+
+def _intialize_container_with_single_file(tmp_path):
+    storage = ContainerStorage(default_encryption_conf=COMPLEX_CONTAINER_CONF, containers_dir=tmp_path)
+
+    storage.enqueue_file_for_encryption(
+        "animals.dat", b"dogs\ncats\n", metadata=None
+    )
+    storage.wait_for_idle_state()
+    container_name, = storage.list_container_names()
+    return storage, container_name
 
 
 @pytest.mark.parametrize(
@@ -1339,7 +1361,8 @@ def ___obsolete_test_encrypt_data_and_dump_container_to_filesystem(tmp_path):
 def test_conf_schema(conf):
     check_conf_sanity(conf=conf, jsonschema_mode=False)
 
-    check_conf_sanity(conf=conf, jsonschema_mode=True)
+    conf_json = _dump_to_json_schema(conf)
+    check_conf_sanity(conf=conf_json, jsonschema_mode=True)
 
 
 def generate_corrupted_conf(CONTAINER_CONF):
@@ -1374,7 +1397,8 @@ def test_corrupted_conf(corrupted_conf):
         check_conf_sanity(conf=corrupted_conf, jsonschema_mode=False)
 
     with pytest.raises(ValidationError):
-        check_conf_sanity(conf=corrupted_conf, jsonschema_mode=True)
+        corrupted_conf_json = _dump_to_json_schema(corrupted_conf)
+        check_conf_sanity(conf=corrupted_conf_json, jsonschema_mode=True)
 
 
 @pytest.mark.parametrize("conf", [SIMPLE_CONTAINER_CONF,
@@ -1387,7 +1411,8 @@ def test_container_schema(conf):
     )
     check_container_sanity(container=container, jsonschema_mode=False)
 
-    check_container_sanity(container=container, jsonschema_mode=True)
+    container_json = _dump_to_json_schema(container)
+    check_container_sanity(container=container_json, jsonschema_mode=True)
 
 
 def test_corrupted_container():
@@ -1413,17 +1438,14 @@ def test_corrupted_container():
             check_container_sanity(container=corrupted_container, jsonschema_mode=True)
 
         with pytest.raises(ValidationError):
-            check_container_sanity(container=corrupted_container, jsonschema_mode=False)
+            corrupted_container_json = _dump_to_json_schema(corrupted_container)
+            check_container_sanity(container=corrupted_container_json, jsonschema_mode=False)
 
 
-def test_check_container_sanity():
+def test_check_container_sanity(tmp_path):
+    storage, container_name = _intialize_container_with_single_file(tmp_path)
 
-    data_encryption_algo = random.choice(AUTHENTICATED_ENCRYPTION_ALGOS)
-    container_conf = copy.deepcopy(SIMPLE_CONTAINER_CONF)
-    container_conf["data_encryption_strata"][0]["data_encryption_algo"] = data_encryption_algo
+    storage.check_container_sanity(container_name_or_idx=container_name)
 
-    container = encrypt_data_into_container(
-        data=b"1234", conf=container_conf, metadata=None
-    )
-    container["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION
+
 

@@ -1,6 +1,5 @@
 import copy
-import io
-import json
+
 
 import logging
 import math
@@ -40,7 +39,7 @@ from wacryptolib.utilities import (
     hash_message,
     synchronized,
     catch_and_log_exception, get_utc_now_date, consume_bytes_as_chunks, delete_filesystem_node_for_stream,
-    SUPPORTED_HASH_ALGOS, dump_to_json_str,
+    SUPPORTED_HASH_ALGOS
 )
 
 logger = logging.getLogger(__name__)
@@ -1303,15 +1302,11 @@ class ContainerStorage:
         logger.info("Container %s successfully decrypted", container_name_or_idx)
         return result
 
-    def check_container_sanity(self, container_name_or_idx):  # TODO NOT FINISH
-        """
-        traiter de facon optimiser avec include date ciphertext = false
-        tester en passant par json schema
-        charger le container et le valider avec le python schema uniquement
-        """
+    def check_container_sanity(self, container_name_or_idx):
+        """ Allows the validation of a container with a python"""
         container = self.load_container_from_storage(container_name_or_idx, include_data_ciphertext=True)
 
-        check_container_sanity(container=container, jsonschema_mode=True)
+        check_container_sanity(container=container, jsonschema_mode=False)
 
 
 def get_encryption_configuration_summary(conf_or_container):
@@ -1349,12 +1344,10 @@ def get_encryption_configuration_summary(conf_or_container):
 
 
 def _create_schema(for_container: bool, extended_json_format: bool):
-    """
-    Instantialization of the validation schema for the data that will be validated.
+    """ Create validation schema for confs and containers.
     :param for_container: true if instance is a container
     :param extended_json_format: true if the scheme is extended to json format
-    return: a schema
-    """
+    return: a schema """
     micro_schema_uid = UUID
     micro_schema_binary = bytes
     micro_schema_int = int
@@ -1453,12 +1446,16 @@ def _create_schema(for_container: bool, extended_json_format: bool):
 
 
 CONF_SCHEMA_PYTHON = _create_schema(for_container=False, extended_json_format=False)
-CONF_SCHEMA_JSON = _create_schema(for_container=False, extended_json_format=True)
+CONF_SCHEMA_JSON = _create_schema(for_container=False, extended_json_format=True).json_schema("conf_schema.json")
 CONTAINER_SCHEMA_PYTHON = _create_schema(for_container=True, extended_json_format=False)
-CONTAINER_SCHEMA_JSON = _create_schema(for_container=True, extended_json_format=True)
+CONTAINER_SCHEMA_JSON = _create_schema(for_container=True, extended_json_format=True).json_schema("container_schema.json")
 
 
 def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
+    """ Allows the validation of a data_tree with a python or json schema
+    :param data_tree: container or conf to validate
+    :param valid_schema: validation scheme
+    """
     if isinstance(valid_schema, Schema):
         # we use the python schema module
         try:
@@ -1475,43 +1472,17 @@ def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
             raise ValidationError("Error validating with {}".format(exc)) from exc
 
 
-# Utilities
-
-def dump_to_json_schema(data, schema):
-    # Exporting schema in jsonschema format
-    container_json_schema_tree = schema.json_schema("my_schema_test")
-
-    # Exporting conf in pymongo extended json format
-    json_std_lib = dump_to_json_str(data)
-
-    # Parsing Json from string
-    json_str_lib = json.loads(json_std_lib)
-
-    return json_str_lib, container_json_schema_tree
-
-
 def check_container_sanity(container: dict, jsonschema_mode: False):
-    """
-      Validating Python data structures, such as those obtained from configuration or container files with the current
-      schema via python schema.
-      """
-    if jsonschema_mode:
-        schema = CONTAINER_SCHEMA_JSON
-        container, schema = dump_to_json_schema(container, schema)
+    """ Validate either a container which is valid python or validate a container which has been loaded raw in json mode """
 
-    else:
-        schema = CONTAINER_SCHEMA_PYTHON
+    schema = CONTAINER_SCHEMA_JSON if jsonschema_mode else CONTAINER_SCHEMA_PYTHON
 
     _validate_data_tree(data_tree=container, valid_schema=schema)
 
 
 def check_conf_sanity(conf: dict, jsonschema_mode: False):
-    if jsonschema_mode:
-        schema = CONF_SCHEMA_JSON
-        conf, schema = dump_to_json_schema(conf, schema)
+    """ Validate either a conf which is valid python or validate a conf which has been loaded raw in json mode """
 
-    else:
-        schema = CONF_SCHEMA_PYTHON
-
+    schema = CONF_SCHEMA_JSON if jsonschema_mode else CONF_SCHEMA_PYTHON
 
     _validate_data_tree(data_tree=conf, valid_schema=schema)

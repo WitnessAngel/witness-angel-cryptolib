@@ -21,6 +21,14 @@ Container object processing
 .. autofunction:: wacryptolib.container.encrypt_data_and_dump_container_to_filesystem
 
 
+Validation utilities
+---------------------------
+
+.. autofunction:: wacryptolib.container.check_container_sanity
+
+.. autofunction:: wacryptolib.container.check_conf_sanity
+
+
 Filesystem operations
 -----------------------------
 
@@ -47,7 +55,3 @@ Escrow operations
 .. autofunction:: wacryptolib.container.gather_escrow_dependencies
 
 .. autofunction:: wacryptolib.container.request_decryption_authorizations
-
-.. autofunction:: wacryptolib.container.check_container_sanity
-
-.. autofunction:: wacryptolib.container.check_conf_sanity

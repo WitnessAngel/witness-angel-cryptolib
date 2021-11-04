@@ -14,6 +14,15 @@ Version 0.6
 * Rename max_containers_count as max_container_count
 * Implement container purges based on total disk quota and container ages
 * Make containers a recursive structure of "shamir" and "normal" strata
+* Add support for Python 3.9 and 3.10
+* Add authenticator submodule
+* Add StreamManager and ContainerEncryptionStream API
+* Make symmetric keys be dicts instead of bytes
+* Add integrity tags (Poly1305, EAX...) to containers
+* Add verify=True/False parameter to decryption API
+* Add wacryptolib_installer.py
+* Add check_container_sanity() and check_conf_sanity() API
+* Optimize test runs via asymmetric key caching
 
 
 Version 0.5.2

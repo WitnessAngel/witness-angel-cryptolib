@@ -15,7 +15,6 @@ run_ci () {
   export PYTHONPATH=$PWD  # necessary for pytest presetup plugin launch
   export PYTHONDONTWRITEBYTECODE=true  # else troubles with virtualbox shares...
 
-
   set +o errexit  # THESE LINTS MUST NOT STOP CHECKS
 
       # Running linting for all python files in the project:
@@ -27,11 +26,7 @@ run_ci () {
       echo "Running mypy"
       mypy src  # Some mixin errors are impossible to workaround now...
 
-  set -o errexit
-
-  echo "Running pytest"
-  pytest --disable-warnings
-  pytest --dead-fixtures --dup-fixtures
+  ###set -o errexit
 
   # Running code-quality check:
   echo "Running xenon"
@@ -40,7 +35,7 @@ run_ci () {
   # Checking if all the dependencies are secure and do not have any
   # known vulnerabilities:
   echo "Running safety check"
-  safety check --bare --full-report
+  #safety check --bare --full-report
 
   # Checking `pyproject.toml` file contents and dependencies status:
   echo "Running poetry & pip checks"
@@ -52,7 +47,7 @@ run_ci () {
 
   # Checking `yaml` files:
   #echo "Running yamllint"
-  yamllint -d '{"extends": "default", "ignore": "build"}' -s .
+  #yamllint -d '{"extends": "default", "ignore": "build"}' -s .
 
   # Checking `.env` files:
   #echo "Running dotenv-linter"
@@ -68,6 +63,15 @@ run_ci () {
   #  echo "Running dennis-cmd lint"
   #  dennis-cmd lint --errorsonly locale
   #fi
+
+  pushd docs/
+  sphinx-build . _build
+  sphinx-build -M clean . _build
+  popd
+
+  echo "Running pytest"
+  pytest --dead-fixtures --dup-fixtures
+  pytest --disable-warnings  # LAUNCHES ALL UNIT-TESTS
 
   echo ">> All CI tests were executed! <<"
 }

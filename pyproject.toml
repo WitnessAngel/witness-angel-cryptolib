@@ -37,6 +37,7 @@ python = ">=3.7, <=3.10"
 # Cryptography & transports
 pycryptodome = "^3.9.9"
 schema = "^0.7.2"
+jsonschema = "^4.1.2"
 click = "^7.1.2"
 pymongo = "^3.11.2"
 jsonrpc-requests = "^0.4.0"

@@ -18,7 +18,7 @@ from uuid import UUID
 import pytest
 from Crypto.Random import get_random_bytes
 
-from _test_mockups import FakeTestContainerStorage
+from _test_mockups import FakeTestContainerStorage, random_bool
 from wacryptolib.container import (
     LOCAL_ESCROW_MARKER,
     encrypt_data_into_container,
@@ -53,7 +53,7 @@ from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, gene
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 
 def _get_binary_or_empty_content():
-    if random.choice((True, False)):
+    if random_bool():
         bytes_length = random.randint(1, 1000)
         return get_random_bytes(bytes_length)
     return b""
@@ -354,7 +354,7 @@ def test_standard_container_encryption_and_decryption(tmp_path, container_conf, 
     data = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
-    use_streaming_encryption = random.choice([True, False])
+    use_streaming_encryption = random_bool()
 
     key_storage_pool = DummyKeyStoragePool()
     metadata = random.choice([None, dict(a=[123])])
@@ -410,7 +410,7 @@ def test_standard_container_encryption_and_decryption(tmp_path, container_conf, 
         assert not keypair_statuses["missing_passphrase"]
         assert not keypair_statuses["missing_private_key"]
 
-    verify = random.choice((True, False))
+    verify = random_bool()
     result_data = decrypt_data_from_container(container=container, key_storage_pool=key_storage_pool, verify=verify)
     # pprint.pprint(result, width=120)
     assert result_data == data
@@ -469,7 +469,7 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf, escro
 
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
 
-    verify = random.choice((True, False))
+    verify = random_bool()
     result_data = decrypt_data_from_container(container=container, verify=verify)
     assert result_data == data
 
@@ -723,7 +723,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     with pytest.raises(DecryptionError):
         storage.decrypt_container_from_storage("beauty.txt.crypt")
 
-    verify = random.choice((True, False))
+    verify = random_bool()
     decrypted = storage.decrypt_container_from_storage("beauty.txt.crypt", passphrase_mapper={None: all_passphrases}, verify=verify)
     assert decrypted == data
 
@@ -772,7 +772,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
 
     animals_file_handle = animals_file_path.open("rb")
 
-    already_deleted_file_input = random.choice((True, False))
+    already_deleted_file_input = random_bool()
     if already_deleted_file_input:
         try:
             animals_file_path.unlink()
@@ -823,7 +823,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     assert not hasattr(_container_for_txt2, "data_ciphertext")
 
     # We continue test with a randomly configured storage
-    offload_data_ciphertext = random.choice((True, False))
+    offload_data_ciphertext = random_bool()
     storage = ContainerStorage(
         default_encryption_conf=SIMPLE_CONTAINER_CONF,
         containers_dir=containers_dir,
@@ -857,7 +857,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     assert storage.list_container_names(as_sorted=True) == [Path("empty.txt.crypt")]
     assert len(storage) == 1  # Remaining offloaded data file is ignored
 
-    offload_data_ciphertext1 = random.choice((True, False))
+    offload_data_ciphertext1 = random_bool()
     storage = FakeTestContainerStorage(
         default_encryption_conf={"smth": True},
         containers_dir=containers_dir,
@@ -874,7 +874,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
 def test_container_storage_purge_by_max_count(tmp_path):
     containers_dir = tmp_path
 
-    offload_data_ciphertext = random.choice((True, False))
+    offload_data_ciphertext = random_bool()
     storage = FakeTestContainerStorage(
         default_encryption_conf={"stuffs": True},
         containers_dir=containers_dir,
@@ -903,7 +903,7 @@ def test_container_storage_purge_by_max_count(tmp_path):
 
     time.sleep(0.2)  # Leave delay, else if files have exactly same timestamp, it's the filename that matters
 
-    offload_data_ciphertext2 = random.choice((True, False))
+    offload_data_ciphertext2 = random_bool()
     storage = FakeTestContainerStorage(
         default_encryption_conf={"randomthings": True},
         containers_dir=containers_dir,
@@ -969,7 +969,7 @@ def test_container_storage_purge_by_age(tmp_path):
     (containers_dir / "20201021222700_oldfile.dat.crypt").touch()
     (containers_dir / "20301021222711_oldfile.dat.crypt").touch()
 
-    offload_data_ciphertext = random.choice((True, False))
+    offload_data_ciphertext = random_bool()
     storage = FakeTestContainerStorage(
         default_encryption_conf={"stuffs": True},
         containers_dir=containers_dir,
@@ -1022,7 +1022,7 @@ def test_container_storage_purge_by_age(tmp_path):
 def test_container_storage_purge_by_quota(tmp_path):
     containers_dir = tmp_path
 
-    offload_data_ciphertext = random.choice((True, False))
+    offload_data_ciphertext = random_bool()
     storage = FakeTestContainerStorage(
         default_encryption_conf={"stuffs": True},
         containers_dir=containers_dir,
@@ -1074,7 +1074,7 @@ def test_container_storage_purge_parameter_combinations(tmp_path):
     params_sets = product([None, 2],[None, 1000], [None, timedelta(days=3)])
 
     for max_container_count, max_container_quota, max_container_age in params_sets:
-        offload_data_ciphertext = random.choice((True, False))
+        offload_data_ciphertext = random_bool()
         storage = FakeTestContainerStorage(
             default_encryption_conf={"stuffs": True},
             containers_dir=containers_dir,

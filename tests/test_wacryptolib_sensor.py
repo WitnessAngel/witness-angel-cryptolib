@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from freezegun import freeze_time
 
-from _test_mockups import FakeTestContainerStorage
+from _test_mockups import FakeTestContainerStorage, random_bool
 from wacryptolib.scaffolding import check_sensor_state_machine
 from wacryptolib.sensor import TarfileRecordsAggregator, JsonDataAggregator, PeriodicValuePoller, SensorsManager
 from wacryptolib.sensor import TimeLimitedAggregatorMixin
@@ -48,7 +48,7 @@ def test_time_limited_aggregator_mixin():
 
 def test_tarfile_aggregator(tmp_path):
 
-    offload_data_ciphertext = random.choice((True, False))
+    offload_data_ciphertext = random_bool()
     container_storage = FakeTestContainerStorage(
         default_encryption_conf={"whatever": True},
         containers_dir=tmp_path,
@@ -206,7 +206,7 @@ def test_tarfile_aggregator(tmp_path):
 
 def test_json_aggregator(tmp_path):
 
-    offload_data_ciphertext = random.choice((True, False))
+    offload_data_ciphertext = random_bool()
     container_storage = FakeTestContainerStorage(
         default_encryption_conf={"qsdqsdsd": True},
         containers_dir=tmp_path,
@@ -294,7 +294,7 @@ def test_json_aggregator(tmp_path):
 
 def test_aggregators_thread_safety(tmp_path):
 
-    offload_data_ciphertext = random.choice((True, False))
+    offload_data_ciphertext = random_bool()
     container_storage = FakeTestContainerStorage(
         default_encryption_conf={"zesvscc": True},
         containers_dir=tmp_path,
@@ -373,7 +373,7 @@ def test_aggregators_thread_safety(tmp_path):
 
 def test_periodic_value_poller(tmp_path):
 
-    offload_data_ciphertext = random.choice((True, False))
+    offload_data_ciphertext = random_bool()
     container_storage = FakeTestContainerStorage(
         default_encryption_conf={"zexcsc": True},
         containers_dir=tmp_path,

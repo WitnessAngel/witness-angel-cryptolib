@@ -6,7 +6,7 @@ from uuid import UUID
 
 import pytest
 
-from _test_mockups import get_fake_authentication_device
+from _test_mockups import get_fake_authentication_device, random_bool
 from wacryptolib.authentication_device import _get_key_storage_folder_path, initialize_authentication_device
 from wacryptolib.escrow import generate_asymmetric_keypair_for_storage
 from wacryptolib.exceptions import KeyStorageDoesNotExist, KeyStorageAlreadyExists
@@ -39,7 +39,7 @@ def test_key_storage_basic_get_set_api(tmp_path):
 
     keychain_uid = filesystem_key_storage_test_locals["keychain_uid"]
 
-    is_public = random.choice([True, False])
+    is_public = random_bool()
     basename = filesystem_key_storage._get_filename(keychain_uid, key_type="abxz", is_public=is_public)
     with open(os.path.join(str(tmp_path), basename), "rb") as f:
         key_data = f.read()

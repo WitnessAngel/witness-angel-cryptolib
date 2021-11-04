@@ -1,3 +1,4 @@
+import random
 from uuid import UUID
 
 from wacryptolib.container import ContainerStorage, dump_container_to_filesystem
@@ -49,3 +50,7 @@ def get_fake_authentication_device(device_path):
         "metadata": None,
     }
     return authentication_device
+
+
+def random_bool():
+    return random.choice((True, False))

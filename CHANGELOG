@@ -19,6 +19,7 @@ Version 0.6
 * Add StreamManager and ContainerEncryptionStream API
 * Make symmetric keys be dicts instead of bytes
 * Add integrity tags (Poly1305, EAX...) to containers
+* Add fields "message_digest" and "container_state" to container
 * Add verify=True/False parameter to decryption API
 * Add wacryptolib_installer.py
 * Add check_container_sanity() and check_conf_sanity() API

@@ -72,6 +72,7 @@ class CONTAINER_STATES:
 
 def get_escrow_id(escrow_conf: dict) -> str:
     """Build opaque unique identifier for a specific escrow.
+
     Remains the same as long as escrow dict is completely unmodified.
     """
     return str(sorted(escrow_conf.items()))
@@ -180,7 +181,9 @@ def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase):
 class ContainerBase:
     """
     BEWARE - this class-based design is provisional and might change a lot.
+
     `key_storage_pool` will be used to fetch local/imported escrows necessary to encryption/decryption operations.
+
     `passphrase_mapper` maps escrows IDs to potential passphrases; a None key can be used to provide additional
     passphrases for all escrows.
     """
@@ -206,12 +209,15 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         """
         Build a base container to store encrypted keys, as well as a stream encryptor
         meant to process heavy data chunk by chunk.
+
         Signatures, and final ciphertext (if not offloaded), will have to be added
         later to the container.
+
         :param conf: configuration tree
         :param output_stream: open file where the stream encryptor should write to
         :param keychain_uid: uuid for the set of encryption keys used
-        :param metadata: additional data to store (unencrypted) in container
+        :param metadata: additional data to store unencrypted in container
+
         :return: container with all the information needed to attempt data decryption
         """
 
@@ -236,6 +242,7 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
                 return None
             def get_authentication_data(self):
                 return [{"SHA256": b"a"*32}]  # Matches SIMPLE_CONTAINER_CONF of unit test
+
         stream_encryptor = FakeStreamEncryptor()
         '''
         ############################################################################
@@ -250,11 +257,14 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
     def encrypt_data(self, data: Union[bytes, BinaryIO], *, conf: dict, keychain_uid=None, metadata=None) -> dict:
         """
         Shortcut when data is already available.
+
         This method browses through configuration tree to apply the right succession of encryption+signature algorithms to data.
+
         :param data: initial plaintext, or file pointer (file immediately deleted then)
         :param conf: configuration tree
         :param keychain_uid: uuid for the set of encryption keys used
         :param metadata: additional data to store unencrypted in container
+
         :return: container with all the information needed to attempt data decryption
         """
 
@@ -324,9 +334,11 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         """
         Build a data-less and signature-less container, preconfigured with a set of symmetric keys
         under their final form (encrypted by escrows). A separate extract, with symmetric keys as well as algo names, is returned so that actual data encryption and signature can be performed separately.
+
         :param conf: configuration tree
         :param keychain_uid: uuid for the set of encryption keys used
         :param metadata: additional data to store unencrypted in container
+
         :return: a (container: dict, secrets: list) tuple, where each secret has keys encryption_algo, symmetric_key and message_digest_algos.
         """
 
@@ -403,9 +415,11 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         The symmetric key data might already be the result of previous encryption passes.
         Encryption can use a simple public key algorithm, or rely on a a set of public keys,
         by using a shared secret scheme.
+
         :param keychain_uid: uuid for the set of encryption keys used
         :param symmetric_key_data: symmetric key to encrypt (potentially already encrypted)
         :param conf: dictionary which contain configuration tree
+
         :return: if the scheme used is 'SHARED_SECRET', a list of encrypted shares is returned. If an asymmetric
         algorithm has been used, a dictionary with all the information needed to decipher the symmetric key is returned.
         """
@@ -458,10 +472,12 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
     ) -> dict:
         """
         Encrypt given data with an asymmetric algorithm.
+
         :param encryption_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
         :param symmetric_key_data: symmetric key as bytes to encrypt
         :param escrow: escrow used for encryption (findable in configuration tree)
+
         :return: dictionary which contains every data needed to decrypt the ciphered data
         """
         encryption_proxy = get_escrow_proxy(escrow=escrow, key_storage_pool=self._key_storage_pool)
@@ -478,9 +494,11 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
     def ____obsolete_____encrypt_shares(self, shares: Sequence, key_shared_secret_escrows: Sequence, keychain_uid: uuid.UUID) -> list:
         """
         Make a loop through all shares from shared secret algorithm to encrypt each of them.
+
         :param shares: list of tuples containing an index and its share data
         :param key_shared_secret_escrows: conf subtree with share escrow information
         :param keychain_uid: uuid for the set of encryption keys used
+
         :return: list of encrypted shares
         """
 
@@ -541,6 +559,7 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
     def _generate_message_signature(self, keychain_uid: uuid.UUID, conf: dict) -> dict:
         """
         Generate a signature for a specific ciphered data.
+
         :param keychain_uid: uuid for the set of encryption keys used
         :param conf: configuration tree inside data_signatures, which MUST already contain the message digest
         :return: dictionary with information needed to verify signature
@@ -572,8 +591,10 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
     def decrypt_data(self, container: dict, verify: bool=True) -> bytes:
         """
         Loop through container layers, to decipher data with the right algorithms.
+
         :param container: dictionary previously built with ContainerWriter method
         :param verify: whether to check tag/mac values of the ciphertext
+
         :return: deciphered plaintext
         """
         assert isinstance(container, dict), container
@@ -633,9 +654,11 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
         """
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
         by a asymmetric algorithm.
+
         :param keychain_uid: uuid for the set of encryption keys used
         :param symmetric_key_cipherdict: dictionary with input ata needed to decrypt symmetric key
         :param conf: dictionary which contains crypto configuration tree
+
         :return: deciphered symmetric key
         """
         assert isinstance(key_cipherdict, dict), key_cipherdict
@@ -700,10 +723,12 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
     ) -> bytes:
         """
         Decrypt given cipherdict with an asymmetric algorithm.
+
         :param encryption_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
         :param cipherdict: dictionary with data components needed to decrypt the ciphered data
         :param escrow: escrow used for encryption (findable in configuration tree)
+
         :return: decypted data as bytes
         """
         encryption_proxy = get_escrow_proxy(escrow=escrow, key_storage_pool=self._key_storage_pool)
@@ -726,6 +751,7 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
         :param keychain_uid: uuid for the set of encryption keys used
         :param symmetric_key_cipherdict: dictionary which contains every data needed to decipher each share
         :param conf: configuration tree inside key_encryption_algo
+
         :return: list of tuples of deciphered shares
         """
         key_shared_secret_escrows = conf["key_shared_secret_escrows"]
@@ -778,6 +804,7 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
     def _verify_message_signature(self, keychain_uid: uuid.UUID, message: bytes, conf: dict):
         """
         Verify a signature for a specific message. An error is raised if signature isn't correct.
+
         :param keychain_uid: uuid for the set of encryption keys used
         :param message: message as bytes on which to verify signature
         :param conf: configuration tree inside data_signatures
@@ -1165,6 +1192,7 @@ class ContainerStorage:
     @catch_and_log_exception
     def _offloaded_encrypt_data_and_dump_container(self, filename_base, data, metadata, keychain_uid, encryption_conf):
         """Task to be called by background thread, which encrypts a payload into a disk container.
+
         Returns the container basename."""
 
         """ TODO later ass a SKIP here!
@@ -1297,7 +1325,7 @@ class ContainerStorage:
         return result
 
     def check_container_sanity(self, container_name_or_idx):
-        """ Allows the validation of a container with a python"""
+        """Allows the validation of a container with a python"""
         container = self.load_container_from_storage(container_name_or_idx, include_data_ciphertext=True)
 
         check_container_sanity(container=container, jsonschema_mode=False)
@@ -1338,10 +1366,13 @@ def get_encryption_configuration_summary(conf_or_container):  # FIXME move up li
 
 
 def _create_schema(for_container: bool, extended_json_format: bool):
-    """ Create validation schema for confs and containers.
+    """Create validation schema for confs and containers.
     :param for_container: true if instance is a container
     :param extended_json_format: true if the scheme is extended to json format
-    return: a schema """
+
+    :return: a schema.
+    """
+
     micro_schema_uid = UUID
     micro_schema_binary = bytes
     micro_schema_int = int

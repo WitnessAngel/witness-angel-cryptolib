@@ -64,7 +64,14 @@ def generate_asymmetric_keypair(
 
     Other arguments are used or not depending on the chosen `key_type`.
 
-    :return: dictionary with "private_key" and "public_key" fields as objects or PEM-format strings"""
+    :return: dictionary with "private_key" and "public_key" fields as objects or PEM-format strings
+    """
+    return _do_generate_asymmetric_keypair(key_type=key_type, serialize=serialize, key_length_bits=key_length_bits, curve=curve, passphrase=passphrase)
+
+
+# Intermediate function to help monkey-patching in tests
+def _do_generate_asymmetric_keypair(key_type, serialize, key_length_bits, curve, passphrase) :
+
     assert serialize or passphrase is None
 
     if isinstance(passphrase, str):

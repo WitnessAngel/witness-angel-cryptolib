@@ -25,10 +25,19 @@ def test_passphrase_encoding():
 @pytest.mark.parametrize("key_type", SUPPORTED_ASYMMETRIC_KEY_TYPES)
 def test_keypair_unicity(key_type):
 
-    keypair1 = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
-    keypair2 = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
+    # We must reuse test-specific caching of asymmetric keypairs, for this test
+    wacryptolib.key_generation.__original_do_generate_asymmetric_keypair_patcher.stop()
+    assert wacryptolib.key_generation._do_generate_asymmetric_keypair == wacryptolib.key_generation.__original_do_generate_asymmetric_keypair
 
-    assert keypair1 != keypair2
+    try:
+
+        keypair1 = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
+        keypair2 = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
+
+        assert keypair1 != keypair2
+
+    finally:
+        wacryptolib.key_generation.__original_do_generate_asymmetric_keypair_patcher.start()
 
 
 @pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)

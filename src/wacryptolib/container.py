@@ -1446,7 +1446,8 @@ CONTAINER_SCHEMA_JSON = _create_schema(for_container=True, extended_json_format=
 
 
 def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
-    """ Allows the validation of a data_tree with a python or json schema
+    """Allows the validation of a data_tree with a pythonschema or jsonschema
+
     :param data_tree: container or conf to validate
     :param valid_schema: validation scheme
     """
@@ -1467,7 +1468,11 @@ def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
 
 
 def check_container_sanity(container: dict, jsonschema_mode: False):
-    """ Validate either a container which is valid python or validate a container which has been loaded raw in json mode """
+    """Validate the format of a container.
+
+    :param jsonschema_mode: If True, the container must have been loaded as raw json
+           (with $binary, $numberInt and such) and will be checked using a jsonschema validator.
+    """
 
     schema = CONTAINER_SCHEMA_JSON if jsonschema_mode else CONTAINER_SCHEMA_PYTHON
 
@@ -1475,7 +1480,11 @@ def check_container_sanity(container: dict, jsonschema_mode: False):
 
 
 def check_conf_sanity(conf: dict, jsonschema_mode: False):
-    """ Validate either a conf which is valid python or validate a conf which has been loaded raw in json mode """
+    """Validate the format of a conf.
+
+    :param jsonschema_mode: If True, the container must have been loaded as raw json
+           (with $binary, $numberInt and such) and will be checked using a jsonschema validator.
+    """
 
     schema = CONF_SCHEMA_JSON if jsonschema_mode else CONF_SCHEMA_PYTHON
 

@@ -301,20 +301,21 @@ def COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES(keychain_uid):
     }
 
 
-def _dump_to_json_schema(data):
-    # Exporting schema in jsonschema format
-    # container_json_schema_tree = schema.json_schema("my_schema_test")
-
-    # Exporting conf in pymongo extended json format
+def _dump_to_raw_json_tree(data):
+    """
+    Turn a python tree (including UUIDs, bytes etc.) into its representation
+    as Pymongo extended json (with $binary, $numberInt etc.)
+    """
+    # Export in pymongo extended json format
     json_std_lib = dump_to_json_str(data)
 
-    # Parsing Json from string
+    # Parse Json from string
     json_str_lib = json.loads(json_std_lib)
 
     return json_str_lib
 
 
-def _intialize_container_with_single_file(tmp_path):
+def _intialize_container_with_single_file(tmp_path):  # FIXME generalize its use in different test functions below
     storage = ContainerStorage(default_encryption_conf=COMPLEX_CONTAINER_CONF, containers_dir=tmp_path)
 
     storage.enqueue_file_for_encryption(
@@ -1362,46 +1363,46 @@ def ___obsolete_test_encrypt_data_and_dump_container_to_filesystem(tmp_path):
         SIMPLE_SHAMIR_CONTAINER_CONF,
         COMPLEX_SHAMIR_CONTAINER_CONF
     ])
-def test_conf_schema(conf):
+def test_conf_validation_success(conf):
     check_conf_sanity(conf=conf, jsonschema_mode=False)
 
-    conf_json = _dump_to_json_schema(conf)
+    conf_json = _dump_to_raw_json_tree(conf)
     check_conf_sanity(conf=conf_json, jsonschema_mode=True)
 
 
-def generate_corrupted_conf(CONTAINER_CONF):
+def _generate_corrupted_confs(conf):
     corrupted_confs = []
 
     # Add a false information to config
-    corrupted_conf1 = copy.deepcopy(CONTAINER_CONF)
+    corrupted_conf1 = copy.deepcopy(conf)
     corrupted_conf1["data_encryption_strata"][0]["keychain_uid"] = ENFORCED_UID2
     corrupted_confs.append(corrupted_conf1)
 
     # Delete a "key_encryption_strata" in an element of conf
-    corrupted_conf2 = copy.deepcopy(CONTAINER_CONF)
+    corrupted_conf2 = copy.deepcopy(conf)
     del corrupted_conf2["data_encryption_strata"][0]["key_encryption_strata"]
     corrupted_confs.append(corrupted_conf2)
 
     # Update data_encryption_algo with a value algo that does not exist
-    corrupted_conf3 = copy.deepcopy(CONTAINER_CONF)
+    corrupted_conf3 = copy.deepcopy(conf)
     corrupted_conf3["data_encryption_strata"][0]["data_encryption_algo"] = "AES_AES"
     corrupted_confs.append(corrupted_conf3)
 
     # Update a "key_encryption_strata" with a string instead of list
-    corrupted_conf4 = copy.deepcopy(CONTAINER_CONF)
+    corrupted_conf4 = copy.deepcopy(conf)
     corrupted_conf4["data_encryption_strata"][0]["key_encryption_strata"] = " "
     corrupted_confs.append(corrupted_conf4)
 
     return corrupted_confs
 
 
-@pytest.mark.parametrize("corrupted_conf", generate_corrupted_conf(COMPLEX_SHAMIR_CONTAINER_CONF))
-def test_corrupted_conf(corrupted_conf):
+@pytest.mark.parametrize("corrupted_conf", _generate_corrupted_confs(COMPLEX_SHAMIR_CONTAINER_CONF))
+def test_conf_validation_error(corrupted_conf):
     with pytest.raises(ValidationError):
         check_conf_sanity(conf=corrupted_conf, jsonschema_mode=False)
 
     with pytest.raises(ValidationError):
-        corrupted_conf_json = _dump_to_json_schema(corrupted_conf)
+        corrupted_conf_json = _dump_to_raw_json_tree(corrupted_conf)
         check_conf_sanity(conf=corrupted_conf_json, jsonschema_mode=True)
 
 
@@ -1409,22 +1410,23 @@ def test_corrupted_conf(corrupted_conf):
                                   COMPLEX_CONTAINER_CONF,
                                   SIMPLE_SHAMIR_CONTAINER_CONF,
                                   COMPLEX_SHAMIR_CONTAINER_CONF])
-def test_container_schema(conf):
+def test_container_validation_success(conf):
     container = encrypt_data_into_container(
         data=b"stuffs", conf=conf, keychain_uid=None, metadata=None
     )
     check_container_sanity(container=container, jsonschema_mode=False)
 
-    container_json = _dump_to_json_schema(container)
+    container_json = _dump_to_raw_json_tree(container)
     check_container_sanity(container=container_json, jsonschema_mode=True)
 
 
-def test_corrupted_container():
-    container = encrypt_data_into_container(
-        data=b"stuffs", conf=SIMPLE_CONTAINER_CONF, keychain_uid=None, metadata=None
-    )
+def _generate_corrupted_containers(conf):
 
+    container = encrypt_data_into_container(
+        data=b"stuffs", conf=conf, keychain_uid=None, metadata=None
+    )
     corrupted_containers = []
+
     corrupted_container1 = copy.deepcopy(container)
     corrupted_container1["data_encryption_strata"][0]["keychain_uid"] = ENFORCED_UID1
     corrupted_containers.append(corrupted_container1)
@@ -1437,19 +1439,31 @@ def test_corrupted_container():
     corrupted_container3["data_encryption_strata"][0]["key_ciphertext"] = []
     corrupted_containers.append(corrupted_container3)
 
-    for corrupted_container in corrupted_containers:
-        with pytest.raises(ValidationError):
-            check_container_sanity(container=corrupted_container, jsonschema_mode=True)
-
-        with pytest.raises(ValidationError):
-            corrupted_container_json = _dump_to_json_schema(corrupted_container)
-            check_container_sanity(container=corrupted_container_json, jsonschema_mode=False)
+    return corrupted_containers
 
 
-def test_check_container_sanity(tmp_path):
+@pytest.mark.parametrize("corrupted_container", _generate_corrupted_containers(SIMPLE_CONTAINER_CONF))
+def test_container_validation_error(corrupted_container):
+
+    with pytest.raises(ValidationError):
+        check_container_sanity(container=corrupted_container, jsonschema_mode=True)
+
+    with pytest.raises(ValidationError):
+        corrupted_container_json = _dump_to_raw_json_tree(corrupted_container)
+        check_container_sanity(container=corrupted_container_json, jsonschema_mode=False)
+
+
+def test_container_storage_check_container_sanity(tmp_path):
     storage, container_name = _intialize_container_with_single_file(tmp_path)
 
     storage.check_container_sanity(container_name_or_idx=container_name)
 
+    # FIXME deduplicate this bit with test_container_storage_decryption_authenticated_algo_verify()
+    container = storage.load_container_from_storage(container_name)
+    container["data_encryption_strata"][0]["bad_name_of_attribute"] = 42
+    container_filepath = storage._make_absolute(container_name)
+    dump_container_to_filesystem(container_filepath, container=container, offload_data_ciphertext=False)  # Don't touch existing
+    ##############
 
-
+    with pytest.raises(ValidationError):
+        storage.check_container_sanity(container_name_or_idx=container_name)

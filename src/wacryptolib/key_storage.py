@@ -185,16 +185,16 @@ class FilesystemKeyStorage(KeyStorageBase):
 
     PUBLIC_KEY_FILENAME_REGEX = r"^(?P<keychain_uid>[-0-9a-z]+)_(?P<key_type>[_A-Z]+)%s$" % _public_key_suffix
 
+    def _ensure_free_keys_dir_exists(self):
+        self._free_keys_dir.mkdir(
+            exist_ok=True
+        )
+
     def __init__(self, keys_dir: Path):
         keys_dir = Path(keys_dir)
         assert keys_dir.is_dir(), keys_dir
         self._keys_dir = keys_dir.absolute()
-
-        free_keys_dir = keys_dir.joinpath("free_keys")
-        free_keys_dir.mkdir(
-            exist_ok=True
-        )  # FIXMe - lazy-initialize this dir, instead? (useless e.g. on authentication devices)
-        self._free_keys_dir = free_keys_dir
+        self._free_keys_dir = self._keys_dir.joinpath("free_keys")  # Might not exist yet
 
     def _get_filename(self, keychain_uid, key_type, is_public: bool):
         return "%s_%s%s" % (keychain_uid, key_type, self._public_key_suffix if is_public else self._private_key_suffix)
@@ -243,13 +243,14 @@ class FilesystemKeyStorage(KeyStorageBase):
 
     # No need for lock here
     def get_free_keypairs_count(self, key_type: str):
-        subdir = self._free_keys_dir.joinpath(key_type)
+        subdir = self._free_keys_dir.joinpath(key_type)  # Might not exist yet
         if not subdir.is_dir():
             return 0
         return len(list(subdir.glob("*" + self._private_key_suffix)))
 
     @synchronized
     def add_free_keypair(self, *, key_type: str, public_key: bytes, private_key: bytes):
+        self._ensure_free_keys_dir_exists()
         subdir = self._free_keys_dir.joinpath(key_type)
         subdir.mkdir(exist_ok=True)
 
@@ -280,7 +281,7 @@ class FilesystemKeyStorage(KeyStorageBase):
             self._get_filename(keychain_uid, key_type=key_type, is_public=False)
         )
 
-        subdir = self._free_keys_dir.joinpath(key_type)
+        subdir = self._free_keys_dir.joinpath(key_type)  # Might not exist
         globber = subdir.glob("*" + self._private_key_suffix)
         try:
             free_private_key = next(globber)

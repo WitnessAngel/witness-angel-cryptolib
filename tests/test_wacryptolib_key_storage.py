@@ -50,9 +50,12 @@ def test_key_storage_free_keys_api(tmp_path):
 
     dummy_key_storage = DummyKeyStorage()
     filesystem_key_storage = FilesystemKeyStorage(keys_dir=tmp_path)
+    assert not filesystem_key_storage._free_keys_dir.exists()
 
     for key_storage in (dummy_key_storage, filesystem_key_storage):
         check_key_storage_free_keys_api(key_storage)
+
+    assert filesystem_key_storage._free_keys_dir.exists()
 
 
 def test_key_storage_free_keys_concurrency(tmp_path):

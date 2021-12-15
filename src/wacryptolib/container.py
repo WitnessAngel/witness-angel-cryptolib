@@ -47,6 +47,7 @@ logger = logging.getLogger(__name__)
 CONTAINER_FORMAT = "WA_0.1a"
 CONTAINER_SUFFIX = ".crypt"
 CONTAINER_DATETIME_FORMAT = "%Y%m%d%H%M%S"  # For use in container names and their records
+CONTAINER_TEMP_SUFFIX = "~"  # To name temporary, unfinalized, containers
 
 OFFLOADED_MARKER = "[OFFLOADED]"
 OFFLOADED_DATA_SUFFIX = ".data"  # Added to CONTAINER_SUFFIX
@@ -835,7 +836,7 @@ class ContainerEncryptionStream:
     """
 
     def __init__(self,
-                 container_filepath,
+                 container_filepath: Path,
                  *,
                 conf: dict,
                 metadata: Optional[dict],
@@ -844,6 +845,7 @@ class ContainerEncryptionStream:
                 dump_initial_container=True):
 
         self._container_filepath = container_filepath
+        self._container_filepath_temp = container_filepath.with_suffix(container_filepath.suffix + CONTAINER_TEMP_SUFFIX)
 
         offloaded_file_path = _get_offloaded_file_path(container_filepath)
         self._output_data_stream = open(offloaded_file_path, mode='wb')
@@ -853,11 +855,14 @@ class ContainerEncryptionStream:
         self._wip_container["data_ciphertext"] = OFFLOADED_MARKER  # Important
 
         if dump_initial_container:  # Savegame in case the stream is broken before finalization
-            self._dump_current_container_to_filesystem()
+            self._dump_current_container_to_filesystem(is_temporary=True)
 
-    def _dump_current_container_to_filesystem(self):
-        dump_container_to_filesystem(self._container_filepath, container=self._wip_container,
+    def _dump_current_container_to_filesystem(self, is_temporary):
+        filepath = self._container_filepath_temp if is_temporary else self._container_filepath
+        dump_container_to_filesystem(filepath, container=self._wip_container,
                                      offload_data_ciphertext=False)  # ALREADY offloaded
+        if not is_temporary:  # Cleanup temporary container
+            self._container_filepath_temp.unlink(missing_ok=True)
 
     def encrypt_chunk(self, chunk: bytes):
         self._stream_encryptor.encrypt_chunk(chunk)
@@ -869,7 +874,7 @@ class ContainerEncryptionStream:
         authentication_data_list = self._stream_encryptor.get_authentication_data()
 
         self._container_writer.add_authentication_data_to_container(self._wip_container, authentication_data_list)
-        self._dump_current_container_to_filesystem()
+        self._dump_current_container_to_filesystem(is_temporary=False)
 
     def __del__(self):
         # Emergency closing of open file on deletion
@@ -1020,6 +1025,8 @@ def extract_metadata_from_container(container: dict) -> Optional[dict]:  # FIXME
     data = reader.extract_metadata(container)
     return data
 
+
+# FIXME add ReadonlyContainerStorage!!
 
 class ContainerStorage:
     """

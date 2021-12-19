@@ -958,7 +958,8 @@ def decrypt_data_from_container(
 
 
 def _get_offloaded_file_path(container_filepath: Path):
-    return container_filepath.parent.joinpath(container_filepath.name + OFFLOADED_DATA_SUFFIX)
+    """We also support, discreetly, TEMPORARY containers"""
+    return container_filepath.parent.joinpath(container_filepath.name.rstrip(CONTAINER_TEMP_SUFFIX) + OFFLOADED_DATA_SUFFIX)
 
 
 def dump_container_to_filesystem(container_filepath: Path, container: dict, offload_data_ciphertext=True) -> None:
@@ -1093,7 +1094,7 @@ class ContainerStorage:
             paths = (Path(p.name) for p in paths)  # beware, only works since we don't have subfolders for now!
         return list(paths)
 
-    def _get_container_datetime(self, container_name):
+    def _get_container_datetime(self, container_name):  # FIXME rename to _get_container_datetime_utc()
         """Returns an UTC datetime corresponding to the creation time stored in filename, or else the file-stat mtime"""
         try:
             dt = datetime.strptime(container_name.name.split("_")[0], CONTAINER_DATETIME_FORMAT)

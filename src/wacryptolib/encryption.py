@@ -88,7 +88,8 @@ def _encrypt_via_aes_cbc(plaintext: bytes, key_dict: dict) -> dict:
     iv = key_dict["iv"]
     _check_symmetric_key_length_bytes(len(main_key))
     cipher = AES.new(main_key, AES.MODE_CBC, iv=iv)
-    ciphertext = cipher.encrypt(pad(plaintext, block_size=AES.block_size))
+    plaintext_padded = pad(plaintext, block_size=AES.block_size)
+    ciphertext = cipher.encrypt(plaintext_padded)
     cipherdict = {"ciphertext": ciphertext}
     return cipherdict
 
@@ -107,7 +108,8 @@ def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict, verify: bool=True) ->
     _check_symmetric_key_length_bytes(len(main_key))
     ciphertext = cipherdict["ciphertext"]
     decipher = AES.new(main_key, AES.MODE_CBC, iv=iv)
-    plaintext = unpad(decipher.decrypt(ciphertext), block_size=AES.block_size)
+    plaintext_padded = decipher.decrypt(ciphertext)
+    plaintext = unpad(plaintext_padded, block_size=AES.block_size)
     return plaintext
 
 

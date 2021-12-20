@@ -37,6 +37,7 @@ from wacryptolib.container import (
     delete_container_from_filesystem, CONTAINER_DATETIME_FORMAT, get_container_size_on_filesystem, ContainerWriter,
     encrypt_data_and_dump_container_to_filesystem, is_container_encryption_conf_streamable, CONF_SCHEMA_PYTHON,
     CONF_SCHEMA_JSON, CONTAINER_SCHEMA_PYTHON, CONTAINER_SCHEMA_JSON, check_conf_sanity, check_container_sanity,
+    CONTAINER_TEMP_SUFFIX,
 )
 from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS, AUTHENTICATED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import (
@@ -1326,7 +1327,7 @@ def test_create_container_encryption_stream(tmp_path):
     container_encryption_stream = storage.create_container_encryption_stream(
         filename_base, metadata={"mymetadata": True}, encryption_conf=SIMPLE_CONTAINER_CONF, dump_initial_container=True)
 
-    container_started = storage.load_container_from_storage("20200101_container_example.crypt")
+    container_started = storage.load_container_from_storage("20200101_container_example.crypt" + CONTAINER_TEMP_SUFFIX)
     assert container_started["container_state"] == "STARTED"
 
     container_encryption_stream.encrypt_chunk(b"bonjour")

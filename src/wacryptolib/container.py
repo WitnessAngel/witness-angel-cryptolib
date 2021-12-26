@@ -242,7 +242,7 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
                 output_stream.flush()
                 return None
             def get_authentication_data(self):
-                return [{"SHA256": b"a"*32}]  # Matches SIMPLE_CONTAINER_CONF of unit test
+                return [{"SHA256": b"a"*32}]  # Matches SIMPLE_CRYPTOCONF of unit test
 
         stream_encryptor = FakeStreamEncryptor()
         '''

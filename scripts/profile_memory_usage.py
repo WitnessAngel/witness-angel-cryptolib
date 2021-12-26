@@ -10,7 +10,7 @@ import time
 from wacryptolib.container import ContainerStorage, LOCAL_ESCROW_MARKER
 from wacryptolib.sensor import TarfileRecordsAggregator
 
-ENCRYPTION_CONF = dict(
+ENCRYPTION_CRYPTOCONF = dict(
     data_encryption_strata=[
         dict(
             data_encryption_algo="AES_EAX",
@@ -40,7 +40,7 @@ def profile_simple_encryption():
     now = datetime.now(tz=timezone.utc)
 
     container_storage = ContainerStorage(
-        default_cryptoconf=ENCRYPTION_CONF,
+        default_cryptoconf=ENCRYPTION_CRYPTOCONF,
         containers_dir=tmp_path,
         offload_data_ciphertext=True,
     )

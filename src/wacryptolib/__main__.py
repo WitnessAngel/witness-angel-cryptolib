@@ -30,7 +30,7 @@ def _get_key_storage_pool(ctx):
     return FilesystemKeyStoragePool(key_storage_pool_path)
 
 
-EXAMPLE_CONTAINER_CONF = dict(
+EXAMPLE_CRYPTOCONF = dict(
     data_encryption_strata=[
         dict(
             data_encryption_algo="AES_CBC",
@@ -75,7 +75,7 @@ def cli(ctx, config, key_storage_pool):
 
 def _do_encrypt(data, key_storage_pool):
     container = encrypt_data_into_container(
-        data, cryptoconf=EXAMPLE_CONTAINER_CONF, metadata=None, key_storage_pool=key_storage_pool
+        data, cryptoconf=EXAMPLE_CRYPTOCONF, metadata=None, key_storage_pool=key_storage_pool
     )
     return container
 

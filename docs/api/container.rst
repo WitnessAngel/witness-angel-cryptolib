@@ -14,7 +14,7 @@ Container object processing
 
 .. autofunction:: wacryptolib.container.extract_metadata_from_container
 
-.. autofunction:: wacryptolib.container.get_encryption_configuration_summary
+.. autofunction:: wacryptolib.container.get_cryptoconf_summary
 
 .. autoclass:: wacryptolib.container.ContainerEncryptionStream
 

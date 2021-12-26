@@ -1339,7 +1339,7 @@ class ContainerStorage:
         check_container_sanity(container=container, jsonschema_mode=False)
 
 
-def get_encryption_configuration_summary(conf_or_container):  # FIXME move up like in docs
+def get_cryptoconf_summary(conf_or_container):  # FIXME move up like in docs
     """
     Returns a string summary of the layers of encryption/signature of a container or a configuration tree.
     """

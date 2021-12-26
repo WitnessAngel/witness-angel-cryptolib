@@ -26,7 +26,7 @@ from wacryptolib.container import (
     ContainerStorage,
     extract_metadata_from_container,
     ContainerBase,
-    get_encryption_configuration_summary,
+    get_cryptoconf_summary,
     dump_container_to_filesystem,
     load_container_from_filesystem,
     SHARED_SECRET_MARKER,
@@ -1168,10 +1168,10 @@ def test_container_storage_decryption_authenticated_algo_verify(tmp_path):
         storage.decrypt_container_from_storage(container_name, verify=True)
 
 
-def test_get_encryption_configuration_summary():
+def test_get_cryptoconf_summary():
     data = b"some data whatever"
 
-    summary = get_encryption_configuration_summary(SIMPLE_CONTAINER_CONF)
+    summary = get_cryptoconf_summary(SIMPLE_CONTAINER_CONF)
 
     assert summary == textwrap.dedent(
         """\
@@ -1184,7 +1184,7 @@ def test_get_encryption_configuration_summary():
     )  # Ending by newline!
 
     container = encrypt_data_into_container(data=data, conf=SIMPLE_CONTAINER_CONF, keychain_uid=None, metadata=None)
-    summary2 = get_encryption_configuration_summary(container)
+    summary2 = get_cryptoconf_summary(container)
     assert summary2 == summary  # Identical summary for conf and generated containers!
 
     # Simulate a conf with remote escrow webservices
@@ -1194,7 +1194,7 @@ def test_get_encryption_configuration_summary():
         escrow_type="jsonrpc", url="http://www.mydomain.com/json"
     )
 
-    summary = get_encryption_configuration_summary(CONF_WITH_ESCROW)
+    summary = get_cryptoconf_summary(CONF_WITH_ESCROW)
     assert summary == textwrap.dedent(
         """\
         Data encryption layer 1: AES_EAX
@@ -1219,7 +1219,7 @@ def test_get_encryption_configuration_summary():
     _public_key = generate_asymmetric_keypair(key_type="RSA_OAEP")["public_key"]
     with patch.object(JsonRpcProxy, "fetch_public_key", return_value=_public_key, create=True) as mock_method:
         container = encrypt_data_into_container(data=data, conf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
-        summary2 = get_encryption_configuration_summary(container)
+        summary2 = get_cryptoconf_summary(container)
         assert summary2 == summary  # Identical summary for conf and generated containers!
 
     # Test unknown escrow structure
@@ -1228,7 +1228,7 @@ def test_get_encryption_configuration_summary():
     CONF_WITH_BROKEN_ESCROW["data_encryption_strata"][0]["key_encryption_strata"][0]["key_escrow"] = dict(abc=33)
 
     with pytest.raises(ValueError, match="Unrecognized key escrow"):
-        get_encryption_configuration_summary(CONF_WITH_BROKEN_ESCROW)
+        get_cryptoconf_summary(CONF_WITH_BROKEN_ESCROW)
 
 
 @pytest.mark.parametrize("container_conf", [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF])

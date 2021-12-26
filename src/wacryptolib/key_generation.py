@@ -16,7 +16,7 @@ def encode_passphrase(passphrase: str):  # FIXME move to generic utilities??
     return unicodedata.normalize("NFKC", passphrase.strip()).encode("utf8")
 
 
-def generate_symmetric_key_dict(encryption_algo: str) -> dict:
+def generate_symkey(encryption_algo: str) -> dict:
     """
     Generate the strongest dict of keys/initializers possible for the wanted symmetric cipher,
     as a dict.

@@ -371,7 +371,7 @@ class StreamManager:
 
         for data_encryption_stratum_extract in data_encryption_strata_extracts:
             data_encryption_algo = data_encryption_stratum_extract["encryption_algo"]  # FIXME RENAME THIS
-            symmetric_key_dict = data_encryption_stratum_extract["symmetric_key_dict"]
+            symkey = data_encryption_stratum_extract["symkey"]
             message_digest_algos = data_encryption_stratum_extract["message_digest_algos"]
 
             encryption_algo_conf = _get_encryption_type_conf(encryption_algo=data_encryption_algo)
@@ -382,7 +382,7 @@ class StreamManager:
                     "Node class %s is not implemented" % data_encryption_algo)  # FIXME use custom exception class
 
             self._cipher_streams.append(
-                encryption_class(key_dict=symmetric_key_dict, message_digest_algo=message_digest_algos))
+                encryption_class(key_dict=symkey, message_digest_algo=message_digest_algos))
 
     def encrypt_chunk(self, chunk):
         for cipher in self._cipher_streams:

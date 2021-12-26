@@ -12,7 +12,7 @@ import wacryptolib
 from wacryptolib.cryptainer import CryptainerWriter
 from wacryptolib.encryption import STREAMABLE_ENCRYPTION_ALGOS
 from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError
-from wacryptolib.key_generation import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symmetric_key_dict, \
+from wacryptolib.key_generation import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey, \
     SYMMETRIC_KEY_TYPES_REGISTRY
 from wacryptolib.utilities import SUPPORTED_HASH_ALGOS, hash_message
 from wacryptolib.encryption import AUTHENTICATED_ENCRYPTION_ALGOS
@@ -80,7 +80,7 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
 @pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
 @pytest.mark.parametrize("use_empty_data", [True, False])
 def test_symmetric_encryption_and_decryption_for_algo(encryption_algo, use_empty_data):
-    key_dict = generate_symmetric_key_dict(encryption_algo)
+    key_dict = generate_symkey(encryption_algo)
 
     binary_content = b"" if use_empty_data else _get_binary_content()
 
@@ -169,7 +169,7 @@ def test_stream_manager(encryption_algo_list):
     data_encryption_strata_extracts = []
     for encryption_algo in encryption_algo_list:
         data_encryption_strata_extract = {'encryption_algo': encryption_algo,
-                                          'symmetric_key_dict': generate_symmetric_key_dict(encryption_algo),
+                                          'symkey': generate_symkey(encryption_algo),
                                           'message_digest_algos': random.choices(SUPPORTED_HASH_ALGOS, k=randint(1,
                                                                                                                  len(SUPPORTED_HASH_ALGOS)))}
         data_encryption_strata_extracts.append(data_encryption_strata_extract)
@@ -205,7 +205,7 @@ def test_stream_manager(encryption_algo_list):
                                                                          encryption_algo=data_encryption_node[
                                                                              'encryption_algo'],
                                                                          key_dict=data_encryption_node[
-                                                                             "symmetric_key_dict"])
+                                                                             "symkey"])
 
         current_ciphertext = decrypted_ciphertext
 
@@ -218,7 +218,7 @@ def test_symmetric_decryption_verify(encryption_algo):
     attribute_to_corrupt = "tag"  # For now it's the only kind of authentication marker
     is_corruptable = encryption_algo in AUTHENTICATED_ENCRYPTION_ALGOS
 
-    key_dict = generate_symmetric_key_dict(encryption_algo)
+    key_dict = generate_symkey(encryption_algo)
     binary_content = _get_binary_content()
 
     cipherdict = wacryptolib.encryption.encrypt_bytestring(

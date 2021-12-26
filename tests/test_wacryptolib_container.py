@@ -1303,10 +1303,10 @@ def test_generate_cryptainer_and_symmetric_keys():
     cryptainer, extracts = cryptainer_writer._generate_cryptainer_base_and_secrets(COMPLEX_CRYPTOCONF)
 
     for data_encryption_stratum in extracts:
-        symmetric_key_dict = data_encryption_stratum["symmetric_key_dict"]
-        assert isinstance(symmetric_key_dict, dict)
-        assert symmetric_key_dict["key"]  # actual main key
-        del data_encryption_stratum["symmetric_key_dict"]
+        symkey = data_encryption_stratum["symkey"]
+        assert isinstance(symkey, dict)
+        assert symkey["key"]  # actual main key
+        del data_encryption_stratum["symkey"]
 
     assert extracts == [
         {'encryption_algo': 'AES_EAX', 'message_digest_algos': []},

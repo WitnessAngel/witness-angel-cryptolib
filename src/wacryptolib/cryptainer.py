@@ -25,7 +25,7 @@ from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring, Strea
 from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi, EscrowApi
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
-from wacryptolib.key_generation import generate_symmetric_key_dict, load_asymmetric_key_from_pem_bytestring, \
+from wacryptolib.key_generation import generate_symkey, load_asymmetric_key_from_pem_bytestring, \
     ASYMMETRIC_KEY_TYPES_REGISTRY
 from wacryptolib.key_storage import KeyStorageBase, DummyKeyStoragePool, KeyStoragePoolBase
 from wacryptolib.shared_secret import split_bytestring_as_shamir_shares, recombine_secret_from_shamir_shares
@@ -232,7 +232,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             def __init__(self):
                 for data_encryption_stratum_extract in data_encryption_strata_extracts:
                     data_encryption_algo = data_encryption_stratum_extract["encryption_algo"]  # FIXME RENAME THIS
-                    symmetric_key_dict = data_encryption_stratum_extract["symmetric_key_dict"]
+                    symkey = data_encryption_stratum_extract["symkey"]
                     message_digest_algos = data_encryption_stratum_extract["message_digest_algos"]
                     # DO SOMETHING WITH THESE
             def encrypt_chunk(self, chunk):
@@ -305,12 +305,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
         for data_encryption_stratum_extract in data_encryption_strata_extracts:
             data_encryption_algo = data_encryption_stratum_extract["encryption_algo"]  # FIXME RENAME THIS
-            symmetric_key_dict = data_encryption_stratum_extract["symmetric_key_dict"]
+            symkey = data_encryption_stratum_extract["symkey"]
             message_digest_algos = data_encryption_stratum_extract["message_digest_algos"]
 
             logger.debug("Encrypting data with symmetric key of type %r", data_encryption_algo)
             data_cipherdict = encrypt_bytestring(
-                plaintext=data_current, encryption_algo=data_encryption_algo, key_dict=symmetric_key_dict
+                plaintext=data_current, encryption_algo=data_encryption_algo, key_dict=symkey
             )
             assert isinstance(data_cipherdict, dict), data_cipherdict  # Might contain integrity/authentication data
 
@@ -362,8 +362,8 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             data_encryption_stratum["integrity_tags"] = None  # Will be filled later with tags/macs etc.
 
             logger.debug("Generating symmetric key of type %r", data_encryption_algo)
-            symmetric_key_dict = generate_symmetric_key_dict(encryption_algo=data_encryption_algo)
-            symmetric_key_bytes = dump_to_json_bytes(symmetric_key_dict)
+            symkey = generate_symkey(encryption_algo=data_encryption_algo)
+            symmetric_key_bytes = dump_to_json_bytes(symkey)
             key_encryption_strata = data_encryption_stratum["key_encryption_strata"]
 
             key_ciphertext = self._encrypt_key_through_multiple_strata(
@@ -374,7 +374,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
             data_encryption_stratum_extract = dict(
                 encryption_algo=data_encryption_algo,
-                symmetric_key_dict=symmetric_key_dict,
+                symkey=symkey,
                 message_digest_algos=[signature["message_digest_algo"] for signature in
                                       data_encryption_stratum["data_signatures"]]
             )
@@ -626,12 +626,12 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
                 key_ciphertext=key_ciphertext,
                 encryption_strata=data_encryption_stratum["key_encryption_strata"])
             assert isinstance(key_bytes, bytes), key_bytes
-            symmetric_key_dict = load_from_json_bytes(key_bytes)
+            symkey = load_from_json_bytes(key_bytes)
 
             integrity_tags = data_encryption_stratum["integrity_tags"]  # Shall be a DICT, FIXME handle if it's still None
             data_cipherdict = dict(ciphertext=data_current, **integrity_tags)
             data_current = decrypt_bytestring(
-                cipherdict=data_cipherdict, key_dict=symmetric_key_dict, encryption_algo=data_encryption_algo, verify=verify
+                cipherdict=data_cipherdict, key_dict=symkey, encryption_algo=data_encryption_algo, verify=verify
             )
 
         data = data_current  # Now decrypted

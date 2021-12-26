@@ -12,7 +12,7 @@ Public API
 
 .. autodata:: wacryptolib.key_generation.SUPPORTED_ASYMMETRIC_KEY_TYPES
 
-.. autofunction:: wacryptolib.key_generation.generate_asymmetric_keypair
+.. autofunction:: wacryptolib.key_generation.generate_keypair
 
 .. autofunction:: wacryptolib.key_generation.load_asymmetric_key_from_pem_bytestring
 

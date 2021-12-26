@@ -7,7 +7,7 @@ from uuid import UUID
 from wacryptolib.encryption import _decrypt_via_rsa_oaep
 from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, DecryptionError, KeyLoadingError
 from wacryptolib.key_generation import (
-    generate_asymmetric_keypair,
+    generate_keypair,
     load_asymmetric_key_from_pem_bytestring,
     SUPPORTED_ASYMMETRIC_KEY_TYPES,
 )
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 MAX_PAYLOAD_LENGTH_FOR_SIGNATURE = 128  # Max 2*SHA512 length
 
 
-def generate_asymmetric_keypair_for_storage(  # FIXME rename and add to docs
+def generate_keypair_for_storage(  # FIXME rename and add to docs
     key_type: str, *, key_storage, keychain_uid: Optional[UUID] = None, passphrase: Optional[AnyStr] = None
 ) -> dict:
     """
@@ -31,10 +31,10 @@ def generate_asymmetric_keypair_for_storage(  # FIXME rename and add to docs
 
     Returns the generated keypair dict.
     """
-    from wacryptolib.key_generation import generate_asymmetric_keypair
+    from wacryptolib.key_generation import generate_keypair
 
     keychain_uid = keychain_uid or generate_uuid0()
-    keypair = generate_asymmetric_keypair(key_type=key_type, serialize=True, passphrase=passphrase)
+    keypair = generate_keypair(key_type=key_type, serialize=True, passphrase=passphrase)
     key_storage.set_keys(
         keychain_uid=keychain_uid,
         key_type=key_type,
@@ -68,7 +68,7 @@ class EscrowApi:
         try:
             self._key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_type=key_type)
         except KeyDoesNotExist:
-            generate_asymmetric_keypair_for_storage(
+            generate_keypair_for_storage(
                 key_type=key_type, key_storage=self._key_storage, keychain_uid=keychain_uid, passphrase=None
             )
 
@@ -240,7 +240,7 @@ class ReadonlyEscrowApi(EscrowApi):
 def generate_free_keypair_for_least_provisioned_key_type(
     key_storage: KeyStorageBase,
     max_free_keys_per_type: int,
-    key_generation_func=generate_asymmetric_keypair,
+    key_generation_func=generate_keypair,
     key_types=SUPPORTED_ASYMMETRIC_KEY_TYPES,
 ):
     """

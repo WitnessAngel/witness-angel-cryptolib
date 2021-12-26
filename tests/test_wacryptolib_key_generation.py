@@ -26,18 +26,18 @@ def test_passphrase_encoding():
 def test_keypair_unicity(key_type):
 
     # We must reuse test-specific caching of asymmetric keypairs, for this test
-    wacryptolib.key_generation.__original_do_generate_asymmetric_keypair_patcher.stop()
-    assert wacryptolib.key_generation._do_generate_asymmetric_keypair == wacryptolib.key_generation.__original_do_generate_asymmetric_keypair
+    wacryptolib.key_generation.__original_do_generate_keypair_patcher.stop()
+    assert wacryptolib.key_generation._do_generate_keypair == wacryptolib.key_generation.__original_do_generate_keypair
 
     try:
 
-        keypair1 = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
-        keypair2 = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
+        keypair1 = wacryptolib.key_generation.generate_keypair(key_type=key_type)
+        keypair2 = wacryptolib.key_generation.generate_keypair(key_type=key_type)
 
         assert keypair1 != keypair2
 
     finally:
-        wacryptolib.key_generation.__original_do_generate_asymmetric_keypair_patcher.start()
+        wacryptolib.key_generation.__original_do_generate_keypair_patcher.start()
 
 
 @pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
@@ -53,21 +53,21 @@ def test_generic_symmetric_key_generation_errors():
         wacryptolib.key_generation.generate_symkey(encryption_algo="AXSX")
 
 
-def test_generic_asymmetric_key_generation_errors():
+def test_generic_keypair_generation_errors():
     with pytest.raises(ValueError, match="Unknown asymmetric key type"):
-        wacryptolib.key_generation.generate_asymmetric_keypair(key_type="AONEG")
+        wacryptolib.key_generation.generate_keypair(key_type="AONEG")
 
 
-def test_rsa_asymmetric_key_generation():
+def test_rsa_keypair_generation():
 
     for key_type in ("RSA_OAEP", "RSA_PSS"):  # Both use teh same RSA keys
 
         with pytest.raises(ValueError, match="asymmetric key length"):
-            wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type, key_length_bits=1024)
+            wacryptolib.key_generation.generate_keypair(key_type=key_type, key_length_bits=1024)
 
         for key_length_bits in (None, 2048):
             extra_parameters = dict(key_length_bits=key_length_bits) if key_length_bits else {}
-            keypair = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type, **extra_parameters)
+            keypair = wacryptolib.key_generation.generate_keypair(key_type=key_type, **extra_parameters)
             assert isinstance(keypair["private_key"], bytes), keypair
             assert isinstance(keypair["public_key"], bytes), keypair
 
@@ -75,14 +75,14 @@ def test_rsa_asymmetric_key_generation():
             assert isinstance(key, RSA.RsaKey)
 
 
-def test_dsa_asymmetric_key_generation():
+def test_dsa_keypair_generation():
 
     with pytest.raises(ValueError, match="asymmetric key length"):
-        wacryptolib.key_generation.generate_asymmetric_keypair(key_type="DSA_DSS", key_length_bits=1024)
+        wacryptolib.key_generation.generate_keypair(key_type="DSA_DSS", key_length_bits=1024)
 
     for key_length_bits in (None, 2048):
         extra_parameters = dict(key_length_bits=key_length_bits) if key_length_bits else {}
-        keypair = wacryptolib.key_generation.generate_asymmetric_keypair(key_type="DSA_DSS", **extra_parameters)
+        keypair = wacryptolib.key_generation.generate_keypair(key_type="DSA_DSS", **extra_parameters)
         assert isinstance(keypair["private_key"], bytes), keypair
         assert isinstance(keypair["public_key"], bytes), keypair
 
@@ -90,14 +90,14 @@ def test_dsa_asymmetric_key_generation():
         assert isinstance(key, DSA.DsaKey)
 
 
-def test_ecc_asymmetric_key_generation():
+def test_ecc_keypair_generation():
 
     with pytest.raises(ValueError, match="Unexisting ECC curve"):
-        wacryptolib.key_generation.generate_asymmetric_keypair(key_type="ECC_DSS", curve="unexisting")
+        wacryptolib.key_generation.generate_keypair(key_type="ECC_DSS", curve="unexisting")
 
     for curve in (None, "p384"):
         extra_parameters = dict(curve=curve) if curve else {}
-        keypair = wacryptolib.key_generation.generate_asymmetric_keypair(key_type="ECC_DSS", **extra_parameters)
+        keypair = wacryptolib.key_generation.generate_keypair(key_type="ECC_DSS", **extra_parameters)
         assert isinstance(keypair["private_key"], bytes), keypair
         assert isinstance(keypair["public_key"], bytes), keypair
 
@@ -109,7 +109,7 @@ def test_load_asymmetric_key_from_pem_bytestring():
 
     for key_type in SUPPORTED_ASYMMETRIC_KEY_TYPES:
 
-        keypair = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type)
+        keypair = wacryptolib.key_generation.generate_keypair(key_type=key_type)
 
         for field in ["private_key", "public_key"]:
             key = load_asymmetric_key_from_pem_bytestring(key_pem=keypair[field], key_type=key_type)
@@ -128,7 +128,7 @@ def test_generate_and_load_passphrase_protected_asymmetric_key():
 
         for key_type in SUPPORTED_ASYMMETRIC_KEY_TYPES:
 
-            keypair = wacryptolib.key_generation.generate_asymmetric_keypair(key_type=key_type, passphrase=passphrase)
+            keypair = wacryptolib.key_generation.generate_keypair(key_type=key_type, passphrase=passphrase)
 
             public_key = load_asymmetric_key_from_pem_bytestring(
                 key_pem=keypair["public_key"], key_type=key_type  # NOT encrypted

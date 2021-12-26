@@ -8,7 +8,7 @@ import pytest
 
 from _test_mockups import get_fake_authentication_device, random_bool
 from wacryptolib.authentication_device import _get_key_storage_folder_path, initialize_authentication_device
-from wacryptolib.escrow import generate_asymmetric_keypair_for_storage
+from wacryptolib.escrow import generate_keypair_for_storage
 from wacryptolib.exceptions import KeyStorageDoesNotExist, KeyStorageAlreadyExists
 from wacryptolib.key_generation import SUPPORTED_ASYMMETRIC_KEY_TYPES
 from wacryptolib.key_storage import FilesystemKeyStorage, DummyKeyStorage, KeyStorageBase, FilesystemKeyStoragePool
@@ -17,7 +17,7 @@ from wacryptolib.scaffolding import (
     check_key_storage_basic_get_set_api,
     check_key_storage_free_keys_api,
 )
-from wacryptolib.key_generation import generate_asymmetric_keypair
+from wacryptolib.key_generation import generate_keypair
 from wacryptolib.utilities import generate_uuid0
 
 
@@ -83,7 +83,7 @@ def test_key_storage_list_keypair_identifiers(tmp_path: Path):
     key_type = random.choice(SUPPORTED_ASYMMETRIC_KEY_TYPES)
 
     keychain_uid = generate_uuid0()
-    generate_asymmetric_keypair_for_storage(key_type=key_type, key_storage=key_storage, keychain_uid=keychain_uid)
+    generate_keypair_for_storage(key_type=key_type, key_storage=key_storage, keychain_uid=keychain_uid)
 
     keys_list = key_storage.list_keypair_identifiers()
     assert isinstance(keys_list, list)
@@ -99,7 +99,7 @@ def test_key_storage_list_keypair_identifiers(tmp_path: Path):
 
     for i in range(3):
         _key_type = random.choice(SUPPORTED_ASYMMETRIC_KEY_TYPES)
-        generate_asymmetric_keypair_for_storage(key_type=_key_type, key_storage=key_storage, passphrase="xzf".encode())
+        generate_keypair_for_storage(key_type=_key_type, key_storage=key_storage, passphrase="xzf".encode())
 
     for bad_filename in (
         "0e896f1d-a4d0-67d6-7286-056f1ec342e8_RSA_OAEP_public_key.dot",
@@ -145,7 +145,7 @@ def test_key_storage_pool_basics(tmp_path: Path):
     assert isinstance(local_key_storage, FilesystemKeyStorage)
     assert not local_key_storage.list_keypair_identifiers()
 
-    keypair = generate_asymmetric_keypair_for_storage(
+    keypair = generate_keypair_for_storage(
         key_type="RSA_OAEP", key_storage=local_key_storage, passphrase="xzf".encode()
     )
 

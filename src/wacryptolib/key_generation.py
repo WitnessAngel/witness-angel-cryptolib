@@ -53,7 +53,7 @@ def _generate_chacha20_poly1305_key_dict():
     )
 
 
-def generate_asymmetric_keypair(
+def generate_keypair(
     *, key_type: str, serialize=True, key_length_bits=2048, curve="p521", passphrase: Optional[AnyStr] = None
 ) -> dict:
     """Generate a (public_key, private_key) pair.
@@ -66,11 +66,11 @@ def generate_asymmetric_keypair(
 
     :return: dictionary with "private_key" and "public_key" fields as objects or PEM-format strings
     """
-    return _do_generate_asymmetric_keypair(key_type=key_type, serialize=serialize, key_length_bits=key_length_bits, curve=curve, passphrase=passphrase)
+    return _do_generate_keypair(key_type=key_type, serialize=serialize, key_length_bits=key_length_bits, curve=curve, passphrase=passphrase)
 
 
 # Intermediate function to help monkey-patching in tests
-def _do_generate_asymmetric_keypair(key_type, serialize, key_length_bits, curve, passphrase) :
+def _do_generate_keypair(key_type, serialize, key_length_bits, curve, passphrase) :
 
     assert serialize or passphrase is None
 

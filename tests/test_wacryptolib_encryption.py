@@ -122,7 +122,7 @@ def test_symmetric_encryption_and_decryption_for_algo(encryption_algo, use_empty
 def test_rsa_oaep_asymmetric_encryption_and_decryption():
     key_length_bits = random.choice([2048, 3072, 4096])
     encryption_algo = "RSA_OAEP"
-    keypair = wacryptolib.key_generation.generate_asymmetric_keypair(
+    keypair = wacryptolib.key_generation.generate_keypair(
         key_type="RSA_OAEP", serialize=False, key_length_bits=key_length_bits
     )
 

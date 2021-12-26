@@ -42,12 +42,12 @@ from wacryptolib.cryptainer import (
 from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS, AUTHENTICATED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import (
     EscrowApi,
-    generate_asymmetric_keypair_for_storage,
+    generate_keypair_for_storage,
     generate_free_keypair_for_least_provisioned_key_type,
 )
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, DecryptionIntegrityError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
-from wacryptolib.key_generation import generate_asymmetric_keypair
+from wacryptolib.key_generation import generate_keypair
 from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, FilesystemKeyStoragePool, DummyKeyStoragePool
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, generate_uuid0, get_utc_now_date, \
     dump_to_json_str
@@ -583,19 +583,19 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     )
 
     local_key_storage = key_storage_pool.get_local_key_storage()
-    generate_asymmetric_keypair_for_storage(
+    generate_keypair_for_storage(
         key_type="RSA_OAEP", key_storage=local_key_storage, keychain_uid=keychain_uid, passphrase=local_passphrase
     )
     key_storage1 = key_storage_pool.get_imported_key_storage(key_storage_uid1)
-    generate_asymmetric_keypair_for_storage(
+    generate_keypair_for_storage(
         key_type="RSA_OAEP", key_storage=key_storage1, keychain_uid=keychain_uid_escrow, passphrase=passphrase1
     )
     key_storage2 = key_storage_pool.get_imported_key_storage(key_storage_uid2)
-    generate_asymmetric_keypair_for_storage(
+    generate_keypair_for_storage(
         key_type="RSA_OAEP", key_storage=key_storage2, keychain_uid=keychain_uid, passphrase=passphrase2
     )
     key_storage3 = key_storage_pool.get_imported_key_storage(key_storage_uid3)
-    generate_asymmetric_keypair_for_storage(
+    generate_keypair_for_storage(
         key_type="RSA_OAEP", key_storage=key_storage3, keychain_uid=keychain_uid, passphrase=passphrase3
     )
 
@@ -1216,7 +1216,7 @@ def test_get_cryptoconf_summary():
             """
     )  # Ending by newline!
 
-    _public_key = generate_asymmetric_keypair(key_type="RSA_OAEP")["public_key"]
+    _public_key = generate_keypair(key_type="RSA_OAEP")["public_key"]
     with patch.object(JsonRpcProxy, "fetch_public_key", return_value=_public_key, create=True) as mock_method:
         cryptainer = encrypt_data_into_cryptainer(data=data, cryptoconf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
         summary2 = get_cryptoconf_summary(cryptainer)

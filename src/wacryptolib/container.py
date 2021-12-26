@@ -1171,22 +1171,22 @@ class ContainerStorage:
                 for deleted_container_dict in deleted_container_dicts:
                     self._delete_container(deleted_container_dict["name"])
 
-    def _encrypt_data_and_dump_container_to_filesystem(self, data, container_filepath, metadata, keychain_uid, encryption_conf):
-        assert encryption_conf, encryption_conf
+    def _encrypt_data_and_dump_container_to_filesystem(self, data, container_filepath, metadata, keychain_uid, cryptoconf):
+        assert cryptoconf, cryptoconf
         encrypt_data_and_dump_container_to_filesystem(
                 container_filepath=container_filepath,
                     data=data,
-                    conf=encryption_conf,
+                    conf=cryptoconf,
                     metadata=metadata,
                     keychain_uid=keychain_uid,
                     key_storage_pool=self._key_storage_pool,
                 )
 
-    def _encrypt_data_into_container(self, data, metadata, keychain_uid, encryption_conf):
-        assert encryption_conf, encryption_conf
+    def _encrypt_data_into_container(self, data, metadata, keychain_uid, cryptoconf):
+        assert cryptoconf, cryptoconf
         return encrypt_data_into_container(
             data=data,
-            conf=encryption_conf,
+            conf=cryptoconf,
             metadata=metadata,
             keychain_uid=keychain_uid,
             key_storage_pool=self._key_storage_pool,
@@ -1198,7 +1198,7 @@ class ContainerStorage:
         )  # Will fail if authorizations are not OK
 
     @catch_and_log_exception
-    def _offloaded_encrypt_data_and_dump_container(self, filename_base, data, metadata, keychain_uid, encryption_conf):
+    def _offloaded_encrypt_data_and_dump_container(self, filename_base, data, metadata, keychain_uid, cryptoconf):
         """Task to be called by background thread, which encrypts a payload into a disk container.
 
         Returns the container basename."""
@@ -1211,11 +1211,11 @@ class ContainerStorage:
 
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
 
-        if self._use_streaming_encryption_for_conf(encryption_conf):
+        if self._use_streaming_encryption_for_conf(cryptoconf):
             # We can use newer, low-memory, streamed API
             logger.debug("Encrypting data file %s into offloaded container directly streamed to storage file %s", filename_base, container_filepath)
             self._encrypt_data_and_dump_container_to_filesystem(
-                data, container_filepath=container_filepath, metadata=metadata, keychain_uid=keychain_uid, encryption_conf=encryption_conf
+                data, container_filepath=container_filepath, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
             )
 
         else:
@@ -1224,7 +1224,7 @@ class ContainerStorage:
             logger.debug("Encrypting data file to self-sufficient container %s", filename_base)
             # Memory warning : duplicates data to json-compatible container
             container = self._encrypt_data_into_container(
-                data, metadata=metadata, keychain_uid=keychain_uid, encryption_conf=encryption_conf
+                data, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
             )
             logger.debug("Writing self-sufficient container data to storage file %s", container_filepath)
             dump_container_to_filesystem(
@@ -1234,28 +1234,28 @@ class ContainerStorage:
         logger.info("Data file %r successfully encrypted into storage container", filename_base)
         return container_filepath.name
 
-    def _use_streaming_encryption_for_conf(self, encryption_conf):  # FIXME rename to cryptoconf
-        return self._offload_data_ciphertext and is_container_encryption_conf_streamable(encryption_conf)
+    def _use_streaming_encryption_for_conf(self, cryptoconf):  # FIXME rename to cryptoconf
+        return self._offload_data_ciphertext and is_container_encryption_conf_streamable(cryptoconf)
 
-    def _prepare_for_new_record_encryption(self, encryption_conf):
+    def _prepare_for_new_record_encryption(self, cryptoconf):
         """
         Validate arguments for new encryption, and purge obsolete things in storage.
         """
-        encryption_conf = encryption_conf or self._default_encryption_conf
-        if not encryption_conf:
+        cryptoconf = cryptoconf or self._default_encryption_conf
+        if not cryptoconf:
             raise RuntimeError("Either default or file-specific encryption conf must be provided to ContainerStorage")
 
         self._purge_exceeding_containers()
         self._purge_executor_results()
-        return encryption_conf
+        return cryptoconf
 
     @synchronized
-    def create_container_encryption_stream(self, filename_base, metadata, keychain_uid=None, encryption_conf=None, dump_initial_container=True):
+    def create_container_encryption_stream(self, filename_base, metadata, keychain_uid=None, cryptoconf=None, dump_initial_container=True):
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
-        encryption_conf = self._prepare_for_new_record_encryption(encryption_conf)
+        cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
         container_encryption_stream = ContainerEncryptionStream(container_filepath,
-                     conf=encryption_conf,
+                     conf=cryptoconf,
                      metadata=metadata,
                      keychain_uid=keychain_uid,
                      key_storage_pool=self._key_storage_pool,
@@ -1263,7 +1263,7 @@ class ContainerStorage:
         return container_encryption_stream
 
     @synchronized
-    def enqueue_file_for_encryption(self, filename_base, data, metadata, keychain_uid=None, encryption_conf=None):
+    def enqueue_file_for_encryption(self, filename_base, data, metadata, keychain_uid=None, cryptoconf=None):
         """Enqueue a data payload for asynchronous encryption and storage.
 
         The filename of final container might be different from provided one.
@@ -1272,11 +1272,11 @@ class ContainerStorage:
         :param data: Bytes string, or a file-like object open for reading, which will be automatically closed.
         :param metadata: Dict of metadata added (unencrypted) to container.
         :param keychain_uid: If provided, replaces autogenerated keychain_uid for this container.
-        :param encryption_conf: If provided, replaces default encryption conf for this container.
+        :param cryptoconf: If provided, replaces default encryption conf for this container.
         """
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
 
-        encryption_conf = self._prepare_for_new_record_encryption(encryption_conf)
+        cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
 
         future = self._thread_pool_executor.submit(
             self._offloaded_encrypt_data_and_dump_container,
@@ -1284,7 +1284,7 @@ class ContainerStorage:
             data=data,
             metadata=metadata,
             keychain_uid=keychain_uid,
-            encryption_conf=encryption_conf,
+            cryptoconf=cryptoconf,
         )
         self._pending_executor_futures.append(future)
 

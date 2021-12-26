@@ -714,7 +714,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     storage = ContainerStorage(tmp_path, key_storage_pool=key_storage_pool)
     storage.enqueue_file_for_encryption(
-        "beauty.txt", data=data, metadata=None, keychain_uid=keychain_uid, encryption_conf=container_conf
+        "beauty.txt", data=data, metadata=None, keychain_uid=keychain_uid, cryptoconf=container_conf
     )
     storage.wait_for_idle_state()
 
@@ -1125,7 +1125,7 @@ def test_container_storage_encryption_conf_precedence(tmp_path):
         storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
 
     storage.enqueue_file_for_encryption(
-        "animals.dat", b"dogs\ncats\n", metadata=None, encryption_conf=SIMPLE_CONTAINER_CONF
+        "animals.dat", b"dogs\ncats\n", metadata=None, cryptoconf=SIMPLE_CONTAINER_CONF
     )
 
     storage.wait_for_idle_state()
@@ -1136,7 +1136,7 @@ def test_container_storage_encryption_conf_precedence(tmp_path):
     storage = ContainerStorage(default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path)
     storage.enqueue_file_for_encryption("stuff_simple.txt", b"aaa", metadata=None)
     storage.enqueue_file_for_encryption(
-        "stuff_complex.txt", b"xxx", metadata=None, encryption_conf=COMPLEX_CONTAINER_CONF
+        "stuff_complex.txt", b"xxx", metadata=None, cryptoconf=COMPLEX_CONTAINER_CONF
     )
     storage.wait_for_idle_state()
 
@@ -1325,7 +1325,7 @@ def test_create_container_encryption_stream(tmp_path):
     storage = ContainerStorage(default_encryption_conf=None, containers_dir=containers_dir)
 
     container_encryption_stream = storage.create_container_encryption_stream(
-        filename_base, metadata={"mymetadata": True}, encryption_conf=SIMPLE_CONTAINER_CONF, dump_initial_container=True)
+        filename_base, metadata={"mymetadata": True}, cryptoconf=SIMPLE_CONTAINER_CONF, dump_initial_container=True)
 
     container_started = storage.load_container_from_storage("20200101_container_example.crypt" + CONTAINER_TEMP_SUFFIX)
     assert container_started["container_state"] == "STARTED"

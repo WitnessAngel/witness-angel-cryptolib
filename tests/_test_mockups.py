@@ -13,12 +13,12 @@ class FakeTestContainerStorage(ContainerStorage):
         super().enqueue_file_for_encryption(filename_base + (".%03d" % self.increment), data, **kwargs)
         self.increment += 1
 
-    def _use_streaming_encryption_for_conf(self, encryption_conf):
-        return self._offload_data_ciphertext  # Do NOT dig encryption_conf here, it might be all wrong
+    def _use_streaming_encryption_for_conf(self, cryptoconf):
+        return self._offload_data_ciphertext  # Do NOT dig cryptoconf here, it might be all wrong
 
-    def _encrypt_data_and_dump_container_to_filesystem(self, data, container_filepath, metadata, keychain_uid, encryption_conf):
+    def _encrypt_data_and_dump_container_to_filesystem(self, data, container_filepath, metadata, keychain_uid, cryptoconf):
         container = self._encrypt_data_into_container(
-            data, metadata=metadata, keychain_uid=keychain_uid, encryption_conf=encryption_conf
+            data, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
         )
         dump_container_to_filesystem(
             container_filepath, container=container, offload_data_ciphertext=True

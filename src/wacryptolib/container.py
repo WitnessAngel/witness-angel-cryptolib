@@ -71,7 +71,7 @@ class CONTAINER_STATES:
     FINISHED = "FINISHED"
 
 
-def get_escrow_id(escrow_cryptoconf: dict) -> str:
+def get_escrow_id(escrow_conf: dict) -> str:
     """Build opaque unique identifier for a specific escrow.
 
     Remains the same as long as escrow dict is completely unmodified.
@@ -223,7 +223,7 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         """
 
         container, data_encryption_strata_extracts = self._generate_container_base_and_secrets(
-           cryptoconf=conf, keychain_uid=keychain_uid, metadata=metadata
+           cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
         )
 
         # HERE INSTANTIATE REAL ENCRYPTOR USING data_encryption_strata_extracts
@@ -272,7 +272,7 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         data = self._load_data_bytes_and_cleanup(data)  # Ensure we get the whole data buffer
 
         container, data_encryption_strata_extracts = self._generate_container_base_and_secrets(
-           cryptoconf=conf, keychain_uid=keychain_uid, metadata=metadata
+           cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
         )
 
         data_ciphertext, authentication_data_list = \
@@ -348,11 +348,11 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         container_uid = generate_uuid0()  # ALWAYS UNIQUE!
         keychain_uid = keychain_uid or generate_uuid0()  # Might be shared by lots of containers
 
-        assert isinstance(conf, dict), cryptoconf
-        container = copy.deepcopy(conf)  # So that we can manipulate it as new container
+        assert isinstance(cryptoconf, dict), cryptoconf
+        container = copy.deepcopy(cryptoconf)  # So that we can manipulate it as new container
         del cryptoconf
         if not container["data_encryption_strata"]:
-            raise ConfigurationError("Empty data_encryption_strata list is forbidden in encryption conf")
+            raise ConfigurationError("Empty data_encryption_strata list is forbidden in cryptoconf")
 
         data_encryption_strata_extracts = []  # Sensitive info with secret keys!
 
@@ -396,7 +396,7 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         # HERE KEY IS REAL KEY OR SHARE !!!
 
         if not key_encryption_strata:
-            raise ConfigurationError("Empty key_encryption_strata list is forbidden in encryption conf")
+            raise ConfigurationError("Empty key_encryption_strata list is forbidden in cryptoconf")
 
         key_ciphertext = key_bytes
         for key_encryption_stratum in key_encryption_strata:
@@ -564,13 +564,13 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         :param cryptoconf: configuration tree inside data_signatures, which MUST already contain the message digest
         :return: dictionary with information needed to verify signature
         """
-        signature_algo = conf["signature_algo"]
-        message_digest = conf["message_digest"]  # Must have been set before, using message_digest_algo field
+        signature_algo = cryptoconf["signature_algo"]
+        message_digest = cryptoconf["message_digest"]  # Must have been set before, using message_digest_algo field
         assert message_digest, message_digest
 
-        encryption_proxy = get_escrow_proxy(escrow=conf["signature_escrow"], key_storage_pool=self._key_storage_pool)
+        encryption_proxy = get_escrow_proxy(escrow=cryptoconf["signature_escrow"], key_storage_pool=self._key_storage_pool)
 
-        keychain_uid_signature = conf.get("keychain_uid") or keychain_uid
+        keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
 
         logger.debug("Signing hash of encrypted data with algo %r", signature_algo)
         signature_value = encryption_proxy.get_message_signature(
@@ -754,8 +754,8 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
 
         :return: list of tuples of deciphered shares
         """
-        key_shared_secret_escrows = conf["key_shared_secret_escrows"]
-        key_shared_secret_threshold = conf["key_shared_secret_threshold"]
+        key_shared_secret_escrows = cryptoconf["key_shared_secret_escrows"]
+        key_shared_secret_threshold = cryptoconf["key_shared_secret_threshold"]
 
         decrypted_shares = []
         decryption_errors = []
@@ -809,18 +809,18 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
         :param message: message as bytes on which to verify signature
         :param cryptoconf: configuration tree inside data_signatures
         """
-        message_digest_algo = conf["message_digest_algo"]
-        signature_algo = conf["signature_algo"]
-        keychain_uid_signature = conf.get("keychain_uid") or keychain_uid
-        encryption_proxy = get_escrow_proxy(escrow=conf["signature_escrow"], key_storage_pool=self._key_storage_pool)
+        message_digest_algo = cryptoconf["message_digest_algo"]
+        signature_algo = cryptoconf["signature_algo"]
+        keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
+        encryption_proxy = get_escrow_proxy(escrow=cryptoconf["signature_escrow"], key_storage_pool=self._key_storage_pool)
         public_key_pem = encryption_proxy.fetch_public_key(
             keychain_uid=keychain_uid_signature, key_type=signature_algo, must_exist=True
         )
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_type=signature_algo)
 
         message_hash = hash_message(message, hash_algo=message_digest_algo)
-        assert message_hash == conf["message_digest"]  # Sanity check!!
-        signature_value = conf["signature_value"]
+        assert message_hash == cryptoconf["message_digest"]  # Sanity check!!
+        signature_value = cryptoconf["signature_value"]
 
         verify_message_signature(
             message=message_hash, signature_algo=signature_algo, signature=signature_value, key=public_key
@@ -882,9 +882,9 @@ class ContainerEncryptionStream:
             self._output_data_stream.close()
 
 
-def is_container_cryptoconf_streamable(conf):  #FIXME rename and add to docs
+def is_container_cryptoconf_streamable(cryptoconf):  #FIXME rename and add to docs
     # FIXME test separately!
-    for data_encryption_stratum in conf["data_encryption_strata"]:
+    for data_encryption_stratum in cryptoconf["data_encryption_strata"]:
         if data_encryption_stratum["data_encryption_algo"] not in STREAMABLE_ENCRYPTION_ALGOS:
             return False
     return True
@@ -905,7 +905,7 @@ def encrypt_data_and_dump_container_to_filesystem(
     """
     # No need to dump initial (signature-less) container here, this is all a quick operation...
     encryptor = ContainerEncryptionStream(container_filepath,
-                cryptoconf=conf, keychain_uid=keychain_uid, metadata=metadata,
+                cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata,
                 key_storage_pool=key_storage_pool,
                 dump_initial_container=False)
 
@@ -934,7 +934,7 @@ def encrypt_data_into_container(
     :return: dict of container
     """
     writer = ContainerWriter(key_storage_pool=key_storage_pool)
-    container = writer.encrypt_data(data, cryptoconf=conf, keychain_uid=keychain_uid, metadata=metadata)
+    container = writer.encrypt_data(data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
     return container
 
 
@@ -1241,7 +1241,7 @@ class ContainerStorage:
         """
         cryptoconf = cryptoconf or self._default_cryptoconf
         if not cryptoconf:
-            raise RuntimeError("Either default or file-specific encryption conf must be provided to ContainerStorage")
+            raise RuntimeError("Either default or file-specific cryptoconf must be provided to ContainerStorage")
 
         self._purge_exceeding_containers()
         self._purge_executor_results()
@@ -1253,7 +1253,7 @@ class ContainerStorage:
         container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
         cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
         container_encryption_stream = ContainerEncryptionStream(container_filepath,
-                    cryptoconf=cryptoconf,
+                     cryptoconf=cryptoconf,
                      metadata=metadata,
                      keychain_uid=keychain_uid,
                      key_storage_pool=self._key_storage_pool,
@@ -1525,4 +1525,4 @@ def check_conf_sanity(cryptoconf: dict, jsonschema_mode: False):
 
     schema = CONF_SCHEMA_JSON if jsonschema_mode else CONF_SCHEMA_PYTHON
 
-    _validate_data_tree(data_tree=conf, valid_schema=schema)
+    _validate_data_tree(data_tree=cryptoconf, valid_schema=schema)

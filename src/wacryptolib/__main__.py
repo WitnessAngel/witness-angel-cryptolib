@@ -75,7 +75,7 @@ def cli(ctx, config, key_storage_pool):
 
 def _do_encrypt(data, key_storage_pool):
     container = encrypt_data_into_container(
-        data, conf=EXAMPLE_CONTAINER_CONF, metadata=None, key_storage_pool=key_storage_pool
+        data, cryptoconf=EXAMPLE_CONTAINER_CONF, metadata=None, key_storage_pool=key_storage_pool
     )
     return container
 

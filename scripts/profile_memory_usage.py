@@ -40,7 +40,7 @@ def profile_simple_encryption():
     now = datetime.now(tz=timezone.utc)
 
     container_storage = ContainerStorage(
-        default_encryption_conf=ENCRYPTION_CONF,
+        default_cryptoconf=ENCRYPTION_CONF,
         containers_dir=tmp_path,
         offload_data_ciphertext=True,
     )

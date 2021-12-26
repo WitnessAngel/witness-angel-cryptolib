@@ -50,7 +50,7 @@ def test_tarfile_aggregator(tmp_path):
 
     offload_data_ciphertext = random_bool()
     container_storage = FakeTestContainerStorage(
-        default_encryption_conf={"whatever": True},
+        default_cryptoconf={"whatever": True},
         containers_dir=tmp_path,
         offload_data_ciphertext=offload_data_ciphertext,
     )
@@ -208,7 +208,7 @@ def test_json_aggregator(tmp_path):
 
     offload_data_ciphertext = random_bool()
     container_storage = FakeTestContainerStorage(
-        default_encryption_conf={"qsdqsdsd": True},
+        default_cryptoconf={"qsdqsdsd": True},
         containers_dir=tmp_path,
         offload_data_ciphertext=offload_data_ciphertext,
     )
@@ -296,7 +296,7 @@ def test_aggregators_thread_safety(tmp_path):
 
     offload_data_ciphertext = random_bool()
     container_storage = FakeTestContainerStorage(
-        default_encryption_conf={"zesvscc": True},
+        default_cryptoconf={"zesvscc": True},
         containers_dir=tmp_path,
         offload_data_ciphertext=offload_data_ciphertext,
     )
@@ -375,7 +375,7 @@ def test_periodic_value_poller(tmp_path):
 
     offload_data_ciphertext = random_bool()
     container_storage = FakeTestContainerStorage(
-        default_encryption_conf={"zexcsc": True},
+        default_cryptoconf={"zexcsc": True},
         containers_dir=tmp_path,
         offload_data_ciphertext=offload_data_ciphertext,
     )

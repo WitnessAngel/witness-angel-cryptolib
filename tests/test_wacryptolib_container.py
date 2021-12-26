@@ -35,7 +35,7 @@ from wacryptolib.container import (
     get_escrow_proxy,
     request_decryption_authorizations,
     delete_container_from_filesystem, CONTAINER_DATETIME_FORMAT, get_container_size_on_filesystem, ContainerWriter,
-    encrypt_data_and_dump_container_to_filesystem, is_container_encryption_conf_streamable, CONF_SCHEMA_PYTHON,
+    encrypt_data_and_dump_container_to_filesystem, is_container_cryptoconf_streamable, CONF_SCHEMA_PYTHON,
     CONF_SCHEMA_JSON, CONTAINER_SCHEMA_PYTHON, CONTAINER_SCHEMA_JSON, check_conf_sanity, check_container_sanity,
     CONTAINER_TEMP_SUFFIX,
 )
@@ -317,7 +317,7 @@ def _dump_to_raw_json_tree(data):
 
 
 def _intialize_container_with_single_file(tmp_path):  # FIXME generalize its use in different test functions below
-    storage = ContainerStorage(default_encryption_conf=COMPLEX_CONTAINER_CONF, containers_dir=tmp_path)
+    storage = ContainerStorage(default_cryptoconf=COMPLEX_CONTAINER_CONF, containers_dir=tmp_path)
 
     storage.enqueue_file_for_encryption(
         "animals.dat", b"dogs\ncats\n", metadata=None
@@ -328,30 +328,30 @@ def _intialize_container_with_single_file(tmp_path):  # FIXME generalize its use
 
 
 @pytest.mark.parametrize(
-    "container_conf",
+    "cryptoconf",
     [
         VOID_CONTAINER_CONF_REGARDING_DATA_ENCRYPTION_STRATA,
         VOID_CONTAINER_CONF_REGARDING_KEY_ENCRYPTION_STRATA,
     ],
 )
-def test_void_container_confs(container_conf):
+def test_void_cryptoconfs(cryptoconf):
     key_storage_pool = DummyKeyStoragePool()
 
     with pytest.raises(ConfigurationError, match="Empty .* list"):
         encrypt_data_into_container(
-            data=b"stuffs", conf=container_conf, keychain_uid=None, metadata=None, key_storage_pool=key_storage_pool
+            data=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None, key_storage_pool=key_storage_pool
         )
 
 
 @pytest.mark.parametrize(
-    "container_conf,escrow_dependencies_builder",
+    "cryptoconf,escrow_dependencies_builder",
     [
         (SIGNATURELESS_CONTAINER_CONF, SIGNATURELESS_CONTAINER_ESCROW_DEPENDENCIES),
         (SIMPLE_CONTAINER_CONF, SIMPLE_CONTAINER_ESCROW_DEPENDENCIES),
         (COMPLEX_CONTAINER_CONF, COMPLEX_CONTAINER_ESCROW_DEPENDENCIES),
     ],
 )
-def test_standard_container_encryption_and_decryption(tmp_path, container_conf, escrow_dependencies_builder):
+def test_standard_container_encryption_and_decryption(tmp_path, cryptoconf, escrow_dependencies_builder):
     data = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
@@ -360,15 +360,15 @@ def test_standard_container_encryption_and_decryption(tmp_path, container_conf, 
     key_storage_pool = DummyKeyStoragePool()
     metadata = random.choice([None, dict(a=[123])])
 
-    if use_streaming_encryption and is_container_encryption_conf_streamable(container_conf):
+    if use_streaming_encryption and is_container_cryptoconf_streamable(cryptoconf):
         container_filepath = tmp_path / "mygoodcontainer.crypt"
         encrypt_data_and_dump_container_to_filesystem(
                 data=data, container_filepath=container_filepath,
-                conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool)
+                cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool)
         container = load_container_from_filesystem(container_filepath, include_data_ciphertext=True)
     else:
         container = encrypt_data_into_container(
-            data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool
+            data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool
         )
 
     assert container["keychain_uid"]
@@ -425,13 +425,13 @@ def test_standard_container_encryption_and_decryption(tmp_path, container_conf, 
 
 
 @pytest.mark.parametrize(
-    "shamir_container_conf, escrow_dependencies_builder",
+    "shamir_cryptoconf, escrow_dependencies_builder",
     [
         (SIMPLE_SHAMIR_CONTAINER_CONF, SIMPLE_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES),
         (COMPLEX_SHAMIR_CONTAINER_CONF, COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES),
     ],
 )
-def test_shamir_container_encryption_and_decryption(shamir_container_conf, escrow_dependencies_builder):
+def test_shamir_container_encryption_and_decryption(shamir_cryptoconf, escrow_dependencies_builder):
     data = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
@@ -439,7 +439,7 @@ def test_shamir_container_encryption_and_decryption(shamir_container_conf, escro
     metadata = random.choice([None, dict(a=[123])])
 
     container = encrypt_data_into_container(
-        data=data, conf=shamir_container_conf, keychain_uid=keychain_uid, metadata=metadata
+        data=data, cryptoconf=shamir_cryptoconf, keychain_uid=keychain_uid, metadata=metadata
     )
 
     assert container["keychain_uid"]
@@ -532,7 +532,7 @@ def test_recursive_shamir_secrets_and_strata():
     data = _get_binary_or_empty_content()
 
     container = encrypt_data_into_container(
-        data=data, conf=RECURSIVE_CONTAINER_CONF, keychain_uid=keychain_uid, metadata=None
+        data=data, cryptoconf=RECURSIVE_CONTAINER_CONF, keychain_uid=keychain_uid, metadata=None
     )
 
     data_decrypted = decrypt_data_from_container(
@@ -544,11 +544,11 @@ def test_recursive_shamir_secrets_and_strata():
 
 def test_decrypt_data_from_container_with_authenticated_algo_and_verify():
     data_encryption_algo = random.choice(AUTHENTICATED_ENCRYPTION_ALGOS)
-    container_conf = copy.deepcopy(SIMPLE_CONTAINER_CONF)
-    container_conf["data_encryption_strata"][0]["data_encryption_algo"] = data_encryption_algo
+    cryptoconf = copy.deepcopy(SIMPLE_CONTAINER_CONF)
+    cryptoconf["data_encryption_strata"][0]["data_encryption_algo"] = data_encryption_algo
 
     container = encrypt_data_into_container(
-        data=b"1234", conf=container_conf, metadata=None
+        data=b"1234", cryptoconf=cryptoconf, metadata=None
     )
     container["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION
 
@@ -610,7 +610,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     share_escrow3 = dict(escrow_type="authentication_device", authentication_device_uid=key_storage_uid3)
     share_escrow3_id = get_escrow_id(share_escrow3)
 
-    container_conf = dict(
+    cryptoconf = dict(
         data_encryption_strata=[
             dict(
                 data_encryption_algo="AES_CBC",
@@ -643,7 +643,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     data = b"sjzgzj"
 
     container = encrypt_data_into_container(
-        data=data, conf=container_conf, keychain_uid=keychain_uid, key_storage_pool=key_storage_pool, metadata=None
+        data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, key_storage_pool=key_storage_pool, metadata=None
     )
 
     # FIXME we must TEST that keychain_uid_escrow is necessary for decryption for example by deleting it before a decrypt()
@@ -714,7 +714,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     storage = ContainerStorage(tmp_path, key_storage_pool=key_storage_pool)
     storage.enqueue_file_for_encryption(
-        "beauty.txt", data=data, metadata=None, keychain_uid=keychain_uid, cryptoconf=container_conf
+        "beauty.txt", data=data, metadata=None, keychain_uid=keychain_uid, cryptoconf=cryptoconf
     )
     storage.wait_for_idle_state()
 
@@ -781,7 +781,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
             pass  # Win32 doesn't allow that
 
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
-    storage = ContainerStorage(default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=containers_dir)
+    storage = ContainerStorage(default_cryptoconf=SIMPLE_CONTAINER_CONF, containers_dir=containers_dir)
     assert storage._max_container_count is None
     assert len(storage) == 0
     assert storage.list_container_names() == []
@@ -803,7 +803,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     assert len(list(storage._containers_dir.iterdir())) == 4  # 2 files per container
 
     storage = ContainerStorage(
-        default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=containers_dir, offload_data_ciphertext=False
+        default_cryptoconf=SIMPLE_CONTAINER_CONF, containers_dir=containers_dir, offload_data_ciphertext=False
     )
     storage.enqueue_file_for_encryption("newfile.bmp", b"stuffs", metadata=None)
     storage.wait_for_idle_state()
@@ -826,7 +826,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
     # We continue test with a randomly configured storage
     offload_data_ciphertext = random_bool()
     storage = ContainerStorage(
-        default_encryption_conf=SIMPLE_CONTAINER_CONF,
+        default_cryptoconf=SIMPLE_CONTAINER_CONF,
         containers_dir=containers_dir,
         offload_data_ciphertext=offload_data_ciphertext,
     )
@@ -860,7 +860,7 @@ def test_container_storage_and_executor(tmp_path, caplog):
 
     offload_data_ciphertext1 = random_bool()
     storage = FakeTestContainerStorage(
-        default_encryption_conf={"smth": True},
+        default_cryptoconf={"smth": True},
         containers_dir=containers_dir,
         offload_data_ciphertext=offload_data_ciphertext1,
     )
@@ -877,7 +877,7 @@ def test_container_storage_purge_by_max_count(tmp_path):
 
     offload_data_ciphertext = random_bool()
     storage = FakeTestContainerStorage(
-        default_encryption_conf={"stuffs": True},
+        default_cryptoconf={"stuffs": True},
         containers_dir=containers_dir,
         max_container_count=3,
         offload_data_ciphertext=offload_data_ciphertext,
@@ -906,7 +906,7 @@ def test_container_storage_purge_by_max_count(tmp_path):
 
     offload_data_ciphertext2 = random_bool()
     storage = FakeTestContainerStorage(
-        default_encryption_conf={"randomthings": True},
+        default_cryptoconf={"randomthings": True},
         containers_dir=containers_dir,
         max_container_count=4,
         offload_data_ciphertext=offload_data_ciphertext2,
@@ -972,7 +972,7 @@ def test_container_storage_purge_by_age(tmp_path):
 
     offload_data_ciphertext = random_bool()
     storage = FakeTestContainerStorage(
-        default_encryption_conf={"stuffs": True},
+        default_cryptoconf={"stuffs": True},
         containers_dir=containers_dir,
         max_container_age=timedelta(days=2),
         offload_data_ciphertext=offload_data_ciphertext,
@@ -1025,7 +1025,7 @@ def test_container_storage_purge_by_quota(tmp_path):
 
     offload_data_ciphertext = random_bool()
     storage = FakeTestContainerStorage(
-        default_encryption_conf={"stuffs": True},
+        default_cryptoconf={"stuffs": True},
         containers_dir=containers_dir,
         max_container_quota=8000,  # Beware of overhead of encryption and json structs!
         offload_data_ciphertext=offload_data_ciphertext,
@@ -1077,7 +1077,7 @@ def test_container_storage_purge_parameter_combinations(tmp_path):
     for max_container_count, max_container_quota, max_container_age in params_sets:
         offload_data_ciphertext = random_bool()
         storage = FakeTestContainerStorage(
-            default_encryption_conf={"stuffs": True},
+            default_cryptoconf={"stuffs": True},
             containers_dir=containers_dir,
             max_container_count=max_container_count,
             max_container_quota=max_container_quota,
@@ -1100,7 +1100,7 @@ def test_container_storage_purge_parameter_combinations(tmp_path):
     # Special case of "everything restricted"
 
     storage = FakeTestContainerStorage(
-        default_encryption_conf={"stuffs": True},
+        default_cryptoconf={"stuffs": True},
         containers_dir=containers_dir,
         max_container_count=0,
         max_container_quota=0,
@@ -1114,14 +1114,14 @@ def test_container_storage_purge_parameter_combinations(tmp_path):
     assert container_names == []
 
 
-def test_container_storage_encryption_conf_precedence(tmp_path):
+def test_container_storage_cryptoconf_precedence(tmp_path):
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
 
-    storage = ContainerStorage(default_encryption_conf=None, containers_dir=tmp_path)
+    storage = ContainerStorage(default_cryptoconf=None, containers_dir=tmp_path)
 
     assert storage.list_container_names() == []
 
-    with pytest.raises(RuntimeError, match="encryption conf"):
+    with pytest.raises(RuntimeError, match="encryption cryptoconf"):
         storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
 
     storage.enqueue_file_for_encryption(
@@ -1133,7 +1133,7 @@ def test_container_storage_encryption_conf_precedence(tmp_path):
 
     # ---
 
-    storage = ContainerStorage(default_encryption_conf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path)
+    storage = ContainerStorage(default_cryptoconf=SIMPLE_CONTAINER_CONF, containers_dir=tmp_path)
     storage.enqueue_file_for_encryption("stuff_simple.txt", b"aaa", metadata=None)
     storage.enqueue_file_for_encryption(
         "stuff_complex.txt", b"xxx", metadata=None, cryptoconf=COMPLEX_CONTAINER_CONF
@@ -1147,7 +1147,7 @@ def test_container_storage_encryption_conf_precedence(tmp_path):
 
 
 def test_container_storage_decryption_authenticated_algo_verify(tmp_path):
-    storage = ContainerStorage(default_encryption_conf=COMPLEX_CONTAINER_CONF, containers_dir=tmp_path)
+    storage = ContainerStorage(default_cryptoconf=COMPLEX_CONTAINER_CONF, containers_dir=tmp_path)
 
     storage.enqueue_file_for_encryption(
         "animals.dat", b"dogs\ncats\n", metadata=None
@@ -1183,11 +1183,11 @@ def test_get_cryptoconf_summary():
             """
     )  # Ending by newline!
 
-    container = encrypt_data_into_container(data=data, conf=SIMPLE_CONTAINER_CONF, keychain_uid=None, metadata=None)
+    container = encrypt_data_into_container(data=data, cryptoconf=SIMPLE_CONTAINER_CONF, keychain_uid=None, metadata=None)
     summary2 = get_cryptoconf_summary(container)
-    assert summary2 == summary  # Identical summary for conf and generated containers!
+    assert summary2 == summary  # Identical summary for cryptoconf and generated containers!
 
-    # Simulate a conf with remote escrow webservices
+    # Simulate a cryptoconf with remote escrow webservices
 
     CONF_WITH_ESCROW = copy.deepcopy(COMPLEX_CONTAINER_CONF)
     CONF_WITH_ESCROW["data_encryption_strata"][0]["key_encryption_strata"][0]["key_escrow"] = dict(
@@ -1218,9 +1218,9 @@ def test_get_cryptoconf_summary():
 
     _public_key = generate_asymmetric_keypair(key_type="RSA_OAEP")["public_key"]
     with patch.object(JsonRpcProxy, "fetch_public_key", return_value=_public_key, create=True) as mock_method:
-        container = encrypt_data_into_container(data=data, conf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
+        container = encrypt_data_into_container(data=data, cryptoconf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
         summary2 = get_cryptoconf_summary(container)
-        assert summary2 == summary  # Identical summary for conf and generated containers!
+        assert summary2 == summary  # Identical summary for cryptoconf and generated containers!
 
     # Test unknown escrow structure
 
@@ -1231,8 +1231,8 @@ def test_get_cryptoconf_summary():
         get_cryptoconf_summary(CONF_WITH_BROKEN_ESCROW)
 
 
-@pytest.mark.parametrize("container_conf", [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF])
-def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
+@pytest.mark.parametrize("cryptoconf", [SIMPLE_CONTAINER_CONF, COMPLEX_CONTAINER_CONF])
+def test_filesystem_container_loading_and_dumping(tmp_path, cryptoconf):
     data = b"jhf" * 200
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
@@ -1240,7 +1240,7 @@ def test_filesystem_container_loading_and_dumping(tmp_path, container_conf):
     metadata = random.choice([None, dict(a=[123])])
 
     container = encrypt_data_into_container(
-        data=data, conf=container_conf, keychain_uid=keychain_uid, metadata=metadata
+        data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
     )
     container_ciphertext_before_dump = container["data_ciphertext"]
 
@@ -1322,7 +1322,7 @@ def test_create_container_encryption_stream(tmp_path):
     filename_base = "20200101_container_example"
 
     # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
-    storage = ContainerStorage(default_encryption_conf=None, containers_dir=containers_dir)
+    storage = ContainerStorage(default_cryptoconf=None, containers_dir=containers_dir)
 
     container_encryption_stream = storage.create_container_encryption_stream(
         filename_base, metadata={"mymetadata": True}, cryptoconf=SIMPLE_CONTAINER_CONF, dump_initial_container=True)
@@ -1349,7 +1349,7 @@ def ___obsolete_test_encrypt_data_and_dump_container_to_filesystem(tmp_path):
     encrypt_data_and_dump_container_to_filesystem(
         data_plaintext,
         container_filepath=container_filepath,
-        conf=SIMPLE_CONTAINER_CONF,
+        cryptoconf=SIMPLE_CONTAINER_CONF,
         metadata=None)
 
     container = load_container_from_filesystem(container_filepath)  # Fetches offloaded content too
@@ -1357,40 +1357,40 @@ def ___obsolete_test_encrypt_data_and_dump_container_to_filesystem(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "conf",
+    "cryptoconf",
     [
         SIMPLE_CONTAINER_CONF,
         COMPLEX_CONTAINER_CONF,
         SIMPLE_SHAMIR_CONTAINER_CONF,
         COMPLEX_SHAMIR_CONTAINER_CONF
     ])
-def test_conf_validation_success(conf):
-    check_conf_sanity(conf=conf, jsonschema_mode=False)
+def test_conf_validation_success(cryptoconf):
+    check_conf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
 
-    conf_json = _dump_to_raw_json_tree(conf)
-    check_conf_sanity(conf=conf_json, jsonschema_mode=True)
+    conf_json = _dump_to_raw_json_tree(cryptoconf)
+    check_conf_sanity(cryptoconf=conf_json, jsonschema_mode=True)
 
 
-def _generate_corrupted_confs(conf):
+def _generate_corrupted_confs(cryptoconf):
     corrupted_confs = []
 
     # Add a false information to config
-    corrupted_conf1 = copy.deepcopy(conf)
+    corrupted_conf1 = copy.deepcopy(cryptoconf)
     corrupted_conf1["data_encryption_strata"][0]["keychain_uid"] = ENFORCED_UID2
     corrupted_confs.append(corrupted_conf1)
 
-    # Delete a "key_encryption_strata" in an element of conf
-    corrupted_conf2 = copy.deepcopy(conf)
+    # Delete a "key_encryption_strata" in an element of cryptoconf
+    corrupted_conf2 = copy.deepcopy(cryptoconf)
     del corrupted_conf2["data_encryption_strata"][0]["key_encryption_strata"]
     corrupted_confs.append(corrupted_conf2)
 
     # Update data_encryption_algo with a value algo that does not exist
-    corrupted_conf3 = copy.deepcopy(conf)
+    corrupted_conf3 = copy.deepcopy(cryptoconf)
     corrupted_conf3["data_encryption_strata"][0]["data_encryption_algo"] = "AES_AES"
     corrupted_confs.append(corrupted_conf3)
 
     # Update a "key_encryption_strata" with a string instead of list
-    corrupted_conf4 = copy.deepcopy(conf)
+    corrupted_conf4 = copy.deepcopy(cryptoconf)
     corrupted_conf4["data_encryption_strata"][0]["key_encryption_strata"] = " "
     corrupted_confs.append(corrupted_conf4)
 
@@ -1400,20 +1400,20 @@ def _generate_corrupted_confs(conf):
 @pytest.mark.parametrize("corrupted_conf", _generate_corrupted_confs(COMPLEX_SHAMIR_CONTAINER_CONF))
 def test_conf_validation_error(corrupted_conf):
     with pytest.raises(ValidationError):
-        check_conf_sanity(conf=corrupted_conf, jsonschema_mode=False)
+        check_conf_sanity(cryptoconf=corrupted_conf, jsonschema_mode=False)
 
     with pytest.raises(ValidationError):
         corrupted_conf_json = _dump_to_raw_json_tree(corrupted_conf)
-        check_conf_sanity(conf=corrupted_conf_json, jsonschema_mode=True)
+        check_conf_sanity(cryptoconf=corrupted_conf_json, jsonschema_mode=True)
 
 
-@pytest.mark.parametrize("conf", [SIMPLE_CONTAINER_CONF,
+@pytest.mark.parametrize("cryptoconf", [SIMPLE_CONTAINER_CONF,
                                   COMPLEX_CONTAINER_CONF,
                                   SIMPLE_SHAMIR_CONTAINER_CONF,
                                   COMPLEX_SHAMIR_CONTAINER_CONF])
-def test_container_validation_success(conf):
+def test_container_validation_success(cryptoconf):
     container = encrypt_data_into_container(
-        data=b"stuffs", conf=conf, keychain_uid=None, metadata=None
+        data=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None
     )
     check_container_sanity(container=container, jsonschema_mode=False)
 
@@ -1421,10 +1421,10 @@ def test_container_validation_success(conf):
     check_container_sanity(container=container_json, jsonschema_mode=True)
 
 
-def _generate_corrupted_containers(conf):
+def _generate_corrupted_containers(cryptoconf):
 
     container = encrypt_data_into_container(
-        data=b"stuffs", conf=conf, keychain_uid=None, metadata=None
+        data=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None
     )
     corrupted_containers = []
 

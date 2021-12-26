@@ -4,7 +4,7 @@ import tarfile
 import threading
 from datetime import datetime, timezone
 
-from wacryptolib.container import ContainerStorage, CONTAINER_DATETIME_FORMAT
+from wacryptolib.cryptainer import CryptainerStorage, CRYPTAINER_DATETIME_FORMAT
 from wacryptolib.utilities import (
     dump_to_json_bytes,
     synchronized,
@@ -67,10 +67,10 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
     _current_records_count = 0
     _current_metadata = None
 
-    def __init__(self, container_storage: ContainerStorage, max_duration_s: float):
+    def __init__(self, cryptainer_storage: CryptainerStorage, max_duration_s: float):
         super().__init__(max_duration_s=max_duration_s)
-        assert container_storage is not None, container_storage
-        self._container_storage = container_storage
+        assert cryptainer_storage is not None, cryptainer_storage
+        self._cryptainer_storage = cryptainer_storage
         self._lock = threading.Lock()
 
     def __len__(self):
@@ -91,9 +91,9 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
     def _build_tarfile_filename(self, from_datetime, to_datetime):
         extension = self.tarfile_extension
         assert extension.startswith("."), extension
-        from_ts = from_datetime.strftime(CONTAINER_DATETIME_FORMAT)
-        to_ts = to_datetime.strftime(CONTAINER_DATETIME_FORMAT)
-        filename = "{from_ts}_{to_ts}_container{extension}".format(**locals())
+        from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
+        to_ts = to_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
+        filename = "{from_ts}_{to_ts}_cryptainer{extension}".format(**locals())
         assert " " not in filename, repr(filename)
         return filename
 
@@ -108,7 +108,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         result_bytestring = self._current_bytesio.getvalue()
         end_time = get_utc_now_date()
         filename_base = self._build_tarfile_filename(from_datetime=self._current_start_time, to_datetime=end_time)
-        self._container_storage.enqueue_file_for_encryption(
+        self._cryptainer_storage.enqueue_file_for_encryption(
             filename_base=filename_base, data=result_bytestring, metadata=self._current_metadata
         )
 
@@ -121,8 +121,8 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
 
     def _build_record_filename(self, sensor_name, from_datetime, to_datetime, extension):
         assert extension.startswith("."), extension
-        from_ts = from_datetime.strftime(CONTAINER_DATETIME_FORMAT)
-        to_ts = to_datetime.strftime(CONTAINER_DATETIME_FORMAT)
+        from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
+        to_ts = to_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
         filename = "{from_ts}_{to_ts}_{sensor_name}{extension}".format(**locals())
         assert " " not in filename, repr(filename)
         return filename

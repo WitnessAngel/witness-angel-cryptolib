@@ -11,7 +11,7 @@ This is the core cryptographic and utility library of the WitnessAngel project.
    Readme<readme>
    getting_started
    algorithms_overview
-   container_format
+   cryptainer_format
    api
 
 

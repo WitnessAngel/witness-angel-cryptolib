@@ -63,9 +63,9 @@ def delete_filesystem_node_for_stream(stream: BinaryIO):
         os.remove(filename)  # We let errors flow here!
 
 
-def get_metadata_file_path(storage_folder: Path):  # FIXME move to AUTHENTICATOR and disambiguate wrt container's metadata!!
+def get_metadata_file_path(storage_folder: Path):  # FIXME move to AUTHENTICATOR and disambiguate wrt cryptainer's metadata!!
     """
-    Return path of standard metadata file for key/container storage.
+    Return path of standard metadata file for key/cryptainer storage.
     """
     return storage_folder.joinpath(".metadata.json")
 

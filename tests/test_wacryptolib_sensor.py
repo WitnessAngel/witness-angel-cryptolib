@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from freezegun import freeze_time
 
-from _test_mockups import FakeTestContainerStorage, random_bool
+from _test_mockups import FakeTestCryptainerStorage, random_bool
 from wacryptolib.scaffolding import check_sensor_state_machine
 from wacryptolib.sensor import TarfileRecordsAggregator, JsonDataAggregator, PeriodicValuePoller, SensorsManager
 from wacryptolib.sensor import TimeLimitedAggregatorMixin
@@ -49,24 +49,24 @@ def test_time_limited_aggregator_mixin():
 def test_tarfile_aggregator(tmp_path):
 
     offload_data_ciphertext = random_bool()
-    container_storage = FakeTestContainerStorage(
+    cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf={"whatever": True},
-        containers_dir=tmp_path,
+        cryptainers_dir=tmp_path,
         offload_data_ciphertext=offload_data_ciphertext,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(container_storage=container_storage, max_duration_s=10)
+    tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=10)
     assert len(tarfile_aggregator) == 0
     assert not tarfile_aggregator._current_start_time
-    assert len(container_storage) == 0
+    assert len(cryptainer_storage) == 0
 
     with freeze_time() as frozen_datetime:
 
         tarfile_aggregator.finalize_tarfile()
-        container_storage.wait_for_idle_state()
+        cryptainer_storage.wait_for_idle_state()
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
-        assert len(container_storage) == 0
+        assert len(cryptainer_storage) == 0
 
         data1 = "hêllö".encode("utf8")
         tarfile_aggregator.add_record(
@@ -92,9 +92,9 @@ def test_tarfile_aggregator(tmp_path):
         frozen_datetime.tick(delta=timedelta(seconds=1))
 
         tarfile_aggregator.finalize_tarfile()
-        container_storage.wait_for_idle_state()
-        assert len(container_storage) == 1
-        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        cryptainer_storage.wait_for_idle_state()
+        assert len(cryptainer_storage) == 1
+        tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
         tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
@@ -110,10 +110,10 @@ def test_tarfile_aggregator(tmp_path):
         for i in range(2):
             frozen_datetime.tick(delta=timedelta(seconds=1))
             tarfile_aggregator.finalize_tarfile()
-            container_storage.wait_for_idle_state()
+            cryptainer_storage.wait_for_idle_state()
             assert len(tarfile_aggregator) == 0
             assert not tarfile_aggregator._current_start_time
-            assert len(container_storage) == 1  # Unchanged
+            assert len(cryptainer_storage) == 1  # Unchanged
 
         data3 = b""
         tarfile_aggregator.add_record(
@@ -128,9 +128,9 @@ def test_tarfile_aggregator(tmp_path):
 
         frozen_datetime.tick(delta=timedelta(seconds=1))
         tarfile_aggregator.finalize_tarfile()
-        container_storage.wait_for_idle_state()
-        assert len(container_storage) == 2
-        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        cryptainer_storage.wait_for_idle_state()
+        assert len(cryptainer_storage) == 2
+        tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
         tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
         assert not tarfile_aggregator._current_start_time
@@ -142,10 +142,10 @@ def test_tarfile_aggregator(tmp_path):
         for i in range(2):
             frozen_datetime.tick(delta=timedelta(seconds=1))
             tarfile_aggregator.finalize_tarfile()
-            container_storage.wait_for_idle_state()
+            cryptainer_storage.wait_for_idle_state()
             assert len(tarfile_aggregator) == 0
             assert not tarfile_aggregator._current_start_time
-            assert len(container_storage) == 2  # Unchanged
+            assert len(cryptainer_storage) == 2  # Unchanged
 
         # We test time-limited aggregation
         simple_add_record = lambda: tarfile_aggregator.add_record(
@@ -173,14 +173,14 @@ def test_tarfile_aggregator(tmp_path):
         assert len(tarfile_aggregator) == 1
         assert tarfile_aggregator._current_start_time
         assert tarfile_aggregator._current_start_time != current_start_time_saved  # AUTO FLUSH occurred
-        container_storage.wait_for_idle_state()
+        cryptainer_storage.wait_for_idle_state()
 
-        assert len(container_storage) == 3
+        assert len(cryptainer_storage) == 3
 
         tarfile_aggregator.finalize_tarfile()  # CLEANUP
-        container_storage.wait_for_idle_state()
+        cryptainer_storage.wait_for_idle_state()
 
-        assert len(container_storage) == 4
+        assert len(cryptainer_storage) == 4
 
         # We tests conflicts between identifical tar record names
         for i in range(3):  # Three times the same file name!
@@ -194,9 +194,9 @@ def test_tarfile_aggregator(tmp_path):
 
         frozen_datetime.tick(delta=timedelta(seconds=1))
         tarfile_aggregator.finalize_tarfile()
-        container_storage.wait_for_idle_state()
-        assert len(container_storage) == 5
-        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        cryptainer_storage.wait_for_idle_state()
+        assert len(cryptainer_storage) == 5
+        tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
         tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tar_file.getmembers()) == 3
         assert len(tar_file.getnames()) == 3
@@ -207,13 +207,13 @@ def test_tarfile_aggregator(tmp_path):
 def test_json_aggregator(tmp_path):
 
     offload_data_ciphertext = random_bool()
-    container_storage = FakeTestContainerStorage(
+    cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf={"qsdqsdsd": True},
-        containers_dir=tmp_path,
+        cryptainers_dir=tmp_path,
         offload_data_ciphertext=offload_data_ciphertext,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(container_storage=container_storage, max_duration_s=100)
+    tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
 
     assert len(tarfile_aggregator) == 0
 
@@ -267,9 +267,9 @@ def test_json_aggregator(tmp_path):
         assert len(json_aggregator) == 0
 
         tarfile_aggregator.finalize_tarfile()
-        container_storage.wait_for_idle_state()
-        assert len(container_storage) == 1
-        tarfile_bytestring = container_storage.decrypt_container_from_storage(container_name_or_idx=-1)
+        cryptainer_storage.wait_for_idle_state()
+        assert len(cryptainer_storage) == 1
+        tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
         tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tarfile_aggregator) == 0
 
@@ -287,21 +287,21 @@ def test_json_aggregator(tmp_path):
         assert data == b'[{"x": "abc"}]'
 
         tarfile_aggregator.finalize_tarfile()
-        container_storage.wait_for_idle_state()
-        assert len(container_storage) == 1  # Unchanged
+        cryptainer_storage.wait_for_idle_state()
+        assert len(cryptainer_storage) == 1  # Unchanged
         assert not json_aggregator._current_start_time
 
 
 def test_aggregators_thread_safety(tmp_path):
 
     offload_data_ciphertext = random_bool()
-    container_storage = FakeTestContainerStorage(
+    cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf={"zesvscc": True},
-        containers_dir=tmp_path,
+        cryptainers_dir=tmp_path,
         offload_data_ciphertext=offload_data_ciphertext,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(container_storage=container_storage, max_duration_s=100)
+    tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
     json_aggregator = JsonDataAggregator(
         max_duration_s=1, tarfile_aggregator=tarfile_aggregator, sensor_name="some_sensors"
     )
@@ -330,15 +330,15 @@ def test_aggregators_thread_safety(tmp_path):
 
     json_aggregator.flush_dataset()
     tarfile_aggregator.finalize_tarfile()
-    container_storage.wait_for_idle_state()
+    cryptainer_storage.wait_for_idle_state()
 
     misc_results = set(future.result() for future in misc_futures)
     assert misc_results == set([None])  # No results expected from any of these methods
 
-    container_names = container_storage.list_container_names(as_sorted=True)
+    cryptainer_names = cryptainer_storage.list_cryptainer_names(as_sorted=True)
 
     tarfiles_bytes = [
-        container_storage.decrypt_container_from_storage(container_name) for container_name in container_names
+        cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name) for cryptainer_name in cryptainer_names
     ]
 
     tarfiles = [
@@ -374,13 +374,13 @@ def test_aggregators_thread_safety(tmp_path):
 def test_periodic_value_poller(tmp_path):
 
     offload_data_ciphertext = random_bool()
-    container_storage = FakeTestContainerStorage(
+    cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf={"zexcsc": True},
-        containers_dir=tmp_path,
+        cryptainers_dir=tmp_path,
         offload_data_ciphertext=offload_data_ciphertext,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(container_storage=container_storage, max_duration_s=100)
+    tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
 
     assert len(tarfile_aggregator) == 0
 

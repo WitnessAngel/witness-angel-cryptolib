@@ -18,7 +18,7 @@ def test_cli_help_texts():
 
     result = runner.invoke(cli, ["encrypt", "-h"])
     assert result.exit_code == 0
-    assert "into a secure container" in result.output
+    assert "into a secure cryptainer" in result.output
 
     result = runner.invoke(cli, ["decrypt", "-h"])
     assert result.exit_code == 0

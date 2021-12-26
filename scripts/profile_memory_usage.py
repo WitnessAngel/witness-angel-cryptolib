@@ -7,7 +7,7 @@ import tempfile
 from datetime import datetime, timezone
 import time
 
-from wacryptolib.container import ContainerStorage, LOCAL_ESCROW_MARKER
+from wacryptolib.cryptainer import CryptainerStorage, LOCAL_ESCROW_MARKER
 from wacryptolib.sensor import TarfileRecordsAggregator
 
 ENCRYPTION_CRYPTOCONF = dict(
@@ -39,13 +39,13 @@ def profile_simple_encryption():
     tmp_path = tempfile.gettempdir()
     now = datetime.now(tz=timezone.utc)
 
-    container_storage = ContainerStorage(
+    cryptainer_storage = CryptainerStorage(
         default_cryptoconf=ENCRYPTION_CRYPTOCONF,
-        containers_dir=tmp_path,
+        cryptainers_dir=tmp_path,
         offload_data_ciphertext=True,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(container_storage=container_storage, max_duration_s=100)
+    tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
 
     data = b"abcdefghij" * 10 * 1024**2
 

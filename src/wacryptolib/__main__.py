@@ -4,11 +4,11 @@ import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
 import os
 
-from wacryptolib.container import (
+from wacryptolib.cryptainer import (
     LOCAL_ESCROW_MARKER,
-    encrypt_data_into_container,
-    decrypt_data_from_container,
-    CONTAINER_SUFFIX,
+    encrypt_data_into_cryptainer,
+    decrypt_data_from_cryptainer,
+    CRYPTAINER_SUFFIX,
     MEDIUM_SUFFIX,
     SHARED_SECRET_MARKER,
 )
@@ -18,7 +18,7 @@ from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 DEFAULT_KEY_STORAGE_POOl_DIRNAME = ".key_storage_pool"
 
-# TODO - much later, use "schema" for validation of config data and container format!  See https://github.com/keleshev/schema
+# TODO - much later, use "schema" for validation of config data and cryptainer format!  See https://github.com/keleshev/schema
 # Then export corresponding jsons-chema for the world to see!
 
 
@@ -74,55 +74,55 @@ def cli(ctx, config, key_storage_pool):
 
 
 def _do_encrypt(data, key_storage_pool):
-    container = encrypt_data_into_container(
+    cryptainer = encrypt_data_into_cryptainer(
         data, cryptoconf=EXAMPLE_CRYPTOCONF, metadata=None, key_storage_pool=key_storage_pool
     )
-    return container
+    return cryptainer
 
 
 @cli.command()
 @click.option("-i", "--input-medium", type=click.File("rb"), required=True)
-@click.option("-o", "--output-container", type=click.File("wb"))
+@click.option("-o", "--output-cryptainer", type=click.File("wb"))
 @click.pass_context
-def encrypt(ctx, input_medium, output_container):
-    """Turn a media file into a secure container."""
-    if not output_container:
-        output_container = LazyFile(input_medium.name + CONTAINER_SUFFIX, "wb")
+def encrypt(ctx, input_medium, output_cryptainer):
+    """Turn a media file into a secure cryptainer."""
+    if not output_cryptainer:
+        output_cryptainer = LazyFile(input_medium.name + CRYPTAINER_SUFFIX, "wb")
     click.echo("In encrypt: %s" % str(locals()))
 
     key_storage_pool = _get_key_storage_pool(ctx)
-    container_data = _do_encrypt(data=input_medium.read(), key_storage_pool=key_storage_pool)
+    cryptainer_data = _do_encrypt(data=input_medium.read(), key_storage_pool=key_storage_pool)
 
-    container_data_bytes = dump_to_json_bytes(container_data, indent=4)
+    cryptainer_data_bytes = dump_to_json_bytes(cryptainer_data, indent=4)
 
-    with output_container as f:
-        f.write(container_data_bytes)
+    with output_cryptainer as f:
+        f.write(cryptainer_data_bytes)
 
 
-def _do_decrypt(container, key_storage_pool):
-    data = decrypt_data_from_container(container, key_storage_pool=key_storage_pool)
+def _do_decrypt(cryptainer, key_storage_pool):
+    data = decrypt_data_from_cryptainer(cryptainer, key_storage_pool=key_storage_pool)
     return data
 
 
 @cli.command()
-@click.option("-i", "--input-container", type=click.File("rb"), required=True)
+@click.option("-i", "--input-cryptainer", type=click.File("rb"), required=True)
 @click.option("-o", "--output-medium", type=click.File("wb"))
 @click.pass_context
-def decrypt(ctx, input_container, output_medium):
-    """Turn a container file back into its original media file."""
+def decrypt(ctx, input_cryptainer, output_medium):
+    """Turn a cryptainer file back into its original media file."""
     if not output_medium:
-        if input_container.name.endswith(CONTAINER_SUFFIX):
-            output_medium_name = input_container.name[: -len(CONTAINER_SUFFIX)]
+        if input_cryptainer.name.endswith(CRYPTAINER_SUFFIX):
+            output_medium_name = input_cryptainer.name[: -len(CRYPTAINER_SUFFIX)]
         else:
-            output_medium_name = input_container.name + MEDIUM_SUFFIX
+            output_medium_name = input_cryptainer.name + MEDIUM_SUFFIX
         output_medium = LazyFile(output_medium_name, "wb")
 
     click.echo("In decrypt: %s" % str(locals()))
 
-    container = load_from_json_bytes(input_container.read())
+    cryptainer = load_from_json_bytes(input_cryptainer.read())
 
     key_storage_pool = _get_key_storage_pool(ctx)
-    medium_content = _do_decrypt(container=container, key_storage_pool=key_storage_pool)
+    medium_content = _do_decrypt(cryptainer=cryptainer, key_storage_pool=key_storage_pool)
 
     with output_medium:
         output_medium.write(medium_content)

@@ -1,10 +1,10 @@
 import random
 from uuid import UUID
 
-from wacryptolib.container import ContainerStorage, dump_container_to_filesystem
+from wacryptolib.cryptainer import CryptainerStorage, dump_cryptainer_to_filesystem
 
 
-class FakeTestContainerStorage(ContainerStorage):
+class FakeTestCryptainerStorage(CryptainerStorage):
     """Fake class which bypasses encryption and forces filename unicity regardless of datetime, to speed up tests..."""
 
     increment = 0
@@ -16,19 +16,19 @@ class FakeTestContainerStorage(ContainerStorage):
     def _use_streaming_encryption_for_conf(self, cryptoconf):
         return self._offload_data_ciphertext  # Do NOT dig cryptoconf here, it might be all wrong
 
-    def _encrypt_data_and_dump_container_to_filesystem(self, data, container_filepath, metadata, keychain_uid, cryptoconf):
-        container = self._encrypt_data_into_container(
+    def _encrypt_data_and_dump_cryptainer_to_filesystem(self, data, cryptainer_filepath, metadata, keychain_uid, cryptoconf):
+        cryptainer = self._encrypt_data_into_cryptainer(
             data, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
         )
-        dump_container_to_filesystem(
-            container_filepath, container=container, offload_data_ciphertext=True
+        dump_cryptainer_to_filesystem(
+            cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=True
         )
 
-    def _encrypt_data_into_container(self, data, **kwargs):
+    def _encrypt_data_into_cryptainer(self, data, **kwargs):
         return dict(a=33, data_ciphertext=data)
 
-    def _decrypt_data_from_container(self, container, **kwargs):
-        return container["data_ciphertext"]
+    def _decrypt_data_from_cryptainer(self, cryptainer, **kwargs):
+        return cryptainer["data_ciphertext"]
 
 
 class WildcardUuid(object):

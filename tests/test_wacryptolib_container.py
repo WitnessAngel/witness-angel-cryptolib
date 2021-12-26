@@ -18,26 +18,26 @@ from uuid import UUID
 import pytest
 from Crypto.Random import get_random_bytes
 
-from _test_mockups import FakeTestContainerStorage, random_bool
-from wacryptolib.container import (
+from _test_mockups import FakeTestCryptainerStorage, random_bool
+from wacryptolib.cryptainer import (
     LOCAL_ESCROW_MARKER,
-    encrypt_data_into_container,
-    decrypt_data_from_container,
-    ContainerStorage,
-    extract_metadata_from_container,
-    ContainerBase,
+    encrypt_data_into_cryptainer,
+    decrypt_data_from_cryptainer,
+    CryptainerStorage,
+    extract_metadata_from_cryptainer,
+    CryptainerBase,
     get_cryptoconf_summary,
-    dump_container_to_filesystem,
-    load_container_from_filesystem,
+    dump_cryptainer_to_filesystem,
+    load_cryptainer_from_filesystem,
     SHARED_SECRET_MARKER,
     get_escrow_id,
     gather_escrow_dependencies,
     get_escrow_proxy,
     request_decryption_authorizations,
-    delete_container_from_filesystem, CONTAINER_DATETIME_FORMAT, get_container_size_on_filesystem, ContainerWriter,
-    encrypt_data_and_dump_container_to_filesystem, is_container_cryptoconf_streamable, CONF_SCHEMA_PYTHON,
-    CONF_SCHEMA_JSON, CONTAINER_SCHEMA_PYTHON, CONTAINER_SCHEMA_JSON, check_conf_sanity, check_container_sanity,
-    CONTAINER_TEMP_SUFFIX,
+    delete_cryptainer_from_filesystem, CRYPTAINER_DATETIME_FORMAT, get_cryptainer_size_on_filesystem, CryptainerWriter,
+    encrypt_data_and_dump_cryptainer_to_filesystem, is_cryptainer_cryptoconf_streamable, CONF_SCHEMA_PYTHON,
+    CONF_SCHEMA_JSON, CRYPTAINER_SCHEMA_PYTHON, CRYPTAINER_SCHEMA_JSON, check_conf_sanity, check_cryptainer_sanity,
+    CRYPTAINER_TEMP_SUFFIX,
 )
 from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS, AUTHENTICATED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import (
@@ -88,7 +88,7 @@ SIGNATURELESS_CRYPTOCONF = dict(
 )
 
 
-SIGNATURELESS_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
+SIGNATURELESS_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
         "[('escrow_type', 'local')]": (
             {"escrow_type": "local"},
@@ -110,7 +110,7 @@ SIMPLE_CRYPTOCONF = dict(
     ]
 )
 
-SIMPLE_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
+SIMPLE_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
         "[('escrow_type', 'local')]": (
             {"escrow_type": "local"},
@@ -160,7 +160,7 @@ COMPLEX_CRYPTOCONF = dict(
     ]
 )
 
-COMPLEX_CONTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
+COMPLEX_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
         "[('escrow_type', 'local')]": (
             {"escrow_type": "local"},
@@ -212,7 +212,7 @@ SIMPLE_SHAMIR_CRYPTOCONF = dict(
     ]
 )
 
-def SIMPLE_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES(keychain_uid):
+def SIMPLE_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES(keychain_uid):
     return {
         "encryption": {
             "[('escrow_type', 'local')]": (
@@ -278,7 +278,7 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
 )
 
 
-def COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES(keychain_uid):
+def COMPLEX_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES(keychain_uid):
      return {
         "encryption": {
             "[('escrow_type', 'local')]": (
@@ -316,15 +316,15 @@ def _dump_to_raw_json_tree(data):
     return json_str_lib
 
 
-def _intialize_container_with_single_file(tmp_path):  # FIXME generalize its use in different test functions below
-    storage = ContainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, containers_dir=tmp_path)
+def _intialize_cryptainer_with_single_file(tmp_path):  # FIXME generalize its use in different test functions below
+    storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainers_dir=tmp_path)
 
     storage.enqueue_file_for_encryption(
         "animals.dat", b"dogs\ncats\n", metadata=None
     )
     storage.wait_for_idle_state()
-    container_name, = storage.list_container_names()
-    return storage, container_name
+    cryptainer_name, = storage.list_cryptainer_names()
+    return storage, cryptainer_name
 
 
 @pytest.mark.parametrize(
@@ -338,7 +338,7 @@ def test_void_cryptoconfs(cryptoconf):
     key_storage_pool = DummyKeyStoragePool()
 
     with pytest.raises(ConfigurationError, match="Empty .* list"):
-        encrypt_data_into_container(
+        encrypt_data_into_cryptainer(
             data=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None, key_storage_pool=key_storage_pool
         )
 
@@ -346,12 +346,12 @@ def test_void_cryptoconfs(cryptoconf):
 @pytest.mark.parametrize(
     "cryptoconf,escrow_dependencies_builder",
     [
-        (SIGNATURELESS_CRYPTOCONF, SIGNATURELESS_CONTAINER_ESCROW_DEPENDENCIES),
-        (SIMPLE_CRYPTOCONF, SIMPLE_CONTAINER_ESCROW_DEPENDENCIES),
-        (COMPLEX_CRYPTOCONF, COMPLEX_CONTAINER_ESCROW_DEPENDENCIES),
+        (SIGNATURELESS_CRYPTOCONF, SIGNATURELESS_CRYPTAINER_ESCROW_DEPENDENCIES),
+        (SIMPLE_CRYPTOCONF, SIMPLE_CRYPTAINER_ESCROW_DEPENDENCIES),
+        (COMPLEX_CRYPTOCONF, COMPLEX_CRYPTAINER_ESCROW_DEPENDENCIES),
     ],
 )
-def test_standard_container_encryption_and_decryption(tmp_path, cryptoconf, escrow_dependencies_builder):
+def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, escrow_dependencies_builder):
     data = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
@@ -360,31 +360,31 @@ def test_standard_container_encryption_and_decryption(tmp_path, cryptoconf, escr
     key_storage_pool = DummyKeyStoragePool()
     metadata = random.choice([None, dict(a=[123])])
 
-    if use_streaming_encryption and is_container_cryptoconf_streamable(cryptoconf):
-        container_filepath = tmp_path / "mygoodcontainer.crypt"
-        encrypt_data_and_dump_container_to_filesystem(
-                data=data, container_filepath=container_filepath,
+    if use_streaming_encryption and is_cryptainer_cryptoconf_streamable(cryptoconf):
+        cryptainer_filepath = tmp_path / "mygoodcryptainer.crypt"
+        encrypt_data_and_dump_cryptainer_to_filesystem(
+                data=data, cryptainer_filepath=cryptainer_filepath,
                 cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool)
-        container = load_container_from_filesystem(container_filepath, include_data_ciphertext=True)
+        cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath, include_data_ciphertext=True)
     else:
-        container = encrypt_data_into_container(
+        cryptainer = encrypt_data_into_cryptainer(
             data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool
         )
 
-    assert container["keychain_uid"]
+    assert cryptainer["keychain_uid"]
     if keychain_uid:
-        assert container["keychain_uid"] == keychain_uid
+        assert cryptainer["keychain_uid"] == keychain_uid
 
     local_keypair_identifiers = key_storage_pool.get_local_key_storage()._cached_keypairs
     print(">>> Test local_keypair_identifiers ->", list(local_keypair_identifiers.keys()))
 
-    escrow_dependencies = gather_escrow_dependencies(containers=[container])
+    escrow_dependencies = gather_escrow_dependencies(cryptainers=[cryptainer])
     print("GOTTEN DEPENDENCIES:")
     pprint(escrow_dependencies)
     print("THEORETICAL DEPENDENCIES:")
-    pprint(escrow_dependencies_builder(container["keychain_uid"]))
+    pprint(escrow_dependencies_builder(cryptainer["keychain_uid"]))
 
-    assert escrow_dependencies == escrow_dependencies_builder(container["keychain_uid"])
+    assert escrow_dependencies == escrow_dependencies_builder(cryptainer["keychain_uid"])
 
     # Check that all referenced keys were really created during encryption (so keychain_uid overriding works fine)
     for escrow_dependency_structs in escrow_dependencies.values():
@@ -412,52 +412,52 @@ def test_standard_container_encryption_and_decryption(tmp_path, cryptoconf, escr
         assert not keypair_statuses["missing_private_key"]
 
     verify = random_bool()
-    result_data = decrypt_data_from_container(container=container, key_storage_pool=key_storage_pool, verify=verify)
+    result_data = decrypt_data_from_cryptainer(cryptainer=cryptainer, key_storage_pool=key_storage_pool, verify=verify)
     # pprint.pprint(result, width=120)
     assert result_data == data
 
-    result_metadata = extract_metadata_from_container(container=container)
+    result_metadata = extract_metadata_from_cryptainer(cryptainer=cryptainer)
     assert result_metadata == metadata
 
-    container["container_format"] = "OAJKB"
-    with pytest.raises(ValueError, match="Unknown container format"):
-        decrypt_data_from_container(container=container)
+    cryptainer["cryptainer_format"] = "OAJKB"
+    with pytest.raises(ValueError, match="Unknown cryptainer format"):
+        decrypt_data_from_cryptainer(cryptainer=cryptainer)
 
 
 @pytest.mark.parametrize(
     "shamir_cryptoconf, escrow_dependencies_builder",
     [
-        (SIMPLE_SHAMIR_CRYPTOCONF, SIMPLE_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES),
-        (COMPLEX_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CONTAINER_ESCROW_DEPENDENCIES),
+        (SIMPLE_SHAMIR_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES),
+        (COMPLEX_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES),
     ],
 )
-def test_shamir_container_encryption_and_decryption(shamir_cryptoconf, escrow_dependencies_builder):
+def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_dependencies_builder):
     data = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
 
     metadata = random.choice([None, dict(a=[123])])
 
-    container = encrypt_data_into_container(
+    cryptainer = encrypt_data_into_cryptainer(
         data=data, cryptoconf=shamir_cryptoconf, keychain_uid=keychain_uid, metadata=metadata
     )
 
-    assert container["keychain_uid"]
+    assert cryptainer["keychain_uid"]
     if keychain_uid:
-        assert container["keychain_uid"] == keychain_uid
+        assert cryptainer["keychain_uid"] == keychain_uid
 
-    escrow_dependencies = gather_escrow_dependencies(containers=[container])
-    assert escrow_dependencies == escrow_dependencies_builder(container["keychain_uid"])
+    escrow_dependencies = gather_escrow_dependencies(cryptainers=[cryptainer])
+    assert escrow_dependencies == escrow_dependencies_builder(cryptainer["keychain_uid"])
 
-    assert isinstance(container["data_ciphertext"], bytes)
+    assert isinstance(cryptainer["data_ciphertext"], bytes)
 
-    result_data = decrypt_data_from_container(container=container)
+    result_data = decrypt_data_from_cryptainer(cryptainer=cryptainer)
 
     assert result_data == data
 
     data_encryption_shamir = {}
     # Delete 1, 2 and too many share(s) from cipherdict key
-    for data_encryption in container["data_encryption_strata"]:
+    for data_encryption in cryptainer["data_encryption_strata"]:
         for key_encryption in data_encryption["key_encryption_strata"]:
             if key_encryption["key_encryption_algo"] == SHARED_SECRET_MARKER:
                 data_encryption_shamir = data_encryption
@@ -471,7 +471,7 @@ def test_shamir_container_encryption_and_decryption(shamir_cryptoconf, escrow_de
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
 
     verify = random_bool()
-    result_data = decrypt_data_from_container(container=container, verify=verify)
+    result_data = decrypt_data_from_cryptainer(cryptainer=cryptainer, verify=verify)
     assert result_data == data
 
     # Another share is deleted
@@ -480,7 +480,7 @@ def test_shamir_container_encryption_and_decryption(shamir_cryptoconf, escrow_de
 
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
 
-    result_data = decrypt_data_from_container(container=container)
+    result_data = decrypt_data_from_cryptainer(cryptainer=cryptainer)
     assert result_data == data
 
     # Another share is deleted and now there aren't enough valid ones to decipher data
@@ -490,14 +490,14 @@ def test_shamir_container_encryption_and_decryption(shamir_cryptoconf, escrow_de
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
 
     with pytest.raises(DecryptionError, match="share.*missing"):
-        decrypt_data_from_container(container=container)
+        decrypt_data_from_cryptainer(cryptainer=cryptainer)
 
-    result_metadata = extract_metadata_from_container(container=container)
+    result_metadata = extract_metadata_from_cryptainer(cryptainer=cryptainer)
     assert result_metadata == metadata
 
-    container["container_format"] = "OAJKB"
-    with pytest.raises(ValueError, match="Unknown container format"):
-        decrypt_data_from_container(container=container)
+    cryptainer["cryptainer_format"] = "OAJKB"
+    with pytest.raises(ValueError, match="Unknown cryptainer format"):
+        decrypt_data_from_cryptainer(cryptainer=cryptainer)
 
 
 # FIXME move that elsewhere and complete it
@@ -531,32 +531,32 @@ def test_recursive_shamir_secrets_and_strata():
     keychain_uid = generate_uuid0()
     data = _get_binary_or_empty_content()
 
-    container = encrypt_data_into_container(
+    cryptainer = encrypt_data_into_cryptainer(
         data=data, cryptoconf=RECURSIVE_CRYPTOCONF, keychain_uid=keychain_uid, metadata=None
     )
 
-    data_decrypted = decrypt_data_from_container(
-            container=container,
+    data_decrypted = decrypt_data_from_cryptainer(
+            cryptainer=cryptainer,
     )
 
     assert data_decrypted == data
 
 
-def test_decrypt_data_from_container_with_authenticated_algo_and_verify():
+def test_decrypt_data_from_cryptainer_with_authenticated_algo_and_verify():
     data_encryption_algo = random.choice(AUTHENTICATED_ENCRYPTION_ALGOS)
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
     cryptoconf["data_encryption_strata"][0]["data_encryption_algo"] = data_encryption_algo
 
-    container = encrypt_data_into_container(
+    cryptainer = encrypt_data_into_cryptainer(
         data=b"1234", cryptoconf=cryptoconf, metadata=None
     )
-    container["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION
+    cryptainer["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION
 
-    result = decrypt_data_from_container(container, verify=False)
+    result = decrypt_data_from_cryptainer(cryptainer, verify=False)
     assert result == b"1234"
 
     with pytest.raises(DecryptionIntegrityError):
-        decrypt_data_from_container(container, verify=True)
+        decrypt_data_from_cryptainer(cryptainer, verify=True)
 
 
 def test_passphrase_mapping_during_decryption(tmp_path):
@@ -642,42 +642,42 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     data = b"sjzgzj"
 
-    container = encrypt_data_into_container(
+    cryptainer = encrypt_data_into_cryptainer(
         data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, key_storage_pool=key_storage_pool, metadata=None
     )
 
     # FIXME we must TEST that keychain_uid_escrow is necessary for decryption for example by deleting it before a decrypt()
 
     with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
-        decrypt_data_from_container(container, key_storage_pool=key_storage_pool)
+        decrypt_data_from_cryptainer(cryptainer, key_storage_pool=key_storage_pool)
 
     with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
-        decrypt_data_from_container(
-            container, key_storage_pool=key_storage_pool, passphrase_mapper={local_escrow_id: all_passphrases}
+        decrypt_data_from_cryptainer(
+            cryptainer, key_storage_pool=key_storage_pool, passphrase_mapper={local_escrow_id: all_passphrases}
         )  # Doesn't help share escrows
 
     with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
-        decrypt_data_from_container(
-            container, key_storage_pool=key_storage_pool, passphrase_mapper={share_escrow1_id: all_passphrases}
+        decrypt_data_from_cryptainer(
+            cryptainer, key_storage_pool=key_storage_pool, passphrase_mapper={share_escrow1_id: all_passphrases}
         )  # Unblocks 1 share escrow
 
     with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
-        decrypt_data_from_container(
-            container,
+        decrypt_data_from_cryptainer(
+            cryptainer,
             key_storage_pool=key_storage_pool,
             passphrase_mapper={share_escrow1_id: all_passphrases, share_escrow2_id: [passphrase3]},
         )  # No changes
 
     with pytest.raises(DecryptionError, match="Could not decrypt private key"):
-        decrypt_data_from_container(
-            container,
+        decrypt_data_from_cryptainer(
+            cryptainer,
             key_storage_pool=key_storage_pool,
             passphrase_mapper={share_escrow1_id: all_passphrases, share_escrow3_id: [passphrase3]},
         )
 
     with pytest.raises(DecryptionError, match="Could not decrypt private key"):
-        decrypt_data_from_container(
-            container,
+        decrypt_data_from_cryptainer(
+            cryptainer,
             key_storage_pool=key_storage_pool,
             passphrase_mapper={
                 local_escrow_id: ["qsdqsd"],
@@ -686,8 +686,8 @@ def test_passphrase_mapping_during_decryption(tmp_path):
             },
         )
 
-    decrypted = decrypt_data_from_container(
-        container,
+    decrypted = decrypt_data_from_cryptainer(
+        cryptainer,
         key_storage_pool=key_storage_pool,
         passphrase_mapper={
             local_escrow_id: [local_passphrase],
@@ -698,8 +698,8 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     assert decrypted == data
 
     # Passphrases of `None` key are always used
-    decrypted = decrypt_data_from_container(
-        container,
+    decrypted = decrypt_data_from_cryptainer(
+        cryptainer,
         key_storage_pool=key_storage_pool,
         passphrase_mapper={
             local_escrow_id: [local_passphrase],
@@ -710,43 +710,43 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     )
     assert decrypted == data
 
-    # Proper forwarding of parameters in container storage class
+    # Proper forwarding of parameters in cryptainer storage class
 
-    storage = ContainerStorage(tmp_path, key_storage_pool=key_storage_pool)
+    storage = CryptainerStorage(tmp_path, key_storage_pool=key_storage_pool)
     storage.enqueue_file_for_encryption(
         "beauty.txt", data=data, metadata=None, keychain_uid=keychain_uid, cryptoconf=cryptoconf
     )
     storage.wait_for_idle_state()
 
-    container_names = storage.list_container_names(as_sorted=True)
-    print(">> container_names", container_names)
+    cryptainer_names = storage.list_cryptainer_names(as_sorted=True)
+    print(">> cryptainer_names", cryptainer_names)
 
     with pytest.raises(DecryptionError):
-        storage.decrypt_container_from_storage("beauty.txt.crypt")
+        storage.decrypt_cryptainer_from_storage("beauty.txt.crypt")
 
     verify = random_bool()
-    decrypted = storage.decrypt_container_from_storage("beauty.txt.crypt", passphrase_mapper={None: all_passphrases}, verify=verify)
+    decrypted = storage.decrypt_cryptainer_from_storage("beauty.txt.crypt", passphrase_mapper={None: all_passphrases}, verify=verify)
     assert decrypted == data
 
 
 def test_get_proxy_for_escrow(tmp_path):
-    container_base1 = ContainerBase()
-    proxy1 = get_escrow_proxy(LOCAL_ESCROW_MARKER, container_base1._key_storage_pool)
+    cryptainer_base1 = CryptainerBase()
+    proxy1 = get_escrow_proxy(LOCAL_ESCROW_MARKER, cryptainer_base1._key_storage_pool)
     assert isinstance(proxy1, EscrowApi)  # Local Escrow
     assert isinstance(proxy1._key_storage, DummyKeyStorage)  # Default type
 
-    container_base1_bis = ContainerBase()
-    proxy1_bis = get_escrow_proxy(LOCAL_ESCROW_MARKER, container_base1_bis._key_storage_pool)
+    cryptainer_base1_bis = CryptainerBase()
+    proxy1_bis = get_escrow_proxy(LOCAL_ESCROW_MARKER, cryptainer_base1_bis._key_storage_pool)
     assert proxy1_bis._key_storage is proxy1_bis._key_storage  # process-local storage is SINGLETON!
 
-    container_base2 = ContainerBase(key_storage_pool=FilesystemKeyStoragePool(str(tmp_path)))
-    proxy2 = get_escrow_proxy(LOCAL_ESCROW_MARKER, container_base2._key_storage_pool)
+    cryptainer_base2 = CryptainerBase(key_storage_pool=FilesystemKeyStoragePool(str(tmp_path)))
+    proxy2 = get_escrow_proxy(LOCAL_ESCROW_MARKER, cryptainer_base2._key_storage_pool)
     assert isinstance(proxy2, EscrowApi)  # Local Escrow
     assert isinstance(proxy2._key_storage, FilesystemKeyStorage)
 
-    for container_base in (container_base1, container_base2):
+    for cryptainer_base in (cryptainer_base1, cryptainer_base2):
         proxy = get_escrow_proxy(
-            dict(escrow_type="jsonrpc", url="http://example.com/jsonrpc"), container_base._key_storage_pool
+            dict(escrow_type="jsonrpc", url="http://example.com/jsonrpc"), cryptainer_base._key_storage_pool
         )
         assert isinstance(proxy, JsonRpcProxy)  # It should expose identical methods to EscrowApi
 
@@ -754,18 +754,18 @@ def test_get_proxy_for_escrow(tmp_path):
         assert proxy._response_error_handler == status_slugs_response_error_handler
 
         with pytest.raises(ValueError):
-            get_escrow_proxy(dict(escrow_type="something-wrong"), container_base._key_storage_pool)
+            get_escrow_proxy(dict(escrow_type="something-wrong"), cryptainer_base._key_storage_pool)
 
         with pytest.raises(ValueError):
-            get_escrow_proxy(dict(urn="athena"), container_base._key_storage_pool)
+            get_escrow_proxy(dict(urn="athena"), cryptainer_base._key_storage_pool)
 
 
-def test_container_storage_and_executor(tmp_path, caplog):
+def test_cryptainer_storage_and_executor(tmp_path, caplog):
     side_tmp = tmp_path / "side_tmp"
     side_tmp.mkdir()
 
-    containers_dir = tmp_path / "containers_dir"
-    containers_dir.mkdir()
+    cryptainers_dir = tmp_path / "cryptainers_dir"
+    cryptainers_dir.mkdir()
 
     animals_file_path = side_tmp / "animals"
     animals_file_path.write_bytes(b"dogs\ncats\n")
@@ -780,54 +780,54 @@ def test_container_storage_and_executor(tmp_path, caplog):
         except PermissionError:
             pass  # Win32 doesn't allow that
 
-    # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
-    storage = ContainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, containers_dir=containers_dir)
-    assert storage._max_container_count is None
+    # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
+    storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainers_dir=cryptainers_dir)
+    assert storage._max_cryptainer_count is None
     assert len(storage) == 0
-    assert storage.list_container_names() == []
+    assert storage.list_cryptainer_names() == []
 
     storage.enqueue_file_for_encryption("animals.dat", animals_file_handle, metadata=None)
     storage.enqueue_file_for_encryption("empty.txt", b"", metadata=dict(somevalue=True))
-    assert len(storage) == 0  # Container threads are just beginning to work!
+    assert len(storage) == 0  # Cryptainer threads are just beginning to work!
 
     storage.wait_for_idle_state()
 
     assert not animals_file_path.is_file()  # AUTO-DELETED after encryption!
 
     assert len(storage) == 2
-    assert storage.list_container_names(as_sorted=True) == [Path("animals.dat.crypt"), Path("empty.txt.crypt")]
-    assert storage._containers_dir.joinpath(
+    assert storage.list_cryptainer_names(as_sorted=True) == [Path("animals.dat.crypt"), Path("empty.txt.crypt")]
+    assert storage._cryptainers_dir.joinpath(
         "animals.dat.crypt.data"
     ).is_file()  # By default, DATA OFFLOADING is activated
-    assert storage._containers_dir.joinpath("empty.txt.crypt.data").is_file()
-    assert len(list(storage._containers_dir.iterdir())) == 4  # 2 files per container
+    assert storage._cryptainers_dir.joinpath("empty.txt.crypt.data").is_file()
+    assert len(list(storage._cryptainers_dir.iterdir())) == 4  # 2 files per cryptainer
 
-    storage = ContainerStorage(
-        default_cryptoconf=SIMPLE_CRYPTOCONF, containers_dir=containers_dir, offload_data_ciphertext=False
+    storage = CryptainerStorage(
+        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainers_dir=cryptainers_dir, offload_data_ciphertext=False
     )
     storage.enqueue_file_for_encryption("newfile.bmp", b"stuffs", metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 3
-    expected_container_names = [Path("animals.dat.crypt"), Path("empty.txt.crypt"), Path("newfile.bmp.crypt")]
-    assert storage.list_container_names(as_sorted=True) == expected_container_names
-    assert sorted(storage.list_container_names(as_sorted=False)) == expected_container_names
+    expected_cryptainer_names = [Path("animals.dat.crypt"), Path("empty.txt.crypt"), Path("newfile.bmp.crypt")]
+    assert storage.list_cryptainer_names(as_sorted=True) == expected_cryptainer_names
+    assert sorted(storage.list_cryptainer_names(as_sorted=False)) == expected_cryptainer_names
 
-    assert not list(storage._containers_dir.glob("newfile*data"))  # Offloading is well disabled now
-    assert len(list(storage._containers_dir.iterdir())) == 5
+    assert not list(storage._cryptainers_dir.glob("newfile*data"))  # Offloading is well disabled now
+    assert len(list(storage._cryptainers_dir.iterdir())) == 5
 
-    _container_for_txt = storage.load_container_from_storage("empty.txt.crypt")
-    assert storage.load_container_from_storage(1) == _container_for_txt
-    assert _container_for_txt["data_ciphertext"]   # Padding occurs for AES_CBC
+    _cryptainer_for_txt = storage.load_cryptainer_from_storage("empty.txt.crypt")
+    assert storage.load_cryptainer_from_storage(1) == _cryptainer_for_txt
+    assert _cryptainer_for_txt["data_ciphertext"]   # Padding occurs for AES_CBC
 
-    _container_for_txt2 = storage.load_container_from_storage("empty.txt.crypt", include_data_ciphertext=False)
-    assert storage.load_container_from_storage(1, include_data_ciphertext=False) == _container_for_txt2
-    assert not hasattr(_container_for_txt2, "data_ciphertext")
+    _cryptainer_for_txt2 = storage.load_cryptainer_from_storage("empty.txt.crypt", include_data_ciphertext=False)
+    assert storage.load_cryptainer_from_storage(1, include_data_ciphertext=False) == _cryptainer_for_txt2
+    assert not hasattr(_cryptainer_for_txt2, "data_ciphertext")
 
     # We continue test with a randomly configured storage
     offload_data_ciphertext = random_bool()
-    storage = ContainerStorage(
+    storage = CryptainerStorage(
         default_cryptoconf=SIMPLE_CRYPTOCONF,
-        containers_dir=containers_dir,
+        cryptainers_dir=cryptainers_dir,
         offload_data_ciphertext=offload_data_ciphertext,
     )
 
@@ -842,29 +842,29 @@ def test_container_storage_and_executor(tmp_path, caplog):
     del storage._make_absolute
     assert storage._make_absolute  # Back to the method
 
-    abs_entries = storage.list_container_names(as_absolute=True)
+    abs_entries = storage.list_cryptainer_names(as_absolute=True)
     assert len(abs_entries) == 3  # Unchanged
     assert all(entry.is_absolute() for entry in abs_entries)
 
-    animals_content = storage.decrypt_container_from_storage("animals.dat.crypt")
+    animals_content = storage.decrypt_cryptainer_from_storage("animals.dat.crypt")
     assert animals_content == b"dogs\ncats\n"
 
-    empty_content = storage.decrypt_container_from_storage("empty.txt.crypt")
+    empty_content = storage.decrypt_cryptainer_from_storage("empty.txt.crypt")
     assert empty_content == b""
 
     assert len(storage) == 3
-    os.remove(os.path.join(containers_dir, "animals.dat.crypt"))
-    os.remove(os.path.join(containers_dir, "newfile.bmp.crypt"))
-    assert storage.list_container_names(as_sorted=True) == [Path("empty.txt.crypt")]
+    os.remove(os.path.join(cryptainers_dir, "animals.dat.crypt"))
+    os.remove(os.path.join(cryptainers_dir, "newfile.bmp.crypt"))
+    assert storage.list_cryptainer_names(as_sorted=True) == [Path("empty.txt.crypt")]
     assert len(storage) == 1  # Remaining offloaded data file is ignored
 
     offload_data_ciphertext1 = random_bool()
-    storage = FakeTestContainerStorage(
+    storage = FakeTestCryptainerStorage(
         default_cryptoconf={"smth": True},
-        containers_dir=containers_dir,
+        cryptainers_dir=cryptainers_dir,
         offload_data_ciphertext=offload_data_ciphertext1,
     )
-    assert storage._max_container_count is None
+    assert storage._max_cryptainer_count is None
     for i in range(10):
         storage.enqueue_file_for_encryption("file.dat", b"dogs\ncats\n", metadata=None)
     assert len(storage) < 11  # In progress
@@ -872,14 +872,14 @@ def test_container_storage_and_executor(tmp_path, caplog):
     assert len(storage) == 11  # Still the older file remains
 
 
-def test_container_storage_purge_by_max_count(tmp_path):
-    containers_dir = tmp_path
+def test_cryptainer_storage_purge_by_max_count(tmp_path):
+    cryptainers_dir = tmp_path
 
     offload_data_ciphertext = random_bool()
-    storage = FakeTestContainerStorage(
+    storage = FakeTestCryptainerStorage(
         default_cryptoconf={"stuffs": True},
-        containers_dir=containers_dir,
-        max_container_count=3,
+        cryptainers_dir=cryptainers_dir,
+        max_cryptainer_count=3,
         offload_data_ciphertext=offload_data_ciphertext,
     )
     for i in range(3):
@@ -887,7 +887,7 @@ def test_container_storage_purge_by_max_count(tmp_path):
 
     storage.wait_for_idle_state()
     assert len(storage) == 3  # Purged
-    assert storage.list_container_names(as_sorted=True) == [
+    assert storage.list_cryptainer_names(as_sorted=True) == [
         Path("xyz.dat.000.crypt"),
         Path("xyz.dat.001.crypt"),
         Path("xyz.dat.002.crypt"),
@@ -896,7 +896,7 @@ def test_container_storage_purge_by_max_count(tmp_path):
     storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 3  # Purged
-    assert storage.list_container_names(as_sorted=True) == [
+    assert storage.list_cryptainer_names(as_sorted=True) == [
         Path("xyz.dat.001.crypt"),
         Path("xyz.dat.002.crypt"),
         Path("xyz.dat.003.crypt"),
@@ -905,29 +905,29 @@ def test_container_storage_purge_by_max_count(tmp_path):
     time.sleep(0.2)  # Leave delay, else if files have exactly same timestamp, it's the filename that matters
 
     offload_data_ciphertext2 = random_bool()
-    storage = FakeTestContainerStorage(
+    storage = FakeTestCryptainerStorage(
         default_cryptoconf={"randomthings": True},
-        containers_dir=containers_dir,
-        max_container_count=4,
+        cryptainers_dir=cryptainers_dir,
+        max_cryptainer_count=4,
         offload_data_ciphertext=offload_data_ciphertext2,
     )
-    assert len(storage) == 3  # Retrieves existing containers
+    assert len(storage) == 3  # Retrieves existing cryptainers
     storage.enqueue_file_for_encryption("aaa.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 4  # Unchanged
     storage.enqueue_file_for_encryption("zzz.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 4  # Purge occurred
-    assert storage.list_container_names(as_sorted=True) == [
+    assert storage.list_cryptainer_names(as_sorted=True) == [
         Path('aaa.dat.000.crypt'),  # It's the file timestamps that counts, not the name!
         Path("xyz.dat.002.crypt"),
         Path("xyz.dat.003.crypt"),
         Path("zzz.dat.001.crypt"),
     ]
 
-    storage.delete_container(Path("xyz.dat.002.crypt"))
+    storage.delete_cryptainer(Path("xyz.dat.002.crypt"))
 
-    assert storage.list_container_names(as_sorted=True) == [
+    assert storage.list_cryptainer_names(as_sorted=True) == [
         Path("aaa.dat.000.crypt"),
         Path("xyz.dat.003.crypt"),
         Path("zzz.dat.001.crypt"),
@@ -936,7 +936,7 @@ def test_container_storage_purge_by_max_count(tmp_path):
     storage.enqueue_file_for_encryption("20201121222727_whatever.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
 
-    assert storage.list_container_names(as_sorted=True) == [
+    assert storage.list_cryptainer_names(as_sorted=True) == [
         Path("20201121222727_whatever.dat.002.crypt"),
         Path('aaa.dat.000.crypt'),
         Path("xyz.dat.003.crypt"),
@@ -947,56 +947,56 @@ def test_container_storage_purge_by_max_count(tmp_path):
     storage.enqueue_file_for_encryption("lmn.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
 
-    print(">>>>>>>", storage.list_container_names(as_sorted=True))
-    assert storage.list_container_names(as_sorted=True) == [
+    print(">>>>>>>", storage.list_cryptainer_names(as_sorted=True))
+    assert storage.list_cryptainer_names(as_sorted=True) == [
         Path('21201121222729_smth.dat.003.crypt'),
         Path('aaa.dat.000.crypt'),  # It's the file timestamps that counts, not the name!
         Path('lmn.dat.004.crypt'),
         Path('zzz.dat.001.crypt'),
     ]
 
-    assert storage._max_container_count
-    storage._max_container_count = 0
+    assert storage._max_cryptainer_count
+    storage._max_cryptainer_count = 0
 
     storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
-    assert storage.list_container_names(as_sorted=True) == []  # ALL PURGED
+    assert storage.list_cryptainer_names(as_sorted=True) == []  # ALL PURGED
 
 
-def test_container_storage_purge_by_age(tmp_path):
-    containers_dir = tmp_path
+def test_cryptainer_storage_purge_by_age(tmp_path):
+    cryptainers_dir = tmp_path
     now = get_utc_now_date()
 
-    (containers_dir / "20201021222700_oldfile.dat.crypt").touch()
-    (containers_dir / "20301021222711_oldfile.dat.crypt").touch()
+    (cryptainers_dir / "20201021222700_oldfile.dat.crypt").touch()
+    (cryptainers_dir / "20301021222711_oldfile.dat.crypt").touch()
 
     offload_data_ciphertext = random_bool()
-    storage = FakeTestContainerStorage(
+    storage = FakeTestCryptainerStorage(
         default_cryptoconf={"stuffs": True},
-        containers_dir=containers_dir,
-        max_container_age=timedelta(days=2),
+        cryptainers_dir=cryptainers_dir,
+        max_cryptainer_age=timedelta(days=2),
         offload_data_ciphertext=offload_data_ciphertext,
     )
 
-    assert storage.list_container_names(as_sorted=True) == [
+    assert storage.list_cryptainer_names(as_sorted=True) == [
         Path('20201021222700_oldfile.dat.crypt'),
         Path('20301021222711_oldfile.dat.crypt'),
     ]
 
     dt = now - timedelta(seconds=1)
     for i in range(5):
-        storage.enqueue_file_for_encryption("%s_stuff.dat" % dt.strftime(CONTAINER_DATETIME_FORMAT),
+        storage.enqueue_file_for_encryption("%s_stuff.dat" % dt.strftime(CRYPTAINER_DATETIME_FORMAT),
                                             b"abc", metadata=None)
         dt -= timedelta(days=1)
     storage.enqueue_file_for_encryption("whatever_stuff.dat", b"xxx", metadata=None)  # File timestamp with be used instead
     storage.wait_for_idle_state()
 
-    container_names = storage.list_container_names(as_sorted=True)
+    cryptainer_names = storage.list_cryptainer_names(as_sorted=True)
 
-    assert Path('20201021222700_oldfile.dat.crypt') not in container_names
+    assert Path('20201021222700_oldfile.dat.crypt') not in cryptainer_names
 
-    assert Path('20301021222711_oldfile.dat.crypt') in container_names
-    assert Path('whatever_stuff.dat.005.crypt') in container_names
+    assert Path('20301021222711_oldfile.dat.crypt') in cryptainer_names
+    assert Path('whatever_stuff.dat.005.crypt') in cryptainer_names
 
     assert len(storage) == 4  # 2 listed just above + 2 recent "<date>_stuff.dat" from loop
 
@@ -1006,28 +1006,28 @@ def test_container_storage_purge_by_age(tmp_path):
     storage.enqueue_file_for_encryption("abcde.dat", b"xxx", metadata=None)
     storage.wait_for_idle_state()
 
-    container_names = storage.list_container_names(as_sorted=True)
-    assert Path('whatever_stuff.dat.005.crypt') not in container_names
-    assert Path('abcde.dat.006.crypt') in container_names
+    cryptainer_names = storage.list_cryptainer_names(as_sorted=True)
+    assert Path('whatever_stuff.dat.005.crypt') not in cryptainer_names
+    assert Path('abcde.dat.006.crypt') in cryptainer_names
 
     assert len(storage) == 4
 
-    assert storage._max_container_age
-    storage._max_container_age = timedelta(days=-1)
+    assert storage._max_cryptainer_age
+    storage._max_cryptainer_age = timedelta(days=-1)
 
     storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
-    assert storage.list_container_names(as_sorted=True) == [Path('20301021222711_oldfile.dat.crypt')]  # ALL PURGED
+    assert storage.list_cryptainer_names(as_sorted=True) == [Path('20301021222711_oldfile.dat.crypt')]  # ALL PURGED
 
 
-def test_container_storage_purge_by_quota(tmp_path):
-    containers_dir = tmp_path
+def test_cryptainer_storage_purge_by_quota(tmp_path):
+    cryptainers_dir = tmp_path
 
     offload_data_ciphertext = random_bool()
-    storage = FakeTestContainerStorage(
+    storage = FakeTestCryptainerStorage(
         default_cryptoconf={"stuffs": True},
-        containers_dir=containers_dir,
-        max_container_quota=8000,  # Beware of overhead of encryption and json structs!
+        cryptainers_dir=cryptainers_dir,
+        max_cryptainer_quota=8000,  # Beware of overhead of encryption and json structs!
         offload_data_ciphertext=offload_data_ciphertext,
     )
     assert not len(storage)
@@ -1039,12 +1039,12 @@ def test_container_storage_purge_by_quota(tmp_path):
         storage.enqueue_file_for_encryption("some_stuff.dat", b"m"*1000, metadata=None)
     storage.wait_for_idle_state()
 
-    container_names = storage.list_container_names(as_sorted=True)
+    cryptainer_names = storage.list_cryptainer_names(as_sorted=True)
 
-    print(container_names)
+    print(cryptainer_names)
 
-    if offload_data_ciphertext:  # Offloaded containers are smaller due to skipping of base64 encoding of ciphertext
-        assert container_names == [
+    if offload_data_ciphertext:  # Offloaded cryptainers are smaller due to skipping of base64 encoding of ciphertext
+        assert cryptainer_names == [
             Path('20301021222711_stuff.dat.001.crypt'),
             Path('some_stuff.dat.007.crypt'),
             Path('some_stuff.dat.008.crypt'),
@@ -1052,36 +1052,36 @@ def test_container_storage_purge_by_quota(tmp_path):
             Path('some_stuff.dat.010.crypt'),
             Path('some_stuff.dat.011.crypt')]
     else:
-        assert container_names == [
+        assert cryptainer_names == [
             Path('20301021222711_stuff.dat.001.crypt'),
             Path('some_stuff.dat.009.crypt'),
             Path('some_stuff.dat.010.crypt'),
             Path('some_stuff.dat.011.crypt')]
 
-    assert storage._max_container_quota
-    storage._max_container_quota = 0
+    assert storage._max_cryptainer_quota
+    storage._max_cryptainer_quota = 0
 
     storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
-    assert storage.list_container_names(as_sorted=True) == []  # ALL PURGED
+    assert storage.list_cryptainer_names(as_sorted=True) == []  # ALL PURGED
 
 
-def test_container_storage_purge_parameter_combinations(tmp_path):
-    containers_dir = tmp_path
+def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
+    cryptainers_dir = tmp_path
     now = get_utc_now_date() - timedelta(seconds=1)
 
-    recent_big_file_name = "%s_recent_big_stuff.dat" % now.strftime(CONTAINER_DATETIME_FORMAT)
+    recent_big_file_name = "%s_recent_big_stuff.dat" % now.strftime(CRYPTAINER_DATETIME_FORMAT)
 
     params_sets = product([None, 2],[None, 1000], [None, timedelta(days=3)])
 
-    for max_container_count, max_container_quota, max_container_age in params_sets:
+    for max_cryptainer_count, max_cryptainer_quota, max_cryptainer_age in params_sets:
         offload_data_ciphertext = random_bool()
-        storage = FakeTestContainerStorage(
+        storage = FakeTestCryptainerStorage(
             default_cryptoconf={"stuffs": True},
-            containers_dir=containers_dir,
-            max_container_count=max_container_count,
-            max_container_quota=max_container_quota,
-            max_container_age=max_container_age,
+            cryptainers_dir=cryptainers_dir,
+            max_cryptainer_count=max_cryptainer_count,
+            max_cryptainer_quota=max_cryptainer_quota,
+            max_cryptainer_age=max_cryptainer_age,
             offload_data_ciphertext=offload_data_ciphertext,
         )
 
@@ -1091,35 +1091,35 @@ def test_container_storage_purge_parameter_combinations(tmp_path):
 
         storage.wait_for_idle_state()
 
-        container_names = storage.list_container_names(as_sorted=True)
+        cryptainer_names = storage.list_cryptainer_names(as_sorted=True)
 
-        assert (Path("20001121222729_smth.dat.000.crypt") in container_names) == (not (max_container_count or max_container_quota or max_container_age))
-        assert (Path(recent_big_file_name +".001.crypt") in container_names) == (not max_container_quota)
-        assert (Path("recent_small_file.dat.002.crypt") in container_names) == True
+        assert (Path("20001121222729_smth.dat.000.crypt") in cryptainer_names) == (not (max_cryptainer_count or max_cryptainer_quota or max_cryptainer_age))
+        assert (Path(recent_big_file_name +".001.crypt") in cryptainer_names) == (not max_cryptainer_quota)
+        assert (Path("recent_small_file.dat.002.crypt") in cryptainer_names) == True
 
     # Special case of "everything restricted"
 
-    storage = FakeTestContainerStorage(
+    storage = FakeTestCryptainerStorage(
         default_cryptoconf={"stuffs": True},
-        containers_dir=containers_dir,
-        max_container_count=0,
-        max_container_quota=0,
-        max_container_age=timedelta(days=0),
+        cryptainers_dir=cryptainers_dir,
+        max_cryptainer_count=0,
+        max_cryptainer_quota=0,
+        max_cryptainer_age=timedelta(days=0),
         offload_data_ciphertext=False,
     )
     storage.enqueue_file_for_encryption("some_small_file.dat", b"0"*50, metadata=None)
     storage.wait_for_idle_state()
 
-    container_names = storage.list_container_names(as_sorted=True)
-    assert container_names == []
+    cryptainer_names = storage.list_cryptainer_names(as_sorted=True)
+    assert cryptainer_names == []
 
 
-def test_container_storage_cryptoconf_precedence(tmp_path):
-    # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
+def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
+    # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
 
-    storage = ContainerStorage(default_cryptoconf=None, containers_dir=tmp_path)
+    storage = CryptainerStorage(default_cryptoconf=None, cryptainers_dir=tmp_path)
 
-    assert storage.list_container_names() == []
+    assert storage.list_cryptainer_names() == []
 
     with pytest.raises(RuntimeError, match="cryptoconf"):
         storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
@@ -1129,43 +1129,43 @@ def test_container_storage_cryptoconf_precedence(tmp_path):
     )
 
     storage.wait_for_idle_state()
-    assert storage.list_container_names() == [Path("animals.dat.crypt")]
+    assert storage.list_cryptainer_names() == [Path("animals.dat.crypt")]
 
     # ---
 
-    storage = ContainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, containers_dir=tmp_path)
+    storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainers_dir=tmp_path)
     storage.enqueue_file_for_encryption("stuff_simple.txt", b"aaa", metadata=None)
     storage.enqueue_file_for_encryption(
         "stuff_complex.txt", b"xxx", metadata=None, cryptoconf=COMPLEX_CRYPTOCONF
     )
     storage.wait_for_idle_state()
 
-    container_simple = storage.load_container_from_storage("stuff_simple.txt.crypt")
-    assert len(container_simple["data_encryption_strata"]) == 1
-    container_complex = storage.load_container_from_storage("stuff_complex.txt.crypt")
-    assert len(container_complex["data_encryption_strata"]) == 3
+    cryptainer_simple = storage.load_cryptainer_from_storage("stuff_simple.txt.crypt")
+    assert len(cryptainer_simple["data_encryption_strata"]) == 1
+    cryptainer_complex = storage.load_cryptainer_from_storage("stuff_complex.txt.crypt")
+    assert len(cryptainer_complex["data_encryption_strata"]) == 3
 
 
-def test_container_storage_decryption_authenticated_algo_verify(tmp_path):
-    storage = ContainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, containers_dir=tmp_path)
+def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
+    storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainers_dir=tmp_path)
 
     storage.enqueue_file_for_encryption(
         "animals.dat", b"dogs\ncats\n", metadata=None
     )
     storage.wait_for_idle_state()
-    container_name, = storage.list_container_names()
+    cryptainer_name, = storage.list_cryptainer_names()
 
-    container = storage.load_container_from_storage(container_name)
-    container["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION of EAX
+    cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
+    cryptainer["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION of EAX
 
-    container_filepath = storage._make_absolute(container_name)
-    dump_container_to_filesystem(container_filepath, container=container, offload_data_ciphertext=False)  # Don't touch existing offloaded data
+    cryptainer_filepath = storage._make_absolute(cryptainer_name)
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=False)  # Don't touch existing offloaded data
 
-    result = storage.decrypt_container_from_storage(container_name, verify=False)
+    result = storage.decrypt_cryptainer_from_storage(cryptainer_name, verify=False)
     assert result == b"dogs\ncats\n"
 
     with pytest.raises(DecryptionIntegrityError):
-        storage.decrypt_container_from_storage(container_name, verify=True)
+        storage.decrypt_cryptainer_from_storage(cryptainer_name, verify=True)
 
 
 def test_get_cryptoconf_summary():
@@ -1183,9 +1183,9 @@ def test_get_cryptoconf_summary():
             """
     )  # Ending by newline!
 
-    container = encrypt_data_into_container(data=data, cryptoconf=SIMPLE_CRYPTOCONF, keychain_uid=None, metadata=None)
-    summary2 = get_cryptoconf_summary(container)
-    assert summary2 == summary  # Identical summary for cryptoconf and generated containers!
+    cryptainer = encrypt_data_into_cryptainer(data=data, cryptoconf=SIMPLE_CRYPTOCONF, keychain_uid=None, metadata=None)
+    summary2 = get_cryptoconf_summary(cryptainer)
+    assert summary2 == summary  # Identical summary for cryptoconf and generated cryptainers!
 
     # Simulate a cryptoconf with remote escrow webservices
 
@@ -1218,9 +1218,9 @@ def test_get_cryptoconf_summary():
 
     _public_key = generate_asymmetric_keypair(key_type="RSA_OAEP")["public_key"]
     with patch.object(JsonRpcProxy, "fetch_public_key", return_value=_public_key, create=True) as mock_method:
-        container = encrypt_data_into_container(data=data, cryptoconf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
-        summary2 = get_cryptoconf_summary(container)
-        assert summary2 == summary  # Identical summary for cryptoconf and generated containers!
+        cryptainer = encrypt_data_into_cryptainer(data=data, cryptoconf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
+        summary2 = get_cryptoconf_summary(cryptainer)
+        assert summary2 == summary  # Identical summary for cryptoconf and generated cryptainers!
 
     # Test unknown escrow structure
 
@@ -1232,75 +1232,75 @@ def test_get_cryptoconf_summary():
 
 
 @pytest.mark.parametrize("cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF])
-def test_filesystem_container_loading_and_dumping(tmp_path, cryptoconf):
+def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
     data = b"jhf" * 200
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
 
     metadata = random.choice([None, dict(a=[123])])
 
-    container = encrypt_data_into_container(
+    cryptainer = encrypt_data_into_cryptainer(
         data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
     )
-    container_ciphertext_before_dump = container["data_ciphertext"]
+    cryptainer_ciphertext_before_dump = cryptainer["data_ciphertext"]
 
-    container_without_ciphertext = copy.deepcopy(container)
-    del container_without_ciphertext["data_ciphertext"]
+    cryptainer_without_ciphertext = copy.deepcopy(cryptainer)
+    del cryptainer_without_ciphertext["data_ciphertext"]
 
     # CASE 1 - MONOLITHIC JSON FILE
 
-    container_filepath = tmp_path / "mycontainer_monolithic.crypt"
-    dump_container_to_filesystem(container_filepath, container=container, offload_data_ciphertext=False)
-    container_reloaded = load_from_json_file(container_filepath)
-    assert container_reloaded["data_ciphertext"] == container_ciphertext_before_dump  # NO OFFLOADING
-    assert load_container_from_filesystem(container_filepath) == container  # UNCHANGED from original
+    cryptainer_filepath = tmp_path / "mycryptainer_monolithic.crypt"
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=False)
+    cryptainer_reloaded = load_from_json_file(cryptainer_filepath)
+    assert cryptainer_reloaded["data_ciphertext"] == cryptainer_ciphertext_before_dump  # NO OFFLOADING
+    assert load_cryptainer_from_filesystem(cryptainer_filepath) == cryptainer  # UNCHANGED from original
 
-    container_truncated = load_container_from_filesystem(container_filepath, include_data_ciphertext=False)
-    assert "data_ciphertext" not in container_truncated
-    assert container_truncated == container_without_ciphertext
+    cryptainer_truncated = load_cryptainer_from_filesystem(cryptainer_filepath, include_data_ciphertext=False)
+    assert "data_ciphertext" not in cryptainer_truncated
+    assert cryptainer_truncated == cryptainer_without_ciphertext
 
-    assert container["data_ciphertext"] == container_ciphertext_before_dump  # Original dict unchanged
+    assert cryptainer["data_ciphertext"] == cryptainer_ciphertext_before_dump  # Original dict unchanged
 
-    size1 = get_container_size_on_filesystem(container_filepath)
+    size1 = get_cryptainer_size_on_filesystem(cryptainer_filepath)
     assert size1
 
-    assert container_filepath.exists()
-    #delete_container_from_filesystem(container_filepath)
-    #assert not container_filepath.exists()
+    assert cryptainer_filepath.exists()
+    #delete_cryptainer_from_filesystem(cryptainer_filepath)
+    #assert not cryptainer_filepath.exists()
 
     # CASE 2 - OFFLOADED CIPHERTEXT FILE
 
-    container_filepath = tmp_path / "mycontainer_offloaded.crypt"
+    cryptainer_filepath = tmp_path / "mycryptainer_offloaded.crypt"
 
-    dump_container_to_filesystem(container_filepath, container=container)  # OVERWRITE, with offloading by default
-    container_reloaded = load_from_json_file(container_filepath)
-    assert container_reloaded["data_ciphertext"] == "[OFFLOADED]"
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer)  # OVERWRITE, with offloading by default
+    cryptainer_reloaded = load_from_json_file(cryptainer_filepath)
+    assert cryptainer_reloaded["data_ciphertext"] == "[OFFLOADED]"
 
-    container_offloaded_filepath = Path(str(container_filepath) + ".data")
-    offloaded_data_reloaded = container_offloaded_filepath.read_bytes()
-    assert offloaded_data_reloaded == container_ciphertext_before_dump  # WELL OFFLOADED as DIRECT BYTES
-    assert load_container_from_filesystem(container_filepath) == container  # UNCHANGED from original
+    cryptainer_offloaded_filepath = Path(str(cryptainer_filepath) + ".data")
+    offloaded_data_reloaded = cryptainer_offloaded_filepath.read_bytes()
+    assert offloaded_data_reloaded == cryptainer_ciphertext_before_dump  # WELL OFFLOADED as DIRECT BYTES
+    assert load_cryptainer_from_filesystem(cryptainer_filepath) == cryptainer  # UNCHANGED from original
 
-    container_truncated = load_container_from_filesystem(container_filepath, include_data_ciphertext=False)
-    assert "data_ciphertext" not in container_truncated
-    assert container_truncated == container_without_ciphertext
+    cryptainer_truncated = load_cryptainer_from_filesystem(cryptainer_filepath, include_data_ciphertext=False)
+    assert "data_ciphertext" not in cryptainer_truncated
+    assert cryptainer_truncated == cryptainer_without_ciphertext
 
-    assert container["data_ciphertext"] == container_ciphertext_before_dump  # Original dict unchanged
+    assert cryptainer["data_ciphertext"] == cryptainer_ciphertext_before_dump  # Original dict unchanged
 
-    size2 = get_container_size_on_filesystem(container_filepath)
+    size2 = get_cryptainer_size_on_filesystem(cryptainer_filepath)
     assert size2 < size1   # Overhead of base64 encoding in monolithic file!
     assert size1 < size2 + 1000  # Overhead remaings limited though
 
-    assert container_filepath.exists()
-    assert container_offloaded_filepath.exists()
-    delete_container_from_filesystem(container_filepath)
-    assert not container_filepath.exists()
-    assert not container_offloaded_filepath.exists()
+    assert cryptainer_filepath.exists()
+    assert cryptainer_offloaded_filepath.exists()
+    delete_cryptainer_from_filesystem(cryptainer_filepath)
+    assert not cryptainer_filepath.exists()
+    assert not cryptainer_offloaded_filepath.exists()
 
 
-def test_generate_container_and_symmetric_keys():
-    container_writer = ContainerWriter()
-    container, extracts = container_writer._generate_container_base_and_secrets(COMPLEX_CRYPTOCONF)
+def test_generate_cryptainer_and_symmetric_keys():
+    cryptainer_writer = CryptainerWriter()
+    cryptainer, extracts = cryptainer_writer._generate_cryptainer_base_and_secrets(COMPLEX_CRYPTOCONF)
 
     for data_encryption_stratum in extracts:
         symmetric_key_dict = data_encryption_stratum["symmetric_key_dict"]
@@ -1315,45 +1315,45 @@ def test_generate_container_and_symmetric_keys():
     ]
 
 
-def test_create_container_encryption_stream(tmp_path):
-    containers_dir = tmp_path / "containers_dir"
-    containers_dir.mkdir()
+def test_create_cryptainer_encryption_stream(tmp_path):
+    cryptainers_dir = tmp_path / "cryptainers_dir"
+    cryptainers_dir.mkdir()
 
-    filename_base = "20200101_container_example"
+    filename_base = "20200101_cryptainer_example"
 
-    # Beware, here we use the REAL ContainerStorage, not FakeTestContainerStorage!
-    storage = ContainerStorage(default_cryptoconf=None, containers_dir=containers_dir)
+    # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
+    storage = CryptainerStorage(default_cryptoconf=None, cryptainers_dir=cryptainers_dir)
 
-    container_encryption_stream = storage.create_container_encryption_stream(
-        filename_base, metadata={"mymetadata": True}, cryptoconf=SIMPLE_CRYPTOCONF, dump_initial_container=True)
+    cryptainer_encryption_stream = storage.create_cryptainer_encryption_stream(
+        filename_base, metadata={"mymetadata": True}, cryptoconf=SIMPLE_CRYPTOCONF, dump_initial_cryptainer=True)
 
-    container_started = storage.load_container_from_storage("20200101_container_example.crypt" + CONTAINER_TEMP_SUFFIX)
-    assert container_started["container_state"] == "STARTED"
+    cryptainer_started = storage.load_cryptainer_from_storage("20200101_cryptainer_example.crypt" + CRYPTAINER_TEMP_SUFFIX)
+    assert cryptainer_started["cryptainer_state"] == "STARTED"
 
-    container_encryption_stream.encrypt_chunk(b"bonjour")
-    container_encryption_stream.encrypt_chunk(b"everyone")
-    container_encryption_stream.finalize()
+    cryptainer_encryption_stream.encrypt_chunk(b"bonjour")
+    cryptainer_encryption_stream.encrypt_chunk(b"everyone")
+    cryptainer_encryption_stream.finalize()
 
-    container = storage.load_container_from_storage("20200101_container_example.crypt")
-    assert container["metadata"] == {"mymetadata": True}
-    assert container["container_state"] == "FINISHED"
+    cryptainer = storage.load_cryptainer_from_storage("20200101_cryptainer_example.crypt")
+    assert cryptainer["metadata"] == {"mymetadata": True}
+    assert cryptainer["cryptainer_state"] == "FINISHED"
 
-    plaintext = storage.decrypt_container_from_storage("20200101_container_example.crypt")
+    plaintext = storage.decrypt_cryptainer_from_storage("20200101_cryptainer_example.crypt")
     assert plaintext == b"bonjoureveryone"
 
 
-def ___obsolete_test_encrypt_data_and_dump_container_to_filesystem(tmp_path):
+def ___obsolete_test_encrypt_data_and_dump_cryptainer_to_filesystem(tmp_path):
     data_plaintext = b"abcd1234" * 10
-    container_filepath = tmp_path / "my_streamed_container.crypt"
+    cryptainer_filepath = tmp_path / "my_streamed_cryptainer.crypt"
 
-    encrypt_data_and_dump_container_to_filesystem(
+    encrypt_data_and_dump_cryptainer_to_filesystem(
         data_plaintext,
-        container_filepath=container_filepath,
+        cryptainer_filepath=cryptainer_filepath,
         cryptoconf=SIMPLE_CRYPTOCONF,
         metadata=None)
 
-    container = load_container_from_filesystem(container_filepath)  # Fetches offloaded content too
-    assert container["data_ciphertext"] == data_plaintext  # TEMPORARY FOR FAKE STREAM ENCRYPTOR
+    cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath)  # Fetches offloaded content too
+    assert cryptainer["data_ciphertext"] == data_plaintext  # TEMPORARY FOR FAKE STREAM ENCRYPTOR
 
 
 @pytest.mark.parametrize(
@@ -1411,60 +1411,60 @@ def test_conf_validation_error(corrupted_conf):
                                   COMPLEX_CRYPTOCONF,
                                   SIMPLE_SHAMIR_CRYPTOCONF,
                                   COMPLEX_SHAMIR_CRYPTOCONF])
-def test_container_validation_success(cryptoconf):
-    container = encrypt_data_into_container(
+def test_cryptainer_validation_success(cryptoconf):
+    cryptainer = encrypt_data_into_cryptainer(
         data=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None
     )
-    check_container_sanity(container=container, jsonschema_mode=False)
+    check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 
-    container_json = _dump_to_raw_json_tree(container)
-    check_container_sanity(container=container_json, jsonschema_mode=True)
+    cryptainer_json = _dump_to_raw_json_tree(cryptainer)
+    check_cryptainer_sanity(cryptainer=cryptainer_json, jsonschema_mode=True)
 
 
-def _generate_corrupted_containers(cryptoconf):
+def _generate_corrupted_cryptainers(cryptoconf):
 
-    container = encrypt_data_into_container(
+    cryptainer = encrypt_data_into_cryptainer(
         data=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None
     )
-    corrupted_containers = []
+    corrupted_cryptainers = []
 
-    corrupted_container1 = copy.deepcopy(container)
-    corrupted_container1["data_encryption_strata"][0]["keychain_uid"] = ENFORCED_UID1
-    corrupted_containers.append(corrupted_container1)
+    corrupted_cryptainer1 = copy.deepcopy(cryptainer)
+    corrupted_cryptainer1["data_encryption_strata"][0]["keychain_uid"] = ENFORCED_UID1
+    corrupted_cryptainers.append(corrupted_cryptainer1)
 
-    corrupted_container2 = copy.deepcopy(container)
-    del corrupted_container2["data_encryption_strata"][0]["integrity_tags"]
-    corrupted_containers.append(corrupted_container2)
+    corrupted_cryptainer2 = copy.deepcopy(cryptainer)
+    del corrupted_cryptainer2["data_encryption_strata"][0]["integrity_tags"]
+    corrupted_cryptainers.append(corrupted_cryptainer2)
 
-    corrupted_container3 = copy.deepcopy(container)
-    corrupted_container3["data_encryption_strata"][0]["key_ciphertext"] = []
-    corrupted_containers.append(corrupted_container3)
+    corrupted_cryptainer3 = copy.deepcopy(cryptainer)
+    corrupted_cryptainer3["data_encryption_strata"][0]["key_ciphertext"] = []
+    corrupted_cryptainers.append(corrupted_cryptainer3)
 
-    return corrupted_containers
+    return corrupted_cryptainers
 
 
-@pytest.mark.parametrize("corrupted_container", _generate_corrupted_containers(SIMPLE_CRYPTOCONF))
-def test_container_validation_error(corrupted_container):
-
-    with pytest.raises(ValidationError):
-        check_container_sanity(container=corrupted_container, jsonschema_mode=True)
+@pytest.mark.parametrize("corrupted_cryptainer", _generate_corrupted_cryptainers(SIMPLE_CRYPTOCONF))
+def test_cryptainer_validation_error(corrupted_cryptainer):
 
     with pytest.raises(ValidationError):
-        corrupted_container_json = _dump_to_raw_json_tree(corrupted_container)
-        check_container_sanity(container=corrupted_container_json, jsonschema_mode=False)
+        check_cryptainer_sanity(cryptainer=corrupted_cryptainer, jsonschema_mode=True)
+
+    with pytest.raises(ValidationError):
+        corrupted_cryptainer_json = _dump_to_raw_json_tree(corrupted_cryptainer)
+        check_cryptainer_sanity(cryptainer=corrupted_cryptainer_json, jsonschema_mode=False)
 
 
-def test_container_storage_check_container_sanity(tmp_path):
-    storage, container_name = _intialize_container_with_single_file(tmp_path)
+def test_cryptainer_storage_check_cryptainer_sanity(tmp_path):
+    storage, cryptainer_name = _intialize_cryptainer_with_single_file(tmp_path)
 
-    storage.check_container_sanity(container_name_or_idx=container_name)
+    storage.check_cryptainer_sanity(cryptainer_name_or_idx=cryptainer_name)
 
-    # FIXME deduplicate this bit with test_container_storage_decryption_authenticated_algo_verify()
-    container = storage.load_container_from_storage(container_name)
-    container["data_encryption_strata"][0]["bad_name_of_attribute"] = 42
-    container_filepath = storage._make_absolute(container_name)
-    dump_container_to_filesystem(container_filepath, container=container, offload_data_ciphertext=False)  # Don't touch existing
+    # FIXME deduplicate this bit with test_cryptainer_storage_decryption_authenticated_algo_verify()
+    cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
+    cryptainer["data_encryption_strata"][0]["bad_name_of_attribute"] = 42
+    cryptainer_filepath = storage._make_absolute(cryptainer_name)
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=False)  # Don't touch existing
     ##############
 
     with pytest.raises(ValidationError):
-        storage.check_container_sanity(container_name_or_idx=container_name)
+        storage.check_cryptainer_sanity(cryptainer_name_or_idx=cryptainer_name)

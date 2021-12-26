@@ -33,6 +33,6 @@ Use `bash ci.sh` to do a full checkup before committing or pushing your changes.
 
 Use the `Black <https://black.readthedocs.io/en/stable/>`_ formatter to format your python code.
 
-A simple command-line interface is available to play with simple (unsafe) containers (ensure that "src/" is in your PYTHONPATH first)::
+A simple command-line interface is available to play with simple (unsafe) cryptainers (ensure that "src/" is in your PYTHONPATH first)::
 
     python -m wacryptolib -h

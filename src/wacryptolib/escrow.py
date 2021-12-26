@@ -46,7 +46,7 @@ def generate_asymmetric_keypair_for_storage(  # FIXME rename and add to docs
 
 class EscrowApi:
     """
-    This is the API meant to be exposed by escrow webservices, to allow end users to create safely encrypted containers.
+    This is the API meant to be exposed by escrow webservices, to allow end users to create safely encrypted cryptainers.
 
     Subclasses must add their own permission checking, especially so that no decryption with private keys can occur
     outside the scope of a well defined legal procedure.

@@ -44,29 +44,29 @@ from wacryptolib.utilities import (
 
 logger = logging.getLogger(__name__)
 
-CONTAINER_FORMAT = "WA_0.1a"
-CONTAINER_SUFFIX = ".crypt"
-CONTAINER_DATETIME_FORMAT = "%Y%m%d%H%M%S"  # For use in container names and their records
-CONTAINER_TEMP_SUFFIX = "~"  # To name temporary, unfinalized, containers
+CRYPTAINER_FORMAT = "WA_0.1a"
+CRYPTAINER_SUFFIX = ".crypt"
+CRYPTAINER_DATETIME_FORMAT = "%Y%m%d%H%M%S"  # For use in cryptainer names and their records
+CRYPTAINER_TEMP_SUFFIX = "~"  # To name temporary, unfinalized, cryptainers
 
 OFFLOADED_MARKER = "[OFFLOADED]"
-OFFLOADED_DATA_SUFFIX = ".data"  # Added to CONTAINER_SUFFIX
+OFFLOADED_DATA_SUFFIX = ".data"  # Added to CRYPTAINER_SUFFIX
 
 DATA_CHUNK_SIZE = 1024 ** 2  # E.g. when streaming a big payload through encryptors
 
-MEDIUM_SUFFIX = ".medium"  # To construct decrypted filename when no previous extensions are found in container filename
+MEDIUM_SUFFIX = ".medium"  # To construct decrypted filename when no previous extensions are found in cryptainer filename
 
 SHARED_SECRET_MARKER = "[SHARED_SECRET]"
 
 DUMMY_KEY_STORAGE_POOL = DummyKeyStoragePool()  # Common fallback storage with in-memory keys
 
-#: Special value in containers, to invoke a device-local escrow
+#: Special value in cryptainers, to invoke a device-local escrow
 LOCAL_ESCROW_MARKER = dict(escrow_type="local")  # FIXME CHANGE THIS
 
 AUTHENTICATION_DEVICE_ESCROW_MARKER = dict(escrow_type="authentication_device")  # FIXME CHANGE THIS
 
 
-class CONTAINER_STATES:
+class CRYPTAINER_STATES:
     STARTED = "STARTED"
     FINISHED = "FINISHED"
 
@@ -79,8 +79,8 @@ def get_escrow_id(escrow_conf: dict) -> str:
     return str(sorted(escrow_conf.items()))
 
 
-def gather_escrow_dependencies(containers: Sequence) -> dict:
-    """Analyse a container and return the escrows (and their keypairs) used by it.
+def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
+    """Analyse a cryptainer and return the escrows (and their keypairs) used by it.
 
     :return: dict with lists of keypair identifiers in fields "encryption" and "signature".
     """
@@ -114,9 +114,9 @@ def gather_escrow_dependencies(containers: Sequence) -> dict:
                     key_type=key_type_encryption,
                 )
 
-    for container in containers:
-        keychain_uid = container["keychain_uid"]
-        for data_encryption_stratum in container["data_encryption_strata"]:
+    for cryptainer in cryptainers:
+        keychain_uid = cryptainer["keychain_uid"]
+        for data_encryption_stratum in cryptainer["data_encryption_strata"]:
             for signature_conf in data_encryption_stratum["data_signatures"]:
                 key_type_signature = signature_conf["signature_algo"]
                 keychain_uid_signature = signature_conf.get("keychain_uid") or keychain_uid
@@ -179,7 +179,7 @@ def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase):
 # FIXME rename keychain_uid to default_keychain_uid where relevant!!
 
 
-class ContainerBase:
+class CryptainerBase:
     """
     BEWARE - this class-based design is provisional and might change a lot.
 
@@ -201,28 +201,28 @@ class ContainerBase:
         self._passphrase_mapper = passphrase_mapper or {}
 
 
-class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
+class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
     """
-    Contains every method used to write and encrypt a container, IN MEMORY.
+    Contains every method used to write and encrypt a cryptainer, IN MEMORY.
     """
 
-    def build_container_and_stream_encryptor(self, *, cryptoconf: dict, output_stream: BinaryIO, keychain_uid=None, metadata=None) -> dict:
+    def build_cryptainer_and_stream_encryptor(self, *, cryptoconf: dict, output_stream: BinaryIO, keychain_uid=None, metadata=None) -> dict:
         """
-        Build a base container to store encrypted keys, as well as a stream encryptor
+        Build a base cryptainer to store encrypted keys, as well as a stream encryptor
         meant to process heavy data chunk by chunk.
 
         Signatures, and final ciphertext (if not offloaded), will have to be added
-        later to the container.
+        later to the cryptainer.
 
         :param cryptoconf: configuration tree
         :param output_stream: open file where the stream encryptor should write to
         :param keychain_uid: uuid for the set of encryption keys used
-        :param metadata: additional data to store unencrypted in container
+        :param metadata: additional data to store unencrypted in cryptainer
 
-        :return: container with all the information needed to attempt data decryption
+        :return: cryptainer with all the information needed to attempt data decryption
         """
 
-        container, data_encryption_strata_extracts = self._generate_container_base_and_secrets(
+        cryptainer, data_encryption_strata_extracts = self._generate_cryptainer_base_and_secrets(
            cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
         )
 
@@ -253,7 +253,7 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
             data_encryption_strata_extracts=data_encryption_strata_extracts,
         )
 
-        return container, stream_encryptor
+        return cryptainer, stream_encryptor
 
     def encrypt_data(self, data: Union[bytes, BinaryIO], *, cryptoconf: dict, keychain_uid=None, metadata=None) -> dict:
         """
@@ -264,25 +264,25 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         :param data: initial plaintext, or file pointer (file immediately deleted then)
         :param cryptoconf: configuration tree
         :param keychain_uid: uuid for the set of encryption keys used
-        :param metadata: additional data to store unencrypted in container
+        :param metadata: additional data to store unencrypted in cryptainer
 
-        :return: container with all the information needed to attempt data decryption
+        :return: cryptainer with all the information needed to attempt data decryption
         """
 
         data = self._load_data_bytes_and_cleanup(data)  # Ensure we get the whole data buffer
 
-        container, data_encryption_strata_extracts = self._generate_container_base_and_secrets(
+        cryptainer, data_encryption_strata_extracts = self._generate_cryptainer_base_and_secrets(
            cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
         )
 
         data_ciphertext, authentication_data_list = \
             self._encrypt_and_hash_data(data, data_encryption_strata_extracts)
 
-        container["data_ciphertext"] = data_ciphertext
+        cryptainer["data_ciphertext"] = data_ciphertext
 
-        self.add_authentication_data_to_container(container, authentication_data_list)
+        self.add_authentication_data_to_cryptainer(cryptainer, authentication_data_list)
 
-        return container
+        return cryptainer
 
     @staticmethod
     def _load_data_bytes_and_cleanup(data: Union[bytes, BinaryIO]):
@@ -331,32 +331,32 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
 
         return data_current, authentication_data_list
 
-    def _generate_container_base_and_secrets(self, cryptoconf: dict, keychain_uid=None, metadata=None) -> tuple:
+    def _generate_cryptainer_base_and_secrets(self, cryptoconf: dict, keychain_uid=None, metadata=None) -> tuple:
         """
-        Build a data-less and signature-less container, preconfigured with a set of symmetric keys
+        Build a data-less and signature-less cryptainer, preconfigured with a set of symmetric keys
         under their final form (encrypted by escrows). A separate extract, with symmetric keys as well as algo names, is returned so that actual data encryption and signature can be performed separately.
 
         :param cryptoconf: configuration tree
         :param keychain_uid: uuid for the set of encryption keys used
-        :param metadata: additional data to store unencrypted in container
+        :param metadata: additional data to store unencrypted in cryptainer
 
-        :return: a (container: dict, secrets: list) tuple, where each secret has keys encryption_algo, symmetric_key and message_digest_algos.
+        :return: a (cryptainer: dict, secrets: list) tuple, where each secret has keys encryption_algo, symmetric_key and message_digest_algos.
         """
 
         assert metadata is None or isinstance(metadata, dict), metadata
-        container_format = CONTAINER_FORMAT
-        container_uid = generate_uuid0()  # ALWAYS UNIQUE!
-        keychain_uid = keychain_uid or generate_uuid0()  # Might be shared by lots of containers
+        cryptainer_format = CRYPTAINER_FORMAT
+        cryptainer_uid = generate_uuid0()  # ALWAYS UNIQUE!
+        keychain_uid = keychain_uid or generate_uuid0()  # Might be shared by lots of cryptainers
 
         assert isinstance(cryptoconf, dict), cryptoconf
-        container = copy.deepcopy(cryptoconf)  # So that we can manipulate it as new container
+        cryptainer = copy.deepcopy(cryptoconf)  # So that we can manipulate it as new cryptainer
         del cryptoconf
-        if not container["data_encryption_strata"]:
+        if not cryptainer["data_encryption_strata"]:
             raise ConfigurationError("Empty data_encryption_strata list is forbidden in cryptoconf")
 
         data_encryption_strata_extracts = []  # Sensitive info with secret keys!
 
-        for data_encryption_stratum in container["data_encryption_strata"]:
+        for data_encryption_stratum in cryptainer["data_encryption_strata"]:
             data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
 
             data_encryption_stratum["integrity_tags"] = None  # Will be filled later with tags/macs etc.
@@ -380,16 +380,16 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
             )
             data_encryption_strata_extracts.append(data_encryption_stratum_extract)
 
-        container.update(
-            # FIXME add container status, PENDING/COMPLETE!!!
-            container_state=CONTAINER_STATES.STARTED,
-            container_format=container_format,
-            container_uid=container_uid,
+        cryptainer.update(
+            # FIXME add cryptainer status, PENDING/COMPLETE!!!
+            cryptainer_state=CRYPTAINER_STATES.STARTED,
+            cryptainer_format=cryptainer_format,
+            cryptainer_uid=cryptainer_uid,
             keychain_uid=keychain_uid,
             data_ciphertext = None,  # Must be filled asap, by OFFLOADED_MARKER if needed!
             metadata=metadata,
         )
-        return container, data_encryption_strata_extracts
+        return cryptainer, data_encryption_strata_extracts
 
     def _encrypt_key_through_multiple_strata(self, keychain_uid: uuid.UUID, key_bytes: bytes,
                                              key_encryption_strata: list) -> bytes:
@@ -526,15 +526,15 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         assert len(shares) == len(key_shared_secret_escrows)
         return all_encrypted_shares
 
-    def add_authentication_data_to_container(self, container: dict, authentication_data_list: list):
-        keychain_uid = container["keychain_uid"]
+    def add_authentication_data_to_cryptainer(self, cryptainer: dict, authentication_data_list: list):
+        keychain_uid = cryptainer["keychain_uid"]
 
-        data_encryption_strata = container["data_encryption_strata"]
+        data_encryption_strata = cryptainer["data_encryption_strata"]
         assert len(data_encryption_strata) == len(authentication_data_list)  # Sanity check
 
-        for data_encryption_stratum, authentication_data_list in zip(container["data_encryption_strata"], authentication_data_list):
+        for data_encryption_stratum, authentication_data_list in zip(cryptainer["data_encryption_strata"], authentication_data_list):
 
-            assert data_encryption_stratum["integrity_tags"] is None  # Set at container build time
+            assert data_encryption_stratum["integrity_tags"] is None  # Set at cryptainer build time
             data_encryption_stratum["integrity_tags"] = authentication_data_list["integrity_tags"]
 
             message_digests = authentication_data_list["message_digests"]
@@ -554,7 +554,7 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
                 _encountered_message_digest_algos.add(message_digest_algo)
             assert _encountered_message_digest_algos == set(message_digests)  # No abnormal extra digest
 
-        container["container_state"] = CONTAINER_STATES.FINISHED
+        cryptainer["cryptainer_state"] = CRYPTAINER_STATES.FINISHED
 
     def _generate_message_signature(self, keychain_uid: uuid.UUID, cryptoconf: dict) -> dict:
         """
@@ -579,39 +579,39 @@ class ContainerWriter(ContainerBase):  #FIXME rename to ContainerEncryptor
         return signature_value
 
 
-class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
+class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
     """
-    Contains every method used to read and decrypt a container, IN MEMORY.
+    Contains every method used to read and decrypt a cryptainer, IN MEMORY.
     """
 
-    def extract_metadata(self, container: dict) -> Optional[dict]:
-        assert isinstance(container, dict), container
-        return container["metadata"]
+    def extract_metadata(self, cryptainer: dict) -> Optional[dict]:
+        assert isinstance(cryptainer, dict), cryptainer
+        return cryptainer["metadata"]
 
-    def decrypt_data(self, container: dict, verify: bool=True) -> bytes:
+    def decrypt_data(self, cryptainer: dict, verify: bool=True) -> bytes:
         """
-        Loop through container layers, to decipher data with the right algorithms.
+        Loop through cryptainer layers, to decipher data with the right algorithms.
 
-        :param container: dictionary previously built with ContainerWriter method
+        :param cryptainer: dictionary previously built with CryptainerWriter method
         :param verify: whether to check tag/mac values of the ciphertext
 
         :return: deciphered plaintext
         """
-        assert isinstance(container, dict), container
+        assert isinstance(cryptainer, dict), cryptainer
 
-        container_format = container["container_format"]
-        if container_format != CONTAINER_FORMAT:
-            raise ValueError("Unknown container format %s" % container_format)
+        cryptainer_format = cryptainer["cryptainer_format"]
+        if cryptainer_format != CRYPTAINER_FORMAT:
+            raise ValueError("Unknown cryptainer format %s" % cryptainer_format)
 
-        container_uid = container["container_uid"]
-        del container_uid  # Might be used for logging etc, later...
+        cryptainer_uid = cryptainer["cryptainer_uid"]
+        del cryptainer_uid  # Might be used for logging etc, later...
 
-        keychain_uid = container["keychain_uid"]
+        keychain_uid = cryptainer["keychain_uid"]
 
-        data_current = container["data_ciphertext"]
+        data_current = cryptainer["data_ciphertext"]
         assert isinstance(data_current, bytes), repr(data_current)  # Else it's still a special marker for example...
 
-        for data_encryption_stratum in reversed(container["data_encryption_strata"]):  # Non-emptiness of this will be checked by validator
+        for data_encryption_stratum in reversed(cryptainer["data_encryption_strata"]):  # Non-emptiness of this will be checked by validator
 
             data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
 
@@ -762,7 +762,7 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
 
         assert len(symmetric_key_cipherdict["shares"]) <= len(
             key_shared_secret_escrows
-        )  # During tests we erase some container shares...
+        )  # During tests we erase some cryptainer shares...
 
         for share_idx, share_conf in enumerate(key_shared_secret_escrows):
 
@@ -827,41 +827,41 @@ class ContainerReader(ContainerBase):  #FIXME rename to ContainerDecryptor
         )  # Raises if troubles
 
 
-class ContainerEncryptionStream:
+class CryptainerEncryptionStream:
     """
-    Helper which prebuilds a container without signatures nor data,
+    Helper which prebuilds a cryptainer without signatures nor data,
     affords to fill its offloaded ciphertext file chunk by chunk, and then
-    dumps the final container now containing signatures.
+    dumps the final cryptainer now containing signatures.
     """
 
     def __init__(self,
-                 container_filepath: Path,
+                 cryptainer_filepath: Path,
                  *,
                 cryptoconf: dict,
                 metadata: Optional[dict],
                 keychain_uid: Optional[uuid.UUID] = None,
                 key_storage_pool: Optional[KeyStoragePoolBase] = None,
-                dump_initial_container=True):
+                dump_initial_cryptainer=True):
 
-        self._container_filepath = container_filepath
-        self._container_filepath_temp = container_filepath.with_suffix(container_filepath.suffix + CONTAINER_TEMP_SUFFIX)
+        self._cryptainer_filepath = cryptainer_filepath
+        self._cryptainer_filepath_temp = cryptainer_filepath.with_suffix(cryptainer_filepath.suffix + CRYPTAINER_TEMP_SUFFIX)
 
-        offloaded_file_path = _get_offloaded_file_path(container_filepath)
+        offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
         self._output_data_stream = open(offloaded_file_path, mode='wb')
 
-        self._container_writer = ContainerWriter(key_storage_pool=key_storage_pool)
-        self._wip_container, self._stream_encryptor = self._container_writer.build_container_and_stream_encryptor(output_stream=self._output_data_stream, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
-        self._wip_container["data_ciphertext"] = OFFLOADED_MARKER  # Important
+        self._cryptainer_writer = CryptainerWriter(key_storage_pool=key_storage_pool)
+        self._wip_cryptainer, self._stream_encryptor = self._cryptainer_writer.build_cryptainer_and_stream_encryptor(output_stream=self._output_data_stream, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
+        self._wip_cryptainer["data_ciphertext"] = OFFLOADED_MARKER  # Important
 
-        if dump_initial_container:  # Savegame in case the stream is broken before finalization
-            self._dump_current_container_to_filesystem(is_temporary=True)
+        if dump_initial_cryptainer:  # Savegame in case the stream is broken before finalization
+            self._dump_current_cryptainer_to_filesystem(is_temporary=True)
 
-    def _dump_current_container_to_filesystem(self, is_temporary):
-        filepath = self._container_filepath_temp if is_temporary else self._container_filepath
-        dump_container_to_filesystem(filepath, container=self._wip_container,
+    def _dump_current_cryptainer_to_filesystem(self, is_temporary):
+        filepath = self._cryptainer_filepath_temp if is_temporary else self._cryptainer_filepath
+        dump_cryptainer_to_filesystem(filepath, cryptainer=self._wip_cryptainer,
                                      offload_data_ciphertext=False)  # ALREADY offloaded
-        if not is_temporary:  # Cleanup temporary container
-            self._container_filepath_temp.unlink(missing_ok=True)
+        if not is_temporary:  # Cleanup temporary cryptainer
+            self._cryptainer_filepath_temp.unlink(missing_ok=True)
 
     def encrypt_chunk(self, chunk: bytes):
         self._stream_encryptor.encrypt_chunk(chunk)
@@ -872,17 +872,17 @@ class ContainerEncryptionStream:
 
         authentication_data_list = self._stream_encryptor.get_authentication_data()
 
-        self._container_writer.add_authentication_data_to_container(self._wip_container, authentication_data_list)
-        self._dump_current_container_to_filesystem(is_temporary=False)
+        self._cryptainer_writer.add_authentication_data_to_cryptainer(self._wip_cryptainer, authentication_data_list)
+        self._dump_current_cryptainer_to_filesystem(is_temporary=False)
 
     def __del__(self):
         # Emergency closing of open file on deletion
         if not self._output_data_stream.closed:
-            logger.error("Encountered abnormal open file in __del__ of ContainerEncryptionStream: %s" % self._output_data_stream)
+            logger.error("Encountered abnormal open file in __del__ of CryptainerEncryptionStream: %s" % self._output_data_stream)
             self._output_data_stream.close()
 
 
-def is_container_cryptoconf_streamable(cryptoconf):  #FIXME rename and add to docs
+def is_cryptainer_cryptoconf_streamable(cryptoconf):  #FIXME rename and add to docs
     # FIXME test separately!
     for data_encryption_stratum in cryptoconf["data_encryption_strata"]:
         if data_encryption_stratum["data_encryption_algo"] not in STREAMABLE_ENCRYPTION_ALGOS:
@@ -890,10 +890,10 @@ def is_container_cryptoconf_streamable(cryptoconf):  #FIXME rename and add to do
     return True
 
 
-def encrypt_data_and_dump_container_to_filesystem(
+def encrypt_data_and_dump_cryptainer_to_filesystem(
     data: Union[bytes, BinaryIO],
     *,
-    container_filepath,
+    cryptainer_filepath,
     cryptoconf: dict,
     metadata: Optional[dict],
     keychain_uid: Optional[uuid.UUID] = None,
@@ -901,13 +901,13 @@ def encrypt_data_and_dump_container_to_filesystem(
 ) -> None:
     """
     Optimized version which directly streams encrypted data to offloaded file,
-    instead of creating a whole container and then dumping it to disk.
+    instead of creating a whole cryptainer and then dumping it to disk.
     """
-    # No need to dump initial (signature-less) container here, this is all a quick operation...
-    encryptor = ContainerEncryptionStream(container_filepath,
+    # No need to dump initial (signature-less) cryptainer here, this is all a quick operation...
+    encryptor = CryptainerEncryptionStream(cryptainer_filepath,
                 cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata,
                 key_storage_pool=key_storage_pool,
-                dump_initial_container=False)
+                dump_initial_cryptainer=False)
 
     for chunk in consume_bytes_as_chunks(data, chunk_size=DATA_CHUNK_SIZE):
         encryptor.encrypt_chunk(chunk)
@@ -915,7 +915,7 @@ def encrypt_data_and_dump_container_to_filesystem(
     encryptor.finalize()  # Handles the dumping to disk
 
 
-def encrypt_data_into_container(
+def encrypt_data_into_cryptainer(
     data: Union[bytes, BinaryIO],
     *,
     cryptoconf: dict,
@@ -923,152 +923,152 @@ def encrypt_data_into_container(
     keychain_uid: Optional[uuid.UUID] = None,
     key_storage_pool: Optional[KeyStoragePoolBase] = None
 ) -> dict:
-    """Turn raw data into a high-security container, which can only be decrypted with
+    """Turn raw data into a high-security cryptainer, which can only be decrypted with
     the agreement of the owner and multiple third-party escrows.
 
     :param data: bytestring of media (image, video, sound...) or readable file object (file immediately deleted then)
     :param cryptoconf: tree of specific encryption settings
-    :param metadata: dict of metadata describing the data (remains unencrypted in container)
+    :param metadata: dict of metadata describing the data (remains unencrypted in cryptainer)
     :param keychain_uid: optional ID of a keychain to reuse
     :param key_storage_pool: optional key storage pool, might be required by cryptoconf
-    :return: dict of container
+    :return: dict of cryptainer
     """
-    writer = ContainerWriter(key_storage_pool=key_storage_pool)
-    container = writer.encrypt_data(data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
-    return container
+    writer = CryptainerWriter(key_storage_pool=key_storage_pool)
+    cryptainer = writer.encrypt_data(data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
+    return cryptainer
 
 
-def decrypt_data_from_container(
-    container: dict, *, key_storage_pool: Optional[KeyStoragePoolBase] = None, passphrase_mapper: Optional[dict] = None, verify: bool=True
+def decrypt_data_from_cryptainer(
+    cryptainer: dict, *, key_storage_pool: Optional[KeyStoragePoolBase] = None, passphrase_mapper: Optional[dict] = None, verify: bool=True
 ) -> bytes:
-    """Decrypt a container with the help of third-parties.
+    """Decrypt a cryptainer with the help of third-parties.
 
-    :param container: the container tree, which holds all information about involved keys
+    :param cryptainer: the cryptainer tree, which holds all information about involved keys
     :param key_storage_pool: optional key storage pool
     :param passphrase_mapper: optional dict mapping escrow IDs to their lists of passphrases
     :param verify: whether to check tag/mac values of the ciphertext
 
     :return: raw bytestring
     """
-    reader = ContainerReader(key_storage_pool=key_storage_pool, passphrase_mapper=passphrase_mapper)
-    data = reader.decrypt_data(container=container, verify=verify)
+    reader = CryptainerReader(key_storage_pool=key_storage_pool, passphrase_mapper=passphrase_mapper)
+    data = reader.decrypt_data(cryptainer=cryptainer, verify=verify)
     return data
 
 
-def _get_offloaded_file_path(container_filepath: Path):
-    """We also support, discreetly, TEMPORARY containers"""
-    return container_filepath.parent.joinpath(container_filepath.name.rstrip(CONTAINER_TEMP_SUFFIX) + OFFLOADED_DATA_SUFFIX)
+def _get_offloaded_file_path(cryptainer_filepath: Path):
+    """We also support, discreetly, TEMPORARY cryptainers"""
+    return cryptainer_filepath.parent.joinpath(cryptainer_filepath.name.rstrip(CRYPTAINER_TEMP_SUFFIX) + OFFLOADED_DATA_SUFFIX)
 
 
-def dump_container_to_filesystem(container_filepath: Path, container: dict, offload_data_ciphertext=True) -> None:
-    """Dump a container to a file path, overwritting it if existing.
+def dump_cryptainer_to_filesystem(cryptainer_filepath: Path, cryptainer: dict, offload_data_ciphertext=True) -> None:
+    """Dump a cryptainer to a file path, overwritting it if existing.
 
-    If `offload_data_ciphertext`, actual encrypted data is dumped to a separate bytes file nearby the json-formatted container.
+    If `offload_data_ciphertext`, actual encrypted data is dumped to a separate bytes file nearby the json-formatted cryptainer.
     """
     if offload_data_ciphertext:
-        offloaded_file_path = _get_offloaded_file_path(container_filepath)
-        assert isinstance(container["data_ciphertext"], bytes), container["data_ciphertext"]
-        offloaded_file_path.write_bytes(container["data_ciphertext"])
-        container = container.copy()  # DO NOT touch original dict!
-        container["data_ciphertext"] = OFFLOADED_MARKER
-    dump_to_json_file(container_filepath, container)
+        offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
+        assert isinstance(cryptainer["data_ciphertext"], bytes), cryptainer["data_ciphertext"]
+        offloaded_file_path.write_bytes(cryptainer["data_ciphertext"])
+        cryptainer = cryptainer.copy()  # DO NOT touch original dict!
+        cryptainer["data_ciphertext"] = OFFLOADED_MARKER
+    dump_to_json_file(cryptainer_filepath, cryptainer)
 
 
-def load_container_from_filesystem(container_filepath: Path, include_data_ciphertext=True) -> dict:
-    """Load a json-formatted container from a file path, potentially loading its offloaded ciphertext from a separate nearby bytes file.
+def load_cryptainer_from_filesystem(cryptainer_filepath: Path, include_data_ciphertext=True) -> dict:
+    """Load a json-formatted cryptainer from a file path, potentially loading its offloaded ciphertext from a separate nearby bytes file.
 
     Field `data_ciphertext` is only present in result dict if `include_data_ciphertext` is True.
     """
 
-    container = load_from_json_file(container_filepath)
+    cryptainer = load_from_json_file(cryptainer_filepath)
 
     if include_data_ciphertext:
-        if container["data_ciphertext"] == OFFLOADED_MARKER:
-            offloaded_file_path = _get_offloaded_file_path(container_filepath)
-            container["data_ciphertext"] = offloaded_file_path.read_bytes()
+        if cryptainer["data_ciphertext"] == OFFLOADED_MARKER:
+            offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
+            cryptainer["data_ciphertext"] = offloaded_file_path.read_bytes()
     else:
-        del container["data_ciphertext"]
+        del cryptainer["data_ciphertext"]
 
-    return container
+    return cryptainer
 
 
-def delete_container_from_filesystem(container_filepath):
-    """Delete a container file and its potential offloaded data file."""
-    os.remove(container_filepath)  # TODO - additional retries if file access errors?
-    offloaded_file_path = _get_offloaded_file_path(container_filepath)
+def delete_cryptainer_from_filesystem(cryptainer_filepath):
+    """Delete a cryptainer file and its potential offloaded data file."""
+    os.remove(cryptainer_filepath)  # TODO - additional retries if file access errors?
+    offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
     if offloaded_file_path.exists():
         # We don't care about OFFLOADED_MARKER here, we go the quick way
         os.remove(offloaded_file_path)
 
 
-def get_container_size_on_filesystem(container_filepath):
-    """Return the total size in bytes occupied by a container and its potential offloaded data file."""
-    size = container_filepath.stat().st_size  # Might fail if file got deleted concurrently
-    offloaded_file_path = _get_offloaded_file_path(container_filepath)
+def get_cryptainer_size_on_filesystem(cryptainer_filepath):
+    """Return the total size in bytes occupied by a cryptainer and its potential offloaded data file."""
+    size = cryptainer_filepath.stat().st_size  # Might fail if file got deleted concurrently
+    offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
     if offloaded_file_path.exists():
         # We don't care about OFFLOADED_MARKER here, we go the quick way
         size += offloaded_file_path.stat().st_size
     return size
 
 
-def extract_metadata_from_container(container: dict) -> Optional[dict]:  # FIXME move that up, like in docs
-    """Read the metadata tree (possibly None) from a container.
+def extract_metadata_from_cryptainer(cryptainer: dict) -> Optional[dict]:  # FIXME move that up, like in docs
+    """Read the metadata tree (possibly None) from a cryptainer.
 
     CURRENTLY METADATA IS NOT ENCRYPTED.
 
-    :param container: the container tree, which also holds metadata about encrypted content
+    :param cryptainer: the cryptainer tree, which also holds metadata about encrypted content
 
     :return: dict
     """
-    reader = ContainerReader()
-    data = reader.extract_metadata(container)
+    reader = CryptainerReader()
+    data = reader.extract_metadata(cryptainer)
     return data
 
 
-# FIXME add ReadonlyContainerStorage!!
+# FIXME add ReadonlyCryptainerStorage!!
 
-class ContainerStorage:
+class CryptainerStorage:
     """
     This class encrypts file streams and stores them into filesystem, in a thread-safe way.
 
-    Exceeding containers are automatically purged when enqueuing new files or waiting for idle state.
+    Exceeding cryptainers are automatically purged when enqueuing new files or waiting for idle state.
 
     A thread pool is used to encrypt files in the background.
 
-    :param containers_dir: the folder where container files are stored
+    :param cryptainers_dir: the folder where cryptainer files are stored
     :param default_encryption_cryptoconf: cryptoconf to use when none is provided when enqueuing data
-    :param max_container_quota: if set, containers are deleted if they exceed this size in bytes
-    :param max_container_count: if set, oldest exceeding containers (time taken from their name, else their file-stats) are automatically erased
-    :param max_container_age: if set, containers exceeding this age (taken from their name, else their file-stats) in days are automatically erased
+    :param max_cryptainer_quota: if set, cryptainers are deleted if they exceed this size in bytes
+    :param max_cryptainer_count: if set, oldest exceeding cryptainers (time taken from their name, else their file-stats) are automatically erased
+    :param max_cryptainer_age: if set, cryptainers exceeding this age (taken from their name, else their file-stats) in days are automatically erased
     :param key_storage_pool: optional KeyStoragePool, which might be required by current encryptioncryptoconf
     :param max_workers: count of worker threads to use in parallel
-    :param offload_data_ciphertext: whether actual encrypted data must be kept separated from structured container file
+    :param offload_data_ciphertext: whether actual encrypted data must be kept separated from structured cryptainer file
     """
 
     def __init__(
         self,
-        containers_dir: Path,
+        cryptainers_dir: Path,
         default_cryptoconf: Optional[dict] = None,
-        max_container_quota: Optional[int] = None,
-        max_container_count: Optional[int] = None,
-        max_container_age: Optional[timedelta] = None,
+        max_cryptainer_quota: Optional[int] = None,
+        max_cryptainer_count: Optional[int] = None,
+        max_cryptainer_age: Optional[timedelta] = None,
         key_storage_pool: Optional[KeyStoragePoolBase] = None,
         max_workers: int = 1,
         offload_data_ciphertext=True,
     ):
-        containers_dir = Path(containers_dir)
-        assert containers_dir.is_dir(), containers_dir
-        containers_dir = containers_dir.absolute()
-        assert max_container_quota is None or max_container_quota >= 0, max_container_quota
-        assert max_container_count is None or max_container_count >= 0, max_container_count
-        assert max_container_age is None or max_container_age >= timedelta(seconds=0), max_container_age
+        cryptainers_dir = Path(cryptainers_dir)
+        assert cryptainers_dir.is_dir(), cryptainers_dir
+        cryptainers_dir = cryptainers_dir.absolute()
+        assert max_cryptainer_quota is None or max_cryptainer_quota >= 0, max_cryptainer_quota
+        assert max_cryptainer_count is None or max_cryptainer_count >= 0, max_cryptainer_count
+        assert max_cryptainer_age is None or max_cryptainer_age >= timedelta(seconds=0), max_cryptainer_age
         self._default_cryptoconf = default_cryptoconf
-        self._containers_dir = containers_dir
-        self._max_container_quota = max_container_quota
-        self._max_container_count = max_container_count
-        self._max_container_age = max_container_age
+        self._cryptainers_dir = cryptainers_dir
+        self._max_cryptainer_quota = max_cryptainer_quota
+        self._max_cryptainer_count = max_cryptainer_count
+        self._max_cryptainer_age = max_cryptainer_age
         self._key_storage_pool = key_storage_pool
-        self._thread_pool_executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="container_worker")
+        self._thread_pool_executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="cryptainer_worker")
         self._pending_executor_futures = []
         self._lock = threading.Lock()
         self._offload_data_ciphertext = offload_data_ciphertext
@@ -1078,13 +1078,13 @@ class ContainerStorage:
 
     def __len__(self):
         """Beware, might be SLOW if many files are present in folder."""
-        return len(self.list_container_names())  # No sorting, to be quicker
+        return len(self.list_cryptainer_names())  # No sorting, to be quicker
 
-    def list_container_names(self, as_sorted=False, as_absolute=False):  # FIXME add annotations everywhere
-        """Returns the list of encrypted containers present in storage,
+    def list_cryptainer_names(self, as_sorted=False, as_absolute=False):  # FIXME add annotations everywhere
+        """Returns the list of encrypted cryptainers present in storage,
         sorted by name or not, absolute or not, as Path objects."""
-        assert self._containers_dir.is_absolute(), self._containers_dir
-        paths = list(self._containers_dir.glob("*" + CONTAINER_SUFFIX))  # As list, for multiple looping on it
+        assert self._cryptainers_dir.is_absolute(), self._cryptainers_dir
+        paths = list(self._cryptainers_dir.glob("*" + CRYPTAINER_SUFFIX))  # As list, for multiple looping on it
         assert all(p.is_absolute() for p in paths), paths
         if as_sorted:
             paths = sorted(paths)
@@ -1092,87 +1092,87 @@ class ContainerStorage:
             paths = (Path(p.name) for p in paths)  # beware, only works since we don't have subfolders for now!
         return list(paths)
 
-    def _get_container_datetime(self, container_name):  # FIXME rename to _get_container_datetime_utc()
+    def _get_cryptainer_datetime(self, cryptainer_name):  # FIXME rename to _get_cryptainer_datetime_utc()
         """Returns an UTC datetime corresponding to the creation time stored in filename, or else the file-stat mtime"""
         try:
-            dt = datetime.strptime(container_name.name.split("_")[0], CONTAINER_DATETIME_FORMAT)
+            dt = datetime.strptime(cryptainer_name.name.split("_")[0], CRYPTAINER_DATETIME_FORMAT)
             dt = dt.replace(tzinfo=timezone.utc)
         except ValueError:
-            mtime = self._make_absolute(container_name).stat().st_mtime  # Might fail if file got deleted concurrently
+            mtime = self._make_absolute(cryptainer_name).stat().st_mtime  # Might fail if file got deleted concurrently
             dt = datetime.fromtimestamp(mtime, tz=timezone.utc)
         return dt
 
-    def _get_container_size(self, container_name):
+    def _get_cryptainer_size(self, cryptainer_name):
         """Returns a size in bytes"""
-        return get_container_size_on_filesystem(self._make_absolute(container_name))
+        return get_cryptainer_size_on_filesystem(self._make_absolute(cryptainer_name))
 
-    def list_container_properties(self, with_age=False, with_size=False):
+    def list_cryptainer_properties(self, with_age=False, with_size=False):
         """Returns an unsorted list of dicts having the fields "name", [age] and [size], depending on requested properties."""
-        container_names = self.list_container_names(as_sorted=False, as_absolute=False)
+        cryptainer_names = self.list_cryptainer_names(as_sorted=False, as_absolute=False)
 
         now = get_utc_now_date()
 
         result = []
-        for container_name in container_names:
-            entry = dict(name=container_name)
+        for cryptainer_name in cryptainer_names:
+            entry = dict(name=cryptainer_name)
             if with_age:
-                container_datetime = self._get_container_datetime(container_name)
-                entry["age"] = now - container_datetime   # We keep as timedelta
+                cryptainer_datetime = self._get_cryptainer_datetime(cryptainer_name)
+                entry["age"] = now - cryptainer_datetime   # We keep as timedelta
             if with_size:
-                entry["size"] = self._get_container_size(container_name)
+                entry["size"] = self._get_cryptainer_size(cryptainer_name)
             result.append(entry)
         return result
 
-    def _make_absolute(self, container_name):
-        assert not Path(container_name).is_absolute()
-        return self._containers_dir.joinpath(container_name)
+    def _make_absolute(self, cryptainer_name):
+        assert not Path(cryptainer_name).is_absolute()
+        return self._cryptainers_dir.joinpath(cryptainer_name)
 
-    def _delete_container(self, container_name):
-        container_filepath = self._make_absolute(container_name)
-        delete_container_from_filesystem(container_filepath)
+    def _delete_cryptainer(self, cryptainer_name):
+        cryptainer_filepath = self._make_absolute(cryptainer_name)
+        delete_cryptainer_from_filesystem(cryptainer_filepath)
 
-    def delete_container(self, container_name):
-        logger.info("Deleting container %s" % container_name)
-        self._delete_container(container_name=container_name)
+    def delete_cryptainer(self, cryptainer_name):
+        logger.info("Deleting cryptainer %s" % cryptainer_name)
+        self._delete_cryptainer(cryptainer_name=cryptainer_name)
 
-    def _purge_exceeding_containers(self):  # TODO LOG WHEN PURGING
-        """Purge containers first by date, then total quota, then count, depending on instance settings"""
+    def _purge_exceeding_cryptainers(self):  # TODO LOG WHEN PURGING
+        """Purge cryptainers first by date, then total quota, then count, depending on instance settings"""
 
-        if self._max_container_age is not None:  # FIRST these, since their deletion is unconditional
-            container_dicts = self.list_container_properties(with_age=True)
-            for container_dict in container_dicts:
-                if container_dict["age"] > self._max_container_age:
-                    self._delete_container(container_dict["name"])
+        if self._max_cryptainer_age is not None:  # FIRST these, since their deletion is unconditional
+            cryptainer_dicts = self.list_cryptainer_properties(with_age=True)
+            for cryptainer_dict in cryptainer_dicts:
+                if cryptainer_dict["age"] > self._max_cryptainer_age:
+                    self._delete_cryptainer(cryptainer_dict["name"])
 
-        if self._max_container_quota is not None:
-            max_container_quota = self._max_container_quota
+        if self._max_cryptainer_quota is not None:
+            max_cryptainer_quota = self._max_cryptainer_quota
 
-            container_dicts = self.list_container_properties(with_size=True, with_age=True)
-            container_dicts.sort(key=lambda x: (-x["age"], x["name"]), reverse=True)  # Oldest last
+            cryptainer_dicts = self.list_cryptainer_properties(with_size=True, with_age=True)
+            cryptainer_dicts.sort(key=lambda x: (-x["age"], x["name"]), reverse=True)  # Oldest last
 
-            total_space_consumed = sum(x["size"] for x in container_dicts)
+            total_space_consumed = sum(x["size"] for x in cryptainer_dicts)
 
-            while total_space_consumed > max_container_quota:
-                deleted_container_dict = container_dicts.pop()
-                self._delete_container(deleted_container_dict["name"])
-                total_space_consumed -= deleted_container_dict["size"]
+            while total_space_consumed > max_cryptainer_quota:
+                deleted_cryptainer_dict = cryptainer_dicts.pop()
+                self._delete_cryptainer(deleted_cryptainer_dict["name"])
+                total_space_consumed -= deleted_cryptainer_dict["size"]
 
-        if self._max_container_count is not None:
-            container_dicts = self.list_container_properties(with_age=True)
-            containers_count = len(container_dicts)
+        if self._max_cryptainer_count is not None:
+            cryptainer_dicts = self.list_cryptainer_properties(with_age=True)
+            cryptainers_count = len(cryptainer_dicts)
 
-            if containers_count > self._max_container_count:
-                assert containers_count > 0, containers_count
-                excess_count = containers_count - self._max_container_count
-                container_dicts.sort(key=lambda x: (-x["age"], x["name"]))  # Oldest first
-                deleted_container_dicts = container_dicts[:excess_count]
-                for deleted_container_dict in deleted_container_dicts:
-                    self._delete_container(deleted_container_dict["name"])
+            if cryptainers_count > self._max_cryptainer_count:
+                assert cryptainers_count > 0, cryptainers_count
+                excess_count = cryptainers_count - self._max_cryptainer_count
+                cryptainer_dicts.sort(key=lambda x: (-x["age"], x["name"]))  # Oldest first
+                deleted_cryptainer_dicts = cryptainer_dicts[:excess_count]
+                for deleted_cryptainer_dict in deleted_cryptainer_dicts:
+                    self._delete_cryptainer(deleted_cryptainer_dict["name"])
 
-    def _encrypt_data_and_dump_container_to_filesystem(self, data, container_filepath, metadata, keychain_uid, cryptoconf):
+    def _encrypt_data_and_dump_cryptainer_to_filesystem(self, data, cryptainer_filepath, metadata, keychain_uid, cryptoconf):
         assert cryptoconf, cryptoconf
-        encrypt_data_and_dump_container_to_filesystem(
-                container_filepath=container_filepath,
+        encrypt_data_and_dump_cryptainer_to_filesystem(
+                cryptainer_filepath=cryptainer_filepath,
                     data=data,
                    cryptoconf=cryptoconf,
                     metadata=metadata,
@@ -1180,9 +1180,9 @@ class ContainerStorage:
                     key_storage_pool=self._key_storage_pool,
                 )
 
-    def _encrypt_data_into_container(self, data, metadata, keychain_uid, cryptoconf):
+    def _encrypt_data_into_cryptainer(self, data, metadata, keychain_uid, cryptoconf):
         assert cryptoconf, cryptoconf
-        return encrypt_data_into_container(
+        return encrypt_data_into_cryptainer(
             data=data,
            cryptoconf=cryptoconf,
             metadata=metadata,
@@ -1190,16 +1190,16 @@ class ContainerStorage:
             key_storage_pool=self._key_storage_pool,
         )
 
-    def _decrypt_data_from_container(self, container: dict, passphrase_mapper: Optional[dict], verify: bool) -> bytes:
-        return decrypt_data_from_container(
-            container, key_storage_pool=self._key_storage_pool, passphrase_mapper=passphrase_mapper, verify=verify
+    def _decrypt_data_from_cryptainer(self, cryptainer: dict, passphrase_mapper: Optional[dict], verify: bool) -> bytes:
+        return decrypt_data_from_cryptainer(
+            cryptainer, key_storage_pool=self._key_storage_pool, passphrase_mapper=passphrase_mapper, verify=verify
         )  # Will fail if authorizations are not OK
 
     @catch_and_log_exception
-    def _offloaded_encrypt_data_and_dump_container(self, filename_base, data, metadata, keychain_uid, cryptoconf):
-        """Task to be called by background thread, which encrypts a payload into a disk container.
+    def _offloaded_encrypt_data_and_dump_cryptainer(self, filename_base, data, metadata, keychain_uid, cryptoconf):
+        """Task to be called by background thread, which encrypts a payload into a disk cryptainer.
 
-        Returns the container basename."""
+        Returns the cryptainer basename."""
 
         """ TODO later ass a SKIP here!
         if not data:
@@ -1207,33 +1207,33 @@ class ContainerStorage:
             return
         """
 
-        container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
+        cryptainer_filepath = self._make_absolute(filename_base + CRYPTAINER_SUFFIX)
 
         if self._use_streaming_encryption_for_conf(cryptoconf):
             # We can use newer, low-memory, streamed API
-            logger.debug("Encrypting data file %s into offloaded container directly streamed to storage file %s", filename_base, container_filepath)
-            self._encrypt_data_and_dump_container_to_filesystem(
-                data, container_filepath=container_filepath, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
+            logger.debug("Encrypting data file %s into offloaded cryptainer directly streamed to storage file %s", filename_base, cryptainer_filepath)
+            self._encrypt_data_and_dump_cryptainer_to_filesystem(
+                data, cryptainer_filepath=cryptainer_filepath, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
             )
 
         else:
             # We use legacy API which encrypts all and then dumps all
 
-            logger.debug("Encrypting data file to self-sufficient container %s", filename_base)
-            # Memory warning : duplicates data to json-compatible container
-            container = self._encrypt_data_into_container(
+            logger.debug("Encrypting data file to self-sufficient cryptainer %s", filename_base)
+            # Memory warning : duplicates data to json-compatible cryptainer
+            cryptainer = self._encrypt_data_into_cryptainer(
                 data, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
             )
-            logger.debug("Writing self-sufficient container data to storage file %s", container_filepath)
-            dump_container_to_filesystem(
-                container_filepath, container=container, offload_data_ciphertext=self._offload_data_ciphertext
+            logger.debug("Writing self-sufficient cryptainer data to storage file %s", cryptainer_filepath)
+            dump_cryptainer_to_filesystem(
+                cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=self._offload_data_ciphertext
             )
 
-        logger.info("Data file %r successfully encrypted into storage container", filename_base)
-        return container_filepath.name
+        logger.info("Data file %r successfully encrypted into storage cryptainer", filename_base)
+        return cryptainer_filepath.name
 
     def _use_streaming_encryption_for_conf(self, cryptoconf):  # FIXME rename to cryptoconf
-        return self._offload_data_ciphertext and is_container_cryptoconf_streamable(cryptoconf)
+        return self._offload_data_ciphertext and is_cryptainer_cryptoconf_streamable(cryptoconf)
 
     def _prepare_for_new_record_encryption(self, cryptoconf):
         """
@@ -1241,43 +1241,43 @@ class ContainerStorage:
         """
         cryptoconf = cryptoconf or self._default_cryptoconf
         if not cryptoconf:
-            raise RuntimeError("Either default or file-specific cryptoconf must be provided to ContainerStorage")
+            raise RuntimeError("Either default or file-specific cryptoconf must be provided to CryptainerStorage")
 
-        self._purge_exceeding_containers()
+        self._purge_exceeding_cryptainers()
         self._purge_executor_results()
         return cryptoconf
 
     @synchronized
-    def create_container_encryption_stream(self, filename_base, metadata, keychain_uid=None, cryptoconf=None, dump_initial_container=True):
+    def create_cryptainer_encryption_stream(self, filename_base, metadata, keychain_uid=None, cryptoconf=None, dump_initial_cryptainer=True):
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
-        container_filepath = self._make_absolute(filename_base + CONTAINER_SUFFIX)
+        cryptainer_filepath = self._make_absolute(filename_base + CRYPTAINER_SUFFIX)
         cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
-        container_encryption_stream = ContainerEncryptionStream(container_filepath,
+        cryptainer_encryption_stream = CryptainerEncryptionStream(cryptainer_filepath,
                      cryptoconf=cryptoconf,
                      metadata=metadata,
                      keychain_uid=keychain_uid,
                      key_storage_pool=self._key_storage_pool,
-                     dump_initial_container=dump_initial_container)
-        return container_encryption_stream
+                     dump_initial_cryptainer=dump_initial_cryptainer)
+        return cryptainer_encryption_stream
 
     @synchronized
     def enqueue_file_for_encryption(self, filename_base, data, metadata, keychain_uid=None, cryptoconf=None):
         """Enqueue a data payload for asynchronous encryption and storage.
 
-        The filename of final container might be different from provided one.
-        And beware, target container with the same constructed name might be overwritten.
+        The filename of final cryptainer might be different from provided one.
+        And beware, target cryptainer with the same constructed name might be overwritten.
 
         :param data: Bytes string, or a file-like object open for reading, which will be automatically closed.
-        :param metadata: Dict of metadata added (unencrypted) to container.
-        :param keychain_uid: If provided, replaces autogenerated keychain_uid for this container.
-        :param cryptoconf: If provided, replaces default cryptoconf for this container.
+        :param metadata: Dict of metadata added (unencrypted) to cryptainer.
+        :param keychain_uid: If provided, replaces autogenerated keychain_uid for this cryptainer.
+        :param cryptoconf: If provided, replaces default cryptoconf for this cryptainer.
         """
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
 
         cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
 
         future = self._thread_pool_executor.submit(
-            self._offloaded_encrypt_data_and_dump_container,
+            self._offloaded_encrypt_data_and_dump_cryptainer,
             filename_base=filename_base,
             data=data,
             metadata=metadata,
@@ -1297,49 +1297,49 @@ class ContainerStorage:
         self._purge_executor_results()
         for future in self._pending_executor_futures:
             future.result()  # Should NEVER raise, thanks to the @catch_and_log_exception above, and absence of cancellations
-        self._purge_exceeding_containers()  # Good to have now
+        self._purge_exceeding_cryptainers()  # Good to have now
 
-    def load_container_from_storage(self, container_name_or_idx, include_data_ciphertext=True) -> dict:
+    def load_cryptainer_from_storage(self, cryptainer_name_or_idx, include_data_ciphertext=True) -> dict:
         """
-        Return the encrypted container dict for `container_name_or_idx` (which must be in `list_container_names()`,
+        Return the encrypted cryptainer dict for `cryptainer_name_or_idx` (which must be in `list_cryptainer_names()`,
         or an index suitable for this sorted list).
         """
-        if isinstance(container_name_or_idx, int):
-            container_names = self.list_container_names(as_sorted=True, as_absolute=False)
-            container_name = container_names[container_name_or_idx]  # Will break if idx is out of bounds
+        if isinstance(cryptainer_name_or_idx, int):
+            cryptainer_names = self.list_cryptainer_names(as_sorted=True, as_absolute=False)
+            cryptainer_name = cryptainer_names[cryptainer_name_or_idx]  # Will break if idx is out of bounds
         else:
-            assert isinstance(container_name_or_idx, (Path, str)), repr(container_name_or_idx)
-            container_name = Path(container_name_or_idx)
-        assert not container_name.is_absolute(), container_name
+            assert isinstance(cryptainer_name_or_idx, (Path, str)), repr(cryptainer_name_or_idx)
+            cryptainer_name = Path(cryptainer_name_or_idx)
+        assert not cryptainer_name.is_absolute(), cryptainer_name
 
-        logger.info("Loading container %s from storage", container_name)
-        container_filepath = self._make_absolute(container_name)
-        container = load_container_from_filesystem(container_filepath, include_data_ciphertext=include_data_ciphertext)
-        return container
+        logger.info("Loading cryptainer %s from storage", cryptainer_name)
+        cryptainer_filepath = self._make_absolute(cryptainer_name)
+        cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath, include_data_ciphertext=include_data_ciphertext)
+        return cryptainer
 
-    def decrypt_container_from_storage(self, container_name_or_idx, passphrase_mapper: Optional[dict]=None, verify: bool=True) -> bytes:
+    def decrypt_cryptainer_from_storage(self, cryptainer_name_or_idx, passphrase_mapper: Optional[dict]=None, verify: bool=True) -> bytes:
         """
-        Return the decrypted content of the container `container_name_or_idx` (which must be in `list_container_names()`,
+        Return the decrypted content of the cryptainer `cryptainer_name_or_idx` (which must be in `list_cryptainer_names()`,
         or an index suitable for this sorted list).
         """
-        logger.info("Decrypting container %r from storage", container_name_or_idx)
+        logger.info("Decrypting cryptainer %r from storage", cryptainer_name_or_idx)
 
-        container = self.load_container_from_storage(container_name_or_idx, include_data_ciphertext=True)
+        cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_data_ciphertext=True)
 
-        result = self._decrypt_data_from_container(container, passphrase_mapper=passphrase_mapper, verify=verify)
-        logger.info("Container %s successfully decrypted", container_name_or_idx)
+        result = self._decrypt_data_from_cryptainer(cryptainer, passphrase_mapper=passphrase_mapper, verify=verify)
+        logger.info("Cryptainer %s successfully decrypted", cryptainer_name_or_idx)
         return result
 
-    def check_container_sanity(self, container_name_or_idx):
-        """Allows the validation of a container with a python"""
-        container = self.load_container_from_storage(container_name_or_idx, include_data_ciphertext=True)
+    def check_cryptainer_sanity(self, cryptainer_name_or_idx):
+        """Allows the validation of a cryptainer with a python"""
+        cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_data_ciphertext=True)
 
-        check_container_sanity(container=container, jsonschema_mode=False)
+        check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 
 
-def get_cryptoconf_summary(conf_or_container):  # FIXME move up like in docs
+def get_cryptoconf_summary(conf_or_cryptainer):  # FIXME move up like in docs
     """
-    Returns a string summary of the layers of encryption/signature of a container or a configuration tree.
+    Returns a string summary of the layers of encryption/signature of a cryptainer or a configuration tree.
     """
 
     def _get_escrow_identifier(_escrow):
@@ -1352,7 +1352,7 @@ def get_cryptoconf_summary(conf_or_container):  # FIXME move up like in docs
         return _escrow
 
     lines = []
-    for idx, data_encryption_stratum in enumerate(conf_or_container["data_encryption_strata"], start=1):
+    for idx, data_encryption_stratum in enumerate(conf_or_cryptainer["data_encryption_strata"], start=1):
         lines.append("Data encryption layer %d: %s" % (idx, data_encryption_stratum["data_encryption_algo"]))
         lines.append("  Key encryption layers:")
         for idx2, key_encryption_stratum in enumerate(data_encryption_stratum["key_encryption_strata"], start=1):
@@ -1371,9 +1371,9 @@ def get_cryptoconf_summary(conf_or_container):  # FIXME move up like in docs
     return result
 
 
-def _create_schema(for_container: bool, extended_json_format: bool):
-    """Create validation schema for confs and containers.
-    :param for_container: true if instance is a container
+def _create_schema(for_cryptainer: bool, extended_json_format: bool):
+    """Create validation schema for confs and cryptainers.
+    :param for_cryptainer: true if instance is a cryptainer
     :param extended_json_format: true if the scheme is extended to json format
 
     :return: a schema.
@@ -1385,7 +1385,7 @@ def _create_schema(for_container: bool, extended_json_format: bool):
     micro_schema_long = int
 
     if extended_json_format:
-        # global SCHEMA_CONTAINERS
+        # global SCHEMA_CRYPTAINERS
         _micro_schema_hex_uid = And(str, Or(Regex(
             '^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$'), Regex(
             '[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}')))
@@ -1407,7 +1407,7 @@ def _create_schema(for_container: bool, extended_json_format: bool):
         micro_schema_long = {
             "$numberLong": And(str, Regex('^([+-]?[0-9]\d*|0)$'))}
 
-    extra_container = {}
+    extra_cryptainer = {}
     extra_key_ciphertext = {}
     integrity_tags = {}
     metadata = {}
@@ -1419,12 +1419,12 @@ def _create_schema(for_container: bool, extended_json_format: bool):
         Optionalkey("keychain_uid"): micro_schema_uid
     }
 
-    # check if it is a container
-    if for_container:
-        extra_container = {
-            "container_state": Or(CONTAINER_STATES.STARTED, CONTAINER_STATES.FINISHED),
-            "container_format": "WA_0.1a",
-            "container_uid": micro_schema_uid,
+    # check if it is a cryptainer
+    if for_cryptainer:
+        extra_cryptainer = {
+            "cryptainer_state": Or(CRYPTAINER_STATES.STARTED, CRYPTAINER_STATES.FINISHED),
+            "cryptainer_format": "WA_0.1a",
+            "cryptainer_uid": micro_schema_uid,
             "data_ciphertext": micro_schema_binary
         }
         extra_key_ciphertext = {
@@ -1443,7 +1443,7 @@ def _create_schema(for_container: bool, extended_json_format: bool):
             }}
         metadata = {"metadata": Or(dict, None)}
 
-    SIMPLE_CONTAINER_PIECE = {
+    SIMPLE_CRYPTAINER_PIECE = {
         "key_encryption_algo": Or(*ASYMMETRIC_KEY_TYPES_REGISTRY.keys()),
         "key_escrow": Const(LOCAL_ESCROW_MARKER),
         Optionalkey("keychain_uid"): micro_schema_uid
@@ -1451,41 +1451,41 @@ def _create_schema(for_container: bool, extended_json_format: bool):
 
     RECURSIVE_SHAMIR = []
 
-    SHAMIR_CONTAINER_PIECE = Schema({
+    SHAMIR_CRYPTAINER_PIECE = Schema({
         "key_encryption_algo": SHARED_SECRET_MARKER,
         "key_shared_secret_escrows": [{
-            "key_encryption_strata": [SIMPLE_CONTAINER_PIECE]}],
+            "key_encryption_strata": [SIMPLE_CRYPTAINER_PIECE]}],
         "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schema_int),
     }, name="Recursive_shamir", as_reference=True)
 
-    RECURSIVE_SHAMIR.append(SHAMIR_CONTAINER_PIECE)
+    RECURSIVE_SHAMIR.append(SHAMIR_CRYPTAINER_PIECE)
 
-    SCHEMA_CONTAINERS = Schema({
-        **extra_container,
+    SCHEMA_CRYPTAINERS = Schema({
+        **extra_cryptainer,
         "data_encryption_strata": [{
             "data_encryption_algo": Or(*SUPPORTED_ENCRYPTION_ALGOS),
             "data_signatures": [data_signature],
             **integrity_tags,
             **extra_key_ciphertext,
-            "key_encryption_strata": [SIMPLE_CONTAINER_PIECE, SHAMIR_CONTAINER_PIECE]
+            "key_encryption_strata": [SIMPLE_CRYPTAINER_PIECE, SHAMIR_CRYPTAINER_PIECE]
         }],
         Optionalkey("keychain_uid"): micro_schema_uid,
         **metadata
     })
 
-    return SCHEMA_CONTAINERS
+    return SCHEMA_CRYPTAINERS
 
 
-CONF_SCHEMA_PYTHON = _create_schema(for_container=False, extended_json_format=False)
-CONF_SCHEMA_JSON = _create_schema(for_container=False, extended_json_format=True).json_schema("conf_schema.json")
-CONTAINER_SCHEMA_PYTHON = _create_schema(for_container=True, extended_json_format=False)
-CONTAINER_SCHEMA_JSON = _create_schema(for_container=True, extended_json_format=True).json_schema("container_schema.json")
+CONF_SCHEMA_PYTHON = _create_schema(for_cryptainer=False, extended_json_format=False)
+CONF_SCHEMA_JSON = _create_schema(for_cryptainer=False, extended_json_format=True).json_schema("conf_schema.json")
+CRYPTAINER_SCHEMA_PYTHON = _create_schema(for_cryptainer=True, extended_json_format=False)
+CRYPTAINER_SCHEMA_JSON = _create_schema(for_cryptainer=True, extended_json_format=True).json_schema("cryptainer_schema.json")
 
 
 def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
     """Allows the validation of a data_tree with a pythonschema or jsonschema
 
-    :param data_tree: container or cryptoconf to validate
+    :param data_tree: cryptainer or cryptoconf to validate
     :param valid_schema: validation scheme
     """
     if isinstance(valid_schema, Schema):
@@ -1504,22 +1504,22 @@ def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
             raise ValidationError("Error validating with {}".format(exc)) from exc
 
 
-def check_container_sanity(container: dict, jsonschema_mode: False):
-    """Validate the format of a container.
+def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode: False):
+    """Validate the format of a cryptainer.
 
-    :param jsonschema_mode: If True, the container must have been loaded as raw json
+    :param jsonschema_mode: If True, the cryptainer must have been loaded as raw json
            (with $binary, $numberInt and such) and will be checked using a jsonschema validator.
     """
 
-    schema = CONTAINER_SCHEMA_JSON if jsonschema_mode else CONTAINER_SCHEMA_PYTHON
+    schema = CRYPTAINER_SCHEMA_JSON if jsonschema_mode else CRYPTAINER_SCHEMA_PYTHON
 
-    _validate_data_tree(data_tree=container, valid_schema=schema)
+    _validate_data_tree(data_tree=cryptainer, valid_schema=schema)
 
 
 def check_conf_sanity(cryptoconf: dict, jsonschema_mode: False):
     """Validate the format of a conf.
 
-    :param jsonschema_mode: If True, the container must have been loaded as raw json
+    :param jsonschema_mode: If True, the cryptainer must have been loaded as raw json
            (with $binary, $numberInt and such) and will be checked using a jsonschema validator.
     """
 

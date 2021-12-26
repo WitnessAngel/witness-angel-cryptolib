@@ -5,7 +5,7 @@ API Documentation
    :maxdepth: 3
    :caption: Contents:
 
-   api/container
+   api/cryptainer
    api/escrow
    api/authenticator
    api/authentication_device

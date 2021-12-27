@@ -233,6 +233,8 @@ def generate_uuid0(ts: Optional[float] = None):
 
     Uses 6 bytes to encode the time and does not encode any version bits, leaving 10 bytes (80 bits) of random data.
 
+    When just transmitting these UUIDs around, the stdlib "uuid" module does the job fine, no need for uuid0 lib.
+
     :param ts: optional timestamp to use instead of current time (if not falsey)
     :return: uuid0 object (subclass of UUID)
     """

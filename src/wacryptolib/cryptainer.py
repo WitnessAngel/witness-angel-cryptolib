@@ -96,17 +96,17 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
         if keypair_identifiers not in keypair_identifiers_list:
             keypair_identifiers_list.append(keypair_identifiers)
 
-    def _grab_key_encryption_strata_dependencies(key_encryption_strata):
-        for key_encryption_stratum in key_encryption_strata:
-            key_type_encryption = key_encryption_stratum["key_encryption_algo"]
+    def _grab_key_encryption_layers_dependencies(key_encryption_layers):
+        for key_encryption_layer in key_encryption_layers:
+            key_type_encryption = key_encryption_layer["key_encryption_algo"]
 
             if key_type_encryption == SHARED_SECRET_MARKER:
-                escrows = key_encryption_stratum["key_shared_secret_escrows"]
+                escrows = key_encryption_layer["key_shared_secret_escrows"]
                 for escrow in escrows:
-                    _grab_key_encryption_strata_dependencies(escrow["key_encryption_strata"])  # Recursive call
+                    _grab_key_encryption_layers_dependencies(escrow["key_encryption_layers"])  # Recursive call
             else:
-                keychain_uid_encryption = key_encryption_stratum.get("keychain_uid") or keychain_uid
-                escrow_conf = key_encryption_stratum["key_escrow"]
+                keychain_uid_encryption = key_encryption_layer.get("keychain_uid") or keychain_uid
+                escrow_conf = key_encryption_layer["key_escrow"]
                 _add_keypair_identifiers_for_escrow(
                     mapper=encryption_dependencies,
                     escrow_conf=escrow_conf,
@@ -116,8 +116,8 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
 
     for cryptainer in cryptainers:
         keychain_uid = cryptainer["keychain_uid"]
-        for data_encryption_stratum in cryptainer["data_encryption_strata"]:
-            for signature_conf in data_encryption_stratum["data_signatures"]:
+        for data_encryption_layer in cryptainer["data_encryption_layers"]:
+            for signature_conf in data_encryption_layer["data_signatures"]:
                 key_type_signature = signature_conf["signature_algo"]
                 keychain_uid_signature = signature_conf.get("keychain_uid") or keychain_uid
                 escrow_conf = signature_conf["signature_escrow"]
@@ -129,7 +129,7 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
                     key_type=key_type_signature,
                 )
 
-            _grab_key_encryption_strata_dependencies(data_encryption_stratum["key_encryption_strata"])
+            _grab_key_encryption_layers_dependencies(data_encryption_layer["key_encryption_layers"])
 
     escrow_dependencies = {"signature": signature_dependencies, "encryption": encryption_dependencies}
     return escrow_dependencies
@@ -222,18 +222,18 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         :return: cryptainer with all the information needed to attempt data decryption
         """
 
-        cryptainer, data_encryption_strata_extracts = self._generate_cryptainer_base_and_secrets(
+        cryptainer, data_encryption_layer_extracts = self._generate_cryptainer_base_and_secrets(
            cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
         )
 
-        # HERE INSTANTIATE REAL ENCRYPTOR USING data_encryption_strata_extracts
+        # HERE INSTANTIATE REAL ENCRYPTOR USING data_encryption_layer_extracts
         '''
         class FakeStreamEncryptor:
             def __init__(self):
-                for data_encryption_stratum_extract in data_encryption_strata_extracts:
-                    data_encryption_algo = data_encryption_stratum_extract["encryption_algo"]  # FIXME RENAME THIS
-                    symkey = data_encryption_stratum_extract["symkey"]
-                    message_digest_algos = data_encryption_stratum_extract["message_digest_algos"]
+                for data_encryption_layer_extract in data_encryption_layer_extracts:
+                    data_encryption_algo = data_encryption_layer_extract["encryption_algo"]  # FIXME RENAME THIS
+                    symkey = data_encryption_layer_extract["symkey"]
+                    message_digest_algos = data_encryption_layer_extract["message_digest_algos"]
                     # DO SOMETHING WITH THESE
             def encrypt_chunk(self, chunk):
                 output_stream.write(chunk)
@@ -250,7 +250,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
         stream_encryptor = StreamManager(
             output_stream=output_stream,
-            data_encryption_strata_extracts=data_encryption_strata_extracts,
+            data_encryption_layer_extracts=data_encryption_layer_extracts,
         )
 
         return cryptainer, stream_encryptor
@@ -271,12 +271,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
         data = self._load_data_bytes_and_cleanup(data)  # Ensure we get the whole data buffer
 
-        cryptainer, data_encryption_strata_extracts = self._generate_cryptainer_base_and_secrets(
+        cryptainer, data_encryption_layer_extracts = self._generate_cryptainer_base_and_secrets(
            cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
         )
 
         data_ciphertext, authentication_data_list = \
-            self._encrypt_and_hash_data(data, data_encryption_strata_extracts)
+            self._encrypt_and_hash_data(data, data_encryption_layer_extracts)
 
         cryptainer["data_ciphertext"] = data_ciphertext
 
@@ -297,16 +297,16 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         ## FIXME LATER ADD THIS - assert data, data  # No encryption must be launched if we have no data to process!
         return data
 
-    def _encrypt_and_hash_data(self, data, data_encryption_strata_extracts):
+    def _encrypt_and_hash_data(self, data, data_encryption_layer_extracts):
         """TODO"""
         data_current = data
 
         authentication_data_list = []
 
-        for data_encryption_stratum_extract in data_encryption_strata_extracts:
-            data_encryption_algo = data_encryption_stratum_extract["encryption_algo"]  # FIXME RENAME THIS
-            symkey = data_encryption_stratum_extract["symkey"]
-            message_digest_algos = data_encryption_stratum_extract["message_digest_algos"]
+        for data_encryption_layer_extract in data_encryption_layer_extracts:
+            data_encryption_algo = data_encryption_layer_extract["encryption_algo"]  # FIXME RENAME THIS
+            symkey = data_encryption_layer_extract["symkey"]
+            message_digest_algos = data_encryption_layer_extract["message_digest_algos"]
 
             logger.debug("Encrypting data with symmetric key of type %r", data_encryption_algo)
             data_cipherdict = encrypt_bytestring(
@@ -351,34 +351,34 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         assert isinstance(cryptoconf, dict), cryptoconf
         cryptainer = copy.deepcopy(cryptoconf)  # So that we can manipulate it as new cryptainer
         del cryptoconf
-        if not cryptainer["data_encryption_strata"]:
-            raise ConfigurationError("Empty data_encryption_strata list is forbidden in cryptoconf")
+        if not cryptainer["data_encryption_layers"]:
+            raise ConfigurationError("Empty data_encryption_layers list is forbidden in cryptoconf")
 
-        data_encryption_strata_extracts = []  # Sensitive info with secret keys!
+        data_encryption_layer_extracts = []  # Sensitive info with secret keys!
 
-        for data_encryption_stratum in cryptainer["data_encryption_strata"]:
-            data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
+        for data_encryption_layer in cryptainer["data_encryption_layers"]:
+            data_encryption_algo = data_encryption_layer["data_encryption_algo"]
 
-            data_encryption_stratum["integrity_tags"] = None  # Will be filled later with tags/macs etc.
+            data_encryption_layer["integrity_tags"] = None  # Will be filled later with tags/macs etc.
 
             logger.debug("Generating symmetric key of type %r", data_encryption_algo)
             symkey = generate_symkey(encryption_algo=data_encryption_algo)
             symmetric_key_bytes = dump_to_json_bytes(symkey)
-            key_encryption_strata = data_encryption_stratum["key_encryption_strata"]
+            key_encryption_layers = data_encryption_layer["key_encryption_layers"]
 
-            key_ciphertext = self._encrypt_key_through_multiple_strata(
+            key_ciphertext = self._encrypt_key_through_multiple_layers(
                     keychain_uid=keychain_uid,
                     key_bytes=symmetric_key_bytes,
-                    key_encryption_strata=key_encryption_strata)
-            data_encryption_stratum["key_ciphertext"] = key_ciphertext
+                    key_encryption_layers=key_encryption_layers)
+            data_encryption_layer["key_ciphertext"] = key_ciphertext
 
-            data_encryption_stratum_extract = dict(
+            data_encryption_layer_extract = dict(
                 encryption_algo=data_encryption_algo,
                 symkey=symkey,
                 message_digest_algos=[signature["message_digest_algo"] for signature in
-                                      data_encryption_stratum["data_signatures"]]
+                                      data_encryption_layer["data_signatures"]]
             )
-            data_encryption_strata_extracts.append(data_encryption_stratum_extract)
+            data_encryption_layer_extracts.append(data_encryption_layer_extract)
 
         cryptainer.update(
             # FIXME add cryptainer status, PENDING/COMPLETE!!!
@@ -389,26 +389,26 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             data_ciphertext = None,  # Must be filled asap, by OFFLOADED_MARKER if needed!
             metadata=metadata,
         )
-        return cryptainer, data_encryption_strata_extracts
+        return cryptainer, data_encryption_layer_extracts
 
-    def _encrypt_key_through_multiple_strata(self, keychain_uid: uuid.UUID, key_bytes: bytes,
-                                             key_encryption_strata: list) -> bytes:
+    def _encrypt_key_through_multiple_layers(self, keychain_uid: uuid.UUID, key_bytes: bytes,
+                                             key_encryption_layers: list) -> bytes:
         # HERE KEY IS REAL KEY OR SHARE !!!
 
-        if not key_encryption_strata:
-            raise ConfigurationError("Empty key_encryption_strata list is forbidden in cryptoconf")
+        if not key_encryption_layers:
+            raise ConfigurationError("Empty key_encryption_layers list is forbidden in cryptoconf")
 
         key_ciphertext = key_bytes
-        for key_encryption_stratum in key_encryption_strata:
-            key_ciphertext_dict = self._encrypt_key_through_single_stratum(
-                keychain_uid=keychain_uid, key_bytes=key_ciphertext, key_encryption_stratum=key_encryption_stratum
+        for key_encryption_layer in key_encryption_layers:
+            key_ciphertext_dict = self._encrypt_key_through_single_layer(
+                keychain_uid=keychain_uid, key_bytes=key_ciphertext, key_encryption_layer=key_encryption_layer
             )
             key_ciphertext = dump_to_json_bytes(key_ciphertext_dict)  # Thus its remains as bytes all along
 
         return key_ciphertext
 
 
-    def _encrypt_key_through_single_stratum(self, keychain_uid: uuid.UUID, key_bytes: bytes, key_encryption_stratum: dict) -> dict:
+    def _encrypt_key_through_single_layer(self, keychain_uid: uuid.UUID, key_bytes: bytes, key_encryption_layer: dict) -> dict:
         """
         Encrypt a symmetric key using an asymmetric encryption scheme.
 
@@ -424,14 +424,14 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         algorithm has been used, a dictionary with all the information needed to decipher the symmetric key is returned.
         """
         assert isinstance(key_bytes, bytes), key_bytes
-        key_encryption_algo = key_encryption_stratum["key_encryption_algo"]
+        key_encryption_algo = key_encryption_layer["key_encryption_algo"]
 
         if key_encryption_algo == SHARED_SECRET_MARKER:
 
-            key_shared_secret_escrows = key_encryption_stratum["key_shared_secret_escrows"]
+            key_shared_secret_escrows = key_encryption_layer["key_shared_secret_escrows"]
             shares_count = len(key_shared_secret_escrows)
 
-            threshold_count = key_encryption_stratum["key_shared_secret_threshold"]
+            threshold_count = key_encryption_layer["key_shared_secret_threshold"]
             assert threshold_count <= shares_count
 
             logger.debug("Generating Shamir shared secret shares (%d needed amongst %d)", threshold_count, shares_count)
@@ -447,10 +447,10 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
             for share, escrow_conf in zip(shares, key_shared_secret_escrows):
                 share_bytes = dump_to_json_bytes(share)  # The tuple (idx, data) of each share thus becomes encryptable
-                shares_ciphertext = self._encrypt_key_through_multiple_strata(  # FIXME rename singular
+                shares_ciphertext = self._encrypt_key_through_multiple_layers(  # FIXME rename singular
                         keychain_uid=keychain_uid,
                         key_bytes=share_bytes,
-                        key_encryption_strata=escrow_conf["key_encryption_strata"])  # Recursive structure
+                        key_encryption_layers=escrow_conf["key_encryption_layers"])  # Recursive structure
                 shares_ciphertexts.append(shares_ciphertext)
 
             key_cipherdict = {"shares": shares_ciphertexts}  # A dict is more future-proof
@@ -458,12 +458,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
         else:  # Using asymmetric algorithm
 
-            keychain_uid_encryption = key_encryption_stratum.get("keychain_uid") or keychain_uid
+            keychain_uid_encryption = key_encryption_layer.get("keychain_uid") or keychain_uid
             key_cipherdict = self._encrypt_with_asymmetric_cipher(
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid_encryption,
                 symmetric_key_data=key_bytes,
-                escrow=key_encryption_stratum["key_escrow"],
+                escrow=key_encryption_layer["key_escrow"],
             )
             return key_cipherdict
 
@@ -529,18 +529,18 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, authentication_data_list: list):
         keychain_uid = cryptainer["keychain_uid"]
 
-        data_encryption_strata = cryptainer["data_encryption_strata"]
-        assert len(data_encryption_strata) == len(authentication_data_list)  # Sanity check
+        data_encryption_layers = cryptainer["data_encryption_layers"]
+        assert len(data_encryption_layers) == len(authentication_data_list)  # Sanity check
 
-        for data_encryption_stratum, authentication_data_list in zip(cryptainer["data_encryption_strata"], authentication_data_list):
+        for data_encryption_layer, authentication_data_list in zip(cryptainer["data_encryption_layers"], authentication_data_list):
 
-            assert data_encryption_stratum["integrity_tags"] is None  # Set at cryptainer build time
-            data_encryption_stratum["integrity_tags"] = authentication_data_list["integrity_tags"]
+            assert data_encryption_layer["integrity_tags"] is None  # Set at cryptainer build time
+            data_encryption_layer["integrity_tags"] = authentication_data_list["integrity_tags"]
 
             message_digests = authentication_data_list["message_digests"]
 
             _encountered_message_digest_algos = set()
-            for signature_conf in data_encryption_stratum["data_signatures"]:
+            for signature_conf in data_encryption_layer["data_signatures"]:
                 message_digest_algo = signature_conf["message_digest_algo"]
 
                 signature_conf["message_digest"] = message_digests[message_digest_algo]  # MUST exist, else incoherence
@@ -611,24 +611,24 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         data_current = cryptainer["data_ciphertext"]
         assert isinstance(data_current, bytes), repr(data_current)  # Else it's still a special marker for example...
 
-        for data_encryption_stratum in reversed(cryptainer["data_encryption_strata"]):  # Non-emptiness of this will be checked by validator
+        for data_encryption_layer in reversed(cryptainer["data_encryption_layers"]):  # Non-emptiness of this will be checked by validator
 
-            data_encryption_algo = data_encryption_stratum["data_encryption_algo"]
+            data_encryption_algo = data_encryption_layer["data_encryption_algo"]
 
-            for signature_conf in data_encryption_stratum["data_signatures"]:
+            for signature_conf in data_encryption_layer["data_signatures"]:
                 self._verify_message_signature(keychain_uid=keychain_uid, message=data_current, cryptoconf=signature_conf)
 
-            key_ciphertext = data_encryption_stratum["key_ciphertext"]  # We start fully encrypted, and unravel it
+            key_ciphertext = data_encryption_layer["key_ciphertext"]  # We start fully encrypted, and unravel it
 
             # FIXME rename to symmetric_key_bytes
-            key_bytes = self._decrypt_key_through_multiple_strata(
+            key_bytes = self._decrypt_key_through_multiple_layers(
                 keychain_uid=keychain_uid,
                 key_ciphertext=key_ciphertext,
-                encryption_strata=data_encryption_stratum["key_encryption_strata"])
+                encryption_layers=data_encryption_layer["key_encryption_layers"])
             assert isinstance(key_bytes, bytes), key_bytes
             symkey = load_from_json_bytes(key_bytes)
 
-            integrity_tags = data_encryption_stratum["integrity_tags"]  # Shall be a DICT, FIXME handle if it's still None
+            integrity_tags = data_encryption_layer["integrity_tags"]  # Shall be a DICT, FIXME handle if it's still None
             data_cipherdict = dict(ciphertext=data_current, **integrity_tags)
             data_current = decrypt_bytestring(
                 cipherdict=data_cipherdict, key_dict=symkey, encryption_algo=data_encryption_algo, verify=verify
@@ -637,20 +637,20 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         data = data_current  # Now decrypted
         return data
 
-    def _decrypt_key_through_multiple_strata(self, keychain_uid: uuid.UUID, key_ciphertext: bytes, encryption_strata: list) -> bytes:
+    def _decrypt_key_through_multiple_layers(self, keychain_uid: uuid.UUID, key_ciphertext: bytes, encryption_layers: list) -> bytes:
         key_bytes = key_ciphertext
 
-        for key_encryption_stratum in reversed(encryption_strata):  # Non-emptiness of this will be checked by validator
+        for key_encryption_layer in reversed(encryption_layers):  # Non-emptiness of this will be checked by validator
             key_cipherdict = load_from_json_bytes(key_bytes)  # We remain as bytes all along
-            key_bytes = self._decrypt_key_through_single_stratum(
+            key_bytes = self._decrypt_key_through_single_layer(
                 keychain_uid=keychain_uid,
                 key_cipherdict=key_cipherdict,
-                encryption_stratum=key_encryption_stratum,
+                encryption_layer=key_encryption_layer,
             )
 
         return key_bytes
 
-    def _decrypt_key_through_single_stratum(self, keychain_uid: uuid.UUID, key_cipherdict: dict, encryption_stratum: dict) -> bytes:
+    def _decrypt_key_through_single_layer(self, keychain_uid: uuid.UUID, key_cipherdict: dict, encryption_layer: dict) -> bytes:
         """
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
         by a asymmetric algorithm.
@@ -662,14 +662,14 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         :return: deciphered symmetric key
         """
         assert isinstance(key_cipherdict, dict), key_cipherdict
-        key_encryption_algo = encryption_stratum["key_encryption_algo"]
+        key_encryption_algo = encryption_layer["key_encryption_algo"]
 
         if key_encryption_algo == SHARED_SECRET_MARKER:
 
             decrypted_shares = []
             decryption_errors = []
-            key_shared_secret_escrows = encryption_stratum["key_shared_secret_escrows"]  # FIXMe rename twice
-            key_shared_secret_threshold = encryption_stratum["key_shared_secret_threshold"]
+            key_shared_secret_escrows = encryption_layer["key_shared_secret_escrows"]  # FIXMe rename twice
+            key_shared_secret_threshold = encryption_layer["key_shared_secret_threshold"]
 
             shares_ciphertexts = key_cipherdict["shares"]  # FIXME rename to share_ciphertexts
 
@@ -679,10 +679,10 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
             for share_ciphertext, escrow_conf in zip(shares_ciphertexts, key_shared_secret_escrows):
 
                 try:
-                    share_bytes = self._decrypt_key_through_multiple_strata(
+                    share_bytes = self._decrypt_key_through_multiple_layers(
                             keychain_uid=keychain_uid,
                             key_ciphertext=share_ciphertext,
-                            encryption_strata=escrow_conf["key_encryption_strata"])  # Recursive structure
+                            encryption_layers=escrow_conf["key_encryption_layers"])  # Recursive structure
                     share = load_from_json_bytes(share_bytes)  # The tuple (idx, data) of each share thus becomes encryptable
                     decrypted_shares.append(share)
 
@@ -708,13 +708,13 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         else:  # Using asymmetric algorithm
 
             # FIXME replace by shorter form everywhere in file
-            keychain_uid_encryption = (encryption_stratum.get("keychain_uid") or keychain_uid)
+            keychain_uid_encryption = (encryption_layer.get("keychain_uid") or keychain_uid)
 
             key_bytes = self._decrypt_with_asymmetric_cipher(
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid_encryption,
                 cipherdict=key_cipherdict,
-                escrow=encryption_stratum["key_escrow"],
+                escrow=encryption_layer["key_escrow"],
             )
             return key_bytes
 
@@ -884,8 +884,8 @@ class CryptainerEncryptionStream:
 
 def is_cryptainer_cryptoconf_streamable(cryptoconf):  #FIXME rename and add to docs
     # FIXME test separately!
-    for data_encryption_stratum in cryptoconf["data_encryption_strata"]:
-        if data_encryption_stratum["data_encryption_algo"] not in STREAMABLE_ENCRYPTION_ALGOS:
+    for data_encryption_layer in cryptoconf["data_encryption_layers"]:
+        if data_encryption_layer["data_encryption_algo"] not in STREAMABLE_ENCRYPTION_ALGOS:
             return False
     return True
 
@@ -1352,15 +1352,15 @@ def get_cryptoconf_summary(conf_or_cryptainer):  # FIXME move up like in docs
         return _escrow
 
     lines = []
-    for idx, data_encryption_stratum in enumerate(conf_or_cryptainer["data_encryption_strata"], start=1):
-        lines.append("Data encryption layer %d: %s" % (idx, data_encryption_stratum["data_encryption_algo"]))
+    for idx, data_encryption_layer in enumerate(conf_or_cryptainer["data_encryption_layers"], start=1):
+        lines.append("Data encryption layer %d: %s" % (idx, data_encryption_layer["data_encryption_algo"]))
         lines.append("  Key encryption layers:")
-        for idx2, key_encryption_stratum in enumerate(data_encryption_stratum["key_encryption_strata"], start=1):
-            key_escrow = key_encryption_stratum["key_escrow"]
+        for idx2, key_encryption_layer in enumerate(data_encryption_layer["key_encryption_layers"], start=1):
+            key_escrow = key_encryption_layer["key_escrow"]
             escrow_id = _get_escrow_identifier(key_escrow)
-            lines.append("    %s (by %s)" % (key_encryption_stratum["key_encryption_algo"], escrow_id))
+            lines.append("    %s (by %s)" % (key_encryption_layer["key_encryption_algo"], escrow_id))
         lines.append("  Signatures:")
-        for idx3, data_signature in enumerate(data_encryption_stratum["data_signatures"], start=1):
+        for idx3, data_signature in enumerate(data_encryption_layer["data_signatures"], start=1):
             signature_escrow = data_signature["signature_escrow"]
             escrow_id = _get_escrow_identifier(signature_escrow)
             lines.append(
@@ -1454,7 +1454,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
     SHAMIR_CRYPTAINER_PIECE = Schema({
         "key_encryption_algo": SHARED_SECRET_MARKER,
         "key_shared_secret_escrows": [{
-            "key_encryption_strata": [SIMPLE_CRYPTAINER_PIECE]}],
+            "key_encryption_layers": [SIMPLE_CRYPTAINER_PIECE]}],
         "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schema_int),
     }, name="Recursive_shamir", as_reference=True)
 
@@ -1462,12 +1462,12 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
 
     SCHEMA_CRYPTAINERS = Schema({
         **extra_cryptainer,
-        "data_encryption_strata": [{
+        "data_encryption_layers": [{
             "data_encryption_algo": Or(*SUPPORTED_ENCRYPTION_ALGOS),
             "data_signatures": [data_signature],
             **integrity_tags,
             **extra_key_ciphertext,
-            "key_encryption_strata": [SIMPLE_CRYPTAINER_PIECE, SHAMIR_CRYPTAINER_PIECE]
+            "key_encryption_layers": [SIMPLE_CRYPTAINER_PIECE, SHAMIR_CRYPTAINER_PIECE]
         }],
         Optionalkey("keychain_uid"): micro_schema_uid,
         **metadata

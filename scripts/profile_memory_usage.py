@@ -11,22 +11,22 @@ from wacryptolib.cryptainer import CryptainerStorage, LOCAL_ESCROW_MARKER
 from wacryptolib.sensor import TarfileRecordsAggregator
 
 ENCRYPTION_CRYPTOCONF = dict(
-    data_encryption_strata=[
+    data_encryption_layers=[
         dict(
             data_encryption_algo="AES_EAX",
-            key_encryption_strata=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
             data_signatures=[],
         ),
         dict(
             data_encryption_algo="CHACHA20_POLY1305",
-            key_encryption_strata=[
+            key_encryption_layers=[
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
             ],
             data_signatures=[],
         ),
         dict(
             data_encryption_algo="AES_CBC",
-            key_encryption_strata=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
             data_signatures=[],
         ),
     ]

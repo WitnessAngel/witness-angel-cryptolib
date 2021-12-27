@@ -63,13 +63,13 @@ def _get_binary_or_empty_content():
 ENFORCED_UID1 = UUID("0e8e861e-f0f7-e54b-18ea-34798d5daaaa")
 ENFORCED_UID2 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeebbbb")
 
-VOID_CRYPTOCONF_REGARDING_DATA_ENCRYPTION_STRATA = dict(data_encryption_strata=[])  # Forbidden
+VOID_CRYPTOCONF_REGARDING_DATA_ENCRYPTION_LAYERS = dict(data_encryption_layers=[])  # Forbidden
 
-VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_STRATA = dict(  # Forbidden
-    data_encryption_strata=[
+VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_LAYERS = dict(  # Forbidden
+    data_encryption_layers=[
         dict(
             data_encryption_algo="AES_CBC",
-            key_encryption_strata=[],
+            key_encryption_layers=[],
             data_signatures=[
                 dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
@@ -78,10 +78,10 @@ VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_STRATA = dict(  # Forbidden
 )
 
 SIGNATURELESS_CRYPTOCONF = dict(
-    data_encryption_strata=[
+    data_encryption_layers=[
         dict(
             data_encryption_algo="AES_EAX",
-            key_encryption_strata=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
             data_signatures=[],
         )
     ]
@@ -99,10 +99,10 @@ SIGNATURELESS_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
 }
 
 SIMPLE_CRYPTOCONF = dict(
-    data_encryption_strata=[
+    data_encryption_layers=[
         dict(
             data_encryption_algo="AES_CBC",
-            key_encryption_strata=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
             data_signatures=[
                 dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
@@ -126,15 +126,15 @@ SIMPLE_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
 }
 
 COMPLEX_CRYPTOCONF = dict(
-    data_encryption_strata=[
+    data_encryption_layers=[
         dict(
             data_encryption_algo="AES_EAX",
-            key_encryption_strata=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
             data_signatures=[],
         ),
         dict(
             data_encryption_algo="AES_CBC",
-            key_encryption_strata=[
+            key_encryption_layers=[
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)
             ],
             data_signatures=[
@@ -143,7 +143,7 @@ COMPLEX_CRYPTOCONF = dict(
         ),
         dict(
             data_encryption_algo="CHACHA20_POLY1305",
-            key_encryption_strata=[
+            key_encryption_layers=[
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
             ],
@@ -183,24 +183,24 @@ COMPLEX_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
 }
 
 SIMPLE_SHAMIR_CRYPTOCONF = dict(
-    data_encryption_strata=[
+    data_encryption_layers=[
         dict(
             data_encryption_algo="AES_CBC",
-            key_encryption_strata=[
+            key_encryption_layers=[
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=3,
                     key_shared_secret_escrows=[
-                        dict(key_encryption_strata=[
+                        dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
-                        dict(key_encryption_strata=[
+                        dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
-                        dict(key_encryption_strata=[
+                        dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
-                        dict(key_encryption_strata=[
+                        dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
-                        dict(key_encryption_strata=[
+                        dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)],),
                     ],
                 ),
@@ -232,34 +232,34 @@ def SIMPLE_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES(keychain_uid):
     }
 
 COMPLEX_SHAMIR_CRYPTOCONF = dict(
-    data_encryption_strata=[
+    data_encryption_layers=[
         dict(
             data_encryption_algo="AES_EAX",
-            key_encryption_strata=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
             data_signatures=[],
         ),
         dict(
             data_encryption_algo="AES_CBC",
-            key_encryption_strata=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
             data_signatures=[
                 dict(message_digest_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         ),
         dict(
             data_encryption_algo="CHACHA20_POLY1305",
-            key_encryption_strata=[
+            key_encryption_layers=[
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=2,
                     key_shared_secret_escrows=[
-                        dict(key_encryption_strata=[
+                        dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
-                        dict(key_encryption_strata=[
+                        dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
-                        dict(key_encryption_strata=[
+                        dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
-                        dict(key_encryption_strata=[
+                        dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID2)],),
                     ],
                 )
@@ -330,8 +330,8 @@ def _intialize_cryptainer_with_single_file(tmp_path):  # FIXME generalize its us
 @pytest.mark.parametrize(
     "cryptoconf",
     [
-        VOID_CRYPTOCONF_REGARDING_DATA_ENCRYPTION_STRATA,
-        VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_STRATA,
+        VOID_CRYPTOCONF_REGARDING_DATA_ENCRYPTION_LAYERS,
+        VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_LAYERS,
     ],
 )
 def test_void_cryptoconfs(cryptoconf):
@@ -457,8 +457,8 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
     data_encryption_shamir = {}
     # Delete 1, 2 and too many share(s) from cipherdict key
-    for data_encryption in cryptainer["data_encryption_strata"]:
-        for key_encryption in data_encryption["key_encryption_strata"]:
+    for data_encryption in cryptainer["data_encryption_layers"]:
+        for key_encryption in data_encryption["key_encryption_layers"]:
             if key_encryption["key_encryption_algo"] == SHARED_SECRET_MARKER:
                 data_encryption_shamir = data_encryption
 
@@ -502,20 +502,20 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
 # FIXME move that elsewhere and complete it
 RECURSIVE_CRYPTOCONF = dict(
-    data_encryption_strata=[
+    data_encryption_layers=[
         dict(
             data_encryption_algo="AES_CBC",
-            key_encryption_strata=[
+            key_encryption_layers=[
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_escrows=[
                         dict(
-                             key_encryption_strata=[
+                             key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(
-                             key_encryption_strata=[
+                             key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
                     ],  # Beware, same escrow for the 2 shares, for now
                 ),
@@ -527,7 +527,7 @@ RECURSIVE_CRYPTOCONF = dict(
     ]
 )
 
-def test_recursive_shamir_secrets_and_strata():
+def test_recursive_shamir_secrets_and_layers():
     keychain_uid = generate_uuid0()
     data = _get_binary_or_empty_content()
 
@@ -545,12 +545,12 @@ def test_recursive_shamir_secrets_and_strata():
 def test_decrypt_data_from_cryptainer_with_authenticated_algo_and_verify():
     data_encryption_algo = random.choice(AUTHENTICATED_ENCRYPTION_ALGOS)
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
-    cryptoconf["data_encryption_strata"][0]["data_encryption_algo"] = data_encryption_algo
+    cryptoconf["data_encryption_layers"][0]["data_encryption_algo"] = data_encryption_algo
 
     cryptainer = encrypt_data_into_cryptainer(
         data=b"1234", cryptoconf=cryptoconf, metadata=None
     )
-    cryptainer["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION
+    cryptainer["data_encryption_layers"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION
 
     result = decrypt_data_from_cryptainer(cryptainer, verify=False)
     assert result == b"1234"
@@ -611,20 +611,20 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     share_escrow3_id = get_escrow_id(share_escrow3)
 
     cryptoconf = dict(
-        data_encryption_strata=[
+        data_encryption_layers=[
             dict(
                 data_encryption_algo="AES_CBC",
-                key_encryption_strata=[
+                key_encryption_layers=[
                     dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                     dict(
                         key_encryption_algo=SHARED_SECRET_MARKER,
                         key_shared_secret_threshold=2,
                         key_shared_secret_escrows=[
-                            dict(key_encryption_strata=[
+                            dict(key_encryption_layers=[
                                      dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow1, keychain_uid=keychain_uid_escrow)],),
-                            dict(key_encryption_strata=[
+                            dict(key_encryption_layers=[
                                      dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow2)],),
-                            dict(key_encryption_strata=[
+                            dict(key_encryption_layers=[
                                      dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow3)],),
                         ],
                     ),
@@ -1141,9 +1141,9 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
     storage.wait_for_idle_state()
 
     cryptainer_simple = storage.load_cryptainer_from_storage("stuff_simple.txt.crypt")
-    assert len(cryptainer_simple["data_encryption_strata"]) == 1
+    assert len(cryptainer_simple["data_encryption_layers"]) == 1
     cryptainer_complex = storage.load_cryptainer_from_storage("stuff_complex.txt.crypt")
-    assert len(cryptainer_complex["data_encryption_strata"]) == 3
+    assert len(cryptainer_complex["data_encryption_layers"]) == 3
 
 
 def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
@@ -1156,7 +1156,7 @@ def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
     cryptainer_name, = storage.list_cryptainer_names()
 
     cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
-    cryptainer["data_encryption_strata"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION of EAX
+    cryptainer["data_encryption_layers"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION of EAX
 
     cryptainer_filepath = storage._make_absolute(cryptainer_name)
     dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=False)  # Don't touch existing offloaded data
@@ -1190,7 +1190,7 @@ def test_get_cryptoconf_summary():
     # Simulate a cryptoconf with remote escrow webservices
 
     CONF_WITH_ESCROW = copy.deepcopy(COMPLEX_CRYPTOCONF)
-    CONF_WITH_ESCROW["data_encryption_strata"][0]["key_encryption_strata"][0]["key_escrow"] = dict(
+    CONF_WITH_ESCROW["data_encryption_layers"][0]["key_encryption_layers"][0]["key_escrow"] = dict(
         escrow_type="jsonrpc", url="http://www.mydomain.com/json"
     )
 
@@ -1225,7 +1225,7 @@ def test_get_cryptoconf_summary():
     # Test unknown escrow structure
 
     CONF_WITH_BROKEN_ESCROW = copy.deepcopy(SIMPLE_CRYPTOCONF)
-    CONF_WITH_BROKEN_ESCROW["data_encryption_strata"][0]["key_encryption_strata"][0]["key_escrow"] = dict(abc=33)
+    CONF_WITH_BROKEN_ESCROW["data_encryption_layers"][0]["key_encryption_layers"][0]["key_escrow"] = dict(abc=33)
 
     with pytest.raises(ValueError, match="Unrecognized key escrow"):
         get_cryptoconf_summary(CONF_WITH_BROKEN_ESCROW)
@@ -1302,11 +1302,11 @@ def test_generate_cryptainer_and_symmetric_keys():
     cryptainer_writer = CryptainerWriter()
     cryptainer, extracts = cryptainer_writer._generate_cryptainer_base_and_secrets(COMPLEX_CRYPTOCONF)
 
-    for data_encryption_stratum in extracts:
-        symkey = data_encryption_stratum["symkey"]
+    for data_encryption_layer in extracts:
+        symkey = data_encryption_layer["symkey"]
         assert isinstance(symkey, dict)
         assert symkey["key"]  # actual main key
-        del data_encryption_stratum["symkey"]
+        del data_encryption_layer["symkey"]
 
     assert extracts == [
         {'encryption_algo': 'AES_EAX', 'message_digest_algos': []},
@@ -1376,22 +1376,22 @@ def _generate_corrupted_confs(cryptoconf):
 
     # Add a false information to config
     corrupted_conf1 = copy.deepcopy(cryptoconf)
-    corrupted_conf1["data_encryption_strata"][0]["keychain_uid"] = ENFORCED_UID2
+    corrupted_conf1["data_encryption_layers"][0]["keychain_uid"] = ENFORCED_UID2
     corrupted_confs.append(corrupted_conf1)
 
-    # Delete a "key_encryption_strata" in an element of cryptoconf
+    # Delete a "key_encryption_layers" in an element of cryptoconf
     corrupted_conf2 = copy.deepcopy(cryptoconf)
-    del corrupted_conf2["data_encryption_strata"][0]["key_encryption_strata"]
+    del corrupted_conf2["data_encryption_layers"][0]["key_encryption_layers"]
     corrupted_confs.append(corrupted_conf2)
 
     # Update data_encryption_algo with a value algo that does not exist
     corrupted_conf3 = copy.deepcopy(cryptoconf)
-    corrupted_conf3["data_encryption_strata"][0]["data_encryption_algo"] = "AES_AES"
+    corrupted_conf3["data_encryption_layers"][0]["data_encryption_algo"] = "AES_AES"
     corrupted_confs.append(corrupted_conf3)
 
-    # Update a "key_encryption_strata" with a string instead of list
+    # Update a "key_encryption_layers" with a string instead of list
     corrupted_conf4 = copy.deepcopy(cryptoconf)
-    corrupted_conf4["data_encryption_strata"][0]["key_encryption_strata"] = " "
+    corrupted_conf4["data_encryption_layers"][0]["key_encryption_layers"] = " "
     corrupted_confs.append(corrupted_conf4)
 
     return corrupted_confs
@@ -1429,15 +1429,15 @@ def _generate_corrupted_cryptainers(cryptoconf):
     corrupted_cryptainers = []
 
     corrupted_cryptainer1 = copy.deepcopy(cryptainer)
-    corrupted_cryptainer1["data_encryption_strata"][0]["keychain_uid"] = ENFORCED_UID1
+    corrupted_cryptainer1["data_encryption_layers"][0]["keychain_uid"] = ENFORCED_UID1
     corrupted_cryptainers.append(corrupted_cryptainer1)
 
     corrupted_cryptainer2 = copy.deepcopy(cryptainer)
-    del corrupted_cryptainer2["data_encryption_strata"][0]["integrity_tags"]
+    del corrupted_cryptainer2["data_encryption_layers"][0]["integrity_tags"]
     corrupted_cryptainers.append(corrupted_cryptainer2)
 
     corrupted_cryptainer3 = copy.deepcopy(cryptainer)
-    corrupted_cryptainer3["data_encryption_strata"][0]["key_ciphertext"] = []
+    corrupted_cryptainer3["data_encryption_layers"][0]["key_ciphertext"] = []
     corrupted_cryptainers.append(corrupted_cryptainer3)
 
     return corrupted_cryptainers
@@ -1461,7 +1461,7 @@ def test_cryptainer_storage_check_cryptainer_sanity(tmp_path):
 
     # FIXME deduplicate this bit with test_cryptainer_storage_decryption_authenticated_algo_verify()
     cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
-    cryptainer["data_encryption_strata"][0]["bad_name_of_attribute"] = 42
+    cryptainer["data_encryption_layers"][0]["bad_name_of_attribute"] = 42
     cryptainer_filepath = storage._make_absolute(cryptainer_name)
     dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=False)  # Don't touch existing
     ##############

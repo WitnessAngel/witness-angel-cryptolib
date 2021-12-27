@@ -364,15 +364,15 @@ class Chacha20Poly1305EncryptionNode(EncryptionStreamBase):
 class StreamManager:
     """"Pipeline to encrypt data through several encryption nodes, down to an outout stream (e.g. file or ByteIO)"""
 
-    def __init__(self, output_stream: BinaryIO, data_encryption_strata_extracts: list):
+    def __init__(self, output_stream: BinaryIO, data_encryption_layer_extracts: list):
 
         self._output_stream = output_stream
         self._cipher_streams = []
 
-        for data_encryption_stratum_extract in data_encryption_strata_extracts:
-            data_encryption_algo = data_encryption_stratum_extract["encryption_algo"]  # FIXME RENAME THIS
-            symkey = data_encryption_stratum_extract["symkey"]
-            message_digest_algos = data_encryption_stratum_extract["message_digest_algos"]
+        for data_encryption_layer_extract in data_encryption_layer_extracts:
+            data_encryption_algo = data_encryption_layer_extract["encryption_algo"]  # FIXME RENAME THIS
+            symkey = data_encryption_layer_extract["symkey"]
+            message_digest_algos = data_encryption_layer_extract["message_digest_algos"]
 
             encryption_algo_conf = _get_encryption_type_conf(encryption_algo=data_encryption_algo)
             encryption_class = encryption_algo_conf["encryption_node_class"]

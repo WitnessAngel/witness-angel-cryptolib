@@ -166,17 +166,17 @@ def test_stream_manager(encryption_algo_list):
 
     output_stream = io.BytesIO()
 
-    data_encryption_strata_extracts = []
+    data_encryption_layer_extracts = []
     for encryption_algo in encryption_algo_list:
-        data_encryption_strata_extract = {'encryption_algo': encryption_algo,
+        data_encryption_layers_extract = {'encryption_algo': encryption_algo,
                                           'symkey': generate_symkey(encryption_algo),
                                           'message_digest_algos': random.choices(SUPPORTED_HASH_ALGOS, k=randint(1,
                                                                                                                  len(SUPPORTED_HASH_ALGOS)))}
-        data_encryption_strata_extracts.append(data_encryption_strata_extract)
-    print(data_encryption_strata_extracts)
+        data_encryption_layer_extracts.append(data_encryption_layers_extract)
+    print(data_encryption_layer_extracts)
 
     streammanager = wacryptolib.encryption.StreamManager(
-        data_encryption_strata_extracts=data_encryption_strata_extracts,
+        data_encryption_layer_extracts=data_encryption_layer_extracts,
         output_stream=output_stream)
 
     plaintext_full = get_random_bytes(randint(10, 10000))
@@ -191,7 +191,7 @@ def test_stream_manager(encryption_algo_list):
 
     current_ciphertext = output_stream.getvalue()
 
-    for data_encryption_node, authentication_data in zip(reversed(data_encryption_strata_extracts),
+    for data_encryption_node, authentication_data in zip(reversed(data_encryption_layer_extracts),
                                                          reversed(streammanager.get_authentication_data())):
 
         for hash_algo in data_encryption_node['message_digest_algos']:

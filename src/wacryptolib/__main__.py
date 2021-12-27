@@ -31,18 +31,18 @@ def _get_key_storage_pool(ctx):
 
 
 EXAMPLE_CRYPTOCONF = dict(
-    data_encryption_strata=[
+    data_encryption_layers=[
         dict(
             data_encryption_algo="AES_CBC",
-            key_encryption_strata=[
+            key_encryption_layers=[
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_escrows=[
-                        dict(key_encryption_strata=[
+                        dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
-                        dict(key_encryption_strata=[
+                        dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
                     ],  # Beware, same escrow for the 2 shares, for now
                 ),

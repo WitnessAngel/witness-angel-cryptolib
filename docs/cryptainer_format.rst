@@ -24,10 +24,10 @@ A minimal cryptainer configuration in python, with a single encryption layer and
     from wacryptolib.cryptainer import LOCAL_ESCROW_MARKER
 
     CONFIG = dict(
-        data_encryption_strata=[
+        data_encryption_layers=[
             dict(
                 data_encryption_algo="AES_CBC",
-                key_encryption_strata=[
+                key_encryption_layers=[
                     dict(
                         key_encryption_algo="RSA_OAEP",
                         key_escrow=LOCAL_ESCROW_MARKER,
@@ -62,7 +62,7 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
               "subType": "00"
           }
       },
-      "data_encryption_strata": [
+      "data_encryption_layers": [
           {
               "data_encryption_algo": "AES_CBC",
               "data_signatures": [
@@ -89,7 +89,7 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
                       "subType": "00"
                   }
               },
-              "key_encryption_strata": [
+              "key_encryption_layers": [
                   {
                       "key_encryption_algo": "RSA_OAEP",
                       "key_escrow": "_local_"
@@ -121,24 +121,24 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
 
         {
             data_ciphertext: <opaque multi-encrypted data bytestring>,
-            data_encryption_strata: <list of Stratum Objects targeting ciphertext, in order of application>,
+            data_encryption_layers: <list of Layer objects targeting ciphertext, in order of application>,
             data_uid: <optional uuid of this specific data cryptainer>,
         }
 
-    Stratum Object:
+    Layer object:
 
         {
-            signatures: <optional list of Signature objects for the parent ciphertext at this stratum of encryption>,
+            signatures: <optional list of Signature objects for the parent ciphertext at this layer of encryption>,
 
             encryption_algorithm: <encryption type label>,
 
-            key_uid: <optional uuid of this specific encryption stratum>,
+            key_uid: <optional uuid of this specific encryption layer>,
 
             # Then we have either:
             key_ciphertext: <opaque multi-encrypted key bytestring>,
-            key_encryption_strata: <(optional) list of Stratum Objects targeting key_ciphertext, in order of application>,
+            key_encryption_layers: <(optional) list of Layer objects targeting key_ciphertext, in order of application>,
             # or:
-            key_escrow: <Escrow Entity object able to decrypt the parent data/key ciphertext at this stratum of encryption>,
+            key_escrow: <Escrow Entity object able to decrypt the parent data/key ciphertext at this layer of encryption>,
         }
 
     Signature object:

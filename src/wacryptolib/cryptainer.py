@@ -323,7 +323,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             }
 
             authentication_data_list.append(dict(
-                    integrity_tags=data_cipherdict,  # Only remains tags, macs etc.
+                    message_authentication_codes=data_cipherdict,  # Only remains tags, macs etc.
                     message_digests=message_digests,
             ))
 
@@ -359,7 +359,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         for data_encryption_layer in cryptainer["data_encryption_layers"]:
             data_encryption_algo = data_encryption_layer["data_encryption_algo"]
 
-            data_encryption_layer["integrity_tags"] = None  # Will be filled later with tags/macs etc.
+            data_encryption_layer["message_authentication_codes"] = None  # Will be filled later with MAC tags etc.
 
             logger.debug("Generating symmetric key of type %r", data_encryption_algo)
             symkey = generate_symkey(encryption_algo=data_encryption_algo)
@@ -534,8 +534,8 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
         for data_encryption_layer, authentication_data_list in zip(cryptainer["data_encryption_layers"], authentication_data_list):
 
-            assert data_encryption_layer["integrity_tags"] is None  # Set at cryptainer build time
-            data_encryption_layer["integrity_tags"] = authentication_data_list["integrity_tags"]
+            assert data_encryption_layer["message_authentication_codes"] is None  # Set at cryptainer build time
+            data_encryption_layer["message_authentication_codes"] = authentication_data_list["message_authentication_codes"]
 
             message_digests = authentication_data_list["message_digests"]
 
@@ -593,7 +593,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         Loop through cryptainer layers, to decipher data with the right algorithms.
 
         :param cryptainer: dictionary previously built with CryptainerWriter method
-        :param verify: whether to check tag/mac values of the ciphertext
+        :param verify: whether to check MAC tags of the ciphertext
 
         :return: deciphered plaintext
         """
@@ -628,8 +628,8 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
             assert isinstance(key_bytes, bytes), key_bytes
             symkey = load_from_json_bytes(key_bytes)
 
-            integrity_tags = data_encryption_layer["integrity_tags"]  # Shall be a DICT, FIXME handle if it's still None
-            data_cipherdict = dict(ciphertext=data_current, **integrity_tags)
+            message_authentication_codes = data_encryption_layer["message_authentication_codes"]  # Shall be a DICT, FIXME handle if it's still None
+            data_cipherdict = dict(ciphertext=data_current, **message_authentication_codes)
             data_current = decrypt_bytestring(
                 cipherdict=data_cipherdict, key_dict=symkey, encryption_algo=data_encryption_algo, verify=verify
             )
@@ -946,7 +946,7 @@ def decrypt_data_from_cryptainer(
     :param cryptainer: the cryptainer tree, which holds all information about involved keys
     :param key_storage_pool: optional key storage pool
     :param passphrase_mapper: optional dict mapping escrow IDs to their lists of passphrases
-    :param verify: whether to check tag/mac values of the ciphertext
+    :param verify: whether to check MAC tags of the ciphertext
 
     :return: raw bytestring
     """
@@ -1409,7 +1409,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
 
     extra_cryptainer = {}
     extra_key_ciphertext = {}
-    integrity_tags = {}
+    message_authentication_codes = {}
     metadata = {}
 
     data_signature = {
@@ -1437,9 +1437,9 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
         }
         data_signature.update(extra_signature)
         data_signature["message_digest"] = micro_schema_binary
-        integrity_tags = {
-            "integrity_tags": {
-                Optionalkey("tag"): micro_schema_binary  # TODO USE THE REGULAR EXPRESSION OF BYTES
+        message_authentication_codes = {
+            "message_authentication_codes": {
+                Optionalkey("tag"): micro_schema_binary
             }}
         metadata = {"metadata": Or(dict, None)}
 
@@ -1465,7 +1465,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
         "data_encryption_layers": [{
             "data_encryption_algo": Or(*SUPPORTED_ENCRYPTION_ALGOS),
             "data_signatures": [data_signature],
-            **integrity_tags,
+            **message_authentication_codes,
             **extra_key_ciphertext,
             "key_encryption_layers": [SIMPLE_CRYPTAINER_PIECE, SHAMIR_CRYPTAINER_PIECE]
         }],

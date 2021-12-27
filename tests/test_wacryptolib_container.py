@@ -550,7 +550,7 @@ def test_decrypt_data_from_cryptainer_with_authenticated_algo_and_verify():
     cryptainer = encrypt_data_into_cryptainer(
         data=b"1234", cryptoconf=cryptoconf, metadata=None
     )
-    cryptainer["data_encryption_layers"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION
+    cryptainer["data_encryption_layers"][0]["message_authentication_codes"]["tag"] += b"hi"  # CORRUPTION
 
     result = decrypt_data_from_cryptainer(cryptainer, verify=False)
     assert result == b"1234"
@@ -1156,7 +1156,7 @@ def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
     cryptainer_name, = storage.list_cryptainer_names()
 
     cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
-    cryptainer["data_encryption_layers"][0]["integrity_tags"]["tag"] += b"hi"  # CORRUPTION of EAX
+    cryptainer["data_encryption_layers"][0]["message_authentication_codes"]["tag"] += b"hi"  # CORRUPTION of EAX
 
     cryptainer_filepath = storage._make_absolute(cryptainer_name)
     dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=False)  # Don't touch existing offloaded data
@@ -1433,7 +1433,7 @@ def _generate_corrupted_cryptainers(cryptoconf):
     corrupted_cryptainers.append(corrupted_cryptainer1)
 
     corrupted_cryptainer2 = copy.deepcopy(cryptainer)
-    del corrupted_cryptainer2["data_encryption_layers"][0]["integrity_tags"]
+    del corrupted_cryptainer2["data_encryption_layers"][0]["message_authentication_codes"]
     corrupted_cryptainers.append(corrupted_cryptainer2)
 
     corrupted_cryptainer3 = copy.deepcopy(cryptainer)

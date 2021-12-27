@@ -50,7 +50,7 @@ class DecryptionError(CryptographyError):
 
 
 class DecryptionIntegrityError(DecryptionError):
-    pass  # E.g. MAC/tag check failed
+    pass  # E.g. MAC tags check failed
 
 
 class SignatureCreationError(CryptographyError):

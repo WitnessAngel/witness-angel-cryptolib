@@ -199,7 +199,7 @@ def test_stream_manager(encryption_algo_list):
                     authentication_data['message_digests'][hash_algo])
 
         cipherdict = {"ciphertext": current_ciphertext}
-        cipherdict.update(authentication_data["integrity_tags"])
+        cipherdict.update(authentication_data["message_authentication_codes"])
 
         decrypted_ciphertext = wacryptolib.encryption.decrypt_bytestring(cipherdict=cipherdict,
                                                                          encryption_algo=data_encryption_node[

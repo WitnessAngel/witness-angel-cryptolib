@@ -61,7 +61,7 @@ def decrypt_bytestring(
         as bytestrings
     :param encryption_algo: one of the supported encryption algorithms
     :param key_dict: dict with secret key fields
-    :param verify: whether to check tag/mac values of the ciphertext
+    :param verify: whether to check MAC tags of the ciphertext
 
     :return: dictionary with encryption data."""
     encryption_type_conf = _get_encryption_type_conf(encryption_algo)
@@ -99,7 +99,7 @@ def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict, verify: bool=True) ->
 
     :param cipherdict: dict with field "ciphertext" as bytestring
     :param key_dict: dict with AES cryptographic main key and nonce.
-    :param verify: whether to check tag/mac values of the ciphertext
+    :param verify: whether to check MAC tags of the ciphertext
         (not applicable for this cipher)
 
     :return: the decrypted bytestring"""
@@ -136,7 +136,7 @@ def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify: bool=True) ->
 
     :param cipherdict: dict with fields "ciphertext", "tag" as bytestrings
     :param key_dict: dict with AES cryptographic main key and nonce.
-    :param verify: whether to check tag/mac values of the ciphertext
+    :param verify: whether to check MAC tags of the ciphertext
 
     :return: the decrypted bytestring"""
     main_key = key_dict["key"]
@@ -175,7 +175,7 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify: boo
 
     :param cipherdict: dict with fields "ciphertext", "tag" and "nonce" as bytestrings
     :param key_dict: 32 bytes long cryptographic key and nonce
-    :param verify: whether to check tag/mac values of the ciphertext
+    :param verify: whether to check MAC tags of the ciphertext
 
     :return: the decrypted bytestring"""
     main_key = key_dict["key"]
@@ -215,7 +215,7 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool=True) -
 
     :param cipherdict: list of ciphertext chunks
     :param key_dict: dict with public RSA key object (RSA.RsaKey)
-    :param verify: whether to check tag/mac values of the ciphertext
+    :param verify: whether to check MAC tags of the ciphertext
         (not applicable for this cipher)
 
     :return: the decrypted bytestring"""
@@ -307,7 +307,7 @@ class EncryptionStreamBase:
         """
         assert self._is_finished
 
-        return dict(integrity_tags=self._get_integrity_tags(),
+        return dict(message_authentication_codes=self._get_message_authentication_codes(),
                     message_digests=self._get_message_digests())
 
     def _get_message_digests(self) -> dict:
@@ -318,7 +318,7 @@ class EncryptionStreamBase:
             hashes[hash_algo] = digest
         return hashes
 
-    def _get_integrity_tags(self) -> dict:
+    def _get_message_authentication_codes(self) -> dict:
         return {}
 
 
@@ -342,7 +342,7 @@ class AesEaxEncryptionNode(EncryptionStreamBase):
         self._nonce = key_dict["nonce"]
         self._cipher = AES.new(self._key, AES.MODE_EAX, nonce=self._nonce)
 
-    def _get_integrity_tags(self) -> dict:
+    def _get_message_authentication_codes(self) -> dict:
         return {"tag": self._cipher.digest()}
 
 
@@ -357,7 +357,7 @@ class Chacha20Poly1305EncryptionNode(EncryptionStreamBase):
         self._nonce = key_dict["nonce"]
         self._cipher = ChaCha20_Poly1305.new(key=self._key, nonce=self._nonce)
 
-    def _get_integrity_tags(self) -> dict:
+    def _get_message_authentication_codes(self) -> dict:
         return {"tag": self._cipher.digest()}
 
 

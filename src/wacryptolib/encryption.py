@@ -23,13 +23,13 @@ RSA_OAEP_CHUNKS_SIZE = 60
 RSA_OAEP_HASHER = Crypto.Hash.SHA512
 
 
-def _get_encryption_type_conf(encryption_algo):
+def _get_encryption_algo_conf(encryption_algo):
     encryption_algo = encryption_algo.upper()
     if encryption_algo not in ENCRYPTION_ALGOS_REGISTRY:
         raise ValueError("Unknown cipher type '%s'" % encryption_algo)
 
-    encryption_type_conf = ENCRYPTION_ALGOS_REGISTRY[encryption_algo]
-    return encryption_type_conf
+    encryption_algo_conf = ENCRYPTION_ALGOS_REGISTRY[encryption_algo]
+    return encryption_algo_conf
 
 
 # FIXME make it return BYTESTRING ALWAYS, no need to jsonify them!
@@ -40,8 +40,8 @@ def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key_dict: dict
 
     :return: dictionary with encryption data"""
     assert isinstance(plaintext, bytes), repr(plaintext)
-    encryption_type_conf = _get_encryption_type_conf(encryption_algo=encryption_algo)
-    encryption_function = encryption_type_conf["encryption_function"]
+    encryption_algo_conf = _get_encryption_algo_conf(encryption_algo=encryption_algo)
+    encryption_function = encryption_algo_conf["encryption_function"]
     #### _check_symmetric_key_length_bytes(len(main_key))
     try:
         cipherdict = encryption_function(key_dict=key_dict, plaintext=plaintext)
@@ -64,8 +64,8 @@ def decrypt_bytestring(
     :param verify: whether to check MAC tags of the ciphertext
 
     :return: dictionary with encryption data."""
-    encryption_type_conf = _get_encryption_type_conf(encryption_algo)
-    decryption_function = encryption_type_conf["decryption_function"]
+    encryption_algo_conf = _get_encryption_algo_conf(encryption_algo)
+    decryption_function = encryption_algo_conf["decryption_function"]
     try:
         plaintext = decryption_function(key_dict=key_dict, cipherdict=cipherdict, verify=verify)
     except ValueError as exc:
@@ -374,7 +374,7 @@ class StreamManager:
             symkey = data_encryption_layer_extract["symkey"]
             message_digest_algos = data_encryption_layer_extract["message_digest_algos"]
 
-            encryption_algo_conf = _get_encryption_type_conf(encryption_algo=data_encryption_algo)
+            encryption_algo_conf = _get_encryption_algo_conf(encryption_algo=data_encryption_algo)
             encryption_class = encryption_algo_conf["encryption_node_class"]
 
             if encryption_class is None:

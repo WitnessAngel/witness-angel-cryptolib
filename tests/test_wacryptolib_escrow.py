@@ -37,7 +37,7 @@ def test_escrow_api_workflow():
 
     for _ in range(2):
         generate_free_keypair_for_least_provisioned_key_algo(
-            key_storage=key_storage, max_free_keys_per_type=10, key_algos=["RSA_OAEP", "DSA_DSS"]
+            key_storage=key_storage, max_free_keys_per_algo=10, key_algos=["RSA_OAEP", "DSA_DSS"]
         )
     assert key_storage.get_free_keypairs_count("DSA_DSS") == 1
     assert key_storage.get_free_keypairs_count("ECC_DSS") == 0
@@ -264,7 +264,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     for _ in range(4):
         res = generate_free_keypair_for_least_provisioned_key_algo(
             key_storage=key_storage,
-            max_free_keys_per_type=10,
+            max_free_keys_per_algo=10,
             key_generation_func=key_generation_func,
             # no key_algos parameter provided
         )
@@ -285,7 +285,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     for _ in range(7):
         res = generate_free_keypair_for_least_provisioned_key_algo(
             key_storage=key_storage,
-            max_free_keys_per_type=10,
+            max_free_keys_per_algo=10,
             key_generation_func=key_generation_func,
             key_algos=restricted_key_algos,
         )
@@ -299,7 +299,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     for _ in range(23):
         res = generate_free_keypair_for_least_provisioned_key_algo(
             key_storage=key_storage,
-            max_free_keys_per_type=10,
+            max_free_keys_per_algo=10,
             key_generation_func=key_generation_func,
             key_algos=restricted_key_algos,
         )
@@ -312,7 +312,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
 
     res = generate_free_keypair_for_least_provisioned_key_algo(
         key_storage=key_storage,
-        max_free_keys_per_type=10,
+        max_free_keys_per_algo=10,
         key_generation_func=key_generation_func,
         key_algos=restricted_key_algos,
     )
@@ -322,7 +322,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     for _ in range(7):
         generate_free_keypair_for_least_provisioned_key_algo(
             key_storage=key_storage,
-            max_free_keys_per_type=15,
+            max_free_keys_per_algo=15,
             key_generation_func=key_generation_func,
             key_algos=["RSA_OAEP", "DSA_DSS"],
         )
@@ -334,7 +334,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
 
     res = generate_free_keypair_for_least_provisioned_key_algo(
         key_storage=key_storage,
-        max_free_keys_per_type=20,
+        max_free_keys_per_algo=20,
         key_generation_func=key_generation_func,
         key_algos=restricted_key_algos,
     )
@@ -346,7 +346,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
 
     res = generate_free_keypair_for_least_provisioned_key_algo(
         key_storage=key_storage,
-        max_free_keys_per_type=5,
+        max_free_keys_per_algo=5,
         key_generation_func=key_generation_func,
         key_algos=restricted_key_algos,
     )
@@ -368,7 +368,7 @@ def test_get_free_keys_generator_worker():
 
     worker = get_free_keys_generator_worker(
         key_storage=key_storage,
-        max_free_keys_per_type=30,
+        max_free_keys_per_algo=30,
         sleep_on_overflow_s=0.5,
         key_generation_func=key_generation_func,
     )

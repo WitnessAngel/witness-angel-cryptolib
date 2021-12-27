@@ -239,7 +239,7 @@ class ReadonlyEscrowApi(EscrowApi):
 
 def generate_free_keypair_for_least_provisioned_key_algo(
     key_storage: KeyStorageBase,
-    max_free_keys_per_type: int,
+    max_free_keys_per_algo: int,
     key_generation_func=generate_keypair,
     key_algos=SUPPORTED_ASYMMETRIC_KEY_ALGOS,
 ):
@@ -248,7 +248,7 @@ def generate_free_keypair_for_least_provisioned_key_algo(
     add it to storage. If the "free keys" pools of the storage are full, do nothing.
 
     :param key_storage: the key storage to use
-    :param max_free_keys_per_type: how many free keys should exist per key type
+    :param max_free_keys_per_algo: how many free keys should exist per key type
     :param key_generation_func: callable to use for keypair generation
     :param key_algos: the different key types (strings) to consider
     :return: True iff a key was generated (i.e. the free keys pool was not full)
@@ -259,7 +259,7 @@ def generate_free_keypair_for_least_provisioned_key_algo(
 
     (count, key_algo) = min(free_keys_counts)
 
-    if count >= max_free_keys_per_type:
+    if count >= max_free_keys_per_algo:
         return False
 
     keypair = key_generation_func(key_algo=key_algo, serialize=True)
@@ -271,14 +271,14 @@ def generate_free_keypair_for_least_provisioned_key_algo(
 
 
 def get_free_keys_generator_worker(
-    key_storage: KeyStorageBase, max_free_keys_per_type: int, sleep_on_overflow_s: float, **extra_generation_kwargs
+    key_storage: KeyStorageBase, max_free_keys_per_algo: int, sleep_on_overflow_s: float, **extra_generation_kwargs
 ) -> PeriodicTaskHandler:
     """
     Return a periodic task handler which will gradually fill the pools of free keys of the key storage,
     and wait longer when these pools are full.
     
     :param key_storage: the key storage to use 
-    :param max_free_keys_per_type: how many free keys should exist per key type
+    :param max_free_keys_per_algo: how many free keys should exist per key type
     :param sleep_on_overflow_s: time to wait when free keys pools are full
     :param extra_generation_kwargs: extra arguments to transmit to `generate_free_keypair_for_least_provisioned_key_algo()`
     :return: periodic task handler
@@ -286,7 +286,7 @@ def get_free_keys_generator_worker(
 
     def free_keypair_generator_task():
         has_generated = generate_free_keypair_for_least_provisioned_key_algo(
-            key_storage=key_storage, max_free_keys_per_type=max_free_keys_per_type, **extra_generation_kwargs
+            key_storage=key_storage, max_free_keys_per_algo=max_free_keys_per_algo, **extra_generation_kwargs
         )
         # TODO - improve this with refactored multitimer, later
         if not has_generated:

@@ -420,7 +420,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         :param key_bytes: symmetric key to encrypt (potentially already encrypted)
         :param cryptoconf: dictionary which contain configuration tree
 
-        :return: if the scheme used is 'SHARED_SECRET', a list of encrypted shares is returned. If an asymmetric
+        :return: if the scheme used is 'SHARED_SECRET', a list of encrypted shards is returned. If an asymmetric
         algorithm has been used, a dictionary with all the information needed to decipher the symmetric key is returned.
         """
         assert isinstance(key_bytes, bytes), key_bytes
@@ -434,26 +434,26 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             threshold_count = key_encryption_layer["key_shared_secret_threshold"]
             assert threshold_count <= shares_count
 
-            logger.debug("Generating Shamir shared secret shares (%d needed amongst %d)", threshold_count, shares_count)
+            logger.debug("Generating Shamir shared secret shards (%d needed amongst %d)", threshold_count, shares_count)
 
-            shares = split_bytestring_as_shamir_shards(
+            shards = split_bytestring_as_shamir_shards(
                 secret=key_bytes, shares_count=shares_count, threshold_count=threshold_count
             )
 
-            logger.debug("Secret has been shared into %d shares", shares_count)
-            assert len(shares) == shares_count
+            logger.debug("Secret has been shared into %d shards", shares_count)
+            assert len(shards) == shares_count
 
             shares_ciphertexts = []
 
-            for share, escrow_conf in zip(shares, key_shared_secret_shards):
-                share_bytes = dump_to_json_bytes(share)  # The tuple (idx, payload) of each share thus becomes encryptable
+            for shard, escrow_conf in zip(shards, key_shared_secret_shards):
+                shard_bytes = dump_to_json_bytes(shard)  # The tuple (idx, payload) of each shard thus becomes encryptable
                 shares_ciphertext = self._encrypt_key_through_multiple_layers(  # FIXME rename singular
                         keychain_uid=keychain_uid,
-                        key_bytes=share_bytes,
+                        key_bytes=shard_bytes,
                         key_encryption_layers=escrow_conf["key_encryption_layers"])  # Recursive structure
                 shares_ciphertexts.append(shares_ciphertext)
 
-            key_cipherdict = {"shares": shares_ciphertexts}  # A dict is more future-proof
+            key_cipherdict = {"shards": shares_ciphertexts}  # A dict is more future-proof
             return key_cipherdict
 
         else:  # Using asymmetric algorithm
@@ -491,39 +491,39 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         cipherdict = encrypt_bytestring(plaintext=key_bytes, encryption_algo=encryption_algo, key_dict={"key": subkey})
         return cipherdict
 
-    def ____obsolete_____encrypt_shards(self, shares: Sequence, key_shared_secret_shards: Sequence, keychain_uid: uuid.UUID) -> list:
+    def ____obsolete_____encrypt_shards(self, shards: Sequence, key_shared_secret_shards: Sequence, keychain_uid: uuid.UUID) -> list:
         """
-        Make a loop through all shares from shared secret algorithm to encrypt each of them.
+        Make a loop through all shards from shared secret algorithm to encrypt each of them.
 
-        :param shares: list of tuples containing an index and its share payload
-        :param key_shared_secret_shards: cryptoconf subtree with share escrow information
+        :param shards: list of tuples containing an index and its shard payload
+        :param key_shared_secret_shards: cryptoconf subtree with shard escrow information
         :param keychain_uid: uuid for the set of encryption keys used
 
-        :return: list of encrypted shares
+        :return: list of encrypted shards
         """
 
         all_encrypted_shards = []
 
-        assert len(shares) == len(key_shared_secret_shards)
+        assert len(shards) == len(key_shared_secret_shards)
 
-        for shared_idx, share in enumerate(shares):
-            assert isinstance(share[1], bytes), repr(share)
+        for shard_idx, shard in enumerate(shards):
+            assert isinstance(shard[1], bytes), repr(shard)
 
-            conf_shard = key_shared_secret_shards[shared_idx]
-            share_encryption_algo = conf_shard["share_encryption_algo"]
-            share_escrow = conf_shard["share_escrow"]
+            conf_shard = key_shared_secret_shards[shard_idx]
+            shard_encryption_algo = conf_shard["shard_encryption_algo"]
+            shard_escrow = conf_shard["shard_escrow"]
             keychain_uid_shard = conf_shard.get("keychain_uid") or keychain_uid
 
-            share_cipherdict = self._encrypt_with_asymmetric_cipher(
-                encryption_algo=share_encryption_algo,
+            shard_cipherdict = self._encrypt_with_asymmetric_cipher(
+                encryption_algo=shard_encryption_algo,
                 keychain_uid=keychain_uid_shard,
-                key_bytes=share[1],
-                escrow=share_escrow,
+                key_bytes=shard[1],
+                escrow=shard_escrow,
             )
 
-            all_encrypted_shards.append((share[0], share_cipherdict))
+            all_encrypted_shards.append((shard[0], shard_cipherdict))
 
-        assert len(shares) == len(key_shared_secret_shards)
+        assert len(shards) == len(key_shared_secret_shards)
         return all_encrypted_shards
 
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: list):
@@ -671,38 +671,38 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
             key_shared_secret_shards = encryption_layer["key_shared_secret_shards"]  # FIXMe rename twice
             key_shared_secret_threshold = encryption_layer["key_shared_secret_threshold"]
 
-            shares_ciphertexts = key_cipherdict["shares"]  # FIXME rename to share_ciphertexts
+            shares_ciphertexts = key_cipherdict["shards"]  # FIXME rename to shard_ciphertexts
 
-            logger.debug("Deciphering each share")
+            logger.debug("Deciphering each shard")
 
-            # If some shares are missing, we won't detect it here because zip() stops at shortest list
-            for share_ciphertext, escrow_conf in zip(shares_ciphertexts, key_shared_secret_shards):
+            # If some shards are missing, we won't detect it here because zip() stops at shortest list
+            for shard_ciphertext, escrow_conf in zip(shares_ciphertexts, key_shared_secret_shards):
 
                 try:
-                    share_bytes = self._decrypt_key_through_multiple_layers(
+                    shard_bytes = self._decrypt_key_through_multiple_layers(
                             keychain_uid=keychain_uid,
-                            key_ciphertext=share_ciphertext,
+                            key_ciphertext=shard_ciphertext,
                             encryption_layers=escrow_conf["key_encryption_layers"])  # Recursive structure
-                    share = load_from_json_bytes(share_bytes)  # The tuple (idx, payload) of each share thus becomes encryptable
-                    decrypted_shards.append(share)
+                    shard = load_from_json_bytes(shard_bytes)  # The tuple (idx, payload) of each shard thus becomes encryptable
+                    decrypted_shards.append(shard)
 
                 # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
                 except Exception as exc:  # If actual escrow doesn't work, we can go to next one
                     decryption_errors.append(exc)
-                    logger.error("Error when decrypting share of %s: %r" % (escrow_conf, exc), exc_info=True)
+                    logger.error("Error when decrypting shard of %s: %r" % (escrow_conf, exc), exc_info=True)
 
                 if len(decrypted_shards) == key_shared_secret_threshold:
-                    logger.debug("A sufficient number of shares has been decrypted")
+                    logger.debug("A sufficient number of shards has been decrypted")
                     break
 
             if len(decrypted_shards) < key_shared_secret_threshold:
                 raise DecryptionError(
-                    "%s valid share(s) missing for reconstitution of symmetric key (errors: %r)"
+                    "%s valid shard(s) missing for reconstitution of symmetric key (errors: %r)"
                     % (key_shared_secret_threshold - len(decrypted_shards), decryption_errors)
                 )
 
-            logger.debug("Recombining shared-secret shares")
-            key_bytes = recombine_secret_from_shamir_shards(shares=decrypted_shards)
+            logger.debug("Recombining shared-secret shards")
+            key_bytes = recombine_secret_from_shamir_shards(shards=decrypted_shards)
             return key_bytes
 
         else:  # Using asymmetric algorithm
@@ -747,12 +747,12 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
     def ________decrypt_symmetric_key_shard(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, cryptoconf: dict):
         """
-        Make a loop through all encrypted shares to decrypt each of them
+        Make a loop through all encrypted shards to decrypt each of them
         :param keychain_uid: uuid for the set of encryption keys used
-        :param symmetric_key_cipherdict: dictionary which contains every payload needed to decipher each share
+        :param symmetric_key_cipherdict: dictionary which contains every payload needed to decipher each shard
         :param cryptoconf: configuration tree inside key_encryption_algo
 
-        :return: list of tuples of deciphered shares
+        :return: list of tuples of deciphered shards
         """
         key_shared_secret_shards = cryptoconf["key_shared_secret_shards"]
         key_shared_secret_threshold = cryptoconf["key_shared_secret_threshold"]
@@ -760,43 +760,43 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         decrypted_shards = []
         decryption_errors = []
 
-        assert len(symmetric_key_cipherdict["shares"]) <= len(
+        assert len(symmetric_key_cipherdict["shards"]) <= len(
             key_shared_secret_shards
-        )  # During tests we erase some cryptainer shares...
+        )  # During tests we erase some cryptainer shards...
 
-        for share_idx, share_conf in enumerate(key_shared_secret_shards):
+        for shard_idx, shard_conf in enumerate(key_shared_secret_shards):
 
-            share_encryption_algo = share_conf["share_encryption_algo"]
-            share_escrow = share_conf["share_escrow"]
-            keychain_uid_shard = share_conf.get("keychain_uid") or keychain_uid
+            shard_encryption_algo = shard_conf["shard_encryption_algo"]
+            shard_escrow = shard_conf["shard_escrow"]
+            keychain_uid_shard = shard_conf.get("keychain_uid") or keychain_uid
 
             try:
                 try:
-                    encrypted_shard = symmetric_key_cipherdict["shares"][share_idx]
+                    encrypted_shard = symmetric_key_cipherdict["shards"][shard_idx]
                 except IndexError:
-                    raise ValueError("Missing share at index %s" % share_idx) from None
+                    raise ValueError("Missing shard at index %s" % shard_idx) from None
 
-                share_plaintext = self._decrypt_with_asymmetric_cipher(
-                    encryption_algo=share_encryption_algo,
+                shard_plaintext = self._decrypt_with_asymmetric_cipher(
+                    encryption_algo=shard_encryption_algo,
                     keychain_uid=keychain_uid_shard,
                     cipherdict=encrypted_shard[1],
-                    escrow=share_escrow,
+                    escrow=shard_escrow,
                 )
-                share = (encrypted_shard[0], share_plaintext)
-                decrypted_shards.append(share)
+                shard = (encrypted_shard[0], shard_plaintext)
+                decrypted_shards.append(shard)
 
             # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
             except Exception as exc:  # If actual escrow doesn't work, we can go to next one
                 decryption_errors.append(exc)
-                logger.error("Error when decrypting share of %s: %r" % (share_escrow, exc), exc_info=True)
+                logger.error("Error when decrypting shard of %s: %r" % (shard_escrow, exc), exc_info=True)
 
             if len(decrypted_shards) == key_shared_secret_threshold:
-                logger.debug("A sufficient number of shares has been decrypted")
+                logger.debug("A sufficient number of shards has been decrypted")
                 break
 
         if len(decrypted_shards) < key_shared_secret_threshold:
             raise DecryptionError(
-                "%s valid share(s) missing for reconstitution of symmetric key (errors: %r)"
+                "%s valid shard(s) missing for reconstitution of symmetric key (errors: %r)"
                 % (key_shared_secret_threshold - len(decrypted_shards), decryption_errors)
             )
         return decrypted_shards

@@ -44,7 +44,7 @@ EXAMPLE_CRYPTOCONF = dict(
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
                         dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
-                    ],  # Beware, same escrow for the 2 shares, for now
+                    ],  # Beware, same escrow for the 2 shards, for now
                 ),
             ],
             payload_signatures=[

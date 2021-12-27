@@ -466,7 +466,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
     # 1 share is deleted
 
-    del key_ciphertext_shards["shares"][-1]
+    del key_ciphertext_shards["shards"][-1]
 
     payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
@@ -476,7 +476,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
     # Another share is deleted
 
-    del key_ciphertext_shards["shares"][-1]
+    del key_ciphertext_shards["shards"][-1]
 
     payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
@@ -485,7 +485,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
     # Another share is deleted and now there aren't enough valid ones to decipher data
 
-    del key_ciphertext_shards["shares"][-1]
+    del key_ciphertext_shards["shards"][-1]
 
     payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
@@ -517,7 +517,7 @@ RECURSIVE_CRYPTOCONF = dict(
                         dict(
                              key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
-                    ],  # Beware, same escrow for the 2 shares, for now
+                    ],  # Beware, same escrow for the 2 shards, for now
                 ),
             ],
             payload_signatures=[
@@ -601,14 +601,14 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     local_escrow_id = get_escrow_id(LOCAL_ESCROW_MARKER)
 
-    share_escrow1 = dict(escrow_type="authdevice", authdevice_uid=keystore_uid1)
-    share_escrow1_id = get_escrow_id(share_escrow1)
+    shard_escrow1 = dict(escrow_type="authdevice", authdevice_uid=keystore_uid1)
+    shard_escrow1_id = get_escrow_id(shard_escrow1)
 
-    share_escrow2 = dict(escrow_type="authdevice", authdevice_uid=keystore_uid2)
-    share_escrow2_id = get_escrow_id(share_escrow2)
+    shard_escrow2 = dict(escrow_type="authdevice", authdevice_uid=keystore_uid2)
+    shard_escrow2_id = get_escrow_id(shard_escrow2)
 
-    share_escrow3 = dict(escrow_type="authdevice", authdevice_uid=keystore_uid3)
-    share_escrow3_id = get_escrow_id(share_escrow3)
+    shard_escrow3 = dict(escrow_type="authdevice", authdevice_uid=keystore_uid3)
+    shard_escrow3_id = get_escrow_id(shard_escrow3)
 
     cryptoconf = dict(
         payload_encryption_layers=[
@@ -621,11 +621,11 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                         key_shared_secret_threshold=2,
                         key_shared_secret_shards=[
                             dict(key_encryption_layers=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow1, keychain_uid=keychain_uid_escrow)],),
+                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=shard_escrow1, keychain_uid=keychain_uid_escrow)],),
                             dict(key_encryption_layers=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow2)],),
+                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=shard_escrow2)],),
                             dict(key_encryption_layers=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow3)],),
+                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=shard_escrow3)],),
                         ],
                     ),
                 ],
@@ -658,21 +658,21 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
         decrypt_payload_from_cryptainer(
-            cryptainer, keystore_pool=keystore_pool, passphrase_mapper={share_escrow1_id: all_passphrases}
+            cryptainer, keystore_pool=keystore_pool, passphrase_mapper={shard_escrow1_id: all_passphrases}
         )  # Unblocks 1 share escrow
 
     with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
         decrypt_payload_from_cryptainer(
             cryptainer,
             keystore_pool=keystore_pool,
-            passphrase_mapper={share_escrow1_id: all_passphrases, share_escrow2_id: [passphrase3]},
+            passphrase_mapper={shard_escrow1_id: all_passphrases, shard_escrow2_id: [passphrase3]},
         )  # No changes
 
     with pytest.raises(DecryptionError, match="Could not decrypt private key"):
         decrypt_payload_from_cryptainer(
             cryptainer,
             keystore_pool=keystore_pool,
-            passphrase_mapper={share_escrow1_id: all_passphrases, share_escrow3_id: [passphrase3]},
+            passphrase_mapper={shard_escrow1_id: all_passphrases, shard_escrow3_id: [passphrase3]},
         )
 
     with pytest.raises(DecryptionError, match="Could not decrypt private key"):
@@ -681,8 +681,8 @@ def test_passphrase_mapping_during_decryption(tmp_path):
             keystore_pool=keystore_pool,
             passphrase_mapper={
                 local_escrow_id: ["qsdqsd"],
-                share_escrow1_id: all_passphrases,
-                share_escrow3_id: [passphrase3],
+                shard_escrow1_id: all_passphrases,
+                shard_escrow3_id: [passphrase3],
             },
         )
 
@@ -691,8 +691,8 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         keystore_pool=keystore_pool,
         passphrase_mapper={
             local_escrow_id: [local_passphrase],
-            share_escrow1_id: all_passphrases,
-            share_escrow3_id: [passphrase3],
+            shard_escrow1_id: all_passphrases,
+            shard_escrow3_id: [passphrase3],
         },
     )
     assert decrypted == payload
@@ -703,8 +703,8 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         keystore_pool=keystore_pool,
         passphrase_mapper={
             local_escrow_id: [local_passphrase],
-            share_escrow1_id: ["dummy-passphrase"],
-            share_escrow3_id: [passphrase3],
+            shard_escrow1_id: ["dummy-passphrase"],
+            shard_escrow3_id: [passphrase3],
             None: all_passphrases,
         },
     )

@@ -41,7 +41,7 @@ def profile_simple_encryption():
 
     cryptainer_storage = CryptainerStorage(
         default_cryptoconf=ENCRYPTION_CRYPTOCONF,
-        cryptainers_dir=tmp_path,
+        cryptainer_dir=tmp_path,
         offload_data_ciphertext=True,
     )
 

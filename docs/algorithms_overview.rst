@@ -3,7 +3,7 @@
 Selected Algorithms
 ===============================
 
-Here are the processes and algorithms that have been cherry-picked to build our secure containers.
+Here are the processes and algorithms that have been cherry-picked to build our secure cryptainers.
 
 
 Invariants

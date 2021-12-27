@@ -317,7 +317,7 @@ def _dump_to_raw_json_tree(data):
 
 
 def _intialize_cryptainer_with_single_file(tmp_path):  # FIXME generalize its use in different test functions below
-    storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainers_dir=tmp_path)
+    storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainer_dir=tmp_path)
 
     storage.enqueue_file_for_encryption(
         "animals.dat", b"dogs\ncats\n", metadata=None
@@ -764,8 +764,8 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     side_tmp = tmp_path / "side_tmp"
     side_tmp.mkdir()
 
-    cryptainers_dir = tmp_path / "cryptainers_dir"
-    cryptainers_dir.mkdir()
+    cryptainer_dir = tmp_path / "cryptainers_dir"
+    cryptainer_dir.mkdir()
 
     animals_file_path = side_tmp / "animals"
     animals_file_path.write_bytes(b"dogs\ncats\n")
@@ -781,7 +781,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
             pass  # Win32 doesn't allow that
 
     # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
-    storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainers_dir=cryptainers_dir)
+    storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=cryptainer_dir)
     assert storage._max_cryptainer_count is None
     assert len(storage) == 0
     assert storage.list_cryptainer_names() == []
@@ -796,14 +796,14 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
 
     assert len(storage) == 2
     assert storage.list_cryptainer_names(as_sorted=True) == [Path("animals.dat.crypt"), Path("empty.txt.crypt")]
-    assert storage._cryptainers_dir.joinpath(
+    assert storage._cryptainer_dir.joinpath(
         "animals.dat.crypt.data"
     ).is_file()  # By default, DATA OFFLOADING is activated
-    assert storage._cryptainers_dir.joinpath("empty.txt.crypt.data").is_file()
-    assert len(list(storage._cryptainers_dir.iterdir())) == 4  # 2 files per cryptainer
+    assert storage._cryptainer_dir.joinpath("empty.txt.crypt.data").is_file()
+    assert len(list(storage._cryptainer_dir.iterdir())) == 4  # 2 files per cryptainer
 
     storage = CryptainerStorage(
-        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainers_dir=cryptainers_dir, offload_data_ciphertext=False
+        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=cryptainer_dir, offload_data_ciphertext=False
     )
     storage.enqueue_file_for_encryption("newfile.bmp", b"stuffs", metadata=None)
     storage.wait_for_idle_state()
@@ -812,8 +812,8 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert storage.list_cryptainer_names(as_sorted=True) == expected_cryptainer_names
     assert sorted(storage.list_cryptainer_names(as_sorted=False)) == expected_cryptainer_names
 
-    assert not list(storage._cryptainers_dir.glob("newfile*data"))  # Offloading is well disabled now
-    assert len(list(storage._cryptainers_dir.iterdir())) == 5
+    assert not list(storage._cryptainer_dir.glob("newfile*data"))  # Offloading is well disabled now
+    assert len(list(storage._cryptainer_dir.iterdir())) == 5
 
     _cryptainer_for_txt = storage.load_cryptainer_from_storage("empty.txt.crypt")
     assert storage.load_cryptainer_from_storage(1) == _cryptainer_for_txt
@@ -827,7 +827,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     offload_data_ciphertext = random_bool()
     storage = CryptainerStorage(
         default_cryptoconf=SIMPLE_CRYPTOCONF,
-        cryptainers_dir=cryptainers_dir,
+        cryptainer_dir=cryptainer_dir,
         offload_data_ciphertext=offload_data_ciphertext,
     )
 
@@ -853,15 +853,15 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert empty_content == b""
 
     assert len(storage) == 3
-    os.remove(os.path.join(cryptainers_dir, "animals.dat.crypt"))
-    os.remove(os.path.join(cryptainers_dir, "newfile.bmp.crypt"))
+    os.remove(os.path.join(cryptainer_dir, "animals.dat.crypt"))
+    os.remove(os.path.join(cryptainer_dir, "newfile.bmp.crypt"))
     assert storage.list_cryptainer_names(as_sorted=True) == [Path("empty.txt.crypt")]
     assert len(storage) == 1  # Remaining offloaded data file is ignored
 
     offload_data_ciphertext1 = random_bool()
     storage = FakeTestCryptainerStorage(
         default_cryptoconf={"smth": True},
-        cryptainers_dir=cryptainers_dir,
+        cryptainer_dir=cryptainer_dir,
         offload_data_ciphertext=offload_data_ciphertext1,
     )
     assert storage._max_cryptainer_count is None
@@ -873,12 +873,12 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
 
 
 def test_cryptainer_storage_purge_by_max_count(tmp_path):
-    cryptainers_dir = tmp_path
+    cryptainer_dir = tmp_path
 
     offload_data_ciphertext = random_bool()
     storage = FakeTestCryptainerStorage(
         default_cryptoconf={"stuffs": True},
-        cryptainers_dir=cryptainers_dir,
+        cryptainer_dir=cryptainer_dir,
         max_cryptainer_count=3,
         offload_data_ciphertext=offload_data_ciphertext,
     )
@@ -907,7 +907,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
     offload_data_ciphertext2 = random_bool()
     storage = FakeTestCryptainerStorage(
         default_cryptoconf={"randomthings": True},
-        cryptainers_dir=cryptainers_dir,
+        cryptainer_dir=cryptainer_dir,
         max_cryptainer_count=4,
         offload_data_ciphertext=offload_data_ciphertext2,
     )
@@ -964,16 +964,16 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
 
 
 def test_cryptainer_storage_purge_by_age(tmp_path):
-    cryptainers_dir = tmp_path
+    cryptainer_dir = tmp_path
     now = get_utc_now_date()
 
-    (cryptainers_dir / "20201021222700_oldfile.dat.crypt").touch()
-    (cryptainers_dir / "20301021222711_oldfile.dat.crypt").touch()
+    (cryptainer_dir / "20201021222700_oldfile.dat.crypt").touch()
+    (cryptainer_dir / "20301021222711_oldfile.dat.crypt").touch()
 
     offload_data_ciphertext = random_bool()
     storage = FakeTestCryptainerStorage(
         default_cryptoconf={"stuffs": True},
-        cryptainers_dir=cryptainers_dir,
+        cryptainer_dir=cryptainer_dir,
         max_cryptainer_age=timedelta(days=2),
         offload_data_ciphertext=offload_data_ciphertext,
     )
@@ -1021,12 +1021,12 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
 
 
 def test_cryptainer_storage_purge_by_quota(tmp_path):
-    cryptainers_dir = tmp_path
+    cryptainer_dir = tmp_path
 
     offload_data_ciphertext = random_bool()
     storage = FakeTestCryptainerStorage(
         default_cryptoconf={"stuffs": True},
-        cryptainers_dir=cryptainers_dir,
+        cryptainer_dir=cryptainer_dir,
         max_cryptainer_quota=8000,  # Beware of overhead of encryption and json structs!
         offload_data_ciphertext=offload_data_ciphertext,
     )
@@ -1067,7 +1067,7 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
 
 
 def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
-    cryptainers_dir = tmp_path
+    cryptainer_dir = tmp_path
     now = get_utc_now_date() - timedelta(seconds=1)
 
     recent_big_file_name = "%s_recent_big_stuff.dat" % now.strftime(CRYPTAINER_DATETIME_FORMAT)
@@ -1078,7 +1078,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
         offload_data_ciphertext = random_bool()
         storage = FakeTestCryptainerStorage(
             default_cryptoconf={"stuffs": True},
-            cryptainers_dir=cryptainers_dir,
+            cryptainer_dir=cryptainer_dir,
             max_cryptainer_count=max_cryptainer_count,
             max_cryptainer_quota=max_cryptainer_quota,
             max_cryptainer_age=max_cryptainer_age,
@@ -1101,7 +1101,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
 
     storage = FakeTestCryptainerStorage(
         default_cryptoconf={"stuffs": True},
-        cryptainers_dir=cryptainers_dir,
+        cryptainer_dir=cryptainer_dir,
         max_cryptainer_count=0,
         max_cryptainer_quota=0,
         max_cryptainer_age=timedelta(days=0),
@@ -1117,7 +1117,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
 def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
     # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
 
-    storage = CryptainerStorage(default_cryptoconf=None, cryptainers_dir=tmp_path)
+    storage = CryptainerStorage(default_cryptoconf=None, cryptainer_dir=tmp_path)
 
     assert storage.list_cryptainer_names() == []
 
@@ -1133,7 +1133,7 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
 
     # ---
 
-    storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainers_dir=tmp_path)
+    storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path)
     storage.enqueue_file_for_encryption("stuff_simple.txt", b"aaa", metadata=None)
     storage.enqueue_file_for_encryption(
         "stuff_complex.txt", b"xxx", metadata=None, cryptoconf=COMPLEX_CRYPTOCONF
@@ -1147,7 +1147,7 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
 
 
 def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
-    storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainers_dir=tmp_path)
+    storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainer_dir=tmp_path)
 
     storage.enqueue_file_for_encryption(
         "animals.dat", b"dogs\ncats\n", metadata=None
@@ -1316,13 +1316,13 @@ def test_generate_cryptainer_and_symmetric_keys():
 
 
 def test_create_cryptainer_encryption_stream(tmp_path):
-    cryptainers_dir = tmp_path / "cryptainers_dir"
-    cryptainers_dir.mkdir()
+    cryptainer_dir = tmp_path / "cryptainers_dir"
+    cryptainer_dir.mkdir()
 
     filename_base = "20200101_cryptainer_example"
 
     # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
-    storage = CryptainerStorage(default_cryptoconf=None, cryptainers_dir=cryptainers_dir)
+    storage = CryptainerStorage(default_cryptoconf=None, cryptainer_dir=cryptainer_dir)
 
     cryptainer_encryption_stream = storage.create_cryptainer_encryption_stream(
         filename_base, metadata={"mymetadata": True}, cryptoconf=SIMPLE_CRYPTOCONF, dump_initial_cryptainer=True)

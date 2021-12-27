@@ -1047,7 +1047,7 @@ class CryptainerStorage:
 
     def __init__(
         self,
-        cryptainers_dir: Path,
+        cryptainer_dir: Path,
         default_cryptoconf: Optional[dict] = None,
         max_cryptainer_quota: Optional[int] = None,
         max_cryptainer_count: Optional[int] = None,
@@ -1056,14 +1056,14 @@ class CryptainerStorage:
         max_workers: int = 1,
         offload_data_ciphertext=True,
     ):
-        cryptainers_dir = Path(cryptainers_dir)
-        assert cryptainers_dir.is_dir(), cryptainers_dir
-        cryptainers_dir = cryptainers_dir.absolute()
+        cryptainer_dir = Path(cryptainer_dir)
+        assert cryptainer_dir.is_dir(), cryptainer_dir
+        cryptainer_dir = cryptainer_dir.absolute()
         assert max_cryptainer_quota is None or max_cryptainer_quota >= 0, max_cryptainer_quota
         assert max_cryptainer_count is None or max_cryptainer_count >= 0, max_cryptainer_count
         assert max_cryptainer_age is None or max_cryptainer_age >= timedelta(seconds=0), max_cryptainer_age
         self._default_cryptoconf = default_cryptoconf
-        self._cryptainers_dir = cryptainers_dir
+        self._cryptainer_dir = cryptainer_dir
         self._max_cryptainer_quota = max_cryptainer_quota
         self._max_cryptainer_count = max_cryptainer_count
         self._max_cryptainer_age = max_cryptainer_age
@@ -1083,8 +1083,8 @@ class CryptainerStorage:
     def list_cryptainer_names(self, as_sorted=False, as_absolute=False):  # FIXME add annotations everywhere
         """Returns the list of encrypted cryptainers present in storage,
         sorted by name or not, absolute or not, as Path objects."""
-        assert self._cryptainers_dir.is_absolute(), self._cryptainers_dir
-        paths = list(self._cryptainers_dir.glob("*" + CRYPTAINER_SUFFIX))  # As list, for multiple looping on it
+        assert self._cryptainer_dir.is_absolute(), self._cryptainer_dir
+        paths = list(self._cryptainer_dir.glob("*" + CRYPTAINER_SUFFIX))  # As list, for multiple looping on it
         assert all(p.is_absolute() for p in paths), paths
         if as_sorted:
             paths = sorted(paths)
@@ -1125,7 +1125,7 @@ class CryptainerStorage:
 
     def _make_absolute(self, cryptainer_name):
         assert not Path(cryptainer_name).is_absolute()
-        return self._cryptainers_dir.joinpath(cryptainer_name)
+        return self._cryptainer_dir.joinpath(cryptainer_name)
 
     def _delete_cryptainer(self, cryptainer_name):
         cryptainer_filepath = self._make_absolute(cryptainer_name)

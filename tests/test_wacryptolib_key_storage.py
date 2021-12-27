@@ -6,8 +6,8 @@ from uuid import UUID
 
 import pytest
 
-from _test_mockups import get_fake_authentication_device, random_bool
-from wacryptolib.authentication_device import _get_key_storage_folder_path, initialize_authentication_device
+from _test_mockups import get_fake_authdevice, random_bool
+from wacryptolib.authdevice import _get_key_storage_folder_path, initialize_authdevice
 from wacryptolib.escrow import generate_keypair_for_storage
 from wacryptolib.exceptions import KeyStorageDoesNotExist, KeyStorageAlreadyExists
 from wacryptolib.key_generation import SUPPORTED_ASYMMETRIC_KEY_TYPES
@@ -197,15 +197,15 @@ def test_key_storage_import_key_storage_from_folder(tmp_path: Path):
     assert pool.list_imported_key_storage_uids() == []
     assert pool.list_imported_key_storage_metadata() == {}
 
-    authentication_device_path = tmp_path / "device"
-    authentication_device_path.mkdir()
-    authentication_device = get_fake_authentication_device(authentication_device_path)
-    initialize_authentication_device(authentication_device, user="Jean-Jâcques")
+    authdevice_path = tmp_path / "device"
+    authdevice_path.mkdir()
+    authdevice = get_fake_authdevice(authdevice_path)
+    initialize_authdevice(authdevice, user="Jean-Jâcques")
 
     keychain_uid = generate_uuid0()
     key_type = "RSA_OAEP"
 
-    remote_key_storage_path = _get_key_storage_folder_path(authentication_device)
+    remote_key_storage_path = _get_key_storage_folder_path(authdevice)
     remote_key_storage = FilesystemKeyStorage(remote_key_storage_path)
     remote_key_storage.set_keys(keychain_uid=keychain_uid, key_type=key_type, public_key=b"555", private_key=b"okj")
 
@@ -226,7 +226,7 @@ def test_key_storage_import_key_storage_from_folder(tmp_path: Path):
     with pytest.raises(KeyStorageAlreadyExists, match=str(key_storage_uid)):
         pool.import_key_storage_from_folder(remote_key_storage_path)
 
-    shutil.rmtree(authentication_device_path)  # Not important anymore
+    shutil.rmtree(authdevice_path)  # Not important anymore
 
     assert pool.list_imported_key_storage_uids() == [key_storage_uid]
     metadata_mapper2 = pool.list_imported_key_storage_metadata()

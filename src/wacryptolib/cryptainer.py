@@ -63,7 +63,7 @@ DUMMY_KEY_STORAGE_POOL = DummyKeyStoragePool()  # Common fallback storage with i
 #: Special value in cryptainers, to invoke a device-local escrow
 LOCAL_ESCROW_MARKER = dict(escrow_type="local")  # FIXME CHANGE THIS
 
-AUTHENTICATION_DEVICE_ESCROW_MARKER = dict(escrow_type="authentication_device")  # FIXME CHANGE THIS
+AUTHDEVICE_ESCROW_MARKER = dict(escrow_type="authdevice")  # FIXME CHANGE THIS
 
 
 class CRYPTAINER_STATES:
@@ -166,9 +166,9 @@ def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase):
 
     if escrow_type == LOCAL_ESCROW_MARKER["escrow_type"]:
         return LocalEscrowApi(key_storage_pool.get_local_key_storage())
-    elif escrow_type == AUTHENTICATION_DEVICE_ESCROW_MARKER["escrow_type"]:
-        authentication_device_uid = escrow["authentication_device_uid"]
-        key_storage = key_storage_pool.get_imported_key_storage(authentication_device_uid)
+    elif escrow_type == AUTHDEVICE_ESCROW_MARKER["escrow_type"]:
+        authdevice_uid = escrow["authdevice_uid"]
+        key_storage = key_storage_pool.get_imported_key_storage(authdevice_uid)
         return ReadonlyEscrowApi(key_storage)
     elif escrow_type == "jsonrpc":
         return JsonRpcProxy(url=escrow["url"], response_error_handler=status_slugs_response_error_handler)

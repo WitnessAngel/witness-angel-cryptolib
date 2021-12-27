@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # FIXME DELETE ALMOST ALL APIS OF THIS MODULE, now authenticator does it all
 
 # FIXME change "format" here, bad wording!!!!
-def list_available_authentication_devices():
+def list_available_authdevices():
     """
     Generate a list of dictionaries representing mounted partitions of USB keys.
 
@@ -30,78 +30,78 @@ def list_available_authentication_devices():
     """
 
     if sys_platform == "win32":
-        authentication_devices = _list_available_authentication_devices_win32()
+        authdevices = _list_available_authdevices_win32()
     else:  # Linux, MacOS etc.
-        authentication_devices = _list_available_authentication_devices_linux()
+        authdevices = _list_available_authdevices_linux()
 
-    for authentication_device in authentication_devices:
+    for authdevice in authdevices:
         metadata = None
-        if authentication_device["is_initialized"]:
-            metadata = load_authentication_device_metadata(authentication_device)  #FIXME - might crash concurrently here??
-        authentication_device["metadata"] = metadata
+        if authdevice["is_initialized"]:
+            metadata = load_authdevice_metadata(authdevice)  #FIXME - might crash concurrently here??
+        authdevice["metadata"] = metadata
 
-    return authentication_devices
+    return authdevices
 
 
 # FIXME deprecated
-def initialize_authentication_device(authentication_device: dict, user: str, extra_metadata: Optional[dict] = None):
+def initialize_authdevice(authdevice: dict, user: str, extra_metadata: Optional[dict] = None):
     """
     Initialize a specific USB key, by creating an internal structure with key device metadata.
 
     The device must not be already initialized.
 
-    :param authentication_device: (dict) Mounted partition of USB key.
+    :param authdevice: (dict) Mounted partition of USB key.
     :param user: (str) User name to store in device.
 
-    On success, updates 'authentication_device' to mark it as initialized, and to contain device metadata.
+    On success, updates 'authdevice' to mark it as initialized, and to contain device metadata.
     """
-    assert not authentication_device["is_initialized"]  # Will be doubled with actual check of filesystem
+    assert not authdevice["is_initialized"]  # Will be doubled with actual check of filesystem
 
-    authenticator_path = _get_authenticator_path(authentication_device)
+    authenticator_path = _get_authenticator_path(authdevice)
 
     metadata = initialize_authenticator(
         authenticator_path=authenticator_path, user=user, extra_metadata=extra_metadata
     )
 
-    authentication_device["is_initialized"] = True
-    authentication_device["metadata"] = metadata
+    authdevice["is_initialized"] = True
+    authdevice["metadata"] = metadata
 
 
 # FIXME deprecated
 # TODO go farther, and add flags to report errors if json or RSA keys are missing/corrupted?
-def is_authentication_device_initialized(authentication_device: dict):
+def is_authdevice_initialized(authdevice: dict):
     """
     Check if a key device seems initialized (by ignoring, of course, its "is_initialized" field).
 
     Doesn't actually load the device metadata.
-    Dooesn't modify `authentication_device` dict content.
+    Dooesn't modify `authdevice` dict content.
 
-    :param authentication_device: (dict) Key device information.
+    :param authdevice: (dict) Key device information.
 
     :return: (bool) True if and only if the key device is initialized.
     """
-    authenticator_path = _get_authenticator_path(authentication_device)
+    authenticator_path = _get_authenticator_path(authdevice)
     return is_authenticator_initialized(authenticator_path)
 
 
 # FIXME deprecated
-def load_authentication_device_metadata(authentication_device: dict) -> dict:
+def load_authdevice_metadata(authdevice: dict) -> dict:
     """
     Return the device metadata stored in the given mountpoint, after checking that it contains at least mandatory
     (user and device_uid) fields.
 
     Raises `ValueError` or json decoding exceptions if device appears initialized, but has corrupted metadata.
     """
-    authenticator_path = _get_authenticator_path(authentication_device)
+    authenticator_path = _get_authenticator_path(authdevice)
     return load_authenticator_metadata(authenticator_path)
 
 
-def _list_available_authentication_devices_win32():
+def _list_available_authdevices_win32():
     import pywintypes  # Import which also helps win32api to load
     import win32api
     import wmi
 
-    authentication_device_list = []
+    authdevice_list = []
     for drive in wmi.WMI().Win32_DiskDrive():
         pnp_dev_id = drive.PNPDeviceID.split("\\")
 
@@ -113,36 +113,36 @@ def _list_available_authentication_devices_win32():
 
                 device_path = logical_disk.Caption + "\\"
 
-                authentication_device = {}
+                authdevice = {}
 
                 try:
                     # This returns (volname, volsernum, maxfilenamlen, sysflags, filesystemtype) on success
-                    authentication_device["label"] = win32api.GetVolumeInformation(device_path)[0]
+                    authdevice["label"] = win32api.GetVolumeInformation(device_path)[0]
                 except pywintypes.error as exc:
                     # Happens e.g. if filesystem is unknown or missing
                     logging.warning("Skipping faulty device %s: %r", device_path, exc)
                     continue
 
-                authentication_device["drive_type"] = pnp_dev_id[0]  # type like 'USBSTOR'
-                authentication_device["path"] = device_path  # E.g. 'E:\\'
+                authdevice["drive_type"] = pnp_dev_id[0]  # type like 'USBSTOR'
+                authdevice["path"] = device_path  # E.g. 'E:\\'
                 assert drive.Size, drive.Size
-                authentication_device["size"] = int(partition.Size)  # In bytes
-                authentication_device["format"] = logical_disk.FileSystem.lower()  # E.g 'fat32'
-                authentication_device["is_initialized"] = is_authentication_device_initialized(
-                    authentication_device
+                authdevice["size"] = int(partition.Size)  # In bytes
+                authdevice["format"] = logical_disk.FileSystem.lower()  # E.g 'fat32'
+                authdevice["is_initialized"] = is_authdevice_initialized(
+                    authdevice
                 )  # E.g True
 
-                authentication_device_list.append(authentication_device)
+                authdevice_list.append(authdevice)
 
-    return authentication_device_list
+    return authdevice_list
 
 
-def _list_available_authentication_devices_linux():
+def _list_available_authdevices_linux():
     import pyudev
     import psutil
 
     context = pyudev.Context()
-    authentication_device_list = []
+    authdevice_list = []
     removable_devices = [
         device
         for device in context.list_devices(subsystem="block", DEVTYPE="disk")
@@ -167,26 +167,26 @@ def _list_available_authentication_devices_linux():
             continue
         #logger.warning("FOUND USB %s", p)
 
-        authentication_device = {}
-        authentication_device["drive_type"] = "USBSTOR"
-        authentication_device["label"] = str(PurePath(p.mountpoint).name)  # E.g: 'UBUNTU 20_0'
-        authentication_device["path"] = p.mountpoint  # E.g: '/media/akram/UBUNTU 20_0',
-        authentication_device["size"] = psutil.disk_usage(authentication_device["path"]).total  # E.g: 30986469376
-        authentication_device["format"] = p.fstype  # E.g: 'vfat'
-        authentication_device["partition"] = p.device  # E.g: '/dev/sda1'
-        authentication_device["is_initialized"] = is_authentication_device_initialized(
-            authentication_device
+        authdevice = {}
+        authdevice["drive_type"] = "USBSTOR"
+        authdevice["label"] = str(PurePath(p.mountpoint).name)  # E.g: 'UBUNTU 20_0'
+        authdevice["path"] = p.mountpoint  # E.g: '/media/akram/UBUNTU 20_0',
+        authdevice["size"] = psutil.disk_usage(authdevice["path"]).total  # E.g: 30986469376
+        authdevice["format"] = p.fstype  # E.g: 'vfat'
+        authdevice["partition"] = p.device  # E.g: '/dev/sda1'
+        authdevice["is_initialized"] = is_authdevice_initialized(
+            authdevice
         )  # E.g False
-        authentication_device_list.append(authentication_device)
+        authdevice_list.append(authdevice)
 
-    return authentication_device_list
+    return authdevice_list
 
 
 # FIXME introduce an AuthenticationDevice class to normalize and lazify API
 
-def _get_authenticator_path(authentication_device: dict):  # FIXME make this PUBLIC API?
-    return Path(authentication_device["path"]).joinpath(".key_storage")
+def _get_authenticator_path(authdevice: dict):  # FIXME make this PUBLIC API?
+    return Path(authdevice["path"]).joinpath(".key_storage")
 _get_key_storage_folder_path = _get_authenticator_path  # FIXME temporary alias for compatibility!
 
 # FIXME use this everywhere ??
-get_authenticator_path_for_authentication_device = _get_authenticator_path
+get_authenticator_path_for_authdevice = _get_authenticator_path

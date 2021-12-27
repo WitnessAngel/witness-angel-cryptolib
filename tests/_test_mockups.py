@@ -38,9 +38,9 @@ class WildcardUuid(object):
         return isinstance(other, UUID)
 
 
-def get_fake_authentication_device(device_path):
+def get_fake_authdevice(device_path):
     """Return a dict representing a fak authentication device."""
-    authentication_device = {
+    authdevice = {
         "drive_type": "USBSTOR",
         "path": device_path,
         "label": "TOSHIBA",
@@ -49,7 +49,7 @@ def get_fake_authentication_device(device_path):
         "is_initialized": False,
         "metadata": None,
     }
-    return authentication_device
+    return authdevice
 
 
 def random_bool():

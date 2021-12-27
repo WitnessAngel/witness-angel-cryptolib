@@ -601,13 +601,13 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     local_escrow_id = get_escrow_id(LOCAL_ESCROW_MARKER)
 
-    share_escrow1 = dict(escrow_type="authentication_device", authentication_device_uid=key_storage_uid1)
+    share_escrow1 = dict(escrow_type="authdevice", authdevice_uid=key_storage_uid1)
     share_escrow1_id = get_escrow_id(share_escrow1)
 
-    share_escrow2 = dict(escrow_type="authentication_device", authentication_device_uid=key_storage_uid2)
+    share_escrow2 = dict(escrow_type="authdevice", authdevice_uid=key_storage_uid2)
     share_escrow2_id = get_escrow_id(share_escrow2)
 
-    share_escrow3 = dict(escrow_type="authentication_device", authentication_device_uid=key_storage_uid3)
+    share_escrow3 = dict(escrow_type="authdevice", authdevice_uid=key_storage_uid3)
     share_escrow3_id = get_escrow_id(share_escrow3)
 
     cryptoconf = dict(

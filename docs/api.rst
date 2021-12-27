@@ -8,7 +8,7 @@ API Documentation
    api/cryptainer
    api/escrow
    api/authenticator
-   api/authentication_device
+   api/authdevice
    api/key_generation
    api/key_storage
    api/signature

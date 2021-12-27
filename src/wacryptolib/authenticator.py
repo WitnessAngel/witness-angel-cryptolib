@@ -69,11 +69,11 @@ def load_authenticator_metadata(authenticator_path: Path) -> dict:
 
     metadata = load_from_json_file(metadata_file)
 
-    _check_authentication_device_metadata(metadata)  # Raises if troubles
+    _check_authdevice_metadata(metadata)  # Raises if troubles
     return metadata
 
 
-def _check_authentication_device_metadata(metadata: dict):
+def _check_authdevice_metadata(metadata: dict):
     if not (
         isinstance(metadata, dict) and metadata.get("user") and metadata.get("device_uid")
     ):  # Only lightweight checkup for now

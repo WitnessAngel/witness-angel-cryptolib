@@ -297,7 +297,7 @@ class EncryptionStreamBase:
 
         return ciphertext
 
-    def get_integrity_tags(self) -> dict:
+    def get_payload_integrity_tags(self) -> dict:
         """ Get metadata
         Digest all hash instance in a dictionnary , and return the hash as bytes.
 
@@ -402,10 +402,10 @@ class StreamManager:
         self._output_stream.write(ciphertext)
         self._output_stream.flush()
 
-    def get_integrity_tags(self) -> list:
+    def get_payload_integrity_tags(self) -> list:
         integrity_tags_list = []
         for cipher in self._cipher_streams:
-            integrity_tags_list.append(cipher.get_integrity_tags())
+            integrity_tags_list.append(cipher.get_payload_integrity_tags())
         return integrity_tags_list
 
 

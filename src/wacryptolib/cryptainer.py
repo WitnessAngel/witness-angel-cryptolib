@@ -241,7 +241,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             def finalize(self):
                 output_stream.flush()
                 return None
-            def get_integrity_tags(self):
+            def get_payload_integrity_tags(self):
                 return [{"SHA256": b"a"*32}]  # Matches SIMPLE_CRYPTOCONF of unit test
 
         stream_encryptor = FakeStreamEncryptor()
@@ -275,12 +275,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
            cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
         )
 
-        payload_ciphertext, authentication_data_list = \
+        payload_ciphertext, payload_integrity_tags = \
             self._encrypt_and_hash_payload(payload, payload_encryption_layer_extracts)
 
         cryptainer["payload_ciphertext"] = payload_ciphertext
 
-        self.add_authentication_data_to_cryptainer(cryptainer, authentication_data_list)
+        self.add_authentication_data_to_cryptainer(cryptainer, payload_integrity_tags)
 
         return cryptainer
 
@@ -301,7 +301,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         """TODO"""
         payload_current = payload
 
-        authentication_data_list = []
+        payload_integrity_tags = []
 
         for payload_encryption_layer_extract in payload_encryption_layer_extracts:
             payload_encryption_algo = payload_encryption_layer_extract["encryption_algo"]  # FIXME RENAME THIS
@@ -322,14 +322,14 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
                 for message_digest_algo in message_digest_algos
             }
 
-            authentication_data_list.append(dict(
+            payload_integrity_tags.append(dict(
                     message_authentication_codes=payload_cipherdict,  # Only remains tags, macs etc.
                     message_digests=message_digests,
             ))
 
             payload_current = payload_ciphertext
 
-        return payload_current, authentication_data_list
+        return payload_current, payload_integrity_tags
 
     def _generate_cryptainer_base_and_secrets(self, cryptoconf: dict, keychain_uid=None, metadata=None) -> tuple:
         """
@@ -526,18 +526,18 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         assert len(shares) == len(key_shared_secret_shards)
         return all_encrypted_shards
 
-    def add_authentication_data_to_cryptainer(self, cryptainer: dict, authentication_data_list: list):
+    def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: list):
         keychain_uid = cryptainer["keychain_uid"]
 
         payload_encryption_layers = cryptainer["payload_encryption_layers"]
-        assert len(payload_encryption_layers) == len(authentication_data_list)  # Sanity check
+        assert len(payload_encryption_layers) == len(payload_integrity_tags)  # Sanity check
 
-        for payload_encryption_layer, authentication_data_list in zip(cryptainer["payload_encryption_layers"], authentication_data_list):
+        for payload_encryption_layer, payload_integrity_tags in zip(cryptainer["payload_encryption_layers"], payload_integrity_tags):
 
             assert payload_encryption_layer["message_authentication_codes"] is None  # Set at cryptainer build time
-            payload_encryption_layer["message_authentication_codes"] = authentication_data_list["message_authentication_codes"]
+            payload_encryption_layer["message_authentication_codes"] = payload_integrity_tags["message_authentication_codes"]
 
-            message_digests = authentication_data_list["message_digests"]
+            message_digests = payload_integrity_tags["message_digests"]
 
             _encountered_message_digest_algos = set()
             for signature_conf in payload_encryption_layer["payload_signatures"]:
@@ -870,9 +870,9 @@ class CryptainerEncryptionStream:
         self._stream_encryptor.finalize()
         self._output_data_stream.close()  # Important
 
-        authentication_data_list = self._stream_encryptor.get_integrity_tags()
+        payload_integrity_tags = self._stream_encryptor.get_payload_integrity_tags()
 
-        self._cryptainer_writer.add_authentication_data_to_cryptainer(self._wip_cryptainer, authentication_data_list)
+        self._cryptainer_writer.add_authentication_data_to_cryptainer(self._wip_cryptainer, payload_integrity_tags)
         self._dump_current_cryptainer_to_filesystem(is_temporary=False)
 
     def __del__(self):

@@ -6,7 +6,7 @@ import os
 
 from wacryptolib.cryptainer import (
     LOCAL_ESCROW_MARKER,
-    encrypt_data_into_cryptainer,
+    encrypt_payload_into_cryptainer,
     decrypt_data_from_cryptainer,
     CRYPTAINER_SUFFIX,
     MEDIUM_SUFFIX,
@@ -16,7 +16,7 @@ from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
-DEFAULT_KEYSTORE_POOl_DIRNAME = ".keystore_pool"
+DEFAULT_KEYSTORE_POOL_DIRNAME = ".keystore_pool"
 
 # TODO - much later, use "schema" for validation of config data and cryptainer format!  See https://github.com/keleshev/schema
 # Then export corresponding jsons-chema for the world to see!
@@ -25,7 +25,7 @@ DEFAULT_KEYSTORE_POOl_DIRNAME = ".keystore_pool"
 def _get_keystore_pool(ctx):
     keystore_pool_path = ctx.obj["keystore_pool"]
     if not keystore_pool_path:
-        keystore_pool_path = Path().joinpath(DEFAULT_KEYSTORE_POOl_DIRNAME)
+        keystore_pool_path = Path().joinpath(DEFAULT_KEYSTORE_POOL_DIRNAME)
         keystore_pool_path.mkdir(exist_ok=True)
     return FilesystemKeystorePool(keystore_pool_path)
 
@@ -61,7 +61,7 @@ EXAMPLE_CRYPTOCONF = dict(
     "-k",
     "--keystore-pool",
     default=None,
-    help="Folder to get/set crypto keys (else ./%s gets created)" % DEFAULT_KEYSTORE_POOl_DIRNAME,
+    help="Folder to get/set crypto keys (else ./%s gets created)" % DEFAULT_KEYSTORE_POOL_DIRNAME,
     type=click.Path(
         exists=True, file_okay=False, dir_okay=True, writable=True, readable=True, resolve_path=True, allow_dash=False
     ),
@@ -73,9 +73,9 @@ def cli(ctx, config, keystore_pool):
     ctx.obj["keystore_pool"] = keystore_pool
 
 
-def _do_encrypt(data, keystore_pool):
-    cryptainer = encrypt_data_into_cryptainer(
-        data, cryptoconf=EXAMPLE_CRYPTOCONF, metadata=None, keystore_pool=keystore_pool
+def _do_encrypt(payload, keystore_pool):
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload, cryptoconf=EXAMPLE_CRYPTOCONF, metadata=None, keystore_pool=keystore_pool
     )
     return cryptainer
 
@@ -91,7 +91,7 @@ def encrypt(ctx, input_medium, output_cryptainer):
     click.echo("In encrypt: %s" % str(locals()))
 
     keystore_pool = _get_keystore_pool(ctx)
-    cryptainer_data = _do_encrypt(data=input_medium.read(), keystore_pool=keystore_pool)
+    cryptainer_data = _do_encrypt(payload=input_medium.read(), keystore_pool=keystore_pool)
 
     cryptainer_data_bytes = dump_to_json_bytes(cryptainer_data, indent=4)
 
@@ -100,8 +100,8 @@ def encrypt(ctx, input_medium, output_cryptainer):
 
 
 def _do_decrypt(cryptainer, keystore_pool):
-    data = decrypt_data_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
-    return data
+    payload = decrypt_data_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+    return payload
 
 
 @cli.command()

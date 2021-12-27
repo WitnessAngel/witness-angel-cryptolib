@@ -50,7 +50,7 @@ CRYPTAINER_DATETIME_FORMAT = "%Y%m%d%H%M%S"  # For use in cryptainer names and t
 CRYPTAINER_TEMP_SUFFIX = "~"  # To name temporary, unfinalized, cryptainers
 
 OFFLOADED_MARKER = "[OFFLOADED]"
-OFFLOADED_DATA_SUFFIX = ".data"  # Added to CRYPTAINER_SUFFIX
+OFFLOADED_DATA_SUFFIX = ".payload"  # Added to CRYPTAINER_SUFFIX
 
 DATA_CHUNK_SIZE = 1024 ** 2  # E.g. when streaming a big payload through encryptors
 
@@ -209,7 +209,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
     def build_cryptainer_and_stream_encryptor(self, *, cryptoconf: dict, output_stream: BinaryIO, keychain_uid=None, metadata=None) -> dict:
         """
         Build a base cryptainer to store encrypted keys, as well as a stream encryptor
-        meant to process heavy data chunk by chunk.
+        meant to process heavy payload chunk by chunk.
 
         Signatures, and final ciphertext (if not offloaded), will have to be added
         later to the cryptainer.
@@ -217,9 +217,9 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         :param cryptoconf: configuration tree
         :param output_stream: open file where the stream encryptor should write to
         :param keychain_uid: uuid for the set of encryption keys used
-        :param metadata: additional data to store unencrypted in cryptainer
+        :param metadata: additional payload to store unencrypted in cryptainer
 
-        :return: cryptainer with all the information needed to attempt data decryption
+        :return: cryptainer with all the information needed to attempt payload decryption
         """
 
         cryptainer, data_encryption_layer_extracts = self._generate_cryptainer_base_and_secrets(
@@ -255,13 +255,13 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
         return cryptainer, stream_encryptor
 
-    def encrypt_data(self, data: Union[bytes, BinaryIO], *, cryptoconf: dict, keychain_uid=None, metadata=None) -> dict:
+    def encrypt_data(self, payload: Union[bytes, BinaryIO], *, cryptoconf: dict, keychain_uid=None, metadata=None) -> dict:
         """
         Shortcut when data is already available.
 
         This method browses through configuration tree to apply the right succession of encryption+signature algorithms to data.
 
-        :param data: initial plaintext, or file pointer (file immediately deleted then)
+        :param payload: initial plaintext, or file pointer (file immediately deleted then)
         :param cryptoconf: configuration tree
         :param keychain_uid: uuid for the set of encryption keys used
         :param metadata: additional data to store unencrypted in cryptainer
@@ -269,14 +269,14 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         :return: cryptainer with all the information needed to attempt data decryption
         """
 
-        data = self._load_data_bytes_and_cleanup(data)  # Ensure we get the whole data buffer
+        payload = self._load_data_bytes_and_cleanup(payload)  # Ensure we get the whole payload buffer
 
         cryptainer, data_encryption_layer_extracts = self._generate_cryptainer_base_and_secrets(
            cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
         )
 
         data_ciphertext, authentication_data_list = \
-            self._encrypt_and_hash_data(data, data_encryption_layer_extracts)
+            self._encrypt_and_hash_data(payload, data_encryption_layer_extracts)
 
         cryptainer["data_ciphertext"] = data_ciphertext
 
@@ -294,7 +294,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             data_stream.close()
             delete_filesystem_node_for_stream(data_stream)
         assert isinstance(data, bytes), data
-        ## FIXME LATER ADD THIS - assert data, data  # No encryption must be launched if we have no data to process!
+        ## FIXME LATER ADD THIS - assert payload, payload  # No encryption must be launched if we have no payload to process!
         return data
 
     def _encrypt_and_hash_data(self, data, data_encryption_layer_extracts):
@@ -308,14 +308,14 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             symkey = data_encryption_layer_extract["symkey"]
             message_digest_algos = data_encryption_layer_extract["message_digest_algos"]
 
-            logger.debug("Encrypting data with symmetric key of type %r", data_encryption_algo)
+            logger.debug("Encrypting payload with symmetric key of type %r", data_encryption_algo)
             data_cipherdict = encrypt_bytestring(
                 plaintext=data_current, encryption_algo=data_encryption_algo, key_dict=symkey
             )
-            assert isinstance(data_cipherdict, dict), data_cipherdict  # Might contain integrity/authentication data
+            assert isinstance(data_cipherdict, dict), data_cipherdict  # Might contain integrity/authentication payload
 
             data_ciphertext = data_cipherdict.pop("ciphertext")  # Mandatory field
-            assert isinstance(data_ciphertext, bytes), data_ciphertext  # Same raw content as would be in offloaded data file
+            assert isinstance(data_ciphertext, bytes), data_ciphertext  # Same raw content as would be in offloaded payload file
 
             message_digests = {
                 message_digest_algo: hash_message(data_ciphertext, hash_algo=message_digest_algo)
@@ -333,12 +333,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
     def _generate_cryptainer_base_and_secrets(self, cryptoconf: dict, keychain_uid=None, metadata=None) -> tuple:
         """
-        Build a data-less and signature-less cryptainer, preconfigured with a set of symmetric keys
-        under their final form (encrypted by escrows). A separate extract, with symmetric keys as well as algo names, is returned so that actual data encryption and signature can be performed separately.
+        Build a payload-less and signature-less cryptainer, preconfigured with a set of symmetric keys
+        under their final form (encrypted by escrows). A separate extract, with symmetric keys as well as algo names, is returned so that actual payload encryption and signature can be performed separately.
 
         :param cryptoconf: configuration tree
         :param keychain_uid: uuid for the set of encryption keys used
-        :param metadata: additional data to store unencrypted in cryptainer
+        :param metadata: additional payload to store unencrypted in cryptainer
 
         :return: a (cryptainer: dict, secrets: list) tuple, where each secret has keys encryption_algo, symmetric_key and message_digest_algos.
         """
@@ -412,7 +412,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         """
         Encrypt a symmetric key using an asymmetric encryption scheme.
 
-        The symmetric key data might already be the result of previous encryption passes.
+        The symmetric key payload might already be the result of previous encryption passes.
         Encryption can use a simple public key algorithm, or rely on a a set of public keys,
         by using a shared secret scheme.
 
@@ -446,7 +446,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             shares_ciphertexts = []
 
             for share, escrow_conf in zip(shares, key_shared_secret_shards):
-                share_bytes = dump_to_json_bytes(share)  # The tuple (idx, data) of each share thus becomes encryptable
+                share_bytes = dump_to_json_bytes(share)  # The tuple (idx, payload) of each share thus becomes encryptable
                 shares_ciphertext = self._encrypt_key_through_multiple_layers(  # FIXME rename singular
                         keychain_uid=keychain_uid,
                         key_bytes=share_bytes,
@@ -471,14 +471,14 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         self, encryption_algo: str, keychain_uid: uuid.UUID, symmetric_key_data: bytes, escrow  # FIXME change symmetric_key_data
     ) -> dict:
         """
-        Encrypt given data with an asymmetric algorithm.
+        Encrypt given payload with an asymmetric algorithm.
 
         :param encryption_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
         :param symmetric_key_data: symmetric key as bytes to encrypt
         :param escrow: escrow used for encryption (findable in configuration tree)
 
-        :return: dictionary which contains every data needed to decrypt the ciphered data
+        :return: dictionary which contains every payload needed to decrypt the ciphered payload
         """
         encryption_proxy = get_escrow_proxy(escrow=escrow, keystore_pool=self._keystore_pool)
 
@@ -495,7 +495,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         """
         Make a loop through all shares from shared secret algorithm to encrypt each of them.
 
-        :param shares: list of tuples containing an index and its share data
+        :param shares: list of tuples containing an index and its share payload
         :param key_shared_secret_shards: cryptoconf subtree with share escrow information
         :param keychain_uid: uuid for the set of encryption keys used
 
@@ -558,7 +558,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
     def _generate_message_signature(self, keychain_uid: uuid.UUID, cryptoconf: dict) -> dict:
         """
-        Generate a signature for a specific ciphered data.
+        Generate a signature for a specific ciphered payload.
 
         :param keychain_uid: uuid for the set of encryption keys used
         :param cryptoconf: configuration tree inside data_signatures, which MUST already contain the message digest
@@ -572,7 +572,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
 
-        logger.debug("Signing hash of encrypted data with algo %r", signature_algo)
+        logger.debug("Signing hash of encrypted payload with algo %r", signature_algo)
         signature_value = encryption_proxy.get_message_signature(
             keychain_uid=keychain_uid_signature, message=message_digest, signature_algo=signature_algo
         )
@@ -590,7 +590,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
     def decrypt_data(self, cryptainer: dict, verify: bool=True) -> bytes:
         """
-        Loop through cryptainer layers, to decipher data with the right algorithms.
+        Loop through cryptainer layers, to decipher payload with the right algorithms.
 
         :param cryptainer: dictionary previously built with CryptainerWriter method
         :param verify: whether to check MAC tags of the ciphertext
@@ -683,7 +683,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
                             keychain_uid=keychain_uid,
                             key_ciphertext=share_ciphertext,
                             encryption_layers=escrow_conf["key_encryption_layers"])  # Recursive structure
-                    share = load_from_json_bytes(share_bytes)  # The tuple (idx, data) of each share thus becomes encryptable
+                    share = load_from_json_bytes(share_bytes)  # The tuple (idx, payload) of each share thus becomes encryptable
                     decrypted_shards.append(share)
 
                 # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
@@ -726,10 +726,10 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
         :param encryption_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
-        :param cipherdict: dictionary with data components needed to decrypt the ciphered data
+        :param cipherdict: dictionary with payload components needed to decrypt the ciphered payload
         :param escrow: escrow used for encryption (findable in configuration tree)
 
-        :return: decypted data as bytes
+        :return: decypted payload as bytes
         """
         encryption_proxy = get_escrow_proxy(escrow=escrow, keystore_pool=self._keystore_pool)
 
@@ -749,7 +749,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         """
         Make a loop through all encrypted shares to decrypt each of them
         :param keychain_uid: uuid for the set of encryption keys used
-        :param symmetric_key_cipherdict: dictionary which contains every data needed to decipher each share
+        :param symmetric_key_cipherdict: dictionary which contains every payload needed to decipher each share
         :param cryptoconf: configuration tree inside key_encryption_algo
 
         :return: list of tuples of deciphered shares
@@ -829,7 +829,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
 class CryptainerEncryptionStream:
     """
-    Helper which prebuilds a cryptainer without signatures nor data,
+    Helper which prebuilds a cryptainer without signatures nor payload,
     affords to fill its offloaded ciphertext file chunk by chunk, and then
     dumps the final cryptainer now containing signatures.
     """
@@ -890,8 +890,8 @@ def is_cryptainer_cryptoconf_streamable(cryptoconf):  #FIXME rename and add to d
     return True
 
 
-def encrypt_data_and_dump_cryptainer_to_filesystem(
-    data: Union[bytes, BinaryIO],
+def encrypt_payload_and_dump_cryptainer_to_filesystem(
+    payload: Union[bytes, BinaryIO],
     *,
     cryptainer_filepath,
     cryptoconf: dict,
@@ -900,7 +900,7 @@ def encrypt_data_and_dump_cryptainer_to_filesystem(
     keystore_pool: Optional[KeystorePoolBase] = None
 ) -> None:
     """
-    Optimized version which directly streams encrypted data to offloaded file,
+    Optimized version which directly streams encrypted payload to offloaded file,
     instead of creating a whole cryptainer and then dumping it to disk.
     """
     # No need to dump initial (signature-less) cryptainer here, this is all a quick operation...
@@ -909,32 +909,32 @@ def encrypt_data_and_dump_cryptainer_to_filesystem(
                 keystore_pool=keystore_pool,
                 dump_initial_cryptainer=False)
 
-    for chunk in consume_bytes_as_chunks(data, chunk_size=DATA_CHUNK_SIZE):
+    for chunk in consume_bytes_as_chunks(payload, chunk_size=DATA_CHUNK_SIZE):
         encryptor.encrypt_chunk(chunk)
 
     encryptor.finalize()  # Handles the dumping to disk
 
 
-def encrypt_data_into_cryptainer(
-    data: Union[bytes, BinaryIO],
+def encrypt_payload_into_cryptainer(
+    payload: Union[bytes, BinaryIO],
     *,
     cryptoconf: dict,
     metadata: Optional[dict],
     keychain_uid: Optional[uuid.UUID] = None,
     keystore_pool: Optional[KeystorePoolBase] = None
 ) -> dict:
-    """Turn raw data into a high-security cryptainer, which can only be decrypted with
+    """Turn raw payload into a high-security cryptainer, which can only be decrypted with
     the agreement of the owner and multiple third-party escrows.
 
     :param data: bytestring of media (image, video, sound...) or readable file object (file immediately deleted then)
     :param cryptoconf: tree of specific encryption settings
-    :param metadata: dict of metadata describing the data (remains unencrypted in cryptainer)
+    :param metadata: dict of metadata describing the payload (remains unencrypted in cryptainer)
     :param keychain_uid: optional ID of a keychain to reuse
     :param keystore_pool: optional key storage pool, might be required by cryptoconf
     :return: dict of cryptainer
     """
     writer = CryptainerWriter(keystore_pool=keystore_pool)
-    cryptainer = writer.encrypt_data(data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
+    cryptainer = writer.encrypt_data(payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
     return cryptainer
 
 
@@ -963,7 +963,7 @@ def _get_offloaded_file_path(cryptainer_filepath: Path):
 def dump_cryptainer_to_filesystem(cryptainer_filepath: Path, cryptainer: dict, offload_data_ciphertext=True) -> None:
     """Dump a cryptainer to a file path, overwritting it if existing.
 
-    If `offload_data_ciphertext`, actual encrypted data is dumped to a separate bytes file nearby the json-formatted cryptainer.
+    If `offload_data_ciphertext`, actual encrypted payload is dumped to a separate bytes file nearby the json-formatted cryptainer.
     """
     if offload_data_ciphertext:
         offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
@@ -993,7 +993,7 @@ def load_cryptainer_from_filesystem(cryptainer_filepath: Path, include_data_ciph
 
 
 def delete_cryptainer_from_filesystem(cryptainer_filepath):
-    """Delete a cryptainer file and its potential offloaded data file."""
+    """Delete a cryptainer file and its potential offloaded payload file."""
     os.remove(cryptainer_filepath)  # TODO - additional retries if file access errors?
     offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
     if offloaded_file_path.exists():
@@ -1002,7 +1002,7 @@ def delete_cryptainer_from_filesystem(cryptainer_filepath):
 
 
 def get_cryptainer_size_on_filesystem(cryptainer_filepath):
-    """Return the total size in bytes occupied by a cryptainer and its potential offloaded data file."""
+    """Return the total size in bytes occupied by a cryptainer and its potential offloaded payload file."""
     size = cryptainer_filepath.stat().st_size  # Might fail if file got deleted concurrently
     offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
     if offloaded_file_path.exists():
@@ -1036,13 +1036,13 @@ class CryptainerStorage:
     A thread pool is used to encrypt files in the background.
 
     :param cryptainers_dir: the folder where cryptainer files are stored
-    :param default_encryption_cryptoconf: cryptoconf to use when none is provided when enqueuing data
+    :param default_encryption_cryptoconf: cryptoconf to use when none is provided when enqueuing payload
     :param max_cryptainer_quota: if set, cryptainers are deleted if they exceed this size in bytes
     :param max_cryptainer_count: if set, oldest exceeding cryptainers (time taken from their name, else their file-stats) are automatically erased
     :param max_cryptainer_age: if set, cryptainers exceeding this age (taken from their name, else their file-stats) in days are automatically erased
     :param keystore_pool: optional KeystorePool, which might be required by current encryptioncryptoconf
     :param max_workers: count of worker threads to use in parallel
-    :param offload_data_ciphertext: whether actual encrypted data must be kept separated from structured cryptainer file
+    :param offload_data_ciphertext: whether actual encrypted payload must be kept separated from structured cryptainer file
     """
 
     def __init__(
@@ -1169,21 +1169,21 @@ class CryptainerStorage:
                 for deleted_cryptainer_dict in deleted_cryptainer_dicts:
                     self._delete_cryptainer(deleted_cryptainer_dict["name"])
 
-    def _encrypt_data_and_dump_cryptainer_to_filesystem(self, data, cryptainer_filepath, metadata, keychain_uid, cryptoconf):
+    def _encrypt_payload_and_dump_cryptainer_to_filesystem(self, payload, cryptainer_filepath, metadata, keychain_uid, cryptoconf):
         assert cryptoconf, cryptoconf
-        encrypt_data_and_dump_cryptainer_to_filesystem(
+        encrypt_payload_and_dump_cryptainer_to_filesystem(
                 cryptainer_filepath=cryptainer_filepath,
-                    data=data,
+                payload=payload,
                    cryptoconf=cryptoconf,
                     metadata=metadata,
                     keychain_uid=keychain_uid,
                     keystore_pool=self._keystore_pool,
                 )
 
-    def _encrypt_data_into_cryptainer(self, data, metadata, keychain_uid, cryptoconf):
+    def _encrypt_payload_into_cryptainer(self, payload, metadata, keychain_uid, cryptoconf):
         assert cryptoconf, cryptoconf
-        return encrypt_data_into_cryptainer(
-            data=data,
+        return encrypt_payload_into_cryptainer(
+            payload=payload,
            cryptoconf=cryptoconf,
             metadata=metadata,
             keychain_uid=keychain_uid,
@@ -1196,14 +1196,14 @@ class CryptainerStorage:
         )  # Will fail if authorizations are not OK
 
     @catch_and_log_exception
-    def _offloaded_encrypt_data_and_dump_cryptainer(self, filename_base, data, metadata, keychain_uid, cryptoconf):
+    def _offloaded_encrypt_payload_and_dump_cryptainer(self, filename_base, payload, metadata, keychain_uid, cryptoconf):
         """Task to be called by background thread, which encrypts a payload into a disk cryptainer.
 
         Returns the cryptainer basename."""
 
         """ TODO later ass a SKIP here!
-        if not data:
-            logger.warning("Skipping encryption of empty data payload for file %s", filename_base)
+        if not payload:
+            logger.warning("Skipping encryption of empty payload payload for file %s", filename_base)
             return
         """
 
@@ -1211,20 +1211,20 @@ class CryptainerStorage:
 
         if self._use_streaming_encryption_for_conf(cryptoconf):
             # We can use newer, low-memory, streamed API
-            logger.debug("Encrypting data file %s into offloaded cryptainer directly streamed to storage file %s", filename_base, cryptainer_filepath)
-            self._encrypt_data_and_dump_cryptainer_to_filesystem(
-                data, cryptainer_filepath=cryptainer_filepath, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
+            logger.debug("Encrypting payload file %s into offloaded cryptainer directly streamed to storage file %s", filename_base, cryptainer_filepath)
+            self._encrypt_payload_and_dump_cryptainer_to_filesystem(
+                payload, cryptainer_filepath=cryptainer_filepath, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
             )
 
         else:
             # We use legacy API which encrypts all and then dumps all
 
-            logger.debug("Encrypting data file to self-sufficient cryptainer %s", filename_base)
-            # Memory warning : duplicates data to json-compatible cryptainer
-            cryptainer = self._encrypt_data_into_cryptainer(
-                data, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
+            logger.debug("Encrypting payload file to self-sufficient cryptainer %s", filename_base)
+            # Memory warning : duplicates payload to json-compatible cryptainer
+            cryptainer = self._encrypt_payload_into_cryptainer(
+                payload, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
             )
-            logger.debug("Writing self-sufficient cryptainer data to storage file %s", cryptainer_filepath)
+            logger.debug("Writing self-sufficient cryptainer payload to storage file %s", cryptainer_filepath)
             dump_cryptainer_to_filesystem(
                 cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=self._offload_data_ciphertext
             )
@@ -1261,13 +1261,13 @@ class CryptainerStorage:
         return cryptainer_encryption_stream
 
     @synchronized
-    def enqueue_file_for_encryption(self, filename_base, data, metadata, keychain_uid=None, cryptoconf=None):
-        """Enqueue a data payload for asynchronous encryption and storage.
+    def enqueue_file_for_encryption(self, filename_base, payload, metadata, keychain_uid=None, cryptoconf=None):
+        """Enqueue a payload payload for asynchronous encryption and storage.
 
         The filename of final cryptainer might be different from provided one.
         And beware, target cryptainer with the same constructed name might be overwritten.
 
-        :param data: Bytes string, or a file-like object open for reading, which will be automatically closed.
+        :param payload: Bytes string, or a file-like object open for reading, which will be automatically closed.
         :param metadata: Dict of metadata added (unencrypted) to cryptainer.
         :param keychain_uid: If provided, replaces autogenerated keychain_uid for this cryptainer.
         :param cryptoconf: If provided, replaces default cryptoconf for this cryptainer.
@@ -1277,9 +1277,9 @@ class CryptainerStorage:
         cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
 
         future = self._thread_pool_executor.submit(
-            self._offloaded_encrypt_data_and_dump_cryptainer,
+            self._offloaded_encrypt_payload_and_dump_cryptainer,
             filename_base=filename_base,
-            data=data,
+            payload=payload,
             metadata=metadata,
             keychain_uid=keychain_uid,
             cryptoconf=cryptoconf,

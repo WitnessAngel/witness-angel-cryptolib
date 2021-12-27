@@ -47,11 +47,11 @@ def profile_simple_encryption():
 
     tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
 
-    data = b"abcdefghij" * 10 * 1024**2
+    payload = b"abcdefghij" * 10 * 1024**2
 
-    copy_data = io.BytesIO(data)
+    copy_payload = io.BytesIO(payload)
 
-    tarfile_aggregator.add_record(sensor_name="dummy_sensor", from_datetime=now, to_datetime=now, extension=".bin", data=data)
+    tarfile_aggregator.add_record(sensor_name="dummy_sensor", from_datetime=now, to_datetime=now, extension=".bin", payload=payload)
 
     tarfile_aggregator._flush_aggregated_data()
 

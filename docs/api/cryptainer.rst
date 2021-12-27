@@ -8,7 +8,7 @@ encryption/signing keys of the escrow system.
 Cryptainer object processing
 ----------------------------------
 
-.. autofunction:: wacryptolib.cryptainer.encrypt_data_into_cryptainer
+.. autofunction:: wacryptolib.cryptainer.encrypt_payload_into_cryptainer
 
 .. autofunction:: wacryptolib.cryptainer.decrypt_data_from_cryptainer
 
@@ -18,7 +18,7 @@ Cryptainer object processing
 
 .. autoclass:: wacryptolib.cryptainer.CryptainerEncryptionStream
 
-.. autofunction:: wacryptolib.cryptainer.encrypt_data_and_dump_cryptainer_to_filesystem
+.. autofunction:: wacryptolib.cryptainer.encrypt_payload_and_dump_cryptainer_to_filesystem
 
 
 Validation utilities

@@ -21,7 +21,7 @@ from Crypto.Random import get_random_bytes
 from _test_mockups import FakeTestCryptainerStorage, random_bool
 from wacryptolib.cryptainer import (
     LOCAL_ESCROW_MARKER,
-    encrypt_data_into_cryptainer,
+    encrypt_payload_into_cryptainer,
     decrypt_data_from_cryptainer,
     CryptainerStorage,
     extract_metadata_from_cryptainer,
@@ -35,7 +35,7 @@ from wacryptolib.cryptainer import (
     get_escrow_proxy,
     request_decryption_authorizations,
     delete_cryptainer_from_filesystem, CRYPTAINER_DATETIME_FORMAT, get_cryptainer_size_on_filesystem, CryptainerWriter,
-    encrypt_data_and_dump_cryptainer_to_filesystem, is_cryptainer_cryptoconf_streamable, CONF_SCHEMA_PYTHON,
+    encrypt_payload_and_dump_cryptainer_to_filesystem, is_cryptainer_cryptoconf_streamable, CONF_SCHEMA_PYTHON,
     CONF_SCHEMA_JSON, CRYPTAINER_SCHEMA_PYTHON, CRYPTAINER_SCHEMA_JSON, check_conf_sanity, check_cryptainer_sanity,
     CRYPTAINER_TEMP_SUFFIX,
 )
@@ -338,8 +338,8 @@ def test_void_cryptoconfs(cryptoconf):
     keystore_pool = DummyKeystorePool()
 
     with pytest.raises(ConfigurationError, match="Empty .* list"):
-        encrypt_data_into_cryptainer(
-            data=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None, keystore_pool=keystore_pool
+        encrypt_payload_into_cryptainer(
+            payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None, keystore_pool=keystore_pool
         )
 
 
@@ -352,7 +352,7 @@ def test_void_cryptoconfs(cryptoconf):
     ],
 )
 def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, escrow_dependencies_builder):
-    data = _get_binary_or_empty_content()
+    payload = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
     use_streaming_encryption = random_bool()
@@ -362,13 +362,13 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, esc
 
     if use_streaming_encryption and is_cryptainer_cryptoconf_streamable(cryptoconf):
         cryptainer_filepath = tmp_path / "mygoodcryptainer.crypt"
-        encrypt_data_and_dump_cryptainer_to_filesystem(
-                data=data, cryptainer_filepath=cryptainer_filepath,
+        encrypt_payload_and_dump_cryptainer_to_filesystem(
+            payload=payload, cryptainer_filepath=cryptainer_filepath,
                 cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, keystore_pool=keystore_pool)
         cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath, include_data_ciphertext=True)
     else:
-        cryptainer = encrypt_data_into_cryptainer(
-            data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, keystore_pool=keystore_pool
+        cryptainer = encrypt_payload_into_cryptainer(
+            payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, keystore_pool=keystore_pool
         )
 
     assert cryptainer["keychain_uid"]
@@ -412,9 +412,9 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, esc
         assert not keypair_statuses["missing_private_key"]
 
     verify = random_bool()
-    result_data = decrypt_data_from_cryptainer(cryptainer=cryptainer, keystore_pool=keystore_pool, verify=verify)
+    result_payload = decrypt_data_from_cryptainer(cryptainer=cryptainer, keystore_pool=keystore_pool, verify=verify)
     # pprint.pprint(result, width=120)
-    assert result_data == data
+    assert result_payload == payload
 
     result_metadata = extract_metadata_from_cryptainer(cryptainer=cryptainer)
     assert result_metadata == metadata
@@ -432,14 +432,14 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, esc
     ],
 )
 def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_dependencies_builder):
-    data = _get_binary_or_empty_content()
+    payload = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
 
     metadata = random.choice([None, dict(a=[123])])
 
-    cryptainer = encrypt_data_into_cryptainer(
-        data=data, cryptoconf=shamir_cryptoconf, keychain_uid=keychain_uid, metadata=metadata
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload, cryptoconf=shamir_cryptoconf, keychain_uid=keychain_uid, metadata=metadata
     )
 
     assert cryptainer["keychain_uid"]
@@ -451,9 +451,9 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
     assert isinstance(cryptainer["data_ciphertext"], bytes)
 
-    result_data = decrypt_data_from_cryptainer(cryptainer=cryptainer)
+    result_payload = decrypt_data_from_cryptainer(cryptainer=cryptainer)
 
-    assert result_data == data
+    assert result_payload == payload
 
     data_encryption_shamir = {}
     # Delete 1, 2 and too many share(s) from cipherdict key
@@ -471,8 +471,8 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
     verify = random_bool()
-    result_data = decrypt_data_from_cryptainer(cryptainer=cryptainer, verify=verify)
-    assert result_data == data
+    result_payload = decrypt_data_from_cryptainer(cryptainer=cryptainer, verify=verify)
+    assert result_payload == payload
 
     # Another share is deleted
 
@@ -480,8 +480,8 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
-    result_data = decrypt_data_from_cryptainer(cryptainer=cryptainer)
-    assert result_data == data
+    result_payload = decrypt_data_from_cryptainer(cryptainer=cryptainer)
+    assert result_payload == payload
 
     # Another share is deleted and now there aren't enough valid ones to decipher data
 
@@ -529,17 +529,17 @@ RECURSIVE_CRYPTOCONF = dict(
 
 def test_recursive_shamir_secrets_and_layers():
     keychain_uid = generate_uuid0()
-    data = _get_binary_or_empty_content()
+    payload = _get_binary_or_empty_content()
 
-    cryptainer = encrypt_data_into_cryptainer(
-        data=data, cryptoconf=RECURSIVE_CRYPTOCONF, keychain_uid=keychain_uid, metadata=None
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload, cryptoconf=RECURSIVE_CRYPTOCONF, keychain_uid=keychain_uid, metadata=None
     )
 
     data_decrypted = decrypt_data_from_cryptainer(
             cryptainer=cryptainer,
     )
 
-    assert data_decrypted == data
+    assert data_decrypted == payload
 
 
 def test_decrypt_data_from_cryptainer_with_authenticated_algo_and_verify():
@@ -547,8 +547,8 @@ def test_decrypt_data_from_cryptainer_with_authenticated_algo_and_verify():
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
     cryptoconf["data_encryption_layers"][0]["data_encryption_algo"] = data_encryption_algo
 
-    cryptainer = encrypt_data_into_cryptainer(
-        data=b"1234", cryptoconf=cryptoconf, metadata=None
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"1234", cryptoconf=cryptoconf, metadata=None
     )
     cryptainer["data_encryption_layers"][0]["message_authentication_codes"]["tag"] += b"hi"  # CORRUPTION
 
@@ -640,10 +640,10 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         ]
     )
 
-    data = b"sjzgzj"
+    payload = b"sjzgzj"
 
-    cryptainer = encrypt_data_into_cryptainer(
-        data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, keystore_pool=keystore_pool, metadata=None
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, keystore_pool=keystore_pool, metadata=None
     )
 
     # FIXME we must TEST that keychain_uid_escrow is necessary for decryption for example by deleting it before a decrypt()
@@ -695,7 +695,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
             share_escrow3_id: [passphrase3],
         },
     )
-    assert decrypted == data
+    assert decrypted == payload
 
     # Passphrases of `None` key are always used
     decrypted = decrypt_data_from_cryptainer(
@@ -708,13 +708,13 @@ def test_passphrase_mapping_during_decryption(tmp_path):
             None: all_passphrases,
         },
     )
-    assert decrypted == data
+    assert decrypted == payload
 
     # Proper forwarding of parameters in cryptainer storage class
 
     storage = CryptainerStorage(tmp_path, keystore_pool=keystore_pool)
     storage.enqueue_file_for_encryption(
-        "beauty.txt", data=data, metadata=None, keychain_uid=keychain_uid, cryptoconf=cryptoconf
+        "beauty.txt", payload=payload, metadata=None, keychain_uid=keychain_uid, cryptoconf=cryptoconf
     )
     storage.wait_for_idle_state()
 
@@ -726,7 +726,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     verify = random_bool()
     decrypted = storage.decrypt_cryptainer_from_storage("beauty.txt.crypt", passphrase_mapper={None: all_passphrases}, verify=verify)
-    assert decrypted == data
+    assert decrypted == payload
 
 
 def test_get_proxy_for_escrow(tmp_path):
@@ -797,9 +797,9 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert len(storage) == 2
     assert storage.list_cryptainer_names(as_sorted=True) == [Path("animals.dat.crypt"), Path("empty.txt.crypt")]
     assert storage._cryptainer_dir.joinpath(
-        "animals.dat.crypt.data"
+        "animals.dat.crypt.payload"
     ).is_file()  # By default, DATA OFFLOADING is activated
-    assert storage._cryptainer_dir.joinpath("empty.txt.crypt.data").is_file()
+    assert storage._cryptainer_dir.joinpath("empty.txt.crypt.payload").is_file()
     assert len(list(storage._cryptainer_dir.iterdir())) == 4  # 2 files per cryptainer
 
     storage = CryptainerStorage(
@@ -1169,7 +1169,7 @@ def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
 
 
 def test_get_cryptoconf_summary():
-    data = b"some data whatever"
+    payload = b"some data whatever"
 
     summary = get_cryptoconf_summary(SIMPLE_CRYPTOCONF)
 
@@ -1183,7 +1183,7 @@ def test_get_cryptoconf_summary():
             """
     )  # Ending by newline!
 
-    cryptainer = encrypt_data_into_cryptainer(data=data, cryptoconf=SIMPLE_CRYPTOCONF, keychain_uid=None, metadata=None)
+    cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=SIMPLE_CRYPTOCONF, keychain_uid=None, metadata=None)
     summary2 = get_cryptoconf_summary(cryptainer)
     assert summary2 == summary  # Identical summary for cryptoconf and generated cryptainers!
 
@@ -1218,7 +1218,7 @@ def test_get_cryptoconf_summary():
 
     _public_key = generate_keypair(key_algo="RSA_OAEP")["public_key"]
     with patch.object(JsonRpcProxy, "fetch_public_key", return_value=_public_key, create=True) as mock_method:
-        cryptainer = encrypt_data_into_cryptainer(data=data, cryptoconf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
+        cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
         summary2 = get_cryptoconf_summary(cryptainer)
         assert summary2 == summary  # Identical summary for cryptoconf and generated cryptainers!
 
@@ -1233,14 +1233,14 @@ def test_get_cryptoconf_summary():
 
 @pytest.mark.parametrize("cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF])
 def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
-    data = b"jhf" * 200
+    payload = b"jhf" * 200
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
 
     metadata = random.choice([None, dict(a=[123])])
 
-    cryptainer = encrypt_data_into_cryptainer(
-        data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
     )
     cryptainer_ciphertext_before_dump = cryptainer["data_ciphertext"]
 
@@ -1276,7 +1276,7 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
     cryptainer_reloaded = load_from_json_file(cryptainer_filepath)
     assert cryptainer_reloaded["data_ciphertext"] == "[OFFLOADED]"
 
-    cryptainer_offloaded_filepath = Path(str(cryptainer_filepath) + ".data")
+    cryptainer_offloaded_filepath = Path(str(cryptainer_filepath) + ".payload")
     offloaded_data_reloaded = cryptainer_offloaded_filepath.read_bytes()
     assert offloaded_data_reloaded == cryptainer_ciphertext_before_dump  # WELL OFFLOADED as DIRECT BYTES
     assert load_cryptainer_from_filesystem(cryptainer_filepath) == cryptainer  # UNCHANGED from original
@@ -1342,11 +1342,11 @@ def test_create_cryptainer_encryption_stream(tmp_path):
     assert plaintext == b"bonjoureveryone"
 
 
-def ___obsolete_test_encrypt_data_and_dump_cryptainer_to_filesystem(tmp_path):
+def ___obsolete_test_encrypt_payload_and_dump_cryptainer_to_filesystem(tmp_path):
     data_plaintext = b"abcd1234" * 10
     cryptainer_filepath = tmp_path / "my_streamed_cryptainer.crypt"
 
-    encrypt_data_and_dump_cryptainer_to_filesystem(
+    encrypt_payload_and_dump_cryptainer_to_filesystem(
         data_plaintext,
         cryptainer_filepath=cryptainer_filepath,
         cryptoconf=SIMPLE_CRYPTOCONF,
@@ -1412,8 +1412,8 @@ def test_conf_validation_error(corrupted_conf):
                                   SIMPLE_SHAMIR_CRYPTOCONF,
                                   COMPLEX_SHAMIR_CRYPTOCONF])
 def test_cryptainer_validation_success(cryptoconf):
-    cryptainer = encrypt_data_into_cryptainer(
-        data=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None
     )
     check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 
@@ -1423,8 +1423,8 @@ def test_cryptainer_validation_success(cryptoconf):
 
 def _generate_corrupted_cryptainers(cryptoconf):
 
-    cryptainer = encrypt_data_into_cryptainer(
-        data=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None
     )
     corrupted_cryptainers = []
 

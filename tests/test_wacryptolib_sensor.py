@@ -74,7 +74,7 @@ def test_tarfile_aggregator(tmp_path):
             from_datetime=datetime(year=2014, month=1, day=2, hour=22, minute=11, second=55, tzinfo=timezone.utc),
             to_datetime=datetime(year=2015, month=2, day=3, tzinfo=timezone.utc),
             extension=".txt",
-            data=data1,
+            payload=data1,
         )
         assert len(tarfile_aggregator) == 1
         assert tarfile_aggregator._current_start_time
@@ -85,7 +85,7 @@ def test_tarfile_aggregator(tmp_path):
             from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
             to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
             extension=".mp3",
-            data=data2,
+            payload=data2,
         )
         assert len(tarfile_aggregator) == 2
 
@@ -121,7 +121,7 @@ def test_tarfile_aggregator(tmp_path):
             from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
             to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
             extension=".avi",
-            data=data3,
+            payload=data3,
         )
         assert len(tarfile_aggregator) == 1
         assert tarfile_aggregator._current_start_time
@@ -153,7 +153,7 @@ def test_tarfile_aggregator(tmp_path):
             from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
             to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
             extension=".dat",
-            data=b"hiiii",
+            payload=b"hiiii",
         )
         simple_add_record()
         assert len(tarfile_aggregator) == 1
@@ -189,7 +189,7 @@ def test_tarfile_aggregator(tmp_path):
                 from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
                 to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
                 extension=".mp3",
-                data=bytes([i] * 500),
+                payload=bytes([i] * 500),
             )
 
         frozen_datetime.tick(delta=timedelta(seconds=1))
@@ -322,7 +322,7 @@ def test_aggregators_thread_safety(tmp_path):
                         from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
                         to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
                         extension=".txt",
-                        data=record_data,
+                        payload=record_data,
                     )
                 )
                 misc_futures.append(executor.submit(tarfile_aggregator.finalize_tarfile))

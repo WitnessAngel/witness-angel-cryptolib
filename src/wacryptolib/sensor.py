@@ -109,7 +109,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         end_time = get_utc_now_date()
         filename_base = self._build_tarfile_filename(from_datetime=self._current_start_time, to_datetime=end_time)
         self._cryptainer_storage.enqueue_file_for_encryption(
-            filename_base=filename_base, data=result_bytestring, metadata=self._current_metadata
+            filename_base=filename_base, payload=result_bytestring, metadata=self._current_metadata
         )
 
         self._current_tarfile = None
@@ -128,7 +128,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         return filename
 
     @synchronized
-    def add_record(self, sensor_name: str, from_datetime: datetime, to_datetime: datetime, extension: str, data: bytes):
+    def add_record(self, sensor_name: str, from_datetime: datetime, to_datetime: datetime, extension: str, payload: bytes):
         """Add the provided data to the tarfile, using associated metadata.
 
         If, despite included timestamps, several records end up having the exact same name, the last one will have
@@ -138,10 +138,10 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         :param from_datetime: start time of the recording
         :param to_datetime: end time of the recording
         :param extension: file extension, starting with a dot
-        :param data: bytestring of audio/video/other data
+        :param payload: bytestring of audio/video/other data
         """
         assert self._current_records_count or not self._current_start_time  # INVARIANT of our system!
-        assert isinstance(data, bytes), repr(data)  # For now, only format supported
+        assert isinstance(payload, bytes), repr(payload)  # For now, only format supported
         assert extension.startswith("."), extension
         assert from_datetime <= to_datetime, (from_datetime, to_datetime)
         check_datetime_is_tz_aware(from_datetime)
@@ -156,14 +156,14 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
 
         mtime = to_datetime.timestamp()
 
-        member_metadata = dict(size=len(data), mtime=to_datetime)
+        member_metadata = dict(size=len(payload), mtime=to_datetime)
         self._current_metadata["members"][filename] = member_metadata  # Overridden if existing
 
         tarinfo = tarfile.TarInfo(filename)
-        tarinfo.size = len(data)  # this is crucial
+        tarinfo.size = len(payload)  # this is crucial
         tarinfo.mtime = mtime
 
-        fileobj = io.BytesIO(data)  # Does NOT copy data until write, since Python3.5
+        fileobj = io.BytesIO(payload)  # Does NOT copy data until write, since Python3.5
 
         # Memory warning : duplicates data to bytesio tarfile
         self._current_tarfile.addfile(tarinfo, fileobj=fileobj)  
@@ -225,7 +225,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
         end_time = get_utc_now_date()
         dataset_bytes = dump_to_json_bytes(self._current_dataset)
         self._tarfile_aggregator.add_record(
-            data=dataset_bytes,
+            payload=dataset_bytes,
             sensor_name=self._sensor_name,
             from_datetime=self._current_start_time,
             to_datetime=end_time,

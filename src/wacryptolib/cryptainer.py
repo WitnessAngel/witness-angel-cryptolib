@@ -28,7 +28,7 @@ from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error
 from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, \
     ASYMMETRIC_KEY_ALGOS_REGISTRY
 from wacryptolib.keystore import KeystoreBase, DummyKeystorePool, KeystorePoolBase
-from wacryptolib.shared_secret import split_bytestring_as_shamir_shards, recombine_secret_from_shamir_shards
+from wacryptolib.shared_secret import split_bytestring_as_shards, recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
 from wacryptolib.utilities import (
     dump_to_json_bytes,
@@ -434,9 +434,9 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             threshold_count = key_encryption_layer["key_shared_secret_threshold"]
             assert threshold_count <= shares_count
 
-            logger.debug("Generating Shamir shared secret shards (%d needed amongst %d)", threshold_count, shares_count)
+            logger.debug("Generating shared secret shards (%d needed amongst %d)", threshold_count, shares_count)
 
-            shards = split_bytestring_as_shamir_shards(
+            shards = split_bytestring_as_shards(
                 secret=key_bytes, shares_count=shares_count, threshold_count=threshold_count
             )
 
@@ -702,7 +702,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
                 )
 
             logger.debug("Recombining shared-secret shards")
-            key_bytes = recombine_secret_from_shamir_shards(shards=decrypted_shards)
+            key_bytes = recombine_secret_from_shards(shards=decrypted_shards)
             return key_bytes
 
         else:  # Using asymmetric algorithm
@@ -1449,16 +1449,16 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
         Optionalkey("keychain_uid"): micro_schema_uid
     }
 
-    RECURSIVE_SHAMIR = []
+    RECURSIVE_SHARED_SECRET = []
 
-    SHAMIR_CRYPTAINER_PIECE = Schema({
+    SHARED_SECRET_CRYPTAINER_PIECE = Schema({
         "key_encryption_algo": SHARED_SECRET_MARKER,
         "key_shared_secret_shards": [{
             "key_encryption_layers": [SIMPLE_CRYPTAINER_PIECE]}],
         "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schema_int),
-    }, name="Recursive_shamir", as_reference=True)
+    }, name="recursive_shared_secret", as_reference=True)
 
-    RECURSIVE_SHAMIR.append(SHAMIR_CRYPTAINER_PIECE)
+    RECURSIVE_SHARED_SECRET.append(SHARED_SECRET_CRYPTAINER_PIECE)
 
     SCHEMA_CRYPTAINERS = Schema({
         **extra_cryptainer,
@@ -1467,7 +1467,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
             "payload_signatures": [payload_signature],
             **message_authentication_codes,
             **extra_key_ciphertext,
-            "key_encryption_layers": [SIMPLE_CRYPTAINER_PIECE, SHAMIR_CRYPTAINER_PIECE]
+            "key_encryption_layers": [SIMPLE_CRYPTAINER_PIECE, SHARED_SECRET_CRYPTAINER_PIECE]
         }],
         Optionalkey("keychain_uid"): micro_schema_uid,
         **metadata

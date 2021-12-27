@@ -11,23 +11,23 @@ from wacryptolib.cryptainer import CryptainerStorage, LOCAL_ESCROW_MARKER
 from wacryptolib.sensor import TarfileRecordsAggregator
 
 ENCRYPTION_CRYPTOCONF = dict(
-    data_encryption_layers=[
+    payload_encryption_layers=[
         dict(
-            data_encryption_algo="AES_EAX",
+            payload_encryption_algo="AES_EAX",
             key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
-            data_signatures=[],
+            payload_signatures=[],
         ),
         dict(
-            data_encryption_algo="CHACHA20_POLY1305",
+            payload_encryption_algo="CHACHA20_POLY1305",
             key_encryption_layers=[
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
             ],
-            data_signatures=[],
+            payload_signatures=[],
         ),
         dict(
-            data_encryption_algo="AES_CBC",
+            payload_encryption_algo="AES_CBC",
             key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
-            data_signatures=[],
+            payload_signatures=[],
         ),
     ]
 )
@@ -42,7 +42,7 @@ def profile_simple_encryption():
     cryptainer_storage = CryptainerStorage(
         default_cryptoconf=ENCRYPTION_CRYPTOCONF,
         cryptainer_dir=tmp_path,
-        offload_data_ciphertext=True,
+        offload_payload_ciphertext=True,
     )
 
     tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)

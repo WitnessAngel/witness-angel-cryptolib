@@ -14,21 +14,21 @@ class FakeTestCryptainerStorage(CryptainerStorage):
         self.increment += 1
 
     def _use_streaming_encryption_for_conf(self, cryptoconf):
-        return self._offload_data_ciphertext  # Do NOT dig cryptoconf here, it might be all wrong
+        return self._offload_payload_ciphertext  # Do NOT dig cryptoconf here, it might be all wrong
 
     def _encrypt_payload_and_dump_cryptainer_to_filesystem(self, payload, cryptainer_filepath, metadata, keychain_uid, cryptoconf):
         cryptainer = self._encrypt_payload_into_cryptainer(
             payload, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
         )
         dump_cryptainer_to_filesystem(
-            cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=True
+            cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=True
         )
 
     def _encrypt_payload_into_cryptainer(self, payload, **kwargs):
-        return dict(a=33, data_ciphertext=payload)
+        return dict(a=33, payload_ciphertext=payload)
 
     def _decrypt_payload_from_cryptainer(self, cryptainer, **kwargs):
-        return cryptainer["data_ciphertext"]
+        return cryptainer["payload_ciphertext"]
 
 
 class WildcardUuid(object):

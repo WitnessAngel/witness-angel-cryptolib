@@ -24,16 +24,16 @@ A minimal cryptainer configuration in python, with a single encryption layer and
     from wacryptolib.cryptainer import LOCAL_ESCROW_MARKER
 
     CONFIG = dict(
-        data_encryption_layers=[
+        payload_encryption_layers=[
             dict(
-                data_encryption_algo="AES_CBC",
+                payload_encryption_algo="AES_CBC",
                 key_encryption_layers=[
                     dict(
                         key_encryption_algo="RSA_OAEP",
                         key_escrow=LOCAL_ESCROW_MARKER,
                     )
                 ],
-                data_signatures=[
+                payload_signatures=[
                     dict(
                         message_digest_algo="SHA256",
                         signature_algo="DSA_DSS",
@@ -56,16 +56,16 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
               "subType": "03"
           }
       },
-      "data_ciphertext": {
+      "payload_ciphertext": {
           "$binary": {
               "base64": "eyJjaXBoZXJ0ZXh0IjogeyIkYmluYXJ5IjogeyJiYXNlNjQiOiAibEZFVWw3Qm1aRExXNkZTSDlsaDVrTjVPYkpYQ2RJN0RIWnlxcm9kSktob20rZmEza0JOYzM3K2NKTzBaay9MUnlId3lhSExlK20yclpsMm1tNXJtd24zMGNmNlZYNTdlNlVFcDVKWkc4MXNNcHpsQ2N6UmZBRUpmM1o4ZUFBdXo0UnJ1ZTROYnFmQml3TjkxbnRkaDhjcFRVVnRsVnZoWFc1VGZSdU9ROCtCR284R1EreHkvS1I0WE9QNlJFbkdhR1dXdjJ2bElaT2Flcm42dytqN3lhQnVEWXZESW1oMWNyK0hGSWIwaXZNYz0iLCAic3ViVHlwZSI6ICIwMCJ9fSwgIml2IjogeyIkYmluYXJ5IjogeyJiYXNlNjQiOiAiM280eXAvcG5lamFZRWtkTjlSOXNUUT09IiwgInN1YlR5cGUiOiAiMDAifX19",
               "subType": "00"
           }
       },
-      "data_encryption_layers": [
+      "payload_encryption_layers": [
           {
-              "data_encryption_algo": "AES_CBC",
-              "data_signatures": [
+              "payload_encryption_algo": "AES_CBC",
+              "payload_signatures": [
                   {
                       "message_digest_algo": "SHA256",
                       "signature_algo": "DSA_DSS",
@@ -120,8 +120,8 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
     Root dict:
 
         {
-            data_ciphertext: <opaque multi-encrypted data bytestring>,
-            data_encryption_layers: <list of Layer objects targeting ciphertext, in order of application>,
+            payload_ciphertext: <opaque multi-encrypted data bytestring>,
+            payload_encryption_layers: <list of Layer objects targeting ciphertext, in order of application>,
             data_uid: <optional uuid of this specific data cryptainer>,
         }
 

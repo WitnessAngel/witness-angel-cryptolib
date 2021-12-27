@@ -166,17 +166,17 @@ def test_stream_manager(encryption_algo_list):
 
     output_stream = io.BytesIO()
 
-    data_encryption_layer_extracts = []
+    payload_encryption_layer_extracts = []
     for encryption_algo in encryption_algo_list:
-        data_encryption_layers_extract = {'encryption_algo': encryption_algo,
+        payload_encryption_layers_extract = {'encryption_algo': encryption_algo,
                                           'symkey': generate_symkey(encryption_algo),
                                           'message_digest_algos': random.choices(SUPPORTED_HASH_ALGOS, k=randint(1,
                                                                                                                  len(SUPPORTED_HASH_ALGOS)))}
-        data_encryption_layer_extracts.append(data_encryption_layers_extract)
-    print(data_encryption_layer_extracts)
+        payload_encryption_layer_extracts.append(payload_encryption_layers_extract)
+    print(payload_encryption_layer_extracts)
 
     streammanager = wacryptolib.encryption.StreamManager(
-        data_encryption_layer_extracts=data_encryption_layer_extracts,
+        payload_encryption_layer_extracts=payload_encryption_layer_extracts,
         output_stream=output_stream)
 
     plaintext_full = get_random_bytes(randint(10, 10000))
@@ -191,10 +191,10 @@ def test_stream_manager(encryption_algo_list):
 
     current_ciphertext = output_stream.getvalue()
 
-    for data_encryption_node, authentication_data in zip(reversed(data_encryption_layer_extracts),
+    for payload_encryption_node, authentication_data in zip(reversed(payload_encryption_layer_extracts),
                                                          reversed(streammanager.get_authentication_data())):
 
-        for hash_algo in data_encryption_node['message_digest_algos']:
+        for hash_algo in payload_encryption_node['message_digest_algos']:
             assert (hash_message(message=current_ciphertext, hash_algo=hash_algo) ==  # TODO NOW create local vars
                     authentication_data['message_digests'][hash_algo])
 
@@ -202,9 +202,9 @@ def test_stream_manager(encryption_algo_list):
         cipherdict.update(authentication_data["message_authentication_codes"])
 
         decrypted_ciphertext = wacryptolib.encryption.decrypt_bytestring(cipherdict=cipherdict,
-                                                                         encryption_algo=data_encryption_node[
+                                                                         encryption_algo=payload_encryption_node[
                                                                              'encryption_algo'],
-                                                                         key_dict=data_encryption_node[
+                                                                         key_dict=payload_encryption_node[
                                                                              "symkey"])
 
         current_ciphertext = decrypted_ciphertext

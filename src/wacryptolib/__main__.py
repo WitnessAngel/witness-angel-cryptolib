@@ -31,9 +31,9 @@ def _get_keystore_pool(ctx):
 
 
 EXAMPLE_CRYPTOCONF = dict(
-    data_encryption_layers=[
+    payload_encryption_layers=[
         dict(
-            data_encryption_algo="AES_CBC",
+            payload_encryption_algo="AES_CBC",
             key_encryption_layers=[
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                 dict(
@@ -47,7 +47,7 @@ EXAMPLE_CRYPTOCONF = dict(
                     ],  # Beware, same escrow for the 2 shares, for now
                 ),
             ],
-            data_signatures=[
+            payload_signatures=[
                 dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
@@ -91,12 +91,12 @@ def encrypt(ctx, input_medium, output_cryptainer):
     click.echo("In encrypt: %s" % str(locals()))
 
     keystore_pool = _get_keystore_pool(ctx)
-    cryptainer_data = _do_encrypt(payload=input_medium.read(), keystore_pool=keystore_pool)
+    cryptainer = _do_encrypt(payload=input_medium.read(), keystore_pool=keystore_pool)
 
-    cryptainer_data_bytes = dump_to_json_bytes(cryptainer_data, indent=4)
+    cryptainer_bytes = dump_to_json_bytes(cryptainer, indent=4)
 
     with output_cryptainer as f:
-        f.write(cryptainer_data_bytes)
+        f.write(cryptainer_bytes)
 
 
 def _do_decrypt(cryptainer, keystore_pool):

@@ -63,14 +63,14 @@ def _get_binary_or_empty_content():
 ENFORCED_UID1 = UUID("0e8e861e-f0f7-e54b-18ea-34798d5daaaa")
 ENFORCED_UID2 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeebbbb")
 
-VOID_CRYPTOCONF_REGARDING_DATA_ENCRYPTION_LAYERS = dict(data_encryption_layers=[])  # Forbidden
+VOID_CRYPTOCONF_REGARDING_DATA_ENCRYPTION_LAYERS = dict(payload_encryption_layers=[])  # Forbidden
 
 VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_LAYERS = dict(  # Forbidden
-    data_encryption_layers=[
+    payload_encryption_layers=[
         dict(
-            data_encryption_algo="AES_CBC",
+            payload_encryption_algo="AES_CBC",
             key_encryption_layers=[],
-            data_signatures=[
+            payload_signatures=[
                 dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
@@ -78,11 +78,11 @@ VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_LAYERS = dict(  # Forbidden
 )
 
 SIGNATURELESS_CRYPTOCONF = dict(
-    data_encryption_layers=[
+    payload_encryption_layers=[
         dict(
-            data_encryption_algo="AES_EAX",
+            payload_encryption_algo="AES_EAX",
             key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
-            data_signatures=[],
+            payload_signatures=[],
         )
     ]
 )
@@ -99,11 +99,11 @@ SIGNATURELESS_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
 }
 
 SIMPLE_CRYPTOCONF = dict(
-    data_encryption_layers=[
+    payload_encryption_layers=[
         dict(
-            data_encryption_algo="AES_CBC",
+            payload_encryption_algo="AES_CBC",
             key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
-            data_signatures=[
+            payload_signatures=[
                 dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
@@ -126,28 +126,28 @@ SIMPLE_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
 }
 
 COMPLEX_CRYPTOCONF = dict(
-    data_encryption_layers=[
+    payload_encryption_layers=[
         dict(
-            data_encryption_algo="AES_EAX",
+            payload_encryption_algo="AES_EAX",
             key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
-            data_signatures=[],
+            payload_signatures=[],
         ),
         dict(
-            data_encryption_algo="AES_CBC",
+            payload_encryption_algo="AES_CBC",
             key_encryption_layers=[
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)
             ],
-            data_signatures=[
+            payload_signatures=[
                 dict(message_digest_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         ),
         dict(
-            data_encryption_algo="CHACHA20_POLY1305",
+            payload_encryption_algo="CHACHA20_POLY1305",
             key_encryption_layers=[
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
             ],
-            data_signatures=[
+            payload_signatures=[
                 dict(message_digest_algo="SHA3_256", signature_algo="RSA_PSS", signature_escrow=LOCAL_ESCROW_MARKER),
                 dict(
                     message_digest_algo="SHA512",
@@ -183,9 +183,9 @@ COMPLEX_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
 }
 
 SIMPLE_SHAMIR_CRYPTOCONF = dict(
-    data_encryption_layers=[
+    payload_encryption_layers=[
         dict(
-            data_encryption_algo="AES_CBC",
+            payload_encryption_algo="AES_CBC",
             key_encryption_layers=[
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                 dict(
@@ -205,7 +205,7 @@ SIMPLE_SHAMIR_CRYPTOCONF = dict(
                     ],
                 ),
             ],
-            data_signatures=[
+            payload_signatures=[
                 dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
@@ -232,21 +232,21 @@ def SIMPLE_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES(keychain_uid):
     }
 
 COMPLEX_SHAMIR_CRYPTOCONF = dict(
-    data_encryption_layers=[
+    payload_encryption_layers=[
         dict(
-            data_encryption_algo="AES_EAX",
+            payload_encryption_algo="AES_EAX",
             key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
-            data_signatures=[],
+            payload_signatures=[],
         ),
         dict(
-            data_encryption_algo="AES_CBC",
+            payload_encryption_algo="AES_CBC",
             key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
-            data_signatures=[
+            payload_signatures=[
                 dict(message_digest_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         ),
         dict(
-            data_encryption_algo="CHACHA20_POLY1305",
+            payload_encryption_algo="CHACHA20_POLY1305",
             key_encryption_layers=[
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
@@ -264,7 +264,7 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                     ],
                 )
             ],
-            data_signatures=[
+            payload_signatures=[
                 dict(
                     message_digest_algo="SHA3_256",
                     signature_algo="RSA_PSS",
@@ -365,7 +365,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, esc
         encrypt_payload_and_dump_cryptainer_to_filesystem(
             payload=payload, cryptainer_filepath=cryptainer_filepath,
                 cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, keystore_pool=keystore_pool)
-        cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath, include_data_ciphertext=True)
+        cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath, include_payload_ciphertext=True)
     else:
         cryptainer = encrypt_payload_into_cryptainer(
             payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, keystore_pool=keystore_pool
@@ -449,26 +449,26 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
     escrow_dependencies = gather_escrow_dependencies(cryptainers=[cryptainer])
     assert escrow_dependencies == escrow_dependencies_builder(cryptainer["keychain_uid"])
 
-    assert isinstance(cryptainer["data_ciphertext"], bytes)
+    assert isinstance(cryptainer["payload_ciphertext"], bytes)
 
     result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
     assert result_payload == payload
 
-    data_encryption_shamir = {}
+    payload_encryption_shamir = {}
     # Delete 1, 2 and too many share(s) from cipherdict key
-    for data_encryption in cryptainer["data_encryption_layers"]:
-        for key_encryption in data_encryption["key_encryption_layers"]:
+    for payload_encryption in cryptainer["payload_encryption_layers"]:
+        for key_encryption in payload_encryption["key_encryption_layers"]:
             if key_encryption["key_encryption_algo"] == SHARED_SECRET_MARKER:
-                data_encryption_shamir = data_encryption
+                payload_encryption_shamir = payload_encryption
 
-    key_ciphertext_shards = load_from_json_bytes(data_encryption_shamir["key_ciphertext"])
+    key_ciphertext_shards = load_from_json_bytes(payload_encryption_shamir["key_ciphertext"])
 
     # 1 share is deleted
 
     del key_ciphertext_shards["shares"][-1]
 
-    data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
+    payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
     verify = random_bool()
     result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer, verify=verify)
@@ -478,7 +478,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
     del key_ciphertext_shards["shares"][-1]
 
-    data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
+    payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
     result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
     assert result_payload == payload
@@ -487,7 +487,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
     del key_ciphertext_shards["shares"][-1]
 
-    data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
+    payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
     with pytest.raises(DecryptionError, match="share.*missing"):
         decrypt_payload_from_cryptainer(cryptainer=cryptainer)
@@ -502,9 +502,9 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
 # FIXME move that elsewhere and complete it
 RECURSIVE_CRYPTOCONF = dict(
-    data_encryption_layers=[
+    payload_encryption_layers=[
         dict(
-            data_encryption_algo="AES_CBC",
+            payload_encryption_algo="AES_CBC",
             key_encryption_layers=[
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                 dict(
@@ -520,7 +520,7 @@ RECURSIVE_CRYPTOCONF = dict(
                     ],  # Beware, same escrow for the 2 shares, for now
                 ),
             ],
-            data_signatures=[
+            payload_signatures=[
                 dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
@@ -543,14 +543,14 @@ def test_recursive_shamir_secrets_and_layers():
 
 
 def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
-    data_encryption_algo = random.choice(AUTHENTICATED_ENCRYPTION_ALGOS)
+    payload_encryption_algo = random.choice(AUTHENTICATED_ENCRYPTION_ALGOS)
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
-    cryptoconf["data_encryption_layers"][0]["data_encryption_algo"] = data_encryption_algo
+    cryptoconf["payload_encryption_layers"][0]["payload_encryption_algo"] = payload_encryption_algo
 
     cryptainer = encrypt_payload_into_cryptainer(
         payload=b"1234", cryptoconf=cryptoconf, metadata=None
     )
-    cryptainer["data_encryption_layers"][0]["message_authentication_codes"]["tag"] += b"hi"  # CORRUPTION
+    cryptainer["payload_encryption_layers"][0]["message_authentication_codes"]["tag"] += b"hi"  # CORRUPTION
 
     result = decrypt_payload_from_cryptainer(cryptainer, verify=False)
     assert result == b"1234"
@@ -611,9 +611,9 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     share_escrow3_id = get_escrow_id(share_escrow3)
 
     cryptoconf = dict(
-        data_encryption_layers=[
+        payload_encryption_layers=[
             dict(
-                data_encryption_algo="AES_CBC",
+                payload_encryption_algo="AES_CBC",
                 key_encryption_layers=[
                     dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                     dict(
@@ -629,7 +629,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                         ],
                     ),
                 ],
-                data_signatures=[
+                payload_signatures=[
                     dict(
                         message_digest_algo="SHA256",
                         signature_algo="DSA_DSS",
@@ -803,7 +803,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert len(list(storage._cryptainer_dir.iterdir())) == 4  # 2 files per cryptainer
 
     storage = CryptainerStorage(
-        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=cryptainer_dir, offload_data_ciphertext=False
+        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=cryptainer_dir, offload_payload_ciphertext=False
     )
     storage.enqueue_file_for_encryption("newfile.bmp", b"stuffs", metadata=None)
     storage.wait_for_idle_state()
@@ -817,18 +817,18 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
 
     _cryptainer_for_txt = storage.load_cryptainer_from_storage("empty.txt.crypt")
     assert storage.load_cryptainer_from_storage(1) == _cryptainer_for_txt
-    assert _cryptainer_for_txt["data_ciphertext"]   # Padding occurs for AES_CBC
+    assert _cryptainer_for_txt["payload_ciphertext"]   # Padding occurs for AES_CBC
 
-    _cryptainer_for_txt2 = storage.load_cryptainer_from_storage("empty.txt.crypt", include_data_ciphertext=False)
-    assert storage.load_cryptainer_from_storage(1, include_data_ciphertext=False) == _cryptainer_for_txt2
-    assert not hasattr(_cryptainer_for_txt2, "data_ciphertext")
+    _cryptainer_for_txt2 = storage.load_cryptainer_from_storage("empty.txt.crypt", include_payload_ciphertext=False)
+    assert storage.load_cryptainer_from_storage(1, include_payload_ciphertext=False) == _cryptainer_for_txt2
+    assert not hasattr(_cryptainer_for_txt2, "payload_ciphertext")
 
     # We continue test with a randomly configured storage
-    offload_data_ciphertext = random_bool()
+    offload_payload_ciphertext = random_bool()
     storage = CryptainerStorage(
         default_cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_dir=cryptainer_dir,
-        offload_data_ciphertext=offload_data_ciphertext,
+        offload_payload_ciphertext=offload_payload_ciphertext,
     )
 
     # Test proper logging of errors occurring in thread pool executor
@@ -858,11 +858,11 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert storage.list_cryptainer_names(as_sorted=True) == [Path("empty.txt.crypt")]
     assert len(storage) == 1  # Remaining offloaded data file is ignored
 
-    offload_data_ciphertext1 = random_bool()
+    offload_payload_ciphertext1 = random_bool()
     storage = FakeTestCryptainerStorage(
         default_cryptoconf={"smth": True},
         cryptainer_dir=cryptainer_dir,
-        offload_data_ciphertext=offload_data_ciphertext1,
+        offload_payload_ciphertext=offload_payload_ciphertext1,
     )
     assert storage._max_cryptainer_count is None
     for i in range(10):
@@ -875,12 +875,12 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
 def test_cryptainer_storage_purge_by_max_count(tmp_path):
     cryptainer_dir = tmp_path
 
-    offload_data_ciphertext = random_bool()
+    offload_payload_ciphertext = random_bool()
     storage = FakeTestCryptainerStorage(
         default_cryptoconf={"stuffs": True},
         cryptainer_dir=cryptainer_dir,
         max_cryptainer_count=3,
-        offload_data_ciphertext=offload_data_ciphertext,
+        offload_payload_ciphertext=offload_payload_ciphertext,
     )
     for i in range(3):
         storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
@@ -904,12 +904,12 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
 
     time.sleep(0.2)  # Leave delay, else if files have exactly same timestamp, it's the filename that matters
 
-    offload_data_ciphertext2 = random_bool()
+    offload_payload_ciphertext2 = random_bool()
     storage = FakeTestCryptainerStorage(
         default_cryptoconf={"randomthings": True},
         cryptainer_dir=cryptainer_dir,
         max_cryptainer_count=4,
-        offload_data_ciphertext=offload_data_ciphertext2,
+        offload_payload_ciphertext=offload_payload_ciphertext2,
     )
     assert len(storage) == 3  # Retrieves existing cryptainers
     storage.enqueue_file_for_encryption("aaa.dat", b"000", metadata=None)
@@ -970,12 +970,12 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
     (cryptainer_dir / "20201021222700_oldfile.dat.crypt").touch()
     (cryptainer_dir / "20301021222711_oldfile.dat.crypt").touch()
 
-    offload_data_ciphertext = random_bool()
+    offload_payload_ciphertext = random_bool()
     storage = FakeTestCryptainerStorage(
         default_cryptoconf={"stuffs": True},
         cryptainer_dir=cryptainer_dir,
         max_cryptainer_age=timedelta(days=2),
-        offload_data_ciphertext=offload_data_ciphertext,
+        offload_payload_ciphertext=offload_payload_ciphertext,
     )
 
     assert storage.list_cryptainer_names(as_sorted=True) == [
@@ -1023,12 +1023,12 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
 def test_cryptainer_storage_purge_by_quota(tmp_path):
     cryptainer_dir = tmp_path
 
-    offload_data_ciphertext = random_bool()
+    offload_payload_ciphertext = random_bool()
     storage = FakeTestCryptainerStorage(
         default_cryptoconf={"stuffs": True},
         cryptainer_dir=cryptainer_dir,
         max_cryptainer_quota=8000,  # Beware of overhead of encryption and json structs!
-        offload_data_ciphertext=offload_data_ciphertext,
+        offload_payload_ciphertext=offload_payload_ciphertext,
     )
     assert not len(storage)
 
@@ -1043,7 +1043,7 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
 
     print(cryptainer_names)
 
-    if offload_data_ciphertext:  # Offloaded cryptainers are smaller due to skipping of base64 encoding of ciphertext
+    if offload_payload_ciphertext:  # Offloaded cryptainers are smaller due to skipping of base64 encoding of ciphertext
         assert cryptainer_names == [
             Path('20301021222711_stuff.dat.001.crypt'),
             Path('some_stuff.dat.007.crypt'),
@@ -1075,14 +1075,14 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
     params_sets = product([None, 2],[None, 1000], [None, timedelta(days=3)])
 
     for max_cryptainer_count, max_cryptainer_quota, max_cryptainer_age in params_sets:
-        offload_data_ciphertext = random_bool()
+        offload_payload_ciphertext = random_bool()
         storage = FakeTestCryptainerStorage(
             default_cryptoconf={"stuffs": True},
             cryptainer_dir=cryptainer_dir,
             max_cryptainer_count=max_cryptainer_count,
             max_cryptainer_quota=max_cryptainer_quota,
             max_cryptainer_age=max_cryptainer_age,
-            offload_data_ciphertext=offload_data_ciphertext,
+            offload_payload_ciphertext=offload_payload_ciphertext,
         )
 
         storage.enqueue_file_for_encryption("20001121222729_smth.dat", b"000", metadata=None)
@@ -1105,7 +1105,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
         max_cryptainer_count=0,
         max_cryptainer_quota=0,
         max_cryptainer_age=timedelta(days=0),
-        offload_data_ciphertext=False,
+        offload_payload_ciphertext=False,
     )
     storage.enqueue_file_for_encryption("some_small_file.dat", b"0"*50, metadata=None)
     storage.wait_for_idle_state()
@@ -1141,9 +1141,9 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
     storage.wait_for_idle_state()
 
     cryptainer_simple = storage.load_cryptainer_from_storage("stuff_simple.txt.crypt")
-    assert len(cryptainer_simple["data_encryption_layers"]) == 1
+    assert len(cryptainer_simple["payload_encryption_layers"]) == 1
     cryptainer_complex = storage.load_cryptainer_from_storage("stuff_complex.txt.crypt")
-    assert len(cryptainer_complex["data_encryption_layers"]) == 3
+    assert len(cryptainer_complex["payload_encryption_layers"]) == 3
 
 
 def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
@@ -1156,10 +1156,10 @@ def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
     cryptainer_name, = storage.list_cryptainer_names()
 
     cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
-    cryptainer["data_encryption_layers"][0]["message_authentication_codes"]["tag"] += b"hi"  # CORRUPTION of EAX
+    cryptainer["payload_encryption_layers"][0]["message_authentication_codes"]["tag"] += b"hi"  # CORRUPTION of EAX
 
     cryptainer_filepath = storage._make_absolute(cryptainer_name)
-    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=False)  # Don't touch existing offloaded data
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False)  # Don't touch existing offloaded data
 
     result = storage.decrypt_cryptainer_from_storage(cryptainer_name, verify=False)
     assert result == b"dogs\ncats\n"
@@ -1190,7 +1190,7 @@ def test_get_cryptoconf_summary():
     # Simulate a cryptoconf with remote escrow webservices
 
     CONF_WITH_ESCROW = copy.deepcopy(COMPLEX_CRYPTOCONF)
-    CONF_WITH_ESCROW["data_encryption_layers"][0]["key_encryption_layers"][0]["key_escrow"] = dict(
+    CONF_WITH_ESCROW["payload_encryption_layers"][0]["key_encryption_layers"][0]["key_escrow"] = dict(
         escrow_type="jsonrpc", url="http://www.mydomain.com/json"
     )
 
@@ -1225,7 +1225,7 @@ def test_get_cryptoconf_summary():
     # Test unknown escrow structure
 
     CONF_WITH_BROKEN_ESCROW = copy.deepcopy(SIMPLE_CRYPTOCONF)
-    CONF_WITH_BROKEN_ESCROW["data_encryption_layers"][0]["key_encryption_layers"][0]["key_escrow"] = dict(abc=33)
+    CONF_WITH_BROKEN_ESCROW["payload_encryption_layers"][0]["key_encryption_layers"][0]["key_escrow"] = dict(abc=33)
 
     with pytest.raises(ValueError, match="Unrecognized key escrow"):
         get_cryptoconf_summary(CONF_WITH_BROKEN_ESCROW)
@@ -1242,24 +1242,24 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
     cryptainer = encrypt_payload_into_cryptainer(
         payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
     )
-    cryptainer_ciphertext_before_dump = cryptainer["data_ciphertext"]
+    cryptainer_ciphertext_before_dump = cryptainer["payload_ciphertext"]
 
     cryptainer_without_ciphertext = copy.deepcopy(cryptainer)
-    del cryptainer_without_ciphertext["data_ciphertext"]
+    del cryptainer_without_ciphertext["payload_ciphertext"]
 
     # CASE 1 - MONOLITHIC JSON FILE
 
     cryptainer_filepath = tmp_path / "mycryptainer_monolithic.crypt"
-    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=False)
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False)
     cryptainer_reloaded = load_from_json_file(cryptainer_filepath)
-    assert cryptainer_reloaded["data_ciphertext"] == cryptainer_ciphertext_before_dump  # NO OFFLOADING
+    assert cryptainer_reloaded["payload_ciphertext"] == cryptainer_ciphertext_before_dump  # NO OFFLOADING
     assert load_cryptainer_from_filesystem(cryptainer_filepath) == cryptainer  # UNCHANGED from original
 
-    cryptainer_truncated = load_cryptainer_from_filesystem(cryptainer_filepath, include_data_ciphertext=False)
-    assert "data_ciphertext" not in cryptainer_truncated
+    cryptainer_truncated = load_cryptainer_from_filesystem(cryptainer_filepath, include_payload_ciphertext=False)
+    assert "payload_ciphertext" not in cryptainer_truncated
     assert cryptainer_truncated == cryptainer_without_ciphertext
 
-    assert cryptainer["data_ciphertext"] == cryptainer_ciphertext_before_dump  # Original dict unchanged
+    assert cryptainer["payload_ciphertext"] == cryptainer_ciphertext_before_dump  # Original dict unchanged
 
     size1 = get_cryptainer_size_on_filesystem(cryptainer_filepath)
     assert size1
@@ -1274,18 +1274,18 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
 
     dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer)  # OVERWRITE, with offloading by default
     cryptainer_reloaded = load_from_json_file(cryptainer_filepath)
-    assert cryptainer_reloaded["data_ciphertext"] == "[OFFLOADED]"
+    assert cryptainer_reloaded["payload_ciphertext"] == "[OFFLOADED]"
 
     cryptainer_offloaded_filepath = Path(str(cryptainer_filepath) + ".payload")
     offloaded_data_reloaded = cryptainer_offloaded_filepath.read_bytes()
     assert offloaded_data_reloaded == cryptainer_ciphertext_before_dump  # WELL OFFLOADED as DIRECT BYTES
     assert load_cryptainer_from_filesystem(cryptainer_filepath) == cryptainer  # UNCHANGED from original
 
-    cryptainer_truncated = load_cryptainer_from_filesystem(cryptainer_filepath, include_data_ciphertext=False)
-    assert "data_ciphertext" not in cryptainer_truncated
+    cryptainer_truncated = load_cryptainer_from_filesystem(cryptainer_filepath, include_payload_ciphertext=False)
+    assert "payload_ciphertext" not in cryptainer_truncated
     assert cryptainer_truncated == cryptainer_without_ciphertext
 
-    assert cryptainer["data_ciphertext"] == cryptainer_ciphertext_before_dump  # Original dict unchanged
+    assert cryptainer["payload_ciphertext"] == cryptainer_ciphertext_before_dump  # Original dict unchanged
 
     size2 = get_cryptainer_size_on_filesystem(cryptainer_filepath)
     assert size2 < size1   # Overhead of base64 encoding in monolithic file!
@@ -1302,11 +1302,11 @@ def test_generate_cryptainer_and_symmetric_keys():
     cryptainer_writer = CryptainerWriter()
     cryptainer, extracts = cryptainer_writer._generate_cryptainer_base_and_secrets(COMPLEX_CRYPTOCONF)
 
-    for data_encryption_layer in extracts:
-        symkey = data_encryption_layer["symkey"]
+    for payload_encryption_layer in extracts:
+        symkey = payload_encryption_layer["symkey"]
         assert isinstance(symkey, dict)
         assert symkey["key"]  # actual main key
-        del data_encryption_layer["symkey"]
+        del payload_encryption_layer["symkey"]
 
     assert extracts == [
         {'encryption_algo': 'AES_EAX', 'message_digest_algos': []},
@@ -1353,7 +1353,7 @@ def ___obsolete_test_encrypt_payload_and_dump_cryptainer_to_filesystem(tmp_path)
         metadata=None)
 
     cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath)  # Fetches offloaded content too
-    assert cryptainer["data_ciphertext"] == data_plaintext  # TEMPORARY FOR FAKE STREAM ENCRYPTOR
+    assert cryptainer["payload_ciphertext"] == data_plaintext  # TEMPORARY FOR FAKE STREAM ENCRYPTOR
 
 
 @pytest.mark.parametrize(
@@ -1376,22 +1376,22 @@ def _generate_corrupted_confs(cryptoconf):
 
     # Add a false information to config
     corrupted_conf1 = copy.deepcopy(cryptoconf)
-    corrupted_conf1["data_encryption_layers"][0]["keychain_uid"] = ENFORCED_UID2
+    corrupted_conf1["payload_encryption_layers"][0]["keychain_uid"] = ENFORCED_UID2
     corrupted_confs.append(corrupted_conf1)
 
     # Delete a "key_encryption_layers" in an element of cryptoconf
     corrupted_conf2 = copy.deepcopy(cryptoconf)
-    del corrupted_conf2["data_encryption_layers"][0]["key_encryption_layers"]
+    del corrupted_conf2["payload_encryption_layers"][0]["key_encryption_layers"]
     corrupted_confs.append(corrupted_conf2)
 
-    # Update data_encryption_algo with a value algo that does not exist
+    # Update payload_encryption_algo with a value algo that does not exist
     corrupted_conf3 = copy.deepcopy(cryptoconf)
-    corrupted_conf3["data_encryption_layers"][0]["data_encryption_algo"] = "AES_AES"
+    corrupted_conf3["payload_encryption_layers"][0]["payload_encryption_algo"] = "AES_AES"
     corrupted_confs.append(corrupted_conf3)
 
     # Update a "key_encryption_layers" with a string instead of list
     corrupted_conf4 = copy.deepcopy(cryptoconf)
-    corrupted_conf4["data_encryption_layers"][0]["key_encryption_layers"] = " "
+    corrupted_conf4["payload_encryption_layers"][0]["key_encryption_layers"] = " "
     corrupted_confs.append(corrupted_conf4)
 
     return corrupted_confs
@@ -1429,15 +1429,15 @@ def _generate_corrupted_cryptainers(cryptoconf):
     corrupted_cryptainers = []
 
     corrupted_cryptainer1 = copy.deepcopy(cryptainer)
-    corrupted_cryptainer1["data_encryption_layers"][0]["keychain_uid"] = ENFORCED_UID1
+    corrupted_cryptainer1["payload_encryption_layers"][0]["keychain_uid"] = ENFORCED_UID1
     corrupted_cryptainers.append(corrupted_cryptainer1)
 
     corrupted_cryptainer2 = copy.deepcopy(cryptainer)
-    del corrupted_cryptainer2["data_encryption_layers"][0]["message_authentication_codes"]
+    del corrupted_cryptainer2["payload_encryption_layers"][0]["message_authentication_codes"]
     corrupted_cryptainers.append(corrupted_cryptainer2)
 
     corrupted_cryptainer3 = copy.deepcopy(cryptainer)
-    corrupted_cryptainer3["data_encryption_layers"][0]["key_ciphertext"] = []
+    corrupted_cryptainer3["payload_encryption_layers"][0]["key_ciphertext"] = []
     corrupted_cryptainers.append(corrupted_cryptainer3)
 
     return corrupted_cryptainers
@@ -1461,9 +1461,9 @@ def test_cryptainer_storage_check_cryptainer_sanity(tmp_path):
 
     # FIXME deduplicate this bit with test_cryptainer_storage_decryption_authenticated_algo_verify()
     cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
-    cryptainer["data_encryption_layers"][0]["bad_name_of_attribute"] = 42
+    cryptainer["payload_encryption_layers"][0]["bad_name_of_attribute"] = 42
     cryptainer_filepath = storage._make_absolute(cryptainer_name)
-    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_data_ciphertext=False)  # Don't touch existing
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False)  # Don't touch existing
     ##############
 
     with pytest.raises(ValidationError):

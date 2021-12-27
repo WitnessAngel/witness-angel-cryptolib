@@ -48,11 +48,11 @@ def test_time_limited_aggregator_mixin():
 
 def test_tarfile_aggregator(tmp_path):
 
-    offload_data_ciphertext = random_bool()
+    offload_payload_ciphertext = random_bool()
     cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf={"whatever": True},
         cryptainer_dir=tmp_path,
-        offload_data_ciphertext=offload_data_ciphertext,
+        offload_payload_ciphertext=offload_payload_ciphertext,
     )
 
     tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=10)
@@ -206,11 +206,11 @@ def test_tarfile_aggregator(tmp_path):
 
 def test_json_aggregator(tmp_path):
 
-    offload_data_ciphertext = random_bool()
+    offload_payload_ciphertext = random_bool()
     cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf={"qsdqsdsd": True},
         cryptainer_dir=tmp_path,
-        offload_data_ciphertext=offload_data_ciphertext,
+        offload_payload_ciphertext=offload_payload_ciphertext,
     )
 
     tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
@@ -294,11 +294,11 @@ def test_json_aggregator(tmp_path):
 
 def test_aggregators_thread_safety(tmp_path):
 
-    offload_data_ciphertext = random_bool()
+    offload_payload_ciphertext = random_bool()
     cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf={"zesvscc": True},
         cryptainer_dir=tmp_path,
-        offload_data_ciphertext=offload_data_ciphertext,
+        offload_payload_ciphertext=offload_payload_ciphertext,
     )
 
     tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
@@ -373,11 +373,11 @@ def test_aggregators_thread_safety(tmp_path):
 
 def test_periodic_value_poller(tmp_path):
 
-    offload_data_ciphertext = random_bool()
+    offload_payload_ciphertext = random_bool()
     cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf={"zexcsc": True},
         cryptainer_dir=tmp_path,
-        offload_data_ciphertext=offload_data_ciphertext,
+        offload_payload_ciphertext=offload_payload_ciphertext,
     )
 
     tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)

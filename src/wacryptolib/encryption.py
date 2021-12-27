@@ -364,22 +364,22 @@ class Chacha20Poly1305EncryptionNode(EncryptionStreamBase):
 class StreamManager:
     """"Pipeline to encrypt data through several encryption nodes, down to an outout stream (e.g. file or ByteIO)"""
 
-    def __init__(self, output_stream: BinaryIO, data_encryption_layer_extracts: list):
+    def __init__(self, output_stream: BinaryIO, payload_encryption_layer_extracts: list):
 
         self._output_stream = output_stream
         self._cipher_streams = []
 
-        for data_encryption_layer_extract in data_encryption_layer_extracts:
-            data_encryption_algo = data_encryption_layer_extract["encryption_algo"]  # FIXME RENAME THIS
-            symkey = data_encryption_layer_extract["symkey"]
-            message_digest_algos = data_encryption_layer_extract["message_digest_algos"]
+        for payload_encryption_layer_extract in payload_encryption_layer_extracts:
+            payload_encryption_algo = payload_encryption_layer_extract["encryption_algo"]  # FIXME RENAME THIS
+            symkey = payload_encryption_layer_extract["symkey"]
+            message_digest_algos = payload_encryption_layer_extract["message_digest_algos"]
 
-            encryption_algo_conf = _get_encryption_algo_conf(encryption_algo=data_encryption_algo)
+            encryption_algo_conf = _get_encryption_algo_conf(encryption_algo=payload_encryption_algo)
             encryption_class = encryption_algo_conf["encryption_node_class"]
 
             if encryption_class is None:
                 raise ValueError(
-                    "Node class %s is not implemented" % data_encryption_algo)  # FIXME use custom exception class
+                    "Node class %s is not implemented" % payload_encryption_algo)  # FIXME use custom exception class
 
             self._cipher_streams.append(
                 encryption_class(key_dict=symkey, message_digest_algo=message_digest_algos))

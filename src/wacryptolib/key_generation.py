@@ -26,7 +26,7 @@ def generate_symkey(encryption_algo: str) -> dict:
     if encryption_algo not in SUPPORTED_SYMMETRIC_KEY_ALGOS:
         raise ValueError("Unknown symmetric key algorithm '%s'" % encryption_algo)
 
-    descriptors = SYMMETRIC_KEY_TYPES_REGISTRY[encryption_algo]
+    descriptors = SYMMETRIC_KEY_ALGOS_REGISTRY[encryption_algo]
     generation_function = descriptors["generation_function"]
 
     key_dict = generation_function()
@@ -54,23 +54,23 @@ def _generate_chacha20_poly1305_key_dict():
 
 
 def generate_keypair(
-    *, key_type: str, serialize=True, key_length_bits=2048, curve="p521", passphrase: Optional[AnyStr] = None
+    *, key_algo: str, serialize=True, key_length_bits=2048, curve="p521", passphrase: Optional[AnyStr] = None
 ) -> dict:
     """Generate a (public_key, private_key) pair.
 
-    :param key_type: name of the key type
+    :param key_algo: name of the key type
     :param serialize: Indicates if key must be serialized as PEM string
     :param passphrase: Bytestring used for private key export (requires serialize=True)
 
-    Other arguments are used or not depending on the chosen `key_type`.
+    Other arguments are used or not depending on the chosen `key_algo`.
 
     :return: dictionary with "private_key" and "public_key" fields as objects or PEM-format strings
     """
-    return _do_generate_keypair(key_type=key_type, serialize=serialize, key_length_bits=key_length_bits, curve=curve, passphrase=passphrase)
+    return _do_generate_keypair(key_algo=key_algo, serialize=serialize, key_length_bits=key_length_bits, curve=curve, passphrase=passphrase)
 
 
 # Intermediate function to help monkey-patching in tests
-def _do_generate_keypair(key_type, serialize, key_length_bits, curve, passphrase) :
+def _do_generate_keypair(key_algo, serialize, key_length_bits, curve, passphrase) :
 
     assert serialize or passphrase is None
 
@@ -79,11 +79,11 @@ def _do_generate_keypair(key_type, serialize, key_length_bits, curve, passphrase
 
     potential_params = dict(key_length_bits=key_length_bits, curve=curve)
 
-    key_type = key_type.upper()
-    if key_type not in SUPPORTED_ASYMMETRIC_KEY_TYPES:
-        raise ValueError("Unknown asymmetric key type '%s'" % key_type)
+    key_algo = key_algo.upper()
+    if key_algo not in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
+        raise ValueError("Unknown asymmetric key type '%s'" % key_algo)
 
-    descriptors = ASYMMETRIC_KEY_TYPES_REGISTRY[key_type]
+    descriptors = ASYMMETRIC_KEY_ALGOS_REGISTRY[key_algo]
 
     generation_function = descriptors["generation_function"]
     generation_extra_parameters = descriptors["generation_extra_parameters"]
@@ -93,34 +93,34 @@ def _do_generate_keypair(key_type, serialize, key_length_bits, curve, passphrase
     assert set(keypair.keys()) == set(["private_key", "public_key"])
     if serialize:
         keypair["private_key"] = _serialize_key_object_to_pem_bytestring(
-            keypair["private_key"], key_type=key_type, passphrase=passphrase
+            keypair["private_key"], key_algo=key_algo, passphrase=passphrase
         )
-        keypair["public_key"] = _serialize_key_object_to_pem_bytestring(keypair["public_key"], key_type=key_type)
+        keypair["public_key"] = _serialize_key_object_to_pem_bytestring(keypair["public_key"], key_algo=key_algo)
 
     return keypair
 
 
-def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_type: str, passphrase: Optional[AnyStr] = None):
+def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_algo: str, passphrase: Optional[AnyStr] = None):
     """Load a key (public or private) from a PEM-formatted bytestring.
 
     :param key_pem: the key bytrestring
-    :param key_type: name of the key format
+    :param key_algo: name of the key format
 
     :return: key object
     """
     if isinstance(passphrase, str):
         passphrase = encode_passphrase(passphrase)
 
-    key_type = key_type.upper()
-    if key_type not in SUPPORTED_ASYMMETRIC_KEY_TYPES:
+    key_algo = key_algo.upper()
+    if key_algo not in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
         raise ValueError("Unknown key type %s" % key_pem)
-    key_import_function = ASYMMETRIC_KEY_TYPES_REGISTRY[key_type]["pem_import_function"]
+    key_import_function = ASYMMETRIC_KEY_ALGOS_REGISTRY[key_algo]["pem_import_function"]
     try:
         return key_import_function(key_pem, passphrase=passphrase)
     except (ValueError, IndexError, TypeError) as exc:
         raise KeyLoadingError(
             "Failed loading %s key from pem bytestring %s passphrase (%s)"
-            % (key_type, "with" if passphrase else "without", exc)
+            % (key_algo, "with" if passphrase else "without", exc)
         ) from exc
 
 
@@ -174,18 +174,18 @@ def _generate_ecc_keypair_as_objects(curve: str) -> dict:
     return keypair
 
 
-def _serialize_key_object_to_pem_bytestring(key, key_type: str, passphrase: Optional[AnyStr] = None) -> bytes:
+def _serialize_key_object_to_pem_bytestring(key, key_algo: str, passphrase: Optional[AnyStr] = None) -> bytes:
     """Convert a private or public key to PEM-formatted bytestring.
 
     If a passphrase is provided, the key (which must be PRIVATE) is encrypted with it.
-    The exact encryption of the key depends on its key_type."""
+    The exact encryption of the key depends on its key_algo."""
     assert passphrase is None or (isinstance(passphrase, bytes) and passphrase), repr(
         passphrase
     )  # No implicit encoding here
     extra_params = {}
     if passphrase:
         extra_params = dict(passphrase=passphrase)
-        extra_params.update(ASYMMETRIC_KEY_TYPES_REGISTRY[key_type]["pem_export_private_key_encryption_kwargs"])
+        extra_params.update(ASYMMETRIC_KEY_ALGOS_REGISTRY[key_algo]["pem_export_private_key_encryption_kwargs"])
     key_pem = key.export_key(format="PEM", **extra_params)
     if isinstance(key_pem, str):
         key_pem = key_pem.encode("ascii")  # Some types deliver ascii bytestrings, let's normalize
@@ -204,13 +204,13 @@ def _check_symmetric_key_length_bytes(key_length_bytes):
         raise ValueError("The symmetric key length must be superior or equal to 32 bits")
 
 
-SYMMETRIC_KEY_TYPES_REGISTRY = dict(
+SYMMETRIC_KEY_ALGOS_REGISTRY = dict(
     AES_CBC={"generation_function": _generate_aes_cbc_key_dict},
     AES_EAX={"generation_function": _generate_aes_eax_key_dict},
     CHACHA20_POLY1305={"generation_function": _generate_chacha20_poly1305_key_dict},
 )
 
-ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
+ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
     ## KEYS FOR ASYMMETRIC ENCRYPTION ##
     RSA_OAEP={
         "generation_function": _generate_rsa_keypair_as_objects,
@@ -240,8 +240,8 @@ ASYMMETRIC_KEY_TYPES_REGISTRY = dict(
 )
 
 
-#: These values can be used as 'key_type' for asymmetric key generation.
-SUPPORTED_ASYMMETRIC_KEY_TYPES = sorted(ASYMMETRIC_KEY_TYPES_REGISTRY.keys())
+#: These values can be used as 'key_algo' for asymmetric key generation.
+SUPPORTED_ASYMMETRIC_KEY_ALGOS = sorted(ASYMMETRIC_KEY_ALGOS_REGISTRY.keys())
 
 #: These values can be used as 'encryption_algo' for symmetric key generation.
-SUPPORTED_SYMMETRIC_KEY_ALGOS = sorted(SYMMETRIC_KEY_TYPES_REGISTRY.keys())  # FIXME rename for coherence
+SUPPORTED_SYMMETRIC_KEY_ALGOS = sorted(SYMMETRIC_KEY_ALGOS_REGISTRY.keys())  # FIXME rename for coherence

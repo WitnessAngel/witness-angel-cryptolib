@@ -15,6 +15,6 @@ API for escrow services
 Auto-replenishing of local free keys
 -------------------------------------
 
-.. autofunction:: wacryptolib.escrow.generate_free_keypair_for_least_provisioned_key_type
+.. autofunction:: wacryptolib.escrow.generate_free_keypair_for_least_provisioned_key_algo
 
 .. autofunction:: wacryptolib.escrow.get_free_keys_generator_worker

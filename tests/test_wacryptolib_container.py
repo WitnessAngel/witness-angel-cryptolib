@@ -43,7 +43,7 @@ from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS, AUTHENTICATED_ENC
 from wacryptolib.escrow import (
     EscrowApi,
     generate_keypair_for_storage,
-    generate_free_keypair_for_least_provisioned_key_type,
+    generate_free_keypair_for_least_provisioned_key_algo,
 )
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, DecryptionIntegrityError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -92,7 +92,7 @@ SIGNATURELESS_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
         "[('escrow_type', 'local')]": (
             {"escrow_type": "local"},
-            [{"key_type": "RSA_OAEP", "keychain_uid": keychain_uid}],
+            [{"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid}],
         )
     },
     "signature": {},
@@ -114,13 +114,13 @@ SIMPLE_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
         "[('escrow_type', 'local')]": (
             {"escrow_type": "local"},
-            [{"key_type": "RSA_OAEP", "keychain_uid": keychain_uid}],
+            [{"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid}],
         )
     },
     "signature": {
         "[('escrow_type', 'local')]": (
             {"escrow_type": "local"},
-            [{"key_type": "DSA_DSS", "keychain_uid": keychain_uid}],
+            [{"key_algo": "DSA_DSS", "keychain_uid": keychain_uid}],
         )
     },
 }
@@ -165,8 +165,8 @@ COMPLEX_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
         "[('escrow_type', 'local')]": (
             {"escrow_type": "local"},
             [
-                {"key_type": "RSA_OAEP", "keychain_uid": keychain_uid},
-                {"key_type": "RSA_OAEP", "keychain_uid": ENFORCED_UID1},
+                {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
+                {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID1},
             ],
         )
     },
@@ -174,9 +174,9 @@ COMPLEX_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
         "[('escrow_type', 'local')]": (
             {"escrow_type": "local"},
             [
-                {"key_type": "DSA_DSS", "keychain_uid": keychain_uid},
-                {"key_type": "RSA_PSS", "keychain_uid": keychain_uid},
-                {"key_type": "ECC_DSS", "keychain_uid": ENFORCED_UID2},
+                {"key_algo": "DSA_DSS", "keychain_uid": keychain_uid},
+                {"key_algo": "RSA_PSS", "keychain_uid": keychain_uid},
+                {"key_algo": "ECC_DSS", "keychain_uid": ENFORCED_UID2},
             ],
         )
     },
@@ -218,15 +218,15 @@ def SIMPLE_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES(keychain_uid):
             "[('escrow_type', 'local')]": (
                 {"escrow_type": "local"},
                 [
-                    {"key_type": "RSA_OAEP", "keychain_uid": keychain_uid},
-                    {"key_type": "RSA_OAEP", "keychain_uid": ENFORCED_UID1},
+                    {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
+                    {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID1},
                 ],
             )
         },
         "signature": {
             "[('escrow_type', 'local')]": (
                 {"escrow_type": "local"},
-                [{"key_type": "DSA_DSS", "keychain_uid": keychain_uid}],
+                [{"key_algo": "DSA_DSS", "keychain_uid": keychain_uid}],
             )
         },
     }
@@ -284,8 +284,8 @@ def COMPLEX_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES(keychain_uid):
             "[('escrow_type', 'local')]": (
                 {"escrow_type": "local"},
                 [
-                    {"key_type": "RSA_OAEP", "keychain_uid": keychain_uid},
-                    {"key_type": "RSA_OAEP", "keychain_uid": ENFORCED_UID2},
+                    {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
+                    {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID2},
                 ],
             )
         },
@@ -293,9 +293,9 @@ def COMPLEX_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES(keychain_uid):
             "[('escrow_type', 'local')]": (
                 {"escrow_type": "local"},
                 [
-                    {"key_type": "DSA_DSS", "keychain_uid": keychain_uid},
-                    {"key_type": "RSA_PSS", "keychain_uid": ENFORCED_UID1},
-                    {"key_type": "ECC_DSS", "keychain_uid": keychain_uid},
+                    {"key_algo": "DSA_DSS", "keychain_uid": keychain_uid},
+                    {"key_algo": "RSA_PSS", "keychain_uid": ENFORCED_UID1},
+                    {"key_algo": "ECC_DSS", "keychain_uid": keychain_uid},
                 ],
             )
         },
@@ -405,7 +405,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, esc
         keypair_statuses = authorization_results["keypair_statuses"]
         assert keypair_statuses["accepted"]
         for keypair_identifiers in keypair_statuses["accepted"]:
-            assert keypair_identifiers["key_type"] in SUPPORTED_ENCRYPTION_ALGOS
+            assert keypair_identifiers["key_algo"] in SUPPORTED_ENCRYPTION_ALGOS
             assert isinstance(keypair_identifiers["keychain_uid"], UUID)
         assert not keypair_statuses["authorization_missing"]
         assert not keypair_statuses["missing_passphrase"]
@@ -584,19 +584,19 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     local_key_storage = key_storage_pool.get_local_key_storage()
     generate_keypair_for_storage(
-        key_type="RSA_OAEP", key_storage=local_key_storage, keychain_uid=keychain_uid, passphrase=local_passphrase
+        key_algo="RSA_OAEP", key_storage=local_key_storage, keychain_uid=keychain_uid, passphrase=local_passphrase
     )
     key_storage1 = key_storage_pool.get_imported_key_storage(key_storage_uid1)
     generate_keypair_for_storage(
-        key_type="RSA_OAEP", key_storage=key_storage1, keychain_uid=keychain_uid_escrow, passphrase=passphrase1
+        key_algo="RSA_OAEP", key_storage=key_storage1, keychain_uid=keychain_uid_escrow, passphrase=passphrase1
     )
     key_storage2 = key_storage_pool.get_imported_key_storage(key_storage_uid2)
     generate_keypair_for_storage(
-        key_type="RSA_OAEP", key_storage=key_storage2, keychain_uid=keychain_uid, passphrase=passphrase2
+        key_algo="RSA_OAEP", key_storage=key_storage2, keychain_uid=keychain_uid, passphrase=passphrase2
     )
     key_storage3 = key_storage_pool.get_imported_key_storage(key_storage_uid3)
     generate_keypair_for_storage(
-        key_type="RSA_OAEP", key_storage=key_storage3, keychain_uid=keychain_uid, passphrase=passphrase3
+        key_algo="RSA_OAEP", key_storage=key_storage3, keychain_uid=keychain_uid, passphrase=passphrase3
     )
 
     local_escrow_id = get_escrow_id(LOCAL_ESCROW_MARKER)
@@ -1216,7 +1216,7 @@ def test_get_cryptoconf_summary():
             """
     )  # Ending by newline!
 
-    _public_key = generate_keypair(key_type="RSA_OAEP")["public_key"]
+    _public_key = generate_keypair(key_algo="RSA_OAEP")["public_key"]
     with patch.object(JsonRpcProxy, "fetch_public_key", return_value=_public_key, create=True) as mock_method:
         cryptainer = encrypt_data_into_cryptainer(data=data, cryptoconf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
         summary2 = get_cryptoconf_summary(cryptainer)

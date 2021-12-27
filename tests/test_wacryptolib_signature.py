@@ -41,7 +41,7 @@ def test_sign_and_verify_with_rsa_key():
     message = b"Hello"
 
     keypair = wacryptolib.key_generation.generate_keypair(
-        key_type="RSA_PSS", serialize=False, key_length_bits=2048
+        key_algo="RSA_PSS", serialize=False, key_length_bits=2048
     )
     signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], message=message, signature_algo="RSA_PSS"
@@ -53,7 +53,7 @@ def test_sign_and_verify_with_dsa_key():
     message = "Mon hât èst joli".encode("utf-8")
 
     keypair = wacryptolib.key_generation.generate_keypair(
-        key_type="DSA_DSS", serialize=False, key_length_bits=2048
+        key_algo="DSA_DSS", serialize=False, key_length_bits=2048
     )
     signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], message=message, signature_algo="DSA_DSS"
@@ -64,7 +64,7 @@ def test_sign_and_verify_with_dsa_key():
 def test_sign_and_verify_with_ecc_key():
     message = "Msd sd 867_ss".encode("utf-8")
 
-    keypair = wacryptolib.key_generation.generate_keypair(key_type="ECC_DSS", serialize=False, curve="p256")
+    keypair = wacryptolib.key_generation.generate_keypair(key_algo="ECC_DSS", serialize=False, curve="p256")
     signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], message=message, signature_algo="ECC_DSS"
     )
@@ -76,7 +76,7 @@ def test_generic_signature_errors():
     message = b"Hello"
 
     keypair = wacryptolib.key_generation.generate_keypair(
-        key_type="RSA_OAEP", serialize=False, key_length_bits=2048
+        key_algo="RSA_OAEP", serialize=False, key_length_bits=2048
     )
 
     with pytest.raises(ValueError, match="Unknown signature algorithm"):

@@ -13,7 +13,7 @@ from wacryptolib.cryptainer import CryptainerWriter
 from wacryptolib.encryption import STREAMABLE_ENCRYPTION_ALGOS
 from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError
 from wacryptolib.key_generation import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey, \
-    SYMMETRIC_KEY_TYPES_REGISTRY
+    SYMMETRIC_KEY_ALGOS_REGISTRY
 from wacryptolib.utilities import SUPPORTED_HASH_ALGOS, hash_message
 from wacryptolib.encryption import AUTHENTICATED_ENCRYPTION_ALGOS
 
@@ -123,7 +123,7 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
     key_length_bits = random.choice([2048, 3072, 4096])
     encryption_algo = "RSA_OAEP"
     keypair = wacryptolib.key_generation.generate_keypair(
-        key_type="RSA_OAEP", serialize=False, key_length_bits=key_length_bits
+        key_algo="RSA_OAEP", serialize=False, key_length_bits=key_length_bits
     )
 
     binary_content = _get_binary_content()

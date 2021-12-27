@@ -26,7 +26,7 @@ from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi, E
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.key_generation import generate_symkey, load_asymmetric_key_from_pem_bytestring, \
-    ASYMMETRIC_KEY_TYPES_REGISTRY
+    ASYMMETRIC_KEY_ALGOS_REGISTRY
 from wacryptolib.key_storage import KeyStorageBase, DummyKeyStoragePool, KeyStoragePoolBase
 from wacryptolib.shared_secret import split_bytestring_as_shamir_shards, recombine_secret_from_shamir_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
@@ -88,9 +88,9 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
     signature_dependencies = {}
     encryption_dependencies = {}
 
-    def _add_keypair_identifiers_for_escrow(mapper, escrow_conf, keychain_uid, key_type):
+    def _add_keypair_identifiers_for_escrow(mapper, escrow_conf, keychain_uid, key_algo):
         escrow_id = get_escrow_id(escrow_conf=escrow_conf)
-        keypair_identifiers = dict(keychain_uid=keychain_uid, key_type=key_type)
+        keypair_identifiers = dict(keychain_uid=keychain_uid, key_algo=key_algo)
         mapper.setdefault(escrow_id, (escrow_conf, []))
         keypair_identifiers_list = mapper[escrow_id][1]
         if keypair_identifiers not in keypair_identifiers_list:
@@ -98,9 +98,9 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
 
     def _grab_key_encryption_layers_dependencies(key_encryption_layers):
         for key_encryption_layer in key_encryption_layers:
-            key_type_encryption = key_encryption_layer["key_encryption_algo"]
+            key_algo_encryption = key_encryption_layer["key_encryption_algo"]
 
-            if key_type_encryption == SHARED_SECRET_MARKER:
+            if key_algo_encryption == SHARED_SECRET_MARKER:
                 escrows = key_encryption_layer["key_shared_secret_shards"]
                 for escrow in escrows:
                     _grab_key_encryption_layers_dependencies(escrow["key_encryption_layers"])  # Recursive call
@@ -111,14 +111,14 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
                     mapper=encryption_dependencies,
                     escrow_conf=escrow_conf,
                     keychain_uid=keychain_uid_encryption,
-                    key_type=key_type_encryption,
+                    key_algo=key_algo_encryption,
                 )
 
     for cryptainer in cryptainers:
         keychain_uid = cryptainer["keychain_uid"]
         for data_encryption_layer in cryptainer["data_encryption_layers"]:
             for signature_conf in data_encryption_layer["data_signatures"]:
-                key_type_signature = signature_conf["signature_algo"]
+                key_algo_signature = signature_conf["signature_algo"]
                 keychain_uid_signature = signature_conf.get("keychain_uid") or keychain_uid
                 escrow_conf = signature_conf["signature_escrow"]
 
@@ -126,7 +126,7 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
                     mapper=signature_dependencies,
                     escrow_conf=escrow_conf,
                     keychain_uid=keychain_uid_signature,
-                    key_type=key_type_signature,
+                    key_algo=key_algo_signature,
                 )
 
             _grab_key_encryption_layers_dependencies(data_encryption_layer["key_encryption_layers"])
@@ -483,10 +483,10 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         encryption_proxy = get_escrow_proxy(escrow=escrow, key_storage_pool=self._key_storage_pool)
 
         logger.debug("Generating asymmetric key of type %r", encryption_algo)
-        subkey_pem = encryption_proxy.fetch_public_key(keychain_uid=keychain_uid, key_type=encryption_algo)
+        subkey_pem = encryption_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=encryption_algo)
 
         logger.debug("Encrypting symmetric key with asymmetric key of type %r", encryption_algo)
-        subkey = load_asymmetric_key_from_pem_bytestring(key_pem=subkey_pem, key_type=encryption_algo)
+        subkey = load_asymmetric_key_from_pem_bytestring(key_pem=subkey_pem, key_algo=encryption_algo)
 
         cipherdict = encrypt_bytestring(plaintext=symmetric_key_data, encryption_algo=encryption_algo, key_dict={"key": subkey})
         return cipherdict
@@ -814,9 +814,9 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
         encryption_proxy = get_escrow_proxy(escrow=cryptoconf["signature_escrow"], key_storage_pool=self._key_storage_pool)
         public_key_pem = encryption_proxy.fetch_public_key(
-            keychain_uid=keychain_uid_signature, key_type=signature_algo, must_exist=True
+            keychain_uid=keychain_uid_signature, key_algo=signature_algo, must_exist=True
         )
-        public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_type=signature_algo)
+        public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=signature_algo)
 
         message_hash = hash_message(message, hash_algo=message_digest_algo)
         assert message_hash == cryptoconf["message_digest"]  # Sanity check!!
@@ -1444,7 +1444,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
         metadata = {"metadata": Or(dict, None)}
 
     SIMPLE_CRYPTAINER_PIECE = {
-        "key_encryption_algo": Or(*ASYMMETRIC_KEY_TYPES_REGISTRY.keys()),
+        "key_encryption_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
         "key_escrow": Const(LOCAL_ESCROW_MARKER),
         Optionalkey("keychain_uid"): micro_schema_uid
     }

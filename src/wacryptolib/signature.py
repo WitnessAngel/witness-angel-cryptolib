@@ -8,13 +8,13 @@ from Crypto.Signature import pss, DSS
 
 from wacryptolib.exceptions import SignatureCreationError, SignatureVerificationError
 
-KNOWN_KEY_TYPES = Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey]
+KNOWN_KEY_ALGOS = Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey]
 SIGNATURE_HASHER = Crypto.Hash.SHA512
 
 logger = logging.getLogger(__name__)
 
 
-def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_TYPES) -> dict:
+def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_ALGOS) -> dict:
     """
     Return a timestamped signature of the chosen type for the given payload,
     with the provided key (which must be of a compatible type).
@@ -26,7 +26,7 @@ def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_TYPES) -
     signature_conf = SIGNATURE_ALGOS_REGISTRY.get(signature_algo)
     if signature_conf is None:
         raise ValueError("Unknown signature algorithm '%s'" % signature_algo)
-    if not isinstance(key, signature_conf["compatible_key_type"]):
+    if not isinstance(key, signature_conf["compatible_key_algo"]):
         raise ValueError("Incompatible key type %s for signature algorithm %s" % (type(key), signature_algo))
     signature_function = signature_conf["signature_function"]
     try:
@@ -71,7 +71,7 @@ def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey]) -> dict:
     return signature
 
 
-def verify_message_signature(*, message: bytes, signature_algo: str, signature: dict, key: Union[KNOWN_KEY_TYPES]):
+def verify_message_signature(*, message: bytes, signature_algo: str, signature: dict, key: Union[KNOWN_KEY_ALGOS]):
     """Verify the authenticity of a signature.
 
     Raises if signature is invalid.
@@ -123,9 +123,9 @@ def _compute_timestamped_hash(message: bytes, timestamp_utc: int):
 
 
 SIGNATURE_ALGOS_REGISTRY = dict(
-    RSA_PSS={"signature_function": _sign_with_pss, "compatible_key_type": RSA.RsaKey},
-    DSA_DSS={"signature_function": _sign_with_dss, "compatible_key_type": DSA.DsaKey},
-    ECC_DSS={"signature_function": _sign_with_dss, "compatible_key_type": ECC.EccKey},
+    RSA_PSS={"signature_function": _sign_with_pss, "compatible_key_algo": RSA.RsaKey},
+    DSA_DSS={"signature_function": _sign_with_dss, "compatible_key_algo": DSA.DsaKey},
+    ECC_DSS={"signature_function": _sign_with_dss, "compatible_key_algo": ECC.EccKey},
 )
 
 #: These values can be used as 'signature_algo' parameters.

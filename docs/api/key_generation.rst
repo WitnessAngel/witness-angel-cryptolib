@@ -10,7 +10,7 @@ for the same keychain uid.
 Public API
 --------------
 
-.. autodata:: wacryptolib.key_generation.SUPPORTED_ASYMMETRIC_KEY_TYPES
+.. autodata:: wacryptolib.key_generation.SUPPORTED_ASYMMETRIC_KEY_ALGOS
 
 .. autofunction:: wacryptolib.key_generation.generate_keypair
 

@@ -53,7 +53,7 @@ def profile_simple_encryption():
 
     tarfile_aggregator.add_record(sensor_name="dummy_sensor", from_datetime=now, to_datetime=now, extension=".bin", payload=payload)
 
-    tarfile_aggregator._flush_aggregated_data()
+    tarfile_aggregator._flush_aggregated_payload()
 
     time.sleep(10)
 

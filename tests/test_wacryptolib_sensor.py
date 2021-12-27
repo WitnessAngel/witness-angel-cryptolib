@@ -42,7 +42,7 @@ def test_time_limited_aggregator_mixin():
             obj._notify_aggregation_operation()
             assert obj._current_start_time > start_time_copy  # Renewed
 
-            obj._flush_aggregated_data()
+            obj._flush_aggregated_payload()
             assert obj._current_start_time is None
 
 

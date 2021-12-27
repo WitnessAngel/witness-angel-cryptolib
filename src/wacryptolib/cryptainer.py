@@ -241,7 +241,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             def finalize(self):
                 output_stream.flush()
                 return None
-            def get_authentication_data(self):
+            def get_integrity_tags(self):
                 return [{"SHA256": b"a"*32}]  # Matches SIMPLE_CRYPTOCONF of unit test
 
         stream_encryptor = FakeStreamEncryptor()
@@ -629,9 +629,9 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
             symkey = load_from_json_bytes(key_bytes)
 
             message_authentication_codes = payload_encryption_layer["message_authentication_codes"]  # Shall be a DICT, FIXME handle if it's still None
-            data_cipherdict = dict(ciphertext=payload_current, **message_authentication_codes)
+            payload_cipherdict = dict(ciphertext=payload_current, **message_authentication_codes)
             payload_current = decrypt_bytestring(
-                cipherdict=data_cipherdict, key_dict=symkey, encryption_algo=payload_encryption_algo, verify=verify
+                cipherdict=payload_cipherdict, key_dict=symkey, encryption_algo=payload_encryption_algo, verify=verify
             )
 
         data = payload_current  # Now decrypted
@@ -870,7 +870,7 @@ class CryptainerEncryptionStream:
         self._stream_encryptor.finalize()
         self._output_data_stream.close()  # Important
 
-        authentication_data_list = self._stream_encryptor.get_authentication_data()
+        authentication_data_list = self._stream_encryptor.get_integrity_tags()
 
         self._cryptainer_writer.add_authentication_data_to_cryptainer(self._wip_cryptainer, authentication_data_list)
         self._dump_current_cryptainer_to_filesystem(is_temporary=False)

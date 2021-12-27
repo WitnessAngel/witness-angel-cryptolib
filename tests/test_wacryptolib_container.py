@@ -63,7 +63,7 @@ def _get_binary_or_empty_content():
 ENFORCED_UID1 = UUID("0e8e861e-f0f7-e54b-18ea-34798d5daaaa")
 ENFORCED_UID2 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeebbbb")
 
-VOID_CRYPTOCONF_REGARDING_DATA_ENCRYPTION_LAYERS = dict(payload_encryption_layers=[])  # Forbidden
+VOID_CRYPTOCONF_REGARDING_PAYLOAD_ENCRYPTION_LAYERS = dict(payload_encryption_layers=[])  # Forbidden
 
 VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_LAYERS = dict(  # Forbidden
     payload_encryption_layers=[
@@ -330,7 +330,7 @@ def _intialize_cryptainer_with_single_file(tmp_path):  # FIXME generalize its us
 @pytest.mark.parametrize(
     "cryptoconf",
     [
-        VOID_CRYPTOCONF_REGARDING_DATA_ENCRYPTION_LAYERS,
+        VOID_CRYPTOCONF_REGARDING_PAYLOAD_ENCRYPTION_LAYERS,
         VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_LAYERS,
     ],
 )

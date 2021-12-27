@@ -256,7 +256,7 @@ class EncryptionStreamBase:
 
         self._hashers_dict = hashers_dict
 
-    def _encrypt_aligned_data(self, plaintext):
+    def _encrypt_aligned_payload(self, plaintext):
         ciphertext = self._cipher.encrypt(plaintext)
         assert isinstance(ciphertext, bytes), repr(ciphertext)
 
@@ -275,7 +275,7 @@ class EncryptionStreamBase:
             formatted_plaintext, self._remainder = utilities.split_as_formatted_data(self._remainder, plaintext,
                                                                                      block_size=self.BLOCK_SIZE)
             plaintext = formatted_plaintext
-        ciphertext = self._encrypt_aligned_data(plaintext)
+        ciphertext = self._encrypt_aligned_payload(plaintext)
         return ciphertext
 
     def finalize(self) -> bytes:
@@ -292,12 +292,12 @@ class EncryptionStreamBase:
 
         if self.BLOCK_SIZE != 1:
             padded_remainder = pad(self._remainder, block_size=self.BLOCK_SIZE)
-            ciphertext = self._encrypt_aligned_data(padded_remainder)
+            ciphertext = self._encrypt_aligned_payload(padded_remainder)
             self._remainder = b""
 
         return ciphertext
 
-    def get_authentication_data(self) -> dict:
+    def get_integrity_tags(self) -> dict:
         """ Get metadata
         Digest all hash instance in a dictionnary , and return the hash as bytes.
 
@@ -402,11 +402,11 @@ class StreamManager:
         self._output_stream.write(ciphertext)
         self._output_stream.flush()
 
-    def get_authentication_data(self) -> list:
-        authentication_data_list = []
+    def get_integrity_tags(self) -> list:
+        integrity_tags_list = []
         for cipher in self._cipher_streams:
-            authentication_data_list.append(cipher.get_authentication_data())
-        return authentication_data_list
+            integrity_tags_list.append(cipher.get_integrity_tags())
+        return integrity_tags_list
 
 
 ENCRYPTION_ALGOS_REGISTRY = dict(

@@ -38,11 +38,11 @@ class TimeLimitedAggregatorMixin:
         if self._current_start_time is not None:
             delay_s = get_utc_now_date() - self._current_start_time
             if delay_s.total_seconds() >= self._max_duration_s:
-                self._flush_aggregated_data()
+                self._flush_aggregated_payload()
         if self._current_start_time is None:
             self._current_start_time = get_utc_now_date()
 
-    def _flush_aggregated_data(self):
+    def _flush_aggregated_payload(self):
         """Call this AFTER really flushing data to the next step of the pipeline"""
         self._current_start_time = None
 
@@ -97,7 +97,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         assert " " not in filename, repr(filename)
         return filename
 
-    def _flush_aggregated_data(self):
+    def _flush_aggregated_payload(self):
 
         if not self._current_start_time:
             assert not self._current_records_count
@@ -117,7 +117,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         self._current_metadata = None
         self._current_records_count = 0
 
-        super()._flush_aggregated_data()
+        super()._flush_aggregated_payload()
 
     def _build_record_filename(self, sensor_name, from_datetime, to_datetime, extension):
         assert extension.startswith("."), extension
@@ -176,15 +176,15 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         Return the content of current tarfile as a bytestring, possibly empty, and reset the current tarfile.
         """
         assert self._current_records_count or not self._current_start_time  # INVARIANT of our system!
-        self._flush_aggregated_data()
+        self._flush_aggregated_payload()
 
     @staticmethod
-    def read_tarfile_from_bytestring(data_bytestring):
+    def read_tarfile_from_bytestring(payload_bytestring):
         """
         Create a readonly TarFile instance from the provided bytestring.
         """
-        assert data_bytestring, data_bytestring  # Empty bytestrings must already have been filtered out
-        return tarfile.open(mode="r", fileobj=io.BytesIO(data_bytestring))
+        assert payload_bytestring, payload_bytestring  # Empty bytestrings must already have been filtered out
+        return tarfile.open(mode="r", fileobj=io.BytesIO(payload_bytestring))
 
 
 class JsonDataAggregator(TimeLimitedAggregatorMixin):
@@ -218,7 +218,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
         if self._current_dataset is None:
             self._current_dataset = []
 
-    def _flush_aggregated_data(self):
+    def _flush_aggregated_payload(self):
         if not self._current_start_time:
             assert not self._current_dataset
             return
@@ -232,7 +232,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
             extension=".json",
         )
         self._current_dataset = None
-        super()._flush_aggregated_data()
+        super()._flush_aggregated_payload()
 
     @synchronized
     def add_data(self, data_dict: dict):
@@ -251,7 +251,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
         Force the flushing of current data to the tarfile (e.g. when terminating the service).
         """
         assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
-        self._flush_aggregated_data()
+        self._flush_aggregated_payload()
 
 
 class PeriodicValueMixin:

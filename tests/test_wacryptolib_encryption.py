@@ -192,7 +192,7 @@ def test_stream_manager(encryption_algo_list):
     current_ciphertext = output_stream.getvalue()
 
     for payload_encryption_node, authentication_data in zip(reversed(payload_encryption_layer_extracts),
-                                                         reversed(streammanager.get_authentication_data())):
+                                                         reversed(streammanager.get_integrity_tags())):
 
         for hash_algo in payload_encryption_node['message_digest_algos']:
             assert (hash_message(message=current_ciphertext, hash_algo=hash_algo) ==  # TODO NOW create local vars

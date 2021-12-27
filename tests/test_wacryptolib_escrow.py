@@ -13,7 +13,7 @@ from wacryptolib.escrow import (
     ReadonlyEscrowApi,
     generate_keypair_for_storage,
 )
-from wacryptolib.key_generation import (
+from wacryptolib.keygen import (
     load_asymmetric_key_from_pem_bytestring,
     SUPPORTED_ASYMMETRIC_KEY_ALGOS,
     generate_keypair,
@@ -252,7 +252,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
 
     generated_keys_count = 0
 
-    def key_generation_func(key_algo, serialize):
+    def keygen_func(key_algo, serialize):
         nonlocal generated_keys_count
         generated_keys_count += 1
         return dict(private_key=b"someprivatekey", public_key=b"somepublickey")
@@ -265,7 +265,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
         res = generate_free_keypair_for_least_provisioned_key_algo(
             key_storage=key_storage,
             max_free_keys_per_algo=10,
-            key_generation_func=key_generation_func,
+            keygen_func=keygen_func,
             # no key_algos parameter provided
         )
         assert res
@@ -286,7 +286,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
         res = generate_free_keypair_for_least_provisioned_key_algo(
             key_storage=key_storage,
             max_free_keys_per_algo=10,
-            key_generation_func=key_generation_func,
+            keygen_func=keygen_func,
             key_algos=restricted_key_algos,
         )
         assert res
@@ -300,7 +300,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
         res = generate_free_keypair_for_least_provisioned_key_algo(
             key_storage=key_storage,
             max_free_keys_per_algo=10,
-            key_generation_func=key_generation_func,
+            keygen_func=keygen_func,
             key_algos=restricted_key_algos,
         )
         assert res
@@ -313,7 +313,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     res = generate_free_keypair_for_least_provisioned_key_algo(
         key_storage=key_storage,
         max_free_keys_per_algo=10,
-        key_generation_func=key_generation_func,
+        keygen_func=keygen_func,
         key_algos=restricted_key_algos,
     )
     assert not res
@@ -323,7 +323,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
         generate_free_keypair_for_least_provisioned_key_algo(
             key_storage=key_storage,
             max_free_keys_per_algo=15,
-            key_generation_func=key_generation_func,
+            keygen_func=keygen_func,
             key_algos=["RSA_OAEP", "DSA_DSS"],
         )
 
@@ -335,7 +335,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     res = generate_free_keypair_for_least_provisioned_key_algo(
         key_storage=key_storage,
         max_free_keys_per_algo=20,
-        key_generation_func=key_generation_func,
+        keygen_func=keygen_func,
         key_algos=restricted_key_algos,
     )
     assert res
@@ -347,7 +347,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     res = generate_free_keypair_for_least_provisioned_key_algo(
         key_storage=key_storage,
         max_free_keys_per_algo=5,
-        key_generation_func=key_generation_func,
+        keygen_func=keygen_func,
         key_algos=restricted_key_algos,
     )
     assert not res
@@ -360,7 +360,7 @@ def test_get_free_keys_generator_worker():
 
     key_storage = DummyKeyStorage()
 
-    def key_generation_func(key_algo, serialize):
+    def keygen_func(key_algo, serialize):
         nonlocal generate_keys_count
         generate_keys_count += 1
         time.sleep(0.01)
@@ -370,7 +370,7 @@ def test_get_free_keys_generator_worker():
         key_storage=key_storage,
         max_free_keys_per_algo=30,
         sleep_on_overflow_s=0.5,
-        key_generation_func=key_generation_func,
+        keygen_func=keygen_func,
     )
 
     try:

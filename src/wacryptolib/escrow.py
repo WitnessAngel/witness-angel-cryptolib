@@ -6,7 +6,7 @@ from uuid import UUID
 
 from wacryptolib.encryption import _decrypt_via_rsa_oaep
 from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, DecryptionError, KeyLoadingError
-from wacryptolib.key_generation import (
+from wacryptolib.keygen import (
     generate_keypair,
     load_asymmetric_key_from_pem_bytestring,
     SUPPORTED_ASYMMETRIC_KEY_ALGOS,
@@ -31,7 +31,7 @@ def generate_keypair_for_storage(  # FIXME rename and add to docs
 
     Returns the generated keypair dict.
     """
-    from wacryptolib.key_generation import generate_keypair
+    from wacryptolib.keygen import generate_keypair
 
     keychain_uid = keychain_uid or generate_uuid0()
     keypair = generate_keypair(key_algo=key_algo, serialize=True, passphrase=passphrase)
@@ -240,7 +240,7 @@ class ReadonlyEscrowApi(EscrowApi):
 def generate_free_keypair_for_least_provisioned_key_algo(
     key_storage: KeyStorageBase,
     max_free_keys_per_algo: int,
-    key_generation_func=generate_keypair,
+    keygen_func=generate_keypair,
     key_algos=SUPPORTED_ASYMMETRIC_KEY_ALGOS,
 ):
     """
@@ -249,7 +249,7 @@ def generate_free_keypair_for_least_provisioned_key_algo(
 
     :param key_storage: the key storage to use
     :param max_free_keys_per_algo: how many free keys should exist per key type
-    :param key_generation_func: callable to use for keypair generation
+    :param keygen_func: callable to use for keypair generation
     :param key_algos: the different key types (strings) to consider
     :return: True iff a key was generated (i.e. the free keys pool was not full)
     """
@@ -262,7 +262,7 @@ def generate_free_keypair_for_least_provisioned_key_algo(
     if count >= max_free_keys_per_algo:
         return False
 
-    keypair = key_generation_func(key_algo=key_algo, serialize=True)
+    keypair = keygen_func(key_algo=key_algo, serialize=True)
     key_storage.add_free_keypair(
         key_algo=key_algo, public_key=keypair["public_key"], private_key=keypair["private_key"]
     )

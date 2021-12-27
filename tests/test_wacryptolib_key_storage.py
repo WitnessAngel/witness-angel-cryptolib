@@ -10,14 +10,14 @@ from _test_mockups import get_fake_authdevice, random_bool
 from wacryptolib.authdevice import _get_key_storage_folder_path, initialize_authdevice
 from wacryptolib.escrow import generate_keypair_for_storage
 from wacryptolib.exceptions import KeyStorageDoesNotExist, KeyStorageAlreadyExists
-from wacryptolib.key_generation import SUPPORTED_ASYMMETRIC_KEY_ALGOS
+from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.key_storage import FilesystemKeyStorage, DummyKeyStorage, KeyStorageBase, FilesystemKeyStoragePool
 from wacryptolib.scaffolding import (
     check_key_storage_free_keys_concurrency,
     check_key_storage_basic_get_set_api,
     check_key_storage_free_keys_api,
 )
-from wacryptolib.key_generation import generate_keypair
+from wacryptolib.keygen import generate_keypair
 from wacryptolib.utilities import generate_uuid0
 
 

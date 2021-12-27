@@ -25,7 +25,7 @@ from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring, Strea
 from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi, EscrowApi
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
-from wacryptolib.key_generation import generate_symkey, load_asymmetric_key_from_pem_bytestring, \
+from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, \
     ASYMMETRIC_KEY_ALGOS_REGISTRY
 from wacryptolib.key_storage import KeyStorageBase, DummyKeyStoragePool, KeyStoragePoolBase
 from wacryptolib.shared_secret import split_bytestring_as_shamir_shards, recombine_secret_from_shamir_shards

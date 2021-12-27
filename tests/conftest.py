@@ -14,13 +14,13 @@ def _generate_keypair_caching():  # FIXME RENAME THIS
     reuse the same keys for most tests !
     """
 
-    import wacryptolib.key_generation
-    original_generator = wacryptolib.key_generation._do_generate_keypair
-    wacryptolib.key_generation.__original_do_generate_keypair = original_generator
+    import wacryptolib.keygen
+    original_generator = wacryptolib.keygen._do_generate_keypair
+    wacryptolib.keygen.__original_do_generate_keypair = original_generator
     cached_generator = functools.lru_cache(maxsize=None)(original_generator)
 
-    patcher = patch('wacryptolib.key_generation._do_generate_keypair', cached_generator)
-    wacryptolib.key_generation.__original_do_generate_keypair_patcher = patcher  # To use stop()/start() in tests
+    patcher = patch('wacryptolib.keygen._do_generate_keypair', cached_generator)
+    wacryptolib.keygen.__original_do_generate_keypair_patcher = patcher  # To use stop()/start() in tests
 
     patcher.start()  # DO NOT use "with" statement here, else start/stop don't work anymore
     try:

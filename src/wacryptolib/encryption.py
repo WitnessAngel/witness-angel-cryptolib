@@ -10,7 +10,7 @@ from Crypto.Util.Padding import pad, unpad
 
 from wacryptolib import utilities
 from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionIntegrityError
-from wacryptolib.key_generation import (
+from wacryptolib.keygen import (
     _check_symmetric_key_length_bytes,
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
     _check_asymmetric_key_length_bits,

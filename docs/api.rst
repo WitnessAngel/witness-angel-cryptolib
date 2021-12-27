@@ -9,7 +9,7 @@ API Documentation
    api/escrow
    api/authenticator
    api/authdevice
-   api/key_generation
+   api/keygen
    api/key_storage
    api/signature
    api/encryption

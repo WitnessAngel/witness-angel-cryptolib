@@ -363,12 +363,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
             logger.debug("Generating symmetric key of type %r", payload_encryption_algo)
             symkey = generate_symkey(encryption_algo=payload_encryption_algo)
-            symmetric_key_bytes = dump_to_json_bytes(symkey)
+            key_bytes = dump_to_json_bytes(symkey)
             key_encryption_layers = payload_encryption_layer["key_encryption_layers"]
 
             key_ciphertext = self._encrypt_key_through_multiple_layers(
                     keychain_uid=keychain_uid,
-                    key_bytes=symmetric_key_bytes,
+                    key_bytes=key_bytes,
                     key_encryption_layers=key_encryption_layers)
             payload_encryption_layer["key_ciphertext"] = key_ciphertext
 
@@ -417,7 +417,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         by using a shared secret scheme.
 
         :param keychain_uid: uuid for the set of encryption keys used
-        :param symmetric_key_data: symmetric key to encrypt (potentially already encrypted)
+        :param key_bytes: symmetric key to encrypt (potentially already encrypted)
         :param cryptoconf: dictionary which contain configuration tree
 
         :return: if the scheme used is 'SHARED_SECRET', a list of encrypted shares is returned. If an asymmetric
@@ -462,20 +462,20 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             key_cipherdict = self._encrypt_with_asymmetric_cipher(
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid_encryption,
-                symmetric_key_data=key_bytes,
+                key_bytes=key_bytes,
                 escrow=key_encryption_layer["key_escrow"],
             )
             return key_cipherdict
 
     def _encrypt_with_asymmetric_cipher(
-        self, encryption_algo: str, keychain_uid: uuid.UUID, symmetric_key_data: bytes, escrow  # FIXME change symmetric_key_data
+        self, encryption_algo: str, keychain_uid: uuid.UUID, key_bytes: bytes, escrow
     ) -> dict:
         """
         Encrypt given payload with an asymmetric algorithm.
 
         :param encryption_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
-        :param symmetric_key_data: symmetric key as bytes to encrypt
+        :param key_bytes: symmetric key as bytes to encrypt
         :param escrow: escrow used for encryption (findable in configuration tree)
 
         :return: dictionary which contains every payload needed to decrypt the ciphered payload
@@ -488,7 +488,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         logger.debug("Encrypting symmetric key with asymmetric key of type %r", encryption_algo)
         subkey = load_asymmetric_key_from_pem_bytestring(key_pem=subkey_pem, key_algo=encryption_algo)
 
-        cipherdict = encrypt_bytestring(plaintext=symmetric_key_data, encryption_algo=encryption_algo, key_dict={"key": subkey})
+        cipherdict = encrypt_bytestring(plaintext=key_bytes, encryption_algo=encryption_algo, key_dict={"key": subkey})
         return cipherdict
 
     def ____obsolete_____encrypt_shards(self, shares: Sequence, key_shared_secret_shards: Sequence, keychain_uid: uuid.UUID) -> list:
@@ -517,7 +517,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             share_cipherdict = self._encrypt_with_asymmetric_cipher(
                 encryption_algo=share_encryption_algo,
                 keychain_uid=keychain_uid_shard,
-                symmetric_key_data=share[1],
+                key_bytes=share[1],
                 escrow=share_escrow,
             )
 

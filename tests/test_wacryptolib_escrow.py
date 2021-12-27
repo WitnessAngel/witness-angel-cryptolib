@@ -5,7 +5,7 @@ import copy
 import pytest
 from Crypto.Random import get_random_bytes
 
-from wacryptolib.encryption import _encrypt_via_rsa_oaep
+from wacryptolib.cipher import _encrypt_via_rsa_oaep
 from wacryptolib.escrow import (
     EscrowApi,
     generate_free_keypair_for_least_provisioned_key_algo,

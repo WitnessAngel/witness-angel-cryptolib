@@ -12,7 +12,7 @@ API Documentation
    api/keygen
    api/keystore
    api/signature
-   api/encryption
+   api/cipher
    api/shared_secret
    api/sensor
    api/jsonrpc_client

@@ -10,12 +10,12 @@ from Crypto.Random.random import randint
 
 import wacryptolib
 from wacryptolib.cryptainer import CryptainerWriter
-from wacryptolib.encryption import STREAMABLE_ENCRYPTION_ALGOS
+from wacryptolib.cipher import STREAMABLE_ENCRYPTION_ALGOS
 from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey, \
     SYMMETRIC_KEY_ALGOS_REGISTRY
 from wacryptolib.utilities import SUPPORTED_HASH_ALGOS, hash_message
-from wacryptolib.encryption import AUTHENTICATED_ENCRYPTION_ALGOS
+from wacryptolib.cipher import AUTHENTICATED_ENCRYPTION_ALGOS
 
 
 def _get_binary_content():
@@ -28,10 +28,10 @@ def test_generic_encryption_and_decryption_errors():
     binary_content = _get_binary_content()
 
     with pytest.raises(ValueError, match="Unknown cipher type"):
-        wacryptolib.encryption.encrypt_bytestring(key_dict=key_dict, plaintext=binary_content, encryption_algo="EXHD")
+        wacryptolib.cipher.encrypt_bytestring(key_dict=key_dict, plaintext=binary_content, encryption_algo="EXHD")
 
     with pytest.raises(ValueError, match="Unknown cipher type"):
-        wacryptolib.encryption.decrypt_bytestring(key_dict=key_dict, cipherdict={}, encryption_algo="EXHD")
+        wacryptolib.cipher.decrypt_bytestring(key_dict=key_dict, cipherdict={}, encryption_algo="EXHD")
 
 
 def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_content):
@@ -84,14 +84,14 @@ def test_symmetric_encryption_and_decryption_for_algo(encryption_algo, use_empty
 
     binary_content = b"" if use_empty_data else _get_binary_content()
 
-    cipherdict = wacryptolib.encryption.encrypt_bytestring(
+    cipherdict = wacryptolib.cipher.encrypt_bytestring(
         key_dict=key_dict, plaintext=binary_content, encryption_algo=encryption_algo
     )
 
     assert "ciphertext" in cipherdict  # Mandatory field
     assert isinstance(cipherdict["ciphertext"], bytes)
 
-    decrypted_content = wacryptolib.encryption.decrypt_bytestring(
+    decrypted_content = wacryptolib.cipher.decrypt_bytestring(
         key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo
     )
 
@@ -99,7 +99,7 @@ def test_symmetric_encryption_and_decryption_for_algo(encryption_algo, use_empty
 
     if not use_empty_data:
         decryption_func = functools.partial(
-            wacryptolib.encryption.decrypt_bytestring, key_dict=key_dict, encryption_algo=encryption_algo
+            wacryptolib.cipher.decrypt_bytestring, key_dict=key_dict, encryption_algo=encryption_algo
         )
         _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
 
@@ -109,12 +109,12 @@ def test_symmetric_encryption_and_decryption_for_algo(encryption_algo, use_empty
     main_key_too_short_dict["key"] = main_key_too_short
 
     with pytest.raises(EncryptionError, match="symmetric key length"):
-        wacryptolib.encryption.encrypt_bytestring(
+        wacryptolib.cipher.encrypt_bytestring(
             key_dict=main_key_too_short_dict, plaintext=binary_content, encryption_algo=encryption_algo
         )
 
     with pytest.raises(DecryptionError, match="symmetric key length"):
-        wacryptolib.encryption.decrypt_bytestring(
+        wacryptolib.cipher.decrypt_bytestring(
             key_dict=main_key_too_short_dict, cipherdict=cipherdict, encryption_algo=encryption_algo
         )
 
@@ -128,18 +128,18 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
 
     binary_content = _get_binary_content()
 
-    cipherdict = wacryptolib.encryption.encrypt_bytestring(
+    cipherdict = wacryptolib.cipher.encrypt_bytestring(
         key_dict=dict(key=keypair["public_key"]), plaintext=binary_content, encryption_algo=encryption_algo
     )
 
-    decrypted_content = wacryptolib.encryption.decrypt_bytestring(
+    decrypted_content = wacryptolib.cipher.decrypt_bytestring(
         key_dict=dict(key=keypair["private_key"]), cipherdict=cipherdict, encryption_algo=encryption_algo
     )
 
     assert decrypted_content == binary_content
 
     decryption_func = functools.partial(
-        wacryptolib.encryption.decrypt_bytestring, key_dict=dict(key=keypair["private_key"]), encryption_algo="RSA_OAEP"
+        wacryptolib.cipher.decrypt_bytestring, key_dict=dict(key=keypair["private_key"]), encryption_algo="RSA_OAEP"
     )
     _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
 
@@ -147,12 +147,12 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
     public_key_too_short = private_key_too_short.publickey()
 
     with pytest.raises(EncryptionError, match="asymmetric key length"):
-        wacryptolib.encryption.encrypt_bytestring(
+        wacryptolib.cipher.encrypt_bytestring(
             key_dict=dict(key=public_key_too_short), plaintext=binary_content, encryption_algo=encryption_algo
         )
 
     with pytest.raises(DecryptionError, match="asymmetric key length"):
-        wacryptolib.encryption.decrypt_bytestring(
+        wacryptolib.cipher.decrypt_bytestring(
             key_dict=dict(key=private_key_too_short), cipherdict=cipherdict, encryption_algo=encryption_algo
         )
 
@@ -175,7 +175,7 @@ def test_stream_manager(encryption_algo_list):
         payload_encryption_layer_extracts.append(payload_encryption_layers_extract)
     print(payload_encryption_layer_extracts)
 
-    streammanager = wacryptolib.encryption.StreamManager(
+    streammanager = wacryptolib.cipher.StreamManager(
         payload_encryption_layer_extracts=payload_encryption_layer_extracts,
         output_stream=output_stream)
 
@@ -201,10 +201,10 @@ def test_stream_manager(encryption_algo_list):
         cipherdict = {"ciphertext": current_ciphertext}
         cipherdict.update(authentication_data["message_authentication_codes"])
 
-        decrypted_ciphertext = wacryptolib.encryption.decrypt_bytestring(cipherdict=cipherdict,
-                                                                         encryption_algo=payload_encryption_node[
+        decrypted_ciphertext = wacryptolib.cipher.decrypt_bytestring(cipherdict=cipherdict,
+                                                                     encryption_algo=payload_encryption_node[
                                                                              'encryption_algo'],
-                                                                         key_dict=payload_encryption_node[
+                                                                     key_dict=payload_encryption_node[
                                                                              "symkey"])
 
         current_ciphertext = decrypted_ciphertext
@@ -221,7 +221,7 @@ def test_symmetric_decryption_verify(encryption_algo):
     key_dict = generate_symkey(encryption_algo)
     binary_content = _get_binary_content()
 
-    cipherdict = wacryptolib.encryption.encrypt_bytestring(
+    cipherdict = wacryptolib.cipher.encrypt_bytestring(
         key_dict=key_dict, plaintext=binary_content, encryption_algo=encryption_algo
     )
 
@@ -231,12 +231,12 @@ def test_symmetric_decryption_verify(encryption_algo):
         cipherdict[attribute_to_corrupt] = get_random_bytes(len(cipherdict[attribute_to_corrupt]))
 
     # Decryption should not fail if verify==False
-    decrypted_content = wacryptolib.encryption.decrypt_bytestring(
+    decrypted_content = wacryptolib.cipher.decrypt_bytestring(
         key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo, verify=False
     )
     assert decrypted_content == binary_content
 
-    decryption_callable = lambda: wacryptolib.encryption.decrypt_bytestring(key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo, verify=True)
+    decryption_callable = lambda: wacryptolib.cipher.decrypt_bytestring(key_dict=key_dict, cipherdict=cipherdict, encryption_algo=encryption_algo, verify=True)
 
     # Decryption should fail if verify==True, but only for algorithms that enforce an authentication check
     if is_corruptable:

@@ -20,7 +20,7 @@ import jsonschema
 from schema import And, Or, Regex, Const, Schema
 from schema import Optional as Optionalkey
 
-from wacryptolib.encryption import encrypt_bytestring, decrypt_bytestring, StreamManager, STREAMABLE_ENCRYPTION_ALGOS, \
+from wacryptolib.cipher import encrypt_bytestring, decrypt_bytestring, StreamManager, STREAMABLE_ENCRYPTION_ALGOS, \
     SUPPORTED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi, EscrowApi
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, ValidationError

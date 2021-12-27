@@ -4,7 +4,7 @@ import uuid
 from typing import Optional, Union, AnyStr, Sequence
 from uuid import UUID
 
-from wacryptolib.encryption import _decrypt_via_rsa_oaep
+from wacryptolib.cipher import _decrypt_via_rsa_oaep
 from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, DecryptionError, KeyLoadingError
 from wacryptolib.keygen import (
     generate_keypair,

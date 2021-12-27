@@ -3,7 +3,7 @@ import unicodedata
 from Crypto.PublicKey import RSA, ECC, DSA
 
 import wacryptolib
-from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS
+from wacryptolib.cipher import SUPPORTED_ENCRYPTION_ALGOS
 from wacryptolib.exceptions import KeyLoadingError
 from wacryptolib.keygen import (
     load_asymmetric_key_from_pem_bytestring,

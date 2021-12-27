@@ -361,7 +361,7 @@ class Chacha20Poly1305EncryptionNode(EncryptionStreamBase):
         return {"tag": self._cipher.digest()}
 
 
-class StreamManager:
+class StreamManager:  # FIXME RENAME THIS
     """"Pipeline to encrypt data through several encryption nodes, down to an outout stream (e.g. file or ByteIO)"""
 
     def __init__(self, output_stream: BinaryIO, payload_encryption_layer_extracts: list):

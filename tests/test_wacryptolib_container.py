@@ -39,7 +39,7 @@ from wacryptolib.cryptainer import (
     CONF_SCHEMA_JSON, CRYPTAINER_SCHEMA_PYTHON, CRYPTAINER_SCHEMA_JSON, check_conf_sanity, check_cryptainer_sanity,
     CRYPTAINER_TEMP_SUFFIX,
 )
-from wacryptolib.encryption import SUPPORTED_ENCRYPTION_ALGOS, AUTHENTICATED_ENCRYPTION_ALGOS
+from wacryptolib.cipher import SUPPORTED_ENCRYPTION_ALGOS, AUTHENTICATED_ENCRYPTION_ALGOS
 from wacryptolib.escrow import (
     EscrowApi,
     generate_keypair_for_storage,
@@ -489,7 +489,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
     payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
-    with pytest.raises(DecryptionError, match="share.*missing"):
+    with pytest.raises(DecryptionError, match="shard.*missing"):
         decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
     result_metadata = extract_metadata_from_cryptainer(cryptainer=cryptainer)

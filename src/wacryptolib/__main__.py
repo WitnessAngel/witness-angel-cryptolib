@@ -7,7 +7,7 @@ import os
 from wacryptolib.cryptainer import (
     LOCAL_ESCROW_MARKER,
     encrypt_payload_into_cryptainer,
-    decrypt_data_from_cryptainer,
+    decrypt_payload_from_cryptainer,
     CRYPTAINER_SUFFIX,
     MEDIUM_SUFFIX,
     SHARED_SECRET_MARKER,
@@ -100,7 +100,7 @@ def encrypt(ctx, input_medium, output_cryptainer):
 
 
 def _do_decrypt(cryptainer, keystore_pool):
-    payload = decrypt_data_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+    payload = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
     return payload
 
 

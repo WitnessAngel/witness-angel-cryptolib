@@ -22,7 +22,7 @@ from _test_mockups import FakeTestCryptainerStorage, random_bool
 from wacryptolib.cryptainer import (
     LOCAL_ESCROW_MARKER,
     encrypt_payload_into_cryptainer,
-    decrypt_data_from_cryptainer,
+    decrypt_payload_from_cryptainer,
     CryptainerStorage,
     extract_metadata_from_cryptainer,
     CryptainerBase,
@@ -412,7 +412,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, esc
         assert not keypair_statuses["missing_private_key"]
 
     verify = random_bool()
-    result_payload = decrypt_data_from_cryptainer(cryptainer=cryptainer, keystore_pool=keystore_pool, verify=verify)
+    result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer, keystore_pool=keystore_pool, verify=verify)
     # pprint.pprint(result, width=120)
     assert result_payload == payload
 
@@ -421,7 +421,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, esc
 
     cryptainer["cryptainer_format"] = "OAJKB"
     with pytest.raises(ValueError, match="Unknown cryptainer format"):
-        decrypt_data_from_cryptainer(cryptainer=cryptainer)
+        decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
 
 @pytest.mark.parametrize(
@@ -451,7 +451,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
     assert isinstance(cryptainer["data_ciphertext"], bytes)
 
-    result_payload = decrypt_data_from_cryptainer(cryptainer=cryptainer)
+    result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
     assert result_payload == payload
 
@@ -471,7 +471,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
     verify = random_bool()
-    result_payload = decrypt_data_from_cryptainer(cryptainer=cryptainer, verify=verify)
+    result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer, verify=verify)
     assert result_payload == payload
 
     # Another share is deleted
@@ -480,7 +480,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
-    result_payload = decrypt_data_from_cryptainer(cryptainer=cryptainer)
+    result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
     assert result_payload == payload
 
     # Another share is deleted and now there aren't enough valid ones to decipher data
@@ -490,14 +490,14 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
     data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
     with pytest.raises(DecryptionError, match="share.*missing"):
-        decrypt_data_from_cryptainer(cryptainer=cryptainer)
+        decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
     result_metadata = extract_metadata_from_cryptainer(cryptainer=cryptainer)
     assert result_metadata == metadata
 
     cryptainer["cryptainer_format"] = "OAJKB"
     with pytest.raises(ValueError, match="Unknown cryptainer format"):
-        decrypt_data_from_cryptainer(cryptainer=cryptainer)
+        decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
 
 # FIXME move that elsewhere and complete it
@@ -535,14 +535,14 @@ def test_recursive_shamir_secrets_and_layers():
         payload=payload, cryptoconf=RECURSIVE_CRYPTOCONF, keychain_uid=keychain_uid, metadata=None
     )
 
-    data_decrypted = decrypt_data_from_cryptainer(
+    data_decrypted = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
     )
 
     assert data_decrypted == payload
 
 
-def test_decrypt_data_from_cryptainer_with_authenticated_algo_and_verify():
+def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
     data_encryption_algo = random.choice(AUTHENTICATED_ENCRYPTION_ALGOS)
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
     cryptoconf["data_encryption_layers"][0]["data_encryption_algo"] = data_encryption_algo
@@ -552,11 +552,11 @@ def test_decrypt_data_from_cryptainer_with_authenticated_algo_and_verify():
     )
     cryptainer["data_encryption_layers"][0]["message_authentication_codes"]["tag"] += b"hi"  # CORRUPTION
 
-    result = decrypt_data_from_cryptainer(cryptainer, verify=False)
+    result = decrypt_payload_from_cryptainer(cryptainer, verify=False)
     assert result == b"1234"
 
     with pytest.raises(DecryptionIntegrityError):
-        decrypt_data_from_cryptainer(cryptainer, verify=True)
+        decrypt_payload_from_cryptainer(cryptainer, verify=True)
 
 
 def test_passphrase_mapping_during_decryption(tmp_path):
@@ -649,34 +649,34 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     # FIXME we must TEST that keychain_uid_escrow is necessary for decryption for example by deleting it before a decrypt()
 
     with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
-        decrypt_data_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+        decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
 
     with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
-        decrypt_data_from_cryptainer(
+        decrypt_payload_from_cryptainer(
             cryptainer, keystore_pool=keystore_pool, passphrase_mapper={local_escrow_id: all_passphrases}
         )  # Doesn't help share escrows
 
     with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
-        decrypt_data_from_cryptainer(
+        decrypt_payload_from_cryptainer(
             cryptainer, keystore_pool=keystore_pool, passphrase_mapper={share_escrow1_id: all_passphrases}
         )  # Unblocks 1 share escrow
 
     with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
-        decrypt_data_from_cryptainer(
+        decrypt_payload_from_cryptainer(
             cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper={share_escrow1_id: all_passphrases, share_escrow2_id: [passphrase3]},
         )  # No changes
 
     with pytest.raises(DecryptionError, match="Could not decrypt private key"):
-        decrypt_data_from_cryptainer(
+        decrypt_payload_from_cryptainer(
             cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper={share_escrow1_id: all_passphrases, share_escrow3_id: [passphrase3]},
         )
 
     with pytest.raises(DecryptionError, match="Could not decrypt private key"):
-        decrypt_data_from_cryptainer(
+        decrypt_payload_from_cryptainer(
             cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper={
@@ -686,7 +686,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
             },
         )
 
-    decrypted = decrypt_data_from_cryptainer(
+    decrypted = decrypt_payload_from_cryptainer(
         cryptainer,
         keystore_pool=keystore_pool,
         passphrase_mapper={
@@ -698,7 +698,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     assert decrypted == payload
 
     # Passphrases of `None` key are always used
-    decrypted = decrypt_data_from_cryptainer(
+    decrypted = decrypt_payload_from_cryptainer(
         cryptainer,
         keystore_pool=keystore_pool,
         passphrase_mapper={

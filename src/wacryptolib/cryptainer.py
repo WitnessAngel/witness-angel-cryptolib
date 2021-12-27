@@ -269,14 +269,14 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         :return: cryptainer with all the information needed to attempt data decryption
         """
 
-        payload = self._load_data_bytes_and_cleanup(payload)  # Ensure we get the whole payload buffer
+        payload = self._load_payload_bytes_and_cleanup(payload)  # Ensure we get the whole payload buffer
 
         cryptainer, data_encryption_layer_extracts = self._generate_cryptainer_base_and_secrets(
            cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
         )
 
         data_ciphertext, authentication_data_list = \
-            self._encrypt_and_hash_data(payload, data_encryption_layer_extracts)
+            self._encrypt_and_hash_payload(payload, data_encryption_layer_extracts)
 
         cryptainer["data_ciphertext"] = data_ciphertext
 
@@ -285,21 +285,21 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         return cryptainer
 
     @staticmethod
-    def _load_data_bytes_and_cleanup(data: Union[bytes, BinaryIO]):
+    def _load_payload_bytes_and_cleanup(payload: Union[bytes, BinaryIO]):
         """Automatically deletes filesystem entry if it exists!"""
-        if hasattr(data, "read"):  # File-like object
-            logger.debug("Reading and deleting open file handle %s", data)
-            data_stream = data
-            data = data_stream.read()
+        if hasattr(payload, "read"):  # File-like object
+            logger.debug("Reading and deleting open file handle %s", payload)
+            data_stream = payload
+            payload = data_stream.read()
             data_stream.close()
             delete_filesystem_node_for_stream(data_stream)
-        assert isinstance(data, bytes), data
+        assert isinstance(payload, bytes), payload
         ## FIXME LATER ADD THIS - assert payload, payload  # No encryption must be launched if we have no payload to process!
-        return data
+        return payload
 
-    def _encrypt_and_hash_data(self, data, data_encryption_layer_extracts):
+    def _encrypt_and_hash_payload(self, payload, data_encryption_layer_extracts):
         """TODO"""
-        data_current = data
+        payload_current = payload
 
         authentication_data_list = []
 
@@ -309,27 +309,27 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             message_digest_algos = data_encryption_layer_extract["message_digest_algos"]
 
             logger.debug("Encrypting payload with symmetric key of type %r", data_encryption_algo)
-            data_cipherdict = encrypt_bytestring(
-                plaintext=data_current, encryption_algo=data_encryption_algo, key_dict=symkey
+            payload_cipherdict = encrypt_bytestring(
+                plaintext=payload_current, encryption_algo=data_encryption_algo, key_dict=symkey
             )
-            assert isinstance(data_cipherdict, dict), data_cipherdict  # Might contain integrity/authentication payload
+            assert isinstance(payload_cipherdict, dict), payload_cipherdict  # Might contain integrity/authentication payload
 
-            data_ciphertext = data_cipherdict.pop("ciphertext")  # Mandatory field
-            assert isinstance(data_ciphertext, bytes), data_ciphertext  # Same raw content as would be in offloaded payload file
+            payload_ciphertext = payload_cipherdict.pop("ciphertext")  # Mandatory field
+            assert isinstance(payload_ciphertext, bytes), payload_ciphertext  # Same raw content as would be in offloaded payload file
 
             message_digests = {
-                message_digest_algo: hash_message(data_ciphertext, hash_algo=message_digest_algo)
+                message_digest_algo: hash_message(payload_ciphertext, hash_algo=message_digest_algo)
                 for message_digest_algo in message_digest_algos
             }
 
             authentication_data_list.append(dict(
-                    message_authentication_codes=data_cipherdict,  # Only remains tags, macs etc.
+                    message_authentication_codes=payload_cipherdict,  # Only remains tags, macs etc.
                     message_digests=message_digests,
             ))
 
-            data_current = data_ciphertext
+            payload_current = payload_ciphertext
 
-        return data_current, authentication_data_list
+        return payload_current, authentication_data_list
 
     def _generate_cryptainer_base_and_secrets(self, cryptoconf: dict, keychain_uid=None, metadata=None) -> tuple:
         """
@@ -588,7 +588,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         assert isinstance(cryptainer, dict), cryptainer
         return cryptainer["metadata"]
 
-    def decrypt_data(self, cryptainer: dict, verify: bool=True) -> bytes:
+    def decrypt_payload(self, cryptainer: dict, verify: bool=True) -> bytes:
         """
         Loop through cryptainer layers, to decipher payload with the right algorithms.
 
@@ -938,7 +938,7 @@ def encrypt_payload_into_cryptainer(
     return cryptainer
 
 
-def decrypt_data_from_cryptainer(
+def decrypt_payload_from_cryptainer(
     cryptainer: dict, *, keystore_pool: Optional[KeystorePoolBase] = None, passphrase_mapper: Optional[dict] = None, verify: bool=True
 ) -> bytes:
     """Decrypt a cryptainer with the help of third-parties.
@@ -951,7 +951,7 @@ def decrypt_data_from_cryptainer(
     :return: raw bytestring
     """
     reader = CryptainerReader(keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
-    data = reader.decrypt_data(cryptainer=cryptainer, verify=verify)
+    data = reader.decrypt_payload(cryptainer=cryptainer, verify=verify)
     return data
 
 
@@ -1190,8 +1190,8 @@ class CryptainerStorage:
             keystore_pool=self._keystore_pool,
         )
 
-    def _decrypt_data_from_cryptainer(self, cryptainer: dict, passphrase_mapper: Optional[dict], verify: bool) -> bytes:
-        return decrypt_data_from_cryptainer(
+    def _decrypt_payload_from_cryptainer(self, cryptainer: dict, passphrase_mapper: Optional[dict], verify: bool) -> bytes:
+        return decrypt_payload_from_cryptainer(
             cryptainer, keystore_pool=self._keystore_pool, passphrase_mapper=passphrase_mapper, verify=verify
         )  # Will fail if authorizations are not OK
 
@@ -1326,7 +1326,7 @@ class CryptainerStorage:
 
         cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_data_ciphertext=True)
 
-        result = self._decrypt_data_from_cryptainer(cryptainer, passphrase_mapper=passphrase_mapper, verify=verify)
+        result = self._decrypt_payload_from_cryptainer(cryptainer, passphrase_mapper=passphrase_mapper, verify=verify)
         logger.info("Cryptainer %s successfully decrypted", cryptainer_name_or_idx)
         return result
 

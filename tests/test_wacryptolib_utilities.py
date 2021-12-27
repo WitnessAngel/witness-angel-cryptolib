@@ -78,50 +78,50 @@ def test_split_as_chunks_and_recombine():
 def test_serialization_utilities(tmp_path):
 
     uid = uuid.UUID("7c0b18f5-f410-4e83-9263-b38c2328e516")
-    data = dict(b=b"xyz", a="hêllo", c=uid)
+    payload = dict(b=b"xyz", a="hêllo", c=uid)
 
-    serialized_str = dump_to_json_str(data)
+    serialized_str = dump_to_json_str(payload)
     # Keys are sorted
     assert (
         serialized_str
         == r'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
     )
     deserialized = load_from_json_str(serialized_str)
-    assert deserialized == data
+    assert deserialized == payload
 
-    serialized_str = dump_to_json_str(data, ensure_ascii=False)  # Json arguments well propagated
+    serialized_str = dump_to_json_str(payload, ensure_ascii=False)  # Json arguments well propagated
     assert (
         serialized_str
         == r'{"a": "hêllo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
     )
     deserialized = load_from_json_str(serialized_str)
-    assert deserialized == data
+    assert deserialized == payload
 
-    serialized_str = dump_to_json_bytes(data)
+    serialized_str = dump_to_json_bytes(payload)
     # Keys are sorted
     assert (
         serialized_str
         == rb'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
     )
     deserialized = load_from_json_bytes(serialized_str)
-    assert deserialized == data
+    assert deserialized == payload
 
-    serialized_str = dump_to_json_bytes(data, ensure_ascii=False)  # Json arguments well propagated
+    serialized_str = dump_to_json_bytes(payload, ensure_ascii=False)  # Json arguments well propagated
     assert (
         serialized_str
         == b'{"a": "h\xc3\xaallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
     )
     deserialized = load_from_json_bytes(serialized_str)
-    assert deserialized == data
+    assert deserialized == payload
 
     tmp_filepath = os.path.join(tmp_path, "dummy_temp_file.dat")
-    serialized_str = dump_to_json_file(tmp_filepath, data=data, ensure_ascii=True)  # Json arguments well propagated
+    serialized_str = dump_to_json_file(tmp_filepath, payload=payload, ensure_ascii=True)  # Json arguments well propagated
     assert (
         serialized_str
         == b'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'
     )
     deserialized = load_from_json_file(tmp_filepath)
-    assert deserialized == data
+    assert deserialized == payload
 
 
 def test_generate_uuid0():

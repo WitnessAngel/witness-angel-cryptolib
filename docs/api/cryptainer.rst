@@ -10,7 +10,7 @@ Cryptainer object processing
 
 .. autofunction:: wacryptolib.cryptainer.encrypt_payload_into_cryptainer
 
-.. autofunction:: wacryptolib.cryptainer.decrypt_data_from_cryptainer
+.. autofunction:: wacryptolib.cryptainer.decrypt_payload_from_cryptainer
 
 .. autofunction:: wacryptolib.cryptainer.extract_metadata_from_cryptainer
 

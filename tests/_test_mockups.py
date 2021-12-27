@@ -27,7 +27,7 @@ class FakeTestCryptainerStorage(CryptainerStorage):
     def _encrypt_payload_into_cryptainer(self, payload, **kwargs):
         return dict(a=33, data_ciphertext=payload)
 
-    def _decrypt_data_from_cryptainer(self, cryptainer, **kwargs):
+    def _decrypt_payload_from_cryptainer(self, cryptainer, **kwargs):
         return cryptainer["data_ciphertext"]
 
 

@@ -19,11 +19,11 @@ class KeyAlreadyExists(ExistenceError):
     pass
 
 
-class KeyStorageDoesNotExist(ExistenceError):
+class KeystoreDoesNotExist(ExistenceError):
     pass
 
 
-class KeyStorageAlreadyExists(ExistenceError):
+class KeystoreAlreadyExists(ExistenceError):
     pass
 
 

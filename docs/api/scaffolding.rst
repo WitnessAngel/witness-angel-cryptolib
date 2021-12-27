@@ -8,10 +8,10 @@ This is a provisional API, which may change without deprecation period, and whic
 like `pytest`.
 
 
-.. autofunction:: wacryptolib.scaffolding.check_key_storage_basic_get_set_api
+.. autofunction:: wacryptolib.scaffolding.check_keystore_basic_get_set_api
 
-.. autofunction:: wacryptolib.scaffolding.check_key_storage_free_keys_api
+.. autofunction:: wacryptolib.scaffolding.check_keystore_free_keys_api
 
-.. autofunction:: wacryptolib.scaffolding.check_key_storage_free_keys_concurrency
+.. autofunction:: wacryptolib.scaffolding.check_keystore_free_keys_concurrency
 
 .. autofunction:: wacryptolib.scaffolding.check_sensor_state_machine

@@ -11,7 +11,7 @@ from wacryptolib.keygen import (
     load_asymmetric_key_from_pem_bytestring,
     SUPPORTED_ASYMMETRIC_KEY_ALGOS,
 )
-from wacryptolib.key_storage import KeyStorageBase as KeyStorageBase
+from wacryptolib.keystore import KeystoreBase as KeystoreBase
 from wacryptolib.signature import sign_message
 from wacryptolib.utilities import PeriodicTaskHandler, generate_uuid0
 
@@ -22,7 +22,7 @@ MAX_PAYLOAD_LENGTH_FOR_SIGNATURE = 128  # Max 2*SHA512 length
 
 
 def generate_keypair_for_storage(  # FIXME rename and add to docs
-    key_algo: str, *, key_storage, keychain_uid: Optional[UUID] = None, passphrase: Optional[AnyStr] = None
+    key_algo: str, *, keystore, keychain_uid: Optional[UUID] = None, passphrase: Optional[AnyStr] = None
 ) -> dict:
     """
     Shortcut to generate an asymmetric keypair and store it into a key storage.
@@ -35,7 +35,7 @@ def generate_keypair_for_storage(  # FIXME rename and add to docs
 
     keychain_uid = keychain_uid or generate_uuid0()
     keypair = generate_keypair(key_algo=key_algo, serialize=True, passphrase=passphrase)
-    key_storage.set_keys(
+    keystore.set_keys(
         keychain_uid=keychain_uid,
         key_algo=key_algo,
         public_key=keypair["public_key"],
@@ -52,24 +52,24 @@ class EscrowApi:
     outside the scope of a well defined legal procedure.
     """
 
-    def __init__(self, key_storage: KeyStorageBase):
-        self._key_storage = key_storage
+    def __init__(self, keystore: KeystoreBase):
+        self._keystore = keystore
 
     def _ensure_keypair_exists(self, keychain_uid: uuid.UUID, key_algo: str):
         """Create a keypair if it doesn't exist."""
 
         try:
-            self._key_storage.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
+            self._keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
         except KeyDoesNotExist:
             pass
         else:
             return  # Ok the key is available!
 
         try:
-            self._key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo=key_algo)
+            self._keystore.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo=key_algo)
         except KeyDoesNotExist:
             generate_keypair_for_storage(
-                key_algo=key_algo, key_storage=self._key_storage, keychain_uid=keychain_uid, passphrase=None
+                key_algo=key_algo, keystore=self._keystore, keychain_uid=keychain_uid, passphrase=None
             )
 
     def fetch_public_key(self, *, keychain_uid: uuid.UUID, key_algo: str, must_exist: bool = False) -> bytes:
@@ -81,7 +81,7 @@ class EscrowApi:
         """
         if not must_exist:
             self._ensure_keypair_exists(keychain_uid=keychain_uid, key_algo=key_algo)
-        return self._key_storage.get_public_key(
+        return self._keystore.get_public_key(
             keychain_uid=keychain_uid, key_algo=key_algo
         )  # Let the exception flow if any
 
@@ -97,7 +97,7 @@ class EscrowApi:
 
         self._ensure_keypair_exists(keychain_uid=keychain_uid, key_algo=signature_algo)
 
-        private_key_pem = self._key_storage.get_private_key(keychain_uid=keychain_uid, key_algo=signature_algo)
+        private_key_pem = self._keystore.get_private_key(keychain_uid=keychain_uid, key_algo=signature_algo)
 
         private_key = load_asymmetric_key_from_pem_bytestring(key_pem=private_key_pem, key_algo=signature_algo)
 
@@ -166,7 +166,7 @@ class EscrowApi:
                 pass  # It's OK, at least we are authorized now
 
             try:
-                private_key_pem = self._key_storage.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
+                private_key_pem = self._keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
             except KeyDoesNotExist:
                 missing_private_key.append(keypair_identifier)
                 continue
@@ -212,7 +212,7 @@ class EscrowApi:
         passphrases = passphrases or []
         assert isinstance(passphrases, (tuple, list)), repr(passphrases)
 
-        private_key_pem = self._key_storage.get_private_key(keychain_uid=keychain_uid, key_algo=encryption_algo)
+        private_key_pem = self._keystore.get_private_key(keychain_uid=keychain_uid, key_algo=encryption_algo)
 
         private_key = self._decrypt_private_key_pem_with_passphrases(
             private_key_pem=private_key_pem, key_algo=encryption_algo, passphrases=passphrases
@@ -231,14 +231,14 @@ class ReadonlyEscrowApi(EscrowApi):
 
     def _ensure_keypair_exists(self, keychain_uid: uuid.UUID, key_algo: str):
         try:
-            self._key_storage.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
+            self._keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
         except KeyDoesNotExist:
             # Just tweak the error message here
             raise KeyDoesNotExist("Keypair %s/%s not found in escrow api" % (keychain_uid, key_algo))
 
 
 def generate_free_keypair_for_least_provisioned_key_algo(
-    key_storage: KeyStorageBase,
+    keystore: KeystoreBase,
     max_free_keys_per_algo: int,
     keygen_func=generate_keypair,
     key_algos=SUPPORTED_ASYMMETRIC_KEY_ALGOS,
@@ -247,14 +247,14 @@ def generate_free_keypair_for_least_provisioned_key_algo(
     Generate a single free keypair for the key type which is the least available in key storage, and
     add it to storage. If the "free keys" pools of the storage are full, do nothing.
 
-    :param key_storage: the key storage to use
+    :param keystore: the key storage to use
     :param max_free_keys_per_algo: how many free keys should exist per key type
     :param keygen_func: callable to use for keypair generation
     :param key_algos: the different key types (strings) to consider
     :return: True iff a key was generated (i.e. the free keys pool was not full)
     """
     assert key_algos, key_algos
-    free_keys_counts = [(key_storage.get_free_keypairs_count(key_algo), key_algo) for key_algo in key_algos]
+    free_keys_counts = [(keystore.get_free_keypairs_count(key_algo), key_algo) for key_algo in key_algos]
     logger.debug("Stats of free keys: %s", str(free_keys_counts))
 
     (count, key_algo) = min(free_keys_counts)
@@ -263,7 +263,7 @@ def generate_free_keypair_for_least_provisioned_key_algo(
         return False
 
     keypair = keygen_func(key_algo=key_algo, serialize=True)
-    key_storage.add_free_keypair(
+    keystore.add_free_keypair(
         key_algo=key_algo, public_key=keypair["public_key"], private_key=keypair["private_key"]
     )
     logger.debug("New free key of type %s pregenerated" % key_algo)
@@ -271,13 +271,13 @@ def generate_free_keypair_for_least_provisioned_key_algo(
 
 
 def get_free_keys_generator_worker(
-    key_storage: KeyStorageBase, max_free_keys_per_algo: int, sleep_on_overflow_s: float, **extra_generation_kwargs
+    keystore: KeystoreBase, max_free_keys_per_algo: int, sleep_on_overflow_s: float, **extra_generation_kwargs
 ) -> PeriodicTaskHandler:
     """
     Return a periodic task handler which will gradually fill the pools of free keys of the key storage,
     and wait longer when these pools are full.
     
-    :param key_storage: the key storage to use 
+    :param keystore: the key storage to use 
     :param max_free_keys_per_algo: how many free keys should exist per key type
     :param sleep_on_overflow_s: time to wait when free keys pools are full
     :param extra_generation_kwargs: extra arguments to transmit to `generate_free_keypair_for_least_provisioned_key_algo()`
@@ -286,7 +286,7 @@ def get_free_keys_generator_worker(
 
     def free_keypair_generator_task():
         has_generated = generate_free_keypair_for_least_provisioned_key_algo(
-            key_storage=key_storage, max_free_keys_per_algo=max_free_keys_per_algo, **extra_generation_kwargs
+            keystore=keystore, max_free_keys_per_algo=max_free_keys_per_algo, **extra_generation_kwargs
         )
         # TODO - improve this with refactored multitimer, later
         if not has_generated:

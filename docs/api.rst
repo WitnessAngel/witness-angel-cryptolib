@@ -10,7 +10,7 @@ API Documentation
    api/authenticator
    api/authdevice
    api/keygen
-   api/key_storage
+   api/keystore
    api/signature
    api/encryption
    api/shared_secret

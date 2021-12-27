@@ -48,7 +48,7 @@ from wacryptolib.escrow import (
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, DecryptionIntegrityError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_keypair
-from wacryptolib.key_storage import DummyKeyStorage, FilesystemKeyStorage, FilesystemKeyStoragePool, DummyKeyStoragePool
+from wacryptolib.keystore import DummyKeystore, FilesystemKeystore, FilesystemKeystorePool, DummyKeystorePool
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, generate_uuid0, get_utc_now_date, \
     dump_to_json_str
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
@@ -335,11 +335,11 @@ def _intialize_cryptainer_with_single_file(tmp_path):  # FIXME generalize its us
     ],
 )
 def test_void_cryptoconfs(cryptoconf):
-    key_storage_pool = DummyKeyStoragePool()
+    keystore_pool = DummyKeystorePool()
 
     with pytest.raises(ConfigurationError, match="Empty .* list"):
         encrypt_data_into_cryptainer(
-            data=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None, key_storage_pool=key_storage_pool
+            data=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None, keystore_pool=keystore_pool
         )
 
 
@@ -357,25 +357,25 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, esc
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
     use_streaming_encryption = random_bool()
 
-    key_storage_pool = DummyKeyStoragePool()
+    keystore_pool = DummyKeystorePool()
     metadata = random.choice([None, dict(a=[123])])
 
     if use_streaming_encryption and is_cryptainer_cryptoconf_streamable(cryptoconf):
         cryptainer_filepath = tmp_path / "mygoodcryptainer.crypt"
         encrypt_data_and_dump_cryptainer_to_filesystem(
                 data=data, cryptainer_filepath=cryptainer_filepath,
-                cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool)
+                cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, keystore_pool=keystore_pool)
         cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath, include_data_ciphertext=True)
     else:
         cryptainer = encrypt_data_into_cryptainer(
-            data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, key_storage_pool=key_storage_pool
+            data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, keystore_pool=keystore_pool
         )
 
     assert cryptainer["keychain_uid"]
     if keychain_uid:
         assert cryptainer["keychain_uid"] == keychain_uid
 
-    local_keypair_identifiers = key_storage_pool.get_local_key_storage()._cached_keypairs
+    local_keypair_identifiers = keystore_pool.get_local_keystore()._cached_keypairs
     print(">>> Test local_keypair_identifiers ->", list(local_keypair_identifiers.keys()))
 
     escrow_dependencies = gather_escrow_dependencies(cryptainers=[cryptainer])
@@ -390,12 +390,12 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, esc
     for escrow_dependency_structs in escrow_dependencies.values():
         for escrow_dependency_struct in escrow_dependency_structs.values():
             escrow_conf, keypairs_identifiers = escrow_dependency_struct
-            escrow = get_escrow_proxy(escrow_conf, key_storage_pool=key_storage_pool)
+            escrow = get_escrow_proxy(escrow_conf, keystore_pool=keystore_pool)
             for keypairs_identifier in keypairs_identifiers:
                 assert escrow.fetch_public_key(**keypairs_identifier, must_exist=True)
 
     all_authorization_results = request_decryption_authorizations(
-        escrow_dependencies=escrow_dependencies, request_message="Decryption needed", key_storage_pool=key_storage_pool
+        escrow_dependencies=escrow_dependencies, request_message="Decryption needed", keystore_pool=keystore_pool
     )
 
     # Generic check of data structure
@@ -412,7 +412,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, esc
         assert not keypair_statuses["missing_private_key"]
 
     verify = random_bool()
-    result_data = decrypt_data_from_cryptainer(cryptainer=cryptainer, key_storage_pool=key_storage_pool, verify=verify)
+    result_data = decrypt_data_from_cryptainer(cryptainer=cryptainer, keystore_pool=keystore_pool, verify=verify)
     # pprint.pprint(result, width=120)
     assert result_data == data
 
@@ -566,48 +566,48 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     local_passphrase = "b^yep&ts"
 
-    key_storage_uid1 = keychain_uid_escrow  # FIXME why mix key and storage uids ?
+    keystore_uid1 = keychain_uid_escrow  # FIXME why mix key and storage uids ?
     passphrase1 = "tata"
 
-    key_storage_uid2 = generate_uuid0()
+    keystore_uid2 = generate_uuid0()
     passphrase2 = "2çès"
 
-    key_storage_uid3 = generate_uuid0()
+    keystore_uid3 = generate_uuid0()
     passphrase3 = "zaizoadsxsnd123"
 
     all_passphrases = [local_passphrase, passphrase1, passphrase2, passphrase3]
 
-    key_storage_pool = DummyKeyStoragePool()
-    key_storage_pool._register_fake_imported_storage_uids(
-        storage_uids=[key_storage_uid1, key_storage_uid2, key_storage_uid3]
+    keystore_pool = DummyKeystorePool()
+    keystore_pool._register_fake_imported_storage_uids(
+        storage_uids=[keystore_uid1, keystore_uid2, keystore_uid3]
     )
 
-    local_key_storage = key_storage_pool.get_local_key_storage()
+    local_keystore = keystore_pool.get_local_keystore()
     generate_keypair_for_storage(
-        key_algo="RSA_OAEP", key_storage=local_key_storage, keychain_uid=keychain_uid, passphrase=local_passphrase
+        key_algo="RSA_OAEP", keystore=local_keystore, keychain_uid=keychain_uid, passphrase=local_passphrase
     )
-    key_storage1 = key_storage_pool.get_imported_key_storage(key_storage_uid1)
+    keystore1 = keystore_pool.get_imported_keystore(keystore_uid1)
     generate_keypair_for_storage(
-        key_algo="RSA_OAEP", key_storage=key_storage1, keychain_uid=keychain_uid_escrow, passphrase=passphrase1
+        key_algo="RSA_OAEP", keystore=keystore1, keychain_uid=keychain_uid_escrow, passphrase=passphrase1
     )
-    key_storage2 = key_storage_pool.get_imported_key_storage(key_storage_uid2)
+    keystore2 = keystore_pool.get_imported_keystore(keystore_uid2)
     generate_keypair_for_storage(
-        key_algo="RSA_OAEP", key_storage=key_storage2, keychain_uid=keychain_uid, passphrase=passphrase2
+        key_algo="RSA_OAEP", keystore=keystore2, keychain_uid=keychain_uid, passphrase=passphrase2
     )
-    key_storage3 = key_storage_pool.get_imported_key_storage(key_storage_uid3)
+    keystore3 = keystore_pool.get_imported_keystore(keystore_uid3)
     generate_keypair_for_storage(
-        key_algo="RSA_OAEP", key_storage=key_storage3, keychain_uid=keychain_uid, passphrase=passphrase3
+        key_algo="RSA_OAEP", keystore=keystore3, keychain_uid=keychain_uid, passphrase=passphrase3
     )
 
     local_escrow_id = get_escrow_id(LOCAL_ESCROW_MARKER)
 
-    share_escrow1 = dict(escrow_type="authdevice", authdevice_uid=key_storage_uid1)
+    share_escrow1 = dict(escrow_type="authdevice", authdevice_uid=keystore_uid1)
     share_escrow1_id = get_escrow_id(share_escrow1)
 
-    share_escrow2 = dict(escrow_type="authdevice", authdevice_uid=key_storage_uid2)
+    share_escrow2 = dict(escrow_type="authdevice", authdevice_uid=keystore_uid2)
     share_escrow2_id = get_escrow_id(share_escrow2)
 
-    share_escrow3 = dict(escrow_type="authdevice", authdevice_uid=key_storage_uid3)
+    share_escrow3 = dict(escrow_type="authdevice", authdevice_uid=keystore_uid3)
     share_escrow3_id = get_escrow_id(share_escrow3)
 
     cryptoconf = dict(
@@ -643,42 +643,42 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     data = b"sjzgzj"
 
     cryptainer = encrypt_data_into_cryptainer(
-        data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, key_storage_pool=key_storage_pool, metadata=None
+        data=data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, keystore_pool=keystore_pool, metadata=None
     )
 
     # FIXME we must TEST that keychain_uid_escrow is necessary for decryption for example by deleting it before a decrypt()
 
     with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
-        decrypt_data_from_cryptainer(cryptainer, key_storage_pool=key_storage_pool)
+        decrypt_data_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
 
     with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
         decrypt_data_from_cryptainer(
-            cryptainer, key_storage_pool=key_storage_pool, passphrase_mapper={local_escrow_id: all_passphrases}
+            cryptainer, keystore_pool=keystore_pool, passphrase_mapper={local_escrow_id: all_passphrases}
         )  # Doesn't help share escrows
 
     with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
         decrypt_data_from_cryptainer(
-            cryptainer, key_storage_pool=key_storage_pool, passphrase_mapper={share_escrow1_id: all_passphrases}
+            cryptainer, keystore_pool=keystore_pool, passphrase_mapper={share_escrow1_id: all_passphrases}
         )  # Unblocks 1 share escrow
 
     with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
         decrypt_data_from_cryptainer(
             cryptainer,
-            key_storage_pool=key_storage_pool,
+            keystore_pool=keystore_pool,
             passphrase_mapper={share_escrow1_id: all_passphrases, share_escrow2_id: [passphrase3]},
         )  # No changes
 
     with pytest.raises(DecryptionError, match="Could not decrypt private key"):
         decrypt_data_from_cryptainer(
             cryptainer,
-            key_storage_pool=key_storage_pool,
+            keystore_pool=keystore_pool,
             passphrase_mapper={share_escrow1_id: all_passphrases, share_escrow3_id: [passphrase3]},
         )
 
     with pytest.raises(DecryptionError, match="Could not decrypt private key"):
         decrypt_data_from_cryptainer(
             cryptainer,
-            key_storage_pool=key_storage_pool,
+            keystore_pool=keystore_pool,
             passphrase_mapper={
                 local_escrow_id: ["qsdqsd"],
                 share_escrow1_id: all_passphrases,
@@ -688,7 +688,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     decrypted = decrypt_data_from_cryptainer(
         cryptainer,
-        key_storage_pool=key_storage_pool,
+        keystore_pool=keystore_pool,
         passphrase_mapper={
             local_escrow_id: [local_passphrase],
             share_escrow1_id: all_passphrases,
@@ -700,7 +700,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     # Passphrases of `None` key are always used
     decrypted = decrypt_data_from_cryptainer(
         cryptainer,
-        key_storage_pool=key_storage_pool,
+        keystore_pool=keystore_pool,
         passphrase_mapper={
             local_escrow_id: [local_passphrase],
             share_escrow1_id: ["dummy-passphrase"],
@@ -712,7 +712,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     # Proper forwarding of parameters in cryptainer storage class
 
-    storage = CryptainerStorage(tmp_path, key_storage_pool=key_storage_pool)
+    storage = CryptainerStorage(tmp_path, keystore_pool=keystore_pool)
     storage.enqueue_file_for_encryption(
         "beauty.txt", data=data, metadata=None, keychain_uid=keychain_uid, cryptoconf=cryptoconf
     )
@@ -731,22 +731,22 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
 def test_get_proxy_for_escrow(tmp_path):
     cryptainer_base1 = CryptainerBase()
-    proxy1 = get_escrow_proxy(LOCAL_ESCROW_MARKER, cryptainer_base1._key_storage_pool)
+    proxy1 = get_escrow_proxy(LOCAL_ESCROW_MARKER, cryptainer_base1._keystore_pool)
     assert isinstance(proxy1, EscrowApi)  # Local Escrow
-    assert isinstance(proxy1._key_storage, DummyKeyStorage)  # Default type
+    assert isinstance(proxy1._keystore, DummyKeystore)  # Default type
 
     cryptainer_base1_bis = CryptainerBase()
-    proxy1_bis = get_escrow_proxy(LOCAL_ESCROW_MARKER, cryptainer_base1_bis._key_storage_pool)
-    assert proxy1_bis._key_storage is proxy1_bis._key_storage  # process-local storage is SINGLETON!
+    proxy1_bis = get_escrow_proxy(LOCAL_ESCROW_MARKER, cryptainer_base1_bis._keystore_pool)
+    assert proxy1_bis._keystore is proxy1_bis._keystore  # process-local storage is SINGLETON!
 
-    cryptainer_base2 = CryptainerBase(key_storage_pool=FilesystemKeyStoragePool(str(tmp_path)))
-    proxy2 = get_escrow_proxy(LOCAL_ESCROW_MARKER, cryptainer_base2._key_storage_pool)
+    cryptainer_base2 = CryptainerBase(keystore_pool=FilesystemKeystorePool(str(tmp_path)))
+    proxy2 = get_escrow_proxy(LOCAL_ESCROW_MARKER, cryptainer_base2._keystore_pool)
     assert isinstance(proxy2, EscrowApi)  # Local Escrow
-    assert isinstance(proxy2._key_storage, FilesystemKeyStorage)
+    assert isinstance(proxy2._keystore, FilesystemKeystore)
 
     for cryptainer_base in (cryptainer_base1, cryptainer_base2):
         proxy = get_escrow_proxy(
-            dict(escrow_type="jsonrpc", url="http://example.com/jsonrpc"), cryptainer_base._key_storage_pool
+            dict(escrow_type="jsonrpc", url="http://example.com/jsonrpc"), cryptainer_base._keystore_pool
         )
         assert isinstance(proxy, JsonRpcProxy)  # It should expose identical methods to EscrowApi
 
@@ -754,10 +754,10 @@ def test_get_proxy_for_escrow(tmp_path):
         assert proxy._response_error_handler == status_slugs_response_error_handler
 
         with pytest.raises(ValueError):
-            get_escrow_proxy(dict(escrow_type="something-wrong"), cryptainer_base._key_storage_pool)
+            get_escrow_proxy(dict(escrow_type="something-wrong"), cryptainer_base._keystore_pool)
 
         with pytest.raises(ValueError):
-            get_escrow_proxy(dict(urn="athena"), cryptainer_base._key_storage_pool)
+            get_escrow_proxy(dict(urn="athena"), cryptainer_base._keystore_pool)
 
 
 def test_cryptainer_storage_and_executor(tmp_path, caplog):

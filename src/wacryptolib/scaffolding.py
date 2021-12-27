@@ -8,7 +8,7 @@ from wacryptolib.utilities import generate_uuid0
 
 # SEE https://docs.pytest.org/en/stable/writing_plugins.html#assertion-rewriting and register_assert_rewrite()
 
-def check_key_storage_basic_get_set_api(key_storage):
+def check_keystore_basic_get_set_api(keystore):
     """Test the workflow of getters/setters of the storage API, for uid-attached keys."""
 
     import pytest
@@ -18,44 +18,44 @@ def check_key_storage_basic_get_set_api(key_storage):
     key_algo = "abxz"
 
     with pytest.raises(KeyDoesNotExist, match="not found"):
-        key_storage.get_public_key(keychain_uid=keychain_uid, key_algo="abxz")
+        keystore.get_public_key(keychain_uid=keychain_uid, key_algo="abxz")
 
-    key_storage.set_keys(
+    keystore.set_keys(
         keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"public_data", private_key=b"private_data"
     )
 
     assert (
-        key_storage.get_public_key(keychain_uid=keychain_uid, key_algo="abxz") == b"public_data"
+        keystore.get_public_key(keychain_uid=keychain_uid, key_algo="abxz") == b"public_data"
     )  # Well readable even without any kind of "commit"
 
     with pytest.raises(KeyAlreadyExists, match="Already existing"):
-        key_storage.set_keys(
+        keystore.set_keys(
             keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"public_data", private_key=b"private_data"
         )
     with pytest.raises(KeyAlreadyExists, match="Already existing"):
-        key_storage.set_keys(
+        keystore.set_keys(
             keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"public_data2", private_key=b"private_data2"
         )
 
-    assert key_storage.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"public_data"
-    assert key_storage.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"private_data"
+    assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"public_data"
+    assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"private_data"
 
     with pytest.raises(KeyDoesNotExist, match="not found"):
-        key_storage.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo + "_")
+        keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo + "_")
 
     with pytest.raises(KeyDoesNotExist, match="not found"):
-        key_storage.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo + "_")
+        keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo + "_")
 
     with pytest.raises(KeyDoesNotExist, match="not found"):
-        key_storage.get_public_key(keychain_uid=keychain_uid_other, key_algo=key_algo)
+        keystore.get_public_key(keychain_uid=keychain_uid_other, key_algo=key_algo)
 
     with pytest.raises(KeyDoesNotExist, match="not found"):
-        key_storage.get_private_key(keychain_uid=keychain_uid_other, key_algo=key_algo)
+        keystore.get_private_key(keychain_uid=keychain_uid_other, key_algo=key_algo)
 
     return locals()
 
 
-def check_key_storage_free_keys_api(key_storage):
+def check_keystore_free_keys_api(keystore):
     """Test the storage regarding the precreation of "free keys", and their subsequent attachment to uids."""
     import pytest
 
@@ -63,65 +63,65 @@ def check_key_storage_free_keys_api(key_storage):
     keychain_uid_other = generate_uuid0()
 
     # This blocks free key attachment to this uid+type
-    key_storage.set_keys(keychain_uid=keychain_uid, key_algo="type1", public_key=b"whatever1", private_key=b"whatever2")
+    keystore.set_keys(keychain_uid=keychain_uid, key_algo="type1", public_key=b"whatever1", private_key=b"whatever2")
 
-    key_storage.add_free_keypair(key_algo="type1", public_key=b"public_data", private_key=b"private_data")
-    key_storage.add_free_keypair(key_algo="type1", public_key=b"public_data2", private_key=b"private_data2")
-    key_storage.add_free_keypair(
+    keystore.add_free_keypair(key_algo="type1", public_key=b"public_data", private_key=b"private_data")
+    keystore.add_free_keypair(key_algo="type1", public_key=b"public_data2", private_key=b"private_data2")
+    keystore.add_free_keypair(
         key_algo="type2", public_key=b"public_data_other_type", private_key=b"private_data_other_type"
     )
 
-    assert key_storage.get_free_keypairs_count("type1") == 2
-    assert key_storage.get_free_keypairs_count("type2") == 1
-    assert key_storage.get_free_keypairs_count("type3") == 0
+    assert keystore.get_free_keypairs_count("type1") == 2
+    assert keystore.get_free_keypairs_count("type2") == 1
+    assert keystore.get_free_keypairs_count("type3") == 0
 
     with pytest.raises(KeyAlreadyExists, match="Already existing"):
-        key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo="type1")
+        keystore.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo="type1")
 
     with pytest.raises(KeyDoesNotExist, match="not found"):
-        key_storage.get_public_key(keychain_uid=keychain_uid, key_algo="type2")
+        keystore.get_public_key(keychain_uid=keychain_uid, key_algo="type2")
 
-    key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo="type2")
-    assert b"public_data" in key_storage.get_public_key(keychain_uid=keychain_uid, key_algo="type2")
+    keystore.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo="type2")
+    assert b"public_data" in keystore.get_public_key(keychain_uid=keychain_uid, key_algo="type2")
 
-    assert key_storage.get_free_keypairs_count("type1") == 2
-    assert key_storage.get_free_keypairs_count("type2") == 0
-    assert key_storage.get_free_keypairs_count("type3") == 0
+    assert keystore.get_free_keypairs_count("type1") == 2
+    assert keystore.get_free_keypairs_count("type2") == 0
+    assert keystore.get_free_keypairs_count("type3") == 0
 
-    key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid_other, key_algo="type1")
+    keystore.attach_free_keypair_to_uuid(keychain_uid=keychain_uid_other, key_algo="type1")
 
-    assert key_storage.get_free_keypairs_count("type1") == 1
-    assert key_storage.get_free_keypairs_count("type2") == 0
-    assert key_storage.get_free_keypairs_count("type3") == 0
-
-    with pytest.raises(KeyDoesNotExist, match="No free keypair of type"):
-        key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid_other, key_algo="type2")
+    assert keystore.get_free_keypairs_count("type1") == 1
+    assert keystore.get_free_keypairs_count("type2") == 0
+    assert keystore.get_free_keypairs_count("type3") == 0
 
     with pytest.raises(KeyDoesNotExist, match="No free keypair of type"):
-        key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo="type3")
+        keystore.attach_free_keypair_to_uuid(keychain_uid=keychain_uid_other, key_algo="type2")
 
-    assert key_storage.get_free_keypairs_count("type1") == 1
-    assert key_storage.get_free_keypairs_count("type2") == 0
-    assert key_storage.get_free_keypairs_count("type3") == 0
+    with pytest.raises(KeyDoesNotExist, match="No free keypair of type"):
+        keystore.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo="type3")
+
+    assert keystore.get_free_keypairs_count("type1") == 1
+    assert keystore.get_free_keypairs_count("type2") == 0
+    assert keystore.get_free_keypairs_count("type3") == 0
 
     return locals()
 
 
-def check_key_storage_free_keys_concurrency(key_storage):
+def check_keystore_free_keys_concurrency(keystore):
     """Parallel tests to check the thread-safety of the storage regarding "free keys" booking."""
     key_algo1 = "mytype1"
     key_algo2 = "mytype2"
 
     for i in range(77):
         for key_algo in (key_algo1, key_algo2):
-            key_storage.add_free_keypair(key_algo=key_algo, public_key=b"whatever1", private_key=b"whatever2")
+            keystore.add_free_keypair(key_algo=key_algo, public_key=b"whatever1", private_key=b"whatever2")
 
     def retrieve_free_keypair_for_index(idx, key_algo):
         keychain_uid = uuid.UUID(int=idx)
         try:
-            key_storage.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo=key_algo)
+            keystore.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo=key_algo)
             time.sleep(0.001)
-            public_key_content = key_storage.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
+            public_key_content = keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
             assert public_key_content == b"whatever1"
             res = True
         except KeyDoesNotExist:
@@ -136,8 +136,8 @@ def check_key_storage_free_keys_concurrency(key_storage):
         assert results.count(True) == 77
         assert results.count(False) == 123
 
-    assert key_storage.get_free_keypairs_count(key_algo=key_algo1) == 0
-    assert key_storage.get_free_keypairs_count(key_algo=key_algo2) == 0
+    assert keystore.get_free_keypairs_count(key_algo=key_algo1) == 0
+    assert keystore.get_free_keypairs_count(key_algo=key_algo2) == 0
     return locals()
 
 

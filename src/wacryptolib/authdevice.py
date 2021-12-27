@@ -185,8 +185,8 @@ def _list_available_authdevices_linux():
 # FIXME introduce an AuthenticationDevice class to normalize and lazify API
 
 def _get_authenticator_path(authdevice: dict):  # FIXME make this PUBLIC API?
-    return Path(authdevice["path"]).joinpath(".key_storage")
-_get_key_storage_folder_path = _get_authenticator_path  # FIXME temporary alias for compatibility!
+    return Path(authdevice["path"]).joinpath(".keystore")
+_get_keystore_folder_path = _get_authenticator_path  # FIXME temporary alias for compatibility!
 
 # FIXME use this everywhere ??
 get_authenticator_path_for_authdevice = _get_authenticator_path

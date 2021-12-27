@@ -11,13 +11,13 @@ from pathlib import Path
 from os.path import join
 import glob
 
-from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist, KeyStorageDoesNotExist, KeyStorageAlreadyExists
+from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist, KeystoreDoesNotExist, KeystoreAlreadyExists
 from wacryptolib.utilities import synchronized, load_from_json_file, get_metadata_file_path, safe_copy_directory
 
 logger = logging.getLogger(__name__)
 
 
-class KeyStorageBase(ABC):
+class KeystoreBase(ABC):
     """
     Subclasses of this storage interface can be implemented to store/retrieve keys from
     miscellaneous locations (disk, database...), without permission checks.
@@ -40,7 +40,7 @@ class KeyStorageBase(ABC):
         :param public_key: public key in clear PEM format
         :param private_key: private key in PEM format (potentially encrypted)
         """
-        raise NotImplementedError("KeyStorageBase.set_keys()")
+        raise NotImplementedError("KeystoreBase.set_keys()")
 
     @abstractmethod
     def get_public_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:  # pragma: no cover
@@ -52,7 +52,7 @@ class KeyStorageBase(ABC):
 
         :return: public key in clear PEM format, or raise KeyDoesNotExist
         """
-        raise NotImplementedError("KeyStorageBase.get_public_key()")
+        raise NotImplementedError("KeystoreBase.get_public_key()")
 
     @abstractmethod
     def get_private_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:  # pragma: no cover
@@ -64,7 +64,7 @@ class KeyStorageBase(ABC):
 
         :return: private key in PEM format (potentially encrypted), or raise KeyDoesNotExist
         """
-        raise NotImplementedError("KeyStorageBase.get_private_key()")
+        raise NotImplementedError("KeystoreBase.get_private_key()")
 
     @abstractmethod
     def get_free_keypairs_count(self, key_algo: str) -> int:  # pragma: no cover
@@ -74,7 +74,7 @@ class KeyStorageBase(ABC):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :return: count of free keypairs of said type
         """
-        raise NotImplementedError("KeyStorageBase.get_free_keypairs_count()")
+        raise NotImplementedError("KeystoreBase.get_free_keypairs_count()")
 
     @abstractmethod
     def add_free_keypair(self, *, key_algo: str, public_key: bytes, private_key: bytes):  # pragma: no cover
@@ -85,7 +85,7 @@ class KeyStorageBase(ABC):
         :param public_key: public key in clear PEM format
         :param private_key: private key in PEM format (potentially encrypted)
         """
-        raise NotImplementedError("KeyStorageBase.add_free_keypair()")
+        raise NotImplementedError("KeystoreBase.add_free_keypair()")
 
     @abstractmethod
     def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_algo: str):  # pragma: no cover
@@ -98,10 +98,10 @@ class KeyStorageBase(ABC):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :return: public key of the keypair, in clear PEM format
         """
-        raise NotImplementedError("KeyStorageBase.attach_free_keypair_to_uuid()")
+        raise NotImplementedError("KeystoreBase.attach_free_keypair_to_uuid()")
 
 
-class DummyKeyStorage(KeyStorageBase):
+class DummyKeystore(KeystoreBase):
     """
     Dummy key storage for use in tests, where keys are kepts only process-locally.
 
@@ -167,7 +167,7 @@ class DummyKeyStorage(KeyStorageBase):
     #        pass
 
 
-class FilesystemKeyStorage(KeyStorageBase):
+class FilesystemKeystore(KeystoreBase):
     """
     Filesystem-based key storage for use in tests, where keys are kepts only instance-locally.
 
@@ -346,12 +346,12 @@ class FilesystemKeyStorage(KeyStorageBase):
         return key_information_list
 
 
-class KeyStoragePoolBase:
-    # FIXME fill base class with signatures!! Like in KeyStorageBase!
+class KeystorePoolBase:
+    # FIXME fill base class with signatures!! Like in KeystoreBase!
     pass
 
 
-class DummyKeyStoragePool(KeyStoragePoolBase):  # FIXME rename to InMemoryKeyStoragePool
+class DummyKeystorePool(KeystorePoolBase):  # FIXME rename to InMemoryKeystorePool
     """
     Dummy key storage pool for use in tests, where keys are kepts only process-locally.
 
@@ -359,100 +359,100 @@ class DummyKeyStoragePool(KeyStoragePoolBase):  # FIXME rename to InMemoryKeySto
     """
 
     def __init__(self):
-        self._local_key_storage = DummyKeyStorage()
-        self._imported_key_storages = {}
+        self._local_keystore = DummyKeystore()
+        self._imported_keystores = {}
 
-    def get_local_key_storage(self):
-        return self._local_key_storage
+    def get_local_keystore(self):
+        return self._local_keystore
 
-    def get_imported_key_storage(self, key_storage_uid):
-        imported_key_storage = self._imported_key_storages.get(key_storage_uid)
-        if not imported_key_storage:
-            raise KeyStorageDoesNotExist("Key storage %s not found" % key_storage_uid)
-        return imported_key_storage
+    def get_imported_keystore(self, keystore_uid):
+        imported_keystore = self._imported_keystores.get(keystore_uid)
+        if not imported_keystore:
+            raise KeystoreDoesNotExist("Key storage %s not found" % keystore_uid)
+        return imported_keystore
 
-    def list_imported_key_storage_uids(self):
-        return list(self._imported_key_storages.keys())
+    def list_imported_keystore_uids(self):
+        return list(self._imported_keystores.keys())
 
     def _register_fake_imported_storage_uids(self, storage_uids: Sequence):
         """Test-specific API"""
-        assert not (set(storage_uids) & set(self._imported_key_storages.keys()))
-        new_storages = {storage_uid: DummyKeyStorage() for storage_uid in storage_uids}
-        self._imported_key_storages.update(new_storages)
+        assert not (set(storage_uids) & set(self._imported_keystores.keys()))
+        new_storages = {storage_uid: DummyKeystore() for storage_uid in storage_uids}
+        self._imported_keystores.update(new_storages)
 
 
-class FilesystemKeyStoragePool(KeyStoragePoolBase):
+class FilesystemKeystorePool(KeystorePoolBase):
     """This class handles a set of locally stored key storages.
 
     The local storage represents the current device/owner, and is expected to be used by read-write escrows,
     whereas imported key storages are supposed to be readonly, and only filled with keypairs imported from key-devices.
     """
 
-    LOCAL_STORAGE_DIRNAME = "local_key_storage"
-    IMPORTED_STORAGES_DIRNAME = "imported_key_storages"
-    IMPORTED_STORAGE_PREFIX = "key_storage_"
+    LOCAL_STORAGE_DIRNAME = "local_keystore"
+    IMPORTED_STORAGES_DIRNAME = "imported_keystores"
+    IMPORTED_STORAGE_PREFIX = "keystore_"
 
     def __init__(self, root_dir):
         root_dir = Path(root_dir)
         assert root_dir.is_dir(), root_dir
         self._root_dir = root_dir.absolute()
 
-    def get_local_key_storage(self):
+    def get_local_keystore(self):
         """Storage automatically created if unexisting."""
-        local_key_storage_path = self._root_dir.joinpath(self.LOCAL_STORAGE_DIRNAME)
-        local_key_storage_path.mkdir(exist_ok=True)
-        # TODO initialize metadata for key_storage ??
-        return FilesystemKeyStorage(local_key_storage_path)
+        local_keystore_path = self._root_dir.joinpath(self.LOCAL_STORAGE_DIRNAME)
+        local_keystore_path.mkdir(exist_ok=True)
+        # TODO initialize metadata for keystore ??
+        return FilesystemKeystore(local_keystore_path)
 
-    def _get_imported_key_storage_path(self, key_storage_uid):
-        imported_key_storage_path = self._root_dir.joinpath(
-            self.IMPORTED_STORAGES_DIRNAME, "%s%s" % (self.IMPORTED_STORAGE_PREFIX, key_storage_uid)
+    def _get_imported_keystore_path(self, keystore_uid):
+        imported_keystore_path = self._root_dir.joinpath(
+            self.IMPORTED_STORAGES_DIRNAME, "%s%s" % (self.IMPORTED_STORAGE_PREFIX, keystore_uid)
         )
-        return imported_key_storage_path
+        return imported_keystore_path
 
-    def get_imported_key_storage(self, key_storage_uid):
-        """The selected storage MUST exist, else a KeyStorageDoesNotExist is raised."""
-        imported_key_storage_path = self._get_imported_key_storage_path(key_storage_uid=key_storage_uid)
-        if not imported_key_storage_path.exists():
-            raise KeyStorageDoesNotExist("Key storage %s not found" % key_storage_uid)
-        return FilesystemKeyStorage(imported_key_storage_path)
+    def get_imported_keystore(self, keystore_uid):
+        """The selected storage MUST exist, else a KeystoreDoesNotExist is raised."""
+        imported_keystore_path = self._get_imported_keystore_path(keystore_uid=keystore_uid)
+        if not imported_keystore_path.exists():
+            raise KeystoreDoesNotExist("Key storage %s not found" % keystore_uid)
+        return FilesystemKeystore(imported_keystore_path)
 
-    def list_imported_key_storage_uids(self):  # FIXME setup signature
+    def list_imported_keystore_uids(self):  # FIXME setup signature
         """Return a sorted list of UUIDs of key storages, corresponding
         to the device_uid of their origin authentication devices."""
-        imported_key_storages_dir = self._root_dir.joinpath(self.IMPORTED_STORAGES_DIRNAME)
-        paths = imported_key_storages_dir.glob("%s*" % self.IMPORTED_STORAGE_PREFIX)  # This excludes TEMP folders
+        imported_keystores_dir = self._root_dir.joinpath(self.IMPORTED_STORAGES_DIRNAME)
+        paths = imported_keystores_dir.glob("%s*" % self.IMPORTED_STORAGE_PREFIX)  # This excludes TEMP folders
         return sorted([uuid.UUID(d.name.replace(self.IMPORTED_STORAGE_PREFIX, "")) for d in paths])
 
-    def list_imported_key_storage_metadata(self) -> dict:  # FIXME doesn't return a list??
+    def list_imported_keystore_metadata(self) -> dict:  # FIXME doesn't return a list??
         """Return a dict mapping key storage UUIDs to the dicts of their metadata.
 
         Raises if any metadata loading fails.
         """
-        key_storage_uids = self.list_imported_key_storage_uids()
+        keystore_uids = self.list_imported_keystore_uids()
 
         metadata_mapper = {}
-        for key_storage_uid in key_storage_uids:
-            _key_storage_path = self._get_imported_key_storage_path(key_storage_uid=key_storage_uid)
-            metadata = load_from_json_file(get_metadata_file_path(_key_storage_path))  # TODO Factorize this ?
-            metadata_mapper[key_storage_uid] = metadata
+        for keystore_uid in keystore_uids:
+            _keystore_path = self._get_imported_keystore_path(keystore_uid=keystore_uid)
+            metadata = load_from_json_file(get_metadata_file_path(_keystore_path))  # TODO Factorize this ?
+            metadata_mapper[keystore_uid] = metadata
 
         return metadata_mapper
 
-    def import_key_storage_from_folder(self, key_storage_path: Path):
+    def import_keystore_from_folder(self, keystore_path: Path):
         """
         Create a local import of a remote key storage folder (which must have a proper metadata file).
 
-        Raises KeyStorageAlreadyExists if this key storage was already imported.
+        Raises KeystoreAlreadyExists if this key storage was already imported.
         """
-        assert key_storage_path.exists(), key_storage_path
+        assert keystore_path.exists(), keystore_path
 
-        metadata = load_from_json_file(get_metadata_file_path(key_storage_path))
-        key_storage_uid = metadata["device_uid"]  # Fails badly if metadata file is corrupted
+        metadata = load_from_json_file(get_metadata_file_path(keystore_path))
+        keystore_uid = metadata["device_uid"]  # Fails badly if metadata file is corrupted
 
-        if key_storage_uid in self.list_imported_key_storage_uids():
-            raise KeyStorageAlreadyExists("Key storage with UUID %s was already imported locally" % key_storage_uid)
+        if keystore_uid in self.list_imported_keystore_uids():
+            raise KeystoreAlreadyExists("Key storage with UUID %s was already imported locally" % keystore_uid)
 
-        imported_key_storage_path = self._get_imported_key_storage_path(key_storage_uid=key_storage_uid)
-        safe_copy_directory(key_storage_path, imported_key_storage_path)  # Must not fail, due to previous checks
-        assert imported_key_storage_path.exists()
+        imported_keystore_path = self._get_imported_keystore_path(keystore_uid=keystore_uid)
+        safe_copy_directory(keystore_path, imported_keystore_path)  # Must not fail, due to previous checks
+        assert imported_keystore_path.exists()

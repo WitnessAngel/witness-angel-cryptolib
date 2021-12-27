@@ -27,7 +27,7 @@ from wacryptolib.exceptions import DecryptionError, ConfigurationError, Validati
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, \
     ASYMMETRIC_KEY_ALGOS_REGISTRY
-from wacryptolib.key_storage import KeyStorageBase, DummyKeyStoragePool, KeyStoragePoolBase
+from wacryptolib.keystore import KeystoreBase, DummyKeystorePool, KeystorePoolBase
 from wacryptolib.shared_secret import split_bytestring_as_shamir_shards, recombine_secret_from_shamir_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
 from wacryptolib.utilities import (
@@ -58,7 +58,7 @@ MEDIUM_SUFFIX = ".medium"  # To construct decrypted filename when no previous ex
 
 SHARED_SECRET_MARKER = "[SHARED_SECRET]"
 
-DUMMY_KEY_STORAGE_POOL = DummyKeyStoragePool()  # Common fallback storage with in-memory keys
+DUMMY_KEYSTORE_POOL = DummyKeystorePool()  # Common fallback storage with in-memory keys
 
 #: Special value in cryptainers, to invoke a device-local escrow
 LOCAL_ESCROW_MARKER = dict(escrow_type="local")  # FIXME CHANGE THIS
@@ -136,7 +136,7 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
 
 
 def request_decryption_authorizations(
-        escrow_dependencies: dict, key_storage_pool, request_message: str, passphrases: Optional[list] = None
+        escrow_dependencies: dict, keystore_pool, request_message: str, passphrases: Optional[list] = None
 ) -> dict:
     """Loop on encryption escrows and request decryption authorization for all the keypairs that they own.
 
@@ -147,7 +147,7 @@ def request_decryption_authorizations(
 
     for escrow_id, escrow_data in encryption_escrows_dependencies.items():
         key_escrow, keypair_identifiers = escrow_data
-        proxy = get_escrow_proxy(escrow=key_escrow, key_storage_pool=key_storage_pool)
+        proxy = get_escrow_proxy(escrow=key_escrow, keystore_pool=keystore_pool)
         result = proxy.request_decryption_authorization(
             keypair_identifiers=keypair_identifiers, request_message=request_message, passphrases=passphrases
         )
@@ -156,7 +156,7 @@ def request_decryption_authorizations(
     return request_authorization_result
 
 
-def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase):
+def get_escrow_proxy(escrow: dict, keystore_pool: KeystorePoolBase):
     """
     Return an EscrowApi subclass instance (or proxy) depending on the content of `escrow` dict.
     """
@@ -165,11 +165,11 @@ def get_escrow_proxy(escrow: dict, key_storage_pool: KeyStoragePoolBase):
     escrow_type = escrow.get("escrow_type")  # Might be None
 
     if escrow_type == LOCAL_ESCROW_MARKER["escrow_type"]:
-        return LocalEscrowApi(key_storage_pool.get_local_key_storage())
+        return LocalEscrowApi(keystore_pool.get_local_keystore())
     elif escrow_type == AUTHDEVICE_ESCROW_MARKER["escrow_type"]:
         authdevice_uid = escrow["authdevice_uid"]
-        key_storage = key_storage_pool.get_imported_key_storage(authdevice_uid)
-        return ReadonlyEscrowApi(key_storage)
+        keystore = keystore_pool.get_imported_keystore(authdevice_uid)
+        return ReadonlyEscrowApi(keystore)
     elif escrow_type == "jsonrpc":
         return JsonRpcProxy(url=escrow["url"], response_error_handler=status_slugs_response_error_handler)
     # TODO - Implement imported storages, escrow lookup in global registry, shared-secret group, etc.
@@ -183,21 +183,21 @@ class CryptainerBase:
     """
     BEWARE - this class-based design is provisional and might change a lot.
 
-    `key_storage_pool` will be used to fetch local/imported escrows necessary to encryption/decryption operations.
+    `keystore_pool` will be used to fetch local/imported escrows necessary to encryption/decryption operations.
 
     `passphrase_mapper` maps escrows IDs to potential passphrases; a None key can be used to provide additional
     passphrases for all escrows.
     """
 
-    def __init__(self, key_storage_pool: KeyStoragePoolBase = None, passphrase_mapper: Optional[dict] = None):
-        if not key_storage_pool:
+    def __init__(self, keystore_pool: KeystorePoolBase = None, passphrase_mapper: Optional[dict] = None):
+        if not keystore_pool:
             logger.warning(
-                "No key storage pool provided for %s instance, falling back to common DummyKeyStoragePool()",
+                "No key storage pool provided for %s instance, falling back to common DummyKeystorePool()",
                 self.__class__.__name__,
             )
-            key_storage_pool = DUMMY_KEY_STORAGE_POOL
-        assert isinstance(key_storage_pool, KeyStoragePoolBase), key_storage_pool
-        self._key_storage_pool = key_storage_pool
+            keystore_pool = DUMMY_KEYSTORE_POOL
+        assert isinstance(keystore_pool, KeystorePoolBase), keystore_pool
+        self._keystore_pool = keystore_pool
         self._passphrase_mapper = passphrase_mapper or {}
 
 
@@ -480,7 +480,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
         :return: dictionary which contains every data needed to decrypt the ciphered data
         """
-        encryption_proxy = get_escrow_proxy(escrow=escrow, key_storage_pool=self._key_storage_pool)
+        encryption_proxy = get_escrow_proxy(escrow=escrow, keystore_pool=self._keystore_pool)
 
         logger.debug("Generating asymmetric key of type %r", encryption_algo)
         subkey_pem = encryption_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=encryption_algo)
@@ -568,7 +568,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         message_digest = cryptoconf["message_digest"]  # Must have been set before, using message_digest_algo field
         assert message_digest, message_digest
 
-        encryption_proxy = get_escrow_proxy(escrow=cryptoconf["signature_escrow"], key_storage_pool=self._key_storage_pool)
+        encryption_proxy = get_escrow_proxy(escrow=cryptoconf["signature_escrow"], keystore_pool=self._keystore_pool)
 
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
 
@@ -731,7 +731,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
         :return: decypted data as bytes
         """
-        encryption_proxy = get_escrow_proxy(escrow=escrow, key_storage_pool=self._key_storage_pool)
+        encryption_proxy = get_escrow_proxy(escrow=escrow, keystore_pool=self._keystore_pool)
 
         escrow_id = get_escrow_id(escrow)
         passphrases = self._passphrase_mapper.get(escrow_id) or []
@@ -812,7 +812,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         message_digest_algo = cryptoconf["message_digest_algo"]
         signature_algo = cryptoconf["signature_algo"]
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
-        encryption_proxy = get_escrow_proxy(escrow=cryptoconf["signature_escrow"], key_storage_pool=self._key_storage_pool)
+        encryption_proxy = get_escrow_proxy(escrow=cryptoconf["signature_escrow"], keystore_pool=self._keystore_pool)
         public_key_pem = encryption_proxy.fetch_public_key(
             keychain_uid=keychain_uid_signature, key_algo=signature_algo, must_exist=True
         )
@@ -840,7 +840,7 @@ class CryptainerEncryptionStream:
                 cryptoconf: dict,
                 metadata: Optional[dict],
                 keychain_uid: Optional[uuid.UUID] = None,
-                key_storage_pool: Optional[KeyStoragePoolBase] = None,
+                keystore_pool: Optional[KeystorePoolBase] = None,
                 dump_initial_cryptainer=True):
 
         self._cryptainer_filepath = cryptainer_filepath
@@ -849,7 +849,7 @@ class CryptainerEncryptionStream:
         offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
         self._output_data_stream = open(offloaded_file_path, mode='wb')
 
-        self._cryptainer_writer = CryptainerWriter(key_storage_pool=key_storage_pool)
+        self._cryptainer_writer = CryptainerWriter(keystore_pool=keystore_pool)
         self._wip_cryptainer, self._stream_encryptor = self._cryptainer_writer.build_cryptainer_and_stream_encryptor(output_stream=self._output_data_stream, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
         self._wip_cryptainer["data_ciphertext"] = OFFLOADED_MARKER  # Important
 
@@ -897,7 +897,7 @@ def encrypt_data_and_dump_cryptainer_to_filesystem(
     cryptoconf: dict,
     metadata: Optional[dict],
     keychain_uid: Optional[uuid.UUID] = None,
-    key_storage_pool: Optional[KeyStoragePoolBase] = None
+    keystore_pool: Optional[KeystorePoolBase] = None
 ) -> None:
     """
     Optimized version which directly streams encrypted data to offloaded file,
@@ -906,7 +906,7 @@ def encrypt_data_and_dump_cryptainer_to_filesystem(
     # No need to dump initial (signature-less) cryptainer here, this is all a quick operation...
     encryptor = CryptainerEncryptionStream(cryptainer_filepath,
                 cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata,
-                key_storage_pool=key_storage_pool,
+                keystore_pool=keystore_pool,
                 dump_initial_cryptainer=False)
 
     for chunk in consume_bytes_as_chunks(data, chunk_size=DATA_CHUNK_SIZE):
@@ -921,7 +921,7 @@ def encrypt_data_into_cryptainer(
     cryptoconf: dict,
     metadata: Optional[dict],
     keychain_uid: Optional[uuid.UUID] = None,
-    key_storage_pool: Optional[KeyStoragePoolBase] = None
+    keystore_pool: Optional[KeystorePoolBase] = None
 ) -> dict:
     """Turn raw data into a high-security cryptainer, which can only be decrypted with
     the agreement of the owner and multiple third-party escrows.
@@ -930,27 +930,27 @@ def encrypt_data_into_cryptainer(
     :param cryptoconf: tree of specific encryption settings
     :param metadata: dict of metadata describing the data (remains unencrypted in cryptainer)
     :param keychain_uid: optional ID of a keychain to reuse
-    :param key_storage_pool: optional key storage pool, might be required by cryptoconf
+    :param keystore_pool: optional key storage pool, might be required by cryptoconf
     :return: dict of cryptainer
     """
-    writer = CryptainerWriter(key_storage_pool=key_storage_pool)
+    writer = CryptainerWriter(keystore_pool=keystore_pool)
     cryptainer = writer.encrypt_data(data, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
     return cryptainer
 
 
 def decrypt_data_from_cryptainer(
-    cryptainer: dict, *, key_storage_pool: Optional[KeyStoragePoolBase] = None, passphrase_mapper: Optional[dict] = None, verify: bool=True
+    cryptainer: dict, *, keystore_pool: Optional[KeystorePoolBase] = None, passphrase_mapper: Optional[dict] = None, verify: bool=True
 ) -> bytes:
     """Decrypt a cryptainer with the help of third-parties.
 
     :param cryptainer: the cryptainer tree, which holds all information about involved keys
-    :param key_storage_pool: optional key storage pool
+    :param keystore_pool: optional key storage pool
     :param passphrase_mapper: optional dict mapping escrow IDs to their lists of passphrases
     :param verify: whether to check MAC tags of the ciphertext
 
     :return: raw bytestring
     """
-    reader = CryptainerReader(key_storage_pool=key_storage_pool, passphrase_mapper=passphrase_mapper)
+    reader = CryptainerReader(keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
     data = reader.decrypt_data(cryptainer=cryptainer, verify=verify)
     return data
 
@@ -1040,7 +1040,7 @@ class CryptainerStorage:
     :param max_cryptainer_quota: if set, cryptainers are deleted if they exceed this size in bytes
     :param max_cryptainer_count: if set, oldest exceeding cryptainers (time taken from their name, else their file-stats) are automatically erased
     :param max_cryptainer_age: if set, cryptainers exceeding this age (taken from their name, else their file-stats) in days are automatically erased
-    :param key_storage_pool: optional KeyStoragePool, which might be required by current encryptioncryptoconf
+    :param keystore_pool: optional KeystorePool, which might be required by current encryptioncryptoconf
     :param max_workers: count of worker threads to use in parallel
     :param offload_data_ciphertext: whether actual encrypted data must be kept separated from structured cryptainer file
     """
@@ -1052,7 +1052,7 @@ class CryptainerStorage:
         max_cryptainer_quota: Optional[int] = None,
         max_cryptainer_count: Optional[int] = None,
         max_cryptainer_age: Optional[timedelta] = None,
-        key_storage_pool: Optional[KeyStoragePoolBase] = None,
+        keystore_pool: Optional[KeystorePoolBase] = None,
         max_workers: int = 1,
         offload_data_ciphertext=True,
     ):
@@ -1067,7 +1067,7 @@ class CryptainerStorage:
         self._max_cryptainer_quota = max_cryptainer_quota
         self._max_cryptainer_count = max_cryptainer_count
         self._max_cryptainer_age = max_cryptainer_age
-        self._key_storage_pool = key_storage_pool
+        self._keystore_pool = keystore_pool
         self._thread_pool_executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="cryptainer_worker")
         self._pending_executor_futures = []
         self._lock = threading.Lock()
@@ -1177,7 +1177,7 @@ class CryptainerStorage:
                    cryptoconf=cryptoconf,
                     metadata=metadata,
                     keychain_uid=keychain_uid,
-                    key_storage_pool=self._key_storage_pool,
+                    keystore_pool=self._keystore_pool,
                 )
 
     def _encrypt_data_into_cryptainer(self, data, metadata, keychain_uid, cryptoconf):
@@ -1187,12 +1187,12 @@ class CryptainerStorage:
            cryptoconf=cryptoconf,
             metadata=metadata,
             keychain_uid=keychain_uid,
-            key_storage_pool=self._key_storage_pool,
+            keystore_pool=self._keystore_pool,
         )
 
     def _decrypt_data_from_cryptainer(self, cryptainer: dict, passphrase_mapper: Optional[dict], verify: bool) -> bytes:
         return decrypt_data_from_cryptainer(
-            cryptainer, key_storage_pool=self._key_storage_pool, passphrase_mapper=passphrase_mapper, verify=verify
+            cryptainer, keystore_pool=self._keystore_pool, passphrase_mapper=passphrase_mapper, verify=verify
         )  # Will fail if authorizations are not OK
 
     @catch_and_log_exception
@@ -1256,7 +1256,7 @@ class CryptainerStorage:
                      cryptoconf=cryptoconf,
                      metadata=metadata,
                      keychain_uid=keychain_uid,
-                     key_storage_pool=self._key_storage_pool,
+                     keystore_pool=self._keystore_pool,
                      dump_initial_cryptainer=dump_initial_cryptainer)
         return cryptainer_encryption_stream
 

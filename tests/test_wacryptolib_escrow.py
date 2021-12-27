@@ -19,15 +19,15 @@ from wacryptolib.keygen import (
     generate_keypair,
 )
 from wacryptolib.exceptions import KeyDoesNotExist, SignatureVerificationError, DecryptionError
-from wacryptolib.key_storage import DummyKeyStorage
+from wacryptolib.keystore import DummyKeystore
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import generate_uuid0
 
 
 def test_escrow_api_workflow():
 
-    key_storage = DummyKeyStorage()
-    escrow_api = EscrowApi(key_storage=key_storage)
+    keystore = DummyKeystore()
+    escrow_api = EscrowApi(keystore=keystore)
 
     keychain_uid = generate_uuid0()
     keychain_uid_other = generate_uuid0()
@@ -37,12 +37,12 @@ def test_escrow_api_workflow():
 
     for _ in range(2):
         generate_free_keypair_for_least_provisioned_key_algo(
-            key_storage=key_storage, max_free_keys_per_algo=10, key_algos=["RSA_OAEP", "DSA_DSS"]
+            keystore=keystore, max_free_keys_per_algo=10, key_algos=["RSA_OAEP", "DSA_DSS"]
         )
-    assert key_storage.get_free_keypairs_count("DSA_DSS") == 1
-    assert key_storage.get_free_keypairs_count("ECC_DSS") == 0
-    assert key_storage.get_free_keypairs_count("RSA_OAEP") == 1
-    assert key_storage.get_free_keypairs_count("RSA_PSS") == 0  # Different from other RSA keys
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 1
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 0
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 1
+    assert keystore.get_free_keypairs_count("RSA_PSS") == 0  # Different from other RSA keys
 
     # Keypair is well auto-created by get_public_key(), by default
     public_key_rsa_oaep_pem = escrow_api.fetch_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP")
@@ -58,20 +58,20 @@ def test_escrow_api_workflow():
 
     public_key_rsa_oaep = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_rsa_oaep_pem, key_algo="RSA_OAEP")
 
-    assert key_storage.get_free_keypairs_count("DSA_DSS") == 1
-    assert key_storage.get_free_keypairs_count("ECC_DSS") == 0
-    assert key_storage.get_free_keypairs_count("RSA_OAEP") == 0  # Taken
-    assert key_storage.get_free_keypairs_count("RSA_PSS") == 0
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 1
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 0
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 0  # Taken
+    assert keystore.get_free_keypairs_count("RSA_PSS") == 0
 
     signature = escrow_api.get_message_signature(keychain_uid=keychain_uid, message=secret, signature_algo="DSA_DSS")
 
     with pytest.raises(ValueError, match="too big"):
         escrow_api.get_message_signature(keychain_uid=keychain_uid, message=secret_too_big, signature_algo="DSA_DSS")
 
-    assert key_storage.get_free_keypairs_count("DSA_DSS") == 0  # Taken
-    assert key_storage.get_free_keypairs_count("ECC_DSS") == 0
-    assert key_storage.get_free_keypairs_count("RSA_OAEP") == 0
-    assert key_storage.get_free_keypairs_count("RSA_PSS") == 0
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 0  # Taken
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 0
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 0
+    assert keystore.get_free_keypairs_count("RSA_PSS") == 0
 
     public_key_dsa_pem = escrow_api.fetch_public_key(keychain_uid=keychain_uid, key_algo="DSA_DSS")
     public_key_dsa = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_dsa_pem, key_algo="DSA_DSS")
@@ -129,7 +129,7 @@ def test_escrow_api_workflow():
     good_passphrase = "good_passphrase"
 
     keypair_cipher_passphrased = generate_keypair_for_storage(
-        key_algo="RSA_OAEP", key_storage=key_storage, keychain_uid=keychain_uid_passphrased, passphrase=good_passphrase
+        key_algo="RSA_OAEP", keystore=keystore, keychain_uid=keychain_uid_passphrased, passphrase=good_passphrase
     )
 
     result = escrow_api.request_decryption_authorization(
@@ -184,16 +184,16 @@ def test_escrow_api_workflow():
     )
     assert decrypted == secret
 
-    assert key_storage.get_free_keypairs_count("DSA_DSS") == 0
-    assert key_storage.get_free_keypairs_count("ECC_DSS") == 0
-    assert key_storage.get_free_keypairs_count("RSA_OAEP") == 0
-    assert key_storage.get_free_keypairs_count("RSA_PSS") == 0
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 0
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 0
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 0
+    assert keystore.get_free_keypairs_count("RSA_PSS") == 0
 
 
 def test_readonly_escrow_api_behaviour():
 
-    key_storage = DummyKeyStorage()
-    escrow_api = ReadonlyEscrowApi(key_storage=key_storage)
+    keystore = DummyKeystore()
+    escrow_api = ReadonlyEscrowApi(keystore=keystore)
 
     keychain_uid = generate_uuid0()
     key_algo_cipher = "RSA_OAEP"
@@ -223,11 +223,11 @@ def test_readonly_escrow_api_behaviour():
     # Now we generate wanted keys #
 
     keypair_cipher = generate_keypair_for_storage(
-        key_algo=key_algo_cipher, key_storage=key_storage, keychain_uid=keychain_uid
+        key_algo=key_algo_cipher, keystore=keystore, keychain_uid=keychain_uid
     )
 
     keypair_signature = generate_keypair_for_storage(
-        key_algo=key_algo_signature, key_storage=key_storage, keychain_uid=keychain_uid
+        key_algo=key_algo_signature, keystore=keystore, keychain_uid=keychain_uid
     )
 
     public_key2 = escrow_api.fetch_public_key(
@@ -259,59 +259,59 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
 
     # Check the fallback on "all types of keys" for key_algos parameter
 
-    key_storage = DummyKeyStorage()
+    keystore = DummyKeystore()
 
     for _ in range(4):
         res = generate_free_keypair_for_least_provisioned_key_algo(
-            key_storage=key_storage,
+            keystore=keystore,
             max_free_keys_per_algo=10,
             keygen_func=keygen_func,
             # no key_algos parameter provided
         )
         assert res
 
-    assert key_storage.get_free_keypairs_count("DSA_DSS") == 1
-    assert key_storage.get_free_keypairs_count("ECC_DSS") == 1
-    assert key_storage.get_free_keypairs_count("RSA_OAEP") == 1
-    assert key_storage.get_free_keypairs_count("RSA_PSS") == 1
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 1
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 1
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 1
+    assert keystore.get_free_keypairs_count("RSA_PSS") == 1
     assert generated_keys_count == 4
 
     # Now test with a restricted set of key types
 
-    key_storage = DummyKeyStorage()
+    keystore = DummyKeystore()
     restricted_key_algos = ["DSA_DSS", "ECC_DSS", "RSA_OAEP"]
     generated_keys_count = 0
 
     for _ in range(7):
         res = generate_free_keypair_for_least_provisioned_key_algo(
-            key_storage=key_storage,
+            keystore=keystore,
             max_free_keys_per_algo=10,
             keygen_func=keygen_func,
             key_algos=restricted_key_algos,
         )
         assert res
 
-    assert key_storage.get_free_keypairs_count("DSA_DSS") == 3
-    assert key_storage.get_free_keypairs_count("ECC_DSS") == 2
-    assert key_storage.get_free_keypairs_count("RSA_OAEP") == 2
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 3
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 2
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 2
     assert generated_keys_count == 7
 
     for _ in range(23):
         res = generate_free_keypair_for_least_provisioned_key_algo(
-            key_storage=key_storage,
+            keystore=keystore,
             max_free_keys_per_algo=10,
             keygen_func=keygen_func,
             key_algos=restricted_key_algos,
         )
         assert res
 
-    assert key_storage.get_free_keypairs_count("DSA_DSS") == 10
-    assert key_storage.get_free_keypairs_count("ECC_DSS") == 10
-    assert key_storage.get_free_keypairs_count("RSA_OAEP") == 10
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 10
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 10
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 10
     assert generated_keys_count == 30
 
     res = generate_free_keypair_for_least_provisioned_key_algo(
-        key_storage=key_storage,
+        keystore=keystore,
         max_free_keys_per_algo=10,
         keygen_func=keygen_func,
         key_algos=restricted_key_algos,
@@ -321,31 +321,31 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
 
     for _ in range(7):
         generate_free_keypair_for_least_provisioned_key_algo(
-            key_storage=key_storage,
+            keystore=keystore,
             max_free_keys_per_algo=15,
             keygen_func=keygen_func,
             key_algos=["RSA_OAEP", "DSA_DSS"],
         )
 
-    assert key_storage.get_free_keypairs_count("DSA_DSS") == 14  # First in sorting order
-    assert key_storage.get_free_keypairs_count("ECC_DSS") == 10
-    assert key_storage.get_free_keypairs_count("RSA_OAEP") == 13
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 14  # First in sorting order
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 10
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 13
     assert generated_keys_count == 37
 
     res = generate_free_keypair_for_least_provisioned_key_algo(
-        key_storage=key_storage,
+        keystore=keystore,
         max_free_keys_per_algo=20,
         keygen_func=keygen_func,
         key_algos=restricted_key_algos,
     )
     assert res
-    assert key_storage.get_free_keypairs_count("DSA_DSS") == 14
-    assert key_storage.get_free_keypairs_count("ECC_DSS") == 11
-    assert key_storage.get_free_keypairs_count("RSA_OAEP") == 13
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 14
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 11
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 13
     assert generated_keys_count == 38
 
     res = generate_free_keypair_for_least_provisioned_key_algo(
-        key_storage=key_storage,
+        keystore=keystore,
         max_free_keys_per_algo=5,
         keygen_func=keygen_func,
         key_algos=restricted_key_algos,
@@ -358,7 +358,7 @@ def test_get_free_keys_generator_worker():
 
     generate_keys_count = 0
 
-    key_storage = DummyKeyStorage()
+    keystore = DummyKeystore()
 
     def keygen_func(key_algo, serialize):
         nonlocal generate_keys_count
@@ -367,7 +367,7 @@ def test_get_free_keys_generator_worker():
         return dict(private_key=b"someprivatekey2", public_key=b"somepublickey2")
 
     worker = get_free_keys_generator_worker(
-        key_storage=key_storage,
+        keystore=keystore,
         max_free_keys_per_algo=30,
         sleep_on_overflow_s=0.5,
         keygen_func=keygen_func,

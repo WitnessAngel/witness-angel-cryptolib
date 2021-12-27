@@ -191,7 +191,7 @@ SIMPLE_SHAMIR_CRYPTOCONF = dict(
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=3,
-                    key_shared_secret_escrows=[
+                    key_shared_secret_shards=[
                         dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_layers=[
@@ -251,7 +251,7 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=2,
-                    key_shared_secret_escrows=[
+                    key_shared_secret_shards=[
                         dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
@@ -462,13 +462,13 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
             if key_encryption["key_encryption_algo"] == SHARED_SECRET_MARKER:
                 data_encryption_shamir = data_encryption
 
-    key_ciphertext_shares = load_from_json_bytes(data_encryption_shamir["key_ciphertext"])
+    key_ciphertext_shards = load_from_json_bytes(data_encryption_shamir["key_ciphertext"])
 
     # 1 share is deleted
 
-    del key_ciphertext_shares["shares"][-1]
+    del key_ciphertext_shards["shares"][-1]
 
-    data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
+    data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
     verify = random_bool()
     result_data = decrypt_data_from_cryptainer(cryptainer=cryptainer, verify=verify)
@@ -476,18 +476,18 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
 
     # Another share is deleted
 
-    del key_ciphertext_shares["shares"][-1]
+    del key_ciphertext_shards["shares"][-1]
 
-    data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
+    data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
     result_data = decrypt_data_from_cryptainer(cryptainer=cryptainer)
     assert result_data == data
 
     # Another share is deleted and now there aren't enough valid ones to decipher data
 
-    del key_ciphertext_shares["shares"][-1]
+    del key_ciphertext_shards["shares"][-1]
 
-    data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shares)
+    data_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
     with pytest.raises(DecryptionError, match="share.*missing"):
         decrypt_data_from_cryptainer(cryptainer=cryptainer)
@@ -510,7 +510,7 @@ RECURSIVE_CRYPTOCONF = dict(
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
-                    key_shared_secret_escrows=[
+                    key_shared_secret_shards=[
                         dict(
                              key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
@@ -619,7 +619,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                     dict(
                         key_encryption_algo=SHARED_SECRET_MARKER,
                         key_shared_secret_threshold=2,
-                        key_shared_secret_escrows=[
+                        key_shared_secret_shards=[
                             dict(key_encryption_layers=[
                                      dict(key_encryption_algo="RSA_OAEP", key_escrow=share_escrow1, keychain_uid=keychain_uid_escrow)],),
                             dict(key_encryption_layers=[

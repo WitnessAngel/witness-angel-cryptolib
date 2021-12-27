@@ -39,7 +39,7 @@ EXAMPLE_CRYPTOCONF = dict(
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
-                    key_shared_secret_escrows=[
+                    key_shared_secret_shards=[
                         dict(key_encryption_layers=[
                                  dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
                         dict(key_encryption_layers=[

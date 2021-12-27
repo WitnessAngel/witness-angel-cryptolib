@@ -28,7 +28,7 @@ from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error
 from wacryptolib.key_generation import generate_symkey, load_asymmetric_key_from_pem_bytestring, \
     ASYMMETRIC_KEY_TYPES_REGISTRY
 from wacryptolib.key_storage import KeyStorageBase, DummyKeyStoragePool, KeyStoragePoolBase
-from wacryptolib.shared_secret import split_bytestring_as_shamir_shares, recombine_secret_from_shamir_shares
+from wacryptolib.shared_secret import split_bytestring_as_shamir_shards, recombine_secret_from_shamir_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
 from wacryptolib.utilities import (
     dump_to_json_bytes,
@@ -101,7 +101,7 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
             key_type_encryption = key_encryption_layer["key_encryption_algo"]
 
             if key_type_encryption == SHARED_SECRET_MARKER:
-                escrows = key_encryption_layer["key_shared_secret_escrows"]
+                escrows = key_encryption_layer["key_shared_secret_shards"]
                 for escrow in escrows:
                     _grab_key_encryption_layers_dependencies(escrow["key_encryption_layers"])  # Recursive call
             else:
@@ -428,15 +428,15 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
         if key_encryption_algo == SHARED_SECRET_MARKER:
 
-            key_shared_secret_escrows = key_encryption_layer["key_shared_secret_escrows"]
-            shares_count = len(key_shared_secret_escrows)
+            key_shared_secret_shards = key_encryption_layer["key_shared_secret_shards"]
+            shares_count = len(key_shared_secret_shards)
 
             threshold_count = key_encryption_layer["key_shared_secret_threshold"]
             assert threshold_count <= shares_count
 
             logger.debug("Generating Shamir shared secret shares (%d needed amongst %d)", threshold_count, shares_count)
 
-            shares = split_bytestring_as_shamir_shares(
+            shares = split_bytestring_as_shamir_shards(
                 secret=key_bytes, shares_count=shares_count, threshold_count=threshold_count
             )
 
@@ -445,7 +445,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
             shares_ciphertexts = []
 
-            for share, escrow_conf in zip(shares, key_shared_secret_escrows):
+            for share, escrow_conf in zip(shares, key_shared_secret_shards):
                 share_bytes = dump_to_json_bytes(share)  # The tuple (idx, data) of each share thus becomes encryptable
                 shares_ciphertext = self._encrypt_key_through_multiple_layers(  # FIXME rename singular
                         keychain_uid=keychain_uid,
@@ -491,40 +491,40 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         cipherdict = encrypt_bytestring(plaintext=symmetric_key_data, encryption_algo=encryption_algo, key_dict={"key": subkey})
         return cipherdict
 
-    def ____obsolete_____encrypt_shares(self, shares: Sequence, key_shared_secret_escrows: Sequence, keychain_uid: uuid.UUID) -> list:
+    def ____obsolete_____encrypt_shards(self, shares: Sequence, key_shared_secret_shards: Sequence, keychain_uid: uuid.UUID) -> list:
         """
         Make a loop through all shares from shared secret algorithm to encrypt each of them.
 
         :param shares: list of tuples containing an index and its share data
-        :param key_shared_secret_escrows: cryptoconf subtree with share escrow information
+        :param key_shared_secret_shards: cryptoconf subtree with share escrow information
         :param keychain_uid: uuid for the set of encryption keys used
 
         :return: list of encrypted shares
         """
 
-        all_encrypted_shares = []
+        all_encrypted_shards = []
 
-        assert len(shares) == len(key_shared_secret_escrows)
+        assert len(shares) == len(key_shared_secret_shards)
 
         for shared_idx, share in enumerate(shares):
             assert isinstance(share[1], bytes), repr(share)
 
-            conf_share = key_shared_secret_escrows[shared_idx]
-            share_encryption_algo = conf_share["share_encryption_algo"]
-            share_escrow = conf_share["share_escrow"]
-            keychain_uid_share = conf_share.get("keychain_uid") or keychain_uid
+            conf_shard = key_shared_secret_shards[shared_idx]
+            share_encryption_algo = conf_shard["share_encryption_algo"]
+            share_escrow = conf_shard["share_escrow"]
+            keychain_uid_shard = conf_shard.get("keychain_uid") or keychain_uid
 
             share_cipherdict = self._encrypt_with_asymmetric_cipher(
                 encryption_algo=share_encryption_algo,
-                keychain_uid=keychain_uid_share,
+                keychain_uid=keychain_uid_shard,
                 symmetric_key_data=share[1],
                 escrow=share_escrow,
             )
 
-            all_encrypted_shares.append((share[0], share_cipherdict))
+            all_encrypted_shards.append((share[0], share_cipherdict))
 
-        assert len(shares) == len(key_shared_secret_escrows)
-        return all_encrypted_shares
+        assert len(shares) == len(key_shared_secret_shards)
+        return all_encrypted_shards
 
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, authentication_data_list: list):
         keychain_uid = cryptainer["keychain_uid"]
@@ -666,9 +666,9 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
         if key_encryption_algo == SHARED_SECRET_MARKER:
 
-            decrypted_shares = []
+            decrypted_shards = []
             decryption_errors = []
-            key_shared_secret_escrows = encryption_layer["key_shared_secret_escrows"]  # FIXMe rename twice
+            key_shared_secret_shards = encryption_layer["key_shared_secret_shards"]  # FIXMe rename twice
             key_shared_secret_threshold = encryption_layer["key_shared_secret_threshold"]
 
             shares_ciphertexts = key_cipherdict["shares"]  # FIXME rename to share_ciphertexts
@@ -676,7 +676,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
             logger.debug("Deciphering each share")
 
             # If some shares are missing, we won't detect it here because zip() stops at shortest list
-            for share_ciphertext, escrow_conf in zip(shares_ciphertexts, key_shared_secret_escrows):
+            for share_ciphertext, escrow_conf in zip(shares_ciphertexts, key_shared_secret_shards):
 
                 try:
                     share_bytes = self._decrypt_key_through_multiple_layers(
@@ -684,25 +684,25 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
                             key_ciphertext=share_ciphertext,
                             encryption_layers=escrow_conf["key_encryption_layers"])  # Recursive structure
                     share = load_from_json_bytes(share_bytes)  # The tuple (idx, data) of each share thus becomes encryptable
-                    decrypted_shares.append(share)
+                    decrypted_shards.append(share)
 
                 # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
                 except Exception as exc:  # If actual escrow doesn't work, we can go to next one
                     decryption_errors.append(exc)
                     logger.error("Error when decrypting share of %s: %r" % (escrow_conf, exc), exc_info=True)
 
-                if len(decrypted_shares) == key_shared_secret_threshold:
+                if len(decrypted_shards) == key_shared_secret_threshold:
                     logger.debug("A sufficient number of shares has been decrypted")
                     break
 
-            if len(decrypted_shares) < key_shared_secret_threshold:
+            if len(decrypted_shards) < key_shared_secret_threshold:
                 raise DecryptionError(
                     "%s valid share(s) missing for reconstitution of symmetric key (errors: %r)"
-                    % (key_shared_secret_threshold - len(decrypted_shares), decryption_errors)
+                    % (key_shared_secret_threshold - len(decrypted_shards), decryption_errors)
                 )
 
             logger.debug("Recombining shared-secret shares")
-            key_bytes = recombine_secret_from_shamir_shares(shares=decrypted_shares)
+            key_bytes = recombine_secret_from_shamir_shards(shares=decrypted_shards)
             return key_bytes
 
         else:  # Using asymmetric algorithm
@@ -745,7 +745,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         )
         return symmetric_key_plaintext
 
-    def ________decrypt_symmetric_key_share(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, cryptoconf: dict):
+    def ________decrypt_symmetric_key_shard(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, cryptoconf: dict):
         """
         Make a loop through all encrypted shares to decrypt each of them
         :param keychain_uid: uuid for the set of encryption keys used
@@ -754,52 +754,52 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
         :return: list of tuples of deciphered shares
         """
-        key_shared_secret_escrows = cryptoconf["key_shared_secret_escrows"]
+        key_shared_secret_shards = cryptoconf["key_shared_secret_shards"]
         key_shared_secret_threshold = cryptoconf["key_shared_secret_threshold"]
 
-        decrypted_shares = []
+        decrypted_shards = []
         decryption_errors = []
 
         assert len(symmetric_key_cipherdict["shares"]) <= len(
-            key_shared_secret_escrows
+            key_shared_secret_shards
         )  # During tests we erase some cryptainer shares...
 
-        for share_idx, share_conf in enumerate(key_shared_secret_escrows):
+        for share_idx, share_conf in enumerate(key_shared_secret_shards):
 
             share_encryption_algo = share_conf["share_encryption_algo"]
             share_escrow = share_conf["share_escrow"]
-            keychain_uid_share = share_conf.get("keychain_uid") or keychain_uid
+            keychain_uid_shard = share_conf.get("keychain_uid") or keychain_uid
 
             try:
                 try:
-                    encrypted_share = symmetric_key_cipherdict["shares"][share_idx]
+                    encrypted_shard = symmetric_key_cipherdict["shares"][share_idx]
                 except IndexError:
                     raise ValueError("Missing share at index %s" % share_idx) from None
 
                 share_plaintext = self._decrypt_with_asymmetric_cipher(
                     encryption_algo=share_encryption_algo,
-                    keychain_uid=keychain_uid_share,
-                    cipherdict=encrypted_share[1],
+                    keychain_uid=keychain_uid_shard,
+                    cipherdict=encrypted_shard[1],
                     escrow=share_escrow,
                 )
-                share = (encrypted_share[0], share_plaintext)
-                decrypted_shares.append(share)
+                share = (encrypted_shard[0], share_plaintext)
+                decrypted_shards.append(share)
 
             # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
             except Exception as exc:  # If actual escrow doesn't work, we can go to next one
                 decryption_errors.append(exc)
                 logger.error("Error when decrypting share of %s: %r" % (share_escrow, exc), exc_info=True)
 
-            if len(decrypted_shares) == key_shared_secret_threshold:
+            if len(decrypted_shards) == key_shared_secret_threshold:
                 logger.debug("A sufficient number of shares has been decrypted")
                 break
 
-        if len(decrypted_shares) < key_shared_secret_threshold:
+        if len(decrypted_shards) < key_shared_secret_threshold:
             raise DecryptionError(
                 "%s valid share(s) missing for reconstitution of symmetric key (errors: %r)"
-                % (key_shared_secret_threshold - len(decrypted_shares), decryption_errors)
+                % (key_shared_secret_threshold - len(decrypted_shards), decryption_errors)
             )
-        return decrypted_shares
+        return decrypted_shards
 
     def _verify_message_signature(self, keychain_uid: uuid.UUID, message: bytes, cryptoconf: dict):
         """
@@ -1453,7 +1453,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
 
     SHAMIR_CRYPTAINER_PIECE = Schema({
         "key_encryption_algo": SHARED_SECRET_MARKER,
-        "key_shared_secret_escrows": [{
+        "key_shared_secret_shards": [{
             "key_encryption_layers": [SIMPLE_CRYPTAINER_PIECE]}],
         "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schema_int),
     }, name="Recursive_shamir", as_reference=True)

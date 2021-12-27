@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 SHAMIR_CHUNK_LENGTH = 16
 
 
-def split_bytestring_as_shamir_shares(secret: bytes, *, shares_count: int, threshold_count: int) -> list:
+def split_bytestring_as_shamir_shards(secret: bytes, *, shares_count: int, threshold_count: int) -> list:
     """Generate a shared secret of `shares_count` subkeys, with `threshold_count`
         of them required to recompute the initial `bytestring`.
 
@@ -28,31 +28,31 @@ def split_bytestring_as_shamir_shares(secret: bytes, *, shares_count: int, thres
             "Threshold count %s can't be higher than shared count %s" % (threshold_count, shares_count)
         )
 
-    all_chunk_shares = []  # List of lists of related 16-bytes shares
+    all_chunk_shards = []  # List of lists of related 16-bytes shares
 
     # Split the secret into tuples of 16 bytes exactly (after padding)
     chunks = split_as_chunks(secret, chunk_size=SHAMIR_CHUNK_LENGTH, must_pad=True)
 
     # Separate each chunk into share
     for chunk in chunks:
-        shares = _split_128b_bytestring_into_shares(chunk, shares_count, threshold_count)
-        all_chunk_shares.append(shares)
+        shares = _split_128b_bytestring_into_shards(chunk, shares_count, threshold_count)
+        all_chunk_shards.append(shares)
         del shares
 
-    full_shares = []
+    full_shards = []
 
     for idx in range(shares_count):
         assert all(
-            chunk_share[idx][0] == idx + 1 for chunk_share in all_chunk_shares
+            chunk_shard[idx][0] == idx + 1 for chunk_shard in all_chunk_shards
         )  # By construction, share indices start at 1
-        idx_shares = (chunk_share[idx][1] for chunk_share in all_chunk_shares)
-        complete_share = b"".join(idx_shares)
-        full_shares.append((idx + 1, complete_share))
+        idx_shards = (chunk_shard[idx][1] for chunk_shard in all_chunk_shards)
+        complete_shard = b"".join(idx_shards)
+        full_shards.append((idx + 1, complete_shard))
 
-    return full_shares
+    return full_shards
 
 
-def recombine_secret_from_shamir_shares(shares: Sequence) -> bytes:
+def recombine_secret_from_shamir_shards(shares: Sequence) -> bytes:
     """Permits to reconstruct a key which has its secret shared
     into `shares_count` shares thanks to a list of `shares`
 
@@ -73,11 +73,11 @@ def recombine_secret_from_shamir_shares(shares: Sequence) -> bytes:
     if len(set(len(chunks) for chunks in shares_per_secret)) != 1:
         raise ValueError("Shamir share chunks must have the same length")
 
-    all_chunk_shares = list(zip(*shares_per_secret))
+    all_chunk_shards = list(zip(*shares_per_secret))
 
     chunks = []
-    for chunk_shares in all_chunk_shares:
-        chunk = _recombine_128b_shares_into_bytestring(chunk_shares)
+    for chunk_shards in all_chunk_shards:
+        chunk = _recombine_128b_shards_into_bytestring(chunk_shards)
         chunks.append(chunk)
 
     secret = recombine_chunks(chunks, chunk_size=SHAMIR_CHUNK_LENGTH, must_unpad=True)
@@ -85,7 +85,7 @@ def recombine_secret_from_shamir_shares(shares: Sequence) -> bytes:
     return secret
 
 
-def _split_128b_bytestring_into_shares(secret: bytes, shares_count: int, threshold_count: int) -> list:
+def _split_128b_bytestring_into_shards(secret: bytes, shares_count: int, threshold_count: int) -> list:
     """Split a bytestring of exactly 128 bits into shares.
 
         :param bytestring: bytestring to split
@@ -100,7 +100,7 @@ def _split_128b_bytestring_into_shares(secret: bytes, shares_count: int, thresho
     return shares
 
 
-def _recombine_128b_shares_into_bytestring(shares: Sequence[tuple]) -> bytes:
+def _recombine_128b_shards_into_bytestring(shares: Sequence[tuple]) -> bytes:
     """Recombine shares of exactly 128 bits into a bytestring.
 
         :param bytestring: bytestring to split

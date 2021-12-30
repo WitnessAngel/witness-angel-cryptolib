@@ -718,7 +718,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     )
     storage.wait_for_idle_state()
 
-    cryptainer_names = storage.list_cryptainer_names(as_sorted=True)
+    cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
     print(">> cryptainer_names", cryptainer_names)
 
     with pytest.raises(DecryptionError):
@@ -795,7 +795,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert not animals_file_path.is_file()  # AUTO-DELETED after encryption!
 
     assert len(storage) == 2
-    assert storage.list_cryptainer_names(as_sorted=True) == [Path("animals.dat.crypt"), Path("empty.txt.crypt")]
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [Path("animals.dat.crypt"), Path("empty.txt.crypt")]
     assert storage._cryptainer_dir.joinpath(
         "animals.dat.crypt.payload"
     ).is_file()  # By default, DATA OFFLOADING is activated
@@ -809,8 +809,8 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     storage.wait_for_idle_state()
     assert len(storage) == 3
     expected_cryptainer_names = [Path("animals.dat.crypt"), Path("empty.txt.crypt"), Path("newfile.bmp.crypt")]
-    assert storage.list_cryptainer_names(as_sorted=True) == expected_cryptainer_names
-    assert sorted(storage.list_cryptainer_names(as_sorted=False)) == expected_cryptainer_names
+    assert storage.list_cryptainer_names(as_sorted_list=True) == expected_cryptainer_names
+    assert sorted(storage.list_cryptainer_names(as_sorted_list=False)) == expected_cryptainer_names
 
     assert not list(storage._cryptainer_dir.glob("newfile*data"))  # Offloading is well disabled now
     assert len(list(storage._cryptainer_dir.iterdir())) == 5
@@ -842,7 +842,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     del storage._make_absolute
     assert storage._make_absolute  # Back to the method
 
-    abs_entries = storage.list_cryptainer_names(as_absolute=True)
+    abs_entries = storage.list_cryptainer_names(as_absolute_paths=True)
     assert len(abs_entries) == 3  # Unchanged
     assert all(entry.is_absolute() for entry in abs_entries)
 
@@ -855,7 +855,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert len(storage) == 3
     os.remove(os.path.join(cryptainer_dir, "animals.dat.crypt"))
     os.remove(os.path.join(cryptainer_dir, "newfile.bmp.crypt"))
-    assert storage.list_cryptainer_names(as_sorted=True) == [Path("empty.txt.crypt")]
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [Path("empty.txt.crypt")]
     assert len(storage) == 1  # Remaining offloaded data file is ignored
 
     offload_payload_ciphertext1 = random_bool()
@@ -887,7 +887,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
 
     storage.wait_for_idle_state()
     assert len(storage) == 3  # Purged
-    assert storage.list_cryptainer_names(as_sorted=True) == [
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [
         Path("xyz.dat.000.crypt"),
         Path("xyz.dat.001.crypt"),
         Path("xyz.dat.002.crypt"),
@@ -896,7 +896,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
     storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 3  # Purged
-    assert storage.list_cryptainer_names(as_sorted=True) == [
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [
         Path("xyz.dat.001.crypt"),
         Path("xyz.dat.002.crypt"),
         Path("xyz.dat.003.crypt"),
@@ -918,7 +918,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
     storage.enqueue_file_for_encryption("zzz.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 4  # Purge occurred
-    assert storage.list_cryptainer_names(as_sorted=True) == [
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [
         Path('aaa.dat.000.crypt'),  # It's the file timestamps that counts, not the name!
         Path("xyz.dat.002.crypt"),
         Path("xyz.dat.003.crypt"),
@@ -927,7 +927,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
 
     storage.delete_cryptainer(Path("xyz.dat.002.crypt"))
 
-    assert storage.list_cryptainer_names(as_sorted=True) == [
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [
         Path("aaa.dat.000.crypt"),
         Path("xyz.dat.003.crypt"),
         Path("zzz.dat.001.crypt"),
@@ -936,7 +936,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
     storage.enqueue_file_for_encryption("20201121222727_whatever.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
 
-    assert storage.list_cryptainer_names(as_sorted=True) == [
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [
         Path("20201121222727_whatever.dat.002.crypt"),
         Path('aaa.dat.000.crypt'),
         Path("xyz.dat.003.crypt"),
@@ -947,8 +947,8 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
     storage.enqueue_file_for_encryption("lmn.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
 
-    print(">>>>>>>", storage.list_cryptainer_names(as_sorted=True))
-    assert storage.list_cryptainer_names(as_sorted=True) == [
+    print(">>>>>>>", storage.list_cryptainer_names(as_sorted_list=True))
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [
         Path('21201121222729_smth.dat.003.crypt'),
         Path('aaa.dat.000.crypt'),  # It's the file timestamps that counts, not the name!
         Path('lmn.dat.004.crypt'),
@@ -960,7 +960,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
 
     storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
-    assert storage.list_cryptainer_names(as_sorted=True) == []  # ALL PURGED
+    assert storage.list_cryptainer_names(as_sorted_list=True) == []  # ALL PURGED
 
 
 def test_cryptainer_storage_purge_by_age(tmp_path):
@@ -978,7 +978,7 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
         offload_payload_ciphertext=offload_payload_ciphertext,
     )
 
-    assert storage.list_cryptainer_names(as_sorted=True) == [
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [
         Path('20201021222700_oldfile.dat.crypt'),
         Path('20301021222711_oldfile.dat.crypt'),
     ]
@@ -991,7 +991,7 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
     storage.enqueue_file_for_encryption("whatever_stuff.dat", b"xxx", metadata=None)  # File timestamp with be used instead
     storage.wait_for_idle_state()
 
-    cryptainer_names = storage.list_cryptainer_names(as_sorted=True)
+    cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
 
     assert Path('20201021222700_oldfile.dat.crypt') not in cryptainer_names
 
@@ -1006,7 +1006,7 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
     storage.enqueue_file_for_encryption("abcde.dat", b"xxx", metadata=None)
     storage.wait_for_idle_state()
 
-    cryptainer_names = storage.list_cryptainer_names(as_sorted=True)
+    cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
     assert Path('whatever_stuff.dat.005.crypt') not in cryptainer_names
     assert Path('abcde.dat.006.crypt') in cryptainer_names
 
@@ -1017,7 +1017,7 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
 
     storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
-    assert storage.list_cryptainer_names(as_sorted=True) == [Path('20301021222711_oldfile.dat.crypt')]  # ALL PURGED
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [Path('20301021222711_oldfile.dat.crypt')]  # ALL PURGED
 
 
 def test_cryptainer_storage_purge_by_quota(tmp_path):
@@ -1039,7 +1039,7 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
         storage.enqueue_file_for_encryption("some_stuff.dat", b"m"*1000, metadata=None)
     storage.wait_for_idle_state()
 
-    cryptainer_names = storage.list_cryptainer_names(as_sorted=True)
+    cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
 
     print(cryptainer_names)
 
@@ -1063,7 +1063,7 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
 
     storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
-    assert storage.list_cryptainer_names(as_sorted=True) == []  # ALL PURGED
+    assert storage.list_cryptainer_names(as_sorted_list=True) == []  # ALL PURGED
 
 
 def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
@@ -1091,7 +1091,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
 
         storage.wait_for_idle_state()
 
-        cryptainer_names = storage.list_cryptainer_names(as_sorted=True)
+        cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
 
         assert (Path("20001121222729_smth.dat.000.crypt") in cryptainer_names) == (not (max_cryptainer_count or max_cryptainer_quota or max_cryptainer_age))
         assert (Path(recent_big_file_name +".001.crypt") in cryptainer_names) == (not max_cryptainer_quota)
@@ -1110,7 +1110,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
     storage.enqueue_file_for_encryption("some_small_file.dat", b"0"*50, metadata=None)
     storage.wait_for_idle_state()
 
-    cryptainer_names = storage.list_cryptainer_names(as_sorted=True)
+    cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
     assert cryptainer_names == []
 
 

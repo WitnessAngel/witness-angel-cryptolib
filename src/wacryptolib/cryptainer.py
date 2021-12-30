@@ -1081,15 +1081,15 @@ class CryptainerStorage:
         """Beware, might be SLOW if many files are present in folder."""
         return len(self.list_cryptainer_names())  # No sorting, to be quicker
 
-    def list_cryptainer_names(self, as_sorted=False, as_absolute=False):  # FIXME add annotations everywhere
+    def list_cryptainer_names(self, as_sorted_list=False, as_absolute_paths=False):  # FIXME add annotations everywhere
         """Returns the list of encrypted cryptainers present in storage,
         sorted by name or not, absolute or not, as Path objects."""
         assert self._cryptainer_dir.is_absolute(), self._cryptainer_dir
         paths = list(self._cryptainer_dir.glob("*" + CRYPTAINER_SUFFIX))  # As list, for multiple looping on it
         assert all(p.is_absolute() for p in paths), paths
-        if as_sorted:
+        if as_sorted_list:
             paths = sorted(paths)
-        if not as_absolute:
+        if not as_absolute_paths:
             paths = (Path(p.name) for p in paths)  # beware, only works since we don't have subfolders for now!
         return list(paths)
 
@@ -1109,7 +1109,7 @@ class CryptainerStorage:
 
     def list_cryptainer_properties(self, with_age=False, with_size=False):
         """Returns an unsorted list of dicts having the fields "name", [age] and [size], depending on requested properties."""
-        cryptainer_names = self.list_cryptainer_names(as_sorted=False, as_absolute=False)
+        cryptainer_names = self.list_cryptainer_names(as_sorted_list=False, as_absolute_paths=False)
 
         now = get_utc_now_date()
 
@@ -1306,7 +1306,7 @@ class CryptainerStorage:
         or an index suitable for this sorted list).
         """
         if isinstance(cryptainer_name_or_idx, int):
-            cryptainer_names = self.list_cryptainer_names(as_sorted=True, as_absolute=False)
+            cryptainer_names = self.list_cryptainer_names(as_sorted_list=True, as_absolute_paths=False)
             cryptainer_name = cryptainer_names[cryptainer_name_or_idx]  # Will break if idx is out of bounds
         else:
             assert isinstance(cryptainer_name_or_idx, (Path, str)), repr(cryptainer_name_or_idx)

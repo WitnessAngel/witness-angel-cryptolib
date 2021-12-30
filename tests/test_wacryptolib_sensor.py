@@ -335,7 +335,7 @@ def test_aggregators_thread_safety(tmp_path):
     misc_results = set(future.result() for future in misc_futures)
     assert misc_results == set([None])  # No results expected from any of these methods
 
-    cryptainer_names = cryptainer_storage.list_cryptainer_names(as_sorted=True)
+    cryptainer_names = cryptainer_storage.list_cryptainer_names(as_sorted_list=True)
 
     tarfiles_bytes = [
         cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name) for cryptainer_name in cryptainer_names

@@ -308,9 +308,9 @@ class EncryptionStreamBase:
         assert self._is_finished
 
         return dict(message_authentication_codes=self._get_message_authentication_codes(),
-                    message_digests=self._get_message_digests())
+                    payload_digests=self._get_payload_digests())
 
-    def _get_message_digests(self) -> dict:
+    def _get_payload_digests(self) -> dict:
         hashes = {}
         for hash_algo, hasher_instance in self._hashers_dict.items():
             digest = hasher_instance.digest()

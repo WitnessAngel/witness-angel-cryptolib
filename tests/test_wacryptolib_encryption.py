@@ -196,7 +196,7 @@ def test_stream_manager(encryption_algo_list):
 
         for hash_algo in payload_encryption_node['payload_digest_algos']:
             assert (hash_message(message=current_ciphertext, hash_algo=hash_algo) ==  # TODO NOW create local vars
-                    authentication_data['message_digests'][hash_algo])
+                    authentication_data['payload_digests'][hash_algo])
 
         cipherdict = {"ciphertext": current_ciphertext}
         cipherdict.update(authentication_data["message_authentication_codes"])

@@ -317,14 +317,14 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             payload_ciphertext = payload_cipherdict.pop("ciphertext")  # Mandatory field
             assert isinstance(payload_ciphertext, bytes), payload_ciphertext  # Same raw content as would be in offloaded payload file
 
-            message_digests = {
+            payload_digests = {
                 payload_digest_algo: hash_message(payload_ciphertext, hash_algo=payload_digest_algo)
                 for payload_digest_algo in payload_digest_algos
             }
 
             payload_integrity_tags.append(dict(
                     message_authentication_codes=payload_cipherdict,  # Only remains tags, macs etc.
-                    message_digests=message_digests,
+                    payload_digests=payload_digests,
             ))
 
             payload_current = payload_ciphertext
@@ -537,22 +537,22 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             assert payload_encryption_layer["message_authentication_codes"] is None  # Set at cryptainer build time
             payload_encryption_layer["message_authentication_codes"] = payload_integrity_tags["message_authentication_codes"]
 
-            message_digests = payload_integrity_tags["message_digests"]
+            payload_digests = payload_integrity_tags["payload_digests"]
 
             _encountered_payload_digest_algos = set()
             for signature_conf in payload_encryption_layer["payload_signatures"]:
                 payload_digest_algo = signature_conf["payload_digest_algo"]
 
-                signature_conf["message_digest"] = message_digests[payload_digest_algo]  # MUST exist, else incoherence
+                signature_conf["payload_digest"] = payload_digests[payload_digest_algo]  # MUST exist, else incoherence
                 # FIXME ADD THIS NEW FIELD TO SCHEMA VALIDATOR!!!!
 
-                signature_value = self._generate_message_signature(
+                payload_signature_value = self._generate_message_signature(
                     keychain_uid=keychain_uid,
                    cryptoconf=signature_conf)
-                signature_conf["signature_value"] = signature_value
+                signature_conf["payload_signature_value"] = payload_signature_value
 
                 _encountered_payload_digest_algos.add(payload_digest_algo)
-            assert _encountered_payload_digest_algos == set(message_digests)  # No abnormal extra digest
+            assert _encountered_payload_digest_algos == set(payload_digests)  # No abnormal extra digest
 
         cryptainer["cryptainer_state"] = CRYPTAINER_STATES.FINISHED
 
@@ -565,18 +565,18 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         :return: dictionary with information needed to verify signature
         """
         payload_signature_algo = cryptoconf["payload_signature_algo"]
-        message_digest = cryptoconf["message_digest"]  # Must have been set before, using payload_digest_algo field
-        assert message_digest, message_digest
+        payload_digest = cryptoconf["payload_digest"]  # Must have been set before, using payload_digest_algo field
+        assert payload_digest, payload_digest
 
         encryption_proxy = get_escrow_proxy(escrow=cryptoconf["payload_signature_escrow"], keystore_pool=self._keystore_pool)
 
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
 
         logger.debug("Signing hash of encrypted payload with algo %r", payload_signature_algo)
-        signature_value = encryption_proxy.get_message_signature(
-            keychain_uid=keychain_uid_signature, message=message_digest, payload_signature_algo=payload_signature_algo
+        payload_signature_value = encryption_proxy.get_message_signature(
+            keychain_uid=keychain_uid_signature, message=payload_digest, payload_signature_algo=payload_signature_algo
         )
-        return signature_value
+        return payload_signature_value
 
 
 class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
@@ -818,12 +818,13 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         )
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=payload_signature_algo)
 
-        message_hash = hash_message(message, hash_algo=payload_digest_algo)
-        assert message_hash == cryptoconf["message_digest"]  # Sanity check!!
-        signature_value = cryptoconf["signature_value"]
+        # FIXME payload_digest might be missing, itd' be OK too!
+        payload_digest = hash_message(message, hash_algo=payload_digest_algo)
+        assert payload_digest == cryptoconf["payload_digest"]  # Sanity check!!
+        payload_signature_value = cryptoconf["payload_signature_value"]
 
         verify_message_signature(
-            message=message_hash, payload_signature_algo=payload_signature_algo, signature=signature_value, key=public_key
+            message=payload_digest, payload_signature_algo=payload_signature_algo, signature=payload_signature_value, key=public_key
         )  # Raises if troubles
 
 
@@ -1419,7 +1420,6 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
         Optionalkey("keychain_uid"): micro_schema_uid
     }
 
-    # check if it is a cryptainer
     if for_cryptainer:
         extra_cryptainer = {
             "cryptainer_state": Or(CRYPTAINER_STATES.STARTED, CRYPTAINER_STATES.FINISHED),
@@ -1431,12 +1431,12 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
             "key_ciphertext": micro_schema_binary
         }
         extra_signature = {
-            "signature_value": {
+            "payload_signature_value": {
                 "digest": micro_schema_binary,
                 "timestamp_utc": Or(micro_schema_int, micro_schema_long, int)}
         }
         payload_signature.update(extra_signature)
-        payload_signature["message_digest"] = micro_schema_binary
+        payload_signature["payload_digest"] = micro_schema_binary  # FIXME must be optional!!
         message_authentication_codes = {
             "message_authentication_codes": {
                 Optionalkey("tag"): micro_schema_binary

@@ -70,14 +70,14 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
                       "payload_digest_algo": "SHA256",
                       "payload_signature_algo": "DSA_DSS",
                       "payload_signature_escrow": "_local_",
-                      "payload_signature_value": {
-                          "digest": {
+                      "payload_signature_struct": {
+                          "signature_value": {
                               "$binary": {
                                   "base64": "PDVJ2+UXnFsQy4JRisXOJW3cwMyX4PDanVoA6q7+hORZsMN8yK7ndpUqLMQNNFcpWAWFw+gtzCM=",
                                   "subType": "00"
                               }
                           },
-                          "timestamp_utc": {
+                          "signature_timestamp_utc": {
                               "$numberInt": "1576333246"
                           }
                       }

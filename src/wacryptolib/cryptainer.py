@@ -544,12 +544,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
                 payload_digest_algo = signature_conf["payload_digest_algo"]
 
                 signature_conf["payload_digest"] = payload_digests[payload_digest_algo]  # MUST exist, else incoherence
-                # FIXME ADD THIS NEW FIELD TO SCHEMA VALIDATOR!!!!
+                # FIXME ADD THIS NEW FIELD TO SCHEMA VALIDATOR!!!! already done??
 
-                payload_signature_value = self._generate_message_signature(
+                payload_signature_struct = self._generate_message_signature(
                     keychain_uid=keychain_uid,
                    cryptoconf=signature_conf)
-                signature_conf["payload_signature_value"] = payload_signature_value
+                signature_conf["payload_signature_struct"] = payload_signature_struct
 
                 _encountered_payload_digest_algos.add(payload_digest_algo)
             assert _encountered_payload_digest_algos == set(payload_digests)  # No abnormal extra digest
@@ -573,10 +573,10 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
 
         logger.debug("Signing hash of encrypted payload with algo %r", payload_signature_algo)
-        payload_signature_value = encryption_proxy.get_message_signature(
+        payload_signature_struct = encryption_proxy.get_message_signature(
             keychain_uid=keychain_uid_signature, message=payload_digest, payload_signature_algo=payload_signature_algo
         )
-        return payload_signature_value
+        return payload_signature_struct
 
 
 class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
@@ -821,10 +821,10 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         # FIXME payload_digest might be missing, itd' be OK too!
         payload_digest = hash_message(message, hash_algo=payload_digest_algo)
         assert payload_digest == cryptoconf["payload_digest"]  # Sanity check!!
-        payload_signature_value = cryptoconf["payload_signature_value"]
+        payload_signature_struct = cryptoconf["payload_signature_struct"]
 
         verify_message_signature(
-            message=payload_digest, payload_signature_algo=payload_signature_algo, signature=payload_signature_value, key=public_key
+            message=payload_digest, payload_signature_algo=payload_signature_algo, signature=payload_signature_struct, key=public_key
         )  # Raises if troubles
 
 
@@ -1410,8 +1410,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
 
     extra_cryptainer = {}
     extra_key_ciphertext = {}
-    message_authentication_codes = {}
-    metadata = {}
+    extra_message_authentication_codes = {}
 
     payload_signature = {
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
@@ -1432,15 +1431,15 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
             "key_ciphertext": micro_schema_binary
         }
         extra_signature = {
-            "payload_signature_value": {
-                "digest": micro_schema_binary,
-                "timestamp_utc": Or(micro_schema_int, micro_schema_long, int)}
+            "payload_signature_struct": {
+                "signature_value": micro_schema_binary,
+                "signature_timestamp_utc": Or(micro_schema_int, micro_schema_long, int)}
         }
         payload_signature.update(extra_signature)
         payload_signature["payload_digest"] = micro_schema_binary  # FIXME must be optional!!
-        message_authentication_codes = {
+        extra_message_authentication_codes = {
             "message_authentication_codes": {
-                Optionalkey("tag"): micro_schema_binary
+                Optionalkey("tag"): micro_schema_binary  # For now only "tag" is used
             }}
 
     SIMPLE_CRYPTAINER_PIECE = {
@@ -1465,7 +1464,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
         "payload_encryption_layers": [{
             "payload_encryption_algo": Or(*SUPPORTED_ENCRYPTION_ALGOS),
             "payload_signatures": [payload_signature],
-            **message_authentication_codes,
+            **extra_message_authentication_codes,
             **extra_key_ciphertext,
             "key_encryption_layers": [SIMPLE_CRYPTAINER_PIECE, SHARED_SECRET_CRYPTAINER_PIECE]
         }],

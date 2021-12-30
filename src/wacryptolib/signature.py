@@ -29,30 +29,31 @@ def sign_message(message: bytes, *, payload_signature_algo: str, key: KNOWN_KEY_
     if not isinstance(key, signature_conf["compatible_key_algo"]):
         raise ValueError("Incompatible key type %s for signature algorithm %s" % (type(key), payload_signature_algo))
     signature_function = signature_conf["signature_function"]
+    timestamp_utc = _get_utc_timestamp()
     try:
-        signature = signature_function(key=key, message=message)
+        signature = signature_function(key=key, message=message, timestamp_utc=timestamp_utc)
     except ValueError as exc:
         raise SignatureCreationError("Failed %s signature creation (%s)" % (payload_signature_algo, exc)) from exc
-    return signature
+    return {"signature_timestamp_utc": timestamp_utc, "signature_value": signature}
 
 
-def _sign_with_pss(message: bytes, key: RSA.RsaKey) -> dict:
+def _sign_with_pss(message: bytes, key: RSA.RsaKey, timestamp_utc: datetime) -> bytes:
     """Sign a bytes message with a private RSA key.
 
     :param message: the bytestring to sign
     :param private_key: the private key
+    :param timestamp_utc: the UTC timestamp of current time
 
-    :return: signature dict with keys "digest" (bytestring) and "timestamp_utc" (integer)"""
+    :return: signature as a bytestring"""
 
-    timestamp_utc = _get_utc_timestamp()
+
     hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=timestamp_utc)
     signer = pss.new(key)
-    digest = signer.sign(hash_payload)
-    signature = {"timestamp_utc": timestamp_utc, "digest": digest}
+    signature = signer.sign(hash_payload)
     return signature
 
 
-def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey]) -> dict:
+def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey], timestamp_utc: datetime) -> bytes:
     """Sign a bytes message with a private DSA or ECC key.
 
     We use the `fips-186-3` mode for the signer because signature is randomized,
@@ -60,14 +61,13 @@ def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey]) -> dict:
 
     :param message: the bytestring to sign
     :param private_key: the private key
+    :param timestamp_utc: the UTC timestamp of current time
 
-    :return: signature dict with keys "digest" (bytestring) and "timestamp_utc" (integer)"""
+    :return: signature as a bytestring"""
 
-    timestamp = _get_utc_timestamp()
-    hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=timestamp)
+    hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=timestamp_utc)
     signer = DSS.new(key, "fips-186-3")
-    digest = signer.sign(hash_payload)
-    signature = {"timestamp_utc": timestamp, "digest": digest}
+    signature = signer.sign(hash_payload)
     return signature
 
 
@@ -90,10 +90,10 @@ def verify_message_signature(*, message: bytes, payload_signature_algo: str, sig
     else:
         raise ValueError("Unknown signature algorithm %s" % payload_signature_algo)
 
-    hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=signature["timestamp_utc"])
+    hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=signature["signature_timestamp_utc"])
 
     try:
-        verifier.verify(hash_payload, signature["digest"])
+        verifier.verify(hash_payload, signature["signature_value"])
     except ValueError as exc:
         raise SignatureVerificationError("Failed %s signature verification (%s)" % (payload_signature_algo, exc)) from exc
 

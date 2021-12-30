@@ -101,8 +101,8 @@ class EscrowApi:
 
         private_key = load_asymmetric_key_from_pem_bytestring(key_pem=private_key_pem, key_algo=payload_signature_algo)
 
-        signature = sign_message(message=message, payload_signature_algo=payload_signature_algo, key=private_key)
-        return signature
+        signature_dict = sign_message(message=message, payload_signature_algo=payload_signature_algo, key=private_key)
+        return signature_dict
 
     def _check_keypair_authorization(self, *, keychain_uid: uuid.UUID, key_algo: str):
         """raises a proper exception if authorization is not given yet to decrypt with this keypair."""

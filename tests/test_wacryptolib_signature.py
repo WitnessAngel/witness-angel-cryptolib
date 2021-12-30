@@ -8,10 +8,10 @@ from wacryptolib.exceptions import SignatureVerificationError
 
 def _common_signature_checks(keypair, message, signature, payload_signature_algo):
 
-    assert isinstance(signature["digest"], bytes)
-    assert isinstance(signature["timestamp_utc"], int)
+    assert isinstance(signature["signature_value"], bytes)
+    assert isinstance(signature["signature_timestamp_utc"], int)
     utcnow = datetime.utcnow().timestamp()
-    assert utcnow - 10 <= signature["timestamp_utc"] <= utcnow
+    assert utcnow - 10 <= signature["signature_timestamp_utc"] <= utcnow
 
     wacryptolib.signature.verify_message_signature(
         key=keypair["public_key"], message=message, signature=signature, payload_signature_algo=payload_signature_algo
@@ -23,14 +23,14 @@ def _common_signature_checks(keypair, message, signature, payload_signature_algo
         )
 
     signature_corrupted = signature.copy()
-    signature_corrupted["digest"] += b"x"
+    signature_corrupted["signature_value"] += b"x"
     with pytest.raises(SignatureVerificationError, match="signature"):
         wacryptolib.signature.verify_message_signature(
             key=keypair["public_key"], message=message, signature=signature_corrupted, payload_signature_algo=payload_signature_algo
         )
 
     signature_corrupted = signature.copy()
-    signature_corrupted["timestamp_utc"] += 1
+    signature_corrupted["signature_timestamp_utc"] += 1
     with pytest.raises(SignatureVerificationError, match="signature"):
         wacryptolib.signature.verify_message_signature(
             key=keypair["public_key"], message=message, signature=signature_corrupted, payload_signature_algo=payload_signature_algo

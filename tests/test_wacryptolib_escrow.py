@@ -77,7 +77,7 @@ def test_escrow_api_workflow():
     public_key_dsa = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_dsa_pem, key_algo="DSA_DSS")
 
     verify_message_signature(message=secret, signature=signature, key=public_key_dsa, payload_signature_algo="DSA_DSS")
-    signature["digest"] += b"xyz"
+    signature["signature_value"] += b"xyz"
     with pytest.raises(SignatureVerificationError, match="Failed.*verification"):
         verify_message_signature(message=secret, signature=signature, key=public_key_dsa, payload_signature_algo="DSA_DSS")
 

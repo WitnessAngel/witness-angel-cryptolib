@@ -39,7 +39,7 @@ from wacryptolib.cryptainer import (
     CONF_SCHEMA_JSON, CRYPTAINER_SCHEMA_PYTHON, CRYPTAINER_SCHEMA_JSON, check_conf_sanity, check_cryptainer_sanity,
     CRYPTAINER_TEMP_SUFFIX,
 )
-from wacryptolib.cipher import SUPPORTED_ENCRYPTION_ALGOS, AUTHENTICATED_ENCRYPTION_ALGOS
+from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS, AUTHENTICATED_CIPHER_ALGOS
 from wacryptolib.trustee import (
     TrusteeApi,
     generate_keypair_for_storage,
@@ -68,7 +68,7 @@ VOID_CRYPTOCONF_REGARDING_PAYLOAD_ENCRYPTION_LAYERS = dict(payload_encryption_la
 VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_LAYERS = dict(  # Forbidden
     payload_encryption_layers=[
         dict(
-            payload_encryption_algo="AES_CBC",
+            payload_cipher_algo="AES_CBC",
             key_encryption_layers=[],
             payload_signatures=[
                 dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
@@ -80,8 +80,8 @@ VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_LAYERS = dict(  # Forbidden
 SIGNATURELESS_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
-            payload_encryption_algo="AES_EAX",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
+            payload_cipher_algo="AES_EAX",
+            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
             payload_signatures=[],
         )
     ]
@@ -101,8 +101,8 @@ SIGNATURELESS_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
 SIMPLE_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
-            payload_encryption_algo="AES_CBC",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
+            payload_cipher_algo="AES_CBC",
+            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
             payload_signatures=[
                 dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
             ],
@@ -128,24 +128,24 @@ SIMPLE_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
 COMPLEX_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
-            payload_encryption_algo="AES_EAX",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
+            payload_cipher_algo="AES_EAX",
+            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
             payload_signatures=[],
         ),
         dict(
-            payload_encryption_algo="AES_CBC",
+            payload_cipher_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID1)
+                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID1)
             ],
             payload_signatures=[
                 dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
             ],
         ),
         dict(
-            payload_encryption_algo="CHACHA20_POLY1305",
+            payload_cipher_algo="CHACHA20_POLY1305",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
-                dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
             ],
             payload_signatures=[
                 dict(payload_digest_algo="SHA3_256", payload_signature_algo="RSA_PSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER),
@@ -185,23 +185,23 @@ COMPLEX_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
 SIMPLE_SHAMIR_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
-            payload_encryption_algo="AES_CBC",
+            payload_cipher_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
                 dict(
-                    key_encryption_algo=SHARED_SECRET_MARKER,
+                    key_cipher_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=3,
                     key_shared_secret_shards=[
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID1)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID1)],),
                     ],
                 ),
             ],
@@ -234,33 +234,33 @@ def SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
 COMPLEX_SHAMIR_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
-            payload_encryption_algo="AES_EAX",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
+            payload_cipher_algo="AES_EAX",
+            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
             payload_signatures=[],
         ),
         dict(
-            payload_encryption_algo="AES_CBC",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
+            payload_cipher_algo="AES_CBC",
+            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
             payload_signatures=[
                 dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
             ],
         ),
         dict(
-            payload_encryption_algo="CHACHA20_POLY1305",
+            payload_cipher_algo="CHACHA20_POLY1305",
             key_encryption_layers=[
                 dict(
-                    key_encryption_algo=SHARED_SECRET_MARKER,
+                    key_cipher_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=2,
                     key_shared_secret_shards=[
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID2)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID2)],),
                     ],
                 )
             ],
@@ -405,7 +405,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
         keypair_statuses = authorization_results["keypair_statuses"]
         assert keypair_statuses["accepted"]
         for keypair_identifiers in keypair_statuses["accepted"]:
-            assert keypair_identifiers["key_algo"] in SUPPORTED_ENCRYPTION_ALGOS
+            assert keypair_identifiers["key_algo"] in SUPPORTED_CIPHER_ALGOS
             assert isinstance(keypair_identifiers["keychain_uid"], UUID)
         assert not keypair_statuses["authorization_missing"]
         assert not keypair_statuses["missing_passphrase"]
@@ -459,7 +459,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
     # Delete 1, 2 and too many share(s) from cipherdict key
     for payload_encryption in cryptainer["payload_encryption_layers"]:
         for key_encryption in payload_encryption["key_encryption_layers"]:
-            if key_encryption["key_encryption_algo"] == SHARED_SECRET_MARKER:
+            if key_encryption["key_cipher_algo"] == SHARED_SECRET_MARKER:
                 payload_encryption_shamir = payload_encryption
 
     key_ciphertext_shards = load_from_json_bytes(payload_encryption_shamir["key_ciphertext"])
@@ -504,19 +504,19 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
 RECURSIVE_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
-            payload_encryption_algo="AES_CBC",
+            payload_cipher_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
                 dict(
-                    key_encryption_algo=SHARED_SECRET_MARKER,
+                    key_cipher_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_shards=[
                         dict(
                              key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(
                              key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)]),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)]),
                     ],  # Beware, same trustee for the 2 shards, for now
                 ),
             ],
@@ -543,9 +543,9 @@ def test_recursive_shamir_secrets_and_layers():
 
 
 def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
-    payload_encryption_algo = random.choice(AUTHENTICATED_ENCRYPTION_ALGOS)
+    payload_cipher_algo = random.choice(AUTHENTICATED_CIPHER_ALGOS)
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
-    cryptoconf["payload_encryption_layers"][0]["payload_encryption_algo"] = payload_encryption_algo
+    cryptoconf["payload_encryption_layers"][0]["payload_cipher_algo"] = payload_cipher_algo
 
     cryptainer = encrypt_payload_into_cryptainer(
         payload=b"1234", cryptoconf=cryptoconf, metadata=None
@@ -613,19 +613,19 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     cryptoconf = dict(
         payload_encryption_layers=[
             dict(
-                payload_encryption_algo="AES_CBC",
+                payload_cipher_algo="AES_CBC",
                 key_encryption_layers=[
-                    dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                    dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
                     dict(
-                        key_encryption_algo=SHARED_SECRET_MARKER,
+                        key_cipher_algo=SHARED_SECRET_MARKER,
                         key_shared_secret_threshold=2,
                         key_shared_secret_shards=[
                             dict(key_encryption_layers=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=shard_trustee1, keychain_uid=keychain_uid_trustee)],),
+                                     dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=shard_trustee1, keychain_uid=keychain_uid_trustee)],),
                             dict(key_encryption_layers=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=shard_trustee2)],),
+                                     dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=shard_trustee2)],),
                             dict(key_encryption_layers=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=shard_trustee3)],),
+                                     dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=shard_trustee3)],),
                         ],
                     ),
                 ],
@@ -1309,9 +1309,9 @@ def test_generate_cryptainer_and_symmetric_keys():
         del payload_encryption_layer["symkey"]
 
     assert extracts == [
-        {'encryption_algo': 'AES_EAX', 'payload_digest_algos': []},
-        {'encryption_algo': 'AES_CBC', 'payload_digest_algos': ['SHA3_512']},
-        {'encryption_algo': 'CHACHA20_POLY1305', 'payload_digest_algos': ['SHA3_256', 'SHA512']}
+        {'cipher_algo': 'AES_EAX', 'payload_digest_algos': []},
+        {'cipher_algo': 'AES_CBC', 'payload_digest_algos': ['SHA3_512']},
+        {'cipher_algo': 'CHACHA20_POLY1305', 'payload_digest_algos': ['SHA3_256', 'SHA512']}
     ]
 
 
@@ -1384,9 +1384,9 @@ def _generate_corrupted_confs(cryptoconf):
     del corrupted_conf2["payload_encryption_layers"][0]["key_encryption_layers"]
     corrupted_confs.append(corrupted_conf2)
 
-    # Update payload_encryption_algo with a value algo that does not exist
+    # Update payload_cipher_algo with a value algo that does not exist
     corrupted_conf3 = copy.deepcopy(cryptoconf)
-    corrupted_conf3["payload_encryption_layers"][0]["payload_encryption_algo"] = "AES_AES"
+    corrupted_conf3["payload_encryption_layers"][0]["payload_cipher_algo"] = "AES_AES"
     corrupted_confs.append(corrupted_conf3)
 
     # Update a "key_encryption_layers" with a string instead of list

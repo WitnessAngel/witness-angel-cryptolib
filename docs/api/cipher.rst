@@ -7,11 +7,11 @@ This module allows to encrypt bytestring data, then decrypt it.
 Public API
 --------------
 
-.. autodata:: wacryptolib.cipher.SUPPORTED_ENCRYPTION_ALGOS
+.. autodata:: wacryptolib.cipher.SUPPORTED_CIPHER_ALGOS
 
-.. autodata:: wacryptolib.cipher.AUTHENTICATED_ENCRYPTION_ALGOS
+.. autodata:: wacryptolib.cipher.AUTHENTICATED_CIPHER_ALGOS
 
-.. autodata:: wacryptolib.cipher.STREAMABLE_ENCRYPTION_ALGOS
+.. autodata:: wacryptolib.cipher.STREAMABLE_CIPHER_ALGOS
 
 .. autofunction:: wacryptolib.cipher.encrypt_bytestring
 

@@ -26,10 +26,10 @@ A minimal cryptainer configuration in python, with a single encryption layer and
     CONFIG = dict(
         payload_encryption_layers=[
             dict(
-                payload_encryption_algo="AES_CBC",
+                payload_cipher_algo="AES_CBC",
                 key_encryption_layers=[
                     dict(
-                        key_encryption_algo="RSA_OAEP",
+                        key_cipher_algo="RSA_OAEP",
                         key_encryption_trustee=LOCAL_TRUSTEE_MARKER,
                     )
                 ],
@@ -64,7 +64,7 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
       },
       "payload_encryption_layers": [
           {
-              "payload_encryption_algo": "AES_CBC",
+              "payload_cipher_algo": "AES_CBC",
               "payload_signatures": [
                   {
                       "payload_digest_algo": "SHA256",
@@ -91,7 +91,7 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
               },
               "key_encryption_layers": [
                   {
-                      "key_encryption_algo": "RSA_OAEP",
+                      "key_cipher_algo": "RSA_OAEP",
                       "key_encryption_trustee": "_local_"
                   }
               ]
@@ -130,7 +130,7 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
         {
             signatures: <optional list of Signature objects for the parent ciphertext at this layer of encryption>,
 
-            encryption_algorithm: <encryption type label>,
+            cipher_algorithm: <encryption type label>,
 
             key_uid: <optional uuid of this specific encryption layer>,
 

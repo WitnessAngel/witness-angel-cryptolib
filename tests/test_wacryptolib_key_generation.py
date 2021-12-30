@@ -3,7 +3,7 @@ import unicodedata
 from Crypto.PublicKey import RSA, ECC, DSA
 
 import wacryptolib
-from wacryptolib.cipher import SUPPORTED_ENCRYPTION_ALGOS
+from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
 from wacryptolib.exceptions import KeyLoadingError
 from wacryptolib.keygen import (
     load_asymmetric_key_from_pem_bytestring,
@@ -40,9 +40,9 @@ def test_keypair_unicity(key_algo):
         wacryptolib.keygen.__original_do_generate_keypair_patcher.start()
 
 
-@pytest.mark.parametrize("encryption_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
-def test_symmetric_keygen(encryption_algo):
-    key_dict = wacryptolib.keygen.generate_symkey(encryption_algo=encryption_algo)
+@pytest.mark.parametrize("cipher_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
+def test_symmetric_keygen(cipher_algo):
+    key_dict = wacryptolib.keygen.generate_symkey(cipher_algo=cipher_algo)
     main_key = key_dict["key"]
     assert isinstance(main_key, bytes)
     assert len(main_key) == 32  # Always max size
@@ -50,7 +50,7 @@ def test_symmetric_keygen(encryption_algo):
 
 def test_generic_symmetric_keygen_errors():
     with pytest.raises(ValueError, match="Unknown symmetric key algorithm"):
-        wacryptolib.keygen.generate_symkey(encryption_algo="AXSX")
+        wacryptolib.keygen.generate_symkey(cipher_algo="AXSX")
 
 
 def test_generic_keypair_generation_errors():
@@ -159,11 +159,11 @@ def test_generate_and_load_passphrase_protected_asymmetric_key():
 def test_key_algos_mapping_and_isolation():
 
     # We separate keys for encryption and signature (especially for RSA)!
-    assert not set(SUPPORTED_ENCRYPTION_ALGOS) & set(SUPPORTED_SIGNATURE_ALGOS)
+    assert not set(SUPPORTED_CIPHER_ALGOS) & set(SUPPORTED_SIGNATURE_ALGOS)
 
     # All these signature algos use asymmetric keys
     assert set(SUPPORTED_SIGNATURE_ALGOS) <= set(SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 
     # Some encryption algos are symmetric, and use simple keys of random bytes
-    asymmetric_key_algos = set(SUPPORTED_ENCRYPTION_ALGOS) - set(SUPPORTED_SYMMETRIC_KEY_ALGOS)
+    asymmetric_key_algos = set(SUPPORTED_CIPHER_ALGOS) - set(SUPPORTED_SYMMETRIC_KEY_ALGOS)
     assert asymmetric_key_algos <= set(SUPPORTED_ASYMMETRIC_KEY_ALGOS)

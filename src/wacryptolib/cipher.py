@@ -23,53 +23,53 @@ RSA_OAEP_CHUNKS_SIZE = 60
 RSA_OAEP_HASHER = Crypto.Hash.SHA512
 
 
-def _get_encryption_algo_conf(encryption_algo):
-    encryption_algo = encryption_algo.upper()
-    if encryption_algo not in ENCRYPTION_ALGOS_REGISTRY:
-        raise ValueError("Unknown cipher type '%s'" % encryption_algo)
+def _get_cipher_algo_conf(cipher_algo):
+    cipher_algo = cipher_algo.upper()
+    if cipher_algo not in CIPHER_ALGOS_REGISTRY:
+        raise ValueError("Unknown cipher type '%s'" % cipher_algo)
 
-    encryption_algo_conf = ENCRYPTION_ALGOS_REGISTRY[encryption_algo]
-    return encryption_algo_conf
+    cipher_algo_conf = CIPHER_ALGOS_REGISTRY[cipher_algo]
+    return cipher_algo_conf
 
 
-def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key_dict: dict) -> dict:
+def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) -> dict:
     """Encrypt a bytestring with the selected algorithm for the given payload,
     using the provided key dict (which must contain keys/initializers of proper types and lengths).
 
     :return: dictionary with encryption data"""
     assert isinstance(plaintext, bytes), repr(plaintext)
-    encryption_algo_conf = _get_encryption_algo_conf(encryption_algo=encryption_algo)
-    encryption_function = encryption_algo_conf["encryption_function"]
+    cipher_algo_conf = _get_cipher_algo_conf(cipher_algo=cipher_algo)
+    encryption_function = cipher_algo_conf["encryption_function"]
     #### _check_symmetric_key_length_bytes(len(main_key))
     try:
         cipherdict = encryption_function(key_dict=key_dict, plaintext=plaintext)
     except ValueError as exc:
-        raise EncryptionError("Failed %s encryption (%s)" % (encryption_algo, exc)) from exc
+        raise EncryptionError("Failed %s encryption (%s)" % (cipher_algo, exc)) from exc
     return cipherdict
 
 
 def decrypt_bytestring(
-        cipherdict: dict, *, encryption_algo: str, key_dict: dict, verify: bool=True
-) -> bytes:  # Fixme rename encryption_algo to decryption_algo? Or normalize?
+        cipherdict: dict, *, cipher_algo: str, key_dict: dict, verify: bool=True
+) -> bytes:  # Fixme rename cipher_algo to decryption_algo? Or normalize?
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
     :param cipherdict: dict with field "ciphertext" as bytestring and (depending
-        on the encryption_algo) some other fields like "tag" or "nonce"
+        on the cipher_algo) some other fields like "tag" or "nonce"
         as bytestrings
-    :param encryption_algo: one of the supported encryption algorithms
+    :param cipher_algo: one of the supported encryption algorithms
     :param key_dict: dict with secret key fields
     :param verify: whether to check MAC tags of the ciphertext
 
     :return: dictionary with encryption data."""
-    encryption_algo_conf = _get_encryption_algo_conf(encryption_algo)
-    decryption_function = encryption_algo_conf["decryption_function"]
+    cipher_algo_conf = _get_cipher_algo_conf(cipher_algo)
+    decryption_function = cipher_algo_conf["decryption_function"]
     try:
         plaintext = decryption_function(key_dict=key_dict, cipherdict=cipherdict, verify=verify)
     except ValueError as exc:
         if "MAC check failed" in str(exc):  # Hackish check for pycryptodome
-            raise DecryptionIntegrityError("Failed %s decryption authentication (%s)" % (encryption_algo, exc)) from exc
-        raise DecryptionError("Failed %s decryption (%s)" % (encryption_algo, exc)) from exc
+            raise DecryptionIntegrityError("Failed %s decryption authentication (%s)" % (cipher_algo, exc)) from exc
+        raise DecryptionError("Failed %s decryption (%s)" % (cipher_algo, exc)) from exc
     return plaintext
 
 
@@ -368,16 +368,16 @@ class StreamManager:  # FIXME RENAME THIS
         self._cipher_streams = []
 
         for payload_encryption_layer_extract in payload_encryption_layer_extracts:
-            payload_encryption_algo = payload_encryption_layer_extract["encryption_algo"]  # FIXME RENAME THIS
+            payload_cipher_algo = payload_encryption_layer_extract["cipher_algo"]  # FIXME RENAME THIS
             symkey = payload_encryption_layer_extract["symkey"]
             payload_digest_algos = payload_encryption_layer_extract["payload_digest_algos"]
 
-            encryption_algo_conf = _get_encryption_algo_conf(encryption_algo=payload_encryption_algo)
-            encryption_class = encryption_algo_conf["encryption_node_class"]
+            cipher_algo_conf = _get_cipher_algo_conf(cipher_algo=payload_cipher_algo)
+            encryption_class = cipher_algo_conf["encryption_node_class"]
 
             if encryption_class is None:
                 raise ValueError(
-                    "Node class %s is not implemented" % payload_encryption_algo)  # FIXME use custom exception class
+                    "Node class %s is not implemented" % payload_cipher_algo)  # FIXME use custom exception class
 
             self._cipher_streams.append(
                 encryption_class(key_dict=symkey, payload_digest_algo=payload_digest_algos))
@@ -407,7 +407,7 @@ class StreamManager:  # FIXME RENAME THIS
         return integrity_tags_list
 
 
-ENCRYPTION_ALGOS_REGISTRY = dict(
+CIPHER_ALGOS_REGISTRY = dict(
     ## SYMMETRIC ENCRYPTION ##
     # ALL encryption/decryption routines must handle a "ciphertext" attribute on their cipherdict
     AES_CBC={"encryption_function": _encrypt_via_aes_cbc, "decryption_function": _decrypt_via_aes_cbc,
@@ -425,12 +425,12 @@ ENCRYPTION_ALGOS_REGISTRY = dict(
               "encryption_node_class": None, "is_authenticated": False},
 )
 
-#: These values can be used as 'encryption_algo'.
-SUPPORTED_ENCRYPTION_ALGOS = sorted(ENCRYPTION_ALGOS_REGISTRY.keys())
-assert set(SUPPORTED_SYMMETRIC_KEY_ALGOS) <= set(SUPPORTED_ENCRYPTION_ALGOS)
+#: These values can be used as 'cipher_algo'.
+SUPPORTED_CIPHER_ALGOS = sorted(CIPHER_ALGOS_REGISTRY.keys())
+assert set(SUPPORTED_SYMMETRIC_KEY_ALGOS) <= set(SUPPORTED_CIPHER_ALGOS)
 
-AUTHENTICATED_ENCRYPTION_ALGOS = sorted(k for (k, v) in ENCRYPTION_ALGOS_REGISTRY.items() if v["is_authenticated"])
-assert set(AUTHENTICATED_ENCRYPTION_ALGOS) <= set(SUPPORTED_ENCRYPTION_ALGOS)
+AUTHENTICATED_CIPHER_ALGOS = sorted(k for (k, v) in CIPHER_ALGOS_REGISTRY.items() if v["is_authenticated"])
+assert set(AUTHENTICATED_CIPHER_ALGOS) <= set(SUPPORTED_CIPHER_ALGOS)
 
-STREAMABLE_ENCRYPTION_ALGOS = sorted(k for (k, v) in ENCRYPTION_ALGOS_REGISTRY.items() if v["encryption_node_class"])
-assert set(STREAMABLE_ENCRYPTION_ALGOS) < set(SUPPORTED_ENCRYPTION_ALGOS)
+STREAMABLE_CIPHER_ALGOS = sorted(k for (k, v) in CIPHER_ALGOS_REGISTRY.items() if v["encryption_node_class"])
+assert set(STREAMABLE_CIPHER_ALGOS) < set(SUPPORTED_CIPHER_ALGOS)

@@ -16,17 +16,17 @@ def encode_passphrase(passphrase: str):  # FIXME move to generic utilities??
     return unicodedata.normalize("NFKC", passphrase.strip()).encode("utf8")
 
 
-def generate_symkey(encryption_algo: str) -> dict:
+def generate_symkey(cipher_algo: str) -> dict:
     """
     Generate the strongest dict of keys/initializers possible for the wanted symmetric cipher,
     as a dict.
     """
 
-    encryption_algo = encryption_algo.upper()
-    if encryption_algo not in SUPPORTED_SYMMETRIC_KEY_ALGOS:
-        raise ValueError("Unknown symmetric key algorithm '%s'" % encryption_algo)
+    cipher_algo = cipher_algo.upper()
+    if cipher_algo not in SUPPORTED_SYMMETRIC_KEY_ALGOS:
+        raise ValueError("Unknown symmetric key algorithm '%s'" % cipher_algo)
 
-    descriptors = SYMMETRIC_KEY_ALGOS_REGISTRY[encryption_algo]
+    descriptors = SYMMETRIC_KEY_ALGOS_REGISTRY[cipher_algo]
     generation_function = descriptors["generation_function"]
 
     key_dict = generation_function()
@@ -243,5 +243,5 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
 #: These values can be used as 'key_algo' for asymmetric key generation.
 SUPPORTED_ASYMMETRIC_KEY_ALGOS = sorted(ASYMMETRIC_KEY_ALGOS_REGISTRY.keys())
 
-#: These values can be used as 'encryption_algo' for symmetric key generation.
+#: These values can be used as 'cipher_algo' for symmetric key generation.
 SUPPORTED_SYMMETRIC_KEY_ALGOS = sorted(SYMMETRIC_KEY_ALGOS_REGISTRY.keys())  # FIXME rename for coherence

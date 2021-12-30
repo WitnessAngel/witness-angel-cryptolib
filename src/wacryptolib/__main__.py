@@ -33,17 +33,17 @@ def _get_keystore_pool(ctx):
 EXAMPLE_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
-            payload_encryption_algo="AES_CBC",
+            payload_cipher_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
                 dict(
-                    key_encryption_algo=SHARED_SECRET_MARKER,
+                    key_cipher_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_shards=[
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)]),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)]),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)]),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)]),
                     ],  # Beware, same trustee for the 2 shards, for now
                 ),
             ],

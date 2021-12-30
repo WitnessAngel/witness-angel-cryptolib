@@ -13,20 +13,20 @@ from wacryptolib.sensor import TarfileRecordsAggregator
 ENCRYPTION_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
-            payload_encryption_algo="AES_EAX",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
+            payload_cipher_algo="AES_EAX",
+            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
             payload_signatures=[],
         ),
         dict(
-            payload_encryption_algo="CHACHA20_POLY1305",
+            payload_cipher_algo="CHACHA20_POLY1305",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
             ],
             payload_signatures=[],
         ),
         dict(
-            payload_encryption_algo="AES_CBC",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
+            payload_cipher_algo="AES_CBC",
+            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
             payload_signatures=[],
         ),
     ]

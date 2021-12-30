@@ -20,8 +20,8 @@ import jsonschema
 from schema import And, Or, Regex, Const, Schema
 from schema import Optional as Optionalkey
 
-from wacryptolib.cipher import encrypt_bytestring, decrypt_bytestring, StreamManager, STREAMABLE_ENCRYPTION_ALGOS, \
-    SUPPORTED_ENCRYPTION_ALGOS
+from wacryptolib.cipher import encrypt_bytestring, decrypt_bytestring, StreamManager, STREAMABLE_CIPHER_ALGOS, \
+    SUPPORTED_CIPHER_ALGOS
 from wacryptolib.trustee import TrusteeApi as LocalTrusteeApi, ReadonlyTrusteeApi, TrusteeApi
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -98,7 +98,7 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
 
     def _grab_key_encryption_layers_dependencies(key_encryption_layers):
         for key_encryption_layer in key_encryption_layers:
-            key_algo_encryption = key_encryption_layer["key_encryption_algo"]
+            key_algo_encryption = key_encryption_layer["key_cipher_algo"]
 
             if key_algo_encryption == SHARED_SECRET_MARKER:
                 trustees = key_encryption_layer["key_shared_secret_shards"]
@@ -231,7 +231,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         class FakeStreamEncryptor:
             def __init__(self):
                 for payload_encryption_layer_extract in payload_encryption_layer_extracts:
-                    payload_encryption_algo = payload_encryption_layer_extract["encryption_algo"]  # FIXME RENAME THIS
+                    payload_cipher_algo = payload_encryption_layer_extract["cipher_algo"]  # FIXME RENAME THIS
                     symkey = payload_encryption_layer_extract["symkey"]
                     payload_digest_algos = payload_encryption_layer_extract["payload_digest_algos"]
                     # DO SOMETHING WITH THESE
@@ -304,13 +304,13 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         payload_integrity_tags = []
 
         for payload_encryption_layer_extract in payload_encryption_layer_extracts:
-            payload_encryption_algo = payload_encryption_layer_extract["encryption_algo"]  # FIXME RENAME THIS
+            payload_cipher_algo = payload_encryption_layer_extract["cipher_algo"]  # FIXME RENAME THIS
             symkey = payload_encryption_layer_extract["symkey"]
             payload_digest_algos = payload_encryption_layer_extract["payload_digest_algos"]
 
-            logger.debug("Encrypting payload with symmetric key of type %r", payload_encryption_algo)
+            logger.debug("Encrypting payload with symmetric key of type %r", payload_cipher_algo)
             payload_cipherdict = encrypt_bytestring(
-                plaintext=payload_current, encryption_algo=payload_encryption_algo, key_dict=symkey
+                plaintext=payload_current, cipher_algo=payload_cipher_algo, key_dict=symkey
             )
             assert isinstance(payload_cipherdict, dict), payload_cipherdict  # Might contain integrity/authentication payload
 
@@ -340,7 +340,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         :param keychain_uid: uuid for the set of encryption keys used
         :param metadata: additional payload to store unencrypted in cryptainer
 
-        :return: a (cryptainer: dict, secrets: list) tuple, where each secret has keys encryption_algo, symmetric_key and payload_digest_algos.
+        :return: a (cryptainer: dict, secrets: list) tuple, where each secret has keys cipher_algo, symmetric_key and payload_digest_algos.
         """
 
         assert metadata is None or isinstance(metadata, dict), metadata
@@ -357,12 +357,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         payload_encryption_layer_extracts = []  # Sensitive info with secret keys!
 
         for payload_encryption_layer in cryptainer["payload_encryption_layers"]:
-            payload_encryption_algo = payload_encryption_layer["payload_encryption_algo"]
+            payload_cipher_algo = payload_encryption_layer["payload_cipher_algo"]
 
             payload_encryption_layer["message_authentication_codes"] = None  # Will be filled later with MAC tags etc.
 
-            logger.debug("Generating symmetric key of type %r", payload_encryption_algo)
-            symkey = generate_symkey(encryption_algo=payload_encryption_algo)
+            logger.debug("Generating symmetric key of type %r", payload_cipher_algo)
+            symkey = generate_symkey(cipher_algo=payload_cipher_algo)
             key_bytes = dump_to_json_bytes(symkey)
             key_encryption_layers = payload_encryption_layer["key_encryption_layers"]
 
@@ -373,7 +373,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             payload_encryption_layer["key_ciphertext"] = key_ciphertext
 
             payload_encryption_layer_extract = dict(
-                encryption_algo=payload_encryption_algo,
+                cipher_algo=payload_cipher_algo,
                 symkey=symkey,
                 payload_digest_algos=[signature["payload_digest_algo"] for signature in
                                       payload_encryption_layer["payload_signatures"]]
@@ -424,9 +424,9 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         algorithm has been used, a dictionary with all the information needed to decipher the symmetric key is returned.
         """
         assert isinstance(key_bytes, bytes), key_bytes
-        key_encryption_algo = key_encryption_layer["key_encryption_algo"]
+        key_cipher_algo = key_encryption_layer["key_cipher_algo"]
 
-        if key_encryption_algo == SHARED_SECRET_MARKER:
+        if key_cipher_algo == SHARED_SECRET_MARKER:
 
             key_shared_secret_shards = key_encryption_layer["key_shared_secret_shards"]
             shares_count = len(key_shared_secret_shards)
@@ -460,7 +460,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
             keychain_uid_encryption = key_encryption_layer.get("keychain_uid") or keychain_uid
             key_cipherdict = self._encrypt_with_asymmetric_cipher(
-                encryption_algo=key_encryption_algo,
+                cipher_algo=key_cipher_algo,
                 keychain_uid=keychain_uid_encryption,
                 key_bytes=key_bytes,
                 trustee=key_encryption_layer["key_encryption_trustee"],
@@ -468,12 +468,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             return key_cipherdict
 
     def _encrypt_with_asymmetric_cipher(
-        self, encryption_algo: str, keychain_uid: uuid.UUID, key_bytes: bytes, trustee
+        self, cipher_algo: str, keychain_uid: uuid.UUID, key_bytes: bytes, trustee
     ) -> dict:
         """
         Encrypt given payload with an asymmetric algorithm.
 
-        :param encryption_algo: string with name of algorithm to use
+        :param cipher_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
         :param key_bytes: symmetric key as bytes to encrypt
         :param trustee: trustee used for encryption (findable in configuration tree)
@@ -482,13 +482,13 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         """
         encryption_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
 
-        logger.debug("Generating asymmetric key of type %r", encryption_algo)
-        public_key_pem = encryption_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=encryption_algo)
+        logger.debug("Generating asymmetric key of type %r", cipher_algo)
+        public_key_pem = encryption_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=cipher_algo)
 
-        logger.debug("Encrypting symmetric key with asymmetric key of type %r", encryption_algo)
-        public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=encryption_algo)
+        logger.debug("Encrypting symmetric key with asymmetric key of type %r", cipher_algo)
+        public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=cipher_algo)
 
-        cipherdict = encrypt_bytestring(plaintext=key_bytes, encryption_algo=encryption_algo, key_dict=dict(key=public_key))
+        cipherdict = encrypt_bytestring(plaintext=key_bytes, cipher_algo=cipher_algo, key_dict=dict(key=public_key))
         return cipherdict
 
     def ____obsolete_____encrypt_shards(self, shards: Sequence, key_shared_secret_shards: Sequence, keychain_uid: uuid.UUID) -> list:
@@ -510,12 +510,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             assert isinstance(shard[1], bytes), repr(shard)
 
             conf_shard = key_shared_secret_shards[shard_idx]
-            shard_encryption_algo = conf_shard["shard_encryption_algo"]
+            shard_cipher_algo = conf_shard["shard_cipher_algo"]
             shard_trustee = conf_shard["shard_trustee"]
             keychain_uid_shard = conf_shard.get("keychain_uid") or keychain_uid
 
             shard_cipherdict = self._encrypt_with_asymmetric_cipher(
-                encryption_algo=shard_encryption_algo,
+                cipher_algo=shard_cipher_algo,
                 keychain_uid=keychain_uid_shard,
                 key_bytes=shard[1],
                 trustee=shard_trustee,
@@ -613,7 +613,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
         for payload_encryption_layer in reversed(cryptainer["payload_encryption_layers"]):  # Non-emptiness of this will be checked by validator
 
-            payload_encryption_algo = payload_encryption_layer["payload_encryption_algo"]
+            payload_cipher_algo = payload_encryption_layer["payload_cipher_algo"]
 
             for signature_conf in payload_encryption_layer["payload_signatures"]:
                 self._verify_message_signature(keychain_uid=keychain_uid, message=payload_current, cryptoconf=signature_conf)
@@ -631,7 +631,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
             message_authentication_codes = payload_encryption_layer["message_authentication_codes"]  # Shall be a DICT, FIXME handle if it's still None
             payload_cipherdict = dict(ciphertext=payload_current, **message_authentication_codes)
             payload_current = decrypt_bytestring(
-                cipherdict=payload_cipherdict, key_dict=symkey, encryption_algo=payload_encryption_algo, verify=verify
+                cipherdict=payload_cipherdict, key_dict=symkey, cipher_algo=payload_cipher_algo, verify=verify
             )
 
         data = payload_current  # Now decrypted
@@ -662,9 +662,9 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         :return: deciphered symmetric key
         """
         assert isinstance(key_cipherdict, dict), key_cipherdict
-        key_encryption_algo = encryption_layer["key_encryption_algo"]
+        key_cipher_algo = encryption_layer["key_cipher_algo"]
 
-        if key_encryption_algo == SHARED_SECRET_MARKER:
+        if key_cipher_algo == SHARED_SECRET_MARKER:
 
             decrypted_shards = []
             decryption_errors = []
@@ -711,7 +711,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
             keychain_uid_encryption = (encryption_layer.get("keychain_uid") or keychain_uid)
 
             key_bytes = self._decrypt_with_asymmetric_cipher(
-                encryption_algo=key_encryption_algo,
+                cipher_algo=key_cipher_algo,
                 keychain_uid=keychain_uid_encryption,
                 cipherdict=key_cipherdict,
                 trustee=encryption_layer["key_encryption_trustee"],
@@ -719,12 +719,12 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
             return key_bytes
 
     def _decrypt_with_asymmetric_cipher(
-            self, encryption_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, trustee: dict
+            self, cipher_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, trustee: dict
     ) -> bytes:
         """
         Decrypt given cipherdict with an asymmetric algorithm.
 
-        :param encryption_algo: string with name of algorithm to use
+        :param cipher_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
         :param cipherdict: dictionary with payload components needed to decrypt the ciphered payload
         :param trustee: trustee used for encryption (findable in configuration tree)
@@ -741,7 +741,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
         # We expect decryption authorization requests to have already been done properly
         symmetric_key_plaintext = encryption_proxy.decrypt_with_private_key(
-            keychain_uid=keychain_uid, encryption_algo=encryption_algo, cipherdict=cipherdict, passphrases=passphrases
+            keychain_uid=keychain_uid, cipher_algo=cipher_algo, cipherdict=cipherdict, passphrases=passphrases
         )
         return symmetric_key_plaintext
 
@@ -750,7 +750,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         Make a loop through all encrypted shards to decrypt each of them
         :param keychain_uid: uuid for the set of encryption keys used
         :param symmetric_key_cipherdict: dictionary which contains every payload needed to decipher each shard
-        :param cryptoconf: configuration tree inside key_encryption_algo
+        :param cryptoconf: configuration tree inside key_cipher_algo
 
         :return: list of tuples of deciphered shards
         """
@@ -766,7 +766,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
         for shard_idx, shard_conf in enumerate(key_shared_secret_shards):
 
-            shard_encryption_algo = shard_conf["shard_encryption_algo"]
+            shard_cipher_algo = shard_conf["shard_cipher_algo"]
             shard_trustee = shard_conf["shard_trustee"]
             keychain_uid_shard = shard_conf.get("keychain_uid") or keychain_uid
 
@@ -777,7 +777,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
                     raise ValueError("Missing shard at index %s" % shard_idx) from None
 
                 shard_plaintext = self._decrypt_with_asymmetric_cipher(
-                    encryption_algo=shard_encryption_algo,
+                    cipher_algo=shard_cipher_algo,
                     keychain_uid=keychain_uid_shard,
                     cipherdict=encrypted_shard[1],
                     trustee=shard_trustee,
@@ -886,7 +886,7 @@ class CryptainerEncryptionStream:
 def is_cryptainer_cryptoconf_streamable(cryptoconf):  #FIXME rename and add to docs
     # FIXME test separately!
     for payload_encryption_layer in cryptoconf["payload_encryption_layers"]:
-        if payload_encryption_layer["payload_encryption_algo"] not in STREAMABLE_ENCRYPTION_ALGOS:
+        if payload_encryption_layer["payload_cipher_algo"] not in STREAMABLE_CIPHER_ALGOS:
             return False
     return True
 
@@ -1354,12 +1354,12 @@ def get_cryptoconf_summary(conf_or_cryptainer):  # FIXME move up like in docs
 
     lines = []
     for idx, payload_encryption_layer in enumerate(conf_or_cryptainer["payload_encryption_layers"], start=1):
-        lines.append("Data encryption layer %d: %s" % (idx, payload_encryption_layer["payload_encryption_algo"]))
+        lines.append("Data encryption layer %d: %s" % (idx, payload_encryption_layer["payload_cipher_algo"]))
         lines.append("  Key encryption layers:")
         for idx2, key_encryption_layer in enumerate(payload_encryption_layer["key_encryption_layers"], start=1):
             key_encryption_trustee = key_encryption_layer["key_encryption_trustee"]
             trustee_id = _get_trustee_identifier(key_encryption_trustee)
-            lines.append("    %s (by %s)" % (key_encryption_layer["key_encryption_algo"], trustee_id))
+            lines.append("    %s (by %s)" % (key_encryption_layer["key_cipher_algo"], trustee_id))
         lines.append("  Signatures:")
         for idx3, payload_signature in enumerate(payload_encryption_layer["payload_signatures"], start=1):
             payload_signature_trustee = payload_signature["payload_signature_trustee"]
@@ -1443,7 +1443,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
             }}
 
     SIMPLE_CRYPTAINER_PIECE = {
-        "key_encryption_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
+        "key_cipher_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
         "key_encryption_trustee": Const(LOCAL_TRUSTEE_MARKER),
         Optionalkey("keychain_uid"): micro_schema_uid
     }
@@ -1451,7 +1451,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
     RECURSIVE_SHARED_SECRET = []
 
     SHARED_SECRET_CRYPTAINER_PIECE = Schema({
-        "key_encryption_algo": SHARED_SECRET_MARKER,
+        "key_cipher_algo": SHARED_SECRET_MARKER,
         "key_shared_secret_shards": [{
             "key_encryption_layers": [SIMPLE_CRYPTAINER_PIECE]}],
         "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schema_int),
@@ -1462,7 +1462,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
     SCHEMA_CRYPTAINERS = Schema({
         **extra_cryptainer,
         "payload_encryption_layers": [{
-            "payload_encryption_algo": Or(*SUPPORTED_ENCRYPTION_ALGOS),
+            "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
             "payload_signatures": [payload_signature],
             **extra_message_authentication_codes,
             **extra_key_ciphertext,

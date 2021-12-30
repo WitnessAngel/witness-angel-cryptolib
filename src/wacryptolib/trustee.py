@@ -199,7 +199,7 @@ class TrusteeApi:
         )  # TODO localize string field!
 
     def decrypt_with_private_key(
-        self, *, keychain_uid: uuid.UUID, encryption_algo: str, cipherdict: dict, passphrases: Optional[list] = None
+        self, *, keychain_uid: uuid.UUID, cipher_algo: str, cipherdict: dict, passphrases: Optional[list] = None
     ) -> bytes:
         """
         Return the message (probably a symmetric key) decrypted with the corresponding key,
@@ -207,15 +207,15 @@ class TrusteeApi:
 
         Raises if key existence, authorization or passphrase errors occur.
         """
-        assert encryption_algo.upper() == "RSA_OAEP"  # Only supported asymmetric cipher for now
+        assert cipher_algo.upper() == "RSA_OAEP"  # Only supported asymmetric cipher for now
 
         passphrases = passphrases or []
         assert isinstance(passphrases, (tuple, list)), repr(passphrases)
 
-        private_key_pem = self._keystore.get_private_key(keychain_uid=keychain_uid, key_algo=encryption_algo)
+        private_key_pem = self._keystore.get_private_key(keychain_uid=keychain_uid, key_algo=cipher_algo)
 
         private_key = self._decrypt_private_key_pem_with_passphrases(
-            private_key_pem=private_key_pem, key_algo=encryption_algo, passphrases=passphrases
+            private_key_pem=private_key_pem, key_algo=cipher_algo, passphrases=passphrases
         )
 
         secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key_dict=dict(key=private_key))

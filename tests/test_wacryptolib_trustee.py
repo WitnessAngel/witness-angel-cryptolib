@@ -95,21 +95,21 @@ def test_trustee_api_workflow():
 
     # Works even without decryption authorization request, by default:
     decrypted = trustee_api.decrypt_with_private_key(
-        keychain_uid=keychain_uid, encryption_algo="RSA_OAEP", cipherdict=cipherdict
+        keychain_uid=keychain_uid, cipher_algo="RSA_OAEP", cipherdict=cipherdict
     )
     assert decrypted == secret
 
     # NO auto-creation of keypair in decrypt_with_private_key()
     with pytest.raises(KeyDoesNotExist, match="not found"):
         trustee_api.decrypt_with_private_key(
-            keychain_uid=keychain_uid_unexisting, encryption_algo="RSA_OAEP", cipherdict=cipherdict
+            keychain_uid=keychain_uid_unexisting, cipher_algo="RSA_OAEP", cipherdict=cipherdict
         )
 
     wrong_cipherdict = copy.deepcopy(cipherdict)
     wrong_cipherdict["digest_list"].append(b"aaabbbccc")
     with pytest.raises(ValueError, match="Ciphertext with incorrect length"):
         trustee_api.decrypt_with_private_key(
-            keychain_uid=keychain_uid, encryption_algo="RSA_OAEP", cipherdict=wrong_cipherdict
+            keychain_uid=keychain_uid, cipher_algo="RSA_OAEP", cipherdict=wrong_cipherdict
         )
 
     with pytest.raises(ValueError, match="empty"):
@@ -165,20 +165,20 @@ def test_trustee_api_workflow():
 
     with pytest.raises(DecryptionError, match="not decrypt"):
         trustee_api.decrypt_with_private_key(
-            keychain_uid=keychain_uid_passphrased, encryption_algo="RSA_OAEP", cipherdict=cipherdict
+            keychain_uid=keychain_uid_passphrased, cipher_algo="RSA_OAEP", cipherdict=cipherdict
         )
 
     with pytest.raises(DecryptionError, match="not decrypt"):
         trustee_api.decrypt_with_private_key(
             keychain_uid=keychain_uid_passphrased,
-            encryption_algo="RSA_OAEP",
+            cipher_algo="RSA_OAEP",
             cipherdict=cipherdict,
             passphrases=["something"],
         )
 
     decrypted = trustee_api.decrypt_with_private_key(
         keychain_uid=keychain_uid_passphrased,
-        encryption_algo="RSA_OAEP",
+        cipher_algo="RSA_OAEP",
         cipherdict=cipherdict,
         passphrases=[good_passphrase],
     )
@@ -218,7 +218,7 @@ def test_readonly_trustee_api_behaviour():
 
     # Still no auto-creation of keypair in decrypt_with_private_key()
     with pytest.raises(KeyDoesNotExist, match="not found"):
-        trustee_api.decrypt_with_private_key(keychain_uid=keychain_uid, encryption_algo=key_algo_cipher, cipherdict={})
+        trustee_api.decrypt_with_private_key(keychain_uid=keychain_uid, cipher_algo=key_algo_cipher, cipherdict={})
 
     # Now we generate wanted keys #
 
@@ -243,7 +243,7 @@ def test_readonly_trustee_api_behaviour():
     )
     cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key_dict=dict(key=private_key_cipher))
     decrypted = trustee_api.decrypt_with_private_key(
-        keychain_uid=keychain_uid, encryption_algo=key_algo_cipher, cipherdict=cipherdict
+        keychain_uid=keychain_uid, cipher_algo=key_algo_cipher, cipherdict=cipherdict
     )
     assert decrypted == secret
 

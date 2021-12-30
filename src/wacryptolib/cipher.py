@@ -305,7 +305,7 @@ class EncryptionNodeBase:
         """
         assert self._is_finished
 
-        return dict(message_authentication_codes=self._get_message_authentication_codes(),
+        return dict(payload_authentication_codes=self._get_payload_authentication_codes(),
                     payload_digests=self._get_payload_digests())
 
     def _get_payload_digests(self) -> dict:
@@ -316,7 +316,7 @@ class EncryptionNodeBase:
             hashes[hash_algo] = digest
         return hashes
 
-    def _get_message_authentication_codes(self) -> dict:
+    def _get_payload_authentication_codes(self) -> dict:
         return {}
 
 
@@ -340,7 +340,7 @@ class AesEaxEncryptionNode(EncryptionNodeBase):
         self._nonce = key_dict["nonce"]
         self._cipher = AES.new(self._key, AES.MODE_EAX, nonce=self._nonce)
 
-    def _get_message_authentication_codes(self) -> dict:
+    def _get_payload_authentication_codes(self) -> dict:
         return {"tag": self._cipher.digest()}
 
 
@@ -354,7 +354,7 @@ class Chacha20Poly1305EncryptionNode(EncryptionNodeBase):
         self._nonce = key_dict["nonce"]
         self._cipher = ChaCha20_Poly1305.new(key=self._key, nonce=self._nonce)
 
-    def _get_message_authentication_codes(self) -> dict:
+    def _get_payload_authentication_codes(self) -> dict:
         return {"tag": self._cipher.digest()}
 
 

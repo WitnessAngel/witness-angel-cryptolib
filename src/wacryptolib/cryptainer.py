@@ -323,7 +323,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             }
 
             payload_integrity_tags.append(dict(
-                    message_authentication_codes=payload_cipherdict,  # Only remains tags, macs etc.
+                    payload_authentication_codes=payload_cipherdict,  # Only remains tags, macs etc.
                     payload_digests=payload_digests,
             ))
 
@@ -359,7 +359,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         for payload_encryption_layer in cryptainer["payload_encryption_layers"]:
             payload_cipher_algo = payload_encryption_layer["payload_cipher_algo"]
 
-            payload_encryption_layer["message_authentication_codes"] = None  # Will be filled later with MAC tags etc.
+            payload_encryption_layer["payload_authentication_codes"] = None  # Will be filled later with MAC tags etc.
 
             logger.debug("Generating symmetric key of type %r", payload_cipher_algo)
             symkey = generate_symkey(cipher_algo=payload_cipher_algo)
@@ -534,8 +534,8 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
         for payload_encryption_layer, payload_integrity_tags in zip(cryptainer["payload_encryption_layers"], payload_integrity_tags):
 
-            assert payload_encryption_layer["message_authentication_codes"] is None  # Set at cryptainer build time
-            payload_encryption_layer["message_authentication_codes"] = payload_integrity_tags["message_authentication_codes"]
+            assert payload_encryption_layer["payload_authentication_codes"] is None  # Set at cryptainer build time
+            payload_encryption_layer["payload_authentication_codes"] = payload_integrity_tags["payload_authentication_codes"]
 
             payload_digests = payload_integrity_tags["payload_digests"]
 
@@ -628,8 +628,8 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
             assert isinstance(key_bytes, bytes), key_bytes
             symkey = load_from_json_bytes(key_bytes)
 
-            message_authentication_codes = payload_encryption_layer["message_authentication_codes"]  # Shall be a DICT, FIXME handle if it's still None
-            payload_cipherdict = dict(ciphertext=payload_current, **message_authentication_codes)
+            payload_authentication_codes = payload_encryption_layer["payload_authentication_codes"]  # Shall be a DICT, FIXME handle if it's still None
+            payload_cipherdict = dict(ciphertext=payload_current, **payload_authentication_codes)
             payload_current = decrypt_bytestring(
                 cipherdict=payload_cipherdict, key_dict=symkey, cipher_algo=payload_cipher_algo, verify=verify
             )
@@ -1410,7 +1410,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
 
     extra_cryptainer = {}
     extra_key_ciphertext = {}
-    extra_message_authentication_codes = {}
+    extra_payload_authentication_codes = {}
 
     payload_signature = {
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
@@ -1437,8 +1437,8 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
         }
         payload_signature.update(extra_signature)
         payload_signature["payload_digest"] = micro_schema_binary  # FIXME must be optional!!
-        extra_message_authentication_codes = {
-            "message_authentication_codes": {
+        extra_payload_authentication_codes = {
+            "payload_authentication_codes": {
                 Optionalkey("tag"): micro_schema_binary  # For now only "tag" is used
             }}
 
@@ -1464,7 +1464,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
         "payload_encryption_layers": [{
             "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
             "payload_signatures": [payload_signature],
-            **extra_message_authentication_codes,
+            **extra_payload_authentication_codes,
             **extra_key_ciphertext,
             "key_encryption_layers": [SIMPLE_CRYPTAINER_PIECE, SHARED_SECRET_CRYPTAINER_PIECE]
         }],

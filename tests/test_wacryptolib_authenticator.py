@@ -10,12 +10,12 @@ def test_authenticator_basic_workflow(tmp_path):
 
     assert tmp_path.exists()
 
-    wrong_path = tmp_path / "subfolder1" / "subsubfolder1"
-    assert not is_authenticator_initialized(wrong_path)
+    wrong_dir = tmp_path / "subfolder1" / "subsubfolder1"
+    assert not is_authenticator_initialized(wrong_dir)
     with pytest.raises(FileNotFoundError):
-        initialize_authenticator(wrong_path, user="myuser")  # Too many missing parent folders
+        initialize_authenticator(wrong_dir, user="myuser")  # Too many missing parent folders
     with pytest.raises(FileNotFoundError):
-        load_authenticator_metadata(wrong_path)
+        load_authenticator_metadata(wrong_dir)
 
     acceptable_path1 = tmp_path / "subfolder2"
     acceptable_path2 = tmp_path / "subfolder3"

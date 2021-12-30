@@ -57,10 +57,10 @@ def initialize_authdevice(authdevice: dict, user: str, extra_metadata: Optional[
     """
     assert not authdevice["is_initialized"]  # Will be doubled with actual check of filesystem
 
-    authenticator_path = _get_authenticator_path(authdevice)
+    authenticator_dir = get_authenticator_dir_for_authdevice(authdevice)
 
     metadata = initialize_authenticator(
-        authenticator_path=authenticator_path, user=user, extra_metadata=extra_metadata
+        authenticator_dir=authenticator_dir, user=user, extra_metadata=extra_metadata
     )
 
     authdevice["is_initialized"] = True
@@ -80,8 +80,8 @@ def is_authdevice_initialized(authdevice: dict):
 
     :return: (bool) True if and only if the key device is initialized.
     """
-    authenticator_path = _get_authenticator_path(authdevice)
-    return is_authenticator_initialized(authenticator_path)
+    authenticator_dir = get_authenticator_dir_for_authdevice(authdevice)
+    return is_authenticator_initialized(authenticator_dir)
 
 
 # FIXME deprecated
@@ -92,8 +92,8 @@ def load_authdevice_metadata(authdevice: dict) -> dict:
 
     Raises `ValueError` or json decoding exceptions if device appears initialized, but has corrupted metadata.
     """
-    authenticator_path = _get_authenticator_path(authdevice)
-    return load_authenticator_metadata(authenticator_path)
+    authenticator_dir = get_authenticator_dir_for_authdevice(authdevice)
+    return load_authenticator_metadata(authenticator_dir)
 
 
 def _list_available_authdevices_win32():
@@ -182,11 +182,8 @@ def _list_available_authdevices_linux():
     return authdevice_list
 
 
-# FIXME introduce an AuthenticationDevice class to normalize and lazify API
+# FIXME introduce an AuthenticationDevice class to normalize and lazify API?
 
-def _get_authenticator_path(authdevice: dict):  # FIXME make this PUBLIC API?
-    return Path(authdevice["path"]).joinpath(".keystore")
-_get_keystore_folder_path = _get_authenticator_path  # FIXME temporary alias for compatibility!
+def get_authenticator_dir_for_authdevice(authdevice: dict):
+    return Path(authdevice["path"]).joinpath(".keystore")  # FIXME rename to .authenticator??
 
-# FIXME use this everywhere ??
-get_authenticator_path_for_authdevice = _get_authenticator_path

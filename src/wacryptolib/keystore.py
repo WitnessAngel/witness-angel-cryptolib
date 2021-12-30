@@ -399,23 +399,23 @@ class FilesystemKeystorePool(KeystorePoolBase):
 
     def get_local_keystore(self):
         """Storage automatically created if unexisting."""
-        local_keystore_path = self._root_dir.joinpath(self.LOCAL_STORAGE_DIRNAME)
-        local_keystore_path.mkdir(exist_ok=True)
+        local_keystore_dir = self._root_dir.joinpath(self.LOCAL_STORAGE_DIRNAME)
+        local_keystore_dir.mkdir(exist_ok=True)
         # TODO initialize metadata for keystore ??
-        return FilesystemKeystore(local_keystore_path)
+        return FilesystemKeystore(local_keystore_dir)
 
-    def _get_imported_keystore_path(self, keystore_uid):
-        imported_keystore_path = self._root_dir.joinpath(
+    def _get_imported_keystore_dir(self, keystore_uid):
+        imported_keystore_dir = self._root_dir.joinpath(
             self.IMPORTED_STORAGES_DIRNAME, "%s%s" % (self.IMPORTED_STORAGE_PREFIX, keystore_uid)
         )
-        return imported_keystore_path
+        return imported_keystore_dir
 
     def get_imported_keystore(self, keystore_uid):
         """The selected storage MUST exist, else a KeystoreDoesNotExist is raised."""
-        imported_keystore_path = self._get_imported_keystore_path(keystore_uid=keystore_uid)
-        if not imported_keystore_path.exists():
+        imported_keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
+        if not imported_keystore_dir.exists():
             raise KeystoreDoesNotExist("Key storage %s not found" % keystore_uid)
-        return FilesystemKeystore(imported_keystore_path)
+        return FilesystemKeystore(imported_keystore_dir)
 
     def list_imported_keystore_uids(self):  # FIXME setup signature
         """Return a sorted list of UUIDs of key storages, corresponding
@@ -433,26 +433,26 @@ class FilesystemKeystorePool(KeystorePoolBase):
 
         metadata_mapper = {}
         for keystore_uid in keystore_uids:
-            _keystore_path = self._get_imported_keystore_path(keystore_uid=keystore_uid)
-            metadata = load_from_json_file(get_metadata_file_path(_keystore_path))  # TODO Factorize this ?
+            _keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
+            metadata = load_from_json_file(get_metadata_file_path(_keystore_dir))  # TODO Factorize this ?
             metadata_mapper[keystore_uid] = metadata
 
         return metadata_mapper
 
-    def import_keystore_from_folder(self, keystore_path: Path):
+    def import_keystore_from_filesystem(self, keystore_dir: Path):
         """
         Create a local import of a remote key storage folder (which must have a proper metadata file).
 
         Raises KeystoreAlreadyExists if this key storage was already imported.
         """
-        assert keystore_path.exists(), keystore_path
+        assert keystore_dir.exists(), keystore_dir
 
-        metadata = load_from_json_file(get_metadata_file_path(keystore_path))
+        metadata = load_from_json_file(get_metadata_file_path(keystore_dir))
         keystore_uid = metadata["device_uid"]  # Fails badly if metadata file is corrupted
 
         if keystore_uid in self.list_imported_keystore_uids():
             raise KeystoreAlreadyExists("Key storage with UUID %s was already imported locally" % keystore_uid)
 
-        imported_keystore_path = self._get_imported_keystore_path(keystore_uid=keystore_uid)
-        safe_copy_directory(keystore_path, imported_keystore_path)  # Must not fail, due to previous checks
-        assert imported_keystore_path.exists()
+        imported_keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
+        safe_copy_directory(keystore_dir, imported_keystore_dir)  # Must not fail, due to previous checks
+        assert imported_keystore_dir.exists()

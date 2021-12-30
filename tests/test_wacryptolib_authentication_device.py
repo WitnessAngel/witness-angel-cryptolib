@@ -5,7 +5,7 @@ from _test_mockups import get_fake_authdevice
 from wacryptolib.authdevice import (
     list_available_authdevices,
     is_authdevice_initialized,
-    _get_authenticator_path,
+    get_authenticator_dir_for_authdevice,
 )
 from wacryptolib.authdevice import initialize_authdevice, load_authdevice_metadata
 from wacryptolib.utilities import get_metadata_file_path
@@ -79,7 +79,7 @@ def test_authdevice_initialization_and_checkers(tmp_path):
     assert isinstance(metadata["device_uid"], UUID)
 
     assert is_authdevice_initialized(authdevice)
-    metadata_file_path = get_metadata_file_path(_get_authenticator_path(authdevice))
+    metadata_file_path = get_metadata_file_path(get_authenticator_dir_for_authdevice(authdevice))
     metadata_file_path.unlink()
     assert not is_authdevice_initialized(authdevice)
     metadata_file_path.write_text("ZJSJS")

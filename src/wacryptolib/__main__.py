@@ -23,11 +23,11 @@ DEFAULT_KEYSTORE_POOL_DIRNAME = ".keystore_pool"
 
 
 def _get_keystore_pool(ctx):
-    keystore_pool_path = ctx.obj["keystore_pool"]
-    if not keystore_pool_path:
-        keystore_pool_path = Path().joinpath(DEFAULT_KEYSTORE_POOL_DIRNAME)
-        keystore_pool_path.mkdir(exist_ok=True)
-    return FilesystemKeystorePool(keystore_pool_path)
+    keystore_pool_dir = ctx.obj["keystore_pool"]
+    if not keystore_pool_dir:
+        keystore_pool_dir = Path().joinpath(DEFAULT_KEYSTORE_POOL_DIRNAME)
+        keystore_pool_dir.mkdir(exist_ok=True)
+    return FilesystemKeystorePool(keystore_pool_dir)
 
 
 EXAMPLE_CRYPTOCONF = dict(

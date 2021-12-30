@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 
 from _test_mockups import get_fake_authdevice, random_bool
-from wacryptolib.authdevice import _get_keystore_folder_path, initialize_authdevice
+from wacryptolib.authdevice import initialize_authdevice, get_authenticator_dir_for_authdevice
 from wacryptolib.trustee import generate_keypair_for_storage
 from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
@@ -189,7 +189,7 @@ def test_keystore_pool_basics(tmp_path: Path):
     assert not imported_keystore2.list_keypair_identifiers()
 
 
-def test_keystore_import_keystore_from_folder(tmp_path: Path):
+def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
 
     pool_path = tmp_path / "pool"
     pool_path.mkdir()
@@ -205,15 +205,15 @@ def test_keystore_import_keystore_from_folder(tmp_path: Path):
     keychain_uid = generate_uuid0()
     key_algo = "RSA_OAEP"
 
-    remote_keystore_path = _get_keystore_folder_path(authdevice)
-    remote_keystore = FilesystemKeystore(remote_keystore_path)
+    remote_keystore_dir = get_authenticator_dir_for_authdevice(authdevice)
+    remote_keystore = FilesystemKeystore(remote_keystore_dir)
     remote_keystore.set_keys(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"555", private_key=b"okj")
 
     # Still untouched of course
     assert pool.list_imported_keystore_uids() == []
     assert pool.list_imported_keystore_metadata() == {}
 
-    pool.import_keystore_from_folder(remote_keystore_path)
+    pool.import_keystore_from_filesystem(remote_keystore_dir)
 
     (keystore_uid,) = pool.list_imported_keystore_uids()
     metadata_mapper = pool.list_imported_keystore_metadata()
@@ -224,7 +224,7 @@ def test_keystore_import_keystore_from_folder(tmp_path: Path):
     assert metadata["user"] == "Jean-Jâcques"
 
     with pytest.raises(KeystoreAlreadyExists, match=str(keystore_uid)):
-        pool.import_keystore_from_folder(remote_keystore_path)
+        pool.import_keystore_from_filesystem(remote_keystore_dir)
 
     shutil.rmtree(authdevice_path)  # Not important anymore
 

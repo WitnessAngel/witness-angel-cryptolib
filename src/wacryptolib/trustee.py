@@ -86,7 +86,7 @@ class TrusteeApi:
         )  # Let the exception flow if any
 
     def get_message_signature(
-        self, *, keychain_uid: uuid.UUID, message: bytes, payload_signature_algo: str  # FIXME name this "key_algo" too?
+        self, *, keychain_uid: uuid.UUID, message: bytes, payload_signature_algo: str
     ) -> dict:
         """
         Return a signature structure corresponding to the provided key and signature types.

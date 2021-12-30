@@ -358,7 +358,7 @@ class Chacha20Poly1305EncryptionNode(EncryptionNodeBase):
         return {"tag": self._cipher.digest()}
 
 
-class EncryptionPipeline:  # FIXME RENAME THIS
+class EncryptionPipeline:
     """"Pipeline to encrypt data through several encryption nodes, down to an outout stream (e.g. file or ByteIO)"""
 
     def __init__(self, output_stream: BinaryIO, payload_encryption_layer_extracts: list):
@@ -367,7 +367,7 @@ class EncryptionPipeline:  # FIXME RENAME THIS
         self._cipher_streams = []
 
         for payload_encryption_layer_extract in payload_encryption_layer_extracts:
-            payload_cipher_algo = payload_encryption_layer_extract["cipher_algo"]  # FIXME RENAME THIS
+            payload_cipher_algo = payload_encryption_layer_extract["cipher_algo"]
             symkey = payload_encryption_layer_extract["symkey"]
             payload_digest_algos = payload_encryption_layer_extract["payload_digest_algos"]
 

@@ -84,7 +84,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
             assert not self._current_records_count, self._current_bytesio
             self._current_bytesio = io.BytesIO()
             self._current_tarfile = tarfile.open(
-                mode=self.tarfile_writing_mode, fileobj=self._current_bytesio  # TODO - add compression?
+                mode=self.tarfile_writing_mode, fileobj=self._current_bytesio  # TODO - add tarfile compression?
             )
             self._current_metadata = {"members": {}}
 
@@ -283,7 +283,7 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
             logger.error("Error in PeriodicValuePoller offloaded task: %r" % exc, exc_info=True)
 
 
-class SensorsManager(TaskRunnerStateMachineBase):  # FIXME deprecate this in favor of whole recording toolchain
+class SensorManager(TaskRunnerStateMachineBase):  # FIXME deprecate this in favor of whole recording toolchain
     """
     Manage a group of sensors for simultaneous starts/stops.
 

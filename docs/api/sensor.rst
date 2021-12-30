@@ -21,4 +21,4 @@ Base classes for poller/pusher sensors
 Management of multiple sensors simultaneously
 ------------------------------------------------
 
-.. autoclass:: wacryptolib.sensor.SensorsManager
+.. autoclass:: wacryptolib.sensor.SensorManager

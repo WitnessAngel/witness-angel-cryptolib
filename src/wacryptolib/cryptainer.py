@@ -27,7 +27,7 @@ from wacryptolib.exceptions import DecryptionError, ConfigurationError, Validati
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, \
     ASYMMETRIC_KEY_ALGOS_REGISTRY
-from wacryptolib.keystore import KeystoreBase, DummyKeystorePool, KeystorePoolBase
+from wacryptolib.keystore import KeystoreBase, InMemoryKeystorePool, KeystorePoolBase
 from wacryptolib.shared_secret import split_bytestring_as_shards, recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
 from wacryptolib.utilities import (
@@ -58,7 +58,7 @@ MEDIUM_SUFFIX = ".medium"  # To construct decrypted filename when no previous ex
 
 SHARED_SECRET_MARKER = "[SHARED_SECRET]"
 
-DUMMY_KEYSTORE_POOL = DummyKeystorePool()  # Common fallback storage with in-memory keys
+DUMMY_KEYSTORE_POOL = InMemoryKeystorePool()  # Common fallback storage with in-memory keys
 
 #: Special value in cryptainers, to invoke a device-local trustee
 LOCAL_TRUSTEE_MARKER = dict(trustee_type="local")  # FIXME CHANGE THIS
@@ -192,7 +192,7 @@ class CryptainerBase:
     def __init__(self, keystore_pool: KeystorePoolBase = None, passphrase_mapper: Optional[dict] = None):
         if not keystore_pool:
             logger.warning(
-                "No key storage pool provided for %s instance, falling back to common DummyKeystorePool()",
+                "No key storage pool provided for %s instance, falling back to common InMemoryKeystorePool()",
                 self.__class__.__name__,
             )
             keystore_pool = DUMMY_KEYSTORE_POOL

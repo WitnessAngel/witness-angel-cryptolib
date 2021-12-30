@@ -48,7 +48,7 @@ from wacryptolib.trustee import (
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, DecryptionIntegrityError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_keypair
-from wacryptolib.keystore import DummyKeystore, FilesystemKeystore, FilesystemKeystorePool, DummyKeystorePool
+from wacryptolib.keystore import DummyKeystore, FilesystemKeystore, FilesystemKeystorePool, InMemoryKeystorePool
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, generate_uuid0, get_utc_now_date, \
     dump_to_json_str
 from wacryptolib.utilities import dump_to_json_file, load_from_json_file
@@ -335,7 +335,7 @@ def _intialize_cryptainer_with_single_file(tmp_path):  # FIXME generalize its us
     ],
 )
 def test_void_cryptoconfs(cryptoconf):
-    keystore_pool = DummyKeystorePool()
+    keystore_pool = InMemoryKeystorePool()
 
     with pytest.raises(ConfigurationError, match="Empty .* list"):
         encrypt_payload_into_cryptainer(
@@ -357,7 +357,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
     use_streaming_encryption = random_bool()
 
-    keystore_pool = DummyKeystorePool()
+    keystore_pool = InMemoryKeystorePool()
     metadata = random.choice([None, dict(a=[123])])
 
     if use_streaming_encryption and is_cryptainer_cryptoconf_streamable(cryptoconf):
@@ -577,7 +577,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     all_passphrases = [local_passphrase, passphrase1, passphrase2, passphrase3]
 
-    keystore_pool = DummyKeystorePool()
+    keystore_pool = InMemoryKeystorePool()
     keystore_pool._register_fake_imported_storage_uids(
         storage_uids=[keystore_uid1, keystore_uid2, keystore_uid3]
     )

@@ -195,7 +195,7 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     pool_path.mkdir()
     pool = FilesystemKeystorePool(pool_path)
     assert pool.list_imported_keystore_uids() == []
-    assert pool.list_imported_keystore_metadata() == {}
+    assert pool.get_imported_keystore_metadata() == {}
 
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()
@@ -211,12 +211,12 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
 
     # Still untouched of course
     assert pool.list_imported_keystore_uids() == []
-    assert pool.list_imported_keystore_metadata() == {}
+    assert pool.get_imported_keystore_metadata() == {}
 
     pool.import_keystore_from_filesystem(remote_keystore_dir)
 
     (keystore_uid,) = pool.list_imported_keystore_uids()
-    metadata_mapper = pool.list_imported_keystore_metadata()
+    metadata_mapper = pool.get_imported_keystore_metadata()
     assert tuple(metadata_mapper) == (keystore_uid,)
 
     metadata = metadata_mapper[keystore_uid]
@@ -229,7 +229,7 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     shutil.rmtree(authdevice_path)  # Not important anymore
 
     assert pool.list_imported_keystore_uids() == [keystore_uid]
-    metadata_mapper2 = pool.list_imported_keystore_metadata()
+    metadata_mapper2 = pool.get_imported_keystore_metadata()
     assert metadata_mapper2 == metadata_mapper
 
     keystore = pool.get_imported_keystore(keystore_uid)

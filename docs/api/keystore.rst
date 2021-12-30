@@ -23,6 +23,6 @@ These combine local and imported key storages under a single interface.
 
 .. autoclass:: wacryptolib.keystore.KeystorePoolBase
 
-.. autoclass:: wacryptolib.keystore.DummyKeystorePool
+.. autoclass:: wacryptolib.keystore.InMemoryKeystorePool
 
 .. autoclass:: wacryptolib.keystore.FilesystemKeystorePool

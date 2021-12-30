@@ -9,7 +9,7 @@ from freezegun import freeze_time
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool
 from wacryptolib.scaffolding import check_sensor_state_machine
-from wacryptolib.sensor import TarfileRecordsAggregator, JsonDataAggregator, PeriodicValuePoller, SensorsManager
+from wacryptolib.sensor import TarfileRecordsAggregator, JsonDataAggregator, PeriodicValuePoller, SensorManager
 from wacryptolib.sensor import TimeLimitedAggregatorMixin
 from wacryptolib.utilities import load_from_json_bytes, TaskRunnerStateMachineBase, get_utc_now_date
 
@@ -460,7 +460,7 @@ def test_sensor_manager():
 
     # First with EMPTY manager
 
-    manager = SensorsManager(sensors=[])
+    manager = SensorManager(sensors=[])
     check_sensor_state_machine(manager)
 
     # Now with FILLED manager
@@ -472,7 +472,7 @@ def test_sensor_manager():
         DummyUnstableSensor(is_broken=False),
     ]
 
-    manager = SensorsManager(sensors=sensors)
+    manager = SensorManager(sensors=sensors)
     check_sensor_state_machine(manager)
 
     success_count = manager.start()

@@ -72,5 +72,5 @@ class ConfigurationError(FunctionalError):
 
 # TODO add ValidationError class, and/or WorkflowError?
 
-class ValidationError(FunctionalError):  # FIXME duplicated???
+class ValidationError(FunctionalError):
     pass  # used e.g. if encryption layer list is empty, thus endangering confidentiality

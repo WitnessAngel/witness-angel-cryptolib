@@ -81,7 +81,7 @@ def verify_message_signature(*, message: bytes, payload_signature_algo: str, sig
     :param signature: structure describing the signature
     :param key: the cryptographic key used to verify the signature
     """
-    # TODO refactor this with new SIGNATURE_ALGOS_REGISTRY fields
+    # TODO refactor this with new SIGNATURE_ALGOS_REGISTRY fields to be added
     payload_signature_algo = payload_signature_algo.upper()
     if payload_signature_algo == "RSA_PSS":
         verifier = pss.new(key)

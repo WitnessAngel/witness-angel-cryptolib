@@ -347,11 +347,11 @@ class FilesystemKeystore(KeystoreBase):
 
 
 class KeystorePoolBase:
-    # FIXME fill base class with signatures!! Like in KeystoreBase!
+    # FIXME fill base class with Python function signatures!! Like in KeystoreBase!
     pass
 
 
-class DummyKeystorePool(KeystorePoolBase):  # FIXME rename to InMemoryKeystorePool
+class InMemoryKeystorePool(KeystorePoolBase):
     """
     Dummy key storage pool for use in tests, where keys are kepts only process-locally.
 
@@ -417,14 +417,14 @@ class FilesystemKeystorePool(KeystorePoolBase):
             raise KeystoreDoesNotExist("Key storage %s not found" % keystore_uid)
         return FilesystemKeystore(imported_keystore_dir)
 
-    def list_imported_keystore_uids(self):  # FIXME setup signature
+    def list_imported_keystore_uids(self) -> list:
         """Return a sorted list of UUIDs of key storages, corresponding
         to the device_uid of their origin authentication devices."""
         imported_keystores_dir = self._root_dir.joinpath(self.IMPORTED_STORAGES_DIRNAME)
         paths = imported_keystores_dir.glob("%s*" % self.IMPORTED_STORAGE_PREFIX)  # This excludes TEMP folders
         return sorted([uuid.UUID(d.name.replace(self.IMPORTED_STORAGE_PREFIX, "")) for d in paths])
 
-    def list_imported_keystore_metadata(self) -> dict:  # FIXME doesn't return a list??
+    def get_imported_keystore_metadata(self) -> dict:
         """Return a dict mapping key storage UUIDs to the dicts of their metadata.
 
         Raises if any metadata loading fails.

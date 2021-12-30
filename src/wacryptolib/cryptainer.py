@@ -233,7 +233,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
                 for payload_encryption_layer_extract in payload_encryption_layer_extracts:
                     payload_encryption_algo = payload_encryption_layer_extract["encryption_algo"]  # FIXME RENAME THIS
                     symkey = payload_encryption_layer_extract["symkey"]
-                    message_digest_algos = payload_encryption_layer_extract["message_digest_algos"]
+                    payload_digest_algos = payload_encryption_layer_extract["payload_digest_algos"]
                     # DO SOMETHING WITH THESE
             def encrypt_chunk(self, chunk):
                 output_stream.write(chunk)
@@ -306,7 +306,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         for payload_encryption_layer_extract in payload_encryption_layer_extracts:
             payload_encryption_algo = payload_encryption_layer_extract["encryption_algo"]  # FIXME RENAME THIS
             symkey = payload_encryption_layer_extract["symkey"]
-            message_digest_algos = payload_encryption_layer_extract["message_digest_algos"]
+            payload_digest_algos = payload_encryption_layer_extract["payload_digest_algos"]
 
             logger.debug("Encrypting payload with symmetric key of type %r", payload_encryption_algo)
             payload_cipherdict = encrypt_bytestring(
@@ -318,8 +318,8 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             assert isinstance(payload_ciphertext, bytes), payload_ciphertext  # Same raw content as would be in offloaded payload file
 
             message_digests = {
-                message_digest_algo: hash_message(payload_ciphertext, hash_algo=message_digest_algo)
-                for message_digest_algo in message_digest_algos
+                payload_digest_algo: hash_message(payload_ciphertext, hash_algo=payload_digest_algo)
+                for payload_digest_algo in payload_digest_algos
             }
 
             payload_integrity_tags.append(dict(
@@ -340,7 +340,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         :param keychain_uid: uuid for the set of encryption keys used
         :param metadata: additional payload to store unencrypted in cryptainer
 
-        :return: a (cryptainer: dict, secrets: list) tuple, where each secret has keys encryption_algo, symmetric_key and message_digest_algos.
+        :return: a (cryptainer: dict, secrets: list) tuple, where each secret has keys encryption_algo, symmetric_key and payload_digest_algos.
         """
 
         assert metadata is None or isinstance(metadata, dict), metadata
@@ -375,7 +375,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             payload_encryption_layer_extract = dict(
                 encryption_algo=payload_encryption_algo,
                 symkey=symkey,
-                message_digest_algos=[signature["message_digest_algo"] for signature in
+                payload_digest_algos=[signature["payload_digest_algo"] for signature in
                                       payload_encryption_layer["payload_signatures"]]
             )
             payload_encryption_layer_extracts.append(payload_encryption_layer_extract)
@@ -539,11 +539,11 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
             message_digests = payload_integrity_tags["message_digests"]
 
-            _encountered_message_digest_algos = set()
+            _encountered_payload_digest_algos = set()
             for signature_conf in payload_encryption_layer["payload_signatures"]:
-                message_digest_algo = signature_conf["message_digest_algo"]
+                payload_digest_algo = signature_conf["payload_digest_algo"]
 
-                signature_conf["message_digest"] = message_digests[message_digest_algo]  # MUST exist, else incoherence
+                signature_conf["message_digest"] = message_digests[payload_digest_algo]  # MUST exist, else incoherence
                 # FIXME ADD THIS NEW FIELD TO SCHEMA VALIDATOR!!!!
 
                 signature_value = self._generate_message_signature(
@@ -551,8 +551,8 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
                    cryptoconf=signature_conf)
                 signature_conf["signature_value"] = signature_value
 
-                _encountered_message_digest_algos.add(message_digest_algo)
-            assert _encountered_message_digest_algos == set(message_digests)  # No abnormal extra digest
+                _encountered_payload_digest_algos.add(payload_digest_algo)
+            assert _encountered_payload_digest_algos == set(message_digests)  # No abnormal extra digest
 
         cryptainer["cryptainer_state"] = CRYPTAINER_STATES.FINISHED
 
@@ -565,7 +565,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         :return: dictionary with information needed to verify signature
         """
         signature_algo = cryptoconf["signature_algo"]
-        message_digest = cryptoconf["message_digest"]  # Must have been set before, using message_digest_algo field
+        message_digest = cryptoconf["message_digest"]  # Must have been set before, using payload_digest_algo field
         assert message_digest, message_digest
 
         encryption_proxy = get_escrow_proxy(escrow=cryptoconf["signature_escrow"], keystore_pool=self._keystore_pool)
@@ -809,7 +809,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         :param message: message as bytes on which to verify signature
         :param cryptoconf: configuration tree inside payload_signatures
         """
-        message_digest_algo = cryptoconf["message_digest_algo"]
+        payload_digest_algo = cryptoconf["payload_digest_algo"]
         signature_algo = cryptoconf["signature_algo"]
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
         encryption_proxy = get_escrow_proxy(escrow=cryptoconf["signature_escrow"], keystore_pool=self._keystore_pool)
@@ -818,7 +818,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         )
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=signature_algo)
 
-        message_hash = hash_message(message, hash_algo=message_digest_algo)
+        message_hash = hash_message(message, hash_algo=payload_digest_algo)
         assert message_hash == cryptoconf["message_digest"]  # Sanity check!!
         signature_value = cryptoconf["signature_value"]
 
@@ -1365,7 +1365,7 @@ def get_cryptoconf_summary(conf_or_cryptainer):  # FIXME move up like in docs
             escrow_id = _get_escrow_identifier(signature_escrow)
             lines.append(
                 "    %s/%s (by %s)"
-                % (payload_signature["message_digest_algo"], payload_signature["signature_algo"], escrow_id)
+                % (payload_signature["payload_digest_algo"], payload_signature["signature_algo"], escrow_id)
             )
     result = "\n".join(lines) + "\n"
     return result
@@ -1413,7 +1413,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
     metadata = {}
 
     payload_signature = {
-        "message_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
+        "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
         "signature_algo": Or(*SUPPORTED_SIGNATURE_ALGOS),
         "signature_escrow": Const(LOCAL_ESCROW_MARKER),
         Optionalkey("keychain_uid"): micro_schema_uid

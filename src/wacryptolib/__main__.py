@@ -48,7 +48,7 @@ EXAMPLE_CRYPTOCONF = dict(
                 ),
             ],
             payload_signatures=[
-                dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]

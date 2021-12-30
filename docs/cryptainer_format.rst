@@ -35,7 +35,7 @@ A minimal cryptainer configuration in python, with a single encryption layer and
                 ],
                 payload_signatures=[
                     dict(
-                        message_digest_algo="SHA256",
+                        payload_digest_algo="SHA256",
                         signature_algo="DSA_DSS",
                         signature_escrow=LOCAL_ESCROW_MARKER,
                     )
@@ -67,7 +67,7 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
               "payload_encryption_algo": "AES_CBC",
               "payload_signatures": [
                   {
-                      "message_digest_algo": "SHA256",
+                      "payload_digest_algo": "SHA256",
                       "signature_algo": "DSA_DSS",
                       "signature_escrow": "_local_",
                       "signature_value": {

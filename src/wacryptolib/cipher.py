@@ -243,13 +243,13 @@ class EncryptionStreamBase:
     _cipher = None  # Created by subclasses
     _hashers_dict = None
 
-    def __init__(self, message_digest_algo=()):
+    def __init__(self, payload_digest_algo=()):
         """ for each algo hash, create an instance that we store in a dictionary
             :param hash algo: different hash algorithm
         """
         hashers_dict = {}
 
-        for hash_algo in message_digest_algo:
+        for hash_algo in payload_digest_algo:
             module = importlib.import_module("Crypto.Hash.%s" % hash_algo)
             hasher_instance = module.new()
             hashers_dict[hash_algo] = hasher_instance
@@ -326,8 +326,8 @@ class AesCbcEncryptionNode(EncryptionStreamBase):
     """Encrypt a bytestring using AES (CBC mode)."""
     BLOCK_SIZE = AES.block_size
 
-    def __init__(self, key_dict: dict, message_digest_algo=()):
-        super().__init__(message_digest_algo=message_digest_algo)
+    def __init__(self, key_dict: dict, payload_digest_algo=()):
+        super().__init__(payload_digest_algo=payload_digest_algo)
         self._key = key_dict["key"]
         self._iv = key_dict["iv"]
         self._cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
@@ -336,8 +336,8 @@ class AesCbcEncryptionNode(EncryptionStreamBase):
 class AesEaxEncryptionNode(EncryptionStreamBase):
     """Encrypt a bytestring using AES (EAX mode)."""
 
-    def __init__(self, key_dict: dict, message_digest_algo=()):
-        super().__init__(message_digest_algo=message_digest_algo)
+    def __init__(self, key_dict: dict, payload_digest_algo=()):
+        super().__init__(payload_digest_algo=payload_digest_algo)
         self._key = key_dict["key"]
         self._nonce = key_dict["nonce"]
         self._cipher = AES.new(self._key, AES.MODE_EAX, nonce=self._nonce)
@@ -349,9 +349,9 @@ class AesEaxEncryptionNode(EncryptionStreamBase):
 class Chacha20Poly1305EncryptionNode(EncryptionStreamBase):
     """Encrypt a bytestring using ChaCha20 with Poly1305 authentication."""
 
-    def __init__(self, key_dict: dict, message_digest_algo=()):
+    def __init__(self, key_dict: dict, payload_digest_algo=()):
         # TODO init CHACHA instance with this proper
-        super().__init__(message_digest_algo=message_digest_algo)
+        super().__init__(payload_digest_algo=payload_digest_algo)
 
         self._key = key_dict["key"]
         self._nonce = key_dict["nonce"]
@@ -372,7 +372,7 @@ class StreamManager:  # FIXME RENAME THIS
         for payload_encryption_layer_extract in payload_encryption_layer_extracts:
             payload_encryption_algo = payload_encryption_layer_extract["encryption_algo"]  # FIXME RENAME THIS
             symkey = payload_encryption_layer_extract["symkey"]
-            message_digest_algos = payload_encryption_layer_extract["message_digest_algos"]
+            payload_digest_algos = payload_encryption_layer_extract["payload_digest_algos"]
 
             encryption_algo_conf = _get_encryption_algo_conf(encryption_algo=payload_encryption_algo)
             encryption_class = encryption_algo_conf["encryption_node_class"]
@@ -382,7 +382,7 @@ class StreamManager:  # FIXME RENAME THIS
                     "Node class %s is not implemented" % payload_encryption_algo)  # FIXME use custom exception class
 
             self._cipher_streams.append(
-                encryption_class(key_dict=symkey, message_digest_algo=message_digest_algos))
+                encryption_class(key_dict=symkey, payload_digest_algo=payload_digest_algos))
 
     def encrypt_chunk(self, chunk):
         for cipher in self._cipher_streams:

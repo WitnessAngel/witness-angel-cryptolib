@@ -71,7 +71,7 @@ VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_LAYERS = dict(  # Forbidden
             payload_encryption_algo="AES_CBC",
             key_encryption_layers=[],
             payload_signatures=[
-                dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]
@@ -104,7 +104,7 @@ SIMPLE_CRYPTOCONF = dict(
             payload_encryption_algo="AES_CBC",
             key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
             payload_signatures=[
-                dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]
@@ -138,7 +138,7 @@ COMPLEX_CRYPTOCONF = dict(
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)
             ],
             payload_signatures=[
-                dict(message_digest_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         ),
         dict(
@@ -148,9 +148,9 @@ COMPLEX_CRYPTOCONF = dict(
                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
             ],
             payload_signatures=[
-                dict(message_digest_algo="SHA3_256", signature_algo="RSA_PSS", signature_escrow=LOCAL_ESCROW_MARKER),
+                dict(payload_digest_algo="SHA3_256", signature_algo="RSA_PSS", signature_escrow=LOCAL_ESCROW_MARKER),
                 dict(
-                    message_digest_algo="SHA512",
+                    payload_digest_algo="SHA512",
                     signature_algo="ECC_DSS",
                     signature_escrow=LOCAL_ESCROW_MARKER,
                     keychain_uid=ENFORCED_UID2,
@@ -206,7 +206,7 @@ SIMPLE_SHAMIR_CRYPTOCONF = dict(
                 ),
             ],
             payload_signatures=[
-                dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]
@@ -242,7 +242,7 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
             payload_encryption_algo="AES_CBC",
             key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
             payload_signatures=[
-                dict(message_digest_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         ),
         dict(
@@ -266,12 +266,12 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
             ],
             payload_signatures=[
                 dict(
-                    message_digest_algo="SHA3_256",
+                    payload_digest_algo="SHA3_256",
                     signature_algo="RSA_PSS",
                     signature_escrow=LOCAL_ESCROW_MARKER,
                     keychain_uid=ENFORCED_UID1,
                 ),
-                dict(message_digest_algo="SHA512", signature_algo="ECC_DSS", signature_escrow=LOCAL_ESCROW_MARKER),
+                dict(payload_digest_algo="SHA512", signature_algo="ECC_DSS", signature_escrow=LOCAL_ESCROW_MARKER),
             ],
         ),
     ]
@@ -521,7 +521,7 @@ RECURSIVE_CRYPTOCONF = dict(
                 ),
             ],
             payload_signatures=[
-                dict(message_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]
@@ -631,7 +631,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                 ],
                 payload_signatures=[
                     dict(
-                        message_digest_algo="SHA256",
+                        payload_digest_algo="SHA256",
                         signature_algo="DSA_DSS",
                         signature_escrow=LOCAL_ESCROW_MARKER,  # Uses separate keypair, no passphrase here
                     )
@@ -1309,9 +1309,9 @@ def test_generate_cryptainer_and_symmetric_keys():
         del payload_encryption_layer["symkey"]
 
     assert extracts == [
-        {'encryption_algo': 'AES_EAX', 'message_digest_algos': []},
-        {'encryption_algo': 'AES_CBC', 'message_digest_algos': ['SHA3_512']},
-        {'encryption_algo': 'CHACHA20_POLY1305', 'message_digest_algos': ['SHA3_256', 'SHA512']}
+        {'encryption_algo': 'AES_EAX', 'payload_digest_algos': []},
+        {'encryption_algo': 'AES_CBC', 'payload_digest_algos': ['SHA3_512']},
+        {'encryption_algo': 'CHACHA20_POLY1305', 'payload_digest_algos': ['SHA3_256', 'SHA512']}
     ]
 
 

@@ -170,7 +170,7 @@ def test_stream_manager(encryption_algo_list):
     for encryption_algo in encryption_algo_list:
         payload_encryption_layers_extract = {'encryption_algo': encryption_algo,
                                           'symkey': generate_symkey(encryption_algo),
-                                          'message_digest_algos': random.choices(SUPPORTED_HASH_ALGOS, k=randint(1,
+                                          'payload_digest_algos': random.choices(SUPPORTED_HASH_ALGOS, k=randint(1,
                                                                                                                  len(SUPPORTED_HASH_ALGOS)))}
         payload_encryption_layer_extracts.append(payload_encryption_layers_extract)
     print(payload_encryption_layer_extracts)
@@ -194,7 +194,7 @@ def test_stream_manager(encryption_algo_list):
     for payload_encryption_node, authentication_data in zip(reversed(payload_encryption_layer_extracts),
                                                          reversed(streammanager.get_payload_integrity_tags())):
 
-        for hash_algo in payload_encryption_node['message_digest_algos']:
+        for hash_algo in payload_encryption_node['payload_digest_algos']:
             assert (hash_message(message=current_ciphertext, hash_algo=hash_algo) ==  # TODO NOW create local vars
                     authentication_data['message_digests'][hash_algo])
 

@@ -106,7 +106,7 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
                     _grab_key_encryption_layers_dependencies(escrow["key_encryption_layers"])  # Recursive call
             else:
                 keychain_uid_encryption = key_encryption_layer.get("keychain_uid") or keychain_uid
-                escrow_conf = key_encryption_layer["key_escrow"]
+                escrow_conf = key_encryption_layer["key_encryption_escrow"]
                 _add_keypair_identifiers_for_escrow(
                     mapper=encryption_dependencies,
                     escrow_conf=escrow_conf,
@@ -118,9 +118,9 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
         keychain_uid = cryptainer["keychain_uid"]
         for payload_encryption_layer in cryptainer["payload_encryption_layers"]:
             for signature_conf in payload_encryption_layer["payload_signatures"]:
-                key_algo_signature = signature_conf["signature_algo"]
+                key_algo_signature = signature_conf["payload_signature_algo"]
                 keychain_uid_signature = signature_conf.get("keychain_uid") or keychain_uid
-                escrow_conf = signature_conf["signature_escrow"]
+                escrow_conf = signature_conf["payload_signature_escrow"]
 
                 _add_keypair_identifiers_for_escrow(
                     mapper=signature_dependencies,
@@ -146,8 +146,8 @@ def request_decryption_authorizations(
     encryption_escrows_dependencies = escrow_dependencies.get("encryption")
 
     for escrow_id, escrow_data in encryption_escrows_dependencies.items():
-        key_escrow, keypair_identifiers = escrow_data
-        proxy = get_escrow_proxy(escrow=key_escrow, keystore_pool=keystore_pool)
+        key_encryption_escrow, keypair_identifiers = escrow_data
+        proxy = get_escrow_proxy(escrow=key_encryption_escrow, keystore_pool=keystore_pool)
         result = proxy.request_decryption_authorization(
             keypair_identifiers=keypair_identifiers, request_message=request_message, passphrases=passphrases
         )
@@ -463,7 +463,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid_encryption,
                 key_bytes=key_bytes,
-                escrow=key_encryption_layer["key_escrow"],
+                escrow=key_encryption_layer["key_encryption_escrow"],
             )
             return key_cipherdict
 
@@ -564,17 +564,17 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         :param cryptoconf: configuration tree inside payload_signatures, which MUST already contain the message digest
         :return: dictionary with information needed to verify signature
         """
-        signature_algo = cryptoconf["signature_algo"]
+        payload_signature_algo = cryptoconf["payload_signature_algo"]
         message_digest = cryptoconf["message_digest"]  # Must have been set before, using payload_digest_algo field
         assert message_digest, message_digest
 
-        encryption_proxy = get_escrow_proxy(escrow=cryptoconf["signature_escrow"], keystore_pool=self._keystore_pool)
+        encryption_proxy = get_escrow_proxy(escrow=cryptoconf["payload_signature_escrow"], keystore_pool=self._keystore_pool)
 
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
 
-        logger.debug("Signing hash of encrypted payload with algo %r", signature_algo)
+        logger.debug("Signing hash of encrypted payload with algo %r", payload_signature_algo)
         signature_value = encryption_proxy.get_message_signature(
-            keychain_uid=keychain_uid_signature, message=message_digest, signature_algo=signature_algo
+            keychain_uid=keychain_uid_signature, message=message_digest, payload_signature_algo=payload_signature_algo
         )
         return signature_value
 
@@ -714,7 +714,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid_encryption,
                 cipherdict=key_cipherdict,
-                escrow=encryption_layer["key_escrow"],
+                escrow=encryption_layer["key_encryption_escrow"],
             )
             return key_bytes
 
@@ -810,20 +810,20 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         :param cryptoconf: configuration tree inside payload_signatures
         """
         payload_digest_algo = cryptoconf["payload_digest_algo"]
-        signature_algo = cryptoconf["signature_algo"]
+        payload_signature_algo = cryptoconf["payload_signature_algo"]
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
-        encryption_proxy = get_escrow_proxy(escrow=cryptoconf["signature_escrow"], keystore_pool=self._keystore_pool)
+        encryption_proxy = get_escrow_proxy(escrow=cryptoconf["payload_signature_escrow"], keystore_pool=self._keystore_pool)
         public_key_pem = encryption_proxy.fetch_public_key(
-            keychain_uid=keychain_uid_signature, key_algo=signature_algo, must_exist=True
+            keychain_uid=keychain_uid_signature, key_algo=payload_signature_algo, must_exist=True
         )
-        public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=signature_algo)
+        public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=payload_signature_algo)
 
         message_hash = hash_message(message, hash_algo=payload_digest_algo)
         assert message_hash == cryptoconf["message_digest"]  # Sanity check!!
         signature_value = cryptoconf["signature_value"]
 
         verify_message_signature(
-            message=message_hash, signature_algo=signature_algo, signature=signature_value, key=public_key
+            message=message_hash, payload_signature_algo=payload_signature_algo, signature=signature_value, key=public_key
         )  # Raises if troubles
 
 
@@ -1356,16 +1356,16 @@ def get_cryptoconf_summary(conf_or_cryptainer):  # FIXME move up like in docs
         lines.append("Data encryption layer %d: %s" % (idx, payload_encryption_layer["payload_encryption_algo"]))
         lines.append("  Key encryption layers:")
         for idx2, key_encryption_layer in enumerate(payload_encryption_layer["key_encryption_layers"], start=1):
-            key_escrow = key_encryption_layer["key_escrow"]
-            escrow_id = _get_escrow_identifier(key_escrow)
+            key_encryption_escrow = key_encryption_layer["key_encryption_escrow"]
+            escrow_id = _get_escrow_identifier(key_encryption_escrow)
             lines.append("    %s (by %s)" % (key_encryption_layer["key_encryption_algo"], escrow_id))
         lines.append("  Signatures:")
         for idx3, payload_signature in enumerate(payload_encryption_layer["payload_signatures"], start=1):
-            signature_escrow = payload_signature["signature_escrow"]
-            escrow_id = _get_escrow_identifier(signature_escrow)
+            payload_signature_escrow = payload_signature["payload_signature_escrow"]
+            escrow_id = _get_escrow_identifier(payload_signature_escrow)
             lines.append(
                 "    %s/%s (by %s)"
-                % (payload_signature["payload_digest_algo"], payload_signature["signature_algo"], escrow_id)
+                % (payload_signature["payload_digest_algo"], payload_signature["payload_signature_algo"], escrow_id)
             )
     result = "\n".join(lines) + "\n"
     return result
@@ -1414,8 +1414,8 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
 
     payload_signature = {
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
-        "signature_algo": Or(*SUPPORTED_SIGNATURE_ALGOS),
-        "signature_escrow": Const(LOCAL_ESCROW_MARKER),
+        "payload_signature_algo": Or(*SUPPORTED_SIGNATURE_ALGOS),
+        "payload_signature_escrow": Const(LOCAL_ESCROW_MARKER),
         Optionalkey("keychain_uid"): micro_schema_uid
     }
 
@@ -1445,7 +1445,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
 
     SIMPLE_CRYPTAINER_PIECE = {
         "key_encryption_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
-        "key_escrow": Const(LOCAL_ESCROW_MARKER),
+        "key_encryption_escrow": Const(LOCAL_ESCROW_MARKER),
         Optionalkey("keychain_uid"): micro_schema_uid
     }
 

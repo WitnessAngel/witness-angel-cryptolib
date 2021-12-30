@@ -30,14 +30,14 @@ A minimal cryptainer configuration in python, with a single encryption layer and
                 key_encryption_layers=[
                     dict(
                         key_encryption_algo="RSA_OAEP",
-                        key_escrow=LOCAL_ESCROW_MARKER,
+                        key_encryption_escrow=LOCAL_ESCROW_MARKER,
                     )
                 ],
                 payload_signatures=[
                     dict(
                         payload_digest_algo="SHA256",
-                        signature_algo="DSA_DSS",
-                        signature_escrow=LOCAL_ESCROW_MARKER,
+                        payload_signature_algo="DSA_DSS",
+                        payload_signature_escrow=LOCAL_ESCROW_MARKER,
                     )
                 ],
             )
@@ -68,8 +68,8 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
               "payload_signatures": [
                   {
                       "payload_digest_algo": "SHA256",
-                      "signature_algo": "DSA_DSS",
-                      "signature_escrow": "_local_",
+                      "payload_signature_algo": "DSA_DSS",
+                      "payload_signature_escrow": "_local_",
                       "signature_value": {
                           "digest": {
                               "$binary": {
@@ -92,7 +92,7 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
               "key_encryption_layers": [
                   {
                       "key_encryption_algo": "RSA_OAEP",
-                      "key_escrow": "_local_"
+                      "key_encryption_escrow": "_local_"
                   }
               ]
           }
@@ -138,15 +138,15 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
             key_ciphertext: <opaque multi-encrypted key bytestring>,
             key_encryption_layers: <(optional) list of Layer objects targeting key_ciphertext, in order of application>,
             # or:
-            key_escrow: <Escrow Entity object able to decrypt the parent data/key ciphertext at this layer of encryption>,
+            key_encryption_escrow: <Escrow Entity object able to decrypt the parent data/key ciphertext at this layer of encryption>,
         }
 
     Signature object:
 
         {
-            signature_algorithm: <signature type label>,
+            payload_signature_algorithm: <signature type label>,
             signature_payload: <opaque signature bytestring>,
-            signature_escrow: <Escrow Entity object which signed the parent data/key ciphertext>,
+            payload_signature_escrow: <Escrow Entity object which signed the parent data/key ciphertext>,
             signature_uid: <optional uuid of this specific signature object>,
         }
 

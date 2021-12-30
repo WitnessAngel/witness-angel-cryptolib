@@ -14,19 +14,19 @@ ENCRYPTION_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_encryption_algo="AES_EAX",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],
             payload_signatures=[],
         ),
         dict(
             payload_encryption_algo="CHACHA20_POLY1305",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
+                dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
             ],
             payload_signatures=[],
         ),
         dict(
             payload_encryption_algo="AES_CBC",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],
             payload_signatures=[],
         ),
     ]

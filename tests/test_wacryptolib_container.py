@@ -71,7 +71,7 @@ VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_LAYERS = dict(  # Forbidden
             payload_encryption_algo="AES_CBC",
             key_encryption_layers=[],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]
@@ -81,7 +81,7 @@ SIGNATURELESS_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_encryption_algo="AES_EAX",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],
             payload_signatures=[],
         )
     ]
@@ -102,9 +102,9 @@ SIMPLE_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_encryption_algo="AES_CBC",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]
@@ -129,30 +129,30 @@ COMPLEX_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_encryption_algo="AES_EAX",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],
             payload_signatures=[],
         ),
         dict(
             payload_encryption_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)
+                dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         ),
         dict(
             payload_encryption_algo="CHACHA20_POLY1305",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
-                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
+                dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
+                dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA3_256", signature_algo="RSA_PSS", signature_escrow=LOCAL_ESCROW_MARKER),
+                dict(payload_digest_algo="SHA3_256", payload_signature_algo="RSA_PSS", payload_signature_escrow=LOCAL_ESCROW_MARKER),
                 dict(
                     payload_digest_algo="SHA512",
-                    signature_algo="ECC_DSS",
-                    signature_escrow=LOCAL_ESCROW_MARKER,
+                    payload_signature_algo="ECC_DSS",
+                    payload_signature_escrow=LOCAL_ESCROW_MARKER,
                     keychain_uid=ENFORCED_UID2,
                 ),
             ],
@@ -187,26 +187,26 @@ SIMPLE_SHAMIR_CRYPTOCONF = dict(
         dict(
             payload_encryption_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
+                dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=3,
                     key_shared_secret_shards=[
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)],),
                     ],
                 ),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]
@@ -235,14 +235,14 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_encryption_algo="AES_EAX",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],
             payload_signatures=[],
         ),
         dict(
             payload_encryption_algo="AES_CBC",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],
             payload_signatures=[
-                dict(payload_digest_algo="SHA3_512", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         ),
         dict(
@@ -253,25 +253,25 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                     key_shared_secret_threshold=2,
                     key_shared_secret_shards=[
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID2)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID2)],),
                     ],
                 )
             ],
             payload_signatures=[
                 dict(
                     payload_digest_algo="SHA3_256",
-                    signature_algo="RSA_PSS",
-                    signature_escrow=LOCAL_ESCROW_MARKER,
+                    payload_signature_algo="RSA_PSS",
+                    payload_signature_escrow=LOCAL_ESCROW_MARKER,
                     keychain_uid=ENFORCED_UID1,
                 ),
-                dict(payload_digest_algo="SHA512", signature_algo="ECC_DSS", signature_escrow=LOCAL_ESCROW_MARKER),
+                dict(payload_digest_algo="SHA512", payload_signature_algo="ECC_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER),
             ],
         ),
     ]
@@ -506,22 +506,22 @@ RECURSIVE_CRYPTOCONF = dict(
         dict(
             payload_encryption_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
+                dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_shards=[
                         dict(
                              key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
                         dict(
                              key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)]),
                     ],  # Beware, same escrow for the 2 shards, for now
                 ),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]
@@ -615,25 +615,25 @@ def test_passphrase_mapping_during_decryption(tmp_path):
             dict(
                 payload_encryption_algo="AES_CBC",
                 key_encryption_layers=[
-                    dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
+                    dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
                     dict(
                         key_encryption_algo=SHARED_SECRET_MARKER,
                         key_shared_secret_threshold=2,
                         key_shared_secret_shards=[
                             dict(key_encryption_layers=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=shard_escrow1, keychain_uid=keychain_uid_escrow)],),
+                                     dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=shard_escrow1, keychain_uid=keychain_uid_escrow)],),
                             dict(key_encryption_layers=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=shard_escrow2)],),
+                                     dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=shard_escrow2)],),
                             dict(key_encryption_layers=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_escrow=shard_escrow3)],),
+                                     dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=shard_escrow3)],),
                         ],
                     ),
                 ],
                 payload_signatures=[
                     dict(
                         payload_digest_algo="SHA256",
-                        signature_algo="DSA_DSS",
-                        signature_escrow=LOCAL_ESCROW_MARKER,  # Uses separate keypair, no passphrase here
+                        payload_signature_algo="DSA_DSS",
+                        payload_signature_escrow=LOCAL_ESCROW_MARKER,  # Uses separate keypair, no passphrase here
                     )
                 ],
             )
@@ -1190,7 +1190,7 @@ def test_get_cryptoconf_summary():
     # Simulate a cryptoconf with remote escrow webservices
 
     CONF_WITH_ESCROW = copy.deepcopy(COMPLEX_CRYPTOCONF)
-    CONF_WITH_ESCROW["payload_encryption_layers"][0]["key_encryption_layers"][0]["key_escrow"] = dict(
+    CONF_WITH_ESCROW["payload_encryption_layers"][0]["key_encryption_layers"][0]["key_encryption_escrow"] = dict(
         escrow_type="jsonrpc", url="http://www.mydomain.com/json"
     )
 
@@ -1225,7 +1225,7 @@ def test_get_cryptoconf_summary():
     # Test unknown escrow structure
 
     CONF_WITH_BROKEN_ESCROW = copy.deepcopy(SIMPLE_CRYPTOCONF)
-    CONF_WITH_BROKEN_ESCROW["payload_encryption_layers"][0]["key_encryption_layers"][0]["key_escrow"] = dict(abc=33)
+    CONF_WITH_BROKEN_ESCROW["payload_encryption_layers"][0]["key_encryption_layers"][0]["key_encryption_escrow"] = dict(abc=33)
 
     with pytest.raises(ValueError, match="Unrecognized key escrow"):
         get_cryptoconf_summary(CONF_WITH_BROKEN_ESCROW)

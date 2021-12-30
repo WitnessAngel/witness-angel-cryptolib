@@ -35,20 +35,20 @@ EXAMPLE_CRYPTOCONF = dict(
         dict(
             payload_encryption_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER),
+                dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_shards=[
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)]),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_escrow=LOCAL_ESCROW_MARKER)]),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)]),
                     ],  # Beware, same escrow for the 2 shards, for now
                 ),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", signature_algo="DSA_DSS", signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
             ],
         )
     ]

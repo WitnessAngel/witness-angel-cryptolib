@@ -14,25 +14,25 @@ SIGNATURE_HASHER = Crypto.Hash.SHA512
 logger = logging.getLogger(__name__)
 
 
-def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_ALGOS) -> dict:
+def sign_message(message: bytes, *, payload_signature_algo: str, key: KNOWN_KEY_ALGOS) -> dict:
     """
     Return a timestamped signature of the chosen type for the given payload,
     with the provided key (which must be of a compatible type).
 
     :return: dictionary with signature data"""
 
-    assert signature_algo, signature_algo
-    signature_algo = signature_algo.upper()
-    signature_conf = SIGNATURE_ALGOS_REGISTRY.get(signature_algo)
+    assert payload_signature_algo, payload_signature_algo
+    payload_signature_algo = payload_signature_algo.upper()
+    signature_conf = SIGNATURE_ALGOS_REGISTRY.get(payload_signature_algo)
     if signature_conf is None:
-        raise ValueError("Unknown signature algorithm '%s'" % signature_algo)
+        raise ValueError("Unknown signature algorithm '%s'" % payload_signature_algo)
     if not isinstance(key, signature_conf["compatible_key_algo"]):
-        raise ValueError("Incompatible key type %s for signature algorithm %s" % (type(key), signature_algo))
+        raise ValueError("Incompatible key type %s for signature algorithm %s" % (type(key), payload_signature_algo))
     signature_function = signature_conf["signature_function"]
     try:
         signature = signature_function(key=key, message=message)
     except ValueError as exc:
-        raise SignatureCreationError("Failed %s signature creation (%s)" % (signature_algo, exc)) from exc
+        raise SignatureCreationError("Failed %s signature creation (%s)" % (payload_signature_algo, exc)) from exc
     return signature
 
 
@@ -71,31 +71,31 @@ def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey]) -> dict:
     return signature
 
 
-def verify_message_signature(*, message: bytes, signature_algo: str, signature: dict, key: Union[KNOWN_KEY_ALGOS]):
+def verify_message_signature(*, message: bytes, payload_signature_algo: str, signature: dict, key: Union[KNOWN_KEY_ALGOS]):
     """Verify the authenticity of a signature.
 
     Raises if signature is invalid.
 
     :param message: the bytestring which was signed
-    :param signature_algo: the name of the signing algorithm
+    :param payload_signature_algo: the name of the signing algorithm
     :param signature: structure describing the signature
     :param key: the cryptographic key used to verify the signature
     """
     # TODO refactor this with new SIGNATURE_ALGOS_REGISTRY fields
-    signature_algo = signature_algo.upper()
-    if signature_algo == "RSA_PSS":
+    payload_signature_algo = payload_signature_algo.upper()
+    if payload_signature_algo == "RSA_PSS":
         verifier = pss.new(key)
-    elif signature_algo in ["DSA_DSS", "ECC_DSS"]:
+    elif payload_signature_algo in ["DSA_DSS", "ECC_DSS"]:
         verifier = DSS.new(key, "fips-186-3")
     else:
-        raise ValueError("Unknown signature algorithm %s" % signature_algo)
+        raise ValueError("Unknown signature algorithm %s" % payload_signature_algo)
 
     hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=signature["timestamp_utc"])
 
     try:
         verifier.verify(hash_payload, signature["digest"])
     except ValueError as exc:
-        raise SignatureVerificationError("Failed %s signature verification (%s)" % (signature_algo, exc)) from exc
+        raise SignatureVerificationError("Failed %s signature verification (%s)" % (payload_signature_algo, exc)) from exc
 
 
 def _get_utc_timestamp() -> int:
@@ -128,5 +128,5 @@ SIGNATURE_ALGOS_REGISTRY = dict(
     ECC_DSS={"signature_function": _sign_with_dss, "compatible_key_algo": ECC.EccKey},
 )
 
-#: These values can be used as 'signature_algo' parameters.
+#: These values can be used as 'payload_signature_algo' parameters.
 SUPPORTED_SIGNATURE_ALGOS = sorted(SIGNATURE_ALGOS_REGISTRY.keys())

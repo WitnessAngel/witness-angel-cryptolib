@@ -6,7 +6,7 @@ API Documentation
    :caption: Contents:
 
    api/cryptainer
-   api/escrow
+   api/trustee
    api/authenticator
    api/authdevice
    api/keygen

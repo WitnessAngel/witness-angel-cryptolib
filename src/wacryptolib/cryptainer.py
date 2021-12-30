@@ -22,7 +22,7 @@ from schema import Optional as Optionalkey
 
 from wacryptolib.cipher import encrypt_bytestring, decrypt_bytestring, StreamManager, STREAMABLE_ENCRYPTION_ALGOS, \
     SUPPORTED_ENCRYPTION_ALGOS
-from wacryptolib.escrow import EscrowApi as LocalEscrowApi, ReadonlyEscrowApi, EscrowApi
+from wacryptolib.trustee import TrusteeApi as LocalTrusteeApi, ReadonlyTrusteeApi, TrusteeApi
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, \
@@ -60,10 +60,10 @@ SHARED_SECRET_MARKER = "[SHARED_SECRET]"
 
 DUMMY_KEYSTORE_POOL = DummyKeystorePool()  # Common fallback storage with in-memory keys
 
-#: Special value in cryptainers, to invoke a device-local escrow
-LOCAL_ESCROW_MARKER = dict(escrow_type="local")  # FIXME CHANGE THIS
+#: Special value in cryptainers, to invoke a device-local trustee
+LOCAL_TRUSTEE_MARKER = dict(trustee_type="local")  # FIXME CHANGE THIS
 
-AUTHDEVICE_ESCROW_MARKER = dict(escrow_type="authdevice")  # FIXME CHANGE THIS
+AUTHDEVICE_TRUSTEE_MARKER = dict(trustee_type="authdevice")  # FIXME CHANGE THIS
 
 
 class CRYPTAINER_STATES:
@@ -71,16 +71,16 @@ class CRYPTAINER_STATES:
     FINISHED = "FINISHED"
 
 
-def get_escrow_id(escrow_conf: dict) -> str:
-    """Build opaque unique identifier for a specific escrow.
+def get_trustee_id(trustee_conf: dict) -> str:
+    """Build opaque unique identifier for a specific trustee.
 
-    Remains the same as long as escrow dict is completely unmodified.
+    Remains the same as long as trustee dict is completely unmodified.
     """
-    return str(sorted(escrow_conf.items()))
+    return str(sorted(trustee_conf.items()))
 
 
-def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
-    """Analyse a cryptainer and return the escrows (and their keypairs) used by it.
+def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
+    """Analyse a cryptainer and return the trustees (and their keypairs) used by it.
 
     :return: dict with lists of keypair identifiers in fields "encryption" and "signature".
     """
@@ -88,11 +88,11 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
     signature_dependencies = {}
     encryption_dependencies = {}
 
-    def _add_keypair_identifiers_for_escrow(mapper, escrow_conf, keychain_uid, key_algo):
-        escrow_id = get_escrow_id(escrow_conf=escrow_conf)
+    def _add_keypair_identifiers_for_trustee(mapper, trustee_conf, keychain_uid, key_algo):
+        trustee_id = get_trustee_id(trustee_conf=trustee_conf)
         keypair_identifiers = dict(keychain_uid=keychain_uid, key_algo=key_algo)
-        mapper.setdefault(escrow_id, (escrow_conf, []))
-        keypair_identifiers_list = mapper[escrow_id][1]
+        mapper.setdefault(trustee_id, (trustee_conf, []))
+        keypair_identifiers_list = mapper[trustee_id][1]
         if keypair_identifiers not in keypair_identifiers_list:
             keypair_identifiers_list.append(keypair_identifiers)
 
@@ -101,15 +101,15 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
             key_algo_encryption = key_encryption_layer["key_encryption_algo"]
 
             if key_algo_encryption == SHARED_SECRET_MARKER:
-                escrows = key_encryption_layer["key_shared_secret_shards"]
-                for escrow in escrows:
-                    _grab_key_encryption_layers_dependencies(escrow["key_encryption_layers"])  # Recursive call
+                trustees = key_encryption_layer["key_shared_secret_shards"]
+                for trustee in trustees:
+                    _grab_key_encryption_layers_dependencies(trustee["key_encryption_layers"])  # Recursive call
             else:
                 keychain_uid_encryption = key_encryption_layer.get("keychain_uid") or keychain_uid
-                escrow_conf = key_encryption_layer["key_encryption_escrow"]
-                _add_keypair_identifiers_for_escrow(
+                trustee_conf = key_encryption_layer["key_encryption_trustee"]
+                _add_keypair_identifiers_for_trustee(
                     mapper=encryption_dependencies,
-                    escrow_conf=escrow_conf,
+                    trustee_conf=trustee_conf,
                     keychain_uid=keychain_uid_encryption,
                     key_algo=key_algo_encryption,
                 )
@@ -120,60 +120,60 @@ def gather_escrow_dependencies(cryptainers: Sequence) -> dict:
             for signature_conf in payload_encryption_layer["payload_signatures"]:
                 key_algo_signature = signature_conf["payload_signature_algo"]
                 keychain_uid_signature = signature_conf.get("keychain_uid") or keychain_uid
-                escrow_conf = signature_conf["payload_signature_escrow"]
+                trustee_conf = signature_conf["payload_signature_trustee"]
 
-                _add_keypair_identifiers_for_escrow(
+                _add_keypair_identifiers_for_trustee(
                     mapper=signature_dependencies,
-                    escrow_conf=escrow_conf,
+                    trustee_conf=trustee_conf,
                     keychain_uid=keychain_uid_signature,
                     key_algo=key_algo_signature,
                 )
 
             _grab_key_encryption_layers_dependencies(payload_encryption_layer["key_encryption_layers"])
 
-    escrow_dependencies = {"signature": signature_dependencies, "encryption": encryption_dependencies}
-    return escrow_dependencies
+    trustee_dependencies = {"signature": signature_dependencies, "encryption": encryption_dependencies}
+    return trustee_dependencies
 
 
 def request_decryption_authorizations(
-        escrow_dependencies: dict, keystore_pool, request_message: str, passphrases: Optional[list] = None
+        trustee_dependencies: dict, keystore_pool, request_message: str, passphrases: Optional[list] = None
 ) -> dict:
-    """Loop on encryption escrows and request decryption authorization for all the keypairs that they own.
+    """Loop on encryption trustees and request decryption authorization for all the keypairs that they own.
 
-    :return: dict mapping escrow ids to authorization result dicts.
+    :return: dict mapping trustee ids to authorization result dicts.
     """
     request_authorization_result = {}
-    encryption_escrows_dependencies = escrow_dependencies.get("encryption")
+    encryption_trustees_dependencies = trustee_dependencies.get("encryption")
 
-    for escrow_id, escrow_data in encryption_escrows_dependencies.items():
-        key_encryption_escrow, keypair_identifiers = escrow_data
-        proxy = get_escrow_proxy(escrow=key_encryption_escrow, keystore_pool=keystore_pool)
+    for trustee_id, trustee_data in encryption_trustees_dependencies.items():
+        key_encryption_trustee, keypair_identifiers = trustee_data
+        proxy = get_trustee_proxy(trustee=key_encryption_trustee, keystore_pool=keystore_pool)
         result = proxy.request_decryption_authorization(
             keypair_identifiers=keypair_identifiers, request_message=request_message, passphrases=passphrases
         )
-        request_authorization_result[escrow_id] = result
+        request_authorization_result[trustee_id] = result
 
     return request_authorization_result
 
 
-def get_escrow_proxy(escrow: dict, keystore_pool: KeystorePoolBase):
+def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):
     """
-    Return an EscrowApi subclass instance (or proxy) depending on the content of `escrow` dict.
+    Return an TrusteeApi subclass instance (or proxy) depending on the content of `trustee` dict.
     """
-    assert isinstance(escrow, dict), escrow
+    assert isinstance(trustee, dict), trustee
 
-    escrow_type = escrow.get("escrow_type")  # Might be None
+    trustee_type = trustee.get("trustee_type")  # Might be None
 
-    if escrow_type == LOCAL_ESCROW_MARKER["escrow_type"]:
-        return LocalEscrowApi(keystore_pool.get_local_keystore())
-    elif escrow_type == AUTHDEVICE_ESCROW_MARKER["escrow_type"]:
-        authdevice_uid = escrow["authdevice_uid"]
+    if trustee_type == LOCAL_TRUSTEE_MARKER["trustee_type"]:
+        return LocalTrusteeApi(keystore_pool.get_local_keystore())
+    elif trustee_type == AUTHDEVICE_TRUSTEE_MARKER["trustee_type"]:
+        authdevice_uid = trustee["authdevice_uid"]
         keystore = keystore_pool.get_imported_keystore(authdevice_uid)
-        return ReadonlyEscrowApi(keystore)
-    elif escrow_type == "jsonrpc":
-        return JsonRpcProxy(url=escrow["url"], response_error_handler=status_slugs_response_error_handler)
-    # TODO - Implement imported storages, escrow lookup in global registry, shared-secret group, etc.
-    raise ValueError("Unrecognized escrow identifiers: %s" % str(escrow))
+        return ReadonlyTrusteeApi(keystore)
+    elif trustee_type == "jsonrpc":
+        return JsonRpcProxy(url=trustee["url"], response_error_handler=status_slugs_response_error_handler)
+    # TODO - Implement imported storages, trustee lookup in global registry, shared-secret group, etc.
+    raise ValueError("Unrecognized trustee identifiers: %s" % str(trustee))
 
 
 # FIXME rename keychain_uid to default_keychain_uid where relevant!!
@@ -183,10 +183,10 @@ class CryptainerBase:
     """
     BEWARE - this class-based design is provisional and might change a lot.
 
-    `keystore_pool` will be used to fetch local/imported escrows necessary to encryption/decryption operations.
+    `keystore_pool` will be used to fetch local/imported trustees necessary to encryption/decryption operations.
 
-    `passphrase_mapper` maps escrows IDs to potential passphrases; a None key can be used to provide additional
-    passphrases for all escrows.
+    `passphrase_mapper` maps trustees IDs to potential passphrases; a None key can be used to provide additional
+    passphrases for all trustees.
     """
 
     def __init__(self, keystore_pool: KeystorePoolBase = None, passphrase_mapper: Optional[dict] = None):
@@ -334,7 +334,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
     def _generate_cryptainer_base_and_secrets(self, cryptoconf: dict, keychain_uid=None, metadata=None) -> tuple:
         """
         Build a payload-less and signature-less cryptainer, preconfigured with a set of symmetric keys
-        under their final form (encrypted by escrows). A separate extract, with symmetric keys as well as algo names, is returned so that actual payload encryption and signature can be performed separately.
+        under their final form (encrypted by trustees). A separate extract, with symmetric keys as well as algo names, is returned so that actual payload encryption and signature can be performed separately.
 
         :param cryptoconf: configuration tree
         :param keychain_uid: uuid for the set of encryption keys used
@@ -445,12 +445,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
             shares_ciphertexts = []
 
-            for shard, escrow_conf in zip(shards, key_shared_secret_shards):
+            for shard, trustee_conf in zip(shards, key_shared_secret_shards):
                 shard_bytes = dump_to_json_bytes(shard)  # The tuple (idx, payload) of each shard thus becomes encryptable
                 shares_ciphertext = self._encrypt_key_through_multiple_layers(  # FIXME rename singular
                         keychain_uid=keychain_uid,
                         key_bytes=shard_bytes,
-                        key_encryption_layers=escrow_conf["key_encryption_layers"])  # Recursive structure
+                        key_encryption_layers=trustee_conf["key_encryption_layers"])  # Recursive structure
                 shares_ciphertexts.append(shares_ciphertext)
 
             key_cipherdict = {"shards": shares_ciphertexts}  # A dict is more future-proof
@@ -463,12 +463,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid_encryption,
                 key_bytes=key_bytes,
-                escrow=key_encryption_layer["key_encryption_escrow"],
+                trustee=key_encryption_layer["key_encryption_trustee"],
             )
             return key_cipherdict
 
     def _encrypt_with_asymmetric_cipher(
-        self, encryption_algo: str, keychain_uid: uuid.UUID, key_bytes: bytes, escrow
+        self, encryption_algo: str, keychain_uid: uuid.UUID, key_bytes: bytes, trustee
     ) -> dict:
         """
         Encrypt given payload with an asymmetric algorithm.
@@ -476,11 +476,11 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         :param encryption_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
         :param key_bytes: symmetric key as bytes to encrypt
-        :param escrow: escrow used for encryption (findable in configuration tree)
+        :param trustee: trustee used for encryption (findable in configuration tree)
 
         :return: dictionary which contains every payload needed to decrypt the ciphered payload
         """
-        encryption_proxy = get_escrow_proxy(escrow=escrow, keystore_pool=self._keystore_pool)
+        encryption_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
 
         logger.debug("Generating asymmetric key of type %r", encryption_algo)
         subkey_pem = encryption_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=encryption_algo)
@@ -496,7 +496,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         Make a loop through all shards from shared secret algorithm to encrypt each of them.
 
         :param shards: list of tuples containing an index and its shard payload
-        :param key_shared_secret_shards: cryptoconf subtree with shard escrow information
+        :param key_shared_secret_shards: cryptoconf subtree with shard trustee information
         :param keychain_uid: uuid for the set of encryption keys used
 
         :return: list of encrypted shards
@@ -511,14 +511,14 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
             conf_shard = key_shared_secret_shards[shard_idx]
             shard_encryption_algo = conf_shard["shard_encryption_algo"]
-            shard_escrow = conf_shard["shard_escrow"]
+            shard_trustee = conf_shard["shard_trustee"]
             keychain_uid_shard = conf_shard.get("keychain_uid") or keychain_uid
 
             shard_cipherdict = self._encrypt_with_asymmetric_cipher(
                 encryption_algo=shard_encryption_algo,
                 keychain_uid=keychain_uid_shard,
                 key_bytes=shard[1],
-                escrow=shard_escrow,
+                trustee=shard_trustee,
             )
 
             all_encrypted_shards.append((shard[0], shard_cipherdict))
@@ -568,7 +568,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         payload_digest = cryptoconf["payload_digest"]  # Must have been set before, using payload_digest_algo field
         assert payload_digest, payload_digest
 
-        encryption_proxy = get_escrow_proxy(escrow=cryptoconf["payload_signature_escrow"], keystore_pool=self._keystore_pool)
+        encryption_proxy = get_trustee_proxy(trustee=cryptoconf["payload_signature_trustee"], keystore_pool=self._keystore_pool)
 
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
 
@@ -676,20 +676,20 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
             logger.debug("Deciphering each shard")
 
             # If some shards are missing, we won't detect it here because zip() stops at shortest list
-            for shard_ciphertext, escrow_conf in zip(shares_ciphertexts, key_shared_secret_shards):
+            for shard_ciphertext, trustee_conf in zip(shares_ciphertexts, key_shared_secret_shards):
 
                 try:
                     shard_bytes = self._decrypt_key_through_multiple_layers(
                             keychain_uid=keychain_uid,
                             key_ciphertext=shard_ciphertext,
-                            encryption_layers=escrow_conf["key_encryption_layers"])  # Recursive structure
+                            encryption_layers=trustee_conf["key_encryption_layers"])  # Recursive structure
                     shard = load_from_json_bytes(shard_bytes)  # The tuple (idx, payload) of each shard thus becomes encryptable
                     decrypted_shards.append(shard)
 
                 # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
-                except Exception as exc:  # If actual escrow doesn't work, we can go to next one
+                except Exception as exc:  # If actual trustee doesn't work, we can go to next one
                     decryption_errors.append(exc)
-                    logger.error("Error when decrypting shard of %s: %r" % (escrow_conf, exc), exc_info=True)
+                    logger.error("Error when decrypting shard of %s: %r" % (trustee_conf, exc), exc_info=True)
 
                 if len(decrypted_shards) == key_shared_secret_threshold:
                     logger.debug("A sufficient number of shards has been decrypted")
@@ -714,12 +714,12 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
                 encryption_algo=key_encryption_algo,
                 keychain_uid=keychain_uid_encryption,
                 cipherdict=key_cipherdict,
-                escrow=encryption_layer["key_encryption_escrow"],
+                trustee=encryption_layer["key_encryption_trustee"],
             )
             return key_bytes
 
     def _decrypt_with_asymmetric_cipher(
-            self, encryption_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, escrow: dict
+            self, encryption_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, trustee: dict
     ) -> bytes:
         """
         Decrypt given cipherdict with an asymmetric algorithm.
@@ -727,14 +727,14 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         :param encryption_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
         :param cipherdict: dictionary with payload components needed to decrypt the ciphered payload
-        :param escrow: escrow used for encryption (findable in configuration tree)
+        :param trustee: trustee used for encryption (findable in configuration tree)
 
         :return: decypted payload as bytes
         """
-        encryption_proxy = get_escrow_proxy(escrow=escrow, keystore_pool=self._keystore_pool)
+        encryption_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
 
-        escrow_id = get_escrow_id(escrow)
-        passphrases = self._passphrase_mapper.get(escrow_id) or []
+        trustee_id = get_trustee_id(trustee)
+        passphrases = self._passphrase_mapper.get(trustee_id) or []
         assert isinstance(passphrases, list), repr(passphrases)  # No SINGLE passphrase here
 
         passphrases += self._passphrase_mapper.get(None) or []  # Add COMMON passphrases
@@ -767,7 +767,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         for shard_idx, shard_conf in enumerate(key_shared_secret_shards):
 
             shard_encryption_algo = shard_conf["shard_encryption_algo"]
-            shard_escrow = shard_conf["shard_escrow"]
+            shard_trustee = shard_conf["shard_trustee"]
             keychain_uid_shard = shard_conf.get("keychain_uid") or keychain_uid
 
             try:
@@ -780,15 +780,15 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
                     encryption_algo=shard_encryption_algo,
                     keychain_uid=keychain_uid_shard,
                     cipherdict=encrypted_shard[1],
-                    escrow=shard_escrow,
+                    trustee=shard_trustee,
                 )
                 shard = (encrypted_shard[0], shard_plaintext)
                 decrypted_shards.append(shard)
 
             # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
-            except Exception as exc:  # If actual escrow doesn't work, we can go to next one
+            except Exception as exc:  # If actual trustee doesn't work, we can go to next one
                 decryption_errors.append(exc)
-                logger.error("Error when decrypting shard of %s: %r" % (shard_escrow, exc), exc_info=True)
+                logger.error("Error when decrypting shard of %s: %r" % (shard_trustee, exc), exc_info=True)
 
             if len(decrypted_shards) == key_shared_secret_threshold:
                 logger.debug("A sufficient number of shards has been decrypted")
@@ -812,7 +812,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         payload_digest_algo = cryptoconf["payload_digest_algo"]
         payload_signature_algo = cryptoconf["payload_signature_algo"]
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
-        encryption_proxy = get_escrow_proxy(escrow=cryptoconf["payload_signature_escrow"], keystore_pool=self._keystore_pool)
+        encryption_proxy = get_trustee_proxy(trustee=cryptoconf["payload_signature_trustee"], keystore_pool=self._keystore_pool)
         public_key_pem = encryption_proxy.fetch_public_key(
             keychain_uid=keychain_uid_signature, key_algo=payload_signature_algo, must_exist=True
         )
@@ -925,7 +925,7 @@ def encrypt_payload_into_cryptainer(
     keystore_pool: Optional[KeystorePoolBase] = None
 ) -> dict:
     """Turn raw payload into a high-security cryptainer, which can only be decrypted with
-    the agreement of the owner and multiple third-party escrows.
+    the agreement of the owner and multiple third-party trustees.
 
     :param data: bytestring of media (image, video, sound...) or readable file object (file immediately deleted then)
     :param cryptoconf: tree of specific encryption settings
@@ -946,7 +946,7 @@ def decrypt_payload_from_cryptainer(
 
     :param cryptainer: the cryptainer tree, which holds all information about involved keys
     :param keystore_pool: optional key storage pool
-    :param passphrase_mapper: optional dict mapping escrow IDs to their lists of passphrases
+    :param passphrase_mapper: optional dict mapping trustee IDs to their lists of passphrases
     :param verify: whether to check MAC tags of the ciphertext
 
     :return: raw bytestring
@@ -1343,30 +1343,30 @@ def get_cryptoconf_summary(conf_or_cryptainer):  # FIXME move up like in docs
     Returns a string summary of the layers of encryption/signature of a cryptainer or a configuration tree.
     """
 
-    def _get_escrow_identifier(_escrow):
-        if _escrow == LOCAL_ESCROW_MARKER:
-            _escrow = "local device"
-        elif "url" in _escrow:
-            _escrow = urlparse(_escrow["url"]).netloc
+    def _get_trustee_identifier(_trustee):
+        if _trustee == LOCAL_TRUSTEE_MARKER:
+            _trustee = "local device"
+        elif "url" in _trustee:
+            _trustee = urlparse(_trustee["url"]).netloc
         else:
-            raise ValueError("Unrecognized key escrow %s" % _escrow)
-        return _escrow
+            raise ValueError("Unrecognized key trustee %s" % _trustee)
+        return _trustee
 
     lines = []
     for idx, payload_encryption_layer in enumerate(conf_or_cryptainer["payload_encryption_layers"], start=1):
         lines.append("Data encryption layer %d: %s" % (idx, payload_encryption_layer["payload_encryption_algo"]))
         lines.append("  Key encryption layers:")
         for idx2, key_encryption_layer in enumerate(payload_encryption_layer["key_encryption_layers"], start=1):
-            key_encryption_escrow = key_encryption_layer["key_encryption_escrow"]
-            escrow_id = _get_escrow_identifier(key_encryption_escrow)
-            lines.append("    %s (by %s)" % (key_encryption_layer["key_encryption_algo"], escrow_id))
+            key_encryption_trustee = key_encryption_layer["key_encryption_trustee"]
+            trustee_id = _get_trustee_identifier(key_encryption_trustee)
+            lines.append("    %s (by %s)" % (key_encryption_layer["key_encryption_algo"], trustee_id))
         lines.append("  Signatures:")
         for idx3, payload_signature in enumerate(payload_encryption_layer["payload_signatures"], start=1):
-            payload_signature_escrow = payload_signature["payload_signature_escrow"]
-            escrow_id = _get_escrow_identifier(payload_signature_escrow)
+            payload_signature_trustee = payload_signature["payload_signature_trustee"]
+            trustee_id = _get_trustee_identifier(payload_signature_trustee)
             lines.append(
                 "    %s/%s (by %s)"
-                % (payload_signature["payload_digest_algo"], payload_signature["payload_signature_algo"], escrow_id)
+                % (payload_signature["payload_digest_algo"], payload_signature["payload_signature_algo"], trustee_id)
             )
     result = "\n".join(lines) + "\n"
     return result
@@ -1415,7 +1415,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
     payload_signature = {
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
         "payload_signature_algo": Or(*SUPPORTED_SIGNATURE_ALGOS),
-        "payload_signature_escrow": Const(LOCAL_ESCROW_MARKER),
+        "payload_signature_trustee": Const(LOCAL_TRUSTEE_MARKER),
         Optionalkey("keychain_uid"): micro_schema_uid
     }
 
@@ -1444,7 +1444,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
 
     SIMPLE_CRYPTAINER_PIECE = {
         "key_encryption_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
-        "key_encryption_escrow": Const(LOCAL_ESCROW_MARKER),
+        "key_encryption_trustee": Const(LOCAL_TRUSTEE_MARKER),
         Optionalkey("keychain_uid"): micro_schema_uid
     }
 

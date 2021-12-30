@@ -384,7 +384,7 @@ class DummyKeystorePool(KeystorePoolBase):  # FIXME rename to InMemoryKeystorePo
 class FilesystemKeystorePool(KeystorePoolBase):
     """This class handles a set of locally stored key storages.
 
-    The local storage represents the current device/owner, and is expected to be used by read-write escrows,
+    The local storage represents the current device/owner, and is expected to be used by read-write trustees,
     whereas imported key storages are supposed to be readonly, and only filled with keypairs imported from key-devices.
     """
 

@@ -20,7 +20,7 @@ from Crypto.Random import get_random_bytes
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool
 from wacryptolib.cryptainer import (
-    LOCAL_ESCROW_MARKER,
+    LOCAL_TRUSTEE_MARKER,
     encrypt_payload_into_cryptainer,
     decrypt_payload_from_cryptainer,
     CryptainerStorage,
@@ -30,9 +30,9 @@ from wacryptolib.cryptainer import (
     dump_cryptainer_to_filesystem,
     load_cryptainer_from_filesystem,
     SHARED_SECRET_MARKER,
-    get_escrow_id,
-    gather_escrow_dependencies,
-    get_escrow_proxy,
+    get_trustee_id,
+    gather_trustee_dependencies,
+    get_trustee_proxy,
     request_decryption_authorizations,
     delete_cryptainer_from_filesystem, CRYPTAINER_DATETIME_FORMAT, get_cryptainer_size_on_filesystem, CryptainerWriter,
     encrypt_payload_and_dump_cryptainer_to_filesystem, is_cryptainer_cryptoconf_streamable, CONF_SCHEMA_PYTHON,
@@ -40,8 +40,8 @@ from wacryptolib.cryptainer import (
     CRYPTAINER_TEMP_SUFFIX,
 )
 from wacryptolib.cipher import SUPPORTED_ENCRYPTION_ALGOS, AUTHENTICATED_ENCRYPTION_ALGOS
-from wacryptolib.escrow import (
-    EscrowApi,
+from wacryptolib.trustee import (
+    TrusteeApi,
     generate_keypair_for_storage,
     generate_free_keypair_for_least_provisioned_key_algo,
 )
@@ -71,7 +71,7 @@ VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_LAYERS = dict(  # Forbidden
             payload_encryption_algo="AES_CBC",
             key_encryption_layers=[],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
             ],
         )
     ]
@@ -81,17 +81,17 @@ SIGNATURELESS_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_encryption_algo="AES_EAX",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
             payload_signatures=[],
         )
     ]
 )
 
 
-SIGNATURELESS_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
+SIGNATURELESS_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
-        "[('escrow_type', 'local')]": (
-            {"escrow_type": "local"},
+        "[('trustee_type', 'local')]": (
+            {"trustee_type": "local"},
             [{"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid}],
         )
     },
@@ -102,24 +102,24 @@ SIMPLE_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_encryption_algo="AES_CBC",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
             ],
         )
     ]
 )
 
-SIMPLE_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
+SIMPLE_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
-        "[('escrow_type', 'local')]": (
-            {"escrow_type": "local"},
+        "[('trustee_type', 'local')]": (
+            {"trustee_type": "local"},
             [{"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid}],
         )
     },
     "signature": {
-        "[('escrow_type', 'local')]": (
-            {"escrow_type": "local"},
+        "[('trustee_type', 'local')]": (
+            {"trustee_type": "local"},
             [{"key_algo": "DSA_DSS", "keychain_uid": keychain_uid}],
         )
     },
@@ -129,30 +129,30 @@ COMPLEX_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_encryption_algo="AES_EAX",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
             payload_signatures=[],
         ),
         dict(
             payload_encryption_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)
+                dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID1)
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
             ],
         ),
         dict(
             payload_encryption_algo="CHACHA20_POLY1305",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
-                dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
+                dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA3_256", payload_signature_algo="RSA_PSS", payload_signature_escrow=LOCAL_ESCROW_MARKER),
+                dict(payload_digest_algo="SHA3_256", payload_signature_algo="RSA_PSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER),
                 dict(
                     payload_digest_algo="SHA512",
                     payload_signature_algo="ECC_DSS",
-                    payload_signature_escrow=LOCAL_ESCROW_MARKER,
+                    payload_signature_trustee=LOCAL_TRUSTEE_MARKER,
                     keychain_uid=ENFORCED_UID2,
                 ),
             ],
@@ -160,10 +160,10 @@ COMPLEX_CRYPTOCONF = dict(
     ]
 )
 
-COMPLEX_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
+COMPLEX_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
-        "[('escrow_type', 'local')]": (
-            {"escrow_type": "local"},
+        "[('trustee_type', 'local')]": (
+            {"trustee_type": "local"},
             [
                 {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
                 {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID1},
@@ -171,8 +171,8 @@ COMPLEX_CRYPTAINER_ESCROW_DEPENDENCIES = lambda keychain_uid: {
         )
     },
     "signature": {
-        "[('escrow_type', 'local')]": (
-            {"escrow_type": "local"},
+        "[('trustee_type', 'local')]": (
+            {"trustee_type": "local"},
             [
                 {"key_algo": "DSA_DSS", "keychain_uid": keychain_uid},
                 {"key_algo": "RSA_PSS", "keychain_uid": keychain_uid},
@@ -187,36 +187,36 @@ SIMPLE_SHAMIR_CRYPTOCONF = dict(
         dict(
             payload_encryption_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
+                dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=3,
                     key_shared_secret_shards=[
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID1)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID1)],),
                     ],
                 ),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
             ],
         )
     ]
 )
 
-def SIMPLE_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES(keychain_uid):
+def SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
     return {
         "encryption": {
-            "[('escrow_type', 'local')]": (
-                {"escrow_type": "local"},
+            "[('trustee_type', 'local')]": (
+                {"trustee_type": "local"},
                 [
                     {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
                     {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID1},
@@ -224,8 +224,8 @@ def SIMPLE_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES(keychain_uid):
             )
         },
         "signature": {
-            "[('escrow_type', 'local')]": (
-                {"escrow_type": "local"},
+            "[('trustee_type', 'local')]": (
+                {"trustee_type": "local"},
                 [{"key_algo": "DSA_DSS", "keychain_uid": keychain_uid}],
             )
         },
@@ -235,14 +235,14 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_encryption_algo="AES_EAX",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
             payload_signatures=[],
         ),
         dict(
             payload_encryption_algo="AES_CBC",
-            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],
+            key_encryption_layers=[dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
             payload_signatures=[
-                dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
             ],
         ),
         dict(
@@ -253,14 +253,14 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                     key_shared_secret_threshold=2,
                     key_shared_secret_shards=[
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER, keychain_uid=ENFORCED_UID2)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID2)],),
                     ],
                 )
             ],
@@ -268,21 +268,21 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                 dict(
                     payload_digest_algo="SHA3_256",
                     payload_signature_algo="RSA_PSS",
-                    payload_signature_escrow=LOCAL_ESCROW_MARKER,
+                    payload_signature_trustee=LOCAL_TRUSTEE_MARKER,
                     keychain_uid=ENFORCED_UID1,
                 ),
-                dict(payload_digest_algo="SHA512", payload_signature_algo="ECC_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER),
+                dict(payload_digest_algo="SHA512", payload_signature_algo="ECC_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER),
             ],
         ),
     ]
 )
 
 
-def COMPLEX_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES(keychain_uid):
+def COMPLEX_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
      return {
         "encryption": {
-            "[('escrow_type', 'local')]": (
-                {"escrow_type": "local"},
+            "[('trustee_type', 'local')]": (
+                {"trustee_type": "local"},
                 [
                     {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
                     {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID2},
@@ -290,8 +290,8 @@ def COMPLEX_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES(keychain_uid):
             )
         },
         "signature": {
-            "[('escrow_type', 'local')]": (
-                {"escrow_type": "local"},
+            "[('trustee_type', 'local')]": (
+                {"trustee_type": "local"},
                 [
                     {"key_algo": "DSA_DSS", "keychain_uid": keychain_uid},
                     {"key_algo": "RSA_PSS", "keychain_uid": ENFORCED_UID1},
@@ -344,14 +344,14 @@ def test_void_cryptoconfs(cryptoconf):
 
 
 @pytest.mark.parametrize(
-    "cryptoconf,escrow_dependencies_builder",
+    "cryptoconf,trustee_dependencies_builder",
     [
-        (SIGNATURELESS_CRYPTOCONF, SIGNATURELESS_CRYPTAINER_ESCROW_DEPENDENCIES),
-        (SIMPLE_CRYPTOCONF, SIMPLE_CRYPTAINER_ESCROW_DEPENDENCIES),
-        (COMPLEX_CRYPTOCONF, COMPLEX_CRYPTAINER_ESCROW_DEPENDENCIES),
+        (SIGNATURELESS_CRYPTOCONF, SIGNATURELESS_CRYPTAINER_TRUSTEE_DEPENDENCIES),
+        (SIMPLE_CRYPTOCONF, SIMPLE_CRYPTAINER_TRUSTEE_DEPENDENCIES),
+        (COMPLEX_CRYPTOCONF, COMPLEX_CRYPTAINER_TRUSTEE_DEPENDENCIES),
     ],
 )
-def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, escrow_dependencies_builder):
+def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, trustee_dependencies_builder):
     payload = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
@@ -378,24 +378,24 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, esc
     local_keypair_identifiers = keystore_pool.get_local_keystore()._cached_keypairs
     print(">>> Test local_keypair_identifiers ->", list(local_keypair_identifiers.keys()))
 
-    escrow_dependencies = gather_escrow_dependencies(cryptainers=[cryptainer])
+    trustee_dependencies = gather_trustee_dependencies(cryptainers=[cryptainer])
     print("GOTTEN DEPENDENCIES:")
-    pprint(escrow_dependencies)
+    pprint(trustee_dependencies)
     print("THEORETICAL DEPENDENCIES:")
-    pprint(escrow_dependencies_builder(cryptainer["keychain_uid"]))
+    pprint(trustee_dependencies_builder(cryptainer["keychain_uid"]))
 
-    assert escrow_dependencies == escrow_dependencies_builder(cryptainer["keychain_uid"])
+    assert trustee_dependencies == trustee_dependencies_builder(cryptainer["keychain_uid"])
 
     # Check that all referenced keys were really created during encryption (so keychain_uid overriding works fine)
-    for escrow_dependency_structs in escrow_dependencies.values():
-        for escrow_dependency_struct in escrow_dependency_structs.values():
-            escrow_conf, keypairs_identifiers = escrow_dependency_struct
-            escrow = get_escrow_proxy(escrow_conf, keystore_pool=keystore_pool)
+    for trustee_dependency_structs in trustee_dependencies.values():
+        for trustee_dependency_struct in trustee_dependency_structs.values():
+            trustee_conf, keypairs_identifiers = trustee_dependency_struct
+            trustee = get_trustee_proxy(trustee_conf, keystore_pool=keystore_pool)
             for keypairs_identifier in keypairs_identifiers:
-                assert escrow.fetch_public_key(**keypairs_identifier, must_exist=True)
+                assert trustee.fetch_public_key(**keypairs_identifier, must_exist=True)
 
     all_authorization_results = request_decryption_authorizations(
-        escrow_dependencies=escrow_dependencies, request_message="Decryption needed", keystore_pool=keystore_pool
+        trustee_dependencies=trustee_dependencies, request_message="Decryption needed", keystore_pool=keystore_pool
     )
 
     # Generic check of data structure
@@ -425,13 +425,13 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, esc
 
 
 @pytest.mark.parametrize(
-    "shamir_cryptoconf, escrow_dependencies_builder",
+    "shamir_cryptoconf, trustee_dependencies_builder",
     [
-        (SIMPLE_SHAMIR_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES),
-        (COMPLEX_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTAINER_ESCROW_DEPENDENCIES),
+        (SIMPLE_SHAMIR_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES),
+        (COMPLEX_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES),
     ],
 )
-def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_dependencies_builder):
+def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_dependencies_builder):
     payload = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
@@ -446,8 +446,8 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, escrow_d
     if keychain_uid:
         assert cryptainer["keychain_uid"] == keychain_uid
 
-    escrow_dependencies = gather_escrow_dependencies(cryptainers=[cryptainer])
-    assert escrow_dependencies == escrow_dependencies_builder(cryptainer["keychain_uid"])
+    trustee_dependencies = gather_trustee_dependencies(cryptainers=[cryptainer])
+    assert trustee_dependencies == trustee_dependencies_builder(cryptainer["keychain_uid"])
 
     assert isinstance(cryptainer["payload_ciphertext"], bytes)
 
@@ -506,22 +506,22 @@ RECURSIVE_CRYPTOCONF = dict(
         dict(
             payload_encryption_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
+                dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
                 dict(
                     key_encryption_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_shards=[
                         dict(
                              key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)],),
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
                         dict(
                              key_encryption_layers=[
-                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER)]),
-                    ],  # Beware, same escrow for the 2 shards, for now
+                                 dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)]),
+                    ],  # Beware, same trustee for the 2 shards, for now
                 ),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_escrow=LOCAL_ESCROW_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
             ],
         )
     ]
@@ -562,11 +562,11 @@ def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
 def test_passphrase_mapping_during_decryption(tmp_path):
     keychain_uid = generate_uuid0()
 
-    keychain_uid_escrow = generate_uuid0()
+    keychain_uid_trustee = generate_uuid0()
 
     local_passphrase = "b^yep&ts"
 
-    keystore_uid1 = keychain_uid_escrow  # FIXME why mix key and storage uids ?
+    keystore_uid1 = keychain_uid_trustee  # FIXME why mix key and storage uids ?
     passphrase1 = "tata"
 
     keystore_uid2 = generate_uuid0()
@@ -588,7 +588,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     )
     keystore1 = keystore_pool.get_imported_keystore(keystore_uid1)
     generate_keypair_for_storage(
-        key_algo="RSA_OAEP", keystore=keystore1, keychain_uid=keychain_uid_escrow, passphrase=passphrase1
+        key_algo="RSA_OAEP", keystore=keystore1, keychain_uid=keychain_uid_trustee, passphrase=passphrase1
     )
     keystore2 = keystore_pool.get_imported_keystore(keystore_uid2)
     generate_keypair_for_storage(
@@ -599,33 +599,33 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         key_algo="RSA_OAEP", keystore=keystore3, keychain_uid=keychain_uid, passphrase=passphrase3
     )
 
-    local_escrow_id = get_escrow_id(LOCAL_ESCROW_MARKER)
+    local_trustee_id = get_trustee_id(LOCAL_TRUSTEE_MARKER)
 
-    shard_escrow1 = dict(escrow_type="authdevice", authdevice_uid=keystore_uid1)
-    shard_escrow1_id = get_escrow_id(shard_escrow1)
+    shard_trustee1 = dict(trustee_type="authdevice", authdevice_uid=keystore_uid1)
+    shard_trustee1_id = get_trustee_id(shard_trustee1)
 
-    shard_escrow2 = dict(escrow_type="authdevice", authdevice_uid=keystore_uid2)
-    shard_escrow2_id = get_escrow_id(shard_escrow2)
+    shard_trustee2 = dict(trustee_type="authdevice", authdevice_uid=keystore_uid2)
+    shard_trustee2_id = get_trustee_id(shard_trustee2)
 
-    shard_escrow3 = dict(escrow_type="authdevice", authdevice_uid=keystore_uid3)
-    shard_escrow3_id = get_escrow_id(shard_escrow3)
+    shard_trustee3 = dict(trustee_type="authdevice", authdevice_uid=keystore_uid3)
+    shard_trustee3_id = get_trustee_id(shard_trustee3)
 
     cryptoconf = dict(
         payload_encryption_layers=[
             dict(
                 payload_encryption_algo="AES_CBC",
                 key_encryption_layers=[
-                    dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=LOCAL_ESCROW_MARKER),
+                    dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
                     dict(
                         key_encryption_algo=SHARED_SECRET_MARKER,
                         key_shared_secret_threshold=2,
                         key_shared_secret_shards=[
                             dict(key_encryption_layers=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=shard_escrow1, keychain_uid=keychain_uid_escrow)],),
+                                     dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=shard_trustee1, keychain_uid=keychain_uid_trustee)],),
                             dict(key_encryption_layers=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=shard_escrow2)],),
+                                     dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=shard_trustee2)],),
                             dict(key_encryption_layers=[
-                                     dict(key_encryption_algo="RSA_OAEP", key_encryption_escrow=shard_escrow3)],),
+                                     dict(key_encryption_algo="RSA_OAEP", key_encryption_trustee=shard_trustee3)],),
                         ],
                     ),
                 ],
@@ -633,7 +633,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                     dict(
                         payload_digest_algo="SHA256",
                         payload_signature_algo="DSA_DSS",
-                        payload_signature_escrow=LOCAL_ESCROW_MARKER,  # Uses separate keypair, no passphrase here
+                        payload_signature_trustee=LOCAL_TRUSTEE_MARKER,  # Uses separate keypair, no passphrase here
                     )
                 ],
             )
@@ -646,33 +646,33 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, keystore_pool=keystore_pool, metadata=None
     )
 
-    # FIXME we must TEST that keychain_uid_escrow is necessary for decryption for example by deleting it before a decrypt()
+    # FIXME we must TEST that keychain_uid_trustee is necessary for decryption for example by deleting it before a decrypt()
 
     with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
         decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
 
     with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
         decrypt_payload_from_cryptainer(
-            cryptainer, keystore_pool=keystore_pool, passphrase_mapper={local_escrow_id: all_passphrases}
-        )  # Doesn't help share escrows
+            cryptainer, keystore_pool=keystore_pool, passphrase_mapper={local_trustee_id: all_passphrases}
+        )  # Doesn't help share trustees
 
     with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
         decrypt_payload_from_cryptainer(
-            cryptainer, keystore_pool=keystore_pool, passphrase_mapper={shard_escrow1_id: all_passphrases}
-        )  # Unblocks 1 share escrow
+            cryptainer, keystore_pool=keystore_pool, passphrase_mapper={shard_trustee1_id: all_passphrases}
+        )  # Unblocks 1 share trustee
 
     with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
         decrypt_payload_from_cryptainer(
             cryptainer,
             keystore_pool=keystore_pool,
-            passphrase_mapper={shard_escrow1_id: all_passphrases, shard_escrow2_id: [passphrase3]},
+            passphrase_mapper={shard_trustee1_id: all_passphrases, shard_trustee2_id: [passphrase3]},
         )  # No changes
 
     with pytest.raises(DecryptionError, match="Could not decrypt private key"):
         decrypt_payload_from_cryptainer(
             cryptainer,
             keystore_pool=keystore_pool,
-            passphrase_mapper={shard_escrow1_id: all_passphrases, shard_escrow3_id: [passphrase3]},
+            passphrase_mapper={shard_trustee1_id: all_passphrases, shard_trustee3_id: [passphrase3]},
         )
 
     with pytest.raises(DecryptionError, match="Could not decrypt private key"):
@@ -680,9 +680,9 @@ def test_passphrase_mapping_during_decryption(tmp_path):
             cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper={
-                local_escrow_id: ["qsdqsd"],
-                shard_escrow1_id: all_passphrases,
-                shard_escrow3_id: [passphrase3],
+                local_trustee_id: ["qsdqsd"],
+                shard_trustee1_id: all_passphrases,
+                shard_trustee3_id: [passphrase3],
             },
         )
 
@@ -690,9 +690,9 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         cryptainer,
         keystore_pool=keystore_pool,
         passphrase_mapper={
-            local_escrow_id: [local_passphrase],
-            shard_escrow1_id: all_passphrases,
-            shard_escrow3_id: [passphrase3],
+            local_trustee_id: [local_passphrase],
+            shard_trustee1_id: all_passphrases,
+            shard_trustee3_id: [passphrase3],
         },
     )
     assert decrypted == payload
@@ -702,9 +702,9 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         cryptainer,
         keystore_pool=keystore_pool,
         passphrase_mapper={
-            local_escrow_id: [local_passphrase],
-            shard_escrow1_id: ["dummy-passphrase"],
-            shard_escrow3_id: [passphrase3],
+            local_trustee_id: [local_passphrase],
+            shard_trustee1_id: ["dummy-passphrase"],
+            shard_trustee3_id: [passphrase3],
             None: all_passphrases,
         },
     )
@@ -729,35 +729,35 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     assert decrypted == payload
 
 
-def test_get_proxy_for_escrow(tmp_path):
+def test_get_proxy_for_trustee(tmp_path):
     cryptainer_base1 = CryptainerBase()
-    proxy1 = get_escrow_proxy(LOCAL_ESCROW_MARKER, cryptainer_base1._keystore_pool)
-    assert isinstance(proxy1, EscrowApi)  # Local Escrow
+    proxy1 = get_trustee_proxy(LOCAL_TRUSTEE_MARKER, cryptainer_base1._keystore_pool)
+    assert isinstance(proxy1, TrusteeApi)  # Local Trustee
     assert isinstance(proxy1._keystore, DummyKeystore)  # Default type
 
     cryptainer_base1_bis = CryptainerBase()
-    proxy1_bis = get_escrow_proxy(LOCAL_ESCROW_MARKER, cryptainer_base1_bis._keystore_pool)
+    proxy1_bis = get_trustee_proxy(LOCAL_TRUSTEE_MARKER, cryptainer_base1_bis._keystore_pool)
     assert proxy1_bis._keystore is proxy1_bis._keystore  # process-local storage is SINGLETON!
 
     cryptainer_base2 = CryptainerBase(keystore_pool=FilesystemKeystorePool(str(tmp_path)))
-    proxy2 = get_escrow_proxy(LOCAL_ESCROW_MARKER, cryptainer_base2._keystore_pool)
-    assert isinstance(proxy2, EscrowApi)  # Local Escrow
+    proxy2 = get_trustee_proxy(LOCAL_TRUSTEE_MARKER, cryptainer_base2._keystore_pool)
+    assert isinstance(proxy2, TrusteeApi)  # Local Trustee
     assert isinstance(proxy2._keystore, FilesystemKeystore)
 
     for cryptainer_base in (cryptainer_base1, cryptainer_base2):
-        proxy = get_escrow_proxy(
-            dict(escrow_type="jsonrpc", url="http://example.com/jsonrpc"), cryptainer_base._keystore_pool
+        proxy = get_trustee_proxy(
+            dict(trustee_type="jsonrpc", url="http://example.com/jsonrpc"), cryptainer_base._keystore_pool
         )
-        assert isinstance(proxy, JsonRpcProxy)  # It should expose identical methods to EscrowApi
+        assert isinstance(proxy, JsonRpcProxy)  # It should expose identical methods to TrusteeApi
 
         assert proxy._url == "http://example.com/jsonrpc"
         assert proxy._response_error_handler == status_slugs_response_error_handler
 
         with pytest.raises(ValueError):
-            get_escrow_proxy(dict(escrow_type="something-wrong"), cryptainer_base._keystore_pool)
+            get_trustee_proxy(dict(trustee_type="something-wrong"), cryptainer_base._keystore_pool)
 
         with pytest.raises(ValueError):
-            get_escrow_proxy(dict(urn="athena"), cryptainer_base._keystore_pool)
+            get_trustee_proxy(dict(urn="athena"), cryptainer_base._keystore_pool)
 
 
 def test_cryptainer_storage_and_executor(tmp_path, caplog):
@@ -1187,14 +1187,14 @@ def test_get_cryptoconf_summary():
     summary2 = get_cryptoconf_summary(cryptainer)
     assert summary2 == summary  # Identical summary for cryptoconf and generated cryptainers!
 
-    # Simulate a cryptoconf with remote escrow webservices
+    # Simulate a cryptoconf with remote trustee webservices
 
-    CONF_WITH_ESCROW = copy.deepcopy(COMPLEX_CRYPTOCONF)
-    CONF_WITH_ESCROW["payload_encryption_layers"][0]["key_encryption_layers"][0]["key_encryption_escrow"] = dict(
-        escrow_type="jsonrpc", url="http://www.mydomain.com/json"
+    CONF_WITH_TRUSTEE = copy.deepcopy(COMPLEX_CRYPTOCONF)
+    CONF_WITH_TRUSTEE["payload_encryption_layers"][0]["key_encryption_layers"][0]["key_encryption_trustee"] = dict(
+        trustee_type="jsonrpc", url="http://www.mydomain.com/json"
     )
 
-    summary = get_cryptoconf_summary(CONF_WITH_ESCROW)
+    summary = get_cryptoconf_summary(CONF_WITH_TRUSTEE)
     assert summary == textwrap.dedent(
         """\
         Data encryption layer 1: AES_EAX
@@ -1218,17 +1218,17 @@ def test_get_cryptoconf_summary():
 
     _public_key = generate_keypair(key_algo="RSA_OAEP")["public_key"]
     with patch.object(JsonRpcProxy, "fetch_public_key", return_value=_public_key, create=True) as mock_method:
-        cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=CONF_WITH_ESCROW, keychain_uid=None, metadata=None)
+        cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=CONF_WITH_TRUSTEE, keychain_uid=None, metadata=None)
         summary2 = get_cryptoconf_summary(cryptainer)
         assert summary2 == summary  # Identical summary for cryptoconf and generated cryptainers!
 
-    # Test unknown escrow structure
+    # Test unknown trustee structure
 
-    CONF_WITH_BROKEN_ESCROW = copy.deepcopy(SIMPLE_CRYPTOCONF)
-    CONF_WITH_BROKEN_ESCROW["payload_encryption_layers"][0]["key_encryption_layers"][0]["key_encryption_escrow"] = dict(abc=33)
+    CONF_WITH_BROKEN_TRUSTEE = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    CONF_WITH_BROKEN_TRUSTEE["payload_encryption_layers"][0]["key_encryption_layers"][0]["key_encryption_trustee"] = dict(abc=33)
 
-    with pytest.raises(ValueError, match="Unrecognized key escrow"):
-        get_cryptoconf_summary(CONF_WITH_BROKEN_ESCROW)
+    with pytest.raises(ValueError, match="Unrecognized key trustee"):
+        get_cryptoconf_summary(CONF_WITH_BROKEN_TRUSTEE)
 
 
 @pytest.mark.parametrize("cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF])

@@ -2,7 +2,7 @@ Cryptainer
 ==========
 
 This module provides utilities to write and read encrypted cryptainers, which themselves use
-encryption/signing keys of the escrow system.
+encryption/signing keys of the trustee system.
 
 
 Cryptainer object processing
@@ -47,11 +47,11 @@ Cryptainer storage system
 .. autoclass:: wacryptolib.cryptainer.CryptainerStorage
 
 
-Escrow operations
+Trustee operations
 --------------------------
 
-.. autofunction:: wacryptolib.cryptainer.get_escrow_proxy
+.. autofunction:: wacryptolib.cryptainer.get_trustee_proxy
 
-.. autofunction:: wacryptolib.cryptainer.gather_escrow_dependencies
+.. autofunction:: wacryptolib.cryptainer.gather_trustee_dependencies
 
 .. autofunction:: wacryptolib.cryptainer.request_decryption_authorizations

@@ -44,9 +44,9 @@ def generate_keypair_for_storage(  # FIXME rename and add to docs
     return keypair
 
 
-class EscrowApi:
+class TrusteeApi:
     """
-    This is the API meant to be exposed by escrow webservices, to allow end users to create safely encrypted cryptainers.
+    This is the API meant to be exposed by trustee webservices, to allow end users to create safely encrypted cryptainers.
 
     Subclasses must add their own permission checking, especially so that no decryption with private keys can occur
     outside the scope of a well defined legal procedure.
@@ -222,9 +222,9 @@ class EscrowApi:
         return secret
 
 
-class ReadonlyEscrowApi(EscrowApi):
+class ReadonlyTrusteeApi(TrusteeApi):
     """
-    Alternative Escrow API which relies on a fixed set of keys (e.g. imported from a key-device).
+    Alternative Trustee API which relies on a fixed set of keys (e.g. imported from a key-device).
 
     This version never generates keys by itself, whatever the values of method parameters like `must_exist`.
     """
@@ -234,7 +234,7 @@ class ReadonlyEscrowApi(EscrowApi):
             self._keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
         except KeyDoesNotExist:
             # Just tweak the error message here
-            raise KeyDoesNotExist("Keypair %s/%s not found in escrow api" % (keychain_uid, key_algo))
+            raise KeyDoesNotExist("Keypair %s/%s not found in trustee api" % (keychain_uid, key_algo))
 
 
 def generate_free_keypair_for_least_provisioned_key_algo(

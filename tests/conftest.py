@@ -8,7 +8,7 @@ pytest.register_assert_rewrite("wacryptolib.scaffolding")
 
 
 @pytest.fixture(autouse=True, scope="session")
-def _generate_keypair_caching():  # FIXME RENAME THIS 
+def monkeypatch_generate_keypair_for_tests():
     """
     Generation of RSA/DSA/ECC keys can be extremfly time-consuming, so we CACHE and
     reuse the same keys for most tests !

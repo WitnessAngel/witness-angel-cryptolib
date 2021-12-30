@@ -304,7 +304,7 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
 
     from multitimer import RepeatingTimer as _RepeatingTimer
 
-    # TODO make PR to ensure that multitimer is a DAEMON thread!
+    # TODO make PR upstream to ensure that multitimer is a DAEMON thread!
     assert hasattr(_RepeatingTimer, "daemon")
     _RepeatingTimer.daemon = True  # Do not prevent process shutdown if we forgot to stop...
 

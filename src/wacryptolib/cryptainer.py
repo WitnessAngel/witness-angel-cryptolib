@@ -298,13 +298,13 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         return payload
 
     def _encrypt_and_hash_payload(self, payload, payload_encryption_layer_extracts):
-        """TODO"""
+        """TODO DOCSTRINGS"""
         payload_current = payload
 
         payload_integrity_tags = []
 
         for payload_encryption_layer_extract in payload_encryption_layer_extracts:
-            payload_cipher_algo = payload_encryption_layer_extract["cipher_algo"]  # FIXME RENAME THIS
+            payload_cipher_algo = payload_encryption_layer_extract["cipher_algo"]
             symkey = payload_encryption_layer_extract["symkey"]
             payload_digest_algos = payload_encryption_layer_extract["payload_digest_algos"]
 
@@ -381,7 +381,6 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             payload_encryption_layer_extracts.append(payload_encryption_layer_extract)
 
         cryptainer.update(
-            # FIXME add cryptainer status, PENDING/COMPLETE!!!
             cryptainer_state=CRYPTAINER_STATES.STARTED,
             cryptainer_format=cryptainer_format,
             cryptainer_uid=cryptainer_uid,
@@ -544,7 +543,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
                 payload_digest_algo = signature_conf["payload_digest_algo"]
 
                 signature_conf["payload_digest"] = payload_digests[payload_digest_algo]  # MUST exist, else incoherence
-                # FIXME ADD THIS NEW FIELD TO SCHEMA VALIDATOR!!!! already done??
+                # FIXME ADD THIS NEW FIELD TO SCHEMA VALIDATOR!!!! already done?? But must be OPTIONAL!!
 
                 payload_signature_struct = self._generate_message_signature(
                     keychain_uid=keychain_uid,
@@ -574,7 +573,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
 
         logger.debug("Signing hash of encrypted payload with algo %r", payload_signature_algo)
         payload_signature_struct = encryption_proxy.get_message_signature(
-            keychain_uid=keychain_uid_signature, message=payload_digest, payload_signature_algo=payload_signature_algo
+            keychain_uid=keychain_uid_signature, message=payload_digest, signature_algo=payload_signature_algo
         )
         return payload_signature_struct
 
@@ -620,7 +619,6 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
             key_ciphertext = payload_encryption_layer["key_ciphertext"]  # We start fully encrypted, and unravel it
 
-            # FIXME rename to symmetric_key_bytes
             key_bytes = self._decrypt_key_through_multiple_layers(
                 keychain_uid=keychain_uid,
                 key_ciphertext=key_ciphertext,
@@ -671,7 +669,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
             key_shared_secret_shards = encryption_layer["key_shared_secret_shards"]  # FIXMe rename twice
             key_shared_secret_threshold = encryption_layer["key_shared_secret_threshold"]
 
-            shares_ciphertexts = key_cipherdict["shards"]  # FIXME rename to shard_ciphertexts
+            shares_ciphertexts = key_cipherdict["shards"]
 
             logger.debug("Deciphering each shard")
 
@@ -707,7 +705,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
         else:  # Using asymmetric algorithm
 
-            # FIXME replace by shorter form everywhere in file
+            # FIXME replace by shorter form everywhere in file?
             keychain_uid_encryption = (encryption_layer.get("keychain_uid") or keychain_uid)
 
             key_bytes = self._decrypt_with_asymmetric_cipher(
@@ -818,7 +816,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         )
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=payload_signature_algo)
 
-        # FIXME payload_digest might be missing, itd' be OK too!
+        # FIXME payload_digest might be missing, it'd be OK too!
         payload_digest = hash_message(message, hash_algo=payload_digest_algo)
         assert payload_digest == cryptoconf["payload_digest"]  # Sanity check!!
         payload_signature_struct = cryptoconf["payload_signature_struct"]
@@ -883,8 +881,7 @@ class CryptainerEncryptionStream:
             self._output_data_stream.close()
 
 
-def is_cryptainer_cryptoconf_streamable(cryptoconf):  #FIXME rename and add to docs
-    # FIXME test separately!
+def is_cryptainer_cryptoconf_streamable(cryptoconf):  # FIXME rename and add to docs and separate tests
     for payload_encryption_layer in cryptoconf["payload_encryption_layers"]:
         if payload_encryption_layer["payload_cipher_algo"] not in STREAMABLE_CIPHER_ALGOS:
             return False
@@ -1026,7 +1023,7 @@ def extract_metadata_from_cryptainer(cryptainer: dict) -> Optional[dict]:  # FIX
     return data
 
 
-# FIXME add ReadonlyCryptainerStorage!!
+# FIXME add ReadonlyCryptainerStorage here!!
 
 class CryptainerStorage:
     """
@@ -1081,7 +1078,7 @@ class CryptainerStorage:
         """Beware, might be SLOW if many files are present in folder."""
         return len(self.list_cryptainer_names())  # No sorting, to be quicker
 
-    def list_cryptainer_names(self, as_sorted_list=False, as_absolute_paths=False):  # FIXME add annotations everywhere
+    def list_cryptainer_names(self, as_sorted_list: bool=False, as_absolute_paths: bool=False):  # FIXME add annotations everywhere in this class
         """Returns the list of encrypted cryptainers present in storage,
         sorted by name or not, absolute or not, as Path objects."""
         assert self._cryptainer_dir.is_absolute(), self._cryptainer_dir
@@ -1093,7 +1090,7 @@ class CryptainerStorage:
             paths = (Path(p.name) for p in paths)  # beware, only works since we don't have subfolders for now!
         return list(paths)
 
-    def _get_cryptainer_datetime(self, cryptainer_name):  # FIXME rename to _get_cryptainer_datetime_utc()
+    def _get_cryptainer_datetime_utc(self, cryptainer_name):
         """Returns an UTC datetime corresponding to the creation time stored in filename, or else the file-stat mtime"""
         try:
             dt = datetime.strptime(cryptainer_name.name.split("_")[0], CRYPTAINER_DATETIME_FORMAT)
@@ -1117,7 +1114,7 @@ class CryptainerStorage:
         for cryptainer_name in cryptainer_names:
             entry = dict(name=cryptainer_name)
             if with_age:
-                cryptainer_datetime = self._get_cryptainer_datetime(cryptainer_name)
+                cryptainer_datetime = self._get_cryptainer_datetime_utc(cryptainer_name)
                 entry["age"] = now - cryptainer_datetime   # We keep as timedelta
             if with_size:
                 entry["size"] = self._get_cryptainer_size(cryptainer_name)
@@ -1233,7 +1230,7 @@ class CryptainerStorage:
         logger.info("Data file %r successfully encrypted into storage cryptainer", filename_base)
         return cryptainer_filepath.name
 
-    def _use_streaming_encryption_for_conf(self, cryptoconf):  # FIXME rename to cryptoconf
+    def _use_streaming_encryption_for_conf(self, cryptoconf):
         return self._offload_payload_ciphertext and is_cryptainer_cryptoconf_streamable(cryptoconf)
 
     def _prepare_for_new_record_encryption(self, cryptoconf):

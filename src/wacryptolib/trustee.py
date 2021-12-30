@@ -86,7 +86,7 @@ class TrusteeApi:
         )  # Let the exception flow if any
 
     def get_message_signature(
-        self, *, keychain_uid: uuid.UUID, message: bytes, payload_signature_algo: str
+        self, *, keychain_uid: uuid.UUID, message: bytes, signature_algo: str
     ) -> dict:
         """
         Return a signature structure corresponding to the provided key and signature types.
@@ -95,13 +95,13 @@ class TrusteeApi:
         if len(message) > MAX_PAYLOAD_LENGTH_FOR_SIGNATURE:  # SECURITY
             raise ValueError("Message too big for signing, only a hash should be sent")
 
-        self._ensure_keypair_exists(keychain_uid=keychain_uid, key_algo=payload_signature_algo)
+        self._ensure_keypair_exists(keychain_uid=keychain_uid, key_algo=signature_algo)
 
-        private_key_pem = self._keystore.get_private_key(keychain_uid=keychain_uid, key_algo=payload_signature_algo)
+        private_key_pem = self._keystore.get_private_key(keychain_uid=keychain_uid, key_algo=signature_algo)
 
-        private_key = load_asymmetric_key_from_pem_bytestring(key_pem=private_key_pem, key_algo=payload_signature_algo)
+        private_key = load_asymmetric_key_from_pem_bytestring(key_pem=private_key_pem, key_algo=signature_algo)
 
-        signature_dict = sign_message(message=message, payload_signature_algo=payload_signature_algo, key=private_key)
+        signature_dict = sign_message(message=message, payload_signature_algo=signature_algo, key=private_key)
         return signature_dict
 
     def _check_keypair_authorization(self, *, keychain_uid: uuid.UUID, key_algo: str):

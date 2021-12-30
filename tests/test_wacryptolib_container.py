@@ -646,7 +646,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, keystore_pool=keystore_pool, metadata=None
     )
 
-    # FIXME we must TEST that keychain_uid_trustee is necessary for decryption for example by deleting it before a decrypt()
+    # FIXME we must TEST that keychain_uid_trustee is necessary for decryption, for example by deleting it before a decrypt()
 
     with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
         decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)

@@ -63,10 +63,10 @@ def test_trustee_api_workflow():
     assert keystore.get_free_keypairs_count("RSA_OAEP") == 0  # Taken
     assert keystore.get_free_keypairs_count("RSA_PSS") == 0
 
-    signature = trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret, payload_signature_algo="DSA_DSS")
+    signature = trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret, signature_algo="DSA_DSS")
 
     with pytest.raises(ValueError, match="too big"):
-        trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret_too_big, payload_signature_algo="DSA_DSS")
+        trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret_too_big, signature_algo="DSA_DSS")
 
     assert keystore.get_free_keypairs_count("DSA_DSS") == 0  # Taken
     assert keystore.get_free_keypairs_count("ECC_DSS") == 0
@@ -83,7 +83,7 @@ def test_trustee_api_workflow():
 
     # Keypair is well auto-created by get_message_signature(), even when no more free keys
     signature = trustee_api.get_message_signature(
-        keychain_uid=keychain_uid_other, message=secret, payload_signature_algo="RSA_PSS"
+        keychain_uid=keychain_uid_other, message=secret, signature_algo="RSA_PSS"
     )
     assert signature
 
@@ -205,7 +205,7 @@ def test_readonly_trustee_api_behaviour():
             trustee_api.fetch_public_key(keychain_uid=keychain_uid, key_algo=key_algo_signature, must_exist=must_exist)
 
     with pytest.raises(KeyDoesNotExist, match="not found"):
-        trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret, payload_signature_algo="RSA_PSS")
+        trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret, signature_algo="RSA_PSS")
 
     # Always accepted for now, dummy implementation
     result = trustee_api.request_decryption_authorization(
@@ -235,7 +235,7 @@ def test_readonly_trustee_api_behaviour():
     )
     assert public_key2 == keypair_signature["public_key"]
 
-    signature = trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret, payload_signature_algo="RSA_PSS")
+    signature = trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret, signature_algo="RSA_PSS")
     assert signature and isinstance(signature, dict)
 
     private_key_cipher = load_asymmetric_key_from_pem_bytestring(

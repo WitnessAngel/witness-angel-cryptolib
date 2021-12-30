@@ -387,7 +387,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             cryptainer_uid=cryptainer_uid,
             keychain_uid=keychain_uid,
             payload_ciphertext = None,  # Must be filled asap, by OFFLOADED_MARKER if needed!
-            metadata=metadata,
+            cryptainer_metadata=metadata,
         )
         return cryptainer, payload_encryption_layer_extracts
 
@@ -586,7 +586,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
 
     def extract_metadata(self, cryptainer: dict) -> Optional[dict]:
         assert isinstance(cryptainer, dict), cryptainer
-        return cryptainer["metadata"]
+        return cryptainer["cryptainer_metadata"]
 
     def decrypt_payload(self, cryptainer: dict, verify: bool=True) -> bytes:
         """
@@ -1425,7 +1425,8 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
             "cryptainer_state": Or(CRYPTAINER_STATES.STARTED, CRYPTAINER_STATES.FINISHED),
             "cryptainer_format": "WA_0.1a",
             "cryptainer_uid": micro_schema_uid,
-            "payload_ciphertext": micro_schema_binary
+            "payload_ciphertext": micro_schema_binary,
+            "cryptainer_metadata": Or(dict, None),
         }
         extra_key_ciphertext = {
             "key_ciphertext": micro_schema_binary
@@ -1441,7 +1442,6 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
             "message_authentication_codes": {
                 Optionalkey("tag"): micro_schema_binary
             }}
-        metadata = {"metadata": Or(dict, None)}
 
     SIMPLE_CRYPTAINER_PIECE = {
         "key_encryption_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
@@ -1470,7 +1470,6 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):
             "key_encryption_layers": [SIMPLE_CRYPTAINER_PIECE, SHARED_SECRET_CRYPTAINER_PIECE]
         }],
         Optionalkey("keychain_uid"): micro_schema_uid,
-        **metadata
     })
 
     return SCHEMA_CRYPTAINERS

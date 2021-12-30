@@ -103,7 +103,7 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
               "subType": "03"
           }
       },
-      "metadata": null  // Can include additional information about contained data
+      "cryptainer_metadata": null  // Can include additional information about contained data
   }
 
 

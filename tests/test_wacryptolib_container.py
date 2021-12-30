@@ -1335,7 +1335,7 @@ def test_create_cryptainer_encryption_stream(tmp_path):
     cryptainer_encryption_stream.finalize()
 
     cryptainer = storage.load_cryptainer_from_storage("20200101_cryptainer_example.crypt")
-    assert cryptainer["metadata"] == {"mymetadata": True}
+    assert cryptainer["cryptainer_metadata"] == {"mymetadata": True}
     assert cryptainer["cryptainer_state"] == "FINISHED"
 
     plaintext = storage.decrypt_cryptainer_from_storage("20200101_cryptainer_example.crypt")

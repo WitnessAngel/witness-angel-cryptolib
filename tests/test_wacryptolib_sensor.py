@@ -223,7 +223,7 @@ def test_json_aggregator(tmp_path):
     assert len(json_aggregator) == 0
     assert json_aggregator.sensor_name == "some_sensors"
 
-    json_aggregator.flush_dataset()  # Does nothing
+    json_aggregator.flush_payload()  # Does nothing
     assert len(tarfile_aggregator) == 0
     assert len(json_aggregator) == 0
     assert not json_aggregator._current_start_time
@@ -252,7 +252,7 @@ def test_json_aggregator(tmp_path):
         assert len(json_aggregator) == 1
         assert json_aggregator._current_start_time
 
-        json_aggregator.flush_dataset()
+        json_aggregator.flush_payload()
         assert not json_aggregator._current_start_time
 
         assert len(tarfile_aggregator) == 2  # 2 json files
@@ -260,7 +260,7 @@ def test_json_aggregator(tmp_path):
 
         frozen_datetime.tick(delta=timedelta(seconds=10))
 
-        json_aggregator.flush_dataset()
+        json_aggregator.flush_payload()
 
         # Unchanged
         assert len(tarfile_aggregator) == 2
@@ -314,7 +314,7 @@ def test_aggregators_thread_safety(tmp_path):
         for burst in range(10):
             for idx in range(100):
                 misc_futures.append(executor.submit(json_aggregator.add_data, dict(res=idx)))
-                misc_futures.append(executor.submit(json_aggregator.flush_dataset))
+                misc_futures.append(executor.submit(json_aggregator.flush_payload))
                 misc_futures.append(
                     executor.submit(
                         tarfile_aggregator.add_record,
@@ -328,7 +328,7 @@ def test_aggregators_thread_safety(tmp_path):
                 misc_futures.append(executor.submit(tarfile_aggregator.finalize_tarfile))
             time.sleep(0.2)
 
-    json_aggregator.flush_dataset()
+    json_aggregator.flush_payload()
     tarfile_aggregator.finalize_tarfile()
     cryptainer_storage.wait_for_idle_state()
 
@@ -397,10 +397,10 @@ def test_periodic_value_poller(tmp_path):
 
     # We have variations due to machine load (but data was fetched immediately on start)
     assert 5 <= len(json_aggregator) <= 6
-    data_sets = json_aggregator._current_dataset
+    data_sets = json_aggregator._current_payload
     assert all(rec["type"] == "current time" for rec in data_sets), data_sets
 
-    json_aggregator.flush_dataset()  # From here one, everything is just standard
+    json_aggregator.flush_payload()  # From here one, everything is just standard
     assert len(json_aggregator) == 0
 
     # CASE OF SLOW FETCHER #
@@ -416,10 +416,10 @@ def test_periodic_value_poller(tmp_path):
     poller.join()
 
     assert len(json_aggregator) == 2  # Second fetching could complete
-    data_sets = json_aggregator._current_dataset
+    data_sets = json_aggregator._current_payload
     assert all(rec["type"] == "current time 2" for rec in data_sets), data_sets
 
-    json_aggregator.flush_dataset()  # From here one, everything is just standard
+    json_aggregator.flush_payload()  # From here one, everything is just standard
     assert len(json_aggregator) == 0
 
     # CASE OF BROKEN TASK #

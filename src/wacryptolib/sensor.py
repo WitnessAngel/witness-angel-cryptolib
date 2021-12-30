@@ -196,7 +196,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
     """
 
     _tarfile_aggregator = None
-    _current_dataset = None
+    _current_payload = None
     _lock = None
 
     def __init__(self, tarfile_aggregator: TarfileRecordsAggregator, sensor_name: str, max_duration_s: float):
@@ -207,7 +207,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
         self._lock = threading.Lock()
 
     def __len__(self):
-        return len(self._current_dataset) if self._current_dataset else 0
+        return len(self._current_payload) if self._current_payload else 0
 
     @property
     def sensor_name(self):
@@ -215,23 +215,23 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
 
     def _notify_aggregation_operation(self):
         super()._notify_aggregation_operation()
-        if self._current_dataset is None:
-            self._current_dataset = []
+        if self._current_payload is None:
+            self._current_payload = []
 
     def _flush_aggregated_payload(self):
         if not self._current_start_time:
-            assert not self._current_dataset
+            assert not self._current_payload
             return
         end_time = get_utc_now_date()
-        dataset_bytes = dump_to_json_bytes(self._current_dataset)
+        payload_bytes = dump_to_json_bytes(self._current_payload)
         self._tarfile_aggregator.add_record(
-            payload=dataset_bytes,
+            payload=payload_bytes,
             sensor_name=self._sensor_name,
             from_datetime=self._current_start_time,
             to_datetime=end_time,
             extension=".json",
         )
-        self._current_dataset = None
+        self._current_payload = None
         super()._flush_aggregated_payload()
 
     @synchronized
@@ -239,18 +239,18 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
         """
         Flush current data to the tarfile if needed, and append `data_dict` to the queue.
         """
-        assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
+        assert self._current_payload or not self._current_start_time  # INVARIANT of our system!
         assert isinstance(data_dict, dict), data_dict
         logger.debug("New data added to %s json builder: %s", self._sensor_name, data_dict)
         self._notify_aggregation_operation()
-        self._current_dataset.append(data_dict)
+        self._current_payload.append(data_dict)
 
     @synchronized
-    def flush_dataset(self):
+    def flush_payload(self):
         """
         Force the flushing of current data to the tarfile (e.g. when terminating the service).
         """
-        assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
+        assert self._current_payload or not self._current_start_time  # INVARIANT of our system!
         self._flush_aggregated_payload()
 
 

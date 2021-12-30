@@ -32,8 +32,6 @@ def _get_encryption_algo_conf(encryption_algo):
     return encryption_algo_conf
 
 
-# FIXME make it return BYTESTRING ALWAYS, no need to jsonify them!
-# FIXME key_dict name is wrong in the case of RSA_OAEP!!
 def encrypt_bytestring(plaintext: bytes, *, encryption_algo: str, key_dict: dict) -> dict:
     """Encrypt a bytestring with the selected algorithm for the given payload,
     using the provided key dict (which must contain keys/initializers of proper types and lengths).
@@ -194,7 +192,7 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
     """Encrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
     :param plaintext: the bytes to cipher
-    :param key_dict: dict with public RSA key object (RSA.RsaKey)
+    :param key_dict: dict with PUBLIC RSA key object (RSA.RsaKey)
 
     :return: a dict with field `digest_list`, containing bytestring chunks of variable width."""
     key = key_dict["key"]
@@ -214,7 +212,7 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool=True) -
     """Decrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
     :param cipherdict: list of ciphertext chunks
-    :param key_dict: dict with public RSA key object (RSA.RsaKey)
+    :param key_dict: dict with PRIVATE RSA key object (RSA.RsaKey)
     :param verify: whether to check MAC tags of the ciphertext
         (not applicable for this cipher)
 
@@ -422,7 +420,7 @@ ENCRYPTION_ALGOS_REGISTRY = dict(
         "encryption_node_class": Chacha20Poly1305EncryptionNode,
         "is_authenticated": True
     },
-    ## ASYMMETRIC ENCRYPTION ##
+    ## ASYMMETRIC ENCRYPTION (proper part of the keypair must be provided) ##
     RSA_OAEP={"encryption_function": _encrypt_via_rsa_oaep, "decryption_function": _decrypt_via_rsa_oaep,
               "encryption_node_class": None, "is_authenticated": False},
 )

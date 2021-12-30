@@ -10,8 +10,6 @@ logger = logging.getLogger(__name__)
 
 # FIXME regroup all metadata and is_initialized in single "metadata" field
 
-# FIXME DELETE ALMOST ALL APIS OF THIS MODULE, now authenticator does it all
-
 # FIXME change "format" here, bad wording!!!!
 def list_available_authdevices():
     """
@@ -43,7 +41,6 @@ def list_available_authdevices():
     return authdevices
 
 
-# FIXME deprecated
 def initialize_authdevice(authdevice: dict, user: str, extra_metadata: Optional[dict] = None):
     """
     Initialize a specific USB key, by creating an internal structure with key device metadata.
@@ -67,7 +64,6 @@ def initialize_authdevice(authdevice: dict, user: str, extra_metadata: Optional[
     authdevice["metadata"] = metadata
 
 
-# FIXME deprecated
 # TODO go farther, and add flags to report errors if json or RSA keys are missing/corrupted?
 def is_authdevice_initialized(authdevice: dict):
     """
@@ -84,7 +80,6 @@ def is_authdevice_initialized(authdevice: dict):
     return is_authenticator_initialized(authenticator_dir)
 
 
-# FIXME deprecated
 def load_authdevice_metadata(authdevice: dict) -> dict:
     """
     Return the device metadata stored in the given mountpoint, after checking that it contains at least mandatory
@@ -182,7 +177,7 @@ def _list_available_authdevices_linux():
     return authdevice_list
 
 
-# FIXME introduce an AuthenticationDevice class to normalize and lazify API?
+# FIXME introduce an AuthenticationDevice class to normalize and lazify this API instead of the dict?
 
 def get_authenticator_dir_for_authdevice(authdevice: dict):
     return Path(authdevice["path"]).joinpath(".keystore")  # FIXME rename to .authenticator??

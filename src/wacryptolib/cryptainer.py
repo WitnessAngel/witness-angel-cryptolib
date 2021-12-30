@@ -483,12 +483,12 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         encryption_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
 
         logger.debug("Generating asymmetric key of type %r", encryption_algo)
-        subkey_pem = encryption_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=encryption_algo)
+        public_key_pem = encryption_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=encryption_algo)
 
         logger.debug("Encrypting symmetric key with asymmetric key of type %r", encryption_algo)
-        subkey = load_asymmetric_key_from_pem_bytestring(key_pem=subkey_pem, key_algo=encryption_algo)
+        public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=encryption_algo)
 
-        cipherdict = encrypt_bytestring(plaintext=key_bytes, encryption_algo=encryption_algo, key_dict={"key": subkey})
+        cipherdict = encrypt_bytestring(plaintext=key_bytes, encryption_algo=encryption_algo, key_dict=dict(key=public_key))
         return cipherdict
 
     def ____obsolete_____encrypt_shards(self, shards: Sequence, key_shared_secret_shards: Sequence, keychain_uid: uuid.UUID) -> list:

@@ -175,7 +175,7 @@ def test_stream_manager(cipher_algo_list):
         payload_encryption_layer_extracts.append(payload_encryption_layers_extract)
     print(payload_encryption_layer_extracts)
 
-    streammanager = wacryptolib.cipher.StreamManager(
+    EncryptionPipeline = wacryptolib.cipher.EncryptionPipeline(
         payload_encryption_layer_extracts=payload_encryption_layer_extracts,
         output_stream=output_stream)
 
@@ -185,14 +185,14 @@ def test_stream_manager(cipher_algo_list):
         chunk_length = randint(1, 300)
         chunk = plaintext_current[0:chunk_length]
         plaintext_current = plaintext_current[chunk_length:]
-        streammanager.encrypt_chunk(chunk)
+        EncryptionPipeline.encrypt_chunk(chunk)
 
-    streammanager.finalize()
+    EncryptionPipeline.finalize()
 
     current_ciphertext = output_stream.getvalue()
 
     for payload_encryption_node, authentication_data in zip(reversed(payload_encryption_layer_extracts),
-                                                         reversed(streammanager.get_payload_integrity_tags())):
+                                                         reversed(EncryptionPipeline.get_payload_integrity_tags())):
 
         for hash_algo in payload_encryption_node['payload_digest_algos']:
             assert (hash_message(message=current_ciphertext, hash_algo=hash_algo) ==  # TODO NOW create local vars

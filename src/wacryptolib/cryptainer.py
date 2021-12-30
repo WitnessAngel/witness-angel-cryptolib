@@ -20,7 +20,7 @@ import jsonschema
 from schema import And, Or, Regex, Const, Schema
 from schema import Optional as Optionalkey
 
-from wacryptolib.cipher import encrypt_bytestring, decrypt_bytestring, StreamManager, STREAMABLE_CIPHER_ALGOS, \
+from wacryptolib.cipher import encrypt_bytestring, decrypt_bytestring, EncryptionPipeline, STREAMABLE_CIPHER_ALGOS, \
     SUPPORTED_CIPHER_ALGOS
 from wacryptolib.trustee import TrusteeApi as LocalTrusteeApi, ReadonlyTrusteeApi, TrusteeApi
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, ValidationError
@@ -248,7 +248,7 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         '''
         ############################################################################
 
-        stream_encryptor = StreamManager(
+        stream_encryptor = EncryptionPipeline(
             output_stream=output_stream,
             payload_encryption_layer_extracts=payload_encryption_layer_extracts,
         )

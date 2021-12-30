@@ -50,7 +50,7 @@ def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) ->
 
 def decrypt_bytestring(
         cipherdict: dict, *, cipher_algo: str, key_dict: dict, verify: bool=True
-) -> bytes:  # Fixme rename cipher_algo to decryption_algo? Or normalize?
+) -> bytes:
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
@@ -231,7 +231,7 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool=True) -
     return b"".join(decrypted_chunks)
 
 
-class EncryptionStreamBase:
+class EncryptionNodeBase:
     """General class of Encrytion Stream Node"""
     _is_finished = False
 
@@ -320,7 +320,7 @@ class EncryptionStreamBase:
         return {}
 
 
-class AesCbcEncryptionNode(EncryptionStreamBase):
+class AesCbcEncryptionNode(EncryptionNodeBase):
     """Encrypt a bytestring using AES (CBC mode)."""
     BLOCK_SIZE = AES.block_size
 
@@ -331,7 +331,7 @@ class AesCbcEncryptionNode(EncryptionStreamBase):
         self._cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
 
 
-class AesEaxEncryptionNode(EncryptionStreamBase):
+class AesEaxEncryptionNode(EncryptionNodeBase):
     """Encrypt a bytestring using AES (EAX mode)."""
 
     def __init__(self, key_dict: dict, payload_digest_algo=()):
@@ -344,11 +344,10 @@ class AesEaxEncryptionNode(EncryptionStreamBase):
         return {"tag": self._cipher.digest()}
 
 
-class Chacha20Poly1305EncryptionNode(EncryptionStreamBase):
+class Chacha20Poly1305EncryptionNode(EncryptionNodeBase):
     """Encrypt a bytestring using ChaCha20 with Poly1305 authentication."""
 
     def __init__(self, key_dict: dict, payload_digest_algo=()):
-        # TODO init CHACHA instance with this proper
         super().__init__(payload_digest_algo=payload_digest_algo)
 
         self._key = key_dict["key"]
@@ -359,7 +358,7 @@ class Chacha20Poly1305EncryptionNode(EncryptionStreamBase):
         return {"tag": self._cipher.digest()}
 
 
-class StreamManager:  # FIXME RENAME THIS
+class EncryptionPipeline:  # FIXME RENAME THIS
     """"Pipeline to encrypt data through several encryption nodes, down to an outout stream (e.g. file or ByteIO)"""
 
     def __init__(self, output_stream: BinaryIO, payload_encryption_layer_extracts: list):

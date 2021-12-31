@@ -49,7 +49,6 @@ CRYPTAINER_SUFFIX = ".crypt"
 CRYPTAINER_DATETIME_FORMAT = "%Y%m%d%H%M%S"  # For use in cryptainer names and their records
 CRYPTAINER_TEMP_SUFFIX = "~"  # To name temporary, unfinalized, cryptainers
 
-
 class PAYLOAD_CIPHERTEXT_LOCATIONS:
     INLINE = "inline"  # Ciphertext is included in the json cryptainer
     OFFLOADED = "offloaded"  # Ciphertext is in a nearby binary file
@@ -63,16 +62,14 @@ DATA_CHUNK_SIZE = 1024 ** 2  # E.g. when streaming a big payload through encrypt
 
 DECRYPTED_FILE_SUFFIX = ".medium"  # To construct decrypted filename when no output filename is provided
 
-SHARED_SECRET_MARKER = "[SHARED_SECRET]"
+SHARED_SECRET_ALGO_MARKER = "[SHARED_SECRET]"  # Special "key_cipher_algo" value
 
 DUMMY_KEYSTORE_POOL = InMemoryKeystorePool()  # Common fallback storage with in-memory keys
-
 
 class TRUSTEE_TYPES:
     LOCAL_FACTORY_TRUSTEE = "local_factory"  # FIXME rename to local_factory?
     AUTHDEVICE_TRUSTEE = "authdevice"
     JSONRPC_TRUSTEE = "jsonrpc"
-
 
 # Shortcut helper, should NOT be modified
 LOCAL_FACTORY_TRUSTEE_MARKER = dict(trustee_type=TRUSTEE_TYPES.LOCAL_FACTORY_TRUSTEE)
@@ -112,7 +109,7 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
         for key_cipher_layer in key_cipher_layers:
             key_algo_encryption = key_cipher_layer["key_cipher_algo"]
 
-            if key_algo_encryption == SHARED_SECRET_MARKER:
+            if key_algo_encryption == SHARED_SECRET_ALGO_MARKER:
                 trustees = key_cipher_layer["key_shared_secret_shards"]
                 for trustee in trustees:
                     _grab_key_cipher_layers_dependencies(trustee["key_cipher_layers"])  # Recursive call
@@ -441,7 +438,7 @@ class CryptainerEncryptor(CryptainerBase):
         assert isinstance(key_bytes, bytes), key_bytes
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
 
-        if key_cipher_algo == SHARED_SECRET_MARKER:
+        if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
 
             key_shared_secret_shards = key_cipher_layer["key_shared_secret_shards"]
             shard_count = len(key_shared_secret_shards)
@@ -688,7 +685,7 @@ class CryptainerDecryptor(CryptainerBase):
         assert isinstance(key_cipherdict, dict), key_cipherdict
         key_cipher_algo = cipher_layer["key_cipher_algo"]
 
-        if key_cipher_algo == SHARED_SECRET_MARKER:
+        if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
 
             decrypted_shards = []
             decryption_errors = []
@@ -1481,7 +1478,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
     RECURSIVE_SHARED_SECRET = []
 
     SHARED_SECRET_CRYPTAINER_PIECE = Schema({
-        "key_cipher_algo": SHARED_SECRET_MARKER,
+        "key_cipher_algo": SHARED_SECRET_ALGO_MARKER,
         "key_shared_secret_shards": [{
             "key_cipher_layers": [SIMPLE_CRYPTAINER_PIECE]}],
         "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schema_int),

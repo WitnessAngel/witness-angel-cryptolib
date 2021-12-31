@@ -10,7 +10,7 @@ from wacryptolib.cryptainer import (
     decrypt_payload_from_cryptainer,
     CRYPTAINER_SUFFIX,
     DECRYPTED_FILE_SUFFIX,
-    SHARED_SECRET_MARKER,
+    SHARED_SECRET_ALGO_MARKER,
 )
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
@@ -37,7 +37,7 @@ EXAMPLE_CRYPTOCONF = dict(
             key_cipher_layers=[
                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
                 dict(
-                    key_cipher_algo=SHARED_SECRET_MARKER,
+                    key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_shards=[
                         dict(key_cipher_layers=[

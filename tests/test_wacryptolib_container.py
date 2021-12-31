@@ -29,7 +29,7 @@ from wacryptolib.cryptainer import (
     get_cryptoconf_summary,
     dump_cryptainer_to_filesystem,
     load_cryptainer_from_filesystem,
-    SHARED_SECRET_MARKER,
+    SHARED_SECRET_ALGO_MARKER,
     get_trustee_id,
     gather_trustee_dependencies,
     get_trustee_proxy,
@@ -190,7 +190,7 @@ SIMPLE_SHAMIR_CRYPTOCONF = dict(
             key_cipher_layers=[
                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
                 dict(
-                    key_cipher_algo=SHARED_SECRET_MARKER,
+                    key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
                     key_shared_secret_threshold=3,
                     key_shared_secret_shards=[
                         dict(key_cipher_layers=[
@@ -250,7 +250,7 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
             payload_cipher_algo="CHACHA20_POLY1305",
             key_cipher_layers=[
                 dict(
-                    key_cipher_algo=SHARED_SECRET_MARKER,
+                    key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
                     key_shared_secret_threshold=2,
                     key_shared_secret_shards=[
                         dict(key_cipher_layers=[
@@ -460,7 +460,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
     # Delete 1, 2 and too many share(s) from cipherdict key
     for payload_encryption in cryptainer["payload_cipher_layers"]:
         for key_encryption in payload_encryption["key_cipher_layers"]:
-            if key_encryption["key_cipher_algo"] == SHARED_SECRET_MARKER:
+            if key_encryption["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER:
                 payload_encryption_shamir = payload_encryption
 
     key_ciphertext_shards = load_from_json_bytes(payload_encryption_shamir["key_ciphertext"])
@@ -509,7 +509,7 @@ RECURSIVE_CRYPTOCONF = dict(
             key_cipher_layers=[
                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
                 dict(
-                    key_cipher_algo=SHARED_SECRET_MARKER,
+                    key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_shards=[
                         dict(
@@ -618,7 +618,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                 key_cipher_layers=[
                     dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
                     dict(
-                        key_cipher_algo=SHARED_SECRET_MARKER,
+                        key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
                         key_shared_secret_threshold=2,
                         key_shared_secret_shards=[
                             dict(key_cipher_layers=[

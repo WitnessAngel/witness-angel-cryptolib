@@ -180,5 +180,5 @@ def _list_available_authdevices_linux():
 # FIXME introduce an AuthenticationDevice class to normalize and lazify this API instead of the dict?
 
 def get_authenticator_dir_for_authdevice(authdevice: dict):
-    return Path(authdevice["path"]).joinpath(".keystore")  # FIXME rename to .authenticator??
+    return Path(authdevice["path"]).joinpath(".authenticator")
 

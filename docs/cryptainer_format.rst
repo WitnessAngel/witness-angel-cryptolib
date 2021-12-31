@@ -21,7 +21,7 @@ Example
 
 A minimal cryptainer configuration in python, with a single encryption layer and its single signature, both backed by the "local" trustee service of the device; this format can't be used in real life of course, since the data is not protected against illegal reads::
 
-    from wacryptolib.cryptainer import LOCAL_TRUSTEE_MARKER
+    from wacryptolib.cryptainer import LOCAL_FACTORY_TRUSTEE_MARKER
 
     CONFIG = dict(
         payload_encryption_layers=[
@@ -30,14 +30,14 @@ A minimal cryptainer configuration in python, with a single encryption layer and
                 key_encryption_layers=[
                     dict(
                         key_cipher_algo="RSA_OAEP",
-                        key_encryption_trustee=LOCAL_TRUSTEE_MARKER,
+                        key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
                     )
                 ],
                 payload_signatures=[
                     dict(
                         payload_digest_algo="SHA256",
                         payload_signature_algo="DSA_DSS",
-                        payload_signature_trustee=LOCAL_TRUSTEE_MARKER,
+                        payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
                     )
                 ],
             )

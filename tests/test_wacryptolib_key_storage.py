@@ -141,7 +141,7 @@ def test_keystore_pool_basics(tmp_path: Path):
 
     pool = FilesystemKeystorePool(tmp_path)
 
-    local_keystore = pool.get_local_keystore()
+    local_keystore = pool.get_local_factory_keystore()
     assert isinstance(local_keystore, FilesystemKeystore)
     assert not local_keystore.list_keypair_identifiers()
 

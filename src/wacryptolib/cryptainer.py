@@ -62,13 +62,13 @@ DUMMY_KEYSTORE_POOL = InMemoryKeystorePool()  # Common fallback storage with in-
 
 
 class TRUSTEE_TYPES:
-    LOCAL_TRUSTEE = "local"  # FIXME rename to localfactory?
+    LOCAL_FACTORY_TRUSTEE = "local_factory"  # FIXME rename to local_factory?
     AUTHDEVICE_TRUSTEE = "authdevice"
     JSONRPC_TRUSTEE = "jsonrpc"
 
 
 # Shortcut helper, should NOT be modified
-LOCAL_TRUSTEE_MARKER = dict(trustee_type=TRUSTEE_TYPES.LOCAL_TRUSTEE)
+LOCAL_FACTORY_TRUSTEE_MARKER = dict(trustee_type=TRUSTEE_TYPES.LOCAL_FACTORY_TRUSTEE)
 
 
 class CRYPTAINER_STATES:
@@ -169,8 +169,8 @@ def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):
 
     trustee_type = trustee.get("trustee_type")  # Might be None
 
-    if trustee_type == TRUSTEE_TYPES.LOCAL_TRUSTEE:
-        return TrusteeApi(keystore_pool.get_local_keystore())
+    if trustee_type == TRUSTEE_TYPES.LOCAL_FACTORY_TRUSTEE:
+        return TrusteeApi(keystore_pool.get_local_factory_keystore())
     elif trustee_type == TRUSTEE_TYPES.AUTHDEVICE_TRUSTEE:
         authdevice_uid = trustee["authdevice_uid"]
         keystore = keystore_pool.get_imported_keystore(authdevice_uid)
@@ -1350,7 +1350,7 @@ def get_cryptoconf_summary(conf_or_cryptainer):  # FIXME move up like in docs
     """
 
     def _get_trustee_identifier(_trustee):
-        if _trustee == LOCAL_TRUSTEE_MARKER:
+        if _trustee == LOCAL_FACTORY_TRUSTEE_MARKER:
             _trustee = "local device"
         elif "url" in _trustee:
             _trustee = urlparse(_trustee["url"]).netloc
@@ -1421,7 +1421,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
     payload_signature = {
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
         "payload_signature_algo": Or(*SUPPORTED_SIGNATURE_ALGOS),
-        "payload_signature_trustee": Const(LOCAL_TRUSTEE_MARKER),
+        "payload_signature_trustee": Const(LOCAL_FACTORY_TRUSTEE_MARKER),
         Optionalkey("keychain_uid"): micro_schema_uid
     }
 
@@ -1450,7 +1450,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
 
     SIMPLE_CRYPTAINER_PIECE = {
         "key_cipher_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
-        "key_encryption_trustee": Const(LOCAL_TRUSTEE_MARKER),
+        "key_encryption_trustee": Const(LOCAL_FACTORY_TRUSTEE_MARKER),
         Optionalkey("keychain_uid"): micro_schema_uid
     }
 

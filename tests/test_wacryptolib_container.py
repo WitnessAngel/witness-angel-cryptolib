@@ -20,7 +20,7 @@ from Crypto.Random import get_random_bytes
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool
 from wacryptolib.cryptainer import (
-    LOCAL_TRUSTEE_MARKER,
+    LOCAL_FACTORY_TRUSTEE_MARKER,
     encrypt_payload_into_cryptainer,
     decrypt_payload_from_cryptainer,
     CryptainerStorage,
@@ -71,7 +71,7 @@ VOID_CRYPTOCONF_REGARDING_KEY_ENCRYPTION_LAYERS = dict(  # Forbidden
             payload_cipher_algo="AES_CBC",
             key_encryption_layers=[],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
             ],
         )
     ]
@@ -81,7 +81,7 @@ SIGNATURELESS_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_cipher_algo="AES_EAX",
-            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
+            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
             payload_signatures=[],
         )
     ]
@@ -90,8 +90,8 @@ SIGNATURELESS_CRYPTOCONF = dict(
 
 SIGNATURELESS_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
-        "[('trustee_type', 'local')]": (
-            {"trustee_type": "local"},
+        "[('trustee_type', 'local_factory')]": (
+            {"trustee_type": "local_factory"},
             [{"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid}],
         )
     },
@@ -102,9 +102,9 @@ SIMPLE_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_cipher_algo="AES_CBC",
-            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
+            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
             ],
         )
     ]
@@ -112,14 +112,14 @@ SIMPLE_CRYPTOCONF = dict(
 
 SIMPLE_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
-        "[('trustee_type', 'local')]": (
-            {"trustee_type": "local"},
+        "[('trustee_type', 'local_factory')]": (
+            {"trustee_type": "local_factory"},
             [{"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid}],
         )
     },
     "signature": {
-        "[('trustee_type', 'local')]": (
-            {"trustee_type": "local"},
+        "[('trustee_type', 'local_factory')]": (
+            {"trustee_type": "local_factory"},
             [{"key_algo": "DSA_DSS", "keychain_uid": keychain_uid}],
         )
     },
@@ -129,30 +129,30 @@ COMPLEX_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_cipher_algo="AES_EAX",
-            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
+            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
             payload_signatures=[],
         ),
         dict(
             payload_cipher_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID1)
+                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID1)
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
+                dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
             ],
         ),
         dict(
             payload_cipher_algo="CHACHA20_POLY1305",
             key_encryption_layers=[
-                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
-                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
+                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA3_256", payload_signature_algo="RSA_PSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER),
+                dict(payload_digest_algo="SHA3_256", payload_signature_algo="RSA_PSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
                 dict(
                     payload_digest_algo="SHA512",
                     payload_signature_algo="ECC_DSS",
-                    payload_signature_trustee=LOCAL_TRUSTEE_MARKER,
+                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
                     keychain_uid=ENFORCED_UID2,
                 ),
             ],
@@ -162,8 +162,8 @@ COMPLEX_CRYPTOCONF = dict(
 
 COMPLEX_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
-        "[('trustee_type', 'local')]": (
-            {"trustee_type": "local"},
+        "[('trustee_type', 'local_factory')]": (
+            {"trustee_type": "local_factory"},
             [
                 {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
                 {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID1},
@@ -171,8 +171,8 @@ COMPLEX_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
         )
     },
     "signature": {
-        "[('trustee_type', 'local')]": (
-            {"trustee_type": "local"},
+        "[('trustee_type', 'local_factory')]": (
+            {"trustee_type": "local_factory"},
             [
                 {"key_algo": "DSA_DSS", "keychain_uid": keychain_uid},
                 {"key_algo": "RSA_PSS", "keychain_uid": keychain_uid},
@@ -187,26 +187,26 @@ SIMPLE_SHAMIR_CRYPTOCONF = dict(
         dict(
             payload_cipher_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
                 dict(
                     key_cipher_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=3,
                     key_shared_secret_shards=[
                         dict(key_encryption_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID1)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID1)],),
                     ],
                 ),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
             ],
         )
     ]
@@ -215,8 +215,8 @@ SIMPLE_SHAMIR_CRYPTOCONF = dict(
 def SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
     return {
         "encryption": {
-            "[('trustee_type', 'local')]": (
-                {"trustee_type": "local"},
+            "[('trustee_type', 'local_factory')]": (
+                {"trustee_type": "local_factory"},
                 [
                     {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
                     {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID1},
@@ -224,8 +224,8 @@ def SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
             )
         },
         "signature": {
-            "[('trustee_type', 'local')]": (
-                {"trustee_type": "local"},
+            "[('trustee_type', 'local_factory')]": (
+                {"trustee_type": "local_factory"},
                 [{"key_algo": "DSA_DSS", "keychain_uid": keychain_uid}],
             )
         },
@@ -235,14 +235,14 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
     payload_encryption_layers=[
         dict(
             payload_cipher_algo="AES_EAX",
-            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
+            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
             payload_signatures=[],
         ),
         dict(
             payload_cipher_algo="AES_CBC",
-            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],
+            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
             payload_signatures=[
-                dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
+                dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
             ],
         ),
         dict(
@@ -253,14 +253,14 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                     key_shared_secret_threshold=2,
                     key_shared_secret_shards=[
                         dict(key_encryption_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
-                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
                         dict(key_encryption_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID2)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID2)],),
                     ],
                 )
             ],
@@ -268,10 +268,10 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                 dict(
                     payload_digest_algo="SHA3_256",
                     payload_signature_algo="RSA_PSS",
-                    payload_signature_trustee=LOCAL_TRUSTEE_MARKER,
+                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
                     keychain_uid=ENFORCED_UID1,
                 ),
-                dict(payload_digest_algo="SHA512", payload_signature_algo="ECC_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER),
+                dict(payload_digest_algo="SHA512", payload_signature_algo="ECC_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
             ],
         ),
     ]
@@ -281,8 +281,8 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
 def COMPLEX_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
      return {
         "encryption": {
-            "[('trustee_type', 'local')]": (
-                {"trustee_type": "local"},
+            "[('trustee_type', 'local_factory')]": (
+                {"trustee_type": "local_factory"},
                 [
                     {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
                     {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID2},
@@ -290,8 +290,8 @@ def COMPLEX_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
             )
         },
         "signature": {
-            "[('trustee_type', 'local')]": (
-                {"trustee_type": "local"},
+            "[('trustee_type', 'local_factory')]": (
+                {"trustee_type": "local_factory"},
                 [
                     {"key_algo": "DSA_DSS", "keychain_uid": keychain_uid},
                     {"key_algo": "RSA_PSS", "keychain_uid": ENFORCED_UID1},
@@ -375,7 +375,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
     if keychain_uid:
         assert cryptainer["keychain_uid"] == keychain_uid
 
-    local_keypair_identifiers = keystore_pool.get_local_keystore()._cached_keypairs
+    local_keypair_identifiers = keystore_pool.get_local_factory_keystore()._cached_keypairs
     print(">>> Test local_keypair_identifiers ->", list(local_keypair_identifiers.keys()))
 
     trustee_dependencies = gather_trustee_dependencies(cryptainers=[cryptainer])
@@ -506,22 +506,22 @@ RECURSIVE_CRYPTOCONF = dict(
         dict(
             payload_cipher_algo="AES_CBC",
             key_encryption_layers=[
-                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
                 dict(
                     key_cipher_algo=SHARED_SECRET_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_shards=[
                         dict(
                              key_encryption_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)],),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
                         dict(
                              key_encryption_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER)]),
+                                 dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)]),
                     ],  # Beware, same trustee for the 2 shards, for now
                 ),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_TRUSTEE_MARKER)
+                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
             ],
         )
     ]
@@ -582,7 +582,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         storage_uids=[keystore_uid1, keystore_uid2, keystore_uid3]
     )
 
-    local_keystore = keystore_pool.get_local_keystore()
+    local_keystore = keystore_pool.get_local_factory_keystore()
     generate_keypair_for_storage(
         key_algo="RSA_OAEP", keystore=local_keystore, keychain_uid=keychain_uid, passphrase=local_passphrase
     )
@@ -599,7 +599,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         key_algo="RSA_OAEP", keystore=keystore3, keychain_uid=keychain_uid, passphrase=passphrase3
     )
 
-    local_trustee_id = get_trustee_id(LOCAL_TRUSTEE_MARKER)
+    local_factory_trustee_id = get_trustee_id(LOCAL_FACTORY_TRUSTEE_MARKER)
 
     shard_trustee1 = dict(trustee_type="authdevice", authdevice_uid=keystore_uid1)
     shard_trustee1_id = get_trustee_id(shard_trustee1)
@@ -615,7 +615,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
             dict(
                 payload_cipher_algo="AES_CBC",
                 key_encryption_layers=[
-                    dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_TRUSTEE_MARKER),
+                    dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
                     dict(
                         key_cipher_algo=SHARED_SECRET_MARKER,
                         key_shared_secret_threshold=2,
@@ -633,7 +633,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                     dict(
                         payload_digest_algo="SHA256",
                         payload_signature_algo="DSA_DSS",
-                        payload_signature_trustee=LOCAL_TRUSTEE_MARKER,  # Uses separate keypair, no passphrase here
+                        payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,  # Uses separate keypair, no passphrase here
                     )
                 ],
             )
@@ -653,7 +653,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
         decrypt_payload_from_cryptainer(
-            cryptainer, keystore_pool=keystore_pool, passphrase_mapper={local_trustee_id: all_passphrases}
+            cryptainer, keystore_pool=keystore_pool, passphrase_mapper={local_factory_trustee_id: all_passphrases}
         )  # Doesn't help share trustees
 
     with pytest.raises(DecryptionError, match="1 valid .* missing for reconstitution"):
@@ -680,7 +680,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
             cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper={
-                local_trustee_id: ["qsdqsd"],
+                local_factory_trustee_id: ["qsdqsd"],
                 shard_trustee1_id: all_passphrases,
                 shard_trustee3_id: [passphrase3],
             },
@@ -690,7 +690,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         cryptainer,
         keystore_pool=keystore_pool,
         passphrase_mapper={
-            local_trustee_id: [local_passphrase],
+            local_factory_trustee_id: [local_passphrase],
             shard_trustee1_id: all_passphrases,
             shard_trustee3_id: [passphrase3],
         },
@@ -702,7 +702,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         cryptainer,
         keystore_pool=keystore_pool,
         passphrase_mapper={
-            local_trustee_id: [local_passphrase],
+            local_factory_trustee_id: [local_passphrase],
             shard_trustee1_id: ["dummy-passphrase"],
             shard_trustee3_id: [passphrase3],
             None: all_passphrases,
@@ -731,16 +731,16 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
 def test_get_proxy_for_trustee(tmp_path):
     cryptainer_base1 = CryptainerBase()
-    proxy1 = get_trustee_proxy(LOCAL_TRUSTEE_MARKER, cryptainer_base1._keystore_pool)
+    proxy1 = get_trustee_proxy(LOCAL_FACTORY_TRUSTEE_MARKER, cryptainer_base1._keystore_pool)
     assert isinstance(proxy1, TrusteeApi)  # Local Trustee
     assert isinstance(proxy1._keystore, DummyKeystore)  # Default type
 
     cryptainer_base1_bis = CryptainerBase()
-    proxy1_bis = get_trustee_proxy(LOCAL_TRUSTEE_MARKER, cryptainer_base1_bis._keystore_pool)
+    proxy1_bis = get_trustee_proxy(LOCAL_FACTORY_TRUSTEE_MARKER, cryptainer_base1_bis._keystore_pool)
     assert proxy1_bis._keystore is proxy1_bis._keystore  # process-local storage is SINGLETON!
 
     cryptainer_base2 = CryptainerBase(keystore_pool=FilesystemKeystorePool(str(tmp_path)))
-    proxy2 = get_trustee_proxy(LOCAL_TRUSTEE_MARKER, cryptainer_base2._keystore_pool)
+    proxy2 = get_trustee_proxy(LOCAL_FACTORY_TRUSTEE_MARKER, cryptainer_base2._keystore_pool)
     assert isinstance(proxy2, TrusteeApi)  # Local Trustee
     assert isinstance(proxy2._keystore, FilesystemKeystore)
 

@@ -362,7 +362,7 @@ class InMemoryKeystorePool(KeystorePoolBase):
         self._local_keystore = DummyKeystore()
         self._imported_keystores = {}
 
-    def get_local_keystore(self):
+    def get_local_factory_keystore(self):
         return self._local_keystore
 
     def get_imported_keystore(self, keystore_uid):
@@ -381,14 +381,14 @@ class InMemoryKeystorePool(KeystorePoolBase):
         self._imported_keystores.update(new_storages)
 
 
-class FilesystemKeystorePool(KeystorePoolBase):
+class FilesystemKeystorePool(KeystorePoolBase):  # FIXME rename methods to represent authdevices, remote authenticators etc.
     """This class handles a set of locally stored key storages.
 
     The local storage represents the current device/owner, and is expected to be used by read-write trustees,
     whereas imported key storages are supposed to be readonly, and only filled with keypairs imported from key-devices.
     """
 
-    LOCAL_STORAGE_DIRNAME = "local_keystore"
+    LOCAL_FACTORY_STORAGE_DIRNAME = "local_factory_keystore"
     IMPORTED_STORAGES_DIRNAME = "imported_keystores"
     IMPORTED_STORAGE_PREFIX = "keystore_"
 
@@ -397,9 +397,9 @@ class FilesystemKeystorePool(KeystorePoolBase):
         assert root_dir.is_dir(), root_dir
         self._root_dir = root_dir.absolute()
 
-    def get_local_keystore(self):
+    def get_local_factory_keystore(self):
         """Storage automatically created if unexisting."""
-        local_keystore_dir = self._root_dir.joinpath(self.LOCAL_STORAGE_DIRNAME)
+        local_keystore_dir = self._root_dir.joinpath(self.LOCAL_FACTORY_STORAGE_DIRNAME)
         local_keystore_dir.mkdir(exist_ok=True)
         # TODO initialize metadata for keystore ??
         return FilesystemKeystore(local_keystore_dir)

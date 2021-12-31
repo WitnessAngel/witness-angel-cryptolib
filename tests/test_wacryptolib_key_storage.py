@@ -155,13 +155,13 @@ def test_keystore_pool_basics(tmp_path: Path):
 
     imported_keystore_uid = generate_uuid0()
     mirror_path = tmp_path.joinpath(
-        pool.IMPORTED_STORAGES_DIRNAME, pool.IMPORTED_STORAGE_PREFIX + str(imported_keystore_uid)
+        pool.IMPORTED_KEYSTORES_DIRNAME, pool.IMPORTED_KEYSTORE_PREFIX + str(imported_keystore_uid)
     )
     mirror_path.mkdir(parents=True, exist_ok=False)
 
     imported_keystore_uid2 = generate_uuid0()
     mirror_path2 = tmp_path.joinpath(
-        pool.IMPORTED_STORAGES_DIRNAME, pool.IMPORTED_STORAGE_PREFIX + str(imported_keystore_uid2)
+        pool.IMPORTED_KEYSTORES_DIRNAME, pool.IMPORTED_KEYSTORE_PREFIX + str(imported_keystore_uid2)
     )
     mirror_path2.mkdir(parents=True, exist_ok=False)
 

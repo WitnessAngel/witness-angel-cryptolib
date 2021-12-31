@@ -93,7 +93,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
         to_ts = to_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
-        filename = "{from_ts}_{to_ts}_cryptainer{extension}".format(**locals())
+        filename = "{from_ts}_to_{to_ts}_cryptainer{extension}".format(**locals())
         assert " " not in filename, repr(filename)
         return filename
 
@@ -123,7 +123,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
         to_ts = to_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
-        filename = "{from_ts}_{to_ts}_{sensor_name}{extension}".format(**locals())
+        filename = "{from_ts}_to_{to_ts}_{sensor_name}{extension}".format(**locals())
         assert " " not in filename, repr(filename)
         return filename
 

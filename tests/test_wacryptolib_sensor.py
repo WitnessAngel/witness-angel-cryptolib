@@ -101,8 +101,8 @@ def test_tarfile_aggregator(tmp_path):
 
         filenames = sorted(tar_file.getnames())
         assert filenames == [
-            "20140102221155_20150203000000_smartphone_front_camera.txt",
-            "20171011000000_20171201000000_smartphone_recorder.mp3",
+            "20140102_221155_to_20150203_000000_smartphone_front_camera.txt",
+            "20171011_000000_to_20171201_000000_smartphone_recorder.mp3",
         ]
         assert tar_file.extractfile(filenames[0]).read() == data1
         assert tar_file.extractfile(filenames[1]).read() == data2
@@ -136,7 +136,7 @@ def test_tarfile_aggregator(tmp_path):
         assert not tarfile_aggregator._current_start_time
 
         filenames = sorted(tar_file.getnames())
-        assert filenames == ["20171011000000_20171201000000_abc.avi"]
+        assert filenames == ["20171011_000000_to_20171201_000000_abc.avi"]
         assert tar_file.extractfile(filenames[0]).read() == b""
 
         for i in range(2):

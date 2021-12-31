@@ -9,7 +9,7 @@ from wacryptolib.cryptainer import (
     encrypt_payload_into_cryptainer,
     decrypt_payload_from_cryptainer,
     CRYPTAINER_SUFFIX,
-    MEDIUM_SUFFIX,
+    DECRYPTED_FILE_SUFFIX,
     SHARED_SECRET_MARKER,
 )
 from wacryptolib.keystore import FilesystemKeystorePool
@@ -114,7 +114,7 @@ def decrypt(ctx, input_cryptainer, output_medium):
         if input_cryptainer.name.endswith(CRYPTAINER_SUFFIX):
             output_medium_name = input_cryptainer.name[: -len(CRYPTAINER_SUFFIX)]
         else:
-            output_medium_name = input_cryptainer.name + MEDIUM_SUFFIX
+            output_medium_name = input_cryptainer.name + DECRYPTED_FILE_SUFFIX
         output_medium = LazyFile(output_medium_name, "wb")
 
     click.echo("In decrypt: %s" % str(locals()))

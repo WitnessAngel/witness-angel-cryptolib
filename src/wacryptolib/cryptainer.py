@@ -49,12 +49,19 @@ CRYPTAINER_SUFFIX = ".crypt"
 CRYPTAINER_DATETIME_FORMAT = "%Y%m%d%H%M%S"  # For use in cryptainer names and their records
 CRYPTAINER_TEMP_SUFFIX = "~"  # To name temporary, unfinalized, cryptainers
 
-OFFLOADED_MARKER = "[OFFLOADED]"
-OFFLOADED_DATA_SUFFIX = ".payload"  # Added to CRYPTAINER_SUFFIX
+
+class PAYLOAD_CIPHERTEXT_LOCATIONS:
+    INLINE = "inline"  # Ciphertext is included in the json cryptainer
+    OFFLOADED = "offloaded"  # Ciphertext is in a nearby binary file
+
+# Shortcut helper, should NOT be modified
+OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER = dict(ciphertext_location=PAYLOAD_CIPHERTEXT_LOCATIONS.OFFLOADED)
+
+OFFLOADED_PAYLOAD_FILENAME_SUFFIX = ".payload"  # Added to CRYPTAINER_SUFFIX
 
 DATA_CHUNK_SIZE = 1024 ** 2  # E.g. when streaming a big payload through encryptors
 
-MEDIUM_SUFFIX = ".medium"  # To construct decrypted filename when no previous extensions are found in cryptainer filename
+DECRYPTED_FILE_SUFFIX = ".medium"  # To construct decrypted filename when no output filename is provided
 
 SHARED_SECRET_MARKER = "[SHARED_SECRET]"
 
@@ -392,7 +399,7 @@ class CryptainerEncryptor(CryptainerBase):
             cryptainer_format=cryptainer_format,
             cryptainer_uid=cryptainer_uid,
             keychain_uid=keychain_uid,
-            payload_ciphertext = None,  # Must be filled asap, by OFFLOADED_MARKER if needed!
+            payload_ciphertext = None,  # Must be filled asap, by OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER if needed!
             cryptainer_metadata=metadata,
         )
         return cryptainer, payload_cipher_layer_extracts
@@ -859,7 +866,7 @@ class CryptainerEncryptionStream:
 
         self._cryptainer_decryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
         self._wip_cryptainer, self._encryption_pipeline = self._cryptainer_decryptor.build_cryptainer_and_encryption_pipeline(output_stream=self._output_data_stream, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
-        self._wip_cryptainer["payload_ciphertext"] = OFFLOADED_MARKER  # Important
+        self._wip_cryptainer["payload_ciphertext"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Important
 
         if dump_initial_cryptainer:  # Savegame in case the stream is broken before finalization
             self._dump_current_cryptainer_to_filesystem(is_temporary=True)
@@ -964,7 +971,7 @@ def decrypt_payload_from_cryptainer(
 
 def _get_offloaded_file_path(cryptainer_filepath: Path):
     """We also support, discreetly, TEMPORARY cryptainers"""
-    return cryptainer_filepath.parent.joinpath(cryptainer_filepath.name.rstrip(CRYPTAINER_TEMP_SUFFIX) + OFFLOADED_DATA_SUFFIX)
+    return cryptainer_filepath.parent.joinpath(cryptainer_filepath.name.rstrip(CRYPTAINER_TEMP_SUFFIX) + OFFLOADED_PAYLOAD_FILENAME_SUFFIX)
 
 
 def dump_cryptainer_to_filesystem(cryptainer_filepath: Path, cryptainer: dict, offload_payload_ciphertext=True) -> None:
@@ -977,7 +984,7 @@ def dump_cryptainer_to_filesystem(cryptainer_filepath: Path, cryptainer: dict, o
         assert isinstance(cryptainer["payload_ciphertext"], bytes), cryptainer["payload_ciphertext"]
         offloaded_file_path.write_bytes(cryptainer["payload_ciphertext"])
         cryptainer = cryptainer.copy()  # DO NOT touch original dict!
-        cryptainer["payload_ciphertext"] = OFFLOADED_MARKER
+        cryptainer["payload_ciphertext"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
     dump_to_json_file(cryptainer_filepath, cryptainer)
 
 
@@ -990,7 +997,7 @@ def load_cryptainer_from_filesystem(cryptainer_filepath: Path, include_payload_c
     cryptainer = load_from_json_file(cryptainer_filepath)
 
     if include_payload_ciphertext:
-        if cryptainer["payload_ciphertext"] == OFFLOADED_MARKER:
+        if cryptainer["payload_ciphertext"] == OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER:
             offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
             cryptainer["payload_ciphertext"] = offloaded_file_path.read_bytes()
     else:
@@ -1004,7 +1011,7 @@ def delete_cryptainer_from_filesystem(cryptainer_filepath):
     os.remove(cryptainer_filepath)  # TODO - additional retries if file access errors?
     offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
     if offloaded_file_path.exists():
-        # We don't care about OFFLOADED_MARKER here, we go the quick way
+        # We don't care about OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER here, we go the quick way
         os.remove(offloaded_file_path)
 
 
@@ -1013,7 +1020,7 @@ def get_cryptainer_size_on_filesystem(cryptainer_filepath):
     size = cryptainer_filepath.stat().st_size  # Might fail if file got deleted concurrently
     offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
     if offloaded_file_path.exists():
-        # We don't care about OFFLOADED_MARKER here, we go the quick way
+        # We don't care about OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER here, we go the quick way
         size += offloaded_file_path.stat().st_size
     return size
 

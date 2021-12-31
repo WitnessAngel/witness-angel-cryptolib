@@ -15,14 +15,14 @@ def list_available_authdevices():
     """
     Generate a list of dictionaries representing mounted partitions of USB keys.
 
-    :return: (list) Dictionaries having at least these fields: path, label, format, size, is_initialized, initialized_user, initialized_device_uid
+    :return: (list) Dictionaries having at least these fields: path, label, format, size, is_initialized, and metadata
     
         - "path" (str):  mount point on the filesystem.
         - "label" (str): possibly empty, label of the partition
         - "format" (str): lowercase character string for filesystem type, like "ext2", "fat32" ...
         - "size" (int): filesystem size in bytes
         - "is_initialized" (bool): if the device has been initialized with metadata
-        - "metadata" (dict): None if device is not initialized, else dict with at least "user" (str) and "device_uid" (UUID) attributes.
+        - "metadata" (dict): None if device is not initialized, else dict with at least "user" (str) and "authenticator_uid" (UUID) attributes.
 
     The linux environment has an additional field which is 'partition' (str) e.g. "/dev/sda1".
     """
@@ -83,7 +83,7 @@ def is_authdevice_initialized(authdevice: dict):
 def load_authdevice_metadata(authdevice: dict) -> dict:
     """
     Return the device metadata stored in the given mountpoint, after checking that it contains at least mandatory
-    (user and device_uid) fields.
+    (user and authenticator_uid) fields.
 
     Raises `ValueError` or json decoding exceptions if device appears initialized, but has corrupted metadata.
     """

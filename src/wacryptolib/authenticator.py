@@ -39,7 +39,7 @@ def _do_initialize_authenticator(authenticator_dir: Path, user: str, extra_metad
     metadata_file = get_metadata_file_path(authenticator_dir)
     metadata_file.parent.mkdir(parents=False, exist_ok=True)  # Only LAST directory might be created
     metadata = extra_metadata.copy()
-    metadata.update({"device_uid": generate_uuid0(), "user": user})  # Override these keys if present!
+    metadata.update({"authenticator_uid": generate_uuid0(), "user": user})  # Override these keys if present!
     dump_to_json_file(metadata_file, metadata)
     return metadata
 
@@ -61,7 +61,7 @@ def is_authenticator_initialized(authenticator_dir: Path):
 def load_authenticator_metadata(authenticator_dir: Path) -> dict:
     """
     Return the authenticator metadata stored in the given folder, after checking that it contains at least mandatory
-    (user and device_uid) fields.
+    (user and authenticator_uid) fields.
 
     Raises `ValueError` or json decoding exceptions if device appears initialized, but has corrupted metadata.
     """
@@ -75,6 +75,6 @@ def load_authenticator_metadata(authenticator_dir: Path) -> dict:
 
 def _check_authdevice_metadata(metadata: dict):
     if not (
-        isinstance(metadata, dict) and metadata.get("user") and metadata.get("device_uid")
+        isinstance(metadata, dict) and metadata.get("user") and metadata.get("authenticator_uid")
     ):  # Only lightweight checkup for now
         raise ValueError("Abnormal key device metadata: %s" % str(metadata))

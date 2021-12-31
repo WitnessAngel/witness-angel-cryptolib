@@ -419,7 +419,7 @@ class FilesystemKeystorePool(KeystorePoolBase):  # FIXME rename methods to repre
 
     def list_imported_keystore_uids(self) -> list:
         """Return a sorted list of UUIDs of key storages, corresponding
-        to the device_uid of their origin authentication devices."""
+        to the authenticator_uid of their origin authentication devices."""
         imported_keystores_dir = self._root_dir.joinpath(self.IMPORTED_STORAGES_DIRNAME)
         paths = imported_keystores_dir.glob("%s*" % self.IMPORTED_STORAGE_PREFIX)  # This excludes TEMP folders
         return sorted([uuid.UUID(d.name.replace(self.IMPORTED_STORAGE_PREFIX, "")) for d in paths])
@@ -448,7 +448,7 @@ class FilesystemKeystorePool(KeystorePoolBase):  # FIXME rename methods to repre
         assert keystore_dir.exists(), keystore_dir
 
         metadata = load_from_json_file(get_metadata_file_path(keystore_dir))
-        keystore_uid = metadata["device_uid"]  # Fails badly if metadata file is corrupted
+        keystore_uid = metadata["authenticator_uid"]  # Fails badly if metadata file is corrupted
 
         if keystore_uid in self.list_imported_keystore_uids():
             raise KeystoreAlreadyExists("Key storage with UUID %s was already imported locally" % keystore_uid)

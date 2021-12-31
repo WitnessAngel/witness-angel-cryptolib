@@ -176,8 +176,8 @@ def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):
     if trustee_type == TRUSTEE_TYPES.LOCAL_FACTORY_TRUSTEE:
         return TrusteeApi(keystore_pool.get_local_factory_keystore())
     elif trustee_type == TRUSTEE_TYPES.AUTHDEVICE_TRUSTEE:
-        authdevice_uid = trustee["authdevice_uid"]
-        keystore = keystore_pool.get_imported_keystore(authdevice_uid)
+        authenticator_uid = trustee["authenticator_uid"]
+        keystore = keystore_pool.get_imported_keystore(authenticator_uid)
         return ReadonlyTrusteeApi(keystore)
     elif trustee_type == TRUSTEE_TYPES.JSONRPC_TRUSTEE:
         return JsonRpcProxy(url=trustee["url"], response_error_handler=status_slugs_response_error_handler)

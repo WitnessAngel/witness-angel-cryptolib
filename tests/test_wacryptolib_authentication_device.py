@@ -38,7 +38,7 @@ def test_list_available_authdevices():  # FIXME add mockups to simulate real USB
 
         if authdevice["metadata"]:
             assert isinstance(authdevice["metadata"]["user"], str)  # Might be empty
-            assert isinstance(authdevice["metadata"]["device_uid"], (type(None), UUID))  # Might be empty
+            assert isinstance(authdevice["metadata"]["authenticator_uid"], (type(None), UUID))  # Might be empty
 
 
 def test_authdevice_initialization_and_checkers(tmp_path):
@@ -61,13 +61,13 @@ def test_authdevice_initialization_and_checkers(tmp_path):
     assert authdevice["is_initialized"] == True
     assert len(authdevice["metadata"]) == 2
     assert authdevice["metadata"]["user"] == "Michél Dûpont"
-    assert isinstance(authdevice["metadata"]["device_uid"], UUID)
+    assert isinstance(authdevice["metadata"]["authenticator_uid"], UUID)
 
     # REAL metadata file content
     metadata = load_authdevice_metadata(authdevice)
     assert len(metadata) == 2
     assert metadata["user"] == "Michél Dûpont"
-    assert isinstance(metadata["device_uid"], UUID)
+    assert isinstance(metadata["authenticator_uid"], UUID)
 
     # We ensure the code doesn't do any weird shortcut
     authdevice["is_initialized"] = False
@@ -76,7 +76,7 @@ def test_authdevice_initialization_and_checkers(tmp_path):
     metadata = load_authdevice_metadata(authdevice)
     assert authdevice == authdevice_original  # Untouched
     assert metadata["user"] == "Michél Dûpont"
-    assert isinstance(metadata["device_uid"], UUID)
+    assert isinstance(metadata["authenticator_uid"], UUID)
 
     assert is_authdevice_initialized(authdevice)
     metadata_file_path = get_metadata_file_path(get_authenticator_dir_for_authdevice(authdevice))
@@ -97,5 +97,5 @@ def test_authdevice_initialization_and_checkers(tmp_path):
     metadata = load_authdevice_metadata(authdevice)
     assert len(metadata) == 3
     assert metadata["user"] == "Johnny"
-    assert isinstance(metadata["device_uid"], UUID)
+    assert isinstance(metadata["authenticator_uid"], UUID)
     assert metadata["passphrase_hint"] == "big passphrâse \n aboùt bïrds"

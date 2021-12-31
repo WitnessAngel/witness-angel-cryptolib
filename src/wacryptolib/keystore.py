@@ -11,8 +11,9 @@ from pathlib import Path
 from os.path import join
 import glob
 
+from wacryptolib.authenticator import load_authenticator_metadata
 from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist, KeystoreDoesNotExist, KeystoreAlreadyExists
-from wacryptolib.utilities import synchronized, load_from_json_file, get_metadata_file_path, safe_copy_directory
+from wacryptolib.utilities import synchronized, safe_copy_directory
 
 logger = logging.getLogger(__name__)
 
@@ -435,8 +436,8 @@ class FilesystemKeystorePool(KeystorePoolBase):  # FIXME rename methods to repre
 
         metadata_mapper = {}
         for keystore_uid in keystore_uids:
-            _keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
-            metadata = load_from_json_file(get_metadata_file_path(_keystore_dir))  # TODO Factorize this ?
+            keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
+            metadata = load_authenticator_metadata(keystore_dir)  # TODO Factorize this ?
             metadata_mapper[keystore_uid] = metadata
 
         return metadata_mapper
@@ -449,7 +450,7 @@ class FilesystemKeystorePool(KeystorePoolBase):  # FIXME rename methods to repre
         """
         assert keystore_dir.exists(), keystore_dir
 
-        metadata = load_from_json_file(get_metadata_file_path(keystore_dir))
+        metadata = load_authenticator_metadata(keystore_dir)
         keystore_uid = metadata["authenticator_uid"]  # FIXME - Fails badly if metadata file is corrupted
 
         if keystore_uid in self.list_imported_keystore_uids():

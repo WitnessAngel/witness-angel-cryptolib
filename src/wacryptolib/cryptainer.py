@@ -22,7 +22,7 @@ from schema import Optional as Optionalkey
 
 from wacryptolib.cipher import encrypt_bytestring, decrypt_bytestring, EncryptionPipeline, STREAMABLE_CIPHER_ALGOS, \
     SUPPORTED_CIPHER_ALGOS
-from wacryptolib.trustee import TrusteeApi as LocalTrusteeApi, ReadonlyTrusteeApi, TrusteeApi
+from wacryptolib.trustee import TrusteeApi, ReadonlyTrusteeApi
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, \
@@ -60,10 +60,15 @@ SHARED_SECRET_MARKER = "[SHARED_SECRET]"
 
 DUMMY_KEYSTORE_POOL = InMemoryKeystorePool()  # Common fallback storage with in-memory keys
 
-#: Special value in cryptainers, to invoke a device-local trustee
-LOCAL_TRUSTEE_MARKER = dict(trustee_type="local")  # FIXME CHANGE THIS
 
-AUTHDEVICE_TRUSTEE_MARKER = dict(trustee_type="authdevice")  # FIXME CHANGE THIS
+class TRUSTEE_TYPES:
+    LOCAL_TRUSTEE = "local"  # FIXME rename to localfactory?
+    AUTHDEVICE_TRUSTEE = "authdevice"
+    JSONRPC_TRUSTEE = "jsonrpc"
+
+
+# Shortcut helper, should NOT be modified
+LOCAL_TRUSTEE_MARKER = dict(trustee_type=TRUSTEE_TYPES.LOCAL_TRUSTEE)
 
 
 class CRYPTAINER_STATES:
@@ -164,13 +169,13 @@ def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):
 
     trustee_type = trustee.get("trustee_type")  # Might be None
 
-    if trustee_type == LOCAL_TRUSTEE_MARKER["trustee_type"]:
-        return LocalTrusteeApi(keystore_pool.get_local_keystore())
-    elif trustee_type == AUTHDEVICE_TRUSTEE_MARKER["trustee_type"]:
+    if trustee_type == TRUSTEE_TYPES.LOCAL_TRUSTEE:
+        return TrusteeApi(keystore_pool.get_local_keystore())
+    elif trustee_type == TRUSTEE_TYPES.AUTHDEVICE_TRUSTEE:
         authdevice_uid = trustee["authdevice_uid"]
         keystore = keystore_pool.get_imported_keystore(authdevice_uid)
         return ReadonlyTrusteeApi(keystore)
-    elif trustee_type == "jsonrpc":
+    elif trustee_type == TRUSTEE_TYPES.JSONRPC_TRUSTEE:
         return JsonRpcProxy(url=trustee["url"], response_error_handler=status_slugs_response_error_handler)
     # TODO - Implement imported storages, trustee lookup in global registry, shared-secret group, etc.
     raise ValueError("Unrecognized trustee identifiers: %s" % str(trustee))

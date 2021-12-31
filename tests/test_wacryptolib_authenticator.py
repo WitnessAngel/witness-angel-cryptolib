@@ -26,6 +26,7 @@ def test_authenticator_basic_workflow(tmp_path):
         initialize_authenticator(acceptable_path, authenticator_owner="myuserX%s" % idx)  # Too many missing parent folders
         is_authenticator_initialized(acceptable_path)
         metadata = load_authenticator_metadata(acceptable_path)
+        assert len(metadata) == 3
         assert isinstance(metadata["authenticator_uid"], UUID)
         assert metadata["authenticator_owner"] == "myuserX%s" % idx
-
+        assert metadata["authenticator_version"] == "authenticator_1.0"

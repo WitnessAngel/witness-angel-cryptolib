@@ -39,7 +39,9 @@ def _do_initialize_authenticator(authenticator_dir: Path, authenticator_owner: s
     metadata_file = get_metadata_file_path(authenticator_dir)
     metadata_file.parent.mkdir(parents=False, exist_ok=True)  # Only LAST directory might be created
     metadata = extra_metadata.copy()
-    metadata.update({"authenticator_uid": generate_uuid0(), "authenticator_owner": authenticator_owner})  # Override these keys if present!
+    metadata.update({"authenticator_version": "authenticator_1.0",   # Might be useful later
+                     "authenticator_uid": generate_uuid0(),
+                     "authenticator_owner": authenticator_owner})  # Overrides these keys if present!
     dump_to_json_file(metadata_file, metadata)
     return metadata
 
@@ -73,7 +75,7 @@ def load_authenticator_metadata(authenticator_dir: Path) -> dict:
     return metadata
 
 
-def _check_authdevice_metadata(metadata: dict):
+def _check_authdevice_metadata(metadata: dict):  # FIXME use python-schema instead!!!
     if not (
         isinstance(metadata, dict) and metadata.get("authenticator_owner") and metadata.get("authenticator_uid")
     ):  # Only lightweight checkup for now

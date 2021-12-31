@@ -59,15 +59,17 @@ def test_authdevice_initialization_and_checkers(tmp_path):
 
     # UPDATED fields
     assert authdevice["is_initialized"] == True
-    assert len(authdevice["metadata"]) == 2
+    assert len(authdevice["metadata"]) == 3
     assert authdevice["metadata"]["authenticator_owner"] == "Michél Dûpont"
     assert isinstance(authdevice["metadata"]["authenticator_uid"], UUID)
+    assert authdevice["metadata"]["authenticator_version"] == "authenticator_1.0"
 
     # REAL metadata file content
     metadata = load_authdevice_metadata(authdevice)
-    assert len(metadata) == 2
+    assert len(metadata) == 3
     assert metadata["authenticator_owner"] == "Michél Dûpont"
     assert isinstance(metadata["authenticator_uid"], UUID)
+    assert metadata["authenticator_version"] == "authenticator_1.0"
 
     # We ensure the code doesn't do any weird shortcut
     authdevice["is_initialized"] = False
@@ -77,6 +79,7 @@ def test_authdevice_initialization_and_checkers(tmp_path):
     assert authdevice == authdevice_original  # Untouched
     assert metadata["authenticator_owner"] == "Michél Dûpont"
     assert isinstance(metadata["authenticator_uid"], UUID)
+    assert metadata["authenticator_version"] == "authenticator_1.0"
 
     assert is_authdevice_initialized(authdevice)
     metadata_file_path = get_metadata_file_path(get_authenticator_dir_for_authdevice(authdevice))
@@ -95,7 +98,8 @@ def test_authdevice_initialization_and_checkers(tmp_path):
     assert is_authdevice_initialized(authdevice)
 
     metadata = load_authdevice_metadata(authdevice)
-    assert len(metadata) == 3
+    assert len(metadata) == 4
     assert metadata["authenticator_owner"] == "Johnny"
     assert isinstance(metadata["authenticator_uid"], UUID)
+    assert metadata["authenticator_version"] == "authenticator_1.0"
     assert metadata["authenticator_passphrase_hint"] == "big passphrâse \n aboùt bïrds"

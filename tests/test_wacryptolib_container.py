@@ -466,7 +466,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
 
     # 1 share is deleted
 
-    del key_ciphertext_shards["shards"][-1]
+    del key_ciphertext_shards["shard_ciphertexts"][-1]
 
     payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
@@ -476,7 +476,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
 
     # Another share is deleted
 
-    del key_ciphertext_shards["shards"][-1]
+    del key_ciphertext_shards["shard_ciphertexts"][-1]
 
     payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
@@ -485,7 +485,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
 
     # Another share is deleted and now there aren't enough valid ones to decipher data
 
-    del key_ciphertext_shards["shards"][-1]
+    del key_ciphertext_shards["shard_ciphertexts"][-1]
 
     payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 

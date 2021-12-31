@@ -448,13 +448,13 @@ class CryptainerEncryptor(CryptainerBase):
 
             for shard, trustee_conf in zip(shards, key_shared_secret_shards):
                 shard_bytes = dump_to_json_bytes(shard)  # The tuple (idx, payload) of each shard thus becomes encryptable
-                shard_ciphertexts = self._encrypt_key_through_multiple_layers(  # FIXME rename singular
+                shard_ciphertext = self._encrypt_key_through_multiple_layers(  # FIXME rename singular
                         keychain_uid=keychain_uid,
                         key_bytes=shard_bytes,
                         key_encryption_layers=trustee_conf["key_encryption_layers"])  # Recursive structure
-                shard_ciphertexts.append(shard_ciphertexts)
+                shard_ciphertexts.append(shard_ciphertext)
 
-            key_cipherdict = {"shards": shard_ciphertexts}  # A dict is more future-proof
+            key_cipherdict = {"shard_ciphertexts": shard_ciphertexts}  # A dict is more future-proof
 
         else:  # Using asymmetric algorithm
 
@@ -673,7 +673,7 @@ class CryptainerDecryptor(CryptainerBase):
             key_shared_secret_shards = encryption_layer["key_shared_secret_shards"]  # FIXMe rename twice
             key_shared_secret_threshold = encryption_layer["key_shared_secret_threshold"]
 
-            shard_ciphertexts = key_cipherdict["shards"]
+            shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
 
             logger.debug("Deciphering each shard")
 
@@ -762,7 +762,7 @@ class CryptainerDecryptor(CryptainerBase):
         decrypted_shards = []
         decryption_errors = []
 
-        assert len(symmetric_key_cipherdict["shards"]) <= len(
+        assert len(symmetric_key_cipherdict["shard_ciphertexts"]) <= len(
             key_shared_secret_shards
         )  # During tests we erase some cryptainer shards...
 
@@ -774,7 +774,7 @@ class CryptainerDecryptor(CryptainerBase):
 
             try:
                 try:
-                    encrypted_shard = symmetric_key_cipherdict["shards"][shard_idx]
+                    encrypted_shard = symmetric_key_cipherdict["shard_ciphertexts"][shard_idx]
                 except IndexError:
                     raise ValueError("Missing shard at index %s" % shard_idx) from None
 
@@ -1373,7 +1373,7 @@ def get_cryptoconf_summary(conf_or_cryptainer):  # FIXME move up like in docs
     return result
 
 
-def _create_schema(for_cryptainer: bool, extended_json_format: bool):
+def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME must support differnt types of trustee
     """Create validation schema for confs and cryptainers.
     :param for_cryptainer: true if instance is a cryptainer
     :param extended_json_format: true if the scheme is extended to json format

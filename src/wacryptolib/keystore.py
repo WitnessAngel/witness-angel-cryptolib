@@ -384,7 +384,7 @@ class InMemoryKeystorePool(KeystorePoolBase):
         self._imported_keystores.update(new_storages)
 
 
-class FilesystemKeystorePool(KeystorePoolBase):  # FIXME rename methods to represent authdevices, remote authenticators etc.
+class FilesystemKeystorePool(KeystorePoolBase):  # FIXME rename methods to better represent authdevices, remote authenticators etc. ??
     """This class handles a set of locally stored key storages.
 
     The local storage represents the current device/owner, and is expected to be used by read-write trustees,
@@ -437,7 +437,7 @@ class FilesystemKeystorePool(KeystorePoolBase):  # FIXME rename methods to repre
         metadata_mapper = {}
         for keystore_uid in keystore_uids:
             keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
-            metadata = load_authenticator_metadata(keystore_dir)  # TODO Factorize this ?
+            metadata = load_authenticator_metadata(keystore_dir)
             metadata_mapper[keystore_uid] = metadata
 
         return metadata_mapper

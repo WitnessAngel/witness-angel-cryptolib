@@ -50,7 +50,7 @@ def slugify_exception_class(
     :param qualified_name_extractor: callable which turns an exception class into its qualified name
     :return: list of strings
     """
-    # TODO change casing? Inspect exception_class.slug_name?
+    # TODO change casing fo class name? Inspect exception_class.slug_name if present?
     assert isinstance(exception_class, type), exception_class  # Must be a CLASS, not an instance!
     slugs = [
         qualified_name_extractor(ancestor)

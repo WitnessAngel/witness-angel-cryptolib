@@ -46,6 +46,7 @@ def _do_initialize_authenticator(authenticator_dir: Path, authenticator_owner: s
     return metadata
 
 
+# TODO go farther, and add flags to report errors if json or RSA keys are missing/corrupted?
 def is_authenticator_initialized(authenticator_dir: Path):
     """
     Check if an authenticator folder seems initialized.

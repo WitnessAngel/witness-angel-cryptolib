@@ -68,7 +68,7 @@ SHARED_SECRET_ALGO_MARKER = "[SHARED_SECRET]"  # Special "key_cipher_algo" value
 DUMMY_KEYSTORE_POOL = InMemoryKeystorePool()  # Common fallback storage with in-memory keys
 
 class TRUSTEE_TYPES:
-    LOCAL_FACTORY_TRUSTEE = "local_factory"  # FIXME rename to local_factory?
+    LOCAL_FACTORY_TRUSTEE = "local_factory"
     AUTHDEVICE_TRUSTEE = "authdevice"
     JSONRPC_TRUSTEE = "jsonrpc"
 
@@ -182,11 +182,7 @@ def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):
         return ReadonlyTrusteeApi(keystore)
     elif trustee_type == TRUSTEE_TYPES.JSONRPC_TRUSTEE:
         return JsonRpcProxy(url=trustee["url"], response_error_handler=status_slugs_response_error_handler)
-    # TODO - Implement imported storages, trustee lookup in global registry, shared-secret group, etc.
     raise ValueError("Unrecognized trustee identifiers: %s" % str(trustee))
-
-
-# FIXME rename keychain_uid to default_keychain_uid where relevant!!
 
 
 class CryptainerBase:
@@ -460,7 +456,7 @@ class CryptainerEncryptor(CryptainerBase):
 
             for shard, trustee_conf in zip(shards, key_shared_secret_shards):
                 shard_bytes = dump_to_json_bytes(shard)  # The tuple (idx, payload) of each shard thus becomes encryptable
-                shard_ciphertext = self._encrypt_key_through_multiple_layers(  # FIXME rename singular
+                shard_ciphertext = self._encrypt_key_through_multiple_layers(
                         keychain_uid=keychain_uid,
                         key_bytes=shard_bytes,
                         key_cipher_layers=trustee_conf["key_cipher_layers"])  # Recursive structure
@@ -690,7 +686,7 @@ class CryptainerDecryptor(CryptainerBase):
 
             decrypted_shards = []
             decryption_errors = []
-            key_shared_secret_shards = cipher_layer["key_shared_secret_shards"]  # FIXMe rename twice
+            key_shared_secret_shards = cipher_layer["key_shared_secret_shards"]
             key_shared_secret_threshold = cipher_layer["key_shared_secret_threshold"]
 
             shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
@@ -1397,7 +1393,7 @@ def get_cryptoconf_summary(conf_or_cryptainer):  # FIXME move up like in docs
     return result
 
 
-def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME must support differnt types of trustee
+def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME must support different types of trustee
     """Create validation schema for confs and cryptainers.
     :param for_cryptainer: true if instance is a cryptainer
     :param extended_json_format: true if the scheme is extended to json format

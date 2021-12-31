@@ -283,7 +283,7 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
             logger.error("Error in PeriodicValuePoller offloaded task: %r" % exc, exc_info=True)
 
 
-class SensorManager(TaskRunnerStateMachineBase):  # FIXME deprecate this in favor of whole recording toolchain
+class SensorManager(TaskRunnerStateMachineBase):  # FIXME deprecate this in favor of class handling the whole recording toolchain, with aggregators etc.?
     """
     Manage a group of sensors for simultaneous starts/stops.
 

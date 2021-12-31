@@ -8,7 +8,7 @@ from wacryptolib.authenticator import is_authenticator_initialized, initialize_a
 
 logger = logging.getLogger(__name__)
 
-# FIXME regroup all metadata and is_initialized in single "metadata" field
+# FIXME regroup all metadata and is_initialized in single "metadata" field??
 
 # FIXME change "format" here, bad wording!!!!
 def list_available_authdevices():
@@ -65,7 +65,6 @@ def initialize_authdevice(authdevice: dict, authdevice_owner: str, extra_metadat
     authdevice["metadata"] = metadata
 
 
-# TODO go farther, and add flags to report errors if json or RSA keys are missing/corrupted?
 # FIXME - actually unused?
 def is_authdevice_initialized(authdevice: dict):
     """

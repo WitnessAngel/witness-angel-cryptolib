@@ -180,8 +180,9 @@ def test_stream_manager(cipher_algo_list):
         output_stream=output_stream)
 
     plaintext_full = get_random_bytes(randint(10, 10000))
+
     plaintext_current = plaintext_full
-    while plaintext_current:     # TODO factorize this utility
+    while plaintext_current:     # TODO factorize this utility of looping through chunks!
         chunk_length = randint(1, 300)
         chunk = plaintext_current[0:chunk_length]
         plaintext_current = plaintext_current[chunk_length:]
@@ -195,8 +196,9 @@ def test_stream_manager(cipher_algo_list):
                                                          reversed(EncryptionPipeline.get_payload_integrity_tags())):
 
         for hash_algo in payload_encryption_node['payload_digest_algos']:
-            assert (hash_message(message=current_ciphertext, hash_algo=hash_algo) ==  # TODO NOW create local vars
-                    authentication_data['payload_digests'][hash_algo])
+            new_hash = hash_message(message=current_ciphertext, hash_algo=hash_algo)
+            expected_hash = authentication_data['payload_digests'][hash_algo]
+            assert new_hash == expected_hash
 
         cipherdict = {"ciphertext": current_ciphertext}
         cipherdict.update(authentication_data["payload_authentication_codes"])

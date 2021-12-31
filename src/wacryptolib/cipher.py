@@ -361,15 +361,15 @@ class Chacha20Poly1305EncryptionNode(EncryptionNodeBase):
 class EncryptionPipeline:
     """"Pipeline to encrypt data through several encryption nodes, down to an outout stream (e.g. file or ByteIO)"""
 
-    def __init__(self, output_stream: BinaryIO, payload_encryption_layer_extracts: list):
+    def __init__(self, output_stream: BinaryIO, payload_cipher_layer_extracts: list):
 
         self._output_stream = output_stream
         self._cipher_streams = []
 
-        for payload_encryption_layer_extract in payload_encryption_layer_extracts:
-            payload_cipher_algo = payload_encryption_layer_extract["cipher_algo"]
-            symkey = payload_encryption_layer_extract["symkey"]
-            payload_digest_algos = payload_encryption_layer_extract["payload_digest_algos"]
+        for payload_cipher_layer_extract in payload_cipher_layer_extracts:
+            payload_cipher_algo = payload_cipher_layer_extract["cipher_algo"]
+            symkey = payload_cipher_layer_extract["symkey"]
+            payload_digest_algos = payload_cipher_layer_extract["payload_digest_algos"]
 
             cipher_algo_conf = _get_cipher_algo_conf(cipher_algo=payload_cipher_algo)
             encryption_class = cipher_algo_conf["encryption_node_class"]

@@ -166,17 +166,17 @@ def test_stream_manager(cipher_algo_list):
 
     output_stream = io.BytesIO()
 
-    payload_encryption_layer_extracts = []
+    payload_cipher_layer_extracts = []
     for cipher_algo in cipher_algo_list:
-        payload_encryption_layers_extract = {'cipher_algo': cipher_algo,
+        payload_cipher_layers_extract = {'cipher_algo': cipher_algo,
                                           'symkey': generate_symkey(cipher_algo),
                                           'payload_digest_algos': random.choices(SUPPORTED_HASH_ALGOS, k=randint(1,
                                                                                                                  len(SUPPORTED_HASH_ALGOS)))}
-        payload_encryption_layer_extracts.append(payload_encryption_layers_extract)
-    print(payload_encryption_layer_extracts)
+        payload_cipher_layer_extracts.append(payload_cipher_layers_extract)
+    print(payload_cipher_layer_extracts)
 
     EncryptionPipeline = wacryptolib.cipher.EncryptionPipeline(
-        payload_encryption_layer_extracts=payload_encryption_layer_extracts,
+        payload_cipher_layer_extracts=payload_cipher_layer_extracts,
         output_stream=output_stream)
 
     plaintext_full = get_random_bytes(randint(10, 10000))
@@ -191,7 +191,7 @@ def test_stream_manager(cipher_algo_list):
 
     current_ciphertext = output_stream.getvalue()
 
-    for payload_encryption_node, authentication_data in zip(reversed(payload_encryption_layer_extracts),
+    for payload_encryption_node, authentication_data in zip(reversed(payload_cipher_layer_extracts),
                                                          reversed(EncryptionPipeline.get_payload_integrity_tags())):
 
         for hash_algo in payload_encryption_node['payload_digest_algos']:

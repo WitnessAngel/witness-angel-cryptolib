@@ -24,13 +24,13 @@ A minimal cryptainer configuration in python, with a single encryption layer and
     from wacryptolib.cryptainer import LOCAL_FACTORY_TRUSTEE_MARKER
 
     CONFIG = dict(
-        payload_encryption_layers=[
+        payload_cipher_layers=[
             dict(
                 payload_cipher_algo="AES_CBC",
-                key_encryption_layers=[
+                key_cipher_layers=[
                     dict(
                         key_cipher_algo="RSA_OAEP",
-                        key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                        key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
                     )
                 ],
                 payload_signatures=[
@@ -62,7 +62,7 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
               "subType": "00"
           }
       },
-      "payload_encryption_layers": [
+      "payload_cipher_layers": [
           {
               "payload_cipher_algo": "AES_CBC",
               "payload_signatures": [
@@ -89,10 +89,10 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
                       "subType": "00"
                   }
               },
-              "key_encryption_layers": [
+              "key_cipher_layers": [
                   {
                       "key_cipher_algo": "RSA_OAEP",
-                      "key_encryption_trustee": "_local_"
+                      "key_cipher_trustee": "_local_"
                   }
               ]
           }
@@ -121,7 +121,7 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
 
         {
             payload_ciphertext: <opaque multi-encrypted data bytestring>,
-            payload_encryption_layers: <list of Layer objects targeting ciphertext, in order of application>,
+            payload_cipher_layers: <list of Layer objects targeting ciphertext, in order of application>,
             data_uid: <optional uuid of this specific data cryptainer>,
         }
 
@@ -136,9 +136,9 @@ The corresponding cryptainer content, in Pymongo's Extended Json format::
 
             # Then we have either:
             key_ciphertext: <opaque multi-encrypted key bytestring>,
-            key_encryption_layers: <(optional) list of Layer objects targeting key_ciphertext, in order of application>,
+            key_cipher_layers: <(optional) list of Layer objects targeting key_ciphertext, in order of application>,
             # or:
-            key_encryption_trustee: <Trustee Entity object able to decrypt the parent data/key ciphertext at this layer of encryption>,
+            key_cipher_trustee: <Trustee Entity object able to decrypt the parent data/key ciphertext at this layer of encryption>,
         }
 
     Signature object:

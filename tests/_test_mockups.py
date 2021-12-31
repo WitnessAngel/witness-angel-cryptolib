@@ -13,7 +13,7 @@ class FakeTestCryptainerStorage(CryptainerStorage):
         super().enqueue_file_for_encryption(filename_base + (".%03d" % self.increment), payload, **kwargs)
         self.increment += 1
 
-    def _use_streaming_encryption_for_conf(self, cryptoconf):
+    def _use_streaming_encryption_for_cryptoconf(self, cryptoconf):
         return self._offload_payload_ciphertext  # Do NOT dig cryptoconf here, it might be all wrong
 
     def _encrypt_payload_and_dump_cryptainer_to_filesystem(self, payload, cryptainer_filepath, metadata, keychain_uid, cryptoconf):

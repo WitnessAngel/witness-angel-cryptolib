@@ -11,22 +11,22 @@ from wacryptolib.cryptainer import CryptainerStorage, LOCAL_FACTORY_TRUSTEE_MARK
 from wacryptolib.sensor import TarfileRecordsAggregator
 
 ENCRYPTION_CRYPTOCONF = dict(
-    payload_encryption_layers=[
+    payload_cipher_layers=[
         dict(
             payload_cipher_algo="AES_EAX",
-            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
+            key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
             payload_signatures=[],
         ),
         dict(
             payload_cipher_algo="CHACHA20_POLY1305",
-            key_encryption_layers=[
-                dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
+            key_cipher_layers=[
+                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
             ],
             payload_signatures=[],
         ),
         dict(
             payload_cipher_algo="AES_CBC",
-            key_encryption_layers=[dict(key_cipher_algo="RSA_OAEP", key_encryption_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
+            key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
             payload_signatures=[],
         ),
     ]

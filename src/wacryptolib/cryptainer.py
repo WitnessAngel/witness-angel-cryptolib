@@ -44,9 +44,10 @@ from wacryptolib.utilities import (
 
 logger = logging.getLogger(__name__)
 
-CRYPTAINER_FORMAT = "WA_0.1a"
+CRYPTAINER_FORMAT = "cryptainer_1.0"
 CRYPTAINER_SUFFIX = ".crypt"
-CRYPTAINER_DATETIME_FORMAT = "%Y%m%d%H%M%S"  # For use in cryptainer names and their records
+CRYPTAINER_DATETIME_FORMAT = "%Y%m%d_%H%M%S"  # For use in cryptainer names and their records
+CRYPTAINER_DATETIME_LENGTH = 15  # Important to lookup prefix of filename before matching it with CRYPTAINER_DATETIME_FORMAT
 CRYPTAINER_TEMP_SUFFIX = "~"  # To name temporary, unfinalized, cryptainers
 
 class PAYLOAD_CIPHERTEXT_LOCATIONS:
@@ -1027,7 +1028,7 @@ def delete_cryptainer_from_filesystem(cryptainer_filepath):
 
 def get_cryptainer_size_on_filesystem(cryptainer_filepath):
     """Return the total size in bytes occupied by a cryptainer and its potential offloaded payload file."""
-    size = cryptainer_filepath.stat().st_size  # Might fail if file got deleted concurrently
+    size = cryptainer_filepath.stat().st_size  # FIXME - Might fail if file got deleted concurrently
     offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
     if offloaded_file_path.exists():
         # We don't care about OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER here, we go the quick way
@@ -1119,10 +1120,11 @@ class CryptainerStorage:
     def _get_cryptainer_datetime_utc(self, cryptainer_name):
         """Returns an UTC datetime corresponding to the creation time stored in filename, or else the file-stat mtime"""
         try:
-            dt = datetime.strptime(cryptainer_name.name.split("_")[0], CRYPTAINER_DATETIME_FORMAT)
+            dt = datetime.strptime(cryptainer_name.name[:CRYPTAINER_DATETIME_LENGTH], CRYPTAINER_DATETIME_FORMAT)
             dt = dt.replace(tzinfo=timezone.utc)
         except ValueError:
-            mtime = self._make_absolute(cryptainer_name).stat().st_mtime  # Might fail if file got deleted concurrently
+            logger.warning("Couldn't recognize timestamp in filename %s, falling back to file time", cryptainer_name.name)
+            mtime = self._make_absolute(cryptainer_name).stat().st_mtime  # FIXME - Might fail if file got deleted concurrently
             dt = datetime.fromtimestamp(mtime, tz=timezone.utc)
         return dt
 
@@ -1445,7 +1447,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
     if for_cryptainer:
         extra_cryptainer = {
             "cryptainer_state": Or(CRYPTAINER_STATES.STARTED, CRYPTAINER_STATES.FINISHED),
-            "cryptainer_format": "WA_0.1a",
+            "cryptainer_format": "cryptainer_1.0",
             "cryptainer_uid": micro_schema_uid,
             "payload_ciphertext_struct": Or(
                 {"ciphertext_location": PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE,

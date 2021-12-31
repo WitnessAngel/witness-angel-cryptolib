@@ -35,7 +35,7 @@ def list_available_authdevices():
     for authdevice in authdevices:
         metadata = None
         if authdevice["is_initialized"]:
-            metadata = load_authdevice_metadata(authdevice)  #FIXME - might crash concurrently here??
+            metadata = load_authdevice_metadata(authdevice)  # FIXME - might crash concurrently here??
         authdevice["metadata"] = metadata
 
     return authdevices

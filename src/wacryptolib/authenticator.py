@@ -10,7 +10,7 @@ from wacryptolib.utilities import dump_to_json_file, load_from_json_file, get_me
 logger = logging.getLogger(__name__)
 
 
-def initialize_authenticator(authenticator_dir: Path, user: str, extra_metadata: Optional[dict] = None) -> dict:
+def initialize_authenticator(authenticator_dir: Path, authenticator_owner: str, extra_metadata: Optional[dict] = None) -> dict:
     """
     Initialize a specific folder, by creating an internal structure with keys and their metadata.
 
@@ -18,28 +18,28 @@ def initialize_authenticator(authenticator_dir: Path, user: str, extra_metadata:
     It may not exist yet, but its parents must exist.
 
     :param authenticator_dir: (Path) Folder where the metadata file is expected.
-    :param user: (str) User name to store in device.
+    :param authenticator_owner: (str) owner name to store in device.
 
     :return: (dict) Metadata for this authenticator.
     """
     extra_metadata = extra_metadata or {}
 
-    assert user and isinstance(user, str), user
+    assert authenticator_owner and isinstance(authenticator_owner, str), authenticator_owner
     assert not extra_metadata or isinstance(extra_metadata, dict), extra_metadata
 
     if is_authenticator_initialized(authenticator_dir):
         raise RuntimeError("Authenticator at path %s is already initialized" % authenticator_dir)
 
-    metadata = _do_initialize_authenticator(authenticator_dir=authenticator_dir, user=user, extra_metadata=extra_metadata)
+    metadata = _do_initialize_authenticator(authenticator_dir=authenticator_dir, authenticator_owner=authenticator_owner, extra_metadata=extra_metadata)
     return metadata
 
 
-def _do_initialize_authenticator(authenticator_dir: Path, user: str, extra_metadata: dict):
-    assert isinstance(user, str) and user, repr(user)
+def _do_initialize_authenticator(authenticator_dir: Path, authenticator_owner: str, extra_metadata: dict):
+    assert isinstance(authenticator_owner, str) and authenticator_owner, repr(authenticator_owner)
     metadata_file = get_metadata_file_path(authenticator_dir)
     metadata_file.parent.mkdir(parents=False, exist_ok=True)  # Only LAST directory might be created
     metadata = extra_metadata.copy()
-    metadata.update({"authenticator_uid": generate_uuid0(), "user": user})  # Override these keys if present!
+    metadata.update({"authenticator_uid": generate_uuid0(), "authenticator_owner": authenticator_owner})  # Override these keys if present!
     dump_to_json_file(metadata_file, metadata)
     return metadata
 
@@ -61,7 +61,7 @@ def is_authenticator_initialized(authenticator_dir: Path):
 def load_authenticator_metadata(authenticator_dir: Path) -> dict:
     """
     Return the authenticator metadata stored in the given folder, after checking that it contains at least mandatory
-    (user and authenticator_uid) fields.
+    (authenticator_owner and authenticator_uid) fields.
 
     Raises `ValueError` or json decoding exceptions if device appears initialized, but has corrupted metadata.
     """
@@ -75,6 +75,6 @@ def load_authenticator_metadata(authenticator_dir: Path) -> dict:
 
 def _check_authdevice_metadata(metadata: dict):
     if not (
-        isinstance(metadata, dict) and metadata.get("user") and metadata.get("authenticator_uid")
+        isinstance(metadata, dict) and metadata.get("authenticator_owner") and metadata.get("authenticator_uid")
     ):  # Only lightweight checkup for now
         raise ValueError("Abnormal key device metadata: %s" % str(metadata))

@@ -200,7 +200,7 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()
     authdevice = get_fake_authdevice(authdevice_path)
-    initialize_authdevice(authdevice, user="Jean-Jâcques")
+    initialize_authdevice(authdevice, authdevice_owner="Jean-Jâcques")
 
     keychain_uid = generate_uuid0()
     key_algo = "RSA_OAEP"
@@ -221,7 +221,7 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
 
     metadata = metadata_mapper[keystore_uid]
     assert metadata["authenticator_uid"] == keystore_uid
-    assert metadata["user"] == "Jean-Jâcques"
+    assert metadata["authenticator_owner"] == "Jean-Jâcques"
 
     with pytest.raises(KeystoreAlreadyExists, match=str(keystore_uid)):
         pool.import_keystore_from_filesystem(remote_keystore_dir)

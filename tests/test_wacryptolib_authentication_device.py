@@ -37,7 +37,7 @@ def test_list_available_authdevices():  # FIXME add mockups to simulate real USB
         assert isinstance(authdevice["is_initialized"], bool)
 
         if authdevice["metadata"]:
-            assert isinstance(authdevice["metadata"]["user"], str)  # Might be empty
+            assert isinstance(authdevice["metadata"]["authenticator_owner"], str)  # Might be empty
             assert isinstance(authdevice["metadata"]["authenticator_uid"], (type(None), UUID))  # Might be empty
 
 
@@ -47,7 +47,7 @@ def test_authdevice_initialization_and_checkers(tmp_path):
     authdevice_original = authdevice.copy()
 
     assert not is_authdevice_initialized(authdevice)
-    initialize_authdevice(authdevice, user="Michél Dûpont")
+    initialize_authdevice(authdevice, authdevice_owner="Michél Dûpont")
     assert is_authdevice_initialized(authdevice)
 
     # UNCHANGED fields
@@ -60,13 +60,13 @@ def test_authdevice_initialization_and_checkers(tmp_path):
     # UPDATED fields
     assert authdevice["is_initialized"] == True
     assert len(authdevice["metadata"]) == 2
-    assert authdevice["metadata"]["user"] == "Michél Dûpont"
+    assert authdevice["metadata"]["authenticator_owner"] == "Michél Dûpont"
     assert isinstance(authdevice["metadata"]["authenticator_uid"], UUID)
 
     # REAL metadata file content
     metadata = load_authdevice_metadata(authdevice)
     assert len(metadata) == 2
-    assert metadata["user"] == "Michél Dûpont"
+    assert metadata["authenticator_owner"] == "Michél Dûpont"
     assert isinstance(metadata["authenticator_uid"], UUID)
 
     # We ensure the code doesn't do any weird shortcut
@@ -75,7 +75,7 @@ def test_authdevice_initialization_and_checkers(tmp_path):
     assert authdevice == authdevice_original
     metadata = load_authdevice_metadata(authdevice)
     assert authdevice == authdevice_original  # Untouched
-    assert metadata["user"] == "Michél Dûpont"
+    assert metadata["authenticator_owner"] == "Michél Dûpont"
     assert isinstance(metadata["authenticator_uid"], UUID)
 
     assert is_authdevice_initialized(authdevice)
@@ -90,12 +90,12 @@ def test_authdevice_initialization_and_checkers(tmp_path):
     metadata_file_path.unlink()
     assert not is_authdevice_initialized(authdevice)
     initialize_authdevice(
-        authdevice, user="Johnny", extra_metadata=dict(passphrase_hint="big passphrâse \n aboùt bïrds")
+        authdevice, authdevice_owner="Johnny", extra_metadata=dict(authenticator_passphrase_hint="big passphrâse \n aboùt bïrds")
     )
     assert is_authdevice_initialized(authdevice)
 
     metadata = load_authdevice_metadata(authdevice)
     assert len(metadata) == 3
-    assert metadata["user"] == "Johnny"
+    assert metadata["authenticator_owner"] == "Johnny"
     assert isinstance(metadata["authenticator_uid"], UUID)
-    assert metadata["passphrase_hint"] == "big passphrâse \n aboùt bïrds"
+    assert metadata["authenticator_passphrase_hint"] == "big passphrâse \n aboùt bïrds"

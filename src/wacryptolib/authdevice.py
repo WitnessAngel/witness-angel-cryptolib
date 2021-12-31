@@ -22,7 +22,7 @@ def list_available_authdevices():
         - "format" (str): lowercase character string for filesystem type, like "ext2", "fat32" ...
         - "size" (int): filesystem size in bytes
         - "is_initialized" (bool): if the device has been initialized with metadata
-        - "metadata" (dict): None if device is not initialized, else dict with at least "user" (str) and "authenticator_uid" (UUID) attributes.
+        - "metadata" (dict): None if device is not initialized, else dict with at least "authenticator_owner" (str) and "authenticator_uid" (UUID) attributes.
 
     The linux environment has an additional field which is 'partition' (str) e.g. "/dev/sda1".
     """
@@ -41,7 +41,8 @@ def list_available_authdevices():
     return authdevices
 
 
-def initialize_authdevice(authdevice: dict, user: str, extra_metadata: Optional[dict] = None):
+# FIXME - actually unused?
+def initialize_authdevice(authdevice: dict, authdevice_owner: str, extra_metadata: Optional[dict] = None):
     """
     Initialize a specific USB key, by creating an internal structure with key device metadata.
 
@@ -57,7 +58,7 @@ def initialize_authdevice(authdevice: dict, user: str, extra_metadata: Optional[
     authenticator_dir = get_authenticator_dir_for_authdevice(authdevice)
 
     metadata = initialize_authenticator(
-        authenticator_dir=authenticator_dir, user=user, extra_metadata=extra_metadata
+        authenticator_dir=authenticator_dir, authenticator_owner=authdevice_owner, extra_metadata=extra_metadata
     )
 
     authdevice["is_initialized"] = True
@@ -65,6 +66,7 @@ def initialize_authdevice(authdevice: dict, user: str, extra_metadata: Optional[
 
 
 # TODO go farther, and add flags to report errors if json or RSA keys are missing/corrupted?
+# FIXME - actually unused?
 def is_authdevice_initialized(authdevice: dict):
     """
     Check if a key device seems initialized (by ignoring, of course, its "is_initialized" field).
@@ -80,6 +82,7 @@ def is_authdevice_initialized(authdevice: dict):
     return is_authenticator_initialized(authenticator_dir)
 
 
+# FIXME - actually unused?
 def load_authdevice_metadata(authdevice: dict) -> dict:
     """
     Return the device metadata stored in the given mountpoint, after checking that it contains at least mandatory

@@ -292,7 +292,9 @@ class CryptainerEncryptor(CryptainerBase):
         payload_ciphertext, payload_integrity_tags = \
             self._encrypt_and_hash_payload(payload, payload_cipher_layer_extracts)
 
-        cryptainer["payload_ciphertext"] = payload_ciphertext
+        cryptainer["payload_ciphertext_struct"] = dict(
+            ciphertext_location=PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE,
+            ciphertext_value=payload_ciphertext)
 
         self.add_authentication_data_to_cryptainer(cryptainer, payload_integrity_tags)
 
@@ -399,7 +401,7 @@ class CryptainerEncryptor(CryptainerBase):
             cryptainer_format=cryptainer_format,
             cryptainer_uid=cryptainer_uid,
             keychain_uid=keychain_uid,
-            payload_ciphertext = None,  # Must be filled asap, by OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER if needed!
+            payload_ciphertext_struct = None,  # Must be filled asap, by OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER if needed!
             cryptainer_metadata=metadata,
         )
         return cryptainer, payload_cipher_layer_extracts
@@ -592,6 +594,15 @@ class CryptainerEncryptor(CryptainerBase):
         return payload_signature_struct
 
 
+def _get_cryptainer_inline_ciphertext_value(cryptainer):
+    assert "payload_ciphertext_struct" in cryptainer, list(cryptainer.keys())
+    payload_ciphertext_struct = cryptainer["payload_ciphertext_struct"]
+    assert payload_ciphertext_struct["ciphertext_location"] == PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE, payload_ciphertext_struct["ciphertext_location"]
+    ciphertext_value = payload_ciphertext_struct["ciphertext_value"]
+    assert isinstance(ciphertext_value, bytes), repr(ciphertext_value)  # Always (no more "special markers")
+    return ciphertext_value
+
+
 class CryptainerDecryptor(CryptainerBase):
     """
     THIS CLASS IS PRIVATE API
@@ -623,8 +634,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         keychain_uid = cryptainer["keychain_uid"]
 
-        payload_current = cryptainer["payload_ciphertext"]
-        assert isinstance(payload_current, bytes), repr(payload_current)  # Else it's still a special marker for example...
+        payload_current = _get_cryptainer_inline_ciphertext_value(cryptainer)
 
         for payload_cipher_layer in reversed(cryptainer["payload_cipher_layers"]):  # Non-emptiness of this will be checked by validator
 
@@ -866,7 +876,7 @@ class CryptainerEncryptionStream:
 
         self._cryptainer_decryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
         self._wip_cryptainer, self._encryption_pipeline = self._cryptainer_decryptor.build_cryptainer_and_encryption_pipeline(output_stream=self._output_data_stream, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
-        self._wip_cryptainer["payload_ciphertext"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Important
+        self._wip_cryptainer["payload_ciphertext_struct"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Important
 
         if dump_initial_cryptainer:  # Savegame in case the stream is broken before finalization
             self._dump_current_cryptainer_to_filesystem(is_temporary=True)
@@ -981,10 +991,10 @@ def dump_cryptainer_to_filesystem(cryptainer_filepath: Path, cryptainer: dict, o
     """
     if offload_payload_ciphertext:
         offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
-        assert isinstance(cryptainer["payload_ciphertext"], bytes), cryptainer["payload_ciphertext"]
-        offloaded_file_path.write_bytes(cryptainer["payload_ciphertext"])
-        cryptainer = cryptainer.copy()  # DO NOT touch original dict!
-        cryptainer["payload_ciphertext"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
+        payload_ciphertext = _get_cryptainer_inline_ciphertext_value(cryptainer)
+        offloaded_file_path.write_bytes(payload_ciphertext)
+        cryptainer = cryptainer.copy()  # Shallow copy, since we DO NOT touch original dict here!
+        cryptainer["payload_ciphertext_struct"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
     dump_to_json_file(cryptainer_filepath, cryptainer)
 
 
@@ -997,11 +1007,14 @@ def load_cryptainer_from_filesystem(cryptainer_filepath: Path, include_payload_c
     cryptainer = load_from_json_file(cryptainer_filepath)
 
     if include_payload_ciphertext:
-        if cryptainer["payload_ciphertext"] == OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER:
+        if cryptainer["payload_ciphertext_struct"] == OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER:
             offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
-            cryptainer["payload_ciphertext"] = offloaded_file_path.read_bytes()
+            ciphertext_value = offloaded_file_path.read_bytes()
+            cryptainer["payload_ciphertext_struct"] = dict(
+                ciphertext_location=PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE,
+                ciphertext_value=ciphertext_value)
     else:
-        del cryptainer["payload_ciphertext"]
+        del cryptainer["payload_ciphertext_struct"]  # Ensure that a nasty error pops if we try to access it
 
     return cryptainer
 
@@ -1428,7 +1441,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
     payload_signature = {
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
         "payload_signature_algo": Or(*SUPPORTED_SIGNATURE_ALGOS),
-        "payload_signature_trustee": Const(LOCAL_FACTORY_TRUSTEE_MARKER),
+        "payload_signature_trustee": Const(LOCAL_FACTORY_TRUSTEE_MARKER),  # FIXME BAD
         Optionalkey("keychain_uid"): micro_schema_uid
     }
 
@@ -1437,7 +1450,11 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
             "cryptainer_state": Or(CRYPTAINER_STATES.STARTED, CRYPTAINER_STATES.FINISHED),
             "cryptainer_format": "WA_0.1a",
             "cryptainer_uid": micro_schema_uid,
-            "payload_ciphertext": micro_schema_binary,
+            "payload_ciphertext_struct": Or(
+                {"ciphertext_location": PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE,
+                 "ciphertext_value": micro_schema_binary},
+                OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
+            ),
             "cryptainer_metadata": Or(dict, None),
         }
         extra_key_ciphertext = {
@@ -1504,7 +1521,7 @@ def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
         try:
             valid_schema.validate(data_tree)
         except schema.SchemaError as exc:
-            raise ValidationError("Error validating".format(exc)) from exc
+            raise ValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
 
     else:
         # we use the json schema module
@@ -1512,7 +1529,7 @@ def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
         try:
             jsonschema_validate(instance=data_tree, schema=valid_schema)
         except jsonschema.exceptions.ValidationError as exc:
-            raise ValidationError("Error validating with {}".format(exc)) from exc
+            raise ValidationError("Error validating data tree with json-schema: {}".format(exc)) from exc
 
 
 def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode: False):

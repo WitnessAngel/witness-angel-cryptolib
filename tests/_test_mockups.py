@@ -1,7 +1,7 @@
 import random
 from uuid import UUID
 
-from wacryptolib.cryptainer import CryptainerStorage, dump_cryptainer_to_filesystem
+from wacryptolib.cryptainer import CryptainerStorage, dump_cryptainer_to_filesystem, PAYLOAD_CIPHERTEXT_LOCATIONS
 
 
 class FakeTestCryptainerStorage(CryptainerStorage):
@@ -25,10 +25,12 @@ class FakeTestCryptainerStorage(CryptainerStorage):
         )
 
     def _encrypt_payload_into_cryptainer(self, payload, **kwargs):
-        return dict(a=33, payload_ciphertext=payload)
+        return dict(a=33, payload_ciphertext_struct=dict(
+            ciphertext_location=PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE,
+            ciphertext_value=payload))
 
     def _decrypt_payload_from_cryptainer(self, cryptainer, **kwargs):
-        return cryptainer["payload_ciphertext"]
+        return cryptainer["payload_ciphertext_struct"]["ciphertext_value"]
 
 
 class WildcardUuid(object):

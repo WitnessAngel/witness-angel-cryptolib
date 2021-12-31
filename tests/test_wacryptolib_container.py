@@ -34,10 +34,11 @@ from wacryptolib.cryptainer import (
     gather_trustee_dependencies,
     get_trustee_proxy,
     request_decryption_authorizations,
-    delete_cryptainer_from_filesystem, CRYPTAINER_DATETIME_FORMAT, get_cryptainer_size_on_filesystem, CryptainerEncryptor,
+    delete_cryptainer_from_filesystem, CRYPTAINER_DATETIME_FORMAT, get_cryptainer_size_on_filesystem,
+    CryptainerEncryptor,
     encrypt_payload_and_dump_cryptainer_to_filesystem, is_cryptainer_cryptoconf_streamable, CONF_SCHEMA_PYTHON,
     CONF_SCHEMA_JSON, CRYPTAINER_SCHEMA_PYTHON, CRYPTAINER_SCHEMA_JSON, check_conf_sanity, check_cryptainer_sanity,
-    CRYPTAINER_TEMP_SUFFIX,
+    CRYPTAINER_TEMP_SUFFIX, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
 )
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS, AUTHENTICATED_CIPHER_ALGOS
 from wacryptolib.trustee import (
@@ -449,7 +450,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
     trustee_dependencies = gather_trustee_dependencies(cryptainers=[cryptainer])
     assert trustee_dependencies == trustee_dependencies_builder(cryptainer["keychain_uid"])
 
-    assert isinstance(cryptainer["payload_ciphertext"], bytes)
+    assert isinstance(cryptainer["payload_ciphertext_struct"], dict)
 
     result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
@@ -817,11 +818,11 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
 
     _cryptainer_for_txt = storage.load_cryptainer_from_storage("empty.txt.crypt")
     assert storage.load_cryptainer_from_storage(1) == _cryptainer_for_txt
-    assert _cryptainer_for_txt["payload_ciphertext"]   # Padding occurs for AES_CBC
+    assert _cryptainer_for_txt["payload_ciphertext_struct"]   # Padding occurs for AES_CBC
 
     _cryptainer_for_txt2 = storage.load_cryptainer_from_storage("empty.txt.crypt", include_payload_ciphertext=False)
     assert storage.load_cryptainer_from_storage(1, include_payload_ciphertext=False) == _cryptainer_for_txt2
-    assert not hasattr(_cryptainer_for_txt2, "payload_ciphertext")
+    assert not hasattr(_cryptainer_for_txt2, "payload_ciphertext_struct")
 
     # We continue test with a randomly configured storage
     offload_payload_ciphertext = random_bool()
@@ -1076,6 +1077,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
 
     for max_cryptainer_count, max_cryptainer_quota, max_cryptainer_age in params_sets:
         offload_payload_ciphertext = random_bool()
+
         storage = FakeTestCryptainerStorage(
             default_cryptoconf={"stuffs": True},
             cryptainer_dir=cryptainer_dir,
@@ -1242,24 +1244,25 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
     cryptainer = encrypt_payload_into_cryptainer(
         payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
     )
-    cryptainer_ciphertext_before_dump = cryptainer["payload_ciphertext"]
+    cryptainer_ciphertext_struct_before_dump = cryptainer["payload_ciphertext_struct"]
+    cryptainer_ciphertext_value_before_dump = cryptainer_ciphertext_struct_before_dump["ciphertext_value"]
 
     cryptainer_without_ciphertext = copy.deepcopy(cryptainer)
-    del cryptainer_without_ciphertext["payload_ciphertext"]
+    del cryptainer_without_ciphertext["payload_ciphertext_struct"]
 
     # CASE 1 - MONOLITHIC JSON FILE
 
     cryptainer_filepath = tmp_path / "mycryptainer_monolithic.crypt"
     dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False)
     cryptainer_reloaded = load_from_json_file(cryptainer_filepath)
-    assert cryptainer_reloaded["payload_ciphertext"] == cryptainer_ciphertext_before_dump  # NO OFFLOADING
+    assert cryptainer_reloaded["payload_ciphertext_struct"] == cryptainer_ciphertext_struct_before_dump  # NO OFFLOADING
     assert load_cryptainer_from_filesystem(cryptainer_filepath) == cryptainer  # UNCHANGED from original
 
     cryptainer_truncated = load_cryptainer_from_filesystem(cryptainer_filepath, include_payload_ciphertext=False)
-    assert "payload_ciphertext" not in cryptainer_truncated
+    assert "payload_ciphertext_struct" not in cryptainer_truncated
     assert cryptainer_truncated == cryptainer_without_ciphertext
 
-    assert cryptainer["payload_ciphertext"] == cryptainer_ciphertext_before_dump  # Original dict unchanged
+    assert cryptainer["payload_ciphertext_struct"] == cryptainer_ciphertext_struct_before_dump  # Original dict unchanged
 
     size1 = get_cryptainer_size_on_filesystem(cryptainer_filepath)
     assert size1
@@ -1274,18 +1277,18 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
 
     dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer)  # OVERWRITE, with offloading by default
     cryptainer_reloaded = load_from_json_file(cryptainer_filepath)
-    assert cryptainer_reloaded["payload_ciphertext"] == "[OFFLOADED]"
+    assert cryptainer_reloaded["payload_ciphertext_struct"] == OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
 
     cryptainer_offloaded_filepath = Path(str(cryptainer_filepath) + ".payload")
     offloaded_data_reloaded = cryptainer_offloaded_filepath.read_bytes()
-    assert offloaded_data_reloaded == cryptainer_ciphertext_before_dump  # WELL OFFLOADED as DIRECT BYTES
+    assert offloaded_data_reloaded == cryptainer_ciphertext_value_before_dump  # WELL OFFLOADED as DIRECT BYTES
     assert load_cryptainer_from_filesystem(cryptainer_filepath) == cryptainer  # UNCHANGED from original
 
     cryptainer_truncated = load_cryptainer_from_filesystem(cryptainer_filepath, include_payload_ciphertext=False)
-    assert "payload_ciphertext" not in cryptainer_truncated
+    assert "payload_ciphertext_struct" not in cryptainer_truncated
     assert cryptainer_truncated == cryptainer_without_ciphertext
 
-    assert cryptainer["payload_ciphertext"] == cryptainer_ciphertext_before_dump  # Original dict unchanged
+    assert cryptainer["payload_ciphertext_struct"] == cryptainer_ciphertext_struct_before_dump  # Original dict unchanged
 
     size2 = get_cryptainer_size_on_filesystem(cryptainer_filepath)
     assert size2 < size1   # Overhead of base64 encoding in monolithic file!
@@ -1353,7 +1356,7 @@ def ___obsolete_test_encrypt_payload_and_dump_cryptainer_to_filesystem(tmp_path)
         metadata=None)
 
     cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath)  # Fetches offloaded content too
-    assert cryptainer["payload_ciphertext"] == data_plaintext  # TEMPORARY FOR FAKE STREAM ENCRYPTOR
+    assert cryptainer["payload_ciphertext_struct"] == data_plaintext  # TEMPORARY FOR FAKE STREAM ENCRYPTOR
 
 
 @pytest.mark.parametrize(

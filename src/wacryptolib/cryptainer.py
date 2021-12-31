@@ -81,7 +81,7 @@ class CRYPTAINER_STATES:
     FINISHED = "FINISHED"
 
 
-def get_trustee_id(trustee_conf: dict) -> str:
+def _get_trustee_id(trustee_conf: dict) -> str:
     """Build opaque unique identifier for a specific trustee.
 
     Remains the same as long as trustee dict is completely unmodified.
@@ -99,7 +99,7 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
     cipher_dependencies = {}
 
     def _add_keypair_identifiers_for_trustee(mapper, trustee_conf, keychain_uid, key_algo):
-        trustee_id = get_trustee_id(trustee_conf=trustee_conf)
+        trustee_id = _get_trustee_id(trustee_conf=trustee_conf)
         keypair_identifiers = dict(keychain_uid=keychain_uid, key_algo=key_algo)
         mapper.setdefault(trustee_id, (trustee_conf, []))
         keypair_identifiers_list = mapper[trustee_id][1]
@@ -751,7 +751,7 @@ class CryptainerDecryptor(CryptainerBase):
         """
         trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
 
-        trustee_id = get_trustee_id(trustee)
+        trustee_id = _get_trustee_id(trustee)
         passphrases = self._passphrase_mapper.get(trustee_id) or []
         assert isinstance(passphrases, list), repr(passphrases)  # No SINGLE passphrase here
 
@@ -944,7 +944,7 @@ def encrypt_payload_into_cryptainer(
     """Turn raw payload into a high-security cryptainer, which can only be decrypted with
     the agreement of the owner and multiple third-party trustees.
 
-    :param data: bytestring of media (image, video, sound...) or readable file object (file immediately deleted then)
+    :param payload: bytestring of media (image, video, sound...) or readable file object (file immediately deleted then)
     :param cryptoconf: tree of specific encryption settings
     :param metadata: dict of metadata describing the payload (remains unencrypted in cryptainer)
     :param keychain_uid: optional ID of a keychain to reuse
@@ -971,6 +971,54 @@ def decrypt_payload_from_cryptainer(
     cryptainer_decryptor = CryptainerDecryptor(keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
     data = cryptainer_decryptor.decrypt_payload(cryptainer=cryptainer, verify=verify)
     return data
+
+
+def extract_metadata_from_cryptainer(cryptainer: dict) -> Optional[dict]:
+    """Read the metadata tree (possibly None) from a cryptainer.
+
+    CURRENTLY METADATA IS NEITHER ENCRYPTED NOR AUTHENTIFIED.
+
+    :param cryptainer: the cryptainer tree, which also holds metadata about encrypted content
+
+    :return: dict
+    """
+    reader = CryptainerDecryptor()
+    data = reader.extract_metadata(cryptainer)
+    return data
+
+
+def get_cryptoconf_summary(conf_or_cryptainer):
+    """
+    Returns a string summary of the layers of encryption/signature of a cryptainer or a configuration tree.
+    """
+
+    def _get_trustee_displayable_identifier(_trustee):
+        if _trustee == LOCAL_FACTORY_TRUSTEE_MARKER:
+            _trustee = "local device"
+        elif "url" in _trustee:
+            _trustee = urlparse(_trustee["url"]).netloc
+        else:
+            raise ValueError("Unrecognized key trustee %s" % _trustee)
+        return _trustee
+
+    lines = []
+    for idx, payload_cipher_layer in enumerate(conf_or_cryptainer["payload_cipher_layers"], start=1):
+        lines.append("Data encryption layer %d: %s" % (idx, payload_cipher_layer["payload_cipher_algo"]))
+        lines.append("  Key encryption layers:")
+        for idx2, key_cipher_layer in enumerate(payload_cipher_layer["key_cipher_layers"], start=1):
+            key_cipher_trustee = key_cipher_layer["key_cipher_trustee"]
+            trustee_id = _get_trustee_displayable_identifier(key_cipher_trustee)
+            lines.append("    %s (by %s)" % (key_cipher_layer["key_cipher_algo"], trustee_id))
+        lines.append("  Signatures:")
+        for idx3, payload_signature in enumerate(payload_cipher_layer["payload_signatures"], start=1):
+            payload_signature_trustee = payload_signature["payload_signature_trustee"]
+            trustee_id = _get_trustee_displayable_identifier(payload_signature_trustee)
+            lines.append(
+                "    %s/%s (by %s)"
+                % (payload_signature["payload_digest_algo"], payload_signature["payload_signature_algo"], trustee_id)
+            )
+    result = "\n".join(lines) + "\n"
+    return result
 
 
 def _get_offloaded_file_path(cryptainer_filepath: Path):
@@ -1030,20 +1078,6 @@ def get_cryptainer_size_on_filesystem(cryptainer_filepath):
         # We don't care about OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER here, we go the quick way
         size += offloaded_file_path.stat().st_size
     return size
-
-
-def extract_metadata_from_cryptainer(cryptainer: dict) -> Optional[dict]:  # FIXME move that up, like in docs
-    """Read the metadata tree (possibly None) from a cryptainer.
-
-    CURRENTLY METADATA IS NOT ENCRYPTED.
-
-    :param cryptainer: the cryptainer tree, which also holds metadata about encrypted content
-
-    :return: dict
-    """
-    reader = CryptainerDecryptor()
-    data = reader.extract_metadata(cryptainer)
-    return data
 
 
 # FIXME add ReadonlyCryptainerStorage here!!
@@ -1357,40 +1391,6 @@ class CryptainerStorage:
         cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_payload_ciphertext=True)
 
         check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
-
-
-def get_cryptoconf_summary(conf_or_cryptainer):  # FIXME move up like in docs
-    """
-    Returns a string summary of the layers of encryption/signature of a cryptainer or a configuration tree.
-    """
-
-    def _get_trustee_identifier(_trustee):
-        if _trustee == LOCAL_FACTORY_TRUSTEE_MARKER:
-            _trustee = "local device"
-        elif "url" in _trustee:
-            _trustee = urlparse(_trustee["url"]).netloc
-        else:
-            raise ValueError("Unrecognized key trustee %s" % _trustee)
-        return _trustee
-
-    lines = []
-    for idx, payload_cipher_layer in enumerate(conf_or_cryptainer["payload_cipher_layers"], start=1):
-        lines.append("Data encryption layer %d: %s" % (idx, payload_cipher_layer["payload_cipher_algo"]))
-        lines.append("  Key encryption layers:")
-        for idx2, key_cipher_layer in enumerate(payload_cipher_layer["key_cipher_layers"], start=1):
-            key_cipher_trustee = key_cipher_layer["key_cipher_trustee"]
-            trustee_id = _get_trustee_identifier(key_cipher_trustee)
-            lines.append("    %s (by %s)" % (key_cipher_layer["key_cipher_algo"], trustee_id))
-        lines.append("  Signatures:")
-        for idx3, payload_signature in enumerate(payload_cipher_layer["payload_signatures"], start=1):
-            payload_signature_trustee = payload_signature["payload_signature_trustee"]
-            trustee_id = _get_trustee_identifier(payload_signature_trustee)
-            lines.append(
-                "    %s/%s (by %s)"
-                % (payload_signature["payload_digest_algo"], payload_signature["payload_signature_algo"], trustee_id)
-            )
-    result = "\n".join(lines) + "\n"
-    return result
 
 
 def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME must support different types of trustee

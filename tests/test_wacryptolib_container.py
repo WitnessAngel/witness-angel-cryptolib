@@ -30,7 +30,7 @@ from wacryptolib.cryptainer import (
     dump_cryptainer_to_filesystem,
     load_cryptainer_from_filesystem,
     SHARED_SECRET_ALGO_MARKER,
-    get_trustee_id,
+    _get_trustee_id,
     gather_trustee_dependencies,
     get_trustee_proxy,
     request_decryption_authorizations,
@@ -600,16 +600,16 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         key_algo="RSA_OAEP", keystore=keystore3, keychain_uid=keychain_uid, passphrase=passphrase3
     )
 
-    local_factory_trustee_id = get_trustee_id(LOCAL_FACTORY_TRUSTEE_MARKER)
+    local_factory_trustee_id = _get_trustee_id(LOCAL_FACTORY_TRUSTEE_MARKER)
 
     shard_trustee1 = dict(trustee_type="authdevice", authenticator_uid=keystore_uid1)
-    shard_trustee1_id = get_trustee_id(shard_trustee1)
+    shard_trustee1_id = _get_trustee_id(shard_trustee1)
 
     shard_trustee2 = dict(trustee_type="authdevice", authenticator_uid=keystore_uid2)
-    shard_trustee2_id = get_trustee_id(shard_trustee2)
+    shard_trustee2_id = _get_trustee_id(shard_trustee2)
 
     shard_trustee3 = dict(trustee_type="authdevice", authenticator_uid=keystore_uid3)
-    shard_trustee3_id = get_trustee_id(shard_trustee3)
+    shard_trustee3_id = _get_trustee_id(shard_trustee3)
 
     cryptoconf = dict(
         payload_cipher_layers=[

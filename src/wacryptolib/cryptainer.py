@@ -435,19 +435,19 @@ class CryptainerEncryptor(CryptainerBase):
         if key_cipher_algo == SHARED_SECRET_MARKER:
 
             key_shared_secret_shards = key_encryption_layer["key_shared_secret_shards"]
-            shares_count = len(key_shared_secret_shards)
+            shard_count = len(key_shared_secret_shards)
 
             threshold_count = key_encryption_layer["key_shared_secret_threshold"]
-            assert threshold_count <= shares_count
+            assert threshold_count <= shard_count
 
-            logger.debug("Generating shared secret shards (%d needed amongst %d)", threshold_count, shares_count)
+            logger.debug("Generating shared secret shards (%d needed amongst %d)", threshold_count, shard_count)
 
             shards = split_bytestring_as_shards(
-                secret=key_bytes, shares_count=shares_count, threshold_count=threshold_count
+                secret=key_bytes, shard_count=shard_count, threshold_count=threshold_count
             )
 
-            logger.debug("Secret has been shared into %d shards", shares_count)
-            assert len(shards) == shares_count
+            logger.debug("Secret has been shared into %d shards", shard_count)
+            assert len(shards) == shard_count
 
             shard_ciphertexts = []
 

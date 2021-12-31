@@ -10,22 +10,22 @@ logger = logging.getLogger(__name__)
 SHAMIR_CHUNK_LENGTH = 16
 
 
-def split_bytestring_as_shards(secret: bytes, *, shares_count: int, threshold_count: int) -> list:
-    """Generate a Shamir shared secret of `shares_count` subkeys, with `threshold_count`
+def split_bytestring_as_shards(secret: bytes, *, shard_count: int, threshold_count: int) -> list:
+    """Generate a Shamir shared secret of `shard_count` subkeys, with `threshold_count`
         of them required to recompute the initial `bytestring`.
 
         :param secret: bytestring to separate as shards, whatever its length
-        :param shares_count: the number of shards to be created for the secret
+        :param shard_count: the number of shards to be created for the secret
         :param threshold_count: the minimal number of shards needed to recombine the key
 
         :return: list of full bytestring shards"""
 
-    if not shares_count:
+    if not shard_count:
         raise ValueError("shards count must be strictly positive")
 
-    if threshold_count > shares_count:
+    if threshold_count > shard_count:
         raise ValueError(
-            "Threshold count %s can't be higher than shared count %s" % (threshold_count, shares_count)
+            "Threshold count %s can't be higher than shared count %s" % (threshold_count, shard_count)
         )
 
     all_chunk_shards = []  # List of lists of related 16-bytes shards
@@ -35,13 +35,13 @@ def split_bytestring_as_shards(secret: bytes, *, shares_count: int, threshold_co
 
     # Separate each chunk into shard
     for chunk in chunks:
-        shards = _split_128b_bytestring_into_shards(chunk, shares_count, threshold_count)
+        shards = _split_128b_bytestring_into_shards(chunk, shard_count, threshold_count)
         all_chunk_shards.append(shards)
         del shards
 
     full_shards = []
 
-    for idx in range(shares_count):
+    for idx in range(shard_count):
         assert all(
             chunk_shard[idx][0] == idx + 1 for chunk_shard in all_chunk_shards
         )  # By construction, shard indices start at 1
@@ -59,7 +59,7 @@ def recombine_secret_from_shards(shards: Sequence) -> bytes:
 
     :return: the key reconstructed as bytes"""
 
-    shares_per_secret = []  # List of lists of same-index 16-bytes shards
+    shards_per_secret = []  # List of lists of same-index 16-bytes shards
 
     if len(set(shard[0] for shard in shards)) != len(shards):
         raise ValueError("Shared secret shards must have unique indices")
@@ -67,12 +67,12 @@ def recombine_secret_from_shards(shards: Sequence) -> bytes:
     for shard in shards:
         idx, secret = shard
         chunks = split_as_chunks(secret, chunk_size=16, must_pad=False)
-        shares_per_secret.append([(idx, chunk) for chunk in chunks])
+        shards_per_secret.append([(idx, chunk) for chunk in chunks])
 
-    if len(set(len(chunks) for chunks in shares_per_secret)) != 1:
+    if len(set(len(chunks) for chunks in shards_per_secret)) != 1:
         raise ValueError("Shared secret shard chunks must have the same length")
 
-    all_chunk_shards = list(zip(*shares_per_secret))
+    all_chunk_shards = list(zip(*shards_per_secret))
 
     chunks = []
     for chunk_shards in all_chunk_shards:
@@ -84,18 +84,18 @@ def recombine_secret_from_shards(shards: Sequence) -> bytes:
     return secret
 
 
-def _split_128b_bytestring_into_shards(secret: bytes, shares_count: int, threshold_count: int) -> list:
+def _split_128b_bytestring_into_shards(secret: bytes, shard_count: int, threshold_count: int) -> list:
     """Split a bytestring of exactly 128 bits into shards.
 
         :param bytestring: bytestring to split
-        :param shares_count: number of shards to create
+        :param shard_count: number of shards to create
         :param threshold_count: number of shards needed to reconstitute the secret
 
         :return: list of tuples (index, shard)"""
 
     assert len(secret) == 16
-    shards = Shamir.split(k=threshold_count, n=shares_count, secret=secret)
-    assert len(shards) == shares_count, shards
+    shards = Shamir.split(k=threshold_count, n=shard_count, secret=secret)
+    assert len(shards) == shard_count, shards
     return shards
 
 
@@ -103,7 +103,7 @@ def _recombine_128b_shards_into_bytestring(shards: Sequence[tuple]) -> bytes:
     """Recombine shards of exactly 128 bits into a bytestring.
 
         :param bytestring: bytestring to split
-        :param shares_count: number of shards to create
+        :param shard_count: number of shards to create
         :param threshold_count: number of shards needed to reconstitute the secret
 
         :return: list of tuples (index, shard)"""

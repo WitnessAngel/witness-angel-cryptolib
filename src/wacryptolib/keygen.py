@@ -11,7 +11,7 @@ from wacryptolib.exceptions import KeyLoadingError
 logger = logging.getLogger(__name__)
 
 
-def encode_passphrase(passphrase: str):  # FIXME move to generic utilities and use elsewhere!!
+def _encode_passphrase(passphrase: str):
     """Strip and NFKC-normalize passphrase, then encode it as utf8 bytes."""
     return unicodedata.normalize("NFKC", passphrase.strip()).encode("utf8")
 
@@ -75,7 +75,7 @@ def _do_generate_keypair(key_algo, serialize, key_length_bits, curve, passphrase
     assert serialize or passphrase is None
 
     if isinstance(passphrase, str):
-        passphrase = encode_passphrase(passphrase)
+        passphrase = _encode_passphrase(passphrase)
 
     potential_params = dict(key_length_bits=key_length_bits, curve=curve)
 
@@ -109,7 +109,7 @@ def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_algo: str, pa
     :return: key object
     """
     if isinstance(passphrase, str):
-        passphrase = encode_passphrase(passphrase)
+        passphrase = _encode_passphrase(passphrase)
 
     key_algo = key_algo.upper()
     if key_algo not in SUPPORTED_ASYMMETRIC_KEY_ALGOS:

@@ -181,7 +181,7 @@ def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):
 
 class CryptainerBase:
     """
-    BEWARE - this class-based design is provisional and might change a lot.
+    THIS CLASS IS PRIVATE API
 
     `keystore_pool` will be used to fetch local/imported trustees necessary to encryption/decryption operations.
 
@@ -201,8 +201,10 @@ class CryptainerBase:
         self._passphrase_mapper = passphrase_mapper or {}
 
 
-class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
+class CryptainerEncryptor(CryptainerBase):
     """
+    THIS CLASS IS PRIVATE API
+
     Contains every method used to write and encrypt a cryptainer, IN MEMORY.
     """
 
@@ -442,18 +444,17 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
             logger.debug("Secret has been shared into %d shards", shares_count)
             assert len(shards) == shares_count
 
-            shares_ciphertexts = []
+            shard_ciphertexts = []
 
             for shard, trustee_conf in zip(shards, key_shared_secret_shards):
                 shard_bytes = dump_to_json_bytes(shard)  # The tuple (idx, payload) of each shard thus becomes encryptable
-                shares_ciphertext = self._encrypt_key_through_multiple_layers(  # FIXME rename singular
+                shard_ciphertexts = self._encrypt_key_through_multiple_layers(  # FIXME rename singular
                         keychain_uid=keychain_uid,
                         key_bytes=shard_bytes,
                         key_encryption_layers=trustee_conf["key_encryption_layers"])  # Recursive structure
-                shares_ciphertexts.append(shares_ciphertext)
+                shard_ciphertexts.append(shard_ciphertexts)
 
-            key_cipherdict = {"shards": shares_ciphertexts}  # A dict is more future-proof
-            return key_cipherdict
+            key_cipherdict = {"shards": shard_ciphertexts}  # A dict is more future-proof
 
         else:  # Using asymmetric algorithm
 
@@ -464,7 +465,8 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
                 key_bytes=key_bytes,
                 trustee=key_encryption_layer["key_encryption_trustee"],
             )
-            return key_cipherdict
+
+        return key_cipherdict
 
     def _encrypt_with_asymmetric_cipher(
         self, cipher_algo: str, keychain_uid: uuid.UUID, key_bytes: bytes, trustee
@@ -578,8 +580,10 @@ class CryptainerWriter(CryptainerBase):  #FIXME rename to CryptainerEncryptor
         return payload_signature_struct
 
 
-class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
+class CryptainerDecryptor(CryptainerBase):
     """
+    THIS CLASS IS PRIVATE API
+
     Contains every method used to read and decrypt a cryptainer, IN MEMORY.
     """
 
@@ -591,7 +595,7 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
         """
         Loop through cryptainer layers, to decipher payload with the right algorithms.
 
-        :param cryptainer: dictionary previously built with CryptainerWriter method
+        :param cryptainer: dictionary previously built with CryptainerEncryptor method
         :param verify: whether to check MAC tags of the ciphertext
 
         :return: deciphered plaintext
@@ -669,12 +673,12 @@ class CryptainerReader(CryptainerBase):  #FIXME rename to CryptainerDecryptor
             key_shared_secret_shards = encryption_layer["key_shared_secret_shards"]  # FIXMe rename twice
             key_shared_secret_threshold = encryption_layer["key_shared_secret_threshold"]
 
-            shares_ciphertexts = key_cipherdict["shards"]
+            shard_ciphertexts = key_cipherdict["shards"]
 
             logger.debug("Deciphering each shard")
 
             # If some shards are missing, we won't detect it here because zip() stops at shortest list
-            for shard_ciphertext, trustee_conf in zip(shares_ciphertexts, key_shared_secret_shards):
+            for shard_ciphertext, trustee_conf in zip(shard_ciphertexts, key_shared_secret_shards):
 
                 try:
                     shard_bytes = self._decrypt_key_through_multiple_layers(
@@ -848,8 +852,8 @@ class CryptainerEncryptionStream:
         offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
         self._output_data_stream = open(offloaded_file_path, mode='wb')
 
-        self._cryptainer_writer = CryptainerWriter(keystore_pool=keystore_pool)
-        self._wip_cryptainer, self._stream_encryptor = self._cryptainer_writer.build_cryptainer_and_stream_encryptor(output_stream=self._output_data_stream, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
+        self._cryptainer_decryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
+        self._wip_cryptainer, self._stream_encryptor = self._cryptainer_decryptor.build_cryptainer_and_stream_encryptor(output_stream=self._output_data_stream, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
         self._wip_cryptainer["payload_ciphertext"] = OFFLOADED_MARKER  # Important
 
         if dump_initial_cryptainer:  # Savegame in case the stream is broken before finalization
@@ -871,7 +875,7 @@ class CryptainerEncryptionStream:
 
         payload_integrity_tags = self._stream_encryptor.get_payload_integrity_tags()
 
-        self._cryptainer_writer.add_authentication_data_to_cryptainer(self._wip_cryptainer, payload_integrity_tags)
+        self._cryptainer_decryptor.add_authentication_data_to_cryptainer(self._wip_cryptainer, payload_integrity_tags)
         self._dump_current_cryptainer_to_filesystem(is_temporary=False)
 
     def __del__(self):
@@ -931,8 +935,8 @@ def encrypt_payload_into_cryptainer(
     :param keystore_pool: optional key storage pool, might be required by cryptoconf
     :return: dict of cryptainer
     """
-    writer = CryptainerWriter(keystore_pool=keystore_pool)
-    cryptainer = writer.encrypt_data(payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
+    cryptainer_encryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
+    cryptainer = cryptainer_encryptor.encrypt_data(payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
     return cryptainer
 
 
@@ -948,8 +952,8 @@ def decrypt_payload_from_cryptainer(
 
     :return: raw bytestring
     """
-    reader = CryptainerReader(keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
-    data = reader.decrypt_payload(cryptainer=cryptainer, verify=verify)
+    cryptainer_decryptor = CryptainerDecryptor(keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
+    data = cryptainer_decryptor.decrypt_payload(cryptainer=cryptainer, verify=verify)
     return data
 
 
@@ -1018,7 +1022,7 @@ def extract_metadata_from_cryptainer(cryptainer: dict) -> Optional[dict]:  # FIX
 
     :return: dict
     """
-    reader = CryptainerReader()
+    reader = CryptainerDecryptor()
     data = reader.extract_metadata(cryptainer)
     return data
 

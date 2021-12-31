@@ -9,17 +9,17 @@ from wacryptolib.keygen import (
     load_asymmetric_key_from_pem_bytestring,
     SUPPORTED_ASYMMETRIC_KEY_ALGOS,
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
-    encode_passphrase,
+    _encode_passphrase,
 )
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
 
 
 def test_passphrase_encoding():
-    assert encode_passphrase(" hello  ") == b"hello"
-    assert encode_passphrase("ｱｲｳｴｵ ") == "アイウエオ".encode("utf8")
-    assert encode_passphrase("パピプペポ") == "パピプペポ".encode("utf8")
+    assert _encode_passphrase(" hello  ") == b"hello"
+    assert _encode_passphrase("ｱｲｳｴｵ ") == "アイウエオ".encode("utf8")
+    assert _encode_passphrase("パピプペポ") == "パピプペポ".encode("utf8")
     with pytest.raises(TypeError):
-        encode_passphrase(b"abcd")
+        _encode_passphrase(b"abcd")
 
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)

@@ -34,7 +34,7 @@ from wacryptolib.cryptainer import (
     gather_trustee_dependencies,
     get_trustee_proxy,
     request_decryption_authorizations,
-    delete_cryptainer_from_filesystem, CRYPTAINER_DATETIME_FORMAT, get_cryptainer_size_on_filesystem, CryptainerWriter,
+    delete_cryptainer_from_filesystem, CRYPTAINER_DATETIME_FORMAT, get_cryptainer_size_on_filesystem, CryptainerEncryptor,
     encrypt_payload_and_dump_cryptainer_to_filesystem, is_cryptainer_cryptoconf_streamable, CONF_SCHEMA_PYTHON,
     CONF_SCHEMA_JSON, CRYPTAINER_SCHEMA_PYTHON, CRYPTAINER_SCHEMA_JSON, check_conf_sanity, check_cryptainer_sanity,
     CRYPTAINER_TEMP_SUFFIX,
@@ -1299,8 +1299,8 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
 
 
 def test_generate_cryptainer_and_symmetric_keys():
-    cryptainer_writer = CryptainerWriter()
-    cryptainer, extracts = cryptainer_writer._generate_cryptainer_base_and_secrets(COMPLEX_CRYPTOCONF)
+    cryptainer_decryptor = CryptainerEncryptor()
+    cryptainer, extracts = cryptainer_decryptor._generate_cryptainer_base_and_secrets(COMPLEX_CRYPTOCONF)
 
     for payload_encryption_layer in extracts:
         symkey = payload_encryption_layer["symkey"]

@@ -1,3 +1,5 @@
+from json import JSONDecodeError
+
 import abc
 import importlib
 import logging
@@ -11,6 +13,8 @@ import multitimer
 import uuid0
 from Crypto.Util.Padding import pad, unpad
 from decorator import decorator
+
+from wacryptolib.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -177,11 +181,16 @@ def load_from_json_str(payload, **extra_options):
     """
     Load a data tree from a json representation as string.
     Supports advanced types like bytes, uuids, dates...
+
+    Raises permissions.ValidationError on loading error
     """
     from bson.json_util import loads, CANONICAL_JSON_OPTIONS
 
     assert isinstance(payload, str), payload
-    return loads(payload, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
+    try:
+        return loads(payload, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
+    except JSONDecodeError as exc:
+        raise ValidationError("Invalid JSON payload: %r" % exc)
 
 
 def dump_to_json_bytes(payload, **extra_options):

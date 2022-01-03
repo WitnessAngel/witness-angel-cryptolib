@@ -7,7 +7,8 @@ from uuid import UUID
 import pytest
 
 from _test_mockups import get_fake_authdevice, random_bool
-from wacryptolib.authdevice import initialize_authdevice, get_authenticator_dir_for_authdevice
+from wacryptolib.authdevice import _initialize_authdevice, _get_authenticator_dir_for_authdevice
+from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.trustee import generate_keypair_for_storage
 from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
@@ -200,12 +201,12 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()
     authdevice = get_fake_authdevice(authdevice_path)
-    initialize_authdevice(authdevice, authdevice_owner="Jean-Jâcques")
+    remote_keystore_dir = authdevice["authenticator_path"]
+    initialize_authenticator(remote_keystore_dir, keystore_owner="Jean-Jâcques", keystore_passphrase_hint="my-hint")
 
     keychain_uid = generate_uuid0()
     key_algo = "RSA_OAEP"
 
-    remote_keystore_dir = get_authenticator_dir_for_authdevice(authdevice)
     remote_keystore = FilesystemKeystore(remote_keystore_dir)
     remote_keystore.set_keys(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"555", private_key=b"okj")
 

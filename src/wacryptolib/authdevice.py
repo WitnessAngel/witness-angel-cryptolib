@@ -9,7 +9,10 @@ from wacryptolib.keystore import load_keystore_metadata
 
 logger = logging.getLogger(__name__)
 
-# FIXME regroup all metadata and is_initialized in single "metadata" field??
+
+def _get_authenticator_dir_for_authdevice(authdevice: dict):
+    return Path(authdevice["path"]).joinpath(".authenticator")
+
 
 # FIXME change "format" here, bad wording!!!!
 def list_available_authdevices():
@@ -18,14 +21,14 @@ def list_available_authdevices():
 
     :return: (list) Dictionaries having at least these fields: path, label, format, size, is_initialized, and metadata
     
-        - "path" (str):  mount point on the filesystem.
+        - "drive_type" (str): device type like "USBSTOR"
+        - "path" (str):  mount point of device on the filesystem.
         - "label" (str): possibly empty, label of the partition
         - "format" (str): lowercase character string for filesystem type, like "ext2", "fat32" ...
         - "size" (int): filesystem size in bytes
-        - "is_initialized" (bool): if the device has been initialized with metadata
-        - "metadata" (dict): None if device is not initialized, else dict with at least "keystore_owner" (str) and "keystore_uid" (UUID) attributes.
+        - "partition" (str): Path to the Linux partition e.g. "/dev/sda1" (remains None on WIndows)
+        - "authenticator_path" (str): Theoretical absolute path to the authenticator (might not exist yet)
 
-    The linux environment has an additional field which is 'partition' (str) e.g. "/dev/sda1".
     """
 
     if sys_platform == "win32":
@@ -34,16 +37,13 @@ def list_available_authdevices():
         authdevices = _list_available_authdevices_linux()
 
     for authdevice in authdevices:
-        metadata = None
-        if authdevice["is_initialized"]:
-            metadata = load_authdevice_metadata(authdevice)  # FIXME - might crash concurrently here??
-        authdevice["metadata"] = metadata
+        authdevice["authenticator_path"] = _get_authenticator_dir_for_authdevice(authdevice)
 
     return authdevices
 
 
 # FIXME - actually unused?
-def initialize_authdevice(authdevice: dict, authdevice_owner: str, extra_metadata: Optional[dict] = None):
+def _initialize_authdevice(authdevice: dict, authdevice_owner: str, extra_metadata: Optional[dict] = None):
     """
     Initialize a specific USB key, by creating an internal structure with key device metadata.
 
@@ -54,7 +54,6 @@ def initialize_authdevice(authdevice: dict, authdevice_owner: str, extra_metadat
 
     On success, updates 'authdevice' to mark it as initialized, and to contain device metadata.
     """
-    assert not authdevice["is_initialized"]  # Will be doubled with actual check of filesystem
 
     authenticator_dir = get_authenticator_dir_for_authdevice(authdevice)
 
@@ -67,7 +66,7 @@ def initialize_authdevice(authdevice: dict, authdevice_owner: str, extra_metadat
 
 
 # FIXME - actually unused?
-def is_authdevice_initialized(authdevice: dict):
+def _is_authdevice_initialized(authdevice: dict):
     """
     Check if a key device seems initialized (by ignoring, of course, its "is_initialized" field).
 
@@ -83,7 +82,7 @@ def is_authdevice_initialized(authdevice: dict):
 
 
 # FIXME - actually unused?
-def load_authdevice_metadata(authdevice: dict) -> dict:
+def _load_authdevice_metadata(authdevice: dict) -> dict:
     """
     Return the device metadata stored in the given mountpoint, after checking that it contains at least mandatory
     (user and keystore_uid) fields.
@@ -126,10 +125,7 @@ def _list_available_authdevices_win32():
                 assert drive.Size, drive.Size
                 authdevice["size"] = int(partition.Size)  # In bytes
                 authdevice["format"] = logical_disk.FileSystem.lower()  # E.g 'fat32'
-                authdevice["is_initialized"] = is_authdevice_initialized(
-                    authdevice
-                )  # E.g True
-
+                authdevice["partition"] = None
                 authdevice_list.append(authdevice)
 
     return authdevice_list
@@ -172,16 +168,8 @@ def _list_available_authdevices_linux():
         authdevice["size"] = psutil.disk_usage(authdevice["path"]).total  # E.g: 30986469376
         authdevice["format"] = p.fstype  # E.g: 'vfat'
         authdevice["partition"] = p.device  # E.g: '/dev/sda1'
-        authdevice["is_initialized"] = is_authdevice_initialized(
-            authdevice
-        )  # E.g False
         authdevice_list.append(authdevice)
 
     return authdevice_list
 
-
-# FIXME introduce an AuthenticationDevice class to normalize and lazify this API instead of the dict?
-
-def get_authenticator_dir_for_authdevice(authdevice: dict):
-    return Path(authdevice["path"]).joinpath(".authenticator")
 

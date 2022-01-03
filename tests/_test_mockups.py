@@ -48,7 +48,7 @@ def get_fake_authdevice(device_path):
         "label": "TOSHIBA",
         "size": 31000166400,
         "format": "fat32",
-        "is_initialized": False,
+        "authenticator_path": device_path / ".myauthenticator",
         "metadata": None,
     }
     return authdevice

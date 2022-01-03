@@ -220,8 +220,8 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     assert tuple(metadata_mapper) == (keystore_uid,)
 
     metadata = metadata_mapper[keystore_uid]
-    assert metadata["authenticator_uid"] == keystore_uid
-    assert metadata["authenticator_owner"] == "Jean-Jâcques"
+    assert metadata["keystore_uid"] == keystore_uid
+    assert metadata["keystore_owner"] == "Jean-Jâcques"
 
     with pytest.raises(KeystoreAlreadyExists, match=str(keystore_uid)):
         pool.import_keystore_from_filesystem(remote_keystore_dir)

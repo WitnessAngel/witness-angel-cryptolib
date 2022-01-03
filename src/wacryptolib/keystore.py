@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from collections.abc import Sequence
 
 import logging
@@ -11,11 +13,53 @@ from pathlib import Path
 from os.path import join
 import glob
 
-from wacryptolib.authenticator import load_authenticator_metadata
-from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist, KeystoreDoesNotExist, KeystoreAlreadyExists
-from wacryptolib.utilities import synchronized, safe_copy_directory
+from schema import Or, And, Optional, SchemaError, Schema
+
+from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist, KeystoreDoesNotExist, KeystoreAlreadyExists, \
+    ValidationError
+from wacryptolib.utilities import synchronized, safe_copy_directory, load_from_json_file
 
 logger = logging.getLogger(__name__)
+
+
+def non_empty(value):
+    return bool(value)
+
+
+KEYSTORE_SCHEMA = Schema({
+    "keystore_type": Or("localfactory", "authenticator", "gateway"),
+    "keystore_format": "keystore_1.0",  # For forward compatibility
+    "keystore_uid": UUID,
+    "keystore_owner": And(str, non_empty),
+    Optional("keystore_passphrase_hint"): And(str, non_empty),
+})
+
+
+def _validate_keystore_metadata(keystore_metadata):
+    try:
+        KEYSTORE_SCHEMA.validate(keystore_metadata)
+    except SchemaError as exc:
+        raise ValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
+
+
+def _get_keystore_metadata_file_path(keystore_dir: Path):
+    """
+    Return path of standard metadata file for key/cryptainer storage.
+    """
+    return keystore_dir.joinpath(".metadata.json")
+
+
+def load_keystore_metadata(authenticator_dir: Path) -> dict:
+    """
+    Return the authenticator metadata stored in the given folder, after checking that it contains at least mandatory
+    (keystore_owner and keystore_uid) fields.
+
+    Raises `ValidationError` or json decoding exceptions if device appears initialized, but has corrupted metadata.
+    """
+    metadata_file = _get_keystore_metadata_file_path(authenticator_dir)
+    metadata = load_from_json_file(metadata_file)
+    _validate_keystore_metadata(metadata)
+    return metadata
 
 
 class KeystoreBase(ABC):
@@ -422,7 +466,7 @@ class FilesystemKeystorePool(KeystorePoolBase):  # FIXME rename methods to bette
 
     def list_imported_keystore_uids(self) -> list:
         """Return a sorted list of UUIDs of key storages, corresponding
-        to the authenticator_uid of their origin authentication devices."""
+        to the keystore_uid of their origin authentication devices."""
         imported_keystores_dir = self._root_dir.joinpath(self.IMPORTED_KEYSTORES_DIRNAME)
         paths = imported_keystores_dir.glob("%s*" % self.IMPORTED_KEYSTORE_PREFIX)  # This excludes TEMP folders
         return sorted([uuid.UUID(d.name.replace(self.IMPORTED_KEYSTORE_PREFIX, "")) for d in paths])
@@ -437,7 +481,7 @@ class FilesystemKeystorePool(KeystorePoolBase):  # FIXME rename methods to bette
         metadata_mapper = {}
         for keystore_uid in keystore_uids:
             keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
-            metadata = load_authenticator_metadata(keystore_dir)
+            metadata = load_keystore_metadata(keystore_dir)
             metadata_mapper[keystore_uid] = metadata
 
         return metadata_mapper
@@ -450,8 +494,8 @@ class FilesystemKeystorePool(KeystorePoolBase):  # FIXME rename methods to bette
         """
         assert keystore_dir.exists(), keystore_dir
 
-        metadata = load_authenticator_metadata(keystore_dir)
-        keystore_uid = metadata["authenticator_uid"]  # FIXME - Fails badly if metadata file is corrupted
+        metadata = load_keystore_metadata(keystore_dir)
+        keystore_uid = metadata["keystore_uid"]  # FIXME - Fails badly if metadata file is corrupted
 
         if keystore_uid in self.list_imported_keystore_uids():
             raise KeystoreAlreadyExists("Key storage with UUID %s was already imported locally" % keystore_uid)

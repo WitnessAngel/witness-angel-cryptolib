@@ -602,13 +602,13 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     local_factory_trustee_id = _get_trustee_id(LOCAL_FACTORY_TRUSTEE_MARKER)
 
-    shard_trustee1 = dict(trustee_type="authdevice", authenticator_uid=keystore_uid1)
+    shard_trustee1 = dict(trustee_type="authdevice", keystore_uid=keystore_uid1)
     shard_trustee1_id = _get_trustee_id(shard_trustee1)
 
-    shard_trustee2 = dict(trustee_type="authdevice", authenticator_uid=keystore_uid2)
+    shard_trustee2 = dict(trustee_type="authdevice", keystore_uid=keystore_uid2)
     shard_trustee2_id = _get_trustee_id(shard_trustee2)
 
-    shard_trustee3 = dict(trustee_type="authdevice", authenticator_uid=keystore_uid3)
+    shard_trustee3 = dict(trustee_type="authdevice", keystore_uid=keystore_uid3)
     shard_trustee3_id = _get_trustee_id(shard_trustee3)
 
     cryptoconf = dict(

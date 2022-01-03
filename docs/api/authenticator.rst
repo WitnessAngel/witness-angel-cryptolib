@@ -8,5 +8,4 @@ This module initializes and loads "authenticators", i.e sets of keys stored in a
 
 .. autofunction:: wacryptolib.authenticator.is_authenticator_initialized
 
-.. autofunction:: wacryptolib.authenticator.load_authenticator_metadata
 

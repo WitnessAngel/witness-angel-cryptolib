@@ -9,6 +9,8 @@ Key storages
 
 Each of these key storages theoretically belongs to a single user.
 
+.. autofunction:: wacryptolib.keystore.load_keystore_metadata
+
 .. autoclass:: wacryptolib.keystore.KeystoreBase
 
 .. autoclass:: wacryptolib.keystore.DummyKeystore

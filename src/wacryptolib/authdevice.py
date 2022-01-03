@@ -4,7 +4,8 @@ from pathlib import Path
 from pathlib import PurePath
 from typing import Optional
 
-from wacryptolib.authenticator import is_authenticator_initialized, initialize_authenticator, load_authenticator_metadata
+from wacryptolib.authenticator import is_authenticator_initialized, initialize_authenticator
+from wacryptolib.keystore import load_keystore_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ def list_available_authdevices():
         - "format" (str): lowercase character string for filesystem type, like "ext2", "fat32" ...
         - "size" (int): filesystem size in bytes
         - "is_initialized" (bool): if the device has been initialized with metadata
-        - "metadata" (dict): None if device is not initialized, else dict with at least "authenticator_owner" (str) and "authenticator_uid" (UUID) attributes.
+        - "metadata" (dict): None if device is not initialized, else dict with at least "keystore_owner" (str) and "keystore_uid" (UUID) attributes.
 
     The linux environment has an additional field which is 'partition' (str) e.g. "/dev/sda1".
     """
@@ -58,7 +59,7 @@ def initialize_authdevice(authdevice: dict, authdevice_owner: str, extra_metadat
     authenticator_dir = get_authenticator_dir_for_authdevice(authdevice)
 
     metadata = initialize_authenticator(
-        authenticator_dir=authenticator_dir, authenticator_owner=authdevice_owner, extra_metadata=extra_metadata
+        authenticator_dir=authenticator_dir, keystore_owner=authdevice_owner, extra_metadata=extra_metadata
     )
 
     authdevice["is_initialized"] = True
@@ -85,12 +86,12 @@ def is_authdevice_initialized(authdevice: dict):
 def load_authdevice_metadata(authdevice: dict) -> dict:
     """
     Return the device metadata stored in the given mountpoint, after checking that it contains at least mandatory
-    (user and authenticator_uid) fields.
+    (user and keystore_uid) fields.
 
     Raises `ValueError` or json decoding exceptions if device appears initialized, but has corrupted metadata.
     """
     authenticator_dir = get_authenticator_dir_for_authdevice(authdevice)
-    return load_authenticator_metadata(authenticator_dir)
+    return load_keystore_metadata(authenticator_dir)
 
 
 def _list_available_authdevices_win32():

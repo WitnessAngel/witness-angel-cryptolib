@@ -2,17 +2,17 @@
 Concepts
 =============
 
-*To avoid too long variable name, and to disambiguate words like "key" which have too many different meanings (symmetric key, asymmetric key, usb key, index key...), this library introduce its own set of terms, in addition to terms already widely used in cryptography (cipher, signature, hash...).*
+*To avoid too long variable name, and to disambiguate words like "key" which have too many different meanings (symmetric key, asymmetric key, usb key, index key...), this library introduces its own set of terms, in addition to those already widely used in cryptography (cipher, signature, hash...).*
 
 
 Trusted parties
 ------------------
 
-The data encrypted by our **Flightbox** cryptosystem relies on multiple actors to protect itself from unwanted access.
+The data encrypted by our **Flightbox cryptosystem** relies on multiple actors to protect itself from unwanted access.
 
 Each of these actors is commonly designated as a **trustee** in the code. A trustee offers a set of standard services: providing public keys for encryption, delivering messages signatures, and treating requests for data decryption.
 
-A witness angel device is itself a **local trustee**, it can encrypt and sign data using its own set of digital keys.
+A witness angel device is itself a **local-factory trustee**, it can encrypt and sign data using its own set of digital keys generated on demand.
 
 But real protection is provided by trustees called **keyguardians**, which are trusted third parties. Access to these remote trustees is generally done via Internet, even if other channels (e.g. usb devices temporarily plugged in) can be used too.
 
@@ -56,7 +56,9 @@ Authenticators can publish their public keys, and public metadata, to a **gatewa
 Encrypted containers
 -------------------------
 
-The word "cryptainer" refers to encrypted containers using our custom formats and algorithms.
+The word **cryptainer** refers to encrypted containers built with this library.
+
+The structure of these cryptainers is driven
 
 More information in the :doc:`cryptainer format <cryptainer_format>` document.
 

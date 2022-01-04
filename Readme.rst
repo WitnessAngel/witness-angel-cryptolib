@@ -14,13 +14,12 @@ Witness Angel Cryptolib
 Summary
 ----------------
 
-This lib gathers utilities to generate and store cryptographic keys, and encrypt/decrypt/sign cryptainer, for the
-WitnessAngel project.
+This lib gathers utilities to generate and store cryptographic keys, and to encrypt/decrypt/sign encrypted containers, for the WitnessAngel project.
 
-It defines a cryptainer format which allows multiple agents (the user's device as well as trusted-third-parties) to
-add layers of encryption and signature to the sensitive data.
+It defines a cryptainer format which allows multiple actors (the user's device as well as trusted thirdparties) to
+add layers of encryption and signature to sensitive data.
 
-It also provides utilities for webservices and their error handling, as well as test-helpers so that software using
+It also provides utilities for webservices and their error handling, as well as test helpers so that software using
 the library may easily check that their own subclasses respect the invariants of this system.
 
 
@@ -29,7 +28,7 @@ CLI interface
 
 You can play with cryptainers using this command line interface.
 
-beware, unless you provide your own crypto-config, these CLI-generated cryptainers will use a hard-coded and simple cryptographic conf, using only locally-stored keys, so they will be insecure.
+Beware, for now these CLI-generated cryptainers use a hard-coded and simple cryptographic conf, using only locally-stored keys, so they will be insecure.
 
 ::
 

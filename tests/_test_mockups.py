@@ -17,10 +17,10 @@ class FakeTestCryptainerStorage(CryptainerStorage):
         return self._offload_payload_ciphertext  # Do NOT dig cryptoconf here, it might be all wrong
 
     def _encrypt_payload_and_dump_cryptainer_to_filesystem(
-        self, payload, cryptainer_filepath, metadata, keychain_uid, cryptoconf
+        self, payload, cryptainer_filepath, cryptainer_metadata, keychain_uid, cryptoconf
     ):
         cryptainer = self._encrypt_payload_into_cryptainer(
-            payload, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
+            payload, cryptainer_metadata=cryptainer_metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
         )
         dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=True)
 

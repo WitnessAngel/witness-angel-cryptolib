@@ -12,7 +12,7 @@ from wacryptolib.cryptainer import (
     SHARED_SECRET_ALGO_MARKER,
 )
 from wacryptolib.keystore import FilesystemKeystorePool
-from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
+from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, dump_to_json_file
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 DEFAULT_KEYSTORE_POOL_DIRNAME = ".keystore_pool"
@@ -81,7 +81,7 @@ def cli(ctx, config, keystore_pool):
 
 def _do_encrypt(payload, keystore_pool):
     cryptainer = encrypt_payload_into_cryptainer(
-        payload, cryptoconf=EXAMPLE_CRYPTOCONF, metadata=None, keystore_pool=keystore_pool
+        payload, cryptoconf=EXAMPLE_CRYPTOCONF, cryptainer_metadata=None, keystore_pool=keystore_pool
     )
     return cryptainer
 

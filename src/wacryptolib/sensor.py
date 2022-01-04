@@ -111,7 +111,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         end_time = get_utc_now_date()
         filename_base = self._build_tarfile_filename(from_datetime=self._current_start_time, to_datetime=end_time)
         self._cryptainer_storage.enqueue_file_for_encryption(
-            filename_base=filename_base, payload=result_bytestring, metadata=self._current_metadata
+            filename_base=filename_base, payload=result_bytestring, cryptainer_metadata=self._current_metadata
         )
 
         self._current_tarfile = None
@@ -183,12 +183,12 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         self._flush_aggregated_payload()
 
     @staticmethod
-    def read_tarfile_from_bytestring(payload_bytestring):
+    def read_tarfile_from_bytestring(payload: bytes):
         """
         Create a readonly TarFile instance from the provided bytestring.
         """
-        assert payload_bytestring, payload_bytestring  # Empty bytestrings must already have been filtered out
-        return tarfile.open(mode="r", fileobj=io.BytesIO(payload_bytestring))
+        assert payload, payload  # Empty bytestrings must already have been filtered out
+        return tarfile.open(mode="r", fileobj=io.BytesIO(payload))
 
 
 class JsonDataAggregator(TimeLimitedAggregatorMixin):

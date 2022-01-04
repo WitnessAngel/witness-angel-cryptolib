@@ -393,7 +393,7 @@ def _dump_to_raw_json_tree(data):
 def _intialize_cryptainer_with_single_file(tmp_path):  # FIXME generalize its use in different test functions below
     storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainer_dir=tmp_path)
 
-    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
+    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     cryptainer_name, = storage.list_cryptainer_names()
     return storage, cryptainer_name
@@ -407,7 +407,7 @@ def test_void_cryptoconfs(cryptoconf):
 
     with pytest.raises(SchemaValidationError, match="Empty .* list"):
         encrypt_payload_into_cryptainer(
-            payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None, keystore_pool=keystore_pool
+            payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, cryptainer_metadata=None, keystore_pool=keystore_pool
         )
 
 
@@ -435,7 +435,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
             cryptainer_filepath=cryptainer_filepath,
             cryptoconf=cryptoconf,
             keychain_uid=keychain_uid,
-            metadata=metadata,
+            cryptainer_metadata=metadata,
             keystore_pool=keystore_pool,
         )
         cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath, include_payload_ciphertext=True)
@@ -444,7 +444,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
             payload=payload,
             cryptoconf=cryptoconf,
             keychain_uid=keychain_uid,
-            metadata=metadata,
+            cryptainer_metadata=metadata,
             keystore_pool=keystore_pool,
         )
 
@@ -516,7 +516,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
     metadata = random.choice([None, dict(a=[123])])
 
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=shamir_cryptoconf, keychain_uid=keychain_uid, metadata=metadata
+        payload=payload, cryptoconf=shamir_cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=metadata
     )
 
     assert cryptainer["keychain_uid"]
@@ -618,7 +618,7 @@ def test_recursive_shamir_secrets_and_layers():
     payload = _get_binary_or_empty_content()
 
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=RECURSIVE_CRYPTOCONF, keychain_uid=keychain_uid, metadata=None
+        payload=payload, cryptoconf=RECURSIVE_CRYPTOCONF, keychain_uid=keychain_uid, cryptainer_metadata=None
     )
 
     data_decrypted = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
@@ -631,7 +631,7 @@ def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
     cryptoconf["payload_cipher_layers"][0]["payload_cipher_algo"] = payload_cipher_algo
 
-    cryptainer = encrypt_payload_into_cryptainer(payload=b"1234", cryptoconf=cryptoconf, metadata=None)
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"1234", cryptoconf=cryptoconf, cryptainer_metadata=None)
     cryptainer["payload_cipher_layers"][0]["payload_macs"]["tag"] += b"hi"  # CORRUPTION
 
     result = decrypt_payload_from_cryptainer(cryptainer, verify=False)
@@ -732,7 +732,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     payload = b"sjzgzj"
 
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, keystore_pool=keystore_pool, metadata=None
+        payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, keystore_pool=keystore_pool, cryptainer_metadata=None
     )
 
     # FIXME we must TEST that keychain_uid_trustee is necessary for decryption, for example by deleting it before a decrypt()
@@ -803,7 +803,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     storage = CryptainerStorage(tmp_path, keystore_pool=keystore_pool)
     storage.enqueue_file_for_encryption(
-        "beauty.txt", payload=payload, metadata=None, keychain_uid=keychain_uid, cryptoconf=cryptoconf
+        "beauty.txt", payload=payload, cryptainer_metadata=None, keychain_uid=keychain_uid, cryptoconf=cryptoconf
     )
     storage.wait_for_idle_state()
 
@@ -877,8 +877,8 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert len(storage) == 0
     assert storage.list_cryptainer_names() == []
 
-    storage.enqueue_file_for_encryption("animals.dat", animals_file_handle, metadata=None)
-    storage.enqueue_file_for_encryption("empty.txt", b"", metadata=dict(somevalue=True))
+    storage.enqueue_file_for_encryption("animals.dat", animals_file_handle, cryptainer_metadata=None)
+    storage.enqueue_file_for_encryption("empty.txt", b"", cryptainer_metadata=dict(somevalue=True))
     assert len(storage) == 0  # Cryptainer threads are just beginning to work!
 
     storage.wait_for_idle_state()
@@ -896,7 +896,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     storage = CryptainerStorage(
         default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=cryptainer_dir, offload_payload_ciphertext=False
     )
-    storage.enqueue_file_for_encryption("newfile.bmp", b"stuffs", metadata=None)
+    storage.enqueue_file_for_encryption("newfile.bmp", b"stuffs", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 3
     expected_cryptainer_names = [Path("animals.dat.crypt"), Path("empty.txt.crypt"), Path("newfile.bmp.crypt")]
@@ -926,7 +926,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert storage._make_absolute  # Instance method
     storage._make_absolute = None  # Corruption!
     assert "Caught exception" not in caplog.text, caplog.text
-    storage.enqueue_file_for_encryption("something.mpg", b"#########", metadata=None)
+    storage.enqueue_file_for_encryption("something.mpg", b"#########", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 3  # Unchanged
     assert "Caught exception" in caplog.text, caplog.text
@@ -957,7 +957,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     )
     assert storage._max_cryptainer_count is None
     for i in range(10):
-        storage.enqueue_file_for_encryption("file.dat", b"dogs\ncats\n", metadata=None)
+        storage.enqueue_file_for_encryption("file.dat", b"dogs\ncats\n", cryptainer_metadata=None)
     assert len(storage) < 11  # In progress
     storage.wait_for_idle_state()
     assert len(storage) == 11  # Still the older file remains
@@ -974,7 +974,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
         offload_payload_ciphertext=offload_payload_ciphertext,
     )
     for i in range(3):
-        storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
+        storage.enqueue_file_for_encryption("xyz.dat", b"abc", cryptainer_metadata=None)
 
     storage.wait_for_idle_state()
     assert len(storage) == 3  # Purged
@@ -984,7 +984,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
         Path("xyz.dat.002.crypt"),
     ]
 
-    storage.enqueue_file_for_encryption("xyz.dat", b"abc", metadata=None)
+    storage.enqueue_file_for_encryption("xyz.dat", b"abc", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 3  # Purged
     assert storage.list_cryptainer_names(as_sorted_list=True) == [
@@ -1003,10 +1003,10 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
         offload_payload_ciphertext=offload_payload_ciphertext2,
     )
     assert len(storage) == 3  # Retrieves existing cryptainers
-    storage.enqueue_file_for_encryption("aaa.dat", b"000", metadata=None)
+    storage.enqueue_file_for_encryption("aaa.dat", b"000", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 4  # Unchanged
-    storage.enqueue_file_for_encryption("zzz.dat", b"000", metadata=None)
+    storage.enqueue_file_for_encryption("zzz.dat", b"000", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     assert len(storage) == 4  # Purge occurred
     assert storage.list_cryptainer_names(as_sorted_list=True) == [
@@ -1024,7 +1024,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
         Path("zzz.dat.001.crypt"),
     ]
 
-    storage.enqueue_file_for_encryption("20201121_222727_whatever.dat", b"000", metadata=None)
+    storage.enqueue_file_for_encryption("20201121_222727_whatever.dat", b"000", cryptainer_metadata=None)
     storage.wait_for_idle_state()
 
     assert storage.list_cryptainer_names(as_sorted_list=True) == [
@@ -1034,8 +1034,8 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
         Path("zzz.dat.001.crypt"),
     ]
 
-    storage.enqueue_file_for_encryption("21201121_222729_smth.dat", b"000", metadata=None)
-    storage.enqueue_file_for_encryption("lmn.dat", b"000", metadata=None)
+    storage.enqueue_file_for_encryption("21201121_222729_smth.dat", b"000", cryptainer_metadata=None)
+    storage.enqueue_file_for_encryption("lmn.dat", b"000", cryptainer_metadata=None)
     storage.wait_for_idle_state()
 
     print(">>>>>>>", storage.list_cryptainer_names(as_sorted_list=True))
@@ -1049,7 +1049,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
     assert storage._max_cryptainer_count
     storage._max_cryptainer_count = 0
 
-    storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
+    storage.enqueue_file_for_encryption("abc.dat", b"000", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     assert storage.list_cryptainer_names(as_sorted_list=True) == []  # ALL PURGED
 
@@ -1077,11 +1077,11 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
     dt = now - timedelta(seconds=1)
     for i in range(5):
         storage.enqueue_file_for_encryption(
-            "%s_stuff.dat" % dt.strftime(CRYPTAINER_DATETIME_FORMAT), b"abc", metadata=None
+            "%s_stuff.dat" % dt.strftime(CRYPTAINER_DATETIME_FORMAT), b"abc", cryptainer_metadata=None
         )
         dt -= timedelta(days=1)
     storage.enqueue_file_for_encryption(
-        "whatever_stuff.dat", b"xxx", metadata=None
+        "whatever_stuff.dat", b"xxx", cryptainer_metadata=None
     )  # File timestamp with be used instead
     storage.wait_for_idle_state()
 
@@ -1097,7 +1097,7 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
     # Change mtime to VERY old!
     os.utime(storage._make_absolute(Path("whatever_stuff.dat.005.crypt")), (1000, 1000))
 
-    storage.enqueue_file_for_encryption("abcde.dat", b"xxx", metadata=None)
+    storage.enqueue_file_for_encryption("abcde.dat", b"xxx", cryptainer_metadata=None)
     storage.wait_for_idle_state()
 
     cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
@@ -1109,7 +1109,7 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
     assert storage._max_cryptainer_age
     storage._max_cryptainer_age = timedelta(days=-1)
 
-    storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
+    storage.enqueue_file_for_encryption("abc.dat", b"000", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     assert storage.list_cryptainer_names(as_sorted_list=True) == [
         Path("20301021_222711_oldfile.dat.crypt")
@@ -1128,11 +1128,11 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
     )
     assert not len(storage)
 
-    storage.enqueue_file_for_encryption("20101021_222711_stuff.dat", b"a" * 2000, metadata=None)
-    storage.enqueue_file_for_encryption("20301021_222711_stuff.dat", b"z" * 2000, metadata=None)
+    storage.enqueue_file_for_encryption("20101021_222711_stuff.dat", b"a" * 2000, cryptainer_metadata=None)
+    storage.enqueue_file_for_encryption("20301021_222711_stuff.dat", b"z" * 2000, cryptainer_metadata=None)
 
     for i in range(10):
-        storage.enqueue_file_for_encryption("some_stuff.dat", b"m" * 1000, metadata=None)
+        storage.enqueue_file_for_encryption("some_stuff.dat", b"m" * 1000, cryptainer_metadata=None)
     storage.wait_for_idle_state()
 
     cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
@@ -1159,7 +1159,7 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
     assert storage._max_cryptainer_quota
     storage._max_cryptainer_quota = 0
 
-    storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
+    storage.enqueue_file_for_encryption("abc.dat", b"000", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     assert storage.list_cryptainer_names(as_sorted_list=True) == []  # ALL PURGED
 
@@ -1184,9 +1184,9 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
             offload_payload_ciphertext=offload_payload_ciphertext,
         )
 
-        storage.enqueue_file_for_encryption("20001121_222729_smth.dat", b"000", metadata=None)
-        storage.enqueue_file_for_encryption(recent_big_file_name, b"0" * 2000, metadata=None)
-        storage.enqueue_file_for_encryption("recent_small_file.dat", b"0" * 50, metadata=None)
+        storage.enqueue_file_for_encryption("20001121_222729_smth.dat", b"000", cryptainer_metadata=None)
+        storage.enqueue_file_for_encryption(recent_big_file_name, b"0" * 2000, cryptainer_metadata=None)
+        storage.enqueue_file_for_encryption("recent_small_file.dat", b"0" * 50, cryptainer_metadata=None)
 
         storage.wait_for_idle_state()
 
@@ -1208,7 +1208,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
         max_cryptainer_age=timedelta(days=0),
         offload_payload_ciphertext=False,
     )
-    storage.enqueue_file_for_encryption("some_small_file.dat", b"0" * 50, metadata=None)
+    storage.enqueue_file_for_encryption("some_small_file.dat", b"0" * 50, cryptainer_metadata=None)
     storage.wait_for_idle_state()
 
     cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
@@ -1223,9 +1223,9 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
     assert storage.list_cryptainer_names() == []
 
     with pytest.raises(RuntimeError, match="cryptoconf"):
-        storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
+        storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", cryptainer_metadata=None)
 
-    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None, cryptoconf=SIMPLE_CRYPTOCONF)
+    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", cryptainer_metadata=None, cryptoconf=SIMPLE_CRYPTOCONF)
 
     storage.wait_for_idle_state()
     assert storage.list_cryptainer_names() == [Path("animals.dat.crypt")]
@@ -1233,8 +1233,8 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
     # ---
 
     storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path)
-    storage.enqueue_file_for_encryption("stuff_simple.txt", b"aaa", metadata=None)
-    storage.enqueue_file_for_encryption("stuff_complex.txt", b"xxx", metadata=None, cryptoconf=COMPLEX_CRYPTOCONF)
+    storage.enqueue_file_for_encryption("stuff_simple.txt", b"aaa", cryptainer_metadata=None)
+    storage.enqueue_file_for_encryption("stuff_complex.txt", b"xxx", cryptainer_metadata=None, cryptoconf=COMPLEX_CRYPTOCONF)
     storage.wait_for_idle_state()
 
     cryptainer_simple = storage.load_cryptainer_from_storage("stuff_simple.txt.crypt")
@@ -1246,7 +1246,7 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
 def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
     storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainer_dir=tmp_path)
 
-    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
+    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     cryptainer_name, = storage.list_cryptainer_names()
 
@@ -1281,7 +1281,7 @@ def test_get_cryptoconf_summary():
     )  # Ending by newline!
 
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=SIMPLE_CRYPTOCONF, keychain_uid=None, metadata=None
+        payload=payload, cryptoconf=SIMPLE_CRYPTOCONF, keychain_uid=None, cryptainer_metadata=None
     )
     summary2 = get_cryptoconf_summary(cryptainer)
     assert summary2 == summary  # Identical summary for cryptoconf and generated cryptainers!
@@ -1318,7 +1318,7 @@ def test_get_cryptoconf_summary():
     _public_key = generate_keypair(key_algo="RSA_OAEP")["public_key"]
     with patch.object(JsonRpcProxy, "fetch_public_key", return_value=_public_key, create=True) as mock_method:
         cryptainer = encrypt_payload_into_cryptainer(
-            payload=payload, cryptoconf=CONF_WITH_TRUSTEE, keychain_uid=None, metadata=None
+            payload=payload, cryptoconf=CONF_WITH_TRUSTEE, keychain_uid=None, cryptainer_metadata=None
         )
         summary2 = get_cryptoconf_summary(cryptainer)
         assert summary2 == summary  # Identical summary for cryptoconf and generated cryptainers!
@@ -1341,7 +1341,7 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
     metadata = random.choice([None, dict(a=[123])])
 
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
+        payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=metadata
     )
     cryptainer_ciphertext_struct_before_dump = cryptainer["payload_ciphertext_struct"]
     cryptainer_ciphertext_value_before_dump = cryptainer_ciphertext_struct_before_dump["ciphertext_value"]
@@ -1431,7 +1431,7 @@ def test_create_cryptainer_encryption_stream(tmp_path):
     storage = CryptainerStorage(default_cryptoconf=None, cryptainer_dir=cryptainer_dir)
 
     cryptainer_encryption_stream = storage.create_cryptainer_encryption_stream(
-        filename_base, metadata={"mymetadata": True}, cryptoconf=SIMPLE_CRYPTOCONF, dump_initial_cryptainer=True
+        filename_base, cryptainer_metadata={"mymetadata": True}, cryptoconf=SIMPLE_CRYPTOCONF, dump_initial_cryptainer=True
     )
 
     cryptainer_started = storage.load_cryptainer_from_storage(
@@ -1456,7 +1456,7 @@ def ___obsolete_test_encrypt_payload_and_dump_cryptainer_to_filesystem(tmp_path)
     cryptainer_filepath = tmp_path / "my_streamed_cryptainer.crypt"
 
     encrypt_payload_and_dump_cryptainer_to_filesystem(
-        data_plaintext, cryptainer_filepath=cryptainer_filepath, cryptoconf=SIMPLE_CRYPTOCONF, metadata=None
+        data_plaintext, cryptainer_filepath=cryptainer_filepath, cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None
     )
 
     cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath)  # Fetches offloaded content too
@@ -1514,7 +1514,7 @@ def test_conf_validation_error(corrupted_conf):
 )
 def test_cryptainer_validation_success(cryptoconf):
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None
+        payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, cryptainer_metadata=None
     )
     check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 
@@ -1525,7 +1525,7 @@ def test_cryptainer_validation_success(cryptoconf):
 def _generate_corrupted_cryptainers(cryptoconf):
 
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None
+        payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, cryptainer_metadata=None
     )
     corrupted_cryptainers = []
 

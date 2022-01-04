@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 SHAMIR_CHUNK_LENGTH = 16
 
 
-def split_bytestring_as_shards(secret: bytes, *, shard_count: int, threshold_count: int) -> list:
+def split_secret_into_shards(secret: bytes, *, shard_count: int, threshold_count: int) -> list:
     """Generate a Shamir shared secret of `shard_count` subkeys, with `threshold_count`
         of them required to recompute the initial `bytestring`.
 

@@ -54,14 +54,14 @@ def _get_keystore_metadata_file_path(keystore_dir: Path):
     return keystore_dir.joinpath(".metadata.json")
 
 
-def load_keystore_metadata(authenticator_dir: Path) -> dict:
+def load_keystore_metadata(keystore_dir: Path) -> dict:
     """
     Return the authenticator metadata stored in the given folder, after checking that it contains at least mandatory
     (keystore_owner and keystore_uid) fields.
 
     Raises `ValidationError` or json decoding exceptions if device appears initialized, but has corrupted metadata.
     """
-    metadata_file = _get_keystore_metadata_file_path(authenticator_dir)
+    metadata_file = _get_keystore_metadata_file_path(keystore_dir)
     metadata = load_from_json_file(metadata_file)
     _validate_keystore_metadata(metadata)
     return metadata

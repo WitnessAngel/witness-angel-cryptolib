@@ -16,7 +16,7 @@ def test_shared_secret_normal_cases():
         shard_count = random.randint(2, 10)
         threshold_count = random.randint(1, shard_count - 1)
 
-        shards = wacryptolib.shared_secret.split_bytestring_as_shards(
+        shards = wacryptolib.shared_secret.split_secret_into_shards(
             secret=secret, shard_count=shard_count, threshold_count=threshold_count
         )
         assert len(shards) == shard_count
@@ -54,15 +54,15 @@ def test_shared_secret_corner_cases():
     secret = get_random_bytes(50)
 
     with pytest.raises(ValueError):
-        wacryptolib.shared_secret.split_bytestring_as_shards(secret=secret, shard_count=0, threshold_count=0)
+        wacryptolib.shared_secret.split_secret_into_shards(secret=secret, shard_count=0, threshold_count=0)
 
     with pytest.raises(ValueError):
-        wacryptolib.shared_secret.split_bytestring_as_shards(secret=secret, shard_count=2, threshold_count=3)
+        wacryptolib.shared_secret.split_secret_into_shards(secret=secret, shard_count=2, threshold_count=3)
 
     with pytest.raises(ValueError):
         wacryptolib.shared_secret.recombine_secret_from_shards([])
 
-    shards = wacryptolib.shared_secret.split_bytestring_as_shards(secret=secret, shard_count=3, threshold_count=3)
+    shards = wacryptolib.shared_secret.split_secret_into_shards(secret=secret, shard_count=3, threshold_count=3)
     assert wacryptolib.shared_secret.recombine_secret_from_shards(shards) == secret
 
     try:

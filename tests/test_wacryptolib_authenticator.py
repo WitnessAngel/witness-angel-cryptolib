@@ -28,7 +28,7 @@ def test_authenticator_basic_workflow(tmp_path):
         assert not is_authenticator_initialized(acceptable_dir)
         initialize_authenticator(acceptable_dir, keystore_owner="myuserX%s" % idx, keystore_passphrase_hint="Some hïnt")
         assert is_authenticator_initialized(acceptable_dir)
-        metadata = load_keystore_metadata(authenticator_dir=acceptable_dir)
+        metadata = load_keystore_metadata(acceptable_dir)
         assert len(metadata) == 5
         assert metadata["keystore_type"] == "authenticator"
         assert isinstance(metadata["keystore_uid"], UUID)

@@ -27,7 +27,7 @@ from wacryptolib.exceptions import DecryptionError, SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, ASYMMETRIC_KEY_ALGOS_REGISTRY
 from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase
-from wacryptolib.shared_secret import split_bytestring_as_shards, recombine_secret_from_shards
+from wacryptolib.shared_secret import split_secret_into_shards, recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
 from wacryptolib.trustee import TrusteeApi, ReadonlyTrusteeApi
 from wacryptolib.utilities import (
@@ -224,7 +224,7 @@ class CryptainerEncryptor(CryptainerBase):
     """
 
     def build_cryptainer_and_encryption_pipeline(
-        self, *, cryptoconf: dict, output_stream: BinaryIO, keychain_uid=None, metadata=None
+        self, *, cryptoconf: dict, output_stream: BinaryIO, keychain_uid=None, cryptainer_metadata=None
     ) -> dict:
         """
         Build a base cryptainer to store encrypted keys, as well as a stream encryptor
@@ -236,13 +236,13 @@ class CryptainerEncryptor(CryptainerBase):
         :param cryptoconf: configuration tree
         :param output_stream: open file where the stream encryptor should write to
         :param keychain_uid: uuid for the set of encryption keys used
-        :param metadata: additional payload to store unencrypted in cryptainer
+        :param cryptainer_metadata: additional informations to store unencrypted in cryptainer
 
         :return: cryptainer with all the information needed to attempt payload decryption
         """
 
         cryptainer, payload_cipher_layer_extracts = self._generate_cryptainer_base_and_secrets(
-            cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
+            cryptoconf=cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=cryptainer_metadata
         )
 
         encryption_pipeline = EncryptionPipeline(
@@ -252,7 +252,7 @@ class CryptainerEncryptor(CryptainerBase):
         return cryptainer, encryption_pipeline
 
     def encrypt_data(
-        self, payload: Union[bytes, BinaryIO], *, cryptoconf: dict, keychain_uid=None, metadata=None
+        self, payload: Union[bytes, BinaryIO], *, cryptoconf: dict, keychain_uid=None, cryptainer_metadata=None
     ) -> dict:
         """
         Shortcut when data is already available.
@@ -262,7 +262,7 @@ class CryptainerEncryptor(CryptainerBase):
         :param payload: initial plaintext, or file pointer (file immediately deleted then)
         :param cryptoconf: configuration tree
         :param keychain_uid: uuid for the set of encryption keys used
-        :param metadata: additional data to store unencrypted in cryptainer
+        :param cryptainer_metadata: additional data to store unencrypted in cryptainer
 
         :return: cryptainer with all the information needed to attempt data decryption
         """
@@ -270,7 +270,7 @@ class CryptainerEncryptor(CryptainerBase):
         payload = self._load_payload_bytes_and_cleanup(payload)  # Ensure we get the whole payload buffer
 
         cryptainer, payload_cipher_layer_extracts = self._generate_cryptainer_base_and_secrets(
-            cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
+            cryptoconf=cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=cryptainer_metadata
         )
 
         payload_ciphertext, payload_integrity_tags = self._encrypt_and_hash_payload(
@@ -335,19 +335,19 @@ class CryptainerEncryptor(CryptainerBase):
 
         return payload_current, payload_integrity_tags
 
-    def _generate_cryptainer_base_and_secrets(self, cryptoconf: dict, keychain_uid=None, metadata=None) -> tuple:
+    def _generate_cryptainer_base_and_secrets(self, cryptoconf: dict, keychain_uid=None, cryptainer_metadata=None) -> tuple:
         """
         Build a payload-less and signature-less cryptainer, preconfigured with a set of symmetric keys
         under their final form (encrypted by trustees). A separate extract, with symmetric keys as well as algo names, is returned so that actual payload encryption and signature can be performed separately.
 
         :param cryptoconf: configuration tree
         :param keychain_uid: uuid for the set of encryption keys used
-        :param metadata: additional payload to store unencrypted in cryptainer
+        :param cryptainer_metadata: additional payload to store unencrypted in cryptainer
 
         :return: a (cryptainer: dict, secrets: list) tuple, where each secret has keys cipher_algo, symmetric_key and payload_digest_algos.
         """
 
-        assert metadata is None or isinstance(metadata, dict), metadata
+        assert cryptainer_metadata is None or isinstance(cryptainer_metadata, dict), cryptainer_metadata
         cryptainer_format = CRYPTAINER_FORMAT
         cryptainer_uid = generate_uuid0()  # ALWAYS UNIQUE!
         keychain_uid = keychain_uid or generate_uuid0()  # Might be shared by lots of cryptainers
@@ -390,7 +390,7 @@ class CryptainerEncryptor(CryptainerBase):
             cryptainer_uid=cryptainer_uid,
             keychain_uid=keychain_uid,
             payload_ciphertext_struct=None,  # Must be filled asap, by OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER if needed!
-            cryptainer_metadata=metadata,
+            cryptainer_metadata=cryptainer_metadata,
         )
         return cryptainer, payload_cipher_layer_extracts
 
@@ -441,7 +441,7 @@ class CryptainerEncryptor(CryptainerBase):
 
             logger.debug("Generating shared secret shards (%d needed amongst %d)", threshold_count, shard_count)
 
-            shards = split_bytestring_as_shards(
+            shards = split_secret_into_shards(
                 secret=key_bytes, shard_count=shard_count, threshold_count=threshold_count
             )
 
@@ -610,7 +610,7 @@ class CryptainerDecryptor(CryptainerBase):
     Contains every method used to read and decrypt a cryptainer, IN MEMORY.
     """
 
-    def extract_metadata(self, cryptainer: dict) -> Optional[dict]:
+    def extract_cryptainer_metadata(self, cryptainer: dict) -> Optional[dict]:
         assert isinstance(cryptainer, dict), cryptainer
         return cryptainer["cryptainer_metadata"]
 
@@ -869,7 +869,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         verify_message_signature(
             message=payload_digest,
-            payload_signature_algo=payload_signature_algo,
+            signature_algo=payload_signature_algo,
             signature=payload_signature_struct,
             key=public_key,
         )  # Raises if troubles
@@ -887,7 +887,7 @@ class CryptainerEncryptionStream:
         cryptainer_filepath: Path,
         *,
         cryptoconf: dict,
-        metadata: Optional[dict],
+        cryptainer_metadata: Optional[dict],
         keychain_uid: Optional[uuid.UUID] = None,
         keystore_pool: Optional[KeystorePoolBase] = None,
         dump_initial_cryptainer=True
@@ -903,7 +903,7 @@ class CryptainerEncryptionStream:
 
         self._cryptainer_decryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
         self._wip_cryptainer, self._encryption_pipeline = self._cryptainer_decryptor.build_cryptainer_and_encryption_pipeline(
-            output_stream=self._output_data_stream, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
+            output_stream=self._output_data_stream, cryptoconf=cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=cryptainer_metadata
         )
         self._wip_cryptainer["payload_ciphertext_struct"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Important
 
@@ -954,7 +954,7 @@ def encrypt_payload_and_dump_cryptainer_to_filesystem(
     *,
     cryptainer_filepath,
     cryptoconf: dict,
-    metadata: Optional[dict],
+    cryptainer_metadata: Optional[dict],
     keychain_uid: Optional[uuid.UUID] = None,
     keystore_pool: Optional[KeystorePoolBase] = None
 ) -> None:
@@ -967,7 +967,7 @@ def encrypt_payload_and_dump_cryptainer_to_filesystem(
         cryptainer_filepath,
         cryptoconf=cryptoconf,
         keychain_uid=keychain_uid,
-        metadata=metadata,
+        cryptainer_metadata=cryptainer_metadata,
         keystore_pool=keystore_pool,
         dump_initial_cryptainer=False,
     )
@@ -982,23 +982,23 @@ def encrypt_payload_into_cryptainer(
     payload: Union[bytes, BinaryIO],
     *,
     cryptoconf: dict,
-    metadata: Optional[dict],
+    cryptainer_metadata: Optional[dict],
     keychain_uid: Optional[uuid.UUID] = None,
     keystore_pool: Optional[KeystorePoolBase] = None
 ) -> dict:
-    """Turn raw payload into a high-security cryptainer, which can only be decrypted with
-    the agreement of the owner and multiple third-party trustees.
+    """Turn a raw payload into a secure cryptainer, which can only be decrypted with
+    the agreement of the owner and third-party trustees.
 
     :param payload: bytestring of media (image, video, sound...) or readable file object (file immediately deleted then)
     :param cryptoconf: tree of specific encryption settings
-    :param metadata: dict of metadata describing the payload (remains unencrypted in cryptainer)
+    :param cryptainer_metadata: dict of metadata describing the payload (remains unencrypted in cryptainer)
     :param keychain_uid: optional ID of a keychain to reuse
     :param keystore_pool: optional key storage pool, might be required by cryptoconf
     :return: dict of cryptainer
     """
     cryptainer_encryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
     cryptainer = cryptainer_encryptor.encrypt_data(
-        payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
+        payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=cryptainer_metadata
     )
     return cryptainer
 
@@ -1027,15 +1027,15 @@ def decrypt_payload_from_cryptainer(
 def extract_metadata_from_cryptainer(cryptainer: dict) -> Optional[dict]:
     """Read the metadata tree (possibly None) from a cryptainer.
 
-    CURRENTLY METADATA IS NEITHER ENCRYPTED NOR AUTHENTIFIED.
+    CURRENTLY CRYPTAINER METADATA ARE NEITHER ENCRYPTED NOR AUTHENTIFIED.
 
-    :param cryptainer: the cryptainer tree, which also holds metadata about encrypted content
+    :param cryptainer: the cryptainer tree, which also holds cryptainer_metadata about encrypted content
 
     :return: dict
     """
     reader = CryptainerDecryptor()
-    data = reader.extract_metadata(cryptainer)
-    return data
+    cryptainer_metadata = reader.extract_cryptainer_metadata(cryptainer)
+    return cryptainer_metadata
 
 
 def get_cryptoconf_summary(conf_or_cryptainer):
@@ -1286,24 +1286,24 @@ class CryptainerStorage:
                     self._delete_cryptainer(deleted_cryptainer_dict["name"])
 
     def _encrypt_payload_and_dump_cryptainer_to_filesystem(
-        self, payload, cryptainer_filepath, metadata, keychain_uid, cryptoconf
+        self, payload, cryptainer_filepath, cryptainer_metadata, keychain_uid, cryptoconf
     ):
         assert cryptoconf, cryptoconf
         encrypt_payload_and_dump_cryptainer_to_filesystem(
             cryptainer_filepath=cryptainer_filepath,
             payload=payload,
             cryptoconf=cryptoconf,
-            metadata=metadata,
+            cryptainer_metadata=cryptainer_metadata,
             keychain_uid=keychain_uid,
             keystore_pool=self._keystore_pool,
         )
 
-    def _encrypt_payload_into_cryptainer(self, payload, metadata, keychain_uid, cryptoconf):
+    def _encrypt_payload_into_cryptainer(self, payload, cryptainer_metadata, keychain_uid, cryptoconf):
         assert cryptoconf, cryptoconf
         return encrypt_payload_into_cryptainer(
             payload=payload,
             cryptoconf=cryptoconf,
-            metadata=metadata,
+            cryptainer_metadata=cryptainer_metadata,
             keychain_uid=keychain_uid,
             keystore_pool=self._keystore_pool,
         )
@@ -1317,7 +1317,7 @@ class CryptainerStorage:
 
     @catch_and_log_exception
     def _offloaded_encrypt_payload_and_dump_cryptainer(
-        self, filename_base, payload, metadata, keychain_uid, cryptoconf
+        self, filename_base, payload, cryptainer_metadata, keychain_uid, cryptoconf
     ):
         """Task to be called by background thread, which encrypts a payload into a disk cryptainer.
 
@@ -1341,7 +1341,7 @@ class CryptainerStorage:
             self._encrypt_payload_and_dump_cryptainer_to_filesystem(
                 payload,
                 cryptainer_filepath=cryptainer_filepath,
-                metadata=metadata,
+                cryptainer_metadata=cryptainer_metadata,
                 keychain_uid=keychain_uid,
                 cryptoconf=cryptoconf,
             )
@@ -1352,7 +1352,7 @@ class CryptainerStorage:
             logger.debug("Encrypting payload file to self-sufficient cryptainer %s", filename_base)
             # Memory warning : duplicates payload to json-compatible cryptainer
             cryptainer = self._encrypt_payload_into_cryptainer(
-                payload, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
+                payload, cryptainer_metadata=cryptainer_metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
             )
             logger.debug("Writing self-sufficient cryptainer payload to storage file %s", cryptainer_filepath)
             dump_cryptainer_to_filesystem(
@@ -1379,7 +1379,7 @@ class CryptainerStorage:
 
     @synchronized
     def create_cryptainer_encryption_stream(
-        self, filename_base, metadata, keychain_uid=None, cryptoconf=None, dump_initial_cryptainer=True
+        self, filename_base, cryptainer_metadata, keychain_uid=None, cryptoconf=None, dump_initial_cryptainer=True
     ):
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
         cryptainer_filepath = self._make_absolute(filename_base + CRYPTAINER_SUFFIX)
@@ -1387,7 +1387,7 @@ class CryptainerStorage:
         cryptainer_encryption_stream = CryptainerEncryptionStream(
             cryptainer_filepath,
             cryptoconf=cryptoconf,
-            metadata=metadata,
+            cryptainer_metadata=cryptainer_metadata,
             keychain_uid=keychain_uid,
             keystore_pool=self._keystore_pool,
             dump_initial_cryptainer=dump_initial_cryptainer,
@@ -1395,14 +1395,14 @@ class CryptainerStorage:
         return cryptainer_encryption_stream
 
     @synchronized
-    def enqueue_file_for_encryption(self, filename_base, payload, metadata, keychain_uid=None, cryptoconf=None):
-        """Enqueue a payload payload for asynchronous encryption and storage.
+    def enqueue_file_for_encryption(self, filename_base, payload, cryptainer_metadata, keychain_uid=None, cryptoconf=None):
+        """Enqueue a payload for asynchronous encryption and storage.
 
         The filename of final cryptainer might be different from provided one.
         And beware, target cryptainer with the same constructed name might be overwritten.
 
         :param payload: Bytes string, or a file-like object open for reading, which will be automatically closed.
-        :param metadata: Dict of metadata added (unencrypted) to cryptainer.
+        :param cryptainer_metadata: Dict of metadata added (unencrypted) to cryptainer.
         :param keychain_uid: If provided, replaces autogenerated keychain_uid for this cryptainer.
         :param cryptoconf: If provided, replaces default cryptoconf for this cryptainer.
         """
@@ -1414,7 +1414,7 @@ class CryptainerStorage:
             self._offloaded_encrypt_payload_and_dump_cryptainer,
             filename_base=filename_base,
             payload=payload,
-            metadata=metadata,
+            cryptainer_metadata=cryptainer_metadata,
             keychain_uid=keychain_uid,
             cryptoconf=cryptoconf,
         )

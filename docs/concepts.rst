@@ -12,7 +12,7 @@ The data encrypted by our **Flightbox cryptosystem** relies on multiple actors t
 
 Each of these actors is commonly designated as a **trustee** in the code. A trustee offers a set of standard services: providing public keys for encryption, delivering messages signatures, and treating requests for data decryption.
 
-A witness angel device is itself a **local-factory trustee**, it can encrypt and sign data using its own set of digital keys generated on demand.
+A witness angel device is itself a **local-factory trustee**, it can encrypt and sign data using its own digital keys.
 
 But real protection is provided by trustees called **keyguardians**, which are trusted third parties. Access to these remote trustees is generally done via Internet, even if other channels (e.g. usb devices temporarily plugged in) can be used too.
 
@@ -37,7 +37,6 @@ The word **digest** is used, instead of "hash", to name the short bytestring obt
 The term **mac** (message authentication code) is used, instead of "tag", to designate a short bytestring which might be obtained at the end of a symmetric encryption operation. This bytestring offers of proof of the payload integrity, and also authenticity (i.e. it was well encrypted with the provided secret key).
 Those digests and macs can be considered all together as **integrity tags**.
 
-
 When a bytestring (typically a serialized symkey) is split in a "Shamir shared secret" scheme, we refer to the parts of the secret as **shards** (and not "shares").
 
 Only when dealing with bytestrings that could be anything (serialized key, serialized json, final encrypted payload...), for example in filesystem utilies, we use the all-embracing term **data**.
@@ -48,9 +47,13 @@ Key repositories
 
 A **keystore** is a generic storage for keypairs: typically a set of public/private PEM files in a directory, with a JSON metadata file describing this repository (type, owner, unique id...). Keys can be "frozen" or on the contrary generated on demand, private keys can be present or not, they can be protected by passphrases or not, depending on the subtype of the keystore.
 
-An **authenticator** is a subtype of keystore used to provide a digital identity keychain to a trusted third party. It is typically a set of N keypairs, all protected by the same passphrase, with some additional authentication fields in the metadata file. An **authdevice**, or authentication device, is a physical device on which an authenticator can be stored. For, we use a simple folder at the root of an usb storage.
+The **local-factory keystore**, which backs the local-factory trustee, can generate keyairs on demands, and typically doesn't protect them with passphrases.
+
+An **authenticator** is a subtype of keystore used to provide a digital identity keychain to a trusted third party. It is typically a set of keypairs, all protected by the same passphrase, with some additional authentication fields in the metadata file. An **authdevice**, or authentication device, is a physical device on which an authenticator can be stored. For, we use a simple folder at the root of an usb storage.
 
 Authenticators can publish their public keys, and public metadata, to a **gateway** - a simple online registry - so that other people may easily rely on them as keyguardian.
+
+When keystores are **imported** from an authdevice or a web gateway, the imported copies naturally only contain a part (public, or at least without confidential information) of the initial authenticator.
 
 
 Encrypted containers

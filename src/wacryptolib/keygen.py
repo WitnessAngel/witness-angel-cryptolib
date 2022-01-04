@@ -51,8 +51,8 @@ def generate_keypair(
     """Generate a (public_key, private_key) pair.
 
     :param key_algo: name of the key type
-    :param serialize: Indicates if key must be serialized as PEM string
-    :param passphrase: Bytestring used for private key export (requires serialize=True)
+    :param serialize: indicates if key must be serialized as PEM string (else it remains a python object)
+    :param passphrase: bytestring used for private key export (requires serialize=True)
 
     Other arguments are used or not depending on the chosen `key_algo`.
 

@@ -12,7 +12,7 @@ from wacryptolib.signature import verify_message_signature
 from wacryptolib.trustee import (
     TrusteeApi,
     generate_free_keypair_for_least_provisioned_key_algo,
-    get_free_keys_generator_worker,
+    get_free_keypair_generator_worker,
     ReadonlyTrusteeApi,
     generate_keypair_for_storage,
 )
@@ -71,11 +71,11 @@ def test_trustee_api_workflow():
     public_key_dsa_pem = trustee_api.fetch_public_key(keychain_uid=keychain_uid, key_algo="DSA_DSS")
     public_key_dsa = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_dsa_pem, key_algo="DSA_DSS")
 
-    verify_message_signature(message=secret, signature=signature, key=public_key_dsa, payload_signature_algo="DSA_DSS")
+    verify_message_signature(message=secret, signature=signature, key=public_key_dsa, signature_algo="DSA_DSS")
     signature["signature_value"] += b"xyz"
     with pytest.raises(SignatureVerificationError, match="Failed.*verification"):
         verify_message_signature(
-            message=secret, signature=signature, key=public_key_dsa, payload_signature_algo="DSA_DSS"
+            message=secret, signature=signature, key=public_key_dsa, signature_algo="DSA_DSS"
         )
 
     # Keypair is well auto-created by get_message_signature(), even when no more free keys
@@ -333,7 +333,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     assert generated_keys_count == 38
 
 
-def test_get_free_keys_generator_worker():
+def test_get_free_keypair_generator_worker():
 
     generate_keys_count = 0
 
@@ -345,7 +345,7 @@ def test_get_free_keys_generator_worker():
         time.sleep(0.01)
         return dict(private_key=b"someprivatekey2", public_key=b"somepublickey2")
 
-    worker = get_free_keys_generator_worker(
+    worker = get_free_keypair_generator_worker(
         keystore=keystore, max_free_keys_per_algo=30, sleep_on_overflow_s=0.5, keygen_func=keygen_func
     )
 

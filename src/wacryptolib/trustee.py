@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 MAX_PAYLOAD_LENGTH_FOR_SIGNATURE = 128  # Max 2*SHA512 length
 
 
-def generate_keypair_for_storage(  # FIXME rename and add to docs
+def generate_keypair_for_storage(  # FIXME rename and add to docs but first MOVE TO KEYSTORE MODULE
     key_algo: str, *, keystore, keychain_uid: Optional[UUID] = None, passphrase: Optional[AnyStr] = None
 ) -> dict:
     """
@@ -96,7 +96,7 @@ class TrusteeApi:
 
         private_key = load_asymmetric_key_from_pem_bytestring(key_pem=private_key_pem, key_algo=signature_algo)
 
-        signature_dict = sign_message(message=message, payload_signature_algo=signature_algo, key=private_key)
+        signature_dict = sign_message(message=message, signature_algo=signature_algo, key=private_key)
         return signature_dict
 
     def _check_keypair_authorization(self, *, keychain_uid: uuid.UUID, key_algo: str):
@@ -232,7 +232,7 @@ class ReadonlyTrusteeApi(TrusteeApi):
             raise KeyDoesNotExist("Keypair %s/%s not found in trustee api" % (keychain_uid, key_algo))
 
 
-def generate_free_keypair_for_least_provisioned_key_algo(
+def generate_free_keypair_for_least_provisioned_key_algo(  # FIXME MOVE TO KEYSTORE MODULE
     keystore: KeystoreBase,
     max_free_keys_per_algo: int,
     keygen_func=generate_keypair,
@@ -263,7 +263,7 @@ def generate_free_keypair_for_least_provisioned_key_algo(
     return True
 
 
-def get_free_keys_generator_worker(
+def get_free_keypair_generator_worker(   # FIXME MOVE TO KEYSTORE MODULE
     keystore: KeystoreBase, max_free_keys_per_algo: int, sleep_on_overflow_s: float, **extra_generation_kwargs
 ) -> PeriodicTaskHandler:
     """

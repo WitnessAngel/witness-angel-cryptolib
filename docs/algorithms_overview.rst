@@ -1,6 +1,6 @@
 
 
-Selected Algorithms
+Selected algorithms
 ===============================
 
 Here are the processes and algorithms that have been cherry-picked to build our secure cryptainers.
@@ -11,9 +11,7 @@ Invariants
 
 Unless specified otherwise, UTF8 is assumed as the encoding of all text data.
 
-When a serialization format doesn't natively support binary strings (e.g. Json), binary strings must be encoded with Base-64 by default.
-
-Preferably use keyword-only arguments in APIs, to ensure a better forward-compatibility of the client.
+When a serialization format doesn't natively support binary strings (e.g. Json), binary strings are encoded with Base-64 by default.
 
 
 Safety and performance rules

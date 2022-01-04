@@ -358,7 +358,9 @@ class Chacha20Poly1305EncryptionNode(EncryptionNodeBase):
 
 
 class EncryptionPipeline:
-    """"Pipeline to encrypt data through several encryption nodes, down to an outout stream (e.g. file or ByteIO)"""
+    """PRIVATE API FOR NOW
+
+    Pipeline to encrypt data through several encryption nodes, down to an outout stream (e.g. file or ByteIO)"""
 
     def __init__(self, output_stream: BinaryIO, payload_cipher_layer_extracts: list):
 

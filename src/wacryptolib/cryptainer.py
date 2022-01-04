@@ -230,28 +230,6 @@ class CryptainerEncryptor(CryptainerBase):
            cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
         )
 
-        # HERE INSTANTIATE REAL ENCRYPTOR USING payload_cipher_layer_extracts
-        '''
-        class FakeStreamEncryptor:
-            def __init__(self):
-                for payload_cipher_layer_extract in payload_cipher_layer_extracts:
-                    payload_cipher_algo = payload_cipher_layer_extract["cipher_algo"]  # FIXME RENAME THIS
-                    symkey = payload_cipher_layer_extract["symkey"]
-                    payload_digest_algos = payload_cipher_layer_extract["payload_digest_algos"]
-                    # DO SOMETHING WITH THESE
-            def encrypt_chunk(self, chunk):
-                output_stream.write(chunk)
-                return None
-            def finalize(self):
-                output_stream.flush()
-                return None
-            def get_payload_integrity_tags(self):
-                return [{"SHA256": b"a"*32}]  # Matches SIMPLE_CRYPTOCONF of unit test
-
-        encryption_pipeline = FakeStreamEncryptor()
-        '''
-        ############################################################################
-
         encryption_pipeline = EncryptionPipeline(
             output_stream=output_stream,
             payload_cipher_layer_extracts=payload_cipher_layer_extracts,
@@ -901,7 +879,7 @@ class CryptainerEncryptionStream:
             self._output_data_stream.close()
 
 
-def is_cryptainer_cryptoconf_streamable(cryptoconf):  # FIXME rename and add to docs and separate tests
+def is_cryptainer_cryptoconf_streamable(cryptoconf):  # FIXME rename and add to docs and add separate tests
     for payload_cipher_layer in cryptoconf["payload_cipher_layers"]:
         if payload_cipher_layer["payload_cipher_algo"] not in STREAMABLE_CIPHER_ALGOS:
             return False

@@ -244,9 +244,9 @@ class FilesystemKeystore(KeystoreBase):
     def _get_filename(self, keychain_uid, key_algo, is_public: bool):
         return "%s_%s%s" % (keychain_uid, key_algo, self._public_key_suffix if is_public else self._private_key_suffix)
 
-    def _write_to_storage_file(self, basename: str, payload: bytes):  # FIXME RENAME
+    def _write_to_storage_file(self, basename: str, data: bytes):  # FIXME RENAME
         assert os.sep not in basename, basename
-        self._keys_dir.joinpath(basename).write_bytes(payload)
+        self._keys_dir.joinpath(basename).write_bytes(data)
 
     def _read_from_storage_file(self, basename: str):
         assert os.sep not in basename, basename
@@ -267,8 +267,8 @@ class FilesystemKeystore(KeystoreBase):
 
         # We override (unexpected) already existing files
 
-        self._write_to_storage_file(basename=target_public_key_filename, payload=public_key)
-        self._write_to_storage_file(basename=target_private_key_filename, payload=private_key)
+        self._write_to_storage_file(basename=target_public_key_filename, data=public_key)
+        self._write_to_storage_file(basename=target_private_key_filename, data=private_key)
 
     @synchronized
     def get_public_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:

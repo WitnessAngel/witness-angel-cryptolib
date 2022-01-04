@@ -164,7 +164,7 @@ def recombine_chunks(chunks: Sequence[bytes], *, chunk_size: int, must_unpad: bo
     return bytestring
 
 
-def dump_to_json_str(payload, **extra_options):
+def dump_to_json_str(data, **extra_options):
     """
     Dump a data tree to a json representation as string.
     Supports advanced types like bytes, uuids, dates...
@@ -173,11 +173,11 @@ def dump_to_json_str(payload, **extra_options):
 
     sort_keys = extra_options.pop("sort_keys", True)
 
-    json_str = dumps(payload, sort_keys=sort_keys, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
+    json_str = dumps(data, sort_keys=sort_keys, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
     return json_str
 
 
-def load_from_json_str(payload, **extra_options):
+def load_from_json_str(data, **extra_options):
     """
     Load a data tree from a json representation as string.
     Supports advanced types like bytes, uuids, dates...
@@ -186,35 +186,35 @@ def load_from_json_str(payload, **extra_options):
     """
     from bson.json_util import loads, CANONICAL_JSON_OPTIONS
 
-    assert isinstance(payload, str), payload
+    assert isinstance(data, str), data
     try:
-        return loads(payload, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
+        return loads(data, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
     except JSONDecodeError as exc:
-        raise ValidationError("Invalid JSON payload: %r" % exc)
+        raise ValidationError("Invalid JSON string: %r" % exc)
 
 
-def dump_to_json_bytes(payload, **extra_options):
+def dump_to_json_bytes(data, **extra_options):
     """
     Same as `dump_to_json_str`, but returns UTF8-encoded bytes.
     """
-    json_str = dump_to_json_str(payload, **extra_options)
+    json_str = dump_to_json_str(data, **extra_options)
     return json_str.encode(UTF8_ENCODING)
 
 
-def load_from_json_bytes(payload, **extra_options):
+def load_from_json_bytes(data, **extra_options):
     """
     Same as `load_from_json_str`, but takes UTF8-encoded bytes as input.
     """
 
-    json_str = payload.decode(UTF8_ENCODING)
-    return load_from_json_str(payload=json_str, **extra_options)
+    json_str = data.decode(UTF8_ENCODING)
+    return load_from_json_str(data=json_str, **extra_options)
 
 
-def dump_to_json_file(filepath, payload, **extra_options):
+def dump_to_json_file(filepath, data, **extra_options):
     """
     Same as `dump_to_json_bytes`, but writes data to filesystem (and returns bytes too).
     """
-    json_bytes = dump_to_json_bytes(payload, **extra_options)
+    json_bytes = dump_to_json_bytes(data, **extra_options)
     with open(filepath, "wb") as f:
         f.write(json_bytes)
     return json_bytes

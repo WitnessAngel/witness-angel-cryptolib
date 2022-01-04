@@ -34,8 +34,9 @@ Data naming and integrity
 We use **payload** to designate the actual content of recorded data (audio, video, gps...), at various stages of its encryption process. We use **cleartext** and **ciphertext** to differentiate data before and after its encryption, although, since we're in a multi-layered encryption scheme, the ciphertext of an encryption layer becomes the cleartext for the next one.
 
 The word **digest** is used, instead of "hash", to name the short bytestring obtained by hashing a payload. This digest can then be used as the "message" on which a timestamped signature is applied by a trustee, offering of proof of payload integrity and anteriority.
-
 The term **mac** (message authentication code) is used, instead of "tag", to designate a short bytestring which might be obtained at the end of a symmetric encryption operation. This bytestring offers of proof of the payload integrity, and also authenticity (i.e. it was well encrypted with the provided secret key).
+Those digests and macs can be considered all together as **integrity tags**.
+
 
 When a bytestring (typically a serialized symkey) is split in a "Shamir shared secret" scheme, we refer to the parts of the secret as **shards** (and not "shares").
 

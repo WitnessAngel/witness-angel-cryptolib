@@ -199,7 +199,7 @@ def test_stream_manager(cipher_algo_list):
             assert new_hash == expected_hash
 
         cipherdict = {"ciphertext": current_ciphertext}
-        cipherdict.update(authentication_data["payload_authentication_codes"])
+        cipherdict.update(authentication_data["payload_macs"])
 
         decrypted_ciphertext = wacryptolib.cipher.decrypt_bytestring(cipherdict=cipherdict,
                                                                      cipher_algo=payload_encryption_node[

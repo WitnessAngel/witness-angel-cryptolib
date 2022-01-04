@@ -330,7 +330,7 @@ class CryptainerEncryptor(CryptainerBase):
             }
 
             payload_integrity_tags.append(dict(
-                    payload_authentication_codes=payload_cipherdict,  # Only remains tags, macs etc.
+                    payload_macs=payload_cipherdict,  # Only remains tags, macs etc.
                     payload_digests=payload_digests,
             ))
 
@@ -366,7 +366,7 @@ class CryptainerEncryptor(CryptainerBase):
         for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
             payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
 
-            payload_cipher_layer["payload_authentication_codes"] = None  # Will be filled later with MAC tags etc.
+            payload_cipher_layer["payload_macs"] = None  # Will be filled later with MAC tags etc.
 
             logger.debug("Generating symmetric key of type %r", payload_cipher_algo)
             symkey = generate_symkey(cipher_algo=payload_cipher_algo)
@@ -540,8 +540,8 @@ class CryptainerEncryptor(CryptainerBase):
 
         for payload_cipher_layer, payload_integrity_tags in zip(cryptainer["payload_cipher_layers"], payload_integrity_tags):
 
-            assert payload_cipher_layer["payload_authentication_codes"] is None  # Set at cryptainer build time
-            payload_cipher_layer["payload_authentication_codes"] = payload_integrity_tags["payload_authentication_codes"]
+            assert payload_cipher_layer["payload_macs"] is None  # Set at cryptainer build time
+            payload_cipher_layer["payload_macs"] = payload_integrity_tags["payload_macs"]
 
             payload_digests = payload_integrity_tags["payload_digests"]
 
@@ -643,8 +643,8 @@ class CryptainerDecryptor(CryptainerBase):
             assert isinstance(key_bytes, bytes), key_bytes
             symkey = load_from_json_bytes(key_bytes)
 
-            payload_authentication_codes = payload_cipher_layer["payload_authentication_codes"]  # Shall be a DICT, FIXME handle if it's still None
-            payload_cipherdict = dict(ciphertext=payload_current, **payload_authentication_codes)
+            payload_macs = payload_cipher_layer["payload_macs"]  # Shall be a DICT, FIXME handle if it's still None
+            payload_cipherdict = dict(ciphertext=payload_current, **payload_macs)
             payload_current = decrypt_bytestring(
                 cipherdict=payload_cipherdict, key_dict=symkey, cipher_algo=payload_cipher_algo, verify=verify
             )
@@ -1429,7 +1429,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
 
     extra_cryptainer = {}
     extra_key_ciphertext = {}
-    extra_payload_authentication_codes = {}
+    extra_payload_macs = {}
 
     payload_signature = {
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
@@ -1460,8 +1460,8 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
         }
         payload_signature.update(extra_signature)
         payload_signature["payload_digest"] = micro_schema_binary  # FIXME must be optional!!
-        extra_payload_authentication_codes = {
-            "payload_authentication_codes": {
+        extra_payload_macs = {
+            "payload_macs": {
                 Optionalkey("tag"): micro_schema_binary  # For now only "tag" is used
             }}
 
@@ -1487,7 +1487,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
         "payload_cipher_layers": [{
             "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
             "payload_signatures": [payload_signature],
-            **extra_payload_authentication_codes,
+            **extra_payload_macs,
             **extra_key_ciphertext,
             "key_cipher_layers": [SIMPLE_CRYPTAINER_PIECE, SHARED_SECRET_CRYPTAINER_PIECE]
         }],

@@ -43,13 +43,12 @@ class WildcardUuid(object):
 def get_fake_authdevice(device_path):
     """Return a dict representing a fak authentication device."""
     authdevice = {
-        "drive_type": "USBSTOR",
-        "path": device_path,
-        "label": "TOSHIBA",
-        "size": 31000166400,
-        "format": "fat32",
+        "device_type": "USBSTOR",
+        "partition_mountpoint": device_path,
+        "partition_label": "TOSHIBA",
+        "filesystem_size": 31000166400,
+        "filesystem_format": "fat32",
         "authenticator_path": device_path / ".myauthenticator",
-        "metadata": None,
     }
     return authdevice
 

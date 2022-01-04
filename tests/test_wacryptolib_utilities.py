@@ -115,7 +115,7 @@ def test_serialization_utilities(tmp_path):
     assert deserialized == payload
 
     tmp_filepath = os.path.join(tmp_path, "dummy_temp_file.dat")
-    serialized_str = dump_to_json_file(tmp_filepath, payload=payload, ensure_ascii=True)  # Json arguments well propagated
+    serialized_str = dump_to_json_file(tmp_filepath, data=payload, ensure_ascii=True)  # Json arguments well propagated
     assert (
         serialized_str
         == b'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "03"}}}'

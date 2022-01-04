@@ -71,13 +71,42 @@ def load_keystore_metadata(keystore_dir: Path) -> dict:
     return metadata
 
 
-class KeystoreBase(ABC):
+class KeystoreReadBase(ABC):
     """
-    Subclasses of this storage interface can be implemented to store/retrieve keys from
+    Subclasses of this storage interface can be implemented to retrieve keys from
     miscellaneous locations (disk, database...), without permission checks.
 
-    By construction for now, a keypair exists entirely or not at all - public and private keys
-    can't exist independently.
+    """
+
+    @abstractmethod
+    def get_public_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:  # pragma: no cover
+        """
+        Fetch a public key from persistent storage.
+
+        :param keychain_uid: unique ID of the keychain
+        :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
+
+        :return: public key in clear PEM format, or raise KeyDoesNotExist
+        """
+        raise NotImplementedError("KeystoreReadBase.get_public_key()")
+
+    @abstractmethod
+    def get_private_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:  # pragma: no cover
+        """
+        Fetch a private key from persistent storage.
+
+        :param keychain_uid: unique ID of the keychain
+        :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
+
+        :return: private key in PEM format (potentially encrypted), or raise KeyDoesNotExist
+        """
+        raise NotImplementedError("KeystoreReadBase.get_private_key()")
+
+
+class KeystoreWriteBase(ABC):
+    """
+    Subclasses of this storage interface can be implemented to store keys into
+    miscellaneous locations (disk, database...), without permission checks.
     """
 
     @abstractmethod
@@ -94,31 +123,7 @@ class KeystoreBase(ABC):
         :param public_key: public key in clear PEM format
         :param private_key: private key in PEM format (potentially encrypted)
         """
-        raise NotImplementedError("KeystoreBase.set_keys()")
-
-    @abstractmethod
-    def get_public_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:  # pragma: no cover
-        """
-        Fetch a public key from persistent storage.
-
-        :param keychain_uid: unique ID of the keychain
-        :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
-
-        :return: public key in clear PEM format, or raise KeyDoesNotExist
-        """
-        raise NotImplementedError("KeystoreBase.get_public_key()")
-
-    @abstractmethod
-    def get_private_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:  # pragma: no cover
-        """
-        Fetch a private key from persistent storage.
-
-        :param keychain_uid: unique ID of the keychain
-        :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
-
-        :return: private key in PEM format (potentially encrypted), or raise KeyDoesNotExist
-        """
-        raise NotImplementedError("KeystoreBase.get_private_key()")
+        raise NotImplementedError("KeystoreWriteBase.set_keys()")
 
     @abstractmethod
     def get_free_keypairs_count(self, key_algo: str) -> int:  # pragma: no cover
@@ -128,7 +133,7 @@ class KeystoreBase(ABC):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :return: count of free keypairs of said type
         """
-        raise NotImplementedError("KeystoreBase.get_free_keypairs_count()")
+        raise NotImplementedError("KeystoreWriteBase.get_free_keypairs_count()")
 
     @abstractmethod
     def add_free_keypair(self, *, key_algo: str, public_key: bytes, private_key: bytes):  # pragma: no cover
@@ -139,7 +144,7 @@ class KeystoreBase(ABC):
         :param public_key: public key in clear PEM format
         :param private_key: private key in PEM format (potentially encrypted)
         """
-        raise NotImplementedError("KeystoreBase.add_free_keypair()")
+        raise NotImplementedError("KeystoreWriteBase.add_free_keypair()")
 
     @abstractmethod
     def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_algo: str):  # pragma: no cover
@@ -152,10 +157,14 @@ class KeystoreBase(ABC):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :return: public key of the keypair, in clear PEM format
         """
-        raise NotImplementedError("KeystoreBase.attach_free_keypair_to_uuid()")
+        raise NotImplementedError("KeystoreWriteBase.attach_free_keypair_to_uuid()")
 
 
-class DummyKeystore(KeystoreBase):
+class KeystoreBase(KeystoreWriteBase, KeystoreReadBase):
+    pass  # Derive from this class to have full-featured keystores
+
+
+class DummyKeystore(KeystoreWriteBase, KeystoreReadBase):
     """
     Dummy key storage for use in tests, where keys are kepts only process-locally.
 
@@ -224,43 +233,114 @@ class DummyKeystore(KeystoreBase):
 # FIXME add ReadonlyFilesystemKeystore and use it for IMPORTED keystores!!
 
 
-class FilesystemKeystore(KeystoreBase):
+class ReadonlyFilesystemKeystore(KeystoreReadBase):
     """
-    Filesystem-based key storage for use in tests, where keys are kepts only instance-locally.
-
-    Protected by a process-wide lock, but not safe to use in multiprocessing environment, or in a process which can be brutally shutdown.
-    To prevent corruption, one should only persistent UUIDs when the key storage operation is successfully finished.
-
-    Beware, public and private keys (free or not) are stored side by side, if one of these is deleted, the resulting behaviour is undefined (but buggy).
+    Read-only filesystem-based key storage.
     """
-
     _lock = threading.Lock()
-
     _private_key_suffix = "_private_key.pem"
     _public_key_suffix = "_public_key.pem"
-    _randint_args = (10 ** 10, 10 ** 11 - 1)
-
     PUBLIC_KEY_FILENAME_REGEX = r"^(?P<keychain_uid>[-0-9a-z]+)_(?P<key_algo>[_A-Z]+)%s$" % _public_key_suffix
 
-    def _ensure_free_keys_dir_exists(self):
-        self._free_keys_dir.mkdir(exist_ok=True)
-
     def __init__(self, keys_dir: Path):
-        keys_dir = Path(keys_dir)
+        keys_dir = Path(keys_dir).absolute()
         assert keys_dir.is_dir(), keys_dir
-        self._keys_dir = keys_dir.absolute()
-        self._free_keys_dir = self._keys_dir.joinpath("free_keys")  # Might not exist yet
+        self._keys_dir = keys_dir
 
     def _get_filename(self, keychain_uid, key_algo, is_public: bool):
         return "%s_%s%s" % (keychain_uid, key_algo, self._public_key_suffix if is_public else self._private_key_suffix)
 
-    def _write_to_storage_file(self, basename: str, data: bytes):
-        assert os.sep not in basename, basename
-        self._keys_dir.joinpath(basename).write_bytes(data)
-
     def _read_from_storage_file(self, basename: str):
         assert os.sep not in basename, basename
         return self._keys_dir.joinpath(basename).read_bytes()
+
+    @synchronized
+    def get_public_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
+        filename_public_key = self._get_filename(keychain_uid, key_algo=key_algo, is_public=True)
+        try:
+            return self._read_from_storage_file(basename=filename_public_key)
+        except FileNotFoundError:
+            raise KeyDoesNotExist("Public filesystem key %s/%s not found" % (keychain_uid, key_algo))
+
+    @synchronized
+    def get_private_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
+        filename_private_key = self._get_filename(keychain_uid, key_algo=key_algo, is_public=False)
+        try:
+            return self._read_from_storage_file(basename=filename_private_key)
+        except FileNotFoundError:
+            raise KeyDoesNotExist("Private filesystem key %s/%s not found" % (keychain_uid, key_algo))
+
+    def list_keypair_identifiers(self) -> list:
+        """
+        List metadata of public keys present in the storage, along with their potential private key existence.
+
+        Returns a SORTED list of key information dicts with standard fields "keychain_uid" and "key_algo", as well as
+        a boolean "private_key_present" which is True if the related private key exists in storage.
+        Sorting is done by keychain_uid and then key_algo.
+        """
+
+        key_information_list = []
+
+        public_key_pem_paths = glob.glob(join(self._keys_dir, "*" + self._public_key_suffix))
+
+        for public_key_pem_path in public_key_pem_paths:
+
+            public_key_pem_filename = os.path.basename(public_key_pem_path)
+
+            match = re.match(self.PUBLIC_KEY_FILENAME_REGEX, public_key_pem_filename)
+
+            if not match:
+                logger.warning(
+                    "Skipping abnormally named PEM file %r when listing public keys", public_key_pem_filename
+                )
+                continue
+
+            # print("MATCH FOUND", public_key_pem_filename, match.groups(), self.PUBLIC_KEY_FILENAME_REGEX)
+
+            keychain_uid_str = match.group("keychain_uid")
+            key_algo = match.group("key_algo")
+
+            try:
+                keychain_uid = uuid.UUID(keychain_uid_str)
+            except ValueError:
+                logger.warning(
+                    "Skipping PEM file with abnormal UUID %r when listing public keys", public_key_pem_filename
+                )
+                continue
+
+            private_key_pem_filename = public_key_pem_filename.replace(
+                self._public_key_suffix, self._private_key_suffix
+            )
+            private_key_present = os.path.exists(join(self._keys_dir, private_key_pem_filename))
+
+            key_information = dict(
+                keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=private_key_present
+            )
+            key_information_list.append(key_information)
+
+        key_information_list.sort(key=lambda x: (x["keychain_uid"], x["key_algo"]))
+        return key_information_list
+
+
+class FilesystemKeystore(KeystoreWriteBase, ReadonlyFilesystemKeystore):
+    """
+    Filesystem-based key storage.
+
+    Protected by a process-wide lock, but not safe to use in multiprocessing environment, or in a process which can be brutally shutdown.
+    To prevent corruption, caller should only persist UUIDs when the key storage operation is successfully finished.
+    """
+    _randint_args = (10 ** 10, 10 ** 11 - 1)
+
+    def __init__(self, keys_dir: Path):
+        super().__init__(keys_dir=keys_dir)
+        self._free_keys_dir = self._keys_dir.joinpath("free_keys")  # Might not exist yet
+
+    def _ensure_free_keys_dir_exists(self):
+        self._free_keys_dir.mkdir(exist_ok=True)
+
+    def _write_to_storage_file(self, basename: str, data: bytes):
+        assert os.sep not in basename, basename
+        self._keys_dir.joinpath(basename).write_bytes(data)
 
     def _check_keypair_does_not_exist(self, keychain_uid, key_algo):
         # We use PRIVATE key as marker of existence
@@ -279,22 +359,6 @@ class FilesystemKeystore(KeystoreBase):
 
         self._write_to_storage_file(basename=target_public_key_filename, data=public_key)
         self._write_to_storage_file(basename=target_private_key_filename, data=private_key)
-
-    @synchronized
-    def get_public_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
-        filename_public_key = self._get_filename(keychain_uid, key_algo=key_algo, is_public=True)
-        try:
-            return self._read_from_storage_file(basename=filename_public_key)
-        except FileNotFoundError:
-            raise KeyDoesNotExist("Public filesystem key %s/%s not found" % (keychain_uid, key_algo))
-
-    @synchronized
-    def get_private_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
-        filename_private_key = self._get_filename(keychain_uid, key_algo=key_algo, is_public=False)
-        try:
-            return self._read_from_storage_file(basename=filename_private_key)
-        except FileNotFoundError:
-            raise KeyDoesNotExist("Private filesystem key %s/%s not found" % (keychain_uid, key_algo))
 
     # No need for lock here
     def get_free_keypairs_count(self, key_algo: str):
@@ -348,57 +412,6 @@ class FilesystemKeystore(KeystoreBase):
         # First move the private key, so that it's not shown anymore as "free"
         free_private_key.replace(target_private_key_filename)
         free_public_key.replace(target_public_key_filename)
-
-    def list_keypair_identifiers(self) -> list:
-        """
-        List metadata of public keys present in the storage, along with their potential private key existence.
-        
-        Returns a SORTED list of key information dicts with standard fields "keychain_uid" and "key_algo", as well as
-        a boolean "private_key_present" which is True if the related private key exists in storage.
-        Sorting is done by keychain_uid and then key_algo.
-        """
-
-        key_information_list = []
-
-        public_key_pem_paths = glob.glob(join(self._keys_dir, "*" + self._public_key_suffix))
-
-        for public_key_pem_path in public_key_pem_paths:
-
-            public_key_pem_filename = os.path.basename(public_key_pem_path)
-
-            match = re.match(self.PUBLIC_KEY_FILENAME_REGEX, public_key_pem_filename)
-
-            if not match:
-                logger.warning(
-                    "Skipping abnormally named PEM file %r when listing public keys", public_key_pem_filename
-                )
-                continue
-
-            # print("MATCH FOUND", public_key_pem_filename, match.groups(), self.PUBLIC_KEY_FILENAME_REGEX)
-
-            keychain_uid_str = match.group("keychain_uid")
-            key_algo = match.group("key_algo")
-
-            try:
-                keychain_uid = uuid.UUID(keychain_uid_str)
-            except ValueError:
-                logger.warning(
-                    "Skipping PEM file with abnormal UUID %r when listing public keys", public_key_pem_filename
-                )
-                continue
-
-            private_key_pem_filename = public_key_pem_filename.replace(
-                self._public_key_suffix, self._private_key_suffix
-            )
-            private_key_present = os.path.exists(join(self._keys_dir, private_key_pem_filename))
-
-            key_information = dict(
-                keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=private_key_present
-            )
-            key_information_list.append(key_information)
-
-        key_information_list.sort(key=lambda x: (x["keychain_uid"], x["key_algo"]))
-        return key_information_list
 
 
 class KeystorePoolBase:
@@ -539,7 +552,7 @@ def generate_keypair_for_storage(  # FIXME document this, or integrate to class?
 
 
 def generate_free_keypair_for_least_provisioned_key_algo(
-    keystore: KeystoreBase,
+    keystore: KeystoreWriteBase,
     max_free_keys_per_algo: int,
     keygen_func=generate_keypair,
     key_algos=SUPPORTED_ASYMMETRIC_KEY_ALGOS,
@@ -570,7 +583,7 @@ def generate_free_keypair_for_least_provisioned_key_algo(
 
 
 def get_free_keypair_generator_worker(
-    keystore: KeystoreBase, max_free_keys_per_algo: int, sleep_on_overflow_s: float, **extra_generation_kwargs
+    keystore: KeystoreWriteBase, max_free_keys_per_algo: int, sleep_on_overflow_s: float, **extra_generation_kwargs
 ) -> PeriodicTaskHandler:
     """
     Return a periodic task handler which will gradually fill the pools of free keys of the key storage,

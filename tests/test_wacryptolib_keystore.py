@@ -13,7 +13,7 @@ from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import FilesystemKeystore, DummyKeystore, KeystoreBase, FilesystemKeystorePool, \
     generate_free_keypair_for_least_provisioned_key_algo, get_free_keypair_generator_worker, \
-    generate_keypair_for_storage
+    generate_keypair_for_storage, ReadonlyFilesystemKeystore
 from wacryptolib.scaffolding import (
     check_keystore_free_keys_concurrency,
     check_keystore_basic_get_set_api,
@@ -57,6 +57,25 @@ def test_keystore_free_keys_api(tmp_path):
         check_keystore_free_keys_api(keystore)
 
     assert filesystem_keystore._free_keys_dir.exists()
+
+
+def test_readonly_keystore_limitations(tmp_path):
+    """For now we just test that the base ReadonlyFilesystemKeystore class doesn't have dangerous fields."""
+
+    normal_keystore = FilesystemKeystore(keys_dir=tmp_path)
+    readonly_keystore = ReadonlyFilesystemKeystore(keys_dir=tmp_path)
+
+    forbidden_fields = [
+        "set_keys",
+        "get_free_keypairs_count",
+        "add_free_keypair",
+        "attach_free_keypair_to_uuid",
+        "_write_to_storage_file",
+    ]
+
+    for forbidden_field in forbidden_fields:
+        assert hasattr(normal_keystore, forbidden_field)
+        assert not hasattr(readonly_keystore, forbidden_field)
 
 
 def test_keystore_free_keys_concurrency(tmp_path):

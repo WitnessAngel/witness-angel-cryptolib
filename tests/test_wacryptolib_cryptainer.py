@@ -1266,7 +1266,7 @@ def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
         storage.decrypt_cryptainer_from_storage(cryptainer_name, verify=True)
 
 
-def test_readonly_cryptainer_storage(tmp_path):
+def test_readonly_cryptainer_storage_limitations(tmp_path):
     """For now we just test that the base ReadonlyCryptainerStorage class doesn't have dangerous fields."""
 
     normal_storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainer_dir=tmp_path)

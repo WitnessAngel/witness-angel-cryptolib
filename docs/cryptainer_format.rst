@@ -117,7 +117,7 @@ Binary subType 03 means "UUID", whereas subType 00 means raw binary.
                 "payload_macs": {},
                 "payload_signatures": [
                     {
-                        "payload_digest": {
+                        "payload_digest_value": {
                             "$binary": {
                                 "base64": "XgNeHINsXw16Tl...WtknjGh93nMB4v09Y=",
                                 "subType": "00"

@@ -555,7 +555,7 @@ class CryptainerEncryptor(CryptainerBase):
             for signature_conf in payload_cipher_layer["payload_signatures"]:
                 payload_digest_algo = signature_conf["payload_digest_algo"]
 
-                signature_conf["payload_digest"] = payload_digests[payload_digest_algo]  # MUST exist, else incoherence
+                signature_conf["payload_digest_value"] = payload_digests[payload_digest_algo]  # MUST exist, else incoherence
 
                 payload_signature_struct = self._generate_message_signature(
                     keychain_uid=keychain_uid, cryptoconf=signature_conf
@@ -576,7 +576,7 @@ class CryptainerEncryptor(CryptainerBase):
         :return: dictionary with information needed to verify signature
         """
         payload_signature_algo = cryptoconf["payload_signature_algo"]
-        payload_digest = cryptoconf["payload_digest"]  # Must have been set before, using payload_digest_algo field
+        payload_digest = cryptoconf["payload_digest_value"]  # Must have been set before, using payload_digest_algo field
         assert payload_digest, payload_digest
 
         trustee_proxy = get_trustee_proxy(
@@ -857,7 +857,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         payload_digest = hash_message(payload, hash_algo=payload_digest_algo)
 
-        expected_payload_digest = cryptoconf.get("payload_digest")  # Might be missing
+        expected_payload_digest = cryptoconf.get("payload_digest_value")  # Might be missing
         if expected_payload_digest and expected_payload_digest != payload_digest:
             raise RuntimeError(
                 "Mismatch between actual and expected payload digests during signature verification"
@@ -1546,7 +1546,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
         }
 
         extra_payload_signature = {
-            OptionalKey("payload_digest"): micro_schema_binary,
+            OptionalKey("payload_digest_value"): micro_schema_binary,
             OptionalKey("payload_signature_struct"): {
                 "signature_value": micro_schema_binary,
                 "signature_timestamp_utc": Or(micro_schema_int, micro_schema_long, int),

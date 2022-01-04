@@ -916,7 +916,10 @@ class CryptainerEncryptionStream:
             filepath, cryptainer=self._wip_cryptainer, offload_payload_ciphertext=False
         )  # ALREADY offloaded
         if not is_temporary:  # Cleanup temporary cryptainer
-            self._cryptainer_filepath_temp.unlink(missing_ok=True)
+            try:
+                self._cryptainer_filepath_temp.unlink()  # TODO use missing_ok=True later
+            except FileNotFoundError:
+                pass
 
     def encrypt_chunk(self, chunk: bytes):
         self._encryption_pipeline.encrypt_chunk(chunk)

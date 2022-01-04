@@ -8,7 +8,6 @@ import pytest
 
 from _test_mockups import get_fake_authdevice, random_bool
 from wacryptolib.authenticator import initialize_authenticator
-from wacryptolib.trustee import generate_keypair_for_storage
 from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import FilesystemKeystore, DummyKeystore, KeystoreBase, FilesystemKeystorePool
@@ -17,7 +16,7 @@ from wacryptolib.scaffolding import (
     check_keystore_basic_get_set_api,
     check_keystore_free_keys_api,
 )
-from wacryptolib.keygen import generate_keypair
+from wacryptolib.trustee import generate_keypair_for_storage
 from wacryptolib.utilities import generate_uuid0
 
 

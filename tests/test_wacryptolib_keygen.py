@@ -1,5 +1,6 @@
-import pytest
 import unicodedata
+
+import pytest
 from Crypto.PublicKey import RSA, ECC, DSA
 
 import wacryptolib

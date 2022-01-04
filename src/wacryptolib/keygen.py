@@ -1,10 +1,10 @@
 import logging
-from typing import Union, Optional, AnyStr
-
 import unicodedata
+from typing import Optional, AnyStr
+
+from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Random import get_random_bytes
-from Crypto.Cipher import AES
 
 from wacryptolib.exceptions import KeyLoadingError
 

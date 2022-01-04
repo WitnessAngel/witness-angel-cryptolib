@@ -1,11 +1,11 @@
-import builtins
 import logging
 
+import builtins
 from jsonrpc_requests import Server as ServerBase, ProtocolError
 
+from wacryptolib import exceptions as wacryptolib_exceptions
 from wacryptolib.error_handling import StatusSlugsMapper
 from wacryptolib.utilities import dump_to_json_str, load_from_json_str
-from wacryptolib import exceptions as wacryptolib_exceptions
 
 logger = logging.getLogger(__name__)
 

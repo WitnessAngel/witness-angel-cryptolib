@@ -1,18 +1,16 @@
+import glob
+import logging
+import threading
+import uuid
+from os.path import join
+from pathlib import Path
 from uuid import UUID
 
-from collections.abc import Sequence
-
-import logging
 import os
 import random
 import re
-import threading
-import uuid
 from abc import ABC, abstractmethod
-from pathlib import Path
-from os.path import join
-import glob
-
+from collections.abc import Sequence
 from schema import Or, And, Optional, SchemaError, Schema
 
 from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist, KeystoreDoesNotExist, KeystoreAlreadyExists, \

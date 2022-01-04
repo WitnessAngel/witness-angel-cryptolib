@@ -4,8 +4,8 @@ This script requires memory-profiler and matplotlib to be installed!
 
 import io
 import tempfile
-from datetime import datetime, timezone
 import time
+from datetime import datetime, timezone
 
 from wacryptolib.cryptainer import CryptainerStorage, LOCAL_FACTORY_TRUSTEE_MARKER
 from wacryptolib.sensor import TarfileRecordsAggregator

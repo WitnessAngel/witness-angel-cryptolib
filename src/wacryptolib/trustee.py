@@ -1,8 +1,9 @@
 import logging
-import time
 import uuid
 from typing import Optional, AnyStr, Sequence
 from uuid import UUID
+
+import time
 
 from wacryptolib.cipher import _decrypt_via_rsa_oaep
 from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, DecryptionError, KeyLoadingError

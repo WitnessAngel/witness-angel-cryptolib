@@ -1,8 +1,8 @@
 import logging
-from sys import platform as sys_platform
 from pathlib import Path
 from pathlib import PurePath
 
+from sys import platform as sys_platform
 
 logger = logging.getLogger(__name__)
 

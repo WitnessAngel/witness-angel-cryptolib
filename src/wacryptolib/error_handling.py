@@ -1,6 +1,5 @@
-from typing import Sequence
-
 import logging
+from typing import Sequence
 
 logger = logging.getLogger(__name__)
 

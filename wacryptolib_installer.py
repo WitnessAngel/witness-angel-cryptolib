@@ -7,7 +7,8 @@ Launch it from repsitory root folder, using a system-wide python executable (req
 Note that this installs the "poetry" package manager locally in the python environment, not system-wide.
 """
 
-import subprocess, sys
+import subprocess
+import sys
 
 commands = """
 PYTHON_EXE -m pip install -U pip==20.3.3

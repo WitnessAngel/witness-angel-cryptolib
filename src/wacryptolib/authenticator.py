@@ -4,7 +4,6 @@ from pathlib import Path
 from wacryptolib.keystore import _validate_keystore_metadata, _get_keystore_metadata_file_path
 from wacryptolib.utilities import dump_to_json_file, generate_uuid0
 
-
 logger = logging.getLogger(__name__)
 
 

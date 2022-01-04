@@ -13,7 +13,7 @@ import uuid0
 from Crypto.Util.Padding import pad, unpad
 from decorator import decorator
 
-from wacryptolib.exceptions import ValidationError
+from wacryptolib.exceptions import SchemaValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +189,7 @@ def load_from_json_str(data, **extra_options):
     try:
         return loads(data, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
     except JSONDecodeError as exc:
-        raise ValidationError("Invalid JSON string: %r" % exc)
+        raise SchemaValidationError("Invalid JSON string: %r" % exc)
 
 
 def dump_to_json_bytes(data, **extra_options):

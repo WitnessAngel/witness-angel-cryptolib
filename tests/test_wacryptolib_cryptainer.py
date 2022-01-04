@@ -43,7 +43,7 @@ from wacryptolib.cryptainer import (
     CRYPTAINER_TEMP_SUFFIX,
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
 )
-from wacryptolib.exceptions import DecryptionError, CryptoconfError, DecryptionIntegrityError, ValidationError
+from wacryptolib.exceptions import DecryptionError, DecryptionIntegrityError, ValidationError, SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_keypair
 from wacryptolib.keystore import DummyKeystore, FilesystemKeystore, FilesystemKeystorePool, InMemoryKeystorePool
@@ -405,7 +405,7 @@ def _intialize_cryptainer_with_single_file(tmp_path):  # FIXME generalize its us
 def test_void_cryptoconfs(cryptoconf):
     keystore_pool = InMemoryKeystorePool()
 
-    with pytest.raises(ConfigurationError, match="Empty .* list"):
+    with pytest.raises(SchemaValidationError, match="Empty .* list"):
         encrypt_payload_into_cryptainer(
             payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None, keystore_pool=keystore_pool
         )

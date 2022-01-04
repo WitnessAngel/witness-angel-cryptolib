@@ -18,7 +18,7 @@ from wacryptolib.exceptions import (
     KeyDoesNotExist,
     KeystoreDoesNotExist,
     KeystoreAlreadyExists,
-    ValidationError,
+    SchemaValidationError,
 )
 from wacryptolib.utilities import synchronized, safe_copy_directory, load_from_json_file
 
@@ -44,7 +44,7 @@ def _validate_keystore_metadata(keystore_metadata):
     try:
         KEYSTORE_SCHEMA.validate(keystore_metadata)
     except SchemaError as exc:
-        raise ValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
+        raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
 
 
 def _get_keystore_metadata_file_path(keystore_dir: Path):

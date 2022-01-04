@@ -67,10 +67,8 @@ class KeyLoadingError(CryptographyError):
 
 # ---
 
-
-class CryptoconfError(FunctionalError):
-    pass  # used e.g. if encryption layer list is empty, thus endangering confidentiality
-
-
 class ValidationError(FunctionalError):
-    pass  # used e.g. if encryption layer list is empty, thus endangering confidentiality
+    pass  # Base for all errors related to corrupted data and invalid config tree
+
+class SchemaValidationError(ValidationError):
+    pass  # When data doesn't respect json format, or an additional python-schema, or some additional security constraints

@@ -23,7 +23,7 @@ from wacryptolib.cipher import (
     STREAMABLE_CIPHER_ALGOS,
     SUPPORTED_CIPHER_ALGOS,
 )
-from wacryptolib.exceptions import DecryptionError, CryptoconfError, ValidationError
+from wacryptolib.exceptions import DecryptionError, SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, ASYMMETRIC_KEY_ALGOS_REGISTRY
 from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase
@@ -356,7 +356,7 @@ class CryptainerEncryptor(CryptainerBase):
         cryptainer = copy.deepcopy(cryptoconf)  # So that we can manipulate it as new cryptainer
         del cryptoconf
         if not cryptainer["payload_cipher_layers"]:
-            raise CryptoconfError("Empty payload_cipher_layers list is forbidden in cryptoconf")
+            raise SchemaValidationError("Empty payload_cipher_layers list is forbidden in cryptoconf")
 
         payload_cipher_layer_extracts = []  # Sensitive info with secret keys!
 
@@ -400,7 +400,7 @@ class CryptainerEncryptor(CryptainerBase):
         # HERE KEY IS REAL KEY OR SHARE !!!
 
         if not key_cipher_layers:
-            raise CryptoconfError("Empty key_cipher_layers list is forbidden in cryptoconf")
+            raise SchemaValidationError("Empty key_cipher_layers list is forbidden in cryptoconf")
 
         key_ciphertext = key_bytes
         for key_cipher_layer in key_cipher_layers:
@@ -1609,7 +1609,7 @@ def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
         try:
             valid_schema.validate(data_tree)
         except schema.SchemaError as exc:
-            raise ValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
+            raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
 
     else:
         # we use the json schema module
@@ -1617,7 +1617,7 @@ def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
         try:
             jsonschema_validate(instance=data_tree, schema=valid_schema)
         except jsonschema.exceptions.ValidationError as exc:
-            raise ValidationError("Error validating data tree with json-schema: {}".format(exc)) from exc
+            raise SchemaValidationError("Error validating data tree with json-schema: {}".format(exc)) from exc
 
 
 def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode: False):

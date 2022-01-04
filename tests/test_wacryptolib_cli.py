@@ -8,7 +8,7 @@ from click.testing import CliRunner
 import wacryptolib
 from wacryptolib.__main__ import cli
 from wacryptolib.cryptainer import LOCAL_FACTORY_TRUSTEE_MARKER
-from wacryptolib.utilities import dump_to_json_bytes, dump_to_json_file
+from wacryptolib.utilities import dump_to_json_file
 
 
 def test_cli_help_texts():

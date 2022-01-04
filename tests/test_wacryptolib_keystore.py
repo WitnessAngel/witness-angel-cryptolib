@@ -3,6 +3,7 @@ import random
 import shutil
 from pathlib import Path
 from uuid import UUID
+import time
 
 import pytest
 
@@ -10,13 +11,14 @@ from _test_mockups import get_fake_authdevice, random_bool
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
-from wacryptolib.keystore import FilesystemKeystore, DummyKeystore, KeystoreBase, FilesystemKeystorePool
+from wacryptolib.keystore import FilesystemKeystore, DummyKeystore, KeystoreBase, FilesystemKeystorePool, \
+    generate_free_keypair_for_least_provisioned_key_algo, get_free_keypair_generator_worker, \
+    generate_keypair_for_storage
 from wacryptolib.scaffolding import (
     check_keystore_free_keys_concurrency,
     check_keystore_basic_get_set_api,
     check_keystore_free_keys_api,
 )
-from wacryptolib.trustee import generate_keypair_for_storage
 from wacryptolib.utilities import generate_uuid0
 
 
@@ -235,3 +237,140 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     ]
     assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"555"
     assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"okj"
+
+
+def test_generate_free_keypair_for_least_provisioned_key_algo():
+
+    generated_keys_count = 0
+
+    def keygen_func(key_algo, serialize):
+        nonlocal generated_keys_count
+        generated_keys_count += 1
+        return dict(private_key=b"someprivatekey", public_key=b"somepublickey")
+
+    # Check the fallback on "all types of keys" for key_algos parameter
+
+    keystore = DummyKeystore()
+
+    for _ in range(4):
+        res = generate_free_keypair_for_least_provisioned_key_algo(
+            keystore=keystore,
+            max_free_keys_per_algo=10,
+            keygen_func=keygen_func,
+            # no key_algos parameter provided
+        )
+        assert res
+
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 1
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 1
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 1
+    assert keystore.get_free_keypairs_count("RSA_PSS") == 1
+    assert generated_keys_count == 4
+
+    # Now test with a restricted set of key types
+
+    keystore = DummyKeystore()
+    restricted_key_algos = ["DSA_DSS", "ECC_DSS", "RSA_OAEP"]
+    generated_keys_count = 0
+
+    for _ in range(7):
+        res = generate_free_keypair_for_least_provisioned_key_algo(
+            keystore=keystore, max_free_keys_per_algo=10, keygen_func=keygen_func, key_algos=restricted_key_algos
+        )
+        assert res
+
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 3
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 2
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 2
+    assert generated_keys_count == 7
+
+    for _ in range(23):
+        res = generate_free_keypair_for_least_provisioned_key_algo(
+            keystore=keystore, max_free_keys_per_algo=10, keygen_func=keygen_func, key_algos=restricted_key_algos
+        )
+        assert res
+
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 10
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 10
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 10
+    assert generated_keys_count == 30
+
+    res = generate_free_keypair_for_least_provisioned_key_algo(
+        keystore=keystore, max_free_keys_per_algo=10, keygen_func=keygen_func, key_algos=restricted_key_algos
+    )
+    assert not res
+    assert generated_keys_count == 30  # Unchanged
+
+    for _ in range(7):
+        generate_free_keypair_for_least_provisioned_key_algo(
+            keystore=keystore, max_free_keys_per_algo=15, keygen_func=keygen_func, key_algos=["RSA_OAEP", "DSA_DSS"]
+        )
+
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 14  # First in sorting order
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 10
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 13
+    assert generated_keys_count == 37
+
+    res = generate_free_keypair_for_least_provisioned_key_algo(
+        keystore=keystore, max_free_keys_per_algo=20, keygen_func=keygen_func, key_algos=restricted_key_algos
+    )
+    assert res
+    assert keystore.get_free_keypairs_count("DSA_DSS") == 14
+    assert keystore.get_free_keypairs_count("ECC_DSS") == 11
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 13
+    assert generated_keys_count == 38
+
+    res = generate_free_keypair_for_least_provisioned_key_algo(
+        keystore=keystore, max_free_keys_per_algo=5, keygen_func=keygen_func, key_algos=restricted_key_algos
+    )
+    assert not res
+    assert generated_keys_count == 38
+
+
+def test_get_free_keypair_generator_worker():
+
+    generated_keys_count = 0
+
+    keystore = DummyKeystore()
+
+    def keygen_func(key_algo, serialize):
+        nonlocal generated_keys_count
+        generated_keys_count += 1
+        time.sleep(0.01)
+        return dict(private_key=b"someprivatekey2", public_key=b"somepublickey2")
+
+    worker = get_free_keypair_generator_worker(
+        keystore=keystore, max_free_keys_per_algo=30, sleep_on_overflow_s=0.5, keygen_func=keygen_func
+    )
+
+    try:
+        worker.start()
+        time.sleep(0.5)
+        worker.stop()
+        worker.join()
+
+        assert 10 < generated_keys_count < 50, generated_keys_count  # Not enough time to generate all
+
+        worker.start()
+        time.sleep(6)
+        worker.stop()
+        worker.join()
+
+        assert (
+            generated_keys_count == 120  # 4 key types for now
+        ), generated_keys_count  # All keys had the time to be generated
+
+        print("NEW START")
+        start = time.time()
+        worker.start()
+        time.sleep(0.01)
+        worker.stop()
+        print("NEW STOP")
+        worker.join()
+        print("NEW JOINED")
+        end = time.time()
+        assert (end - start) > 0.4  # sleep-on-overflow occurred
+
+    finally:
+        if worker.is_running:
+            worker.stop()

@@ -1,8 +1,7 @@
-import uuid
-from concurrent.futures.thread import ThreadPoolExecutor
-
 import functools
 import time
+import uuid
+from concurrent.futures.thread import ThreadPoolExecutor
 
 from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist
 from wacryptolib.utilities import generate_uuid0

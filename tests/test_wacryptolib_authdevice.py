@@ -1,9 +1,6 @@
 from pathlib import Path
-from uuid import UUID
 
-from _test_mockups import get_fake_authdevice
 from wacryptolib.authdevice import list_available_authdevices
-from wacryptolib.authenticator import _get_keystore_metadata_file_path
 
 
 def test_list_available_authdevices():  # FIXME add mockups to simulate real USB key?

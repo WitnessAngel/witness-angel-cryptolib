@@ -1,9 +1,8 @@
+import io
 import logging
+import tarfile
 import threading
 from datetime import datetime
-
-import io
-import tarfile
 
 from wacryptolib.cryptainer import CryptainerStorage, CRYPTAINER_DATETIME_FORMAT
 from wacryptolib.utilities import (

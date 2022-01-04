@@ -1,5 +1,7 @@
 import copy
 import logging
+import math
+import os
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -10,8 +12,6 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 import jsonschema
-import math
-import os
 import schema
 from jsonschema import validate as jsonschema_validate
 from schema import And, Or, Regex, Const, Schema, Optional as OptionalKey

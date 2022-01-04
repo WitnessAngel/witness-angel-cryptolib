@@ -1,44 +1,17 @@
 import logging
 import uuid
-from typing import Optional, AnyStr, Sequence
-from uuid import UUID
-
-import time
+from typing import Optional, Sequence
 
 from wacryptolib.cipher import _decrypt_via_rsa_oaep
 from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, DecryptionError, KeyLoadingError
-from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring, SUPPORTED_ASYMMETRIC_KEY_ALGOS
-from wacryptolib.keystore import KeystoreBase as KeystoreBase
+from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
+from wacryptolib.keystore import KeystoreBase as KeystoreBase, generate_keypair_for_storage
 from wacryptolib.signature import sign_message
-from wacryptolib.utilities import PeriodicTaskHandler, generate_uuid0
 
 logger = logging.getLogger(__name__)
 
 
 MAX_PAYLOAD_LENGTH_FOR_SIGNATURE = 128  # Max 2*SHA512 length
-
-
-def generate_keypair_for_storage(  # FIXME rename and add to docs but first MOVE TO KEYSTORE MODULE
-    key_algo: str, *, keystore, keychain_uid: Optional[UUID] = None, passphrase: Optional[AnyStr] = None
-) -> dict:
-    """
-    Shortcut to generate an asymmetric keypair and store it into a key storage.
-
-    `keychain_uid` is auto-generated if not provided.
-
-    Returns the generated keypair dict.
-    """
-    from wacryptolib.keygen import generate_keypair
-
-    keychain_uid = keychain_uid or generate_uuid0()
-    keypair = generate_keypair(key_algo=key_algo, serialize=True, passphrase=passphrase)
-    keystore.set_keys(
-        keychain_uid=keychain_uid,
-        key_algo=key_algo,
-        public_key=keypair["public_key"],
-        private_key=keypair["private_key"],
-    )
-    return keypair
 
 
 class TrusteeApi:
@@ -230,61 +203,3 @@ class ReadonlyTrusteeApi(TrusteeApi):
         except KeyDoesNotExist:
             # Just tweak the error message here
             raise KeyDoesNotExist("Keypair %s/%s not found in trustee api" % (keychain_uid, key_algo))
-
-
-def generate_free_keypair_for_least_provisioned_key_algo(  # FIXME MOVE TO KEYSTORE MODULE
-    keystore: KeystoreBase,
-    max_free_keys_per_algo: int,
-    keygen_func=generate_keypair,
-    key_algos=SUPPORTED_ASYMMETRIC_KEY_ALGOS,
-):
-    """
-    Generate a single free keypair for the key type which is the least available in key storage, and
-    add it to storage. If the "free keys" pools of the storage are full, do nothing.
-
-    :param keystore: the key storage to use
-    :param max_free_keys_per_algo: how many free keys should exist per key type
-    :param keygen_func: callable to use for keypair generation
-    :param key_algos: the different key types (strings) to consider
-    :return: True iff a key was generated (i.e. the free keys pool was not full)
-    """
-    assert key_algos, key_algos
-    free_keys_counts = [(keystore.get_free_keypairs_count(key_algo), key_algo) for key_algo in key_algos]
-    logger.debug("Stats of free keys: %s", str(free_keys_counts))
-
-    (count, key_algo) = min(free_keys_counts)
-
-    if count >= max_free_keys_per_algo:
-        return False
-
-    keypair = keygen_func(key_algo=key_algo, serialize=True)
-    keystore.add_free_keypair(key_algo=key_algo, public_key=keypair["public_key"], private_key=keypair["private_key"])
-    logger.debug("New free key of type %s pregenerated" % key_algo)
-    return True
-
-
-def get_free_keypair_generator_worker(   # FIXME MOVE TO KEYSTORE MODULE
-    keystore: KeystoreBase, max_free_keys_per_algo: int, sleep_on_overflow_s: float, **extra_generation_kwargs
-) -> PeriodicTaskHandler:
-    """
-    Return a periodic task handler which will gradually fill the pools of free keys of the key storage,
-    and wait longer when these pools are full.
-    
-    :param keystore: the key storage to use 
-    :param max_free_keys_per_algo: how many free keys should exist per key type
-    :param sleep_on_overflow_s: time to wait when free keys pools are full
-    :param extra_generation_kwargs: extra arguments to transmit to `generate_free_keypair_for_least_provisioned_key_algo()`
-    :return: periodic task handler
-    """
-
-    def free_keypair_generator_task():
-        has_generated = generate_free_keypair_for_least_provisioned_key_algo(
-            keystore=keystore, max_free_keys_per_algo=max_free_keys_per_algo, **extra_generation_kwargs
-        )
-        # TODO - improve this with refactored multitimer, later
-        if not has_generated:
-            time.sleep(sleep_on_overflow_s)
-        return has_generated
-
-    periodic_task_handler = PeriodicTaskHandler(interval_s=0.001, task_func=free_keypair_generator_task)
-    return periodic_task_handler

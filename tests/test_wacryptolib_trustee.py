@@ -1,5 +1,4 @@
 import copy
-import time
 
 import pytest
 from Crypto.Random import get_random_bytes
@@ -7,14 +6,12 @@ from Crypto.Random import get_random_bytes
 from wacryptolib.cipher import _encrypt_via_rsa_oaep
 from wacryptolib.exceptions import KeyDoesNotExist, SignatureVerificationError, DecryptionError
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
-from wacryptolib.keystore import DummyKeystore
+from wacryptolib.keystore import DummyKeystore, generate_free_keypair_for_least_provisioned_key_algo, \
+    generate_keypair_for_storage
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.trustee import (
     TrusteeApi,
-    generate_free_keypair_for_least_provisioned_key_algo,
-    get_free_keypair_generator_worker,
     ReadonlyTrusteeApi,
-    generate_keypair_for_storage,
 )
 from wacryptolib.utilities import generate_uuid0
 
@@ -243,136 +240,3 @@ def test_readonly_trustee_api_behaviour():
         keychain_uid=keychain_uid, cipher_algo=key_algo_cipher, cipherdict=cipherdict
     )
     assert decrypted == secret
-
-
-def test_generate_free_keypair_for_least_provisioned_key_algo():
-
-    generated_keys_count = 0
-
-    def keygen_func(key_algo, serialize):
-        nonlocal generated_keys_count
-        generated_keys_count += 1
-        return dict(private_key=b"someprivatekey", public_key=b"somepublickey")
-
-    # Check the fallback on "all types of keys" for key_algos parameter
-
-    keystore = DummyKeystore()
-
-    for _ in range(4):
-        res = generate_free_keypair_for_least_provisioned_key_algo(
-            keystore=keystore,
-            max_free_keys_per_algo=10,
-            keygen_func=keygen_func,
-            # no key_algos parameter provided
-        )
-        assert res
-
-    assert keystore.get_free_keypairs_count("DSA_DSS") == 1
-    assert keystore.get_free_keypairs_count("ECC_DSS") == 1
-    assert keystore.get_free_keypairs_count("RSA_OAEP") == 1
-    assert keystore.get_free_keypairs_count("RSA_PSS") == 1
-    assert generated_keys_count == 4
-
-    # Now test with a restricted set of key types
-
-    keystore = DummyKeystore()
-    restricted_key_algos = ["DSA_DSS", "ECC_DSS", "RSA_OAEP"]
-    generated_keys_count = 0
-
-    for _ in range(7):
-        res = generate_free_keypair_for_least_provisioned_key_algo(
-            keystore=keystore, max_free_keys_per_algo=10, keygen_func=keygen_func, key_algos=restricted_key_algos
-        )
-        assert res
-
-    assert keystore.get_free_keypairs_count("DSA_DSS") == 3
-    assert keystore.get_free_keypairs_count("ECC_DSS") == 2
-    assert keystore.get_free_keypairs_count("RSA_OAEP") == 2
-    assert generated_keys_count == 7
-
-    for _ in range(23):
-        res = generate_free_keypair_for_least_provisioned_key_algo(
-            keystore=keystore, max_free_keys_per_algo=10, keygen_func=keygen_func, key_algos=restricted_key_algos
-        )
-        assert res
-
-    assert keystore.get_free_keypairs_count("DSA_DSS") == 10
-    assert keystore.get_free_keypairs_count("ECC_DSS") == 10
-    assert keystore.get_free_keypairs_count("RSA_OAEP") == 10
-    assert generated_keys_count == 30
-
-    res = generate_free_keypair_for_least_provisioned_key_algo(
-        keystore=keystore, max_free_keys_per_algo=10, keygen_func=keygen_func, key_algos=restricted_key_algos
-    )
-    assert not res
-    assert generated_keys_count == 30  # Unchanged
-
-    for _ in range(7):
-        generate_free_keypair_for_least_provisioned_key_algo(
-            keystore=keystore, max_free_keys_per_algo=15, keygen_func=keygen_func, key_algos=["RSA_OAEP", "DSA_DSS"]
-        )
-
-    assert keystore.get_free_keypairs_count("DSA_DSS") == 14  # First in sorting order
-    assert keystore.get_free_keypairs_count("ECC_DSS") == 10
-    assert keystore.get_free_keypairs_count("RSA_OAEP") == 13
-    assert generated_keys_count == 37
-
-    res = generate_free_keypair_for_least_provisioned_key_algo(
-        keystore=keystore, max_free_keys_per_algo=20, keygen_func=keygen_func, key_algos=restricted_key_algos
-    )
-    assert res
-    assert keystore.get_free_keypairs_count("DSA_DSS") == 14
-    assert keystore.get_free_keypairs_count("ECC_DSS") == 11
-    assert keystore.get_free_keypairs_count("RSA_OAEP") == 13
-    assert generated_keys_count == 38
-
-    res = generate_free_keypair_for_least_provisioned_key_algo(
-        keystore=keystore, max_free_keys_per_algo=5, keygen_func=keygen_func, key_algos=restricted_key_algos
-    )
-    assert not res
-    assert generated_keys_count == 38
-
-
-def test_get_free_keypair_generator_worker():
-
-    generate_keys_count = 0
-
-    keystore = DummyKeystore()
-
-    def keygen_func(key_algo, serialize):
-        nonlocal generate_keys_count
-        generate_keys_count += 1
-        time.sleep(0.01)
-        return dict(private_key=b"someprivatekey2", public_key=b"somepublickey2")
-
-    worker = get_free_keypair_generator_worker(
-        keystore=keystore, max_free_keys_per_algo=30, sleep_on_overflow_s=0.5, keygen_func=keygen_func
-    )
-
-    try:
-        worker.start()
-        time.sleep(0.5)
-        worker.stop()
-        worker.join()
-
-        assert 10 < generate_keys_count < 50, generate_keys_count  # Not enough time to generate all
-
-        worker.start()
-        time.sleep(6)
-        worker.stop()
-        worker.join()
-
-        assert (
-            generate_keys_count == 120  # 4 key types for now
-        ), generate_keys_count  # All keys had the time to be generated
-
-        start = time.time()
-        worker.start()
-        worker.stop()
-        worker.join()
-        end = time.time()
-        assert (end - start) > 0.4  # sleep-on-overflow occurred
-
-    finally:
-        if worker.is_running:
-            worker.stop()

@@ -12,7 +12,7 @@ from wacryptolib.cryptainer import (
     SHARED_SECRET_ALGO_MARKER,
 )
 from wacryptolib.keystore import FilesystemKeystorePool
-from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, dump_to_json_file
+from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 DEFAULT_KEYSTORE_POOL_DIRNAME = ".keystore_pool"

@@ -46,8 +46,9 @@ from wacryptolib.cryptainer import (
 from wacryptolib.exceptions import DecryptionError, DecryptionIntegrityError, ValidationError, SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_keypair
-from wacryptolib.keystore import DummyKeystore, FilesystemKeystore, FilesystemKeystorePool, InMemoryKeystorePool
-from wacryptolib.trustee import TrusteeApi, generate_keypair_for_storage
+from wacryptolib.keystore import DummyKeystore, FilesystemKeystore, FilesystemKeystorePool, InMemoryKeystorePool, \
+    generate_keypair_for_storage
+from wacryptolib.trustee import TrusteeApi
 from wacryptolib.utilities import (
     load_from_json_bytes,
     dump_to_json_bytes,

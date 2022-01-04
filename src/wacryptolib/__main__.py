@@ -62,7 +62,6 @@ EXAMPLE_CRYPTOCONF = dict(
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
-@click.option("-c", "--config", default=None, help="Json configuration file", type=click.File("rb"))
 @click.option(
     "-k",
     "--keystore-pool",
@@ -73,15 +72,21 @@ EXAMPLE_CRYPTOCONF = dict(
     ),
 )
 @click.pass_context
-def cli(ctx, config, keystore_pool):
+def cli(ctx, keystore_pool):
     ctx.ensure_object(dict)
-    ctx.obj["config"] = config  # TODO read, validate and USE this file later
     ctx.obj["keystore_pool"] = keystore_pool
 
 
-def _do_encrypt(payload, keystore_pool):
+def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):
+
+    if not cryptoconf_fileobj:
+        click.echo("No cryptoconf provided, defaulting to simple example conf")
+        cryptoconf=EXAMPLE_CRYPTOCONF
+    else:
+        cryptoconf = load_from_json_bytes(cryptoconf_fileobj.read())
+
     cryptainer = encrypt_payload_into_cryptainer(
-        payload, cryptoconf=EXAMPLE_CRYPTOCONF, cryptainer_metadata=None, keystore_pool=keystore_pool
+        payload, cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
     )
     return cryptainer
 
@@ -89,20 +94,23 @@ def _do_encrypt(payload, keystore_pool):
 @cli.command()
 @click.option("-i", "--input-medium", type=click.File("rb"), required=True)
 @click.option("-o", "--output-cryptainer", type=click.File("wb"))
+@click.option("-c", "--cryptoconf", default=None, help="Json crypotoconf file", type=click.File("rb"))
 @click.pass_context
-def encrypt(ctx, input_medium, output_cryptainer):
+def encrypt(ctx, input_medium, output_cryptainer, cryptoconf):
     """Turn a media file into a secure cryptainer."""
     if not output_cryptainer:
         output_cryptainer = LazyFile(input_medium.name + CRYPTAINER_SUFFIX, "wb")
     click.echo("In encrypt: %s" % str(locals()))
 
     keystore_pool = _get_keystore_pool(ctx)
-    cryptainer = _do_encrypt(payload=input_medium.read(), keystore_pool=keystore_pool)
+    cryptainer = _do_encrypt(payload=input_medium.read(), cryptoconf_fileobj=cryptoconf, keystore_pool=keystore_pool)
 
     cryptainer_bytes = dump_to_json_bytes(cryptainer, indent=4)
 
     with output_cryptainer as f:
         f.write(cryptainer_bytes)
+
+    click.echo("Encryption finished")
 
 
 def _do_decrypt(cryptainer, keystore_pool):
@@ -132,6 +140,8 @@ def decrypt(ctx, input_cryptainer, output_medium):
 
     with output_medium:
         output_medium.write(medium_content)
+
+    click.echo("Decryption finished")
 
 
 if __name__ == "__main__":

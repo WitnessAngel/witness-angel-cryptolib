@@ -7,6 +7,8 @@ from click.testing import CliRunner
 
 import wacryptolib
 from wacryptolib.__main__ import cli
+from wacryptolib.cryptainer import LOCAL_FACTORY_TRUSTEE_MARKER
+from wacryptolib.utilities import dump_to_json_bytes, dump_to_json_file
 
 
 def test_cli_help_texts():
@@ -30,6 +32,7 @@ def test_cli_encryption_and_decryption(tmp_path):
 
     data_file = "test_file.txt"
     data_sample = "Héllô\nguÿs"
+    cryptoconf_file = "mycryptoconf.json"
 
     for idx, base_args in enumerate([[], ["-k", tmp_path]]):  # Store keys into cwd or into specific folder
 
@@ -47,6 +50,10 @@ def test_cli_encryption_and_decryption(tmp_path):
             result = runner.invoke(cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "stuff.dat"])
             assert result.exit_code == 0
             assert os.path.exists("stuff.dat")
+
+            with open("stuff.dat", "r") as input_file:
+                data = input_file.read()
+                assert "CHACHA20_POLY1305" not in data  # Not in default cryptoconf
 
             os.remove(data_file)  # CLEANUP
             assert not os.path.exists(data_file)
@@ -72,6 +79,41 @@ def test_cli_encryption_and_decryption(tmp_path):
             empty_storage.mkdir()
             result = runner.invoke(cli, ["-k", empty_storage, "decrypt", "-i", "stuff.dat", "-o", "stuffs.txt"])
             assert result.exit_code == 1  # Decryption failed because keypair was regenerated
+
+            # CUSTOM cryptoconf !
+
+            with open(cryptoconf_file, "wb") as f:
+                f.write(b"badcontent")
+
+            result = runner.invoke(cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file])
+            assert result.exit_code == 1
+            assert not os.path.exists("specialconf.crypt")
+
+            simple_cryptoconf_tree = dict(payload_cipher_layers = [
+                    dict(
+                        payload_cipher_algo="CHACHA20_POLY1305",
+                        key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
+                        payload_signatures=[],
+                    )
+                ]
+            )
+            dump_to_json_file(cryptoconf_file, simple_cryptoconf_tree)
+
+            result = runner.invoke(cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file])
+            assert result.exit_code == 0
+            assert os.path.exists("specialconf.crypt")
+
+            with open("specialconf.crypt", "r") as input_file:
+                data = input_file.read()
+                assert "CHACHA20_POLY1305" in data
+
+            result = runner.invoke(cli, base_args + ["decrypt", "-i", "specialconf.crypt", "-o", "specialconf.crypt.decrypted"])
+            assert result.exit_code == 0
+            assert os.path.exists("specialconf.crypt.decrypted")
+
+            with open("specialconf.crypt.decrypted", "r") as input_file:
+                data = input_file.read()
+                assert data == data_sample
 
 
 def test_cli_subprocess_invocation():

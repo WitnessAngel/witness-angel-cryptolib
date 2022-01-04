@@ -14,8 +14,7 @@ import math
 import os
 import schema
 from jsonschema import validate as jsonschema_validate
-from schema import And, Or, Regex, Const, Schema
-from schema import Optional as Optionalkey
+from schema import And, Or, Regex, Const, Schema, Optional as OptionalKey
 
 from wacryptolib.cipher import encrypt_bytestring, decrypt_bytestring, EncryptionPipeline, STREAMABLE_CIPHER_ALGOS, \
     SUPPORTED_CIPHER_ALGOS
@@ -550,7 +549,6 @@ class CryptainerEncryptor(CryptainerBase):
                 payload_digest_algo = signature_conf["payload_digest_algo"]
 
                 signature_conf["payload_digest"] = payload_digests[payload_digest_algo]  # MUST exist, else incoherence
-                # FIXME ADD THIS NEW FIELD TO SCHEMA VALIDATOR!!!! already done?? But must be OPTIONAL!!
 
                 payload_signature_struct = self._generate_message_signature(
                     keychain_uid=keychain_uid,
@@ -632,7 +630,7 @@ class CryptainerDecryptor(CryptainerBase):
             payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
 
             for signature_conf in payload_cipher_layer["payload_signatures"]:
-                self._verify_message_signature(keychain_uid=keychain_uid, message=payload_current, cryptoconf=signature_conf)
+                self._verify_payload_signature(keychain_uid=keychain_uid, payload=payload_current, cryptoconf=signature_conf)
 
             key_ciphertext = payload_cipher_layer["key_ciphertext"]  # We start fully encrypted, and unravel it
 
@@ -816,13 +814,12 @@ class CryptainerDecryptor(CryptainerBase):
             )
         return decrypted_shards
 
-    # FIXME rename this message to "payload"!!!!
-    def _verify_message_signature(self, keychain_uid: uuid.UUID, message: bytes, cryptoconf: dict):
+    def _verify_payload_signature(self, keychain_uid: uuid.UUID, payload: bytes, cryptoconf: dict):
         """
         Verify a signature for a specific message. An error is raised if signature isn't correct.
 
         :param keychain_uid: uuid for the set of encryption keys used
-        :param message: message as bytes on which to verify signature
+        :param payload: payload on which to verify signature (after digest)
         :param cryptoconf: configuration tree inside payload_signatures
         """
         payload_digest_algo = cryptoconf["payload_digest_algo"]
@@ -834,10 +831,15 @@ class CryptainerDecryptor(CryptainerBase):
         )
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=payload_signature_algo)
 
-        # FIXME payload_digest might be missing, it'd be OK too!
-        payload_digest = hash_message(message, hash_algo=payload_digest_algo)
-        assert payload_digest == cryptoconf["payload_digest"]  # Sanity check!!
-        payload_signature_struct = cryptoconf["payload_signature_struct"]
+        payload_digest = hash_message(payload, hash_algo=payload_digest_algo)
+
+        expected_payload_digest = cryptoconf.get("payload_digest")  # Might be missing
+        if expected_payload_digest and expected_payload_digest != payload_digest:
+            raise RuntimeError("Mismatch between actual and expected payload digests during signature verification")  # FIXME improve that
+
+        payload_signature_struct = cryptoconf.get("payload_signature_struct")
+        if not payload_signature_struct:
+            raise RuntimeError("Missing signature structure")  # FIXME improve that
 
         verify_message_signature(
             message=payload_digest, payload_signature_algo=payload_signature_algo, signature=payload_signature_struct, key=public_key
@@ -1428,14 +1430,14 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
             "$numberLong": And(str, Regex('^([+-]?[0-9]\d*|0)$'))}
 
     extra_cryptainer = {}
-    extra_key_ciphertext = {}
-    extra_payload_macs = {}
+    extra_payload_cipher_layer = {}
+    extra_payload_signature = {}
 
     payload_signature = {
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
         "payload_signature_algo": Or(*SUPPORTED_SIGNATURE_ALGOS),
-        "payload_signature_trustee": Const(LOCAL_FACTORY_TRUSTEE_MARKER),  # FIXME BAD
-        Optionalkey("keychain_uid"): micro_schema_uid
+        "payload_signature_trustee": LOCAL_FACTORY_TRUSTEE_MARKER,  # FIXME BAD
+        OptionalKey("keychain_uid"): micro_schema_uid
     }
 
     if for_cryptainer:
@@ -1450,25 +1452,25 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
             ),
             "cryptainer_metadata": Or(dict, None),
         }
-        extra_key_ciphertext = {
-            "key_ciphertext": micro_schema_binary
+
+        extra_payload_cipher_layer = {
+            "key_ciphertext": micro_schema_binary,
+            "payload_macs": {
+                OptionalKey("tag"): micro_schema_binary  # For now only "tag" is used
+            }
         }
-        extra_signature = {
-            "payload_signature_struct": {
+
+        extra_payload_signature = {
+            OptionalKey("payload_digest"): micro_schema_binary,
+            OptionalKey("payload_signature_struct"): {
                 "signature_value": micro_schema_binary,
                 "signature_timestamp_utc": Or(micro_schema_int, micro_schema_long, int)}
         }
-        payload_signature.update(extra_signature)
-        payload_signature["payload_digest"] = micro_schema_binary  # FIXME must be optional!!
-        extra_payload_macs = {
-            "payload_macs": {
-                Optionalkey("tag"): micro_schema_binary  # For now only "tag" is used
-            }}
 
     SIMPLE_CRYPTAINER_PIECE = {
         "key_cipher_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
         "key_cipher_trustee": Const(LOCAL_FACTORY_TRUSTEE_MARKER),
-        Optionalkey("keychain_uid"): micro_schema_uid
+        OptionalKey("keychain_uid"): micro_schema_uid
     }
 
     RECURSIVE_SHARED_SECRET = []
@@ -1482,16 +1484,17 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
 
     RECURSIVE_SHARED_SECRET.append(SHARED_SECRET_CRYPTAINER_PIECE)
 
+    payload_signature.update(extra_payload_signature)
+
     SCHEMA_CRYPTAINERS = Schema({
         **extra_cryptainer,
         "payload_cipher_layers": [{
             "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
             "payload_signatures": [payload_signature],
-            **extra_payload_macs,
-            **extra_key_ciphertext,
+            **extra_payload_cipher_layer,
             "key_cipher_layers": [SIMPLE_CRYPTAINER_PIECE, SHARED_SECRET_CRYPTAINER_PIECE]
         }],
-        Optionalkey("keychain_uid"): micro_schema_uid,
+        OptionalKey("keychain_uid"): micro_schema_uid,
     })
 
     return SCHEMA_CRYPTAINERS

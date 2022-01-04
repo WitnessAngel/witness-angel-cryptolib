@@ -1,5 +1,5 @@
 import logging
-from typing import List, Sequence
+from typing import Sequence
 
 from Crypto.Protocol.SecretSharing import Shamir
 

@@ -2,7 +2,7 @@ import io
 import logging
 import tarfile
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 
 from wacryptolib.cryptainer import CryptainerStorage, CRYPTAINER_DATETIME_FORMAT
 from wacryptolib.utilities import (

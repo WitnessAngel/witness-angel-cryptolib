@@ -4,7 +4,7 @@ from typing import Union, Optional, AnyStr
 import unicodedata
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Random import get_random_bytes
-from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
+from Crypto.Cipher import AES
 
 from wacryptolib.exceptions import KeyLoadingError
 

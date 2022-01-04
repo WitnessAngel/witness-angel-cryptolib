@@ -4,8 +4,6 @@ from typing import BinaryIO
 
 import Crypto.Hash.SHA512
 from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
-from Crypto.PublicKey import RSA
-from Crypto.Random import get_random_bytes
 from Crypto.Util.Padding import pad, unpad
 
 from wacryptolib import utilities
@@ -242,8 +240,9 @@ class EncryptionNodeBase:
     _hashers_dict = None
 
     def __init__(self, payload_digest_algo=()):
-        """ for each algo hash, create an instance that we store in a dictionary
-            :param hash algo: different hash algorithm
+        """Base class for nodes able to encrypt and digest data chunk by chunk.
+
+        :param payload_digest_algo: different hash algorithms to apply on ciphertext
         """
         hashers_dict = {}
 

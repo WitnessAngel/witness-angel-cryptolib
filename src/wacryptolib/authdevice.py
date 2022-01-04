@@ -2,10 +2,7 @@ import logging
 from sys import platform as sys_platform
 from pathlib import Path
 from pathlib import PurePath
-from typing import Optional
 
-from wacryptolib.authenticator import is_authenticator_initialized, initialize_authenticator
-from wacryptolib.keystore import load_keystore_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -15,11 +12,11 @@ def _get_authenticator_dir_for_authdevice(authdevice: dict):
 
 
 # FIXME change "format" here, bad wording!!!!
-def list_available_authdevices():
+def list_available_authdevices() -> list:
     """
     Generate a list of dictionaries representing mounted partitions of USB keys.
 
-    :return: (list) Dictionaries having at least these fields: path, label, format, size, is_initialized, and metadata
+    :return: list of dicts having at least these fields:
     
         - "drive_type" (str): device type like "USBSTOR"
         - "path" (str):  mount point of device on the filesystem.
@@ -40,57 +37,6 @@ def list_available_authdevices():
         authdevice["authenticator_path"] = _get_authenticator_dir_for_authdevice(authdevice)
 
     return authdevices
-
-
-# FIXME - actually unused?
-def _initialize_authdevice(authdevice: dict, authdevice_owner: str, extra_metadata: Optional[dict] = None):
-    """
-    Initialize a specific USB key, by creating an internal structure with key device metadata.
-
-    The device must not be already initialized.
-
-    :param authdevice: (dict) Mounted partition of USB key.
-    :param user: (str) User name to store in device.
-
-    On success, updates 'authdevice' to mark it as initialized, and to contain device metadata.
-    """
-
-    authenticator_dir = get_authenticator_dir_for_authdevice(authdevice)
-
-    metadata = initialize_authenticator(
-        authenticator_dir=authenticator_dir, keystore_owner=authdevice_owner, extra_metadata=extra_metadata
-    )
-
-    authdevice["is_initialized"] = True
-    authdevice["metadata"] = metadata
-
-
-# FIXME - actually unused?
-def _is_authdevice_initialized(authdevice: dict):
-    """
-    Check if a key device seems initialized (by ignoring, of course, its "is_initialized" field).
-
-    Doesn't actually load the device metadata.
-    Dooesn't modify `authdevice` dict content.
-
-    :param authdevice: (dict) Key device information.
-
-    :return: (bool) True if and only if the key device is initialized.
-    """
-    authenticator_dir = get_authenticator_dir_for_authdevice(authdevice)
-    return is_authenticator_initialized(authenticator_dir)
-
-
-# FIXME - actually unused?
-def _load_authdevice_metadata(authdevice: dict) -> dict:
-    """
-    Return the device metadata stored in the given mountpoint, after checking that it contains at least mandatory
-    (user and keystore_uid) fields.
-
-    Raises `ValueError` or json decoding exceptions if device appears initialized, but has corrupted metadata.
-    """
-    authenticator_dir = get_authenticator_dir_for_authdevice(authdevice)
-    return load_keystore_metadata(authenticator_dir)
 
 
 def _list_available_authdevices_win32():
@@ -144,19 +90,19 @@ def _list_available_authdevices_linux():
     ]
     logger.debug("Removable pyudev devices found: %s", str(removable_devices))
 
-    removable_devices_partitions = [
+    removable_device_partitions = [
         device.device_node
         for removable_device in removable_devices
         for device in context.list_devices(subsystem="block", DEVTYPE="partition", parent=removable_device)
     ]
-    logger.debug("Removable pyudev partitions found: %s", str(removable_devices_partitions))
+    logger.debug("Removable pyudev partitions found: %s", str(removable_device_partitions))
 
     all_existing_partitions = psutil.disk_partitions()
     logger.debug("All mounted psutil partitions found: %s", str(all_existing_partitions))
 
     for p in all_existing_partitions:
 
-        if p.device not in removable_devices_partitions:
+        if p.device not in removable_device_partitions:
             #logger.warning("REJECTED %s", p)
             continue
         #logger.warning("FOUND USB %s", p)

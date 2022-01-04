@@ -5,10 +5,9 @@ import random
 import textwrap
 import time
 import uuid
-import pytest
 
 
-from datetime import timedelta, datetime, timezone
+from datetime import timedelta
 from itertools import product
 from pathlib import Path
 from pprint import pprint

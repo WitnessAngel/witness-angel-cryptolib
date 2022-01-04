@@ -2,12 +2,8 @@ from pathlib import Path
 from uuid import UUID
 
 from _test_mockups import get_fake_authdevice
-from wacryptolib.authdevice import (
-    list_available_authdevices,
-    _is_authdevice_initialized,
-    _get_authenticator_dir_for_authdevice,
-)
-from wacryptolib.authdevice import _initialize_authdevice, _load_authdevice_metadata
+from wacryptolib.authdevice import list_available_authdevices
+
 from wacryptolib.authenticator import _get_keystore_metadata_file_path
 
 

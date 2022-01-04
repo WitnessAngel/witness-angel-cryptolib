@@ -9,11 +9,9 @@ from Crypto.Random import get_random_bytes
 from Crypto.Random.random import randint
 
 import wacryptolib
-from wacryptolib.cryptainer import CryptainerEncryptor
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
 from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError
-from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey, \
-    SYMMETRIC_KEY_ALGOS_REGISTRY
+from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey
 from wacryptolib.utilities import SUPPORTED_HASH_ALGOS, hash_message
 from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS
 

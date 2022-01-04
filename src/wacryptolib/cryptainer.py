@@ -1,6 +1,4 @@
 import copy
-
-
 import logging
 import math
 import os
@@ -11,8 +9,7 @@ from jsonschema import validate as jsonschema_validate
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from pprint import pprint
-from typing import Optional, Union, List, Sequence, BinaryIO
+from typing import Optional, Union, Sequence, BinaryIO
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -27,7 +24,7 @@ from wacryptolib.exceptions import DecryptionError, ConfigurationError, Validati
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, \
     ASYMMETRIC_KEY_ALGOS_REGISTRY
-from wacryptolib.keystore import KeystoreBase, InMemoryKeystorePool, KeystorePoolBase
+from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase
 from wacryptolib.shared_secret import split_bytestring_as_shards, recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
 from wacryptolib.utilities import (

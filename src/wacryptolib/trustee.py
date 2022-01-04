@@ -1,7 +1,7 @@
 import logging
 import time
 import uuid
-from typing import Optional, Union, AnyStr, Sequence
+from typing import Optional, AnyStr, Sequence
 from uuid import UUID
 
 from wacryptolib.cipher import _decrypt_via_rsa_oaep

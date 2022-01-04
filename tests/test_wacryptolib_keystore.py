@@ -7,7 +7,6 @@ from uuid import UUID
 import pytest
 
 from _test_mockups import get_fake_authdevice, random_bool
-from wacryptolib.authdevice import _initialize_authdevice, _get_authenticator_dir_for_authdevice
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.trustee import generate_keypair_for_storage
 from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists

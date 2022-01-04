@@ -1,8 +1,5 @@
 import logging
-from sys import platform as sys_platform
 from pathlib import Path
-from pathlib import PurePath
-from typing import Optional
 
 from wacryptolib.keystore import _validate_keystore_metadata, _get_keystore_metadata_file_path
 from wacryptolib.utilities import dump_to_json_file, generate_uuid0
@@ -18,8 +15,9 @@ def initialize_authenticator(authenticator_dir: Path, keystore_owner: str, keyst
     The folder must not be already initialized.
     It may not exist yet, but its parents must exist.
 
-    :param authenticator_dir: (Path) Folder where the metadata file is expected.
-    :param keystore_owner: (str) owner name to store in device.
+    :param authenticator_dir: Folder where the metadata file is expected.
+    :param keystore_owner: owner name to store in device.
+    :param keystore_passphrase_hint: hint for the passphrase used on private keys.
 
     :return: (dict) Metadata for this authenticator.
     """

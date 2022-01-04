@@ -13,11 +13,7 @@ from wacryptolib.trustee import (
     ReadonlyTrusteeApi,
     generate_keypair_for_storage,
 )
-from wacryptolib.keygen import (
-    load_asymmetric_key_from_pem_bytestring,
-    SUPPORTED_ASYMMETRIC_KEY_ALGOS,
-    generate_keypair,
-)
+from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.exceptions import KeyDoesNotExist, SignatureVerificationError, DecryptionError
 from wacryptolib.keystore import DummyKeystore
 from wacryptolib.signature import verify_message_signature

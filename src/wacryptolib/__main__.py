@@ -2,7 +2,6 @@ from pathlib import Path
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
-import os
 
 from wacryptolib.cryptainer import (
     LOCAL_FACTORY_TRUSTEE_MARKER,

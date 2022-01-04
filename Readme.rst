@@ -14,8 +14,6 @@ Witness Angel Cryptolib
 Summary
 ----------------
 
-**WARNING, HUGE REFACTORING OF THIS LIB WILL SOON OCCUR**
-
 This lib gathers utilities to generate and store cryptographic keys, and encrypt/decrypt/sign cryptainer, for the
 WitnessAngel project.
 

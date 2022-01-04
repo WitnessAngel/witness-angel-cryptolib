@@ -244,7 +244,7 @@ class FilesystemKeystore(KeystoreBase):
     def _get_filename(self, keychain_uid, key_algo, is_public: bool):
         return "%s_%s%s" % (keychain_uid, key_algo, self._public_key_suffix if is_public else self._private_key_suffix)
 
-    def _write_to_storage_file(self, basename: str, payload: bytes):
+    def _write_to_storage_file(self, basename: str, payload: bytes):  # FIXME RENAME
         assert os.sep not in basename, basename
         self._keys_dir.joinpath(basename).write_bytes(payload)
 

@@ -816,6 +816,7 @@ class CryptainerDecryptor(CryptainerBase):
             )
         return decrypted_shards
 
+    # FIXME rename this message to "payload"!!!!
     def _verify_message_signature(self, keychain_uid: uuid.UUID, message: bytes, cryptoconf: dict):
         """
         Verify a signature for a specific message. An error is raised if signature isn't correct.

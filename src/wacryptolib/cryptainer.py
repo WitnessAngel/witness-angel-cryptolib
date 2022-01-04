@@ -23,7 +23,7 @@ from wacryptolib.cipher import (
     STREAMABLE_CIPHER_ALGOS,
     SUPPORTED_CIPHER_ALGOS,
 )
-from wacryptolib.exceptions import DecryptionError, ConfigurationError, ValidationError
+from wacryptolib.exceptions import DecryptionError, CryptoconfError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, ASYMMETRIC_KEY_ALGOS_REGISTRY
 from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase
@@ -299,7 +299,7 @@ class CryptainerEncryptor(CryptainerBase):
         return payload
 
     def _encrypt_and_hash_payload(self, payload, payload_cipher_layer_extracts):
-        """TODO DOCSTRINGS"""
+
         payload_current = payload
 
         payload_integrity_tags = []
@@ -356,7 +356,7 @@ class CryptainerEncryptor(CryptainerBase):
         cryptainer = copy.deepcopy(cryptoconf)  # So that we can manipulate it as new cryptainer
         del cryptoconf
         if not cryptainer["payload_cipher_layers"]:
-            raise ConfigurationError("Empty payload_cipher_layers list is forbidden in cryptoconf")
+            raise CryptoconfError("Empty payload_cipher_layers list is forbidden in cryptoconf")
 
         payload_cipher_layer_extracts = []  # Sensitive info with secret keys!
 
@@ -400,7 +400,7 @@ class CryptainerEncryptor(CryptainerBase):
         # HERE KEY IS REAL KEY OR SHARE !!!
 
         if not key_cipher_layers:
-            raise ConfigurationError("Empty key_cipher_layers list is forbidden in cryptoconf")
+            raise CryptoconfError("Empty key_cipher_layers list is forbidden in cryptoconf")
 
         key_ciphertext = key_bytes
         for key_cipher_layer in key_cipher_layers:
@@ -657,7 +657,7 @@ class CryptainerDecryptor(CryptainerBase):
             assert isinstance(key_bytes, bytes), key_bytes
             symkey = load_from_json_bytes(key_bytes)
 
-            payload_macs = payload_cipher_layer["payload_macs"]  # Shall be a DICT, FIXME handle if it's still None
+            payload_macs = payload_cipher_layer["payload_macs"]  # FIXME handle if it's not there, missing integrity tags due to unfinished container!!
             payload_cipherdict = dict(ciphertext=payload_current, **payload_macs)
             payload_current = decrypt_bytestring(
                 cipherdict=payload_cipherdict, key_dict=symkey, cipher_algo=payload_cipher_algo, verify=verify
@@ -741,7 +741,6 @@ class CryptainerDecryptor(CryptainerBase):
 
         else:  # Using asymmetric algorithm
 
-            # FIXME replace by shorter form everywhere in file?
             keychain_uid_encryption = cipher_layer.get("keychain_uid") or keychain_uid
 
             key_bytes = self._decrypt_with_asymmetric_cipher(
@@ -1189,7 +1188,7 @@ class CryptainerStorage:
 
     def list_cryptainer_names(
         self, as_sorted_list: bool = False, as_absolute_paths: bool = False
-    ):  # FIXME add annotations everywhere in this class
+    ):  # FIXME add function annotations everywhere in this class
         """Returns the list of encrypted cryptainers present in storage,
         sorted by name or not, absolute or not, as Path objects."""
         assert self._cryptainer_dir.is_absolute(), self._cryptainer_dir

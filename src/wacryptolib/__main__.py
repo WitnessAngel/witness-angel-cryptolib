@@ -17,9 +17,6 @@ from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 DEFAULT_KEYSTORE_POOL_DIRNAME = ".keystore_pool"
 
-# TODO - much later, use "schema" for validation of config data and cryptainer format!  See https://github.com/keleshev/schema
-# Then export corresponding jsons-chema for the world to see!
-
 
 def _get_keystore_pool(ctx):
     keystore_pool_dir = ctx.obj["keystore_pool"]
@@ -78,7 +75,7 @@ EXAMPLE_CRYPTOCONF = dict(
 @click.pass_context
 def cli(ctx, config, keystore_pool):
     ctx.ensure_object(dict)
-    ctx.obj["config"] = config  # TODO read and validate this file later
+    ctx.obj["config"] = config  # TODO read, validate and USE this file later
     ctx.obj["keystore_pool"] = keystore_pool
 
 

@@ -191,7 +191,7 @@ class TrusteeApi:
             response_message="Decryption request denied" if has_errors else "Decryption request accepted",
             has_errors=has_errors,
             keypair_statuses=keypair_statuses,
-        )  # TODO localize string field!
+        )  # TODO localize (i18n) string field!
 
     def decrypt_with_private_key(
         self, *, keychain_uid: uuid.UUID, cipher_algo: str, cipherdict: dict, passphrases: Optional[list] = None

@@ -250,7 +250,7 @@ class FilesystemKeystore(KeystoreBase):
     def _get_filename(self, keychain_uid, key_algo, is_public: bool):
         return "%s_%s%s" % (keychain_uid, key_algo, self._public_key_suffix if is_public else self._private_key_suffix)
 
-    def _write_to_storage_file(self, basename: str, data: bytes):  # FIXME RENAME
+    def _write_to_storage_file(self, basename: str, data: bytes):
         assert os.sep not in basename, basename
         self._keys_dir.joinpath(basename).write_bytes(data)
 
@@ -454,7 +454,7 @@ class FilesystemKeystorePool(
         """Storage automatically created if unexisting."""
         local_keystore_dir = self._root_dir.joinpath(self.LOCAL_FACTORY_KEYSTORE_DIRNAME)
         local_keystore_dir.mkdir(exist_ok=True)
-        # TODO initialize metadata for keystore ??
+        # TODO initialize metadata for local keystore ??
         return FilesystemKeystore(local_keystore_dir)
 
     def _get_imported_keystore_dir(self, keystore_uid):

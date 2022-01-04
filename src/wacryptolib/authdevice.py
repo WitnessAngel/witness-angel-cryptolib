@@ -11,7 +11,6 @@ def _get_authenticator_dir_for_authdevice(authdevice: dict):
     return Path(authdevice["partition_mountpoint"]).joinpath(".authenticator")
 
 
-# FIXME change "format" here, bad wording!!!!
 def list_available_authdevices() -> list:
     """
     Generate a list of dictionaries representing mounted partitions of USB keys.

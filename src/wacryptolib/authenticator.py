@@ -9,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 def initialize_authenticator(authenticator_dir: Path, keystore_owner: str, keystore_passphrase_hint: str) -> dict:
     """
+    BEWARE - PRIVATE API FOR NOW
+
     Initialize a specific folder, by creating an internal structure with keys and their metadata.
 
     The folder must not be already initialized.
@@ -50,9 +52,11 @@ def _initialize_authenticator_metadata(authenticator_dir: Path, keystore_owner: 
     return metadata
 
 
-# TODO go farther, and add flags to report errors if json or RSA keys are missing/corrupted?
+# TODO go farther, and add flags to report errors if JSON or RSA keys are missing/corrupted?
 def is_authenticator_initialized(authenticator_dir: Path):
     """
+    BEWARE - PRIVATE API FOR NOW
+
     Check if an authenticator folder seems initialized.
 
     Doesn't actually load the authenticator metadata.

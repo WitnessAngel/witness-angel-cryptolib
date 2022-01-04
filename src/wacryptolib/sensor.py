@@ -11,7 +11,8 @@ from wacryptolib.utilities import (
     synchronized,
     check_datetime_is_tz_aware,
     PeriodicTaskHandler,
-    TaskRunnerStateMachineBase, get_utc_now_date,
+    TaskRunnerStateMachineBase,
+    get_utc_now_date,
 )
 
 logger = logging.getLogger(__name__)
@@ -129,7 +130,9 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         return filename
 
     @synchronized
-    def add_record(self, sensor_name: str, from_datetime: datetime, to_datetime: datetime, extension: str, payload: bytes):
+    def add_record(
+        self, sensor_name: str, from_datetime: datetime, to_datetime: datetime, extension: str, payload: bytes
+    ):
         """Add the provided data to the tarfile, using associated metadata.
 
         If, despite included timestamps, several records end up having the exact same name, the last one will have
@@ -167,7 +170,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         fileobj = io.BytesIO(payload)  # Does NOT copy data until write, since Python3.5
 
         # Memory warning : duplicates data to bytesio tarfile
-        self._current_tarfile.addfile(tarinfo, fileobj=fileobj)  
+        self._current_tarfile.addfile(tarinfo, fileobj=fileobj)
 
         self._current_records_count += 1
 
@@ -284,7 +287,9 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
             logger.error("Error in PeriodicValuePoller offloaded task: %r" % exc, exc_info=True)
 
 
-class SensorManager(TaskRunnerStateMachineBase):  # FIXME deprecate this in favor of class handling the whole recording toolchain, with aggregators etc.?
+class SensorManager(
+    TaskRunnerStateMachineBase
+):  # FIXME deprecate this in favor of class handling the whole recording toolchain, with aggregators etc.?
     """
     Manage a group of sensors for simultaneous starts/stops.
 

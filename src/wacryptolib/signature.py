@@ -46,7 +46,6 @@ def _sign_with_pss(message: bytes, key: RSA.RsaKey, timestamp_utc: datetime) -> 
 
     :return: signature as a bytestring"""
 
-
     hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=timestamp_utc)
     signer = pss.new(key)
     signature = signer.sign(hash_payload)
@@ -71,7 +70,9 @@ def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey], timestamp
     return signature
 
 
-def verify_message_signature(*, message: bytes, payload_signature_algo: str, signature: dict, key: Union[KNOWN_KEY_ALGOS]):
+def verify_message_signature(
+    *, message: bytes, payload_signature_algo: str, signature: dict, key: Union[KNOWN_KEY_ALGOS]
+):
     """Verify the authenticity of a signature.
 
     Raises if signature is invalid.
@@ -95,7 +96,9 @@ def verify_message_signature(*, message: bytes, payload_signature_algo: str, sig
     try:
         verifier.verify(hash_payload, signature["signature_value"])
     except ValueError as exc:
-        raise SignatureVerificationError("Failed %s signature verification (%s)" % (payload_signature_algo, exc)) from exc
+        raise SignatureVerificationError(
+            "Failed %s signature verification (%s)" % (payload_signature_algo, exc)
+        ) from exc
 
 
 def _get_utc_timestamp() -> int:

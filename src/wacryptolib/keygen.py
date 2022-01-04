@@ -34,23 +34,15 @@ def generate_symkey(cipher_algo: str) -> dict:
 
 
 def _generate_aes_cbc_key_dict():
-    return dict(
-        key=get_random_bytes(32),
-        iv=get_random_bytes(AES.block_size)
-    )
+    return dict(key=get_random_bytes(32), iv=get_random_bytes(AES.block_size))
 
 
 def _generate_aes_eax_key_dict():
-    return dict(
-        key=get_random_bytes(32),
-        nonce=get_random_bytes(16)  # Recommended length, could be bigger
-    )
+    return dict(key=get_random_bytes(32), nonce=get_random_bytes(16))  # Recommended length, could be bigger
+
 
 def _generate_chacha20_poly1305_key_dict():
-    return dict(
-        key=get_random_bytes(32),
-        nonce=get_random_bytes(12)  # We could switch to 24 for XChaCha20
-    )
+    return dict(key=get_random_bytes(32), nonce=get_random_bytes(12))  # We could switch to 24 for XChaCha20
 
 
 def generate_keypair(
@@ -66,11 +58,13 @@ def generate_keypair(
 
     :return: dictionary with "private_key" and "public_key" fields as objects or PEM-format strings
     """
-    return _do_generate_keypair(key_algo=key_algo, serialize=serialize, key_length_bits=key_length_bits, curve=curve, passphrase=passphrase)
+    return _do_generate_keypair(
+        key_algo=key_algo, serialize=serialize, key_length_bits=key_length_bits, curve=curve, passphrase=passphrase
+    )
 
 
 # Intermediate function to help monkey-patching in tests
-def _do_generate_keypair(key_algo, serialize, key_length_bits, curve, passphrase) :
+def _do_generate_keypair(key_algo, serialize, key_length_bits, curve, passphrase):
 
     assert serialize or passphrase is None
 

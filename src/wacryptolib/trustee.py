@@ -7,11 +7,7 @@ import time
 
 from wacryptolib.cipher import _decrypt_via_rsa_oaep
 from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, DecryptionError, KeyLoadingError
-from wacryptolib.keygen import (
-    generate_keypair,
-    load_asymmetric_key_from_pem_bytestring,
-    SUPPORTED_ASYMMETRIC_KEY_ALGOS,
-)
+from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import KeystoreBase as KeystoreBase
 from wacryptolib.signature import sign_message
 from wacryptolib.utilities import PeriodicTaskHandler, generate_uuid0
@@ -86,9 +82,7 @@ class TrusteeApi:
             keychain_uid=keychain_uid, key_algo=key_algo
         )  # Let the exception flow if any
 
-    def get_message_signature(
-        self, *, keychain_uid: uuid.UUID, message: bytes, signature_algo: str
-    ) -> dict:
+    def get_message_signature(self, *, keychain_uid: uuid.UUID, message: bytes, signature_algo: str) -> dict:
         """
         Return a signature structure corresponding to the provided key and signature types.
         """
@@ -264,9 +258,7 @@ def generate_free_keypair_for_least_provisioned_key_algo(
         return False
 
     keypair = keygen_func(key_algo=key_algo, serialize=True)
-    keystore.add_free_keypair(
-        key_algo=key_algo, public_key=keypair["public_key"], private_key=keypair["private_key"]
-    )
+    keystore.add_free_keypair(key_algo=key_algo, public_key=keypair["public_key"], private_key=keypair["private_key"])
     logger.debug("New free key of type %s pregenerated" % key_algo)
     return True
 

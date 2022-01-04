@@ -74,7 +74,9 @@ def test_trustee_api_workflow():
     verify_message_signature(message=secret, signature=signature, key=public_key_dsa, payload_signature_algo="DSA_DSS")
     signature["signature_value"] += b"xyz"
     with pytest.raises(SignatureVerificationError, match="Failed.*verification"):
-        verify_message_signature(message=secret, signature=signature, key=public_key_dsa, payload_signature_algo="DSA_DSS")
+        verify_message_signature(
+            message=secret, signature=signature, key=public_key_dsa, payload_signature_algo="DSA_DSS"
+        )
 
     # Keypair is well auto-created by get_message_signature(), even when no more free keys
     signature = trustee_api.get_message_signature(
@@ -279,10 +281,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
 
     for _ in range(7):
         res = generate_free_keypair_for_least_provisioned_key_algo(
-            keystore=keystore,
-            max_free_keys_per_algo=10,
-            keygen_func=keygen_func,
-            key_algos=restricted_key_algos,
+            keystore=keystore, max_free_keys_per_algo=10, keygen_func=keygen_func, key_algos=restricted_key_algos
         )
         assert res
 
@@ -293,10 +292,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
 
     for _ in range(23):
         res = generate_free_keypair_for_least_provisioned_key_algo(
-            keystore=keystore,
-            max_free_keys_per_algo=10,
-            keygen_func=keygen_func,
-            key_algos=restricted_key_algos,
+            keystore=keystore, max_free_keys_per_algo=10, keygen_func=keygen_func, key_algos=restricted_key_algos
         )
         assert res
 
@@ -306,20 +302,14 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     assert generated_keys_count == 30
 
     res = generate_free_keypair_for_least_provisioned_key_algo(
-        keystore=keystore,
-        max_free_keys_per_algo=10,
-        keygen_func=keygen_func,
-        key_algos=restricted_key_algos,
+        keystore=keystore, max_free_keys_per_algo=10, keygen_func=keygen_func, key_algos=restricted_key_algos
     )
     assert not res
     assert generated_keys_count == 30  # Unchanged
 
     for _ in range(7):
         generate_free_keypair_for_least_provisioned_key_algo(
-            keystore=keystore,
-            max_free_keys_per_algo=15,
-            keygen_func=keygen_func,
-            key_algos=["RSA_OAEP", "DSA_DSS"],
+            keystore=keystore, max_free_keys_per_algo=15, keygen_func=keygen_func, key_algos=["RSA_OAEP", "DSA_DSS"]
         )
 
     assert keystore.get_free_keypairs_count("DSA_DSS") == 14  # First in sorting order
@@ -328,10 +318,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     assert generated_keys_count == 37
 
     res = generate_free_keypair_for_least_provisioned_key_algo(
-        keystore=keystore,
-        max_free_keys_per_algo=20,
-        keygen_func=keygen_func,
-        key_algos=restricted_key_algos,
+        keystore=keystore, max_free_keys_per_algo=20, keygen_func=keygen_func, key_algos=restricted_key_algos
     )
     assert res
     assert keystore.get_free_keypairs_count("DSA_DSS") == 14
@@ -340,10 +327,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     assert generated_keys_count == 38
 
     res = generate_free_keypair_for_least_provisioned_key_algo(
-        keystore=keystore,
-        max_free_keys_per_algo=5,
-        keygen_func=keygen_func,
-        key_algos=restricted_key_algos,
+        keystore=keystore, max_free_keys_per_algo=5, keygen_func=keygen_func, key_algos=restricted_key_algos
     )
     assert not res
     assert generated_keys_count == 38
@@ -362,10 +346,7 @@ def test_get_free_keys_generator_worker():
         return dict(private_key=b"someprivatekey2", public_key=b"somepublickey2")
 
     worker = get_free_keys_generator_worker(
-        keystore=keystore,
-        max_free_keys_per_algo=30,
-        sleep_on_overflow_s=0.5,
-        keygen_func=keygen_func,
+        keystore=keystore, max_free_keys_per_algo=30, sleep_on_overflow_s=0.5, keygen_func=keygen_func
     )
 
     try:

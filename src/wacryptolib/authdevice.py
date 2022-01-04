@@ -24,7 +24,6 @@ def list_available_authdevices() -> list:
         - "filesystem_format" (str): lowercase character string for filesystem type, like "ext2", "fat32" ...
         - "filesystem_size" (int): filesystem size in bytes
         - "authenticator_path" (Path): Theoretical absolute path to the authenticator (might not exist yet)
-
     """
 
     if sys_platform == "win32":
@@ -101,9 +100,9 @@ def _list_available_authdevices_linux():
     for p in all_existing_partitions:
 
         if p.device not in removable_device_partitions:
-            #logger.warning("REJECTED %s", p)
+            # logger.warning("REJECTED %s", p)
             continue
-        #logger.warning("FOUND USB %s", p)
+        # logger.warning("FOUND USB %s", p)
 
         authdevice = {}
         authdevice["device_type"] = "USBSTOR"
@@ -111,9 +110,7 @@ def _list_available_authdevices_linux():
         authdevice["partition_mountpoint"] = p.mountpoint  # E.g: '/media/akram/UBUNTU 20_0',
         authdevice["filesystem_size"] = psutil.disk_usage(authdevice["partition_mountpoint"]).total  # E.g: 30986469376
         authdevice["filesystem_format"] = p.fstype  # E.g: 'vfat'
-        #authdevice["partition"] = p.device  # E.g: '/dev/sda1' if needed one day
+        # authdevice["partition"] = p.device  # E.g: '/dev/sda1' if needed one day
         authdevice_list.append(authdevice)
 
     return authdevice_list
-
-

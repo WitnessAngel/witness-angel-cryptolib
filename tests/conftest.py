@@ -15,11 +15,12 @@ def monkeypatch_generate_keypair_for_tests():
     """
 
     import wacryptolib.keygen
+
     original_generator = wacryptolib.keygen._do_generate_keypair
     wacryptolib.keygen.__original_do_generate_keypair = original_generator
     cached_generator = functools.lru_cache(maxsize=None)(original_generator)
 
-    patcher = patch('wacryptolib.keygen._do_generate_keypair', cached_generator)
+    patcher = patch("wacryptolib.keygen._do_generate_keypair", cached_generator)
     wacryptolib.keygen.__original_do_generate_keypair_patcher = patcher  # To use stop()/start() in tests
 
     patcher.start()  # DO NOT use "with" statement here, else start/stop don't work anymore

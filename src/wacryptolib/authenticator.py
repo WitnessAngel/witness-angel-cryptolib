@@ -24,7 +24,11 @@ def initialize_authenticator(authenticator_dir: Path, keystore_owner: str, keyst
     if is_authenticator_initialized(authenticator_dir):
         raise RuntimeError("Authenticator at path %s is already initialized" % authenticator_dir)
 
-    metadata = _initialize_authenticator_metadata(authenticator_dir=authenticator_dir, keystore_owner=keystore_owner, keystore_passphrase_hint=keystore_passphrase_hint)
+    metadata = _initialize_authenticator_metadata(
+        authenticator_dir=authenticator_dir,
+        keystore_owner=keystore_owner,
+        keystore_passphrase_hint=keystore_passphrase_hint,
+    )
     return metadata
 
     # FIXME - do HERE the creation of digital keypairs!!!
@@ -34,11 +38,13 @@ def _initialize_authenticator_metadata(authenticator_dir: Path, keystore_owner: 
     metadata_file = _get_keystore_metadata_file_path(authenticator_dir)
     assert not metadata_file.exists(), metadata_file
     metadata_file.parent.mkdir(parents=False, exist_ok=True)  # Only LAST directory might be created
-    metadata = {"keystore_type": "authenticator",
-                 "keystore_format": 'keystore_1.0',
-                 "keystore_uid": generate_uuid0(),
-                 "keystore_owner": keystore_owner,
-                 "keystore_passphrase_hint": keystore_passphrase_hint}
+    metadata = {
+        "keystore_type": "authenticator",
+        "keystore_format": "keystore_1.0",
+        "keystore_uid": generate_uuid0(),
+        "keystore_owner": keystore_owner,
+        "keystore_passphrase_hint": keystore_passphrase_hint,
+    }
     _validate_keystore_metadata(metadata)  # Ensure no weird metadata is added!
     dump_to_json_file(metadata_file, metadata)
     return metadata

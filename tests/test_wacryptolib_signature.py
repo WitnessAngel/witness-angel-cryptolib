@@ -19,30 +19,37 @@ def _common_signature_checks(keypair, message, signature, payload_signature_algo
 
     with pytest.raises(SignatureVerificationError, match="signature"):
         wacryptolib.signature.verify_message_signature(
-            key=keypair["public_key"], message=message + b"X", signature=signature, payload_signature_algo=payload_signature_algo
+            key=keypair["public_key"],
+            message=message + b"X",
+            signature=signature,
+            payload_signature_algo=payload_signature_algo,
         )
 
     signature_corrupted = signature.copy()
     signature_corrupted["signature_value"] += b"x"
     with pytest.raises(SignatureVerificationError, match="signature"):
         wacryptolib.signature.verify_message_signature(
-            key=keypair["public_key"], message=message, signature=signature_corrupted, payload_signature_algo=payload_signature_algo
+            key=keypair["public_key"],
+            message=message,
+            signature=signature_corrupted,
+            payload_signature_algo=payload_signature_algo,
         )
 
     signature_corrupted = signature.copy()
     signature_corrupted["signature_timestamp_utc"] += 1
     with pytest.raises(SignatureVerificationError, match="signature"):
         wacryptolib.signature.verify_message_signature(
-            key=keypair["public_key"], message=message, signature=signature_corrupted, payload_signature_algo=payload_signature_algo
+            key=keypair["public_key"],
+            message=message,
+            signature=signature_corrupted,
+            payload_signature_algo=payload_signature_algo,
         )
 
 
 def test_sign_and_verify_with_rsa_key():
     message = b"Hello"
 
-    keypair = wacryptolib.keygen.generate_keypair(
-        key_algo="RSA_PSS", serialize=False, key_length_bits=2048
-    )
+    keypair = wacryptolib.keygen.generate_keypair(key_algo="RSA_PSS", serialize=False, key_length_bits=2048)
     signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], message=message, payload_signature_algo="RSA_PSS"
     )
@@ -52,9 +59,7 @@ def test_sign_and_verify_with_rsa_key():
 def test_sign_and_verify_with_dsa_key():
     message = "Mon hât èst joli".encode("utf-8")
 
-    keypair = wacryptolib.keygen.generate_keypair(
-        key_algo="DSA_DSS", serialize=False, key_length_bits=2048
-    )
+    keypair = wacryptolib.keygen.generate_keypair(key_algo="DSA_DSS", serialize=False, key_length_bits=2048)
     signature = wacryptolib.signature.sign_message(
         key=keypair["private_key"], message=message, payload_signature_algo="DSA_DSS"
     )
@@ -75,9 +80,7 @@ def test_generic_signature_errors():
 
     message = b"Hello"
 
-    keypair = wacryptolib.keygen.generate_keypair(
-        key_algo="RSA_OAEP", serialize=False, key_length_bits=2048
-    )
+    keypair = wacryptolib.keygen.generate_keypair(key_algo="RSA_OAEP", serialize=False, key_length_bits=2048)
 
     with pytest.raises(ValueError, match="Unknown signature algorithm"):
         wacryptolib.signature.sign_message(key=keypair["private_key"], message=message, payload_signature_algo="EIXH")

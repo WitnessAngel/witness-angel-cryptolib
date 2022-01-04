@@ -67,10 +67,13 @@ class KeyLoadingError(CryptographyError):
 
 # ---
 
+
 class ConfigurationError(FunctionalError):
     pass  # used e.g. if encryption layer list is empty, thus endangering confidentiality
 
+
 # TODO add ValidationError class, and/or WorkflowError?
+
 
 class ValidationError(FunctionalError):
     pass  # used e.g. if encryption layer list is empty, thus endangering confidentiality

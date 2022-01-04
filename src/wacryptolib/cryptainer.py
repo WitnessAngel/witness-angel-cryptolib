@@ -16,12 +16,16 @@ import schema
 from jsonschema import validate as jsonschema_validate
 from schema import And, Or, Regex, Const, Schema, Optional as OptionalKey
 
-from wacryptolib.cipher import encrypt_bytestring, decrypt_bytestring, EncryptionPipeline, STREAMABLE_CIPHER_ALGOS, \
-    SUPPORTED_CIPHER_ALGOS
+from wacryptolib.cipher import (
+    encrypt_bytestring,
+    decrypt_bytestring,
+    EncryptionPipeline,
+    STREAMABLE_CIPHER_ALGOS,
+    SUPPORTED_CIPHER_ALGOS,
+)
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
-from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, \
-    ASYMMETRIC_KEY_ALGOS_REGISTRY
+from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, ASYMMETRIC_KEY_ALGOS_REGISTRY
 from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase
 from wacryptolib.shared_secret import split_bytestring_as_shards, recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
@@ -34,8 +38,11 @@ from wacryptolib.utilities import (
     generate_uuid0,
     hash_message,
     synchronized,
-    catch_and_log_exception, get_utc_now_date, consume_bytes_as_chunks, delete_filesystem_node_for_stream,
-    SUPPORTED_HASH_ALGOS
+    catch_and_log_exception,
+    get_utc_now_date,
+    consume_bytes_as_chunks,
+    delete_filesystem_node_for_stream,
+    SUPPORTED_HASH_ALGOS,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,12 +50,16 @@ logger = logging.getLogger(__name__)
 CRYPTAINER_FORMAT = "cryptainer_1.0"
 CRYPTAINER_SUFFIX = ".crypt"
 CRYPTAINER_DATETIME_FORMAT = "%Y%m%d_%H%M%S"  # For use in cryptainer names and their records
-CRYPTAINER_DATETIME_LENGTH = 15  # Important to lookup prefix of filename before matching it with CRYPTAINER_DATETIME_FORMAT
+CRYPTAINER_DATETIME_LENGTH = (
+    15
+)  # Important to lookup prefix of filename before matching it with CRYPTAINER_DATETIME_FORMAT
 CRYPTAINER_TEMP_SUFFIX = "~"  # To name temporary, unfinalized, cryptainers
+
 
 class PAYLOAD_CIPHERTEXT_LOCATIONS:
     INLINE = "inline"  # Ciphertext is included in the json cryptainer
     OFFLOADED = "offloaded"  # Ciphertext is in a nearby binary file
+
 
 # Shortcut helper, should NOT be modified
 OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER = dict(ciphertext_location=PAYLOAD_CIPHERTEXT_LOCATIONS.OFFLOADED)
@@ -63,10 +74,12 @@ SHARED_SECRET_ALGO_MARKER = "[SHARED_SECRET]"  # Special "key_cipher_algo" value
 
 DUMMY_KEYSTORE_POOL = InMemoryKeystorePool()  # Common fallback storage with in-memory keys
 
+
 class TRUSTEE_TYPES:
     LOCAL_FACTORY_TRUSTEE = "local_factory"
     AUTHDEVICE_TRUSTEE = "authdevice"
     JSONRPC_TRUSTEE = "jsonrpc"
+
 
 # Shortcut helper, should NOT be modified
 LOCAL_FACTORY_TRUSTEE_MARKER = dict(trustee_type=TRUSTEE_TYPES.LOCAL_FACTORY_TRUSTEE)
@@ -142,7 +155,7 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
 
 
 def request_decryption_authorizations(
-        trustee_dependencies: dict, keystore_pool, request_message: str, passphrases: Optional[list] = None
+    trustee_dependencies: dict, keystore_pool, request_message: str, passphrases: Optional[list] = None
 ) -> dict:
     """Loop on encryption trustees and request decryption authorization for all the keypairs that they own.
 
@@ -210,7 +223,9 @@ class CryptainerEncryptor(CryptainerBase):
     Contains every method used to write and encrypt a cryptainer, IN MEMORY.
     """
 
-    def build_cryptainer_and_encryption_pipeline(self, *, cryptoconf: dict, output_stream: BinaryIO, keychain_uid=None, metadata=None) -> dict:
+    def build_cryptainer_and_encryption_pipeline(
+        self, *, cryptoconf: dict, output_stream: BinaryIO, keychain_uid=None, metadata=None
+    ) -> dict:
         """
         Build a base cryptainer to store encrypted keys, as well as a stream encryptor
         meant to process heavy payload chunk by chunk.
@@ -227,17 +242,18 @@ class CryptainerEncryptor(CryptainerBase):
         """
 
         cryptainer, payload_cipher_layer_extracts = self._generate_cryptainer_base_and_secrets(
-           cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
+            cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
         )
 
         encryption_pipeline = EncryptionPipeline(
-            output_stream=output_stream,
-            payload_cipher_layer_extracts=payload_cipher_layer_extracts,
+            output_stream=output_stream, payload_cipher_layer_extracts=payload_cipher_layer_extracts
         )
 
         return cryptainer, encryption_pipeline
 
-    def encrypt_data(self, payload: Union[bytes, BinaryIO], *, cryptoconf: dict, keychain_uid=None, metadata=None) -> dict:
+    def encrypt_data(
+        self, payload: Union[bytes, BinaryIO], *, cryptoconf: dict, keychain_uid=None, metadata=None
+    ) -> dict:
         """
         Shortcut when data is already available.
 
@@ -254,15 +270,16 @@ class CryptainerEncryptor(CryptainerBase):
         payload = self._load_payload_bytes_and_cleanup(payload)  # Ensure we get the whole payload buffer
 
         cryptainer, payload_cipher_layer_extracts = self._generate_cryptainer_base_and_secrets(
-           cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
+            cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
         )
 
-        payload_ciphertext, payload_integrity_tags = \
-            self._encrypt_and_hash_payload(payload, payload_cipher_layer_extracts)
+        payload_ciphertext, payload_integrity_tags = self._encrypt_and_hash_payload(
+            payload, payload_cipher_layer_extracts
+        )
 
         cryptainer["payload_ciphertext_struct"] = dict(
-            ciphertext_location=PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE,
-            ciphertext_value=payload_ciphertext)
+            ciphertext_location=PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE, ciphertext_value=payload_ciphertext
+        )
 
         self.add_authentication_data_to_cryptainer(cryptainer, payload_integrity_tags)
 
@@ -296,20 +313,23 @@ class CryptainerEncryptor(CryptainerBase):
             payload_cipherdict = encrypt_bytestring(
                 plaintext=payload_current, cipher_algo=payload_cipher_algo, key_dict=symkey
             )
-            assert isinstance(payload_cipherdict, dict), payload_cipherdict  # Might contain integrity/authentication payload
+            assert isinstance(
+                payload_cipherdict, dict
+            ), payload_cipherdict  # Might contain integrity/authentication payload
 
             payload_ciphertext = payload_cipherdict.pop("ciphertext")  # Mandatory field
-            assert isinstance(payload_ciphertext, bytes), payload_ciphertext  # Same raw content as would be in offloaded payload file
+            assert isinstance(
+                payload_ciphertext, bytes
+            ), payload_ciphertext  # Same raw content as would be in offloaded payload file
 
             payload_digests = {
                 payload_digest_algo: hash_message(payload_ciphertext, hash_algo=payload_digest_algo)
                 for payload_digest_algo in payload_digest_algos
             }
 
-            payload_integrity_tags.append(dict(
-                    payload_macs=payload_cipherdict,  # Only remains tags, macs etc.
-                    payload_digests=payload_digests,
-            ))
+            payload_integrity_tags.append(
+                dict(payload_macs=payload_cipherdict, payload_digests=payload_digests)  # Only remains tags, macs etc.
+            )
 
             payload_current = payload_ciphertext
 
@@ -351,16 +371,16 @@ class CryptainerEncryptor(CryptainerBase):
             key_cipher_layers = payload_cipher_layer["key_cipher_layers"]
 
             key_ciphertext = self._encrypt_key_through_multiple_layers(
-                    keychain_uid=keychain_uid,
-                    key_bytes=key_bytes,
-                    key_cipher_layers=key_cipher_layers)
+                keychain_uid=keychain_uid, key_bytes=key_bytes, key_cipher_layers=key_cipher_layers
+            )
             payload_cipher_layer["key_ciphertext"] = key_ciphertext
 
             payload_cipher_layer_extract = dict(
                 cipher_algo=payload_cipher_algo,
                 symkey=symkey,
-                payload_digest_algos=[signature["payload_digest_algo"] for signature in
-                                      payload_cipher_layer["payload_signatures"]]
+                payload_digest_algos=[
+                    signature["payload_digest_algo"] for signature in payload_cipher_layer["payload_signatures"]
+                ],
             )
             payload_cipher_layer_extracts.append(payload_cipher_layer_extract)
 
@@ -369,13 +389,14 @@ class CryptainerEncryptor(CryptainerBase):
             cryptainer_format=cryptainer_format,
             cryptainer_uid=cryptainer_uid,
             keychain_uid=keychain_uid,
-            payload_ciphertext_struct = None,  # Must be filled asap, by OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER if needed!
+            payload_ciphertext_struct=None,  # Must be filled asap, by OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER if needed!
             cryptainer_metadata=metadata,
         )
         return cryptainer, payload_cipher_layer_extracts
 
-    def _encrypt_key_through_multiple_layers(self, keychain_uid: uuid.UUID, key_bytes: bytes,
-                                             key_cipher_layers: list) -> bytes:
+    def _encrypt_key_through_multiple_layers(
+        self, keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layers: list
+    ) -> bytes:
         # HERE KEY IS REAL KEY OR SHARE !!!
 
         if not key_cipher_layers:
@@ -390,8 +411,9 @@ class CryptainerEncryptor(CryptainerBase):
 
         return key_ciphertext
 
-
-    def _encrypt_key_through_single_layer(self, keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layer: dict) -> dict:
+    def _encrypt_key_through_single_layer(
+        self, keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layer: dict
+    ) -> dict:
         """
         Encrypt a symmetric key using an asymmetric encryption scheme.
 
@@ -429,11 +451,14 @@ class CryptainerEncryptor(CryptainerBase):
             shard_ciphertexts = []
 
             for shard, trustee_conf in zip(shards, key_shared_secret_shards):
-                shard_bytes = dump_to_json_bytes(shard)  # The tuple (idx, payload) of each shard thus becomes encryptable
+                shard_bytes = dump_to_json_bytes(
+                    shard
+                )  # The tuple (idx, payload) of each shard thus becomes encryptable
                 shard_ciphertext = self._encrypt_key_through_multiple_layers(
-                        keychain_uid=keychain_uid,
-                        key_bytes=shard_bytes,
-                        key_cipher_layers=trustee_conf["key_cipher_layers"])  # Recursive structure
+                    keychain_uid=keychain_uid,
+                    key_bytes=shard_bytes,
+                    key_cipher_layers=trustee_conf["key_cipher_layers"],
+                )  # Recursive structure
                 shard_ciphertexts.append(shard_ciphertext)
 
             key_cipherdict = {"shard_ciphertexts": shard_ciphertexts}  # A dict is more future-proof
@@ -474,7 +499,9 @@ class CryptainerEncryptor(CryptainerBase):
         cipherdict = encrypt_bytestring(plaintext=key_bytes, cipher_algo=cipher_algo, key_dict=dict(key=public_key))
         return cipherdict
 
-    def ____obsolete_____encrypt_shards(self, shards: Sequence, key_shared_secret_shards: Sequence, keychain_uid: uuid.UUID) -> list:
+    def ____obsolete_____encrypt_shards(
+        self, shards: Sequence, key_shared_secret_shards: Sequence, keychain_uid: uuid.UUID
+    ) -> list:
         """
         Make a loop through all shards from shared secret algorithm to encrypt each of them.
 
@@ -515,7 +542,9 @@ class CryptainerEncryptor(CryptainerBase):
         payload_cipher_layers = cryptainer["payload_cipher_layers"]
         assert len(payload_cipher_layers) == len(payload_integrity_tags)  # Sanity check
 
-        for payload_cipher_layer, payload_integrity_tags in zip(cryptainer["payload_cipher_layers"], payload_integrity_tags):
+        for payload_cipher_layer, payload_integrity_tags in zip(
+            cryptainer["payload_cipher_layers"], payload_integrity_tags
+        ):
 
             assert payload_cipher_layer["payload_macs"] is None  # Set at cryptainer build time
             payload_cipher_layer["payload_macs"] = payload_integrity_tags["payload_macs"]
@@ -529,8 +558,8 @@ class CryptainerEncryptor(CryptainerBase):
                 signature_conf["payload_digest"] = payload_digests[payload_digest_algo]  # MUST exist, else incoherence
 
                 payload_signature_struct = self._generate_message_signature(
-                    keychain_uid=keychain_uid,
-                   cryptoconf=signature_conf)
+                    keychain_uid=keychain_uid, cryptoconf=signature_conf
+                )
                 signature_conf["payload_signature_struct"] = payload_signature_struct
 
                 _encountered_payload_digest_algos.add(payload_digest_algo)
@@ -550,7 +579,9 @@ class CryptainerEncryptor(CryptainerBase):
         payload_digest = cryptoconf["payload_digest"]  # Must have been set before, using payload_digest_algo field
         assert payload_digest, payload_digest
 
-        trustee_proxy = get_trustee_proxy(trustee=cryptoconf["payload_signature_trustee"], keystore_pool=self._keystore_pool)
+        trustee_proxy = get_trustee_proxy(
+            trustee=cryptoconf["payload_signature_trustee"], keystore_pool=self._keystore_pool
+        )
 
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
 
@@ -564,7 +595,9 @@ class CryptainerEncryptor(CryptainerBase):
 def _get_cryptainer_inline_ciphertext_value(cryptainer):
     assert "payload_ciphertext_struct" in cryptainer, list(cryptainer.keys())
     payload_ciphertext_struct = cryptainer["payload_ciphertext_struct"]
-    assert payload_ciphertext_struct["ciphertext_location"] == PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE, payload_ciphertext_struct["ciphertext_location"]
+    assert (
+        payload_ciphertext_struct["ciphertext_location"] == PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE
+    ), payload_ciphertext_struct["ciphertext_location"]
     ciphertext_value = payload_ciphertext_struct["ciphertext_value"]
     assert isinstance(ciphertext_value, bytes), repr(ciphertext_value)  # Always (no more "special markers")
     return ciphertext_value
@@ -581,7 +614,7 @@ class CryptainerDecryptor(CryptainerBase):
         assert isinstance(cryptainer, dict), cryptainer
         return cryptainer["cryptainer_metadata"]
 
-    def decrypt_payload(self, cryptainer: dict, verify: bool=True) -> bytes:
+    def decrypt_payload(self, cryptainer: dict, verify: bool = True) -> bytes:
         """
         Loop through cryptainer layers, to decipher payload with the right algorithms.
 
@@ -603,19 +636,24 @@ class CryptainerDecryptor(CryptainerBase):
 
         payload_current = _get_cryptainer_inline_ciphertext_value(cryptainer)
 
-        for payload_cipher_layer in reversed(cryptainer["payload_cipher_layers"]):  # Non-emptiness of this will be checked by validator
+        for payload_cipher_layer in reversed(
+            cryptainer["payload_cipher_layers"]
+        ):  # Non-emptiness of this will be checked by validator
 
             payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
 
             for signature_conf in payload_cipher_layer["payload_signatures"]:
-                self._verify_payload_signature(keychain_uid=keychain_uid, payload=payload_current, cryptoconf=signature_conf)
+                self._verify_payload_signature(
+                    keychain_uid=keychain_uid, payload=payload_current, cryptoconf=signature_conf
+                )
 
             key_ciphertext = payload_cipher_layer["key_ciphertext"]  # We start fully encrypted, and unravel it
 
             key_bytes = self._decrypt_key_through_multiple_layers(
                 keychain_uid=keychain_uid,
                 key_ciphertext=key_ciphertext,
-                cipher_layers=payload_cipher_layer["key_cipher_layers"])
+                cipher_layers=payload_cipher_layer["key_cipher_layers"],
+            )
             assert isinstance(key_bytes, bytes), key_bytes
             symkey = load_from_json_bytes(key_bytes)
 
@@ -628,20 +666,22 @@ class CryptainerDecryptor(CryptainerBase):
         data = payload_current  # Now decrypted
         return data
 
-    def _decrypt_key_through_multiple_layers(self, keychain_uid: uuid.UUID, key_ciphertext: bytes, cipher_layers: list) -> bytes:
+    def _decrypt_key_through_multiple_layers(
+        self, keychain_uid: uuid.UUID, key_ciphertext: bytes, cipher_layers: list
+    ) -> bytes:
         key_bytes = key_ciphertext
 
         for key_cipher_layer in reversed(cipher_layers):  # Non-emptiness of this will be checked by validator
             key_cipherdict = load_from_json_bytes(key_bytes)  # We remain as bytes all along
             key_bytes = self._decrypt_key_through_single_layer(
-                keychain_uid=keychain_uid,
-                key_cipherdict=key_cipherdict,
-                cipher_layer=key_cipher_layer,
+                keychain_uid=keychain_uid, key_cipherdict=key_cipherdict, cipher_layer=key_cipher_layer
             )
 
         return key_bytes
 
-    def _decrypt_key_through_single_layer(self, keychain_uid: uuid.UUID, key_cipherdict: dict, cipher_layer: dict) -> bytes:
+    def _decrypt_key_through_single_layer(
+        self, keychain_uid: uuid.UUID, key_cipherdict: dict, cipher_layer: dict
+    ) -> bytes:
         """
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
         by a asymmetric algorithm.
@@ -671,10 +711,13 @@ class CryptainerDecryptor(CryptainerBase):
 
                 try:
                     shard_bytes = self._decrypt_key_through_multiple_layers(
-                            keychain_uid=keychain_uid,
-                            key_ciphertext=shard_ciphertext,
-                            cipher_layers=trustee_conf["key_cipher_layers"])  # Recursive structure
-                    shard = load_from_json_bytes(shard_bytes)  # The tuple (idx, payload) of each shard thus becomes encryptable
+                        keychain_uid=keychain_uid,
+                        key_ciphertext=shard_ciphertext,
+                        cipher_layers=trustee_conf["key_cipher_layers"],
+                    )  # Recursive structure
+                    shard = load_from_json_bytes(
+                        shard_bytes
+                    )  # The tuple (idx, payload) of each shard thus becomes encryptable
                     decrypted_shards.append(shard)
 
                 # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
@@ -699,7 +742,7 @@ class CryptainerDecryptor(CryptainerBase):
         else:  # Using asymmetric algorithm
 
             # FIXME replace by shorter form everywhere in file?
-            keychain_uid_encryption = (cipher_layer.get("keychain_uid") or keychain_uid)
+            keychain_uid_encryption = cipher_layer.get("keychain_uid") or keychain_uid
 
             key_bytes = self._decrypt_with_asymmetric_cipher(
                 cipher_algo=key_cipher_algo,
@@ -710,7 +753,7 @@ class CryptainerDecryptor(CryptainerBase):
             return key_bytes
 
     def _decrypt_with_asymmetric_cipher(
-            self, cipher_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, trustee: dict
+        self, cipher_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, trustee: dict
     ) -> bytes:
         """
         Decrypt given cipherdict with an asymmetric algorithm.
@@ -736,7 +779,9 @@ class CryptainerDecryptor(CryptainerBase):
         )
         return symmetric_key_plaintext
 
-    def ________decrypt_symmetric_key_shard(self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, cryptoconf: dict):
+    def ________decrypt_symmetric_key_shard(
+        self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, cryptoconf: dict
+    ):
         """
         Make a loop through all encrypted shards to decrypt each of them
         :param keychain_uid: uuid for the set of encryption keys used
@@ -803,7 +848,9 @@ class CryptainerDecryptor(CryptainerBase):
         payload_digest_algo = cryptoconf["payload_digest_algo"]
         payload_signature_algo = cryptoconf["payload_signature_algo"]
         keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
-        trustee_proxy = get_trustee_proxy(trustee=cryptoconf["payload_signature_trustee"], keystore_pool=self._keystore_pool)
+        trustee_proxy = get_trustee_proxy(
+            trustee=cryptoconf["payload_signature_trustee"], keystore_pool=self._keystore_pool
+        )
         public_key_pem = trustee_proxy.fetch_public_key(
             keychain_uid=keychain_uid_signature, key_algo=payload_signature_algo, must_exist=True
         )
@@ -813,14 +860,19 @@ class CryptainerDecryptor(CryptainerBase):
 
         expected_payload_digest = cryptoconf.get("payload_digest")  # Might be missing
         if expected_payload_digest and expected_payload_digest != payload_digest:
-            raise RuntimeError("Mismatch between actual and expected payload digests during signature verification")  # FIXME improve that
+            raise RuntimeError(
+                "Mismatch between actual and expected payload digests during signature verification"
+            )  # FIXME improve that
 
         payload_signature_struct = cryptoconf.get("payload_signature_struct")
         if not payload_signature_struct:
             raise RuntimeError("Missing signature structure")  # FIXME improve that
 
         verify_message_signature(
-            message=payload_digest, payload_signature_algo=payload_signature_algo, signature=payload_signature_struct, key=public_key
+            message=payload_digest,
+            payload_signature_algo=payload_signature_algo,
+            signature=payload_signature_struct,
+            key=public_key,
         )  # Raises if troubles
 
 
@@ -831,23 +883,29 @@ class CryptainerEncryptionStream:
     dumps the final cryptainer now containing signatures.
     """
 
-    def __init__(self,
-                 cryptainer_filepath: Path,
-                 *,
-                cryptoconf: dict,
-                metadata: Optional[dict],
-                keychain_uid: Optional[uuid.UUID] = None,
-                keystore_pool: Optional[KeystorePoolBase] = None,
-                dump_initial_cryptainer=True):
+    def __init__(
+        self,
+        cryptainer_filepath: Path,
+        *,
+        cryptoconf: dict,
+        metadata: Optional[dict],
+        keychain_uid: Optional[uuid.UUID] = None,
+        keystore_pool: Optional[KeystorePoolBase] = None,
+        dump_initial_cryptainer=True
+    ):
 
         self._cryptainer_filepath = cryptainer_filepath
-        self._cryptainer_filepath_temp = cryptainer_filepath.with_suffix(cryptainer_filepath.suffix + CRYPTAINER_TEMP_SUFFIX)
+        self._cryptainer_filepath_temp = cryptainer_filepath.with_suffix(
+            cryptainer_filepath.suffix + CRYPTAINER_TEMP_SUFFIX
+        )
 
         offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
-        self._output_data_stream = open(offloaded_file_path, mode='wb')
+        self._output_data_stream = open(offloaded_file_path, mode="wb")
 
         self._cryptainer_decryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
-        self._wip_cryptainer, self._encryption_pipeline = self._cryptainer_decryptor.build_cryptainer_and_encryption_pipeline(output_stream=self._output_data_stream, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
+        self._wip_cryptainer, self._encryption_pipeline = self._cryptainer_decryptor.build_cryptainer_and_encryption_pipeline(
+            output_stream=self._output_data_stream, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
+        )
         self._wip_cryptainer["payload_ciphertext_struct"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Important
 
         if dump_initial_cryptainer:  # Savegame in case the stream is broken before finalization
@@ -855,8 +913,9 @@ class CryptainerEncryptionStream:
 
     def _dump_current_cryptainer_to_filesystem(self, is_temporary):
         filepath = self._cryptainer_filepath_temp if is_temporary else self._cryptainer_filepath
-        dump_cryptainer_to_filesystem(filepath, cryptainer=self._wip_cryptainer,
-                                     offload_payload_ciphertext=False)  # ALREADY offloaded
+        dump_cryptainer_to_filesystem(
+            filepath, cryptainer=self._wip_cryptainer, offload_payload_ciphertext=False
+        )  # ALREADY offloaded
         if not is_temporary:  # Cleanup temporary cryptainer
             self._cryptainer_filepath_temp.unlink(missing_ok=True)
 
@@ -875,7 +934,9 @@ class CryptainerEncryptionStream:
     def __del__(self):
         # Emergency closing of open file on deletion
         if not self._output_data_stream.closed:
-            logger.error("Encountered abnormal open file in __del__ of CryptainerEncryptionStream: %s" % self._output_data_stream)
+            logger.error(
+                "Encountered abnormal open file in __del__ of CryptainerEncryptionStream: %s" % self._output_data_stream
+            )
             self._output_data_stream.close()
 
 
@@ -900,10 +961,14 @@ def encrypt_payload_and_dump_cryptainer_to_filesystem(
     instead of creating a whole cryptainer and then dumping it to disk.
     """
     # No need to dump initial (signature-less) cryptainer here, this is all a quick operation...
-    encryptor = CryptainerEncryptionStream(cryptainer_filepath,
-                cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata,
-                keystore_pool=keystore_pool,
-                dump_initial_cryptainer=False)
+    encryptor = CryptainerEncryptionStream(
+        cryptainer_filepath,
+        cryptoconf=cryptoconf,
+        keychain_uid=keychain_uid,
+        metadata=metadata,
+        keystore_pool=keystore_pool,
+        dump_initial_cryptainer=False,
+    )
 
     for chunk in consume_bytes_as_chunks(payload, chunk_size=DATA_CHUNK_SIZE):
         encryptor.encrypt_chunk(chunk)
@@ -930,12 +995,18 @@ def encrypt_payload_into_cryptainer(
     :return: dict of cryptainer
     """
     cryptainer_encryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
-    cryptainer = cryptainer_encryptor.encrypt_data(payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata)
+    cryptainer = cryptainer_encryptor.encrypt_data(
+        payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata
+    )
     return cryptainer
 
 
 def decrypt_payload_from_cryptainer(
-    cryptainer: dict, *, keystore_pool: Optional[KeystorePoolBase] = None, passphrase_mapper: Optional[dict] = None, verify: bool=True
+    cryptainer: dict,
+    *,
+    keystore_pool: Optional[KeystorePoolBase] = None,
+    passphrase_mapper: Optional[dict] = None,
+    verify: bool = True
 ) -> bytes:
     """Decrypt a cryptainer with the help of third-parties.
 
@@ -1001,7 +1072,9 @@ def get_cryptoconf_summary(conf_or_cryptainer):
 
 def _get_offloaded_file_path(cryptainer_filepath: Path):
     """We also support, discreetly, TEMPORARY cryptainers"""
-    return cryptainer_filepath.parent.joinpath(cryptainer_filepath.name.rstrip(CRYPTAINER_TEMP_SUFFIX) + OFFLOADED_PAYLOAD_FILENAME_SUFFIX)
+    return cryptainer_filepath.parent.joinpath(
+        cryptainer_filepath.name.rstrip(CRYPTAINER_TEMP_SUFFIX) + OFFLOADED_PAYLOAD_FILENAME_SUFFIX
+    )
 
 
 def dump_cryptainer_to_filesystem(cryptainer_filepath: Path, cryptainer: dict, offload_payload_ciphertext=True) -> None:
@@ -1031,8 +1104,8 @@ def load_cryptainer_from_filesystem(cryptainer_filepath: Path, include_payload_c
             offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
             ciphertext_value = offloaded_file_path.read_bytes()
             cryptainer["payload_ciphertext_struct"] = dict(
-                ciphertext_location=PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE,
-                ciphertext_value=ciphertext_value)
+                ciphertext_location=PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE, ciphertext_value=ciphertext_value
+            )
     else:
         del cryptainer["payload_ciphertext_struct"]  # Ensure that a nasty error pops if we try to access it
 
@@ -1059,6 +1132,7 @@ def get_cryptainer_size_on_filesystem(cryptainer_filepath):
 
 
 # FIXME add ReadonlyCryptainerStorage here!!
+
 
 class CryptainerStorage:
     """
@@ -1113,7 +1187,9 @@ class CryptainerStorage:
         """Beware, might be SLOW if many files are present in folder."""
         return len(self.list_cryptainer_names())  # No sorting, to be quicker
 
-    def list_cryptainer_names(self, as_sorted_list: bool=False, as_absolute_paths: bool=False):  # FIXME add annotations everywhere in this class
+    def list_cryptainer_names(
+        self, as_sorted_list: bool = False, as_absolute_paths: bool = False
+    ):  # FIXME add annotations everywhere in this class
         """Returns the list of encrypted cryptainers present in storage,
         sorted by name or not, absolute or not, as Path objects."""
         assert self._cryptainer_dir.is_absolute(), self._cryptainer_dir
@@ -1131,8 +1207,12 @@ class CryptainerStorage:
             dt = datetime.strptime(cryptainer_name.name[:CRYPTAINER_DATETIME_LENGTH], CRYPTAINER_DATETIME_FORMAT)
             dt = dt.replace(tzinfo=timezone.utc)
         except ValueError:
-            logger.warning("Couldn't recognize timestamp in filename %s, falling back to file time", cryptainer_name.name)
-            mtime = self._make_absolute(cryptainer_name).stat().st_mtime  # FIXME - Might fail if file got deleted concurrently
+            logger.warning(
+                "Couldn't recognize timestamp in filename %s, falling back to file time", cryptainer_name.name
+            )
+            mtime = (
+                self._make_absolute(cryptainer_name).stat().st_mtime
+            )  # FIXME - Might fail if file got deleted concurrently
             dt = datetime.fromtimestamp(mtime, tz=timezone.utc)
         return dt
 
@@ -1151,7 +1231,7 @@ class CryptainerStorage:
             entry = dict(name=cryptainer_name)
             if with_age:
                 cryptainer_datetime = self._get_cryptainer_datetime_utc(cryptainer_name)
-                entry["age"] = now - cryptainer_datetime   # We keep as timedelta
+                entry["age"] = now - cryptainer_datetime  # We keep as timedelta
             if with_size:
                 entry["size"] = self._get_cryptainer_size(cryptainer_name)
             result.append(entry)
@@ -1203,34 +1283,40 @@ class CryptainerStorage:
                 for deleted_cryptainer_dict in deleted_cryptainer_dicts:
                     self._delete_cryptainer(deleted_cryptainer_dict["name"])
 
-    def _encrypt_payload_and_dump_cryptainer_to_filesystem(self, payload, cryptainer_filepath, metadata, keychain_uid, cryptoconf):
+    def _encrypt_payload_and_dump_cryptainer_to_filesystem(
+        self, payload, cryptainer_filepath, metadata, keychain_uid, cryptoconf
+    ):
         assert cryptoconf, cryptoconf
         encrypt_payload_and_dump_cryptainer_to_filesystem(
-                cryptainer_filepath=cryptainer_filepath,
-                payload=payload,
-                   cryptoconf=cryptoconf,
-                    metadata=metadata,
-                    keychain_uid=keychain_uid,
-                    keystore_pool=self._keystore_pool,
-                )
-
-    def _encrypt_payload_into_cryptainer(self, payload, metadata, keychain_uid, cryptoconf):
-        assert cryptoconf, cryptoconf
-        return encrypt_payload_into_cryptainer(
+            cryptainer_filepath=cryptainer_filepath,
             payload=payload,
-           cryptoconf=cryptoconf,
+            cryptoconf=cryptoconf,
             metadata=metadata,
             keychain_uid=keychain_uid,
             keystore_pool=self._keystore_pool,
         )
 
-    def _decrypt_payload_from_cryptainer(self, cryptainer: dict, passphrase_mapper: Optional[dict], verify: bool) -> bytes:
+    def _encrypt_payload_into_cryptainer(self, payload, metadata, keychain_uid, cryptoconf):
+        assert cryptoconf, cryptoconf
+        return encrypt_payload_into_cryptainer(
+            payload=payload,
+            cryptoconf=cryptoconf,
+            metadata=metadata,
+            keychain_uid=keychain_uid,
+            keystore_pool=self._keystore_pool,
+        )
+
+    def _decrypt_payload_from_cryptainer(
+        self, cryptainer: dict, passphrase_mapper: Optional[dict], verify: bool
+    ) -> bytes:
         return decrypt_payload_from_cryptainer(
             cryptainer, keystore_pool=self._keystore_pool, passphrase_mapper=passphrase_mapper, verify=verify
         )  # Will fail if authorizations are not OK
 
     @catch_and_log_exception
-    def _offloaded_encrypt_payload_and_dump_cryptainer(self, filename_base, payload, metadata, keychain_uid, cryptoconf):
+    def _offloaded_encrypt_payload_and_dump_cryptainer(
+        self, filename_base, payload, metadata, keychain_uid, cryptoconf
+    ):
         """Task to be called by background thread, which encrypts a payload into a disk cryptainer.
 
         Returns the cryptainer basename."""
@@ -1245,9 +1331,17 @@ class CryptainerStorage:
 
         if self._use_streaming_encryption_for_cryptoconf(cryptoconf):
             # We can use newer, low-memory, streamed API
-            logger.debug("Encrypting payload file %s into offloaded cryptainer directly streamed to storage file %s", filename_base, cryptainer_filepath)
+            logger.debug(
+                "Encrypting payload file %s into offloaded cryptainer directly streamed to storage file %s",
+                filename_base,
+                cryptainer_filepath,
+            )
             self._encrypt_payload_and_dump_cryptainer_to_filesystem(
-                payload, cryptainer_filepath=cryptainer_filepath, metadata=metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
+                payload,
+                cryptainer_filepath=cryptainer_filepath,
+                metadata=metadata,
+                keychain_uid=keychain_uid,
+                cryptoconf=cryptoconf,
             )
 
         else:
@@ -1282,16 +1376,20 @@ class CryptainerStorage:
         return cryptoconf
 
     @synchronized
-    def create_cryptainer_encryption_stream(self, filename_base, metadata, keychain_uid=None, cryptoconf=None, dump_initial_cryptainer=True):
+    def create_cryptainer_encryption_stream(
+        self, filename_base, metadata, keychain_uid=None, cryptoconf=None, dump_initial_cryptainer=True
+    ):
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
         cryptainer_filepath = self._make_absolute(filename_base + CRYPTAINER_SUFFIX)
         cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
-        cryptainer_encryption_stream = CryptainerEncryptionStream(cryptainer_filepath,
-                     cryptoconf=cryptoconf,
-                     metadata=metadata,
-                     keychain_uid=keychain_uid,
-                     keystore_pool=self._keystore_pool,
-                     dump_initial_cryptainer=dump_initial_cryptainer)
+        cryptainer_encryption_stream = CryptainerEncryptionStream(
+            cryptainer_filepath,
+            cryptoconf=cryptoconf,
+            metadata=metadata,
+            keychain_uid=keychain_uid,
+            keystore_pool=self._keystore_pool,
+            dump_initial_cryptainer=dump_initial_cryptainer,
+        )
         return cryptainer_encryption_stream
 
     @synchronized
@@ -1348,10 +1446,14 @@ class CryptainerStorage:
 
         logger.info("Loading cryptainer %s from storage", cryptainer_name)
         cryptainer_filepath = self._make_absolute(cryptainer_name)
-        cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath, include_payload_ciphertext=include_payload_ciphertext)
+        cryptainer = load_cryptainer_from_filesystem(
+            cryptainer_filepath, include_payload_ciphertext=include_payload_ciphertext
+        )
         return cryptainer
 
-    def decrypt_cryptainer_from_storage(self, cryptainer_name_or_idx, passphrase_mapper: Optional[dict]=None, verify: bool=True) -> bytes:
+    def decrypt_cryptainer_from_storage(
+        self, cryptainer_name_or_idx, passphrase_mapper: Optional[dict] = None, verify: bool = True
+    ) -> bytes:
         """
         Return the decrypted content of the cryptainer `cryptainer_name_or_idx` (which must be in `list_cryptainer_names()`,
         or an index suitable for this sorted list).
@@ -1386,26 +1488,32 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
 
     if extended_json_format:
         # global SCHEMA_CRYPTAINERS
-        _micro_schema_hex_uid = And(str, Or(Regex(
-            '^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$'), Regex(
-            '[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}')))
-        micro_schema_uid = {
-            "$binary": {
-                "base64": _micro_schema_hex_uid,
-                "subType": "03"}}
+        _micro_schema_hex_uid = And(
+            str,
+            Or(
+                Regex("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$"),
+                Regex("[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"),
+            ),
+        )
+        micro_schema_uid = {"$binary": {"base64": _micro_schema_hex_uid, "subType": "03"}}
         micro_schema_binary = {
             "$binary": {
-                "base64": And(str,
-                              Regex(
-                                  '^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$')),
-                "subType": "00"}
+                "base64": And(
+                    str, Regex("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$")
+                ),
+                "subType": "00",
+            }
         }
         micro_schema_int = {
-            "$numberInt": And(str, Regex(
-                '^(-?\d{1,9}|-?1\d{9}|-?20\d{8}|-?21[0-3]\d{7}|-?214[0-6]\d{6}|-?2147[0-3]\d{5}|-?21474[0-7]\d{4}|-?214748[012]\d{4}|-?2147483[0-5]\d{3}|-?21474836[0-3]\d{2}|214748364[0-7]|-214748364[0-8])$'))}
+            "$numberInt": And(
+                str,
+                Regex(
+                    "^(-?\d{1,9}|-?1\d{9}|-?20\d{8}|-?21[0-3]\d{7}|-?214[0-6]\d{6}|-?2147[0-3]\d{5}|-?21474[0-7]\d{4}|-?214748[012]\d{4}|-?2147483[0-5]\d{3}|-?21474836[0-3]\d{2}|214748364[0-7]|-214748364[0-8])$"
+                ),
+            )
+        }
 
-        micro_schema_long = {
-            "$numberLong": And(str, Regex('^([+-]?[0-9]\d*|0)$'))}
+        micro_schema_long = {"$numberLong": And(str, Regex("^([+-]?[0-9]\d*|0)$"))}
 
     extra_cryptainer = {}
     extra_payload_cipher_layer = {}
@@ -1415,7 +1523,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
         "payload_signature_algo": Or(*SUPPORTED_SIGNATURE_ALGOS),
         "payload_signature_trustee": LOCAL_FACTORY_TRUSTEE_MARKER,  # FIXME BAD
-        OptionalKey("keychain_uid"): micro_schema_uid
+        OptionalKey("keychain_uid"): micro_schema_uid,
     }
 
     if for_cryptainer:
@@ -1424,8 +1532,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
             "cryptainer_format": "cryptainer_1.0",
             "cryptainer_uid": micro_schema_uid,
             "payload_ciphertext_struct": Or(
-                {"ciphertext_location": PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE,
-                 "ciphertext_value": micro_schema_binary},
+                {"ciphertext_location": PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE, "ciphertext_value": micro_schema_binary},
                 OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
             ),
             "cryptainer_metadata": Or(dict, None),
@@ -1433,47 +1540,53 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
 
         extra_payload_cipher_layer = {
             "key_ciphertext": micro_schema_binary,
-            "payload_macs": {
-                OptionalKey("tag"): micro_schema_binary  # For now only "tag" is used
-            }
+            "payload_macs": {OptionalKey("tag"): micro_schema_binary},  # For now only "tag" is used
         }
 
         extra_payload_signature = {
             OptionalKey("payload_digest"): micro_schema_binary,
             OptionalKey("payload_signature_struct"): {
                 "signature_value": micro_schema_binary,
-                "signature_timestamp_utc": Or(micro_schema_int, micro_schema_long, int)}
+                "signature_timestamp_utc": Or(micro_schema_int, micro_schema_long, int),
+            },
         }
 
     SIMPLE_CRYPTAINER_PIECE = {
         "key_cipher_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
         "key_cipher_trustee": Const(LOCAL_FACTORY_TRUSTEE_MARKER),
-        OptionalKey("keychain_uid"): micro_schema_uid
+        OptionalKey("keychain_uid"): micro_schema_uid,
     }
 
     RECURSIVE_SHARED_SECRET = []
 
-    SHARED_SECRET_CRYPTAINER_PIECE = Schema({
-        "key_cipher_algo": SHARED_SECRET_ALGO_MARKER,
-        "key_shared_secret_shards": [{
-            "key_cipher_layers": [SIMPLE_CRYPTAINER_PIECE]}],
-        "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schema_int),
-    }, name="recursive_shared_secret", as_reference=True)
+    SHARED_SECRET_CRYPTAINER_PIECE = Schema(
+        {
+            "key_cipher_algo": SHARED_SECRET_ALGO_MARKER,
+            "key_shared_secret_shards": [{"key_cipher_layers": [SIMPLE_CRYPTAINER_PIECE]}],
+            "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schema_int),
+        },
+        name="recursive_shared_secret",
+        as_reference=True,
+    )
 
     RECURSIVE_SHARED_SECRET.append(SHARED_SECRET_CRYPTAINER_PIECE)
 
     payload_signature.update(extra_payload_signature)
 
-    SCHEMA_CRYPTAINERS = Schema({
-        **extra_cryptainer,
-        "payload_cipher_layers": [{
-            "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
-            "payload_signatures": [payload_signature],
-            **extra_payload_cipher_layer,
-            "key_cipher_layers": [SIMPLE_CRYPTAINER_PIECE, SHARED_SECRET_CRYPTAINER_PIECE]
-        }],
-        OptionalKey("keychain_uid"): micro_schema_uid,
-    })
+    SCHEMA_CRYPTAINERS = Schema(
+        {
+            **extra_cryptainer,
+            "payload_cipher_layers": [
+                {
+                    "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
+                    "payload_signatures": [payload_signature],
+                    **extra_payload_cipher_layer,
+                    "key_cipher_layers": [SIMPLE_CRYPTAINER_PIECE, SHARED_SECRET_CRYPTAINER_PIECE],
+                }
+            ],
+            OptionalKey("keychain_uid"): micro_schema_uid,
+        }
+    )
 
     return SCHEMA_CRYPTAINERS
 
@@ -1481,7 +1594,9 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
 CONF_SCHEMA_PYTHON = _create_schema(for_cryptainer=False, extended_json_format=False)
 CONF_SCHEMA_JSON = _create_schema(for_cryptainer=False, extended_json_format=True).json_schema("conf_schema.json")
 CRYPTAINER_SCHEMA_PYTHON = _create_schema(for_cryptainer=True, extended_json_format=False)
-CRYPTAINER_SCHEMA_JSON = _create_schema(for_cryptainer=True, extended_json_format=True).json_schema("cryptainer_schema.json")
+CRYPTAINER_SCHEMA_JSON = _create_schema(for_cryptainer=True, extended_json_format=True).json_schema(
+    "cryptainer_schema.json"
+)
 
 
 def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):

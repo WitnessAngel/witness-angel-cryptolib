@@ -32,22 +32,29 @@ from wacryptolib.cryptainer import (
     gather_trustee_dependencies,
     get_trustee_proxy,
     request_decryption_authorizations,
-    delete_cryptainer_from_filesystem, CRYPTAINER_DATETIME_FORMAT, get_cryptainer_size_on_filesystem,
+    delete_cryptainer_from_filesystem,
+    CRYPTAINER_DATETIME_FORMAT,
+    get_cryptainer_size_on_filesystem,
     CryptainerEncryptor,
-    encrypt_payload_and_dump_cryptainer_to_filesystem, is_cryptainer_cryptoconf_streamable, check_conf_sanity,
+    encrypt_payload_and_dump_cryptainer_to_filesystem,
+    is_cryptainer_cryptoconf_streamable,
+    check_conf_sanity,
     check_cryptainer_sanity,
-    CRYPTAINER_TEMP_SUFFIX, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
+    CRYPTAINER_TEMP_SUFFIX,
+    OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
 )
 from wacryptolib.exceptions import DecryptionError, ConfigurationError, DecryptionIntegrityError, ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_keypair
 from wacryptolib.keystore import DummyKeystore, FilesystemKeystore, FilesystemKeystorePool, InMemoryKeystorePool
-from wacryptolib.trustee import (
-    TrusteeApi,
-    generate_keypair_for_storage,
+from wacryptolib.trustee import TrusteeApi, generate_keypair_for_storage
+from wacryptolib.utilities import (
+    load_from_json_bytes,
+    dump_to_json_bytes,
+    generate_uuid0,
+    get_utc_now_date,
+    dump_to_json_str,
 )
-from wacryptolib.utilities import load_from_json_bytes, dump_to_json_bytes, generate_uuid0, get_utc_now_date, \
-    dump_to_json_str
 from wacryptolib.utilities import load_from_json_file
 
 
@@ -69,7 +76,11 @@ VOID_CRYPTOCONF_REGARDING_KEY_CIPHER_LAYERS = dict(  # Forbidden
             payload_cipher_algo="AES_CBC",
             key_cipher_layers=[],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                dict(
+                    payload_digest_algo="SHA256",
+                    payload_signature_algo="DSA_DSS",
+                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                )
             ],
         )
     ]
@@ -102,7 +113,11 @@ SIMPLE_CRYPTOCONF = dict(
             payload_cipher_algo="AES_CBC",
             key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                dict(
+                    payload_digest_algo="SHA256",
+                    payload_signature_algo="DSA_DSS",
+                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                )
             ],
         )
     ]
@@ -133,10 +148,18 @@ COMPLEX_CRYPTOCONF = dict(
         dict(
             payload_cipher_algo="AES_CBC",
             key_cipher_layers=[
-                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID1)
+                dict(
+                    key_cipher_algo="RSA_OAEP",
+                    key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                    keychain_uid=ENFORCED_UID1,
+                )
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                dict(
+                    payload_digest_algo="SHA3_512",
+                    payload_signature_algo="DSA_DSS",
+                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                )
             ],
         ),
         dict(
@@ -146,7 +169,11 @@ COMPLEX_CRYPTOCONF = dict(
                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA3_256", payload_signature_algo="RSA_PSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
+                dict(
+                    payload_digest_algo="SHA3_256",
+                    payload_signature_algo="RSA_PSS",
+                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                ),
                 dict(
                     payload_digest_algo="SHA512",
                     payload_signature_algo="ECC_DSS",
@@ -190,25 +217,49 @@ SIMPLE_SHAMIR_CRYPTOCONF = dict(
                     key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
                     key_shared_secret_threshold=3,
                     key_shared_secret_shards=[
-                        dict(key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
-                        dict(key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
-                        dict(key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
-                        dict(key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
-                        dict(key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID1)],),
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                        dict(
+                            key_cipher_layers=[
+                                dict(
+                                    key_cipher_algo="RSA_OAEP",
+                                    key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                                    keychain_uid=ENFORCED_UID1,
+                                )
+                            ]
+                        ),
                     ],
                 ),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                dict(
+                    payload_digest_algo="SHA256",
+                    payload_signature_algo="DSA_DSS",
+                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                )
             ],
         )
     ]
 )
+
 
 def SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
     return {
@@ -229,6 +280,7 @@ def SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
         },
     }
 
+
 COMPLEX_SHAMIR_CRYPTOCONF = dict(
     payload_cipher_layers=[
         dict(
@@ -240,7 +292,11 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
             payload_cipher_algo="AES_CBC",
             key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
             payload_signatures=[
-                dict(payload_digest_algo="SHA3_512", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                dict(
+                    payload_digest_algo="SHA3_512",
+                    payload_signature_algo="DSA_DSS",
+                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                )
             ],
         ),
         dict(
@@ -250,15 +306,31 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                     key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
                     key_shared_secret_threshold=2,
                     key_shared_secret_shards=[
-                        dict(key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
-                        dict(key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
-                        dict(key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
-                        dict(key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER, keychain_uid=ENFORCED_UID2)],),
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
+                            ]
+                        ),
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                        dict(
+                            key_cipher_layers=[
+                                dict(
+                                    key_cipher_algo="RSA_OAEP",
+                                    key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                                    keychain_uid=ENFORCED_UID2,
+                                )
+                            ]
+                        ),
                     ],
                 )
             ],
@@ -269,7 +341,11 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                     payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
                     keychain_uid=ENFORCED_UID1,
                 ),
-                dict(payload_digest_algo="SHA512", payload_signature_algo="ECC_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
+                dict(
+                    payload_digest_algo="SHA512",
+                    payload_signature_algo="ECC_DSS",
+                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                ),
             ],
         ),
     ]
@@ -277,7 +353,7 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
 
 
 def COMPLEX_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
-     return {
+    return {
         "encryption": {
             "[('trustee_type', 'local_factory')]": (
                 {"trustee_type": "local_factory"},
@@ -317,20 +393,14 @@ def _dump_to_raw_json_tree(data):
 def _intialize_cryptainer_with_single_file(tmp_path):  # FIXME generalize its use in different test functions below
     storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainer_dir=tmp_path)
 
-    storage.enqueue_file_for_encryption(
-        "animals.dat", b"dogs\ncats\n", metadata=None
-    )
+    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
     storage.wait_for_idle_state()
     cryptainer_name, = storage.list_cryptainer_names()
     return storage, cryptainer_name
 
 
 @pytest.mark.parametrize(
-    "cryptoconf",
-    [
-        VOID_CRYPTOCONF_REGARDING_PAYLOAD_CIPHER_LAYERS,
-        VOID_CRYPTOCONF_REGARDING_KEY_CIPHER_LAYERS,
-    ],
+    "cryptoconf", [VOID_CRYPTOCONF_REGARDING_PAYLOAD_CIPHER_LAYERS, VOID_CRYPTOCONF_REGARDING_KEY_CIPHER_LAYERS]
 )
 def test_void_cryptoconfs(cryptoconf):
     keystore_pool = InMemoryKeystorePool()
@@ -361,12 +431,21 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
     if use_streaming_encryption and is_cryptainer_cryptoconf_streamable(cryptoconf):
         cryptainer_filepath = tmp_path / "mygoodcryptainer.crypt"
         encrypt_payload_and_dump_cryptainer_to_filesystem(
-            payload=payload, cryptainer_filepath=cryptainer_filepath,
-                cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, keystore_pool=keystore_pool)
+            payload=payload,
+            cryptainer_filepath=cryptainer_filepath,
+            cryptoconf=cryptoconf,
+            keychain_uid=keychain_uid,
+            metadata=metadata,
+            keystore_pool=keystore_pool,
+        )
         cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath, include_payload_ciphertext=True)
     else:
         cryptainer = encrypt_payload_into_cryptainer(
-            payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, metadata=metadata, keystore_pool=keystore_pool
+            payload=payload,
+            cryptoconf=cryptoconf,
+            keychain_uid=keychain_uid,
+            metadata=metadata,
+            keystore_pool=keystore_pool,
         )
 
     assert cryptainer["keychain_uid"]
@@ -510,20 +589,29 @@ RECURSIVE_CRYPTOCONF = dict(
                     key_shared_secret_threshold=1,
                     key_shared_secret_shards=[
                         dict(
-                             key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],),
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
                         dict(
-                             key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)]),
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
                     ],  # Beware, same trustee for the 2 shards, for now
                 ),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                dict(
+                    payload_digest_algo="SHA256",
+                    payload_signature_algo="DSA_DSS",
+                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                )
             ],
         )
     ]
 )
+
 
 def test_recursive_shamir_secrets_and_layers():
     keychain_uid = generate_uuid0()
@@ -533,9 +621,7 @@ def test_recursive_shamir_secrets_and_layers():
         payload=payload, cryptoconf=RECURSIVE_CRYPTOCONF, keychain_uid=keychain_uid, metadata=None
     )
 
-    data_decrypted = decrypt_payload_from_cryptainer(
-            cryptainer=cryptainer,
-    )
+    data_decrypted = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
     assert data_decrypted == payload
 
@@ -545,9 +631,7 @@ def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
     cryptoconf["payload_cipher_layers"][0]["payload_cipher_algo"] = payload_cipher_algo
 
-    cryptainer = encrypt_payload_into_cryptainer(
-        payload=b"1234", cryptoconf=cryptoconf, metadata=None
-    )
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"1234", cryptoconf=cryptoconf, metadata=None)
     cryptainer["payload_cipher_layers"][0]["payload_macs"]["tag"] += b"hi"  # CORRUPTION
 
     result = decrypt_payload_from_cryptainer(cryptainer, verify=False)
@@ -576,9 +660,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     all_passphrases = [local_passphrase, passphrase1, passphrase2, passphrase3]
 
     keystore_pool = InMemoryKeystorePool()
-    keystore_pool._register_fake_imported_storage_uids(
-        storage_uids=[keystore_uid1, keystore_uid2, keystore_uid3]
-    )
+    keystore_pool._register_fake_imported_storage_uids(storage_uids=[keystore_uid1, keystore_uid2, keystore_uid3])
 
     local_keystore = keystore_pool.get_local_factory_keystore()
     generate_keypair_for_storage(
@@ -618,12 +700,21 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                         key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
                         key_shared_secret_threshold=2,
                         key_shared_secret_shards=[
-                            dict(key_cipher_layers=[
-                                     dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee1, keychain_uid=keychain_uid_trustee)],),
-                            dict(key_cipher_layers=[
-                                     dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee2)],),
-                            dict(key_cipher_layers=[
-                                     dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee3)],),
+                            dict(
+                                key_cipher_layers=[
+                                    dict(
+                                        key_cipher_algo="RSA_OAEP",
+                                        key_cipher_trustee=shard_trustee1,
+                                        keychain_uid=keychain_uid_trustee,
+                                    )
+                                ]
+                            ),
+                            dict(
+                                key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee2)]
+                            ),
+                            dict(
+                                key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee3)]
+                            ),
                         ],
                     ),
                 ],
@@ -723,7 +814,9 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         storage.decrypt_cryptainer_from_storage("beauty.txt.crypt")
 
     verify = random_bool()
-    decrypted = storage.decrypt_cryptainer_from_storage("beauty.txt.crypt", passphrase_mapper={None: all_passphrases}, verify=verify)
+    decrypted = storage.decrypt_cryptainer_from_storage(
+        "beauty.txt.crypt", passphrase_mapper={None: all_passphrases}, verify=verify
+    )
     assert decrypted == payload
 
 
@@ -815,7 +908,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
 
     _cryptainer_for_txt = storage.load_cryptainer_from_storage("empty.txt.crypt")
     assert storage.load_cryptainer_from_storage(1) == _cryptainer_for_txt
-    assert _cryptainer_for_txt["payload_ciphertext_struct"]   # Padding occurs for AES_CBC
+    assert _cryptainer_for_txt["payload_ciphertext_struct"]  # Padding occurs for AES_CBC
 
     _cryptainer_for_txt2 = storage.load_cryptainer_from_storage("empty.txt.crypt", include_payload_ciphertext=False)
     assert storage.load_cryptainer_from_storage(1, include_payload_ciphertext=False) == _cryptainer_for_txt2
@@ -917,7 +1010,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
     storage.wait_for_idle_state()
     assert len(storage) == 4  # Purge occurred
     assert storage.list_cryptainer_names(as_sorted_list=True) == [
-        Path('aaa.dat.000.crypt'),  # It's the file timestamps that counts, not the name!
+        Path("aaa.dat.000.crypt"),  # It's the file timestamps that counts, not the name!
         Path("xyz.dat.002.crypt"),
         Path("xyz.dat.003.crypt"),
         Path("zzz.dat.001.crypt"),
@@ -936,7 +1029,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
 
     assert storage.list_cryptainer_names(as_sorted_list=True) == [
         Path("20201121_222727_whatever.dat.002.crypt"),
-        Path('aaa.dat.000.crypt'),
+        Path("aaa.dat.000.crypt"),
         Path("xyz.dat.003.crypt"),
         Path("zzz.dat.001.crypt"),
     ]
@@ -947,10 +1040,10 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
 
     print(">>>>>>>", storage.list_cryptainer_names(as_sorted_list=True))
     assert storage.list_cryptainer_names(as_sorted_list=True) == [
-        Path('21201121_222729_smth.dat.003.crypt'),
-        Path('aaa.dat.000.crypt'),  # It's the file timestamps that counts, not the name!
-        Path('lmn.dat.004.crypt'),
-        Path('zzz.dat.001.crypt'),
+        Path("21201121_222729_smth.dat.003.crypt"),
+        Path("aaa.dat.000.crypt"),  # It's the file timestamps that counts, not the name!
+        Path("lmn.dat.004.crypt"),
+        Path("zzz.dat.001.crypt"),
     ]
 
     assert storage._max_cryptainer_count
@@ -977,36 +1070,39 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
     )
 
     assert storage.list_cryptainer_names(as_sorted_list=True) == [
-        Path('20201021_222700_oldfile.dat.crypt'),
-        Path('20301021_222711_oldfile.dat.crypt'),
+        Path("20201021_222700_oldfile.dat.crypt"),
+        Path("20301021_222711_oldfile.dat.crypt"),
     ]
 
     dt = now - timedelta(seconds=1)
     for i in range(5):
-        storage.enqueue_file_for_encryption("%s_stuff.dat" % dt.strftime(CRYPTAINER_DATETIME_FORMAT),
-                                            b"abc", metadata=None)
+        storage.enqueue_file_for_encryption(
+            "%s_stuff.dat" % dt.strftime(CRYPTAINER_DATETIME_FORMAT), b"abc", metadata=None
+        )
         dt -= timedelta(days=1)
-    storage.enqueue_file_for_encryption("whatever_stuff.dat", b"xxx", metadata=None)  # File timestamp with be used instead
+    storage.enqueue_file_for_encryption(
+        "whatever_stuff.dat", b"xxx", metadata=None
+    )  # File timestamp with be used instead
     storage.wait_for_idle_state()
 
     cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
 
-    assert Path('20201021_222700_oldfile.dat.crypt') not in cryptainer_names
+    assert Path("20201021_222700_oldfile.dat.crypt") not in cryptainer_names
 
-    assert Path('20301021_222711_oldfile.dat.crypt') in cryptainer_names
-    assert Path('whatever_stuff.dat.005.crypt') in cryptainer_names
+    assert Path("20301021_222711_oldfile.dat.crypt") in cryptainer_names
+    assert Path("whatever_stuff.dat.005.crypt") in cryptainer_names
 
     assert len(storage) == 4  # 2 listed just above + 2 recent "<date>_stuff.dat" from loop
 
     # Change mtime to VERY old!
-    os.utime(storage._make_absolute(Path('whatever_stuff.dat.005.crypt')), (1000, 1000))
+    os.utime(storage._make_absolute(Path("whatever_stuff.dat.005.crypt")), (1000, 1000))
 
     storage.enqueue_file_for_encryption("abcde.dat", b"xxx", metadata=None)
     storage.wait_for_idle_state()
 
     cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
-    assert Path('whatever_stuff.dat.005.crypt') not in cryptainer_names
-    assert Path('abcde.dat.006.crypt') in cryptainer_names
+    assert Path("whatever_stuff.dat.005.crypt") not in cryptainer_names
+    assert Path("abcde.dat.006.crypt") in cryptainer_names
 
     assert len(storage) == 4
 
@@ -1015,7 +1111,9 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
 
     storage.enqueue_file_for_encryption("abc.dat", b"000", metadata=None)
     storage.wait_for_idle_state()
-    assert storage.list_cryptainer_names(as_sorted_list=True) == [Path('20301021_222711_oldfile.dat.crypt')]  # ALL PURGED
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [
+        Path("20301021_222711_oldfile.dat.crypt")
+    ]  # ALL PURGED
 
 
 def test_cryptainer_storage_purge_by_quota(tmp_path):
@@ -1030,11 +1128,11 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
     )
     assert not len(storage)
 
-    storage.enqueue_file_for_encryption("20101021_222711_stuff.dat", b"a"*2000, metadata=None)
-    storage.enqueue_file_for_encryption("20301021_222711_stuff.dat", b"z"*2000, metadata=None)
+    storage.enqueue_file_for_encryption("20101021_222711_stuff.dat", b"a" * 2000, metadata=None)
+    storage.enqueue_file_for_encryption("20301021_222711_stuff.dat", b"z" * 2000, metadata=None)
 
     for i in range(10):
-        storage.enqueue_file_for_encryption("some_stuff.dat", b"m"*1000, metadata=None)
+        storage.enqueue_file_for_encryption("some_stuff.dat", b"m" * 1000, metadata=None)
     storage.wait_for_idle_state()
 
     cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
@@ -1043,18 +1141,20 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
 
     if offload_payload_ciphertext:  # Offloaded cryptainers are smaller due to skipping of base64 encoding of ciphertext
         assert cryptainer_names == [
-            Path('20301021_222711_stuff.dat.001.crypt'),
-            Path('some_stuff.dat.007.crypt'),
-            Path('some_stuff.dat.008.crypt'),
-            Path('some_stuff.dat.009.crypt'),
-            Path('some_stuff.dat.010.crypt'),
-            Path('some_stuff.dat.011.crypt')]
+            Path("20301021_222711_stuff.dat.001.crypt"),
+            Path("some_stuff.dat.007.crypt"),
+            Path("some_stuff.dat.008.crypt"),
+            Path("some_stuff.dat.009.crypt"),
+            Path("some_stuff.dat.010.crypt"),
+            Path("some_stuff.dat.011.crypt"),
+        ]
     else:
         assert cryptainer_names == [
-            Path('20301021_222711_stuff.dat.001.crypt'),
-            Path('some_stuff.dat.009.crypt'),
-            Path('some_stuff.dat.010.crypt'),
-            Path('some_stuff.dat.011.crypt')]
+            Path("20301021_222711_stuff.dat.001.crypt"),
+            Path("some_stuff.dat.009.crypt"),
+            Path("some_stuff.dat.010.crypt"),
+            Path("some_stuff.dat.011.crypt"),
+        ]
 
     assert storage._max_cryptainer_quota
     storage._max_cryptainer_quota = 0
@@ -1070,7 +1170,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
 
     recent_big_file_name = "%s_recent_big_stuff.dat" % now.strftime(CRYPTAINER_DATETIME_FORMAT)
 
-    params_sets = product([None, 2],[None, 1000], [None, timedelta(days=3)])
+    params_sets = product([None, 2], [None, 1000], [None, timedelta(days=3)])
 
     for max_cryptainer_count, max_cryptainer_quota, max_cryptainer_age in params_sets:
         offload_payload_ciphertext = random_bool()
@@ -1085,15 +1185,17 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
         )
 
         storage.enqueue_file_for_encryption("20001121_222729_smth.dat", b"000", metadata=None)
-        storage.enqueue_file_for_encryption(recent_big_file_name, b"0"*2000, metadata=None)
-        storage.enqueue_file_for_encryption("recent_small_file.dat", b"0"*50, metadata=None)
+        storage.enqueue_file_for_encryption(recent_big_file_name, b"0" * 2000, metadata=None)
+        storage.enqueue_file_for_encryption("recent_small_file.dat", b"0" * 50, metadata=None)
 
         storage.wait_for_idle_state()
 
         cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
 
-        assert (Path("20001121_222729_smth.dat.000.crypt") in cryptainer_names) == (not (max_cryptainer_count or max_cryptainer_quota or max_cryptainer_age))
-        assert (Path(recent_big_file_name +".001.crypt") in cryptainer_names) == (not max_cryptainer_quota)
+        assert (Path("20001121_222729_smth.dat.000.crypt") in cryptainer_names) == (
+            not (max_cryptainer_count or max_cryptainer_quota or max_cryptainer_age)
+        )
+        assert (Path(recent_big_file_name + ".001.crypt") in cryptainer_names) == (not max_cryptainer_quota)
         assert (Path("recent_small_file.dat.002.crypt") in cryptainer_names) == True
 
     # Special case of "everything restricted"
@@ -1106,7 +1208,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
         max_cryptainer_age=timedelta(days=0),
         offload_payload_ciphertext=False,
     )
-    storage.enqueue_file_for_encryption("some_small_file.dat", b"0"*50, metadata=None)
+    storage.enqueue_file_for_encryption("some_small_file.dat", b"0" * 50, metadata=None)
     storage.wait_for_idle_state()
 
     cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
@@ -1123,9 +1225,7 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
     with pytest.raises(RuntimeError, match="cryptoconf"):
         storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
 
-    storage.enqueue_file_for_encryption(
-        "animals.dat", b"dogs\ncats\n", metadata=None, cryptoconf=SIMPLE_CRYPTOCONF
-    )
+    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None, cryptoconf=SIMPLE_CRYPTOCONF)
 
     storage.wait_for_idle_state()
     assert storage.list_cryptainer_names() == [Path("animals.dat.crypt")]
@@ -1134,9 +1234,7 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
 
     storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path)
     storage.enqueue_file_for_encryption("stuff_simple.txt", b"aaa", metadata=None)
-    storage.enqueue_file_for_encryption(
-        "stuff_complex.txt", b"xxx", metadata=None, cryptoconf=COMPLEX_CRYPTOCONF
-    )
+    storage.enqueue_file_for_encryption("stuff_complex.txt", b"xxx", metadata=None, cryptoconf=COMPLEX_CRYPTOCONF)
     storage.wait_for_idle_state()
 
     cryptainer_simple = storage.load_cryptainer_from_storage("stuff_simple.txt.crypt")
@@ -1148,9 +1246,7 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
 def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
     storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainer_dir=tmp_path)
 
-    storage.enqueue_file_for_encryption(
-        "animals.dat", b"dogs\ncats\n", metadata=None
-    )
+    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", metadata=None)
     storage.wait_for_idle_state()
     cryptainer_name, = storage.list_cryptainer_names()
 
@@ -1158,7 +1254,9 @@ def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
     cryptainer["payload_cipher_layers"][0]["payload_macs"]["tag"] += b"hi"  # CORRUPTION of EAX
 
     cryptainer_filepath = storage._make_absolute(cryptainer_name)
-    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False)  # Don't touch existing offloaded data
+    dump_cryptainer_to_filesystem(
+        cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False
+    )  # Don't touch existing offloaded data
 
     result = storage.decrypt_cryptainer_from_storage(cryptainer_name, verify=False)
     assert result == b"dogs\ncats\n"
@@ -1182,7 +1280,9 @@ def test_get_cryptoconf_summary():
             """
     )  # Ending by newline!
 
-    cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=SIMPLE_CRYPTOCONF, keychain_uid=None, metadata=None)
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload, cryptoconf=SIMPLE_CRYPTOCONF, keychain_uid=None, metadata=None
+    )
     summary2 = get_cryptoconf_summary(cryptainer)
     assert summary2 == summary  # Identical summary for cryptoconf and generated cryptainers!
 
@@ -1217,7 +1317,9 @@ def test_get_cryptoconf_summary():
 
     _public_key = generate_keypair(key_algo="RSA_OAEP")["public_key"]
     with patch.object(JsonRpcProxy, "fetch_public_key", return_value=_public_key, create=True) as mock_method:
-        cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=CONF_WITH_TRUSTEE, keychain_uid=None, metadata=None)
+        cryptainer = encrypt_payload_into_cryptainer(
+            payload=payload, cryptoconf=CONF_WITH_TRUSTEE, keychain_uid=None, metadata=None
+        )
         summary2 = get_cryptoconf_summary(cryptainer)
         assert summary2 == summary  # Identical summary for cryptoconf and generated cryptainers!
 
@@ -1259,14 +1361,16 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
     assert "payload_ciphertext_struct" not in cryptainer_truncated
     assert cryptainer_truncated == cryptainer_without_ciphertext
 
-    assert cryptainer["payload_ciphertext_struct"] == cryptainer_ciphertext_struct_before_dump  # Original dict unchanged
+    assert (
+        cryptainer["payload_ciphertext_struct"] == cryptainer_ciphertext_struct_before_dump
+    )  # Original dict unchanged
 
     size1 = get_cryptainer_size_on_filesystem(cryptainer_filepath)
     assert size1
 
     assert cryptainer_filepath.exists()
-    #delete_cryptainer_from_filesystem(cryptainer_filepath)
-    #assert not cryptainer_filepath.exists()
+    # delete_cryptainer_from_filesystem(cryptainer_filepath)
+    # assert not cryptainer_filepath.exists()
 
     # CASE 2 - OFFLOADED CIPHERTEXT FILE
 
@@ -1285,10 +1389,12 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
     assert "payload_ciphertext_struct" not in cryptainer_truncated
     assert cryptainer_truncated == cryptainer_without_ciphertext
 
-    assert cryptainer["payload_ciphertext_struct"] == cryptainer_ciphertext_struct_before_dump  # Original dict unchanged
+    assert (
+        cryptainer["payload_ciphertext_struct"] == cryptainer_ciphertext_struct_before_dump
+    )  # Original dict unchanged
 
     size2 = get_cryptainer_size_on_filesystem(cryptainer_filepath)
-    assert size2 < size1   # Overhead of base64 encoding in monolithic file!
+    assert size2 < size1  # Overhead of base64 encoding in monolithic file!
     assert size1 < size2 + 1000  # Overhead remaings limited though
 
     assert cryptainer_filepath.exists()
@@ -1309,9 +1415,9 @@ def test_generate_cryptainer_and_symmetric_keys():
         del payload_cipher_layer["symkey"]
 
     assert extracts == [
-        {'cipher_algo': 'AES_EAX', 'payload_digest_algos': []},
-        {'cipher_algo': 'AES_CBC', 'payload_digest_algos': ['SHA3_512']},
-        {'cipher_algo': 'CHACHA20_POLY1305', 'payload_digest_algos': ['SHA3_256', 'SHA512']}
+        {"cipher_algo": "AES_EAX", "payload_digest_algos": []},
+        {"cipher_algo": "AES_CBC", "payload_digest_algos": ["SHA3_512"]},
+        {"cipher_algo": "CHACHA20_POLY1305", "payload_digest_algos": ["SHA3_256", "SHA512"]},
     ]
 
 
@@ -1325,9 +1431,12 @@ def test_create_cryptainer_encryption_stream(tmp_path):
     storage = CryptainerStorage(default_cryptoconf=None, cryptainer_dir=cryptainer_dir)
 
     cryptainer_encryption_stream = storage.create_cryptainer_encryption_stream(
-        filename_base, metadata={"mymetadata": True}, cryptoconf=SIMPLE_CRYPTOCONF, dump_initial_cryptainer=True)
+        filename_base, metadata={"mymetadata": True}, cryptoconf=SIMPLE_CRYPTOCONF, dump_initial_cryptainer=True
+    )
 
-    cryptainer_started = storage.load_cryptainer_from_storage("20200101_cryptainer_example.crypt" + CRYPTAINER_TEMP_SUFFIX)
+    cryptainer_started = storage.load_cryptainer_from_storage(
+        "20200101_cryptainer_example.crypt" + CRYPTAINER_TEMP_SUFFIX
+    )
     assert cryptainer_started["cryptainer_state"] == "STARTED"
 
     cryptainer_encryption_stream.encrypt_chunk(b"bonjour")
@@ -1347,23 +1456,16 @@ def ___obsolete_test_encrypt_payload_and_dump_cryptainer_to_filesystem(tmp_path)
     cryptainer_filepath = tmp_path / "my_streamed_cryptainer.crypt"
 
     encrypt_payload_and_dump_cryptainer_to_filesystem(
-        data_plaintext,
-        cryptainer_filepath=cryptainer_filepath,
-        cryptoconf=SIMPLE_CRYPTOCONF,
-        metadata=None)
+        data_plaintext, cryptainer_filepath=cryptainer_filepath, cryptoconf=SIMPLE_CRYPTOCONF, metadata=None
+    )
 
     cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath)  # Fetches offloaded content too
     assert cryptainer["payload_ciphertext_struct"] == data_plaintext  # TEMPORARY FOR FAKE STREAM ENCRYPTOR
 
 
 @pytest.mark.parametrize(
-    "cryptoconf",
-    [
-        SIMPLE_CRYPTOCONF,
-        COMPLEX_CRYPTOCONF,
-        SIMPLE_SHAMIR_CRYPTOCONF,
-        COMPLEX_SHAMIR_CRYPTOCONF
-    ])
+    "cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF]
+)
 def test_conf_validation_success(cryptoconf):
     check_conf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
 
@@ -1407,10 +1509,9 @@ def test_conf_validation_error(corrupted_conf):
         check_conf_sanity(cryptoconf=corrupted_conf_json, jsonschema_mode=True)
 
 
-@pytest.mark.parametrize("cryptoconf", [SIMPLE_CRYPTOCONF,
-                                  COMPLEX_CRYPTOCONF,
-                                  SIMPLE_SHAMIR_CRYPTOCONF,
-                                  COMPLEX_SHAMIR_CRYPTOCONF])
+@pytest.mark.parametrize(
+    "cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF]
+)
 def test_cryptainer_validation_success(cryptoconf):
     cryptainer = encrypt_payload_into_cryptainer(
         payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, metadata=None
@@ -1463,7 +1564,9 @@ def test_cryptainer_storage_check_cryptainer_sanity(tmp_path):
     cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
     cryptainer["payload_cipher_layers"][0]["bad_name_of_attribute"] = 42
     cryptainer_filepath = storage._make_absolute(cryptainer_name)
-    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False)  # Don't touch existing
+    dump_cryptainer_to_filesystem(
+        cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False
+    )  # Don't touch existing
     ##############
 
     with pytest.raises(ValidationError):

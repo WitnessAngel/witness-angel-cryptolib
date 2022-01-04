@@ -19,6 +19,14 @@ Check it then with::
     $ poetry config --list
 
 
+Reformatting code
+-----------------------
+
+Command to use from repository root::
+
+    black -l 120 src tests
+
+
 Publishing a new version
 ------------------------------
 

@@ -1,4 +1,3 @@
-
 import logging
 from datetime import datetime, timezone
 from json import JSONDecodeError
@@ -55,6 +54,7 @@ def catch_and_log_exception(f, *args, **kwargs):
 
 def get_memory_rss_bytes():
     import psutil
+
     process = psutil.Process(os.getpid())
     rss = process.memory_info().rss  # in bytes
     return rss
@@ -88,7 +88,6 @@ def safe_copy_directory(from_dir: Path, to_dir: Path, temp_prefix="__", **extra_
     os.rename(to_dir_tmp, to_dir)
 
 
-
 ### Public utilities ###
 
 
@@ -112,17 +111,17 @@ def consume_bytes_as_chunks(data: Union[bytes, BinaryIO], chunk_size: int):  # F
         while True:
             chunk = data.read(chunk_size)
             if not chunk:
-                break;
+                break
             yield chunk
         data.close()
         delete_filesystem_node_for_stream(data)
     else:  # Object with a len()
         for i in range(0, len(data), chunk_size):
-            yield data[i:i + chunk_size]  # TODO use memoryview to optimize?
+            yield data[i : i + chunk_size]  # TODO use memoryview to optimize?
 
 
 def split_as_chunks(
-        bytestring: bytes, *, chunk_size: int, must_pad: bool, accept_incomplete_chunk: bool = False
+    bytestring: bytes, *, chunk_size: int, must_pad: bool, accept_incomplete_chunk: bool = False
 ) -> List[bytes]:
     """Split a `bytestring` into chunks (or blocks)
 
@@ -145,7 +144,7 @@ def split_as_chunks(
     chunks = []
 
     for i in range(chunks_count):
-        chunk = bytestring[i * chunk_size: (i + 1) * chunk_size]
+        chunk = bytestring[i * chunk_size : (i + 1) * chunk_size]
         chunks.append(chunk)
     return chunks
 

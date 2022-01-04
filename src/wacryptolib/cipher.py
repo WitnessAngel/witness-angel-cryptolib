@@ -46,9 +46,7 @@ def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) ->
     return cipherdict
 
 
-def decrypt_bytestring(
-        cipherdict: dict, *, cipher_algo: str, key_dict: dict, verify: bool=True
-) -> bytes:
+def decrypt_bytestring(cipherdict: dict, *, cipher_algo: str, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
@@ -90,7 +88,7 @@ def _encrypt_via_aes_cbc(plaintext: bytes, key_dict: dict) -> dict:
     return cipherdict
 
 
-def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict, verify: bool=True) -> bytes:
+def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring using AES (CBC mode).
 
     :param cipherdict: dict with field "ciphertext" as bytestring
@@ -127,7 +125,7 @@ def _encrypt_via_aes_eax(plaintext: bytes, key_dict: dict) -> dict:
     return cipherdict
 
 
-def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify: bool=True) -> bytes:
+def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring using AES (EAX mode).
 
     :param cipherdict: dict with fields "ciphertext", "tag" as bytestrings
@@ -166,7 +164,7 @@ def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict) -> dict:
     return encryption
 
 
-def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify: bool=True) -> bytes:
+def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring with the stream cipher ChaCha20.
 
     :param cipherdict: dict with fields "ciphertext", "tag" and "nonce" as bytestrings
@@ -206,7 +204,7 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
     return dict(digest_list=encrypted_chunks)
 
 
-def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool=True) -> bytes:
+def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
     """Decrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
     :param cipherdict: list of ciphertext chunks
@@ -231,6 +229,7 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool=True) -
 
 class EncryptionNodeBase:
     """General class of Encrytion Stream Node"""
+
     _is_finished = False
 
     BLOCK_SIZE = 1
@@ -269,8 +268,9 @@ class EncryptionNodeBase:
         """
         assert not self._is_finished
         if self.BLOCK_SIZE != 1:
-            formatted_plaintext, self._remainder = utilities.split_as_formatted_data(self._remainder, plaintext,
-                                                                                     block_size=self.BLOCK_SIZE)
+            formatted_plaintext, self._remainder = utilities.split_as_formatted_data(
+                self._remainder, plaintext, block_size=self.BLOCK_SIZE
+            )
             plaintext = formatted_plaintext
         ciphertext = self._encrypt_aligned_payload(plaintext)
         return ciphertext
@@ -304,8 +304,7 @@ class EncryptionNodeBase:
         """
         assert self._is_finished
 
-        return dict(payload_macs=self._get_payload_macs(),
-                    payload_digests=self._get_payload_digests())
+        return dict(payload_macs=self._get_payload_macs(), payload_digests=self._get_payload_digests())
 
     def _get_payload_digests(self) -> dict:
         hashes = {}
@@ -321,6 +320,7 @@ class EncryptionNodeBase:
 
 class AesCbcEncryptionNode(EncryptionNodeBase):
     """Encrypt a bytestring using AES (CBC mode)."""
+
     BLOCK_SIZE = AES.block_size
 
     def __init__(self, key_dict: dict, payload_digest_algo=()):
@@ -375,10 +375,10 @@ class EncryptionPipeline:
 
             if encryption_class is None:
                 raise ValueError(
-                    "Node class %s is not implemented" % payload_cipher_algo)  # FIXME use custom exception class
+                    "Node class %s is not implemented" % payload_cipher_algo
+                )  # FIXME use custom exception class
 
-            self._cipher_streams.append(
-                encryption_class(key_dict=symkey, payload_digest_algo=payload_digest_algos))
+            self._cipher_streams.append(encryption_class(key_dict=symkey, payload_digest_algo=payload_digest_algos))
 
     def encrypt_chunk(self, chunk):
         for cipher in self._cipher_streams:
@@ -408,19 +408,31 @@ class EncryptionPipeline:
 CIPHER_ALGOS_REGISTRY = dict(
     ## SYMMETRIC ENCRYPTION ##
     # ALL encryption/decryption routines must handle a "ciphertext" attribute on their cipherdict
-    AES_CBC={"encryption_function": _encrypt_via_aes_cbc, "decryption_function": _decrypt_via_aes_cbc,
-             "encryption_node_class": AesCbcEncryptionNode, "is_authenticated": False},
-    AES_EAX={"encryption_function": _encrypt_via_aes_eax, "decryption_function": _decrypt_via_aes_eax,
-             "encryption_node_class": AesEaxEncryptionNode, "is_authenticated": True},
+    AES_CBC={
+        "encryption_function": _encrypt_via_aes_cbc,
+        "decryption_function": _decrypt_via_aes_cbc,
+        "encryption_node_class": AesCbcEncryptionNode,
+        "is_authenticated": False,
+    },
+    AES_EAX={
+        "encryption_function": _encrypt_via_aes_eax,
+        "decryption_function": _decrypt_via_aes_eax,
+        "encryption_node_class": AesEaxEncryptionNode,
+        "is_authenticated": True,
+    },
     CHACHA20_POLY1305={
         "encryption_function": _encrypt_via_chacha20_poly1305,
         "decryption_function": _decrypt_via_chacha20_poly1305,
         "encryption_node_class": Chacha20Poly1305EncryptionNode,
-        "is_authenticated": True
+        "is_authenticated": True,
     },
     ## ASYMMETRIC ENCRYPTION (proper part of the keypair must be provided) ##
-    RSA_OAEP={"encryption_function": _encrypt_via_rsa_oaep, "decryption_function": _decrypt_via_rsa_oaep,
-              "encryption_node_class": None, "is_authenticated": False},
+    RSA_OAEP={
+        "encryption_function": _encrypt_via_rsa_oaep,
+        "decryption_function": _decrypt_via_rsa_oaep,
+        "encryption_node_class": None,
+        "is_authenticated": False,
+    },
 )
 
 #: These values can be used as 'cipher_algo'.

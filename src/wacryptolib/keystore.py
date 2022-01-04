@@ -13,8 +13,13 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from schema import Or, And, Optional, SchemaError, Schema
 
-from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist, KeystoreDoesNotExist, KeystoreAlreadyExists, \
-    ValidationError
+from wacryptolib.exceptions import (
+    KeyAlreadyExists,
+    KeyDoesNotExist,
+    KeystoreDoesNotExist,
+    KeystoreAlreadyExists,
+    ValidationError,
+)
 from wacryptolib.utilities import synchronized, safe_copy_directory, load_from_json_file
 
 logger = logging.getLogger(__name__)
@@ -24,13 +29,15 @@ def non_empty(value):
     return bool(value)
 
 
-KEYSTORE_SCHEMA = Schema({
-    "keystore_type": Or("localfactory", "authenticator", "gateway"),
-    "keystore_format": "keystore_1.0",  # For forward compatibility
-    "keystore_uid": UUID,
-    "keystore_owner": And(str, non_empty),
-    Optional("keystore_passphrase_hint"): And(str, non_empty),
-})
+KEYSTORE_SCHEMA = Schema(
+    {
+        "keystore_type": Or("localfactory", "authenticator", "gateway"),
+        "keystore_format": "keystore_1.0",  # For forward compatibility
+        "keystore_uid": UUID,
+        "keystore_owner": And(str, non_empty),
+        Optional("keystore_passphrase_hint"): And(str, non_empty),
+    }
+)
 
 
 def _validate_keystore_metadata(keystore_metadata):
@@ -212,6 +219,7 @@ class DummyKeystore(KeystoreBase):
 
 # FIXME add ReadonlyFilesystemKeystore and use it for IMPORTED keystores!!
 
+
 class FilesystemKeystore(KeystoreBase):
     """
     Filesystem-based key storage for use in tests, where keys are kepts only instance-locally.
@@ -231,9 +239,7 @@ class FilesystemKeystore(KeystoreBase):
     PUBLIC_KEY_FILENAME_REGEX = r"^(?P<keychain_uid>[-0-9a-z]+)_(?P<key_algo>[_A-Z]+)%s$" % _public_key_suffix
 
     def _ensure_free_keys_dir_exists(self):
-        self._free_keys_dir.mkdir(
-            exist_ok=True
-        )
+        self._free_keys_dir.mkdir(exist_ok=True)
 
     def __init__(self, keys_dir: Path):
         keys_dir = Path(keys_dir)
@@ -426,7 +432,9 @@ class InMemoryKeystorePool(KeystorePoolBase):
         self._imported_keystores.update(new_storages)
 
 
-class FilesystemKeystorePool(KeystorePoolBase):  # FIXME rename methods to better represent authdevices, remote authenticators etc. ??
+class FilesystemKeystorePool(
+    KeystorePoolBase
+):  # FIXME rename methods to better represent authdevices, remote authenticators etc. ??
     """This class handles a set of locally stored key storages.
 
     The local storage represents the current device/owner, and is expected to be used by read-write trustees,

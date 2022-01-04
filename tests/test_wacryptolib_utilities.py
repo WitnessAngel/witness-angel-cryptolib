@@ -21,7 +21,8 @@ from wacryptolib.utilities import (
     generate_uuid0,
     SUPPORTED_HASH_ALGOS,
     hash_message,
-    safe_copy_directory, get_utc_now_date,
+    safe_copy_directory,
+    get_utc_now_date,
 )
 
 

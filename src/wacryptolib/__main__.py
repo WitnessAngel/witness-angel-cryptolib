@@ -39,15 +39,25 @@ EXAMPLE_CRYPTOCONF = dict(
                     key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_shards=[
-                        dict(key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)]),
-                        dict(key_cipher_layers=[
-                                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)]),
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
                     ],  # Beware, same trustee for the 2 shards, for now
                 ),
             ],
             payload_signatures=[
-                dict(payload_digest_algo="SHA256", payload_signature_algo="DSA_DSS", payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                dict(
+                    payload_digest_algo="SHA256",
+                    payload_signature_algo="DSA_DSS",
+                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                )
             ],
         )
     ]

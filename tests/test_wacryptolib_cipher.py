@@ -120,9 +120,7 @@ def test_symmetric_encryption_and_decryption_for_algo(cipher_algo, use_empty_dat
 def test_rsa_oaep_asymmetric_encryption_and_decryption():
     key_length_bits = random.choice([2048, 3072, 4096])
     cipher_algo = "RSA_OAEP"
-    keypair = wacryptolib.keygen.generate_keypair(
-        key_algo="RSA_OAEP", serialize=False, key_length_bits=key_length_bits
-    )
+    keypair = wacryptolib.keygen.generate_keypair(key_algo="RSA_OAEP", serialize=False, key_length_bits=key_length_bits)
 
     binary_content = _get_binary_content()
 
@@ -166,21 +164,22 @@ def test_stream_manager(cipher_algo_list):
 
     payload_cipher_layer_extracts = []
     for cipher_algo in cipher_algo_list:
-        payload_cipher_layers_extract = {'cipher_algo': cipher_algo,
-                                          'symkey': generate_symkey(cipher_algo),
-                                          'payload_digest_algos': random.choices(SUPPORTED_HASH_ALGOS, k=randint(1,
-                                                                                                                 len(SUPPORTED_HASH_ALGOS)))}
+        payload_cipher_layers_extract = {
+            "cipher_algo": cipher_algo,
+            "symkey": generate_symkey(cipher_algo),
+            "payload_digest_algos": random.choices(SUPPORTED_HASH_ALGOS, k=randint(1, len(SUPPORTED_HASH_ALGOS))),
+        }
         payload_cipher_layer_extracts.append(payload_cipher_layers_extract)
     print(payload_cipher_layer_extracts)
 
     EncryptionPipeline = wacryptolib.cipher.EncryptionPipeline(
-        payload_cipher_layer_extracts=payload_cipher_layer_extracts,
-        output_stream=output_stream)
+        payload_cipher_layer_extracts=payload_cipher_layer_extracts, output_stream=output_stream
+    )
 
     plaintext_full = get_random_bytes(randint(10, 10000))
 
     plaintext_current = plaintext_full
-    while plaintext_current:     # TODO factorize this utility of looping through chunks!
+    while plaintext_current:  # TODO factorize this utility of looping through chunks!
         chunk_length = randint(1, 300)
         chunk = plaintext_current[0:chunk_length]
         plaintext_current = plaintext_current[chunk_length:]
@@ -190,22 +189,23 @@ def test_stream_manager(cipher_algo_list):
 
     current_ciphertext = output_stream.getvalue()
 
-    for payload_encryption_node, authentication_data in zip(reversed(payload_cipher_layer_extracts),
-                                                         reversed(EncryptionPipeline.get_payload_integrity_tags())):
+    for payload_encryption_node, authentication_data in zip(
+        reversed(payload_cipher_layer_extracts), reversed(EncryptionPipeline.get_payload_integrity_tags())
+    ):
 
-        for hash_algo in payload_encryption_node['payload_digest_algos']:
+        for hash_algo in payload_encryption_node["payload_digest_algos"]:
             new_hash = hash_message(message=current_ciphertext, hash_algo=hash_algo)
-            expected_hash = authentication_data['payload_digests'][hash_algo]
+            expected_hash = authentication_data["payload_digests"][hash_algo]
             assert new_hash == expected_hash
 
         cipherdict = {"ciphertext": current_ciphertext}
         cipherdict.update(authentication_data["payload_macs"])
 
-        decrypted_ciphertext = wacryptolib.cipher.decrypt_bytestring(cipherdict=cipherdict,
-                                                                     cipher_algo=payload_encryption_node[
-                                                                             'cipher_algo'],
-                                                                     key_dict=payload_encryption_node[
-                                                                             "symkey"])
+        decrypted_ciphertext = wacryptolib.cipher.decrypt_bytestring(
+            cipherdict=cipherdict,
+            cipher_algo=payload_encryption_node["cipher_algo"],
+            key_dict=payload_encryption_node["symkey"],
+        )
 
         current_ciphertext = decrypted_ciphertext
 
@@ -236,7 +236,9 @@ def test_symmetric_decryption_verify(cipher_algo):
     )
     assert decrypted_content == binary_content
 
-    decryption_callable = lambda: wacryptolib.cipher.decrypt_bytestring(key_dict=key_dict, cipherdict=cipherdict, cipher_algo=cipher_algo, verify=True)
+    decryption_callable = lambda: wacryptolib.cipher.decrypt_bytestring(
+        key_dict=key_dict, cipherdict=cipherdict, cipher_algo=cipher_algo, verify=True
+    )
 
     # Decryption should fail if verify==True, but only for algorithms that enforce an authentication check
     if is_corruptable:

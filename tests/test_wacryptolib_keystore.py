@@ -144,9 +144,7 @@ def test_keystore_pool_basics(tmp_path: Path):
     assert isinstance(local_keystore, FilesystemKeystore)
     assert not local_keystore.list_keypair_identifiers()
 
-    keypair = generate_keypair_for_storage(
-        key_algo="RSA_OAEP", keystore=local_keystore, passphrase="xzf".encode()
-    )
+    keypair = generate_keypair_for_storage(key_algo="RSA_OAEP", keystore=local_keystore, passphrase="xzf".encode())
 
     assert len(local_keystore.list_keypair_identifiers()) == 1
 

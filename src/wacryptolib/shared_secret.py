@@ -24,9 +24,7 @@ def split_bytestring_as_shards(secret: bytes, *, shard_count: int, threshold_cou
         raise ValueError("shards count must be strictly positive")
 
     if threshold_count > shard_count:
-        raise ValueError(
-            "Threshold count %s can't be higher than shared count %s" % (threshold_count, shard_count)
-        )
+        raise ValueError("Threshold count %s can't be higher than shared count %s" % (threshold_count, shard_count))
 
     all_chunk_shards = []  # List of lists of related 16-bytes shards
 

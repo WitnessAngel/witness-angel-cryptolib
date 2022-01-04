@@ -9,7 +9,7 @@ from Crypto.Random import get_random_bytes
 from Crypto.Random.random import randint
 
 import wacryptolib
-from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS
+from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipeline
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
 from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey
@@ -172,7 +172,7 @@ def test_stream_manager(cipher_algo_list):
         payload_cipher_layer_extracts.append(payload_cipher_layers_extract)
     print(payload_cipher_layer_extracts)
 
-    EncryptionPipeline = wacryptolib.cipher.EncryptionPipeline(
+    encryption_pipeline = PayloadEncryptionPipeline(
         payload_cipher_layer_extracts=payload_cipher_layer_extracts, output_stream=output_stream
     )
 
@@ -183,14 +183,14 @@ def test_stream_manager(cipher_algo_list):
         chunk_length = randint(1, 300)
         chunk = plaintext_current[0:chunk_length]
         plaintext_current = plaintext_current[chunk_length:]
-        EncryptionPipeline.encrypt_chunk(chunk)
+        encryption_pipeline.encrypt_chunk(chunk)
 
-    EncryptionPipeline.finalize()
+    encryption_pipeline.finalize()
 
     current_ciphertext = output_stream.getvalue()
 
     for payload_encryption_node, authentication_data in zip(
-        reversed(payload_cipher_layer_extracts), reversed(EncryptionPipeline.get_payload_integrity_tags())
+        reversed(payload_cipher_layer_extracts), reversed(encryption_pipeline.get_payload_integrity_tags())
     ):
 
         for hash_algo in payload_encryption_node["payload_digest_algos"]:

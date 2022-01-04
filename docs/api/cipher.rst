@@ -17,7 +17,7 @@ Public API
 
 .. autofunction:: wacryptolib.cipher.decrypt_bytestring
 
-.. autoclass:: wacryptolib.cipher.EncryptionPipeline
+.. autoclass:: wacryptolib.cipher.PayloadEncryptionPipeline
 
 
 Private API

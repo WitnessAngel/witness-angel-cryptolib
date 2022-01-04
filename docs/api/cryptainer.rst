@@ -16,7 +16,7 @@ Cryptainer object processing
 
 .. autofunction:: wacryptolib.cryptainer.get_cryptoconf_summary
 
-.. autoclass:: wacryptolib.cryptainer.CryptainerEncryptionStream
+.. autoclass:: wacryptolib.cryptainer.CryptainerEncryptionPipeline
 
 .. autofunction:: wacryptolib.cryptainer.encrypt_payload_and_dump_cryptainer_to_filesystem
 
@@ -43,6 +43,8 @@ Filesystem operations
 
 Cryptainer storage system
 ---------------------------------
+
+.. autoclass:: wacryptolib.cryptainer.ReadonlyCryptainerStorage
 
 .. autoclass:: wacryptolib.cryptainer.CryptainerStorage
 

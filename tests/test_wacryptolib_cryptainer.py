@@ -36,12 +36,12 @@ from wacryptolib.cryptainer import (
     CRYPTAINER_DATETIME_FORMAT,
     get_cryptainer_size_on_filesystem,
     CryptainerEncryptor,
-    encrypt_payload_and_dump_cryptainer_to_filesystem,
+    encrypt_payload_and_stream_cryptainer_to_filesystem,
     is_cryptainer_cryptoconf_streamable,
     check_conf_sanity,
     check_cryptainer_sanity,
     CRYPTAINER_TEMP_SUFFIX,
-    OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
+    OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, ReadonlyCryptainerStorage,
 )
 from wacryptolib.exceptions import DecryptionError, DecryptionIntegrityError, ValidationError, SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -431,7 +431,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
 
     if use_streaming_encryption and is_cryptainer_cryptoconf_streamable(cryptoconf):
         cryptainer_filepath = tmp_path / "mygoodcryptainer.crypt"
-        encrypt_payload_and_dump_cryptainer_to_filesystem(
+        encrypt_payload_and_stream_cryptainer_to_filesystem(
             payload=payload,
             cryptainer_filepath=cryptainer_filepath,
             cryptoconf=cryptoconf,
@@ -1266,6 +1266,30 @@ def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
         storage.decrypt_cryptainer_from_storage(cryptainer_name, verify=True)
 
 
+def test_readonly_cryptainer_storage(tmp_path):
+    """For now we just test that the base ReadonlyCryptainerStorage class doesn't have dangerous fields."""
+
+    normal_storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainer_dir=tmp_path)
+    readonly_storage = ReadonlyCryptainerStorage(cryptainer_dir=tmp_path)
+
+    forbidden_fields = [
+        # Methods
+        "delete_cryptainer",
+        "create_cryptainer_encryption_stream",
+        "enqueue_file_for_encryption",
+        "_offloaded_encrypt_payload_and_dump_cryptainer",
+        "wait_for_idle_state",
+        # Attributes
+        "_thread_pool_executor",
+        "_keystore_pool",
+        "_default_cryptoconf",
+    ]
+
+    for forbidden_field in forbidden_fields:
+        assert hasattr(normal_storage, forbidden_field)
+        assert not hasattr(readonly_storage, forbidden_field)
+
+
 def test_get_cryptoconf_summary():
     payload = b"some data whatever"
 
@@ -1452,11 +1476,11 @@ def test_create_cryptainer_encryption_stream(tmp_path):
     assert plaintext == b"bonjoureveryone"
 
 
-def ___obsolete_test_encrypt_payload_and_dump_cryptainer_to_filesystem(tmp_path):
+def ___obsolete_test_encrypt_payload_and_stream_cryptainer_to_filesystem(tmp_path):
     data_plaintext = b"abcd1234" * 10
     cryptainer_filepath = tmp_path / "my_streamed_cryptainer.crypt"
 
-    encrypt_payload_and_dump_cryptainer_to_filesystem(
+    encrypt_payload_and_stream_cryptainer_to_filesystem(
         data_plaintext, cryptainer_filepath=cryptainer_filepath, cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None
     )
 

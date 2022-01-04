@@ -16,7 +16,7 @@ class FakeTestCryptainerStorage(CryptainerStorage):
     def _use_streaming_encryption_for_cryptoconf(self, cryptoconf):
         return self._offload_payload_ciphertext  # Do NOT dig cryptoconf here, it might be all wrong
 
-    def _encrypt_payload_and_dump_cryptainer_to_filesystem(
+    def _encrypt_payload_and_stream_cryptainer_to_filesystem(
         self, payload, cryptainer_filepath, cryptainer_metadata, keychain_uid, cryptoconf
     ):
         cryptainer = self._encrypt_payload_into_cryptainer(

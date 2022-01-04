@@ -357,10 +357,12 @@ class Chacha20Poly1305EncryptionNode(EncryptionNodeBase):
         return {"tag": self._cipher.digest()}
 
 
-class EncryptionPipeline:
+class PayloadEncryptionPipeline:
     """PRIVATE API FOR NOW
 
-    Pipeline to encrypt data through several encryption nodes, down to an outout stream (e.g. file or ByteIO)"""
+    Pipeline to encrypt data through several encryption nodes, and stream it to an output
+    binary stream (e.g. file or ByteIO)
+    """
 
     def __init__(self, output_stream: BinaryIO, payload_cipher_layer_extracts: list):
 

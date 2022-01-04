@@ -19,7 +19,7 @@ from schema import And, Or, Regex, Const, Schema, Optional as OptionalKey
 from wacryptolib.cipher import (
     encrypt_bytestring,
     decrypt_bytestring,
-    EncryptionPipeline,
+    PayloadEncryptionPipeline,
     STREAMABLE_CIPHER_ALGOS,
     SUPPORTED_CIPHER_ALGOS,
 )
@@ -245,7 +245,7 @@ class CryptainerEncryptor(CryptainerBase):
             cryptoconf=cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=cryptainer_metadata
         )
 
-        encryption_pipeline = EncryptionPipeline(
+        encryption_pipeline = PayloadEncryptionPipeline(
             output_stream=output_stream, payload_cipher_layer_extracts=payload_cipher_layer_extracts
         )
 
@@ -875,11 +875,11 @@ class CryptainerDecryptor(CryptainerBase):
         )  # Raises if troubles
 
 
-class CryptainerEncryptionStream:
+class CryptainerEncryptionPipeline:
     """
     Helper which prebuilds a cryptainer without signatures nor payload,
-    affords to fill its offloaded ciphertext file chunk by chunk, and then
-    dumps the final cryptainer now containing signatures.
+    fills its offloaded ciphertext file chunk by chunk, and then
+    dumps the final cryptainer (now containing signatures).
     """
 
     def __init__(
@@ -937,7 +937,7 @@ class CryptainerEncryptionStream:
         # Emergency closing of open file on deletion
         if not self._output_data_stream.closed:
             logger.error(
-                "Encountered abnormal open file in __del__ of CryptainerEncryptionStream: %s" % self._output_data_stream
+                "Encountered abnormal open file in __del__ of CryptainerEncryptionPipeline: %s" % self._output_data_stream
             )
             self._output_data_stream.close()
 
@@ -949,7 +949,7 @@ def is_cryptainer_cryptoconf_streamable(cryptoconf):  # FIXME rename and add to 
     return True
 
 
-def encrypt_payload_and_dump_cryptainer_to_filesystem(
+def encrypt_payload_and_stream_cryptainer_to_filesystem(
     payload: Union[bytes, BinaryIO],
     *,
     cryptainer_filepath,
@@ -959,11 +959,13 @@ def encrypt_payload_and_dump_cryptainer_to_filesystem(
     keystore_pool: Optional[KeystorePoolBase] = None
 ) -> None:
     """
-    Optimized version which directly streams encrypted payload to offloaded file,
+    Optimized version which directly streams encrypted payload to **offloaded** file,
     instead of creating a whole cryptainer and then dumping it to disk.
+
+    The cryptoconf used must be streamable with an EncryptionPipeline!
     """
     # No need to dump initial (signature-less) cryptainer here, this is all a quick operation...
-    encryptor = CryptainerEncryptionStream(
+    encryptor = CryptainerEncryptionPipeline(
         cryptainer_filepath,
         cryptoconf=cryptoconf,
         keychain_uid=keychain_uid,
@@ -1135,57 +1137,18 @@ def get_cryptainer_size_on_filesystem(cryptainer_filepath):
 
 # FIXME add ReadonlyCryptainerStorage here!!
 
-
-class CryptainerStorage:
+class ReadonlyCryptainerStorage:
     """
-    This class encrypts file streams and stores them into filesystem, in a thread-safe way.
-
-    Exceeding cryptainers are automatically purged when enqueuing new files or waiting for idle state.
-
-    A thread pool is used to encrypt files in the background.
+    This class provides read access to a directory filled with cryptainers..
 
     :param cryptainers_dir: the folder where cryptainer files are stored
-    :param default_encryption_cryptoconf: cryptoconf to use when none is provided when enqueuing payload
-    :param max_cryptainer_quota: if set, cryptainers are deleted if they exceed this size in bytes
-    :param max_cryptainer_count: if set, oldest exceeding cryptainers (time taken from their name, else their file-stats) are automatically erased
-    :param max_cryptainer_age: if set, cryptainers exceeding this age (taken from their name, else their file-stats) in days are automatically erased
-    :param keystore_pool: optional KeystorePool, which might be required by current encryptioncryptoconf
-    :param max_workers: count of worker threads to use in parallel
-    :param offload_payload_ciphertext: whether actual encrypted payload must be kept separated from structured cryptainer file
     """
-
-    def __init__(
-        self,
-        cryptainer_dir: Path,
-        default_cryptoconf: Optional[dict] = None,
-        max_cryptainer_quota: Optional[int] = None,
-        max_cryptainer_count: Optional[int] = None,
-        max_cryptainer_age: Optional[timedelta] = None,
-        keystore_pool: Optional[KeystorePoolBase] = None,
-        max_workers: int = 1,
-        offload_payload_ciphertext=True,
-    ):
-        cryptainer_dir = Path(cryptainer_dir)
+    def __init__(self,cryptainer_dir: Path):
+        cryptainer_dir = Path(cryptainer_dir).absolute()
         assert cryptainer_dir.is_dir(), cryptainer_dir
-        cryptainer_dir = cryptainer_dir.absolute()
-        assert max_cryptainer_quota is None or max_cryptainer_quota >= 0, max_cryptainer_quota
-        assert max_cryptainer_count is None or max_cryptainer_count >= 0, max_cryptainer_count
-        assert max_cryptainer_age is None or max_cryptainer_age >= timedelta(seconds=0), max_cryptainer_age
-        self._default_cryptoconf = default_cryptoconf
         self._cryptainer_dir = cryptainer_dir
-        self._max_cryptainer_quota = max_cryptainer_quota
-        self._max_cryptainer_count = max_cryptainer_count
-        self._max_cryptainer_age = max_cryptainer_age
-        self._keystore_pool = keystore_pool
-        self._thread_pool_executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="cryptainer_worker")
-        self._pending_executor_futures = []
-        self._lock = threading.Lock()
-        self._offload_payload_ciphertext = offload_payload_ciphertext
 
-    def __del__(self):
-        self._thread_pool_executor.shutdown(wait=False)
-
-    def __len__(self):
+    def __len__(self):  # FIXME REMOVE THAT, DANGEROUS!!!!
         """Beware, might be SLOW if many files are present in folder."""
         return len(self.list_cryptainer_names())  # No sorting, to be quicker
 
@@ -1243,6 +1206,93 @@ class CryptainerStorage:
         assert not Path(cryptainer_name).is_absolute()
         return self._cryptainer_dir.joinpath(cryptainer_name)
 
+    def load_cryptainer_from_storage(self, cryptainer_name_or_idx, include_payload_ciphertext=True) -> dict:
+        """
+        Return the encrypted cryptainer dict for `cryptainer_name_or_idx` (which must be in `list_cryptainer_names()`,
+        or an index suitable for this sorted list).
+        """
+        if isinstance(cryptainer_name_or_idx, int):
+            cryptainer_names = self.list_cryptainer_names(as_sorted_list=True, as_absolute_paths=False)
+            cryptainer_name = cryptainer_names[cryptainer_name_or_idx]  # Will break if idx is out of bounds
+        else:
+            assert isinstance(cryptainer_name_or_idx, (Path, str)), repr(cryptainer_name_or_idx)
+            cryptainer_name = Path(cryptainer_name_or_idx)
+        assert not cryptainer_name.is_absolute(), cryptainer_name
+
+        logger.info("Loading cryptainer %s from storage", cryptainer_name)
+        cryptainer_filepath = self._make_absolute(cryptainer_name)
+        cryptainer = load_cryptainer_from_filesystem(
+            cryptainer_filepath, include_payload_ciphertext=include_payload_ciphertext
+        )
+        return cryptainer
+
+    def decrypt_cryptainer_from_storage(
+        self, cryptainer_name_or_idx, passphrase_mapper: Optional[dict] = None, verify: bool = True
+    ) -> bytes:
+        """
+        Return the decrypted content of the cryptainer `cryptainer_name_or_idx` (which must be in `list_cryptainer_names()`,
+        or an index suitable for this sorted list).
+        """
+        logger.info("Decrypting cryptainer %r from storage", cryptainer_name_or_idx)
+
+        cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_payload_ciphertext=True)
+
+        result = self._decrypt_payload_from_cryptainer(cryptainer, passphrase_mapper=passphrase_mapper, verify=verify)
+        logger.info("Cryptainer %s successfully decrypted", cryptainer_name_or_idx)
+        return result
+
+    def check_cryptainer_sanity(self, cryptainer_name_or_idx):
+        """Allows the validation of a cryptainer with a python"""
+        cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_payload_ciphertext=True)
+
+        check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
+
+
+class CryptainerStorage(ReadonlyCryptainerStorage):
+    """
+    This class encrypts file streams and stores them into filesystem, in a thread-safe way.
+
+    Exceeding cryptainers are automatically purged when enqueuing new files or waiting for idle state.
+    A thread pool is used to encrypt files in the background.
+
+    :param cryptainers_dir: the folder where cryptainer files are stored
+    :param default_encryption_cryptoconf: cryptoconf to use when none is provided when enqueuing payload
+    :param max_cryptainer_quota: if set, cryptainers are deleted if they exceed this size in bytes
+    :param max_cryptainer_count: if set, oldest exceeding cryptainers (time taken from their name, else their file-stats) are automatically erased
+    :param max_cryptainer_age: if set, cryptainers exceeding this age (taken from their name, else their file-stats) in days are automatically erased
+    :param keystore_pool: optional KeystorePool, which might be required by current encryptioncryptoconf
+    :param max_workers: count of worker threads to use in parallel
+    :param offload_payload_ciphertext: whether actual encrypted payload must be kept separated from structured cryptainer file
+    """
+
+    def __init__(
+        self,
+        cryptainer_dir: Path,
+        default_cryptoconf: Optional[dict] = None,
+        max_cryptainer_quota: Optional[int] = None,
+        max_cryptainer_count: Optional[int] = None,
+        max_cryptainer_age: Optional[timedelta] = None,
+        keystore_pool: Optional[KeystorePoolBase] = None,
+        max_workers: int = 1,
+        offload_payload_ciphertext=True,
+    ):
+        super().__init__(cryptainer_dir=cryptainer_dir)
+        assert max_cryptainer_quota is None or max_cryptainer_quota >= 0, max_cryptainer_quota
+        assert max_cryptainer_count is None or max_cryptainer_count >= 0, max_cryptainer_count
+        assert max_cryptainer_age is None or max_cryptainer_age >= timedelta(seconds=0), max_cryptainer_age
+        self._default_cryptoconf = default_cryptoconf
+        self._max_cryptainer_quota = max_cryptainer_quota
+        self._max_cryptainer_count = max_cryptainer_count
+        self._max_cryptainer_age = max_cryptainer_age
+        self._keystore_pool = keystore_pool
+        self._thread_pool_executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="cryptainer_worker")
+        self._pending_executor_futures = []
+        self._lock = threading.Lock()
+        self._offload_payload_ciphertext = offload_payload_ciphertext
+
+    def __del__(self):
+        self._thread_pool_executor.shutdown(wait=False)
+
     def _delete_cryptainer(self, cryptainer_name):
         cryptainer_filepath = self._make_absolute(cryptainer_name)
         delete_cryptainer_from_filesystem(cryptainer_filepath)
@@ -1285,11 +1335,11 @@ class CryptainerStorage:
                 for deleted_cryptainer_dict in deleted_cryptainer_dicts:
                     self._delete_cryptainer(deleted_cryptainer_dict["name"])
 
-    def _encrypt_payload_and_dump_cryptainer_to_filesystem(
+    def _encrypt_payload_and_stream_cryptainer_to_filesystem(
         self, payload, cryptainer_filepath, cryptainer_metadata, keychain_uid, cryptoconf
     ):
         assert cryptoconf, cryptoconf
-        encrypt_payload_and_dump_cryptainer_to_filesystem(
+        encrypt_payload_and_stream_cryptainer_to_filesystem(
             cryptainer_filepath=cryptainer_filepath,
             payload=payload,
             cryptoconf=cryptoconf,
@@ -1338,7 +1388,7 @@ class CryptainerStorage:
                 filename_base,
                 cryptainer_filepath,
             )
-            self._encrypt_payload_and_dump_cryptainer_to_filesystem(
+            self._encrypt_payload_and_stream_cryptainer_to_filesystem(
                 payload,
                 cryptainer_filepath=cryptainer_filepath,
                 cryptainer_metadata=cryptainer_metadata,
@@ -1384,7 +1434,7 @@ class CryptainerStorage:
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
         cryptainer_filepath = self._make_absolute(filename_base + CRYPTAINER_SUFFIX)
         cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
-        cryptainer_encryption_stream = CryptainerEncryptionStream(
+        cryptainer_encryption_stream = CryptainerEncryptionPipeline(
             cryptainer_filepath,
             cryptoconf=cryptoconf,
             cryptainer_metadata=cryptainer_metadata,
@@ -1432,47 +1482,6 @@ class CryptainerStorage:
         for future in self._pending_executor_futures:
             future.result()  # Should NEVER raise, thanks to the @catch_and_log_exception above, and absence of cancellations
         self._purge_exceeding_cryptainers()  # Good to have now
-
-    def load_cryptainer_from_storage(self, cryptainer_name_or_idx, include_payload_ciphertext=True) -> dict:
-        """
-        Return the encrypted cryptainer dict for `cryptainer_name_or_idx` (which must be in `list_cryptainer_names()`,
-        or an index suitable for this sorted list).
-        """
-        if isinstance(cryptainer_name_or_idx, int):
-            cryptainer_names = self.list_cryptainer_names(as_sorted_list=True, as_absolute_paths=False)
-            cryptainer_name = cryptainer_names[cryptainer_name_or_idx]  # Will break if idx is out of bounds
-        else:
-            assert isinstance(cryptainer_name_or_idx, (Path, str)), repr(cryptainer_name_or_idx)
-            cryptainer_name = Path(cryptainer_name_or_idx)
-        assert not cryptainer_name.is_absolute(), cryptainer_name
-
-        logger.info("Loading cryptainer %s from storage", cryptainer_name)
-        cryptainer_filepath = self._make_absolute(cryptainer_name)
-        cryptainer = load_cryptainer_from_filesystem(
-            cryptainer_filepath, include_payload_ciphertext=include_payload_ciphertext
-        )
-        return cryptainer
-
-    def decrypt_cryptainer_from_storage(
-        self, cryptainer_name_or_idx, passphrase_mapper: Optional[dict] = None, verify: bool = True
-    ) -> bytes:
-        """
-        Return the decrypted content of the cryptainer `cryptainer_name_or_idx` (which must be in `list_cryptainer_names()`,
-        or an index suitable for this sorted list).
-        """
-        logger.info("Decrypting cryptainer %r from storage", cryptainer_name_or_idx)
-
-        cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_payload_ciphertext=True)
-
-        result = self._decrypt_payload_from_cryptainer(cryptainer, passphrase_mapper=passphrase_mapper, verify=verify)
-        logger.info("Cryptainer %s successfully decrypted", cryptainer_name_or_idx)
-        return result
-
-    def check_cryptainer_sanity(self, cryptainer_name_or_idx):
-        """Allows the validation of a cryptainer with a python"""
-        cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_payload_ciphertext=True)
-
-        check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 
 
 def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME must support different types of trustee

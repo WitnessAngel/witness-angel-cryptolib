@@ -18,7 +18,7 @@ Cryptainer object processing
 
 .. autoclass:: wacryptolib.cryptainer.CryptainerEncryptionPipeline
 
-.. autofunction:: wacryptolib.cryptainer.encrypt_payload_and_dump_cryptainer_to_filesystem
+.. autofunction:: wacryptolib.cryptainer.encrypt_payload_and_stream_cryptainer_to_filesystem
 
 
 Validation utilities

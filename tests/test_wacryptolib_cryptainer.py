@@ -66,6 +66,10 @@ def _get_binary_or_empty_content():
     return b""
 
 
+def _get_random_cryptainer_storage_class():
+    return random.choice([CryptainerStorage, ReadonlyCryptainerStorage])
+
+
 ENFORCED_UID1 = UUID("0e8e861e-f0f7-e54b-18ea-34798d5daaaa")
 ENFORCED_UID2 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeebbbb")
 
@@ -576,55 +580,6 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
     cryptainer["cryptainer_format"] = "OAJKB"
     with pytest.raises(ValueError, match="Unknown cryptainer format"):
         decrypt_payload_from_cryptainer(cryptainer=cryptainer)
-
-
-# FIXME move that elsewhere and complete it
-RECURSIVE_CRYPTOCONF = dict(
-    payload_cipher_layers=[
-        dict(
-            payload_cipher_algo="AES_CBC",
-            key_cipher_layers=[
-                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
-                dict(
-                    key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
-                    key_shared_secret_threshold=1,
-                    key_shared_secret_shards=[
-                        dict(
-                            key_cipher_layers=[
-                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
-                            ]
-                        ),
-                        dict(
-                            key_cipher_layers=[
-                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
-                            ]
-                        ),
-                    ],  # Beware, same trustee for the 2 shards, for now
-                ),
-            ],
-            payload_signatures=[
-                dict(
-                    payload_digest_algo="SHA256",
-                    payload_signature_algo="DSA_DSS",
-                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
-                )
-            ],
-        )
-    ]
-)
-
-
-def test_recursive_shamir_secrets_and_layers():
-    keychain_uid = generate_uuid0()
-    payload = _get_binary_or_empty_content()
-
-    cryptainer = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=RECURSIVE_CRYPTOCONF, keychain_uid=keychain_uid, cryptainer_metadata=None
-    )
-
-    data_decrypted = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
-
-    assert data_decrypted == payload
 
 
 def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
@@ -1266,6 +1221,24 @@ def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
         storage.decrypt_cryptainer_from_storage(cryptainer_name, verify=True)
 
 
+def test_cryptainer_storage_check_cryptainer_sanity(tmp_path):
+    storage, cryptainer_name = _intialize_cryptainer_with_single_file(tmp_path)
+
+    storage.check_cryptainer_sanity(cryptainer_name_or_idx=cryptainer_name)
+
+    # FIXME deduplicate this bit with test_cryptainer_storage_decryption_authenticated_algo_verify()
+    cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
+    cryptainer["payload_cipher_layers"][0]["bad_name_of_attribute"] = 42
+    cryptainer_filepath = storage._make_absolute(cryptainer_name)
+    dump_cryptainer_to_filesystem(
+        cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False
+    )  # Don't touch existing
+    ##############
+
+    with pytest.raises(ValidationError):
+        storage.check_cryptainer_sanity(cryptainer_name_or_idx=cryptainer_name)
+
+
 def test_readonly_cryptainer_storage_limitations(tmp_path):
     """For now we just test that the base ReadonlyCryptainerStorage class doesn't have dangerous fields."""
 
@@ -1429,7 +1402,7 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
     assert not cryptainer_offloaded_filepath.exists()
 
 
-def test_generate_cryptainer_and_symmetric_keys():
+def test_generate_cryptainer_base_and_symmetric_keys():
     cryptainer_decryptor = CryptainerEncryptor()
     cryptainer, extracts = cryptainer_decryptor._generate_cryptainer_base_and_secrets(COMPLEX_CRYPTOCONF)
 
@@ -1474,18 +1447,6 @@ def test_create_cryptainer_encryption_stream(tmp_path):
 
     plaintext = storage.decrypt_cryptainer_from_storage("20200101_cryptainer_example.crypt")
     assert plaintext == b"bonjoureveryone"
-
-
-def ___obsolete_test_encrypt_payload_and_stream_cryptainer_to_filesystem(tmp_path):
-    data_plaintext = b"abcd1234" * 10
-    cryptainer_filepath = tmp_path / "my_streamed_cryptainer.crypt"
-
-    encrypt_payload_and_stream_cryptainer_to_filesystem(
-        data_plaintext, cryptainer_filepath=cryptainer_filepath, cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None
-    )
-
-    cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath)  # Fetches offloaded content too
-    assert cryptainer["payload_ciphertext_struct"] == data_plaintext  # TEMPORARY FOR FAKE STREAM ENCRYPTOR
 
 
 @pytest.mark.parametrize(
@@ -1578,21 +1539,3 @@ def test_cryptainer_validation_error(corrupted_cryptainer):
     with pytest.raises(ValidationError):
         corrupted_cryptainer_json = _dump_to_raw_json_tree(corrupted_cryptainer)
         check_cryptainer_sanity(cryptainer=corrupted_cryptainer_json, jsonschema_mode=False)
-
-
-def test_cryptainer_storage_check_cryptainer_sanity(tmp_path):
-    storage, cryptainer_name = _intialize_cryptainer_with_single_file(tmp_path)
-
-    storage.check_cryptainer_sanity(cryptainer_name_or_idx=cryptainer_name)
-
-    # FIXME deduplicate this bit with test_cryptainer_storage_decryption_authenticated_algo_verify()
-    cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
-    cryptainer["payload_cipher_layers"][0]["bad_name_of_attribute"] = 42
-    cryptainer_filepath = storage._make_absolute(cryptainer_name)
-    dump_cryptainer_to_filesystem(
-        cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False
-    )  # Don't touch existing
-    ##############
-
-    with pytest.raises(ValidationError):
-        storage.check_cryptainer_sanity(cryptainer_name_or_idx=cryptainer_name)

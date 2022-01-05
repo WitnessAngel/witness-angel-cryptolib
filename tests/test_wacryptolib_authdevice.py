@@ -30,4 +30,4 @@ def test_list_available_authdevices():  # FIXME add mockups to simulate real USB
         assert isinstance(authdevice["filesystem_size"], int)
         assert authdevice["filesystem_size"] > 0
 
-        assert Path(authdevice["authenticator_path"]).parent == Path(authdevice["partition_mountpoint"])
+        assert Path(authdevice["authenticator_dir"]).parent == Path(authdevice["partition_mountpoint"])

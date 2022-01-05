@@ -22,7 +22,7 @@ def list_available_authdevices() -> list:
         - "partition_mountpoint" (str):  mount point of device on the filesystem.
         - "filesystem_format" (str): lowercase character string for filesystem type, like "ext2", "fat32" ...
         - "filesystem_size" (int): filesystem size in bytes
-        - "authenticator_path" (Path): Theoretical absolute path to the authenticator (might not exist yet)
+        - "authenticator_dir" (Path): Theoretical absolute path to the authenticator (might not exist yet)
     """
 
     if sys_platform == "win32":
@@ -31,7 +31,7 @@ def list_available_authdevices() -> list:
         authdevices = _list_available_authdevices_linux()
 
     for authdevice in authdevices:
-        authdevice["authenticator_path"] = _get_authenticator_dir_for_authdevice(authdevice)
+        authdevice["authenticator_dir"] = _get_authenticator_dir_for_authdevice(authdevice)
 
     return authdevices
 

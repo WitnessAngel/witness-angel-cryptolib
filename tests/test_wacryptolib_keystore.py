@@ -222,7 +222,7 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()
     authdevice = get_fake_authdevice(authdevice_path)
-    remote_keystore_dir = authdevice["authenticator_path"]
+    remote_keystore_dir = authdevice["authenticator_dir"]
     initialize_authenticator(remote_keystore_dir, keystore_owner="Jean-Jâcques", keystore_passphrase_hint="my-hint")
 
     keychain_uid = generate_uuid0()

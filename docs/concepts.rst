@@ -12,7 +12,7 @@ The data encrypted by our **Flightbox cryptosystem** relies on multiple actors t
 
 Each of these actors is commonly designated as a **trustee** in the code. A trustee offers a set of standard services: providing public keys for encryption, delivering messages signatures, and treating requests for data decryption.
 
-A witness angel device is itself a **local-factory trustee**, it can encrypt and sign data using its own digital keys.
+A witness angel device is itself a **local key-factory trustee**, it can encrypt and sign data using its own digital keys.
 
 But real protection is provided by trustees called **keyguardians**, which are trusted third parties. Access to these remote trustees is generally done via Internet, even if other channels (e.g. usb devices temporarily plugged in) can be used too.
 

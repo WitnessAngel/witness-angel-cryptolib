@@ -4,7 +4,7 @@ import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
 
 from wacryptolib.cryptainer import (
-    LOCAL_FACTORY_TRUSTEE_MARKER,
+    LOCAL_KEYFACTORY_TRUSTEE_MARKER,
     encrypt_payload_into_cryptainer,
     decrypt_payload_from_cryptainer,
     CRYPTAINER_SUFFIX,
@@ -31,19 +31,19 @@ EXAMPLE_CRYPTOCONF = dict(
         dict(
             payload_cipher_algo="AES_CBC",
             key_cipher_layers=[
-                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER),
+                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
                 dict(
                     key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
                     key_shared_secret_threshold=1,
                     key_shared_secret_shards=[
                         dict(
                             key_cipher_layers=[
-                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
                             ]
                         ),
                         dict(
                             key_cipher_layers=[
-                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
                             ]
                         ),
                     ],  # Beware, same trustee for the 2 shards, for now
@@ -53,7 +53,7 @@ EXAMPLE_CRYPTOCONF = dict(
                 dict(
                     payload_digest_algo="SHA256",
                     payload_signature_algo="DSA_DSS",
-                    payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                    payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
                 )
             ],
         )

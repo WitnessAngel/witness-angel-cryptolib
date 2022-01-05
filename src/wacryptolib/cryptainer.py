@@ -75,14 +75,14 @@ SHARED_SECRET_ALGO_MARKER = "[SHARED_SECRET]"  # Special "key_cipher_algo" value
 DUMMY_KEYSTORE_POOL = InMemoryKeystorePool()  # Common fallback storage with in-memory keys
 
 
-class TRUSTEE_TYPES:
-    LOCAL_FACTORY_TRUSTEE = "local_factory"
-    AUTHDEVICE_TRUSTEE = "authdevice"
+class CRYPTAINER_TRUSTEE_TYPES:
+    LOCAL_KEYFACTORY_TRUSTEE = "local_keyfactory"
+    AUTHENTICATOR_TRUSTEE = "authenticator"
     JSONRPC_TRUSTEE = "jsonrpc"
 
 
 # Shortcut helper, should NOT be modified
-LOCAL_FACTORY_TRUSTEE_MARKER = dict(trustee_type=TRUSTEE_TYPES.LOCAL_FACTORY_TRUSTEE)
+LOCAL_KEYFACTORY_TRUSTEE_MARKER = dict(trustee_type=CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE)
 
 
 class CRYPTAINER_STATES:
@@ -183,13 +183,13 @@ def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):
 
     trustee_type = trustee.get("trustee_type")  # Might be None
 
-    if trustee_type == TRUSTEE_TYPES.LOCAL_FACTORY_TRUSTEE:
-        return TrusteeApi(keystore_pool.get_local_factory_keystore())
-    elif trustee_type == TRUSTEE_TYPES.AUTHDEVICE_TRUSTEE:
-        keystore_uid = trustee["keystore_uid"]
+    if trustee_type == CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE:
+        return TrusteeApi(keystore_pool.get_local_keyfactory_keystore())
+    elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
+        keystore_uid = trustee["keystore_uid"]  # ID of authenticator is identical to that of its keystore
         keystore = keystore_pool.get_imported_keystore(keystore_uid)
         return ReadonlyTrusteeApi(keystore)
-    elif trustee_type == TRUSTEE_TYPES.JSONRPC_TRUSTEE:
+    elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_TRUSTEE:
         return JsonRpcProxy(url=trustee["url"], response_error_handler=status_slugs_response_error_handler)
     raise ValueError("Unrecognized trustee identifiers: %s" % str(trustee))
 
@@ -1046,7 +1046,7 @@ def get_cryptoconf_summary(conf_or_cryptainer):
     """
 
     def _get_trustee_displayable_identifier(_trustee):
-        if _trustee == LOCAL_FACTORY_TRUSTEE_MARKER:
+        if _trustee == LOCAL_KEYFACTORY_TRUSTEE_MARKER:
             _trustee = "local device"
         elif "url" in _trustee:
             _trustee = urlparse(_trustee["url"]).netloc
@@ -1531,10 +1531,18 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
     extra_payload_cipher_layer = {}
     extra_payload_signature = {}
 
+    trustee_schemas = Or(
+        LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+        {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE,
+         "keystore_uid": micro_schema_uid},
+        {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.JSONRPC_TRUSTEE,
+         "jsonrpc_url": str},
+    )
+
     payload_signature = {
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
         "payload_signature_algo": Or(*SUPPORTED_SIGNATURE_ALGOS),
-        "payload_signature_trustee": LOCAL_FACTORY_TRUSTEE_MARKER,  # FIXME BAD
+        "payload_signature_trustee": trustee_schemas,   # FIXME test various trustee cases in unit-tests!!
         OptionalKey("keychain_uid"): micro_schema_uid,
     }
 
@@ -1565,7 +1573,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
 
     SIMPLE_CRYPTAINER_PIECE = {
         "key_cipher_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
-        "key_cipher_trustee": Const(LOCAL_FACTORY_TRUSTEE_MARKER),
+        "key_cipher_trustee": Const(LOCAL_KEYFACTORY_TRUSTEE_MARKER),
         OptionalKey("keychain_uid"): micro_schema_uid,
     }
 

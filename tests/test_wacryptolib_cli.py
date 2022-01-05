@@ -7,7 +7,7 @@ from click.testing import CliRunner
 
 import wacryptolib
 from wacryptolib.__main__ import cli
-from wacryptolib.cryptainer import LOCAL_FACTORY_TRUSTEE_MARKER
+from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER
 from wacryptolib.utilities import dump_to_json_file
 
 
@@ -92,7 +92,7 @@ def test_cli_encryption_and_decryption(tmp_path):
             simple_cryptoconf_tree = dict(payload_cipher_layers = [
                     dict(
                         payload_cipher_algo="CHACHA20_POLY1305",
-                        key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER)],
+                        key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
                         payload_signatures=[],
                     )
                 ]

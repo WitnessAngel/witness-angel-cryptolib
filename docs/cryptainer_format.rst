@@ -26,7 +26,7 @@ Containers can be much more complex: they can have multiples layers of payload e
 
 ::
 
-    from wacryptolib.cryptainer import LOCAL_FACTORY_TRUSTEE_MARKER
+    from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER
 
     CRYPTOCONF = dict(
         payload_cipher_layers=[
@@ -35,14 +35,14 @@ Containers can be much more complex: they can have multiples layers of payload e
                 key_cipher_layers=[
                     dict(
                         key_cipher_algo="RSA_OAEP",
-                        key_cipher_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                        key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
                     )
                 ],
                 payload_signatures=[
                     dict(
                         payload_digest_algo="SHA256",
                         payload_signature_algo="DSA_DSS",
-                        payload_signature_trustee=LOCAL_FACTORY_TRUSTEE_MARKER,
+                        payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
                     )
                 ],
             )
@@ -58,7 +58,7 @@ Here is the JSON equivalent of this cryptoconf::
                 {
                    "key_cipher_algo":"RSA_OAEP",
                    "key_cipher_trustee":{
-                      "trustee_type":"local_factory"
+                      "trustee_type":"local_keyfactory"
                    }
                 }
              ],
@@ -68,7 +68,7 @@ Here is the JSON equivalent of this cryptoconf::
                    "payload_digest_algo":"SHA256",
                    "payload_signature_algo":"DSA_DSS",
                    "payload_signature_trustee":{
-                      "trustee_type":"local_factory"
+                      "trustee_type":"local_keyfactory"
                    }
                 }
              ]
@@ -103,7 +103,7 @@ Binary subType 03 means "UUID", whereas subType 00 means raw binary.
                     {
                         "key_cipher_algo": "RSA_OAEP",
                         "key_cipher_trustee": {
-                            "trustee_type": "local_factory"
+                            "trustee_type": "local_keyfactory"
                         }
                     }
                 ],
@@ -137,7 +137,7 @@ Binary subType 03 means "UUID", whereas subType 00 means raw binary.
                             }
                         },
                         "payload_signature_trustee": {
-                            "trustee_type": "local_factory"
+                            "trustee_type": "local_keyfactory"
                         }
                     }
                 ]

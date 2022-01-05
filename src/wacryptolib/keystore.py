@@ -98,7 +98,7 @@ class KeystoreReadBase(ABC):
         :param keychain_uid: unique ID of the keychain
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
 
-        :return: private key in PEM format (potentially encrypted), or raise KeyDoesNotExist
+        :return: private key in PEM format (potentially passphrase-protected), or raise KeyDoesNotExist
         """
         raise NotImplementedError("KeystoreReadBase.get_private_key()")
 
@@ -295,7 +295,6 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
 
         public_key_pem_paths = glob.glob(join(self._keys_dir, "*" + self._public_key_suffix))
 
-        print(">>>>>>>", self._keys_dir, self._public_key_suffix, public_key_pem_paths)
         for public_key_pem_path in public_key_pem_paths:
 
             public_key_pem_filename = os.path.basename(public_key_pem_path)

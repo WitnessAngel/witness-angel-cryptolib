@@ -3,14 +3,14 @@ import time
 import uuid
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist
+from wacryptolib.exceptions import KeyAlreadyExists, KeyDoesNotExist, OperationNotSupported
 from wacryptolib.utilities import generate_uuid0
 
 
 # SEE https://docs.pytest.org/en/stable/writing_plugins.html#assertion-rewriting and register_assert_rewrite()
 
 
-def check_keystore_basic_get_set_api(keystore):
+def check_keystore_basic_get_set_api(keystore, readonly_keystore=None):
     """Test the workflow of getters/setters of the storage API, for uid-attached keys."""
 
     import pytest
@@ -19,16 +19,28 @@ def check_keystore_basic_get_set_api(keystore):
     keychain_uid_other = generate_uuid0()
     key_algo = "abxz"
 
-    with pytest.raises(KeyDoesNotExist, match="not found"):
-        keystore.get_public_key(keychain_uid=keychain_uid, key_algo="abxz")
+    all_keystores = [keystore, readonly_keystore] if readonly_keystore else [keystore]
+
+    for _keystore in all_keystores:
+        with pytest.raises(KeyDoesNotExist, match="not found"):
+            _keystore.get_public_key(keychain_uid=keychain_uid, key_algo="abxz")
+        try:
+            assert not _keystore.list_keypair_identifiers()
+        except OperationNotSupported:
+            pass
 
     keystore.set_keys(
         keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"public_data", private_key=b"private_data"
     )
 
-    assert (
-        keystore.get_public_key(keychain_uid=keychain_uid, key_algo="abxz") == b"public_data"
-    )  # Well readable even without any kind of "commit"
+    for _keystore in all_keystores:
+        assert (
+            _keystore.get_public_key(keychain_uid=keychain_uid, key_algo="abxz") == b"public_data"
+        )  # Well readable even without any kind of "commit"
+        try:
+            assert _keystore.list_keypair_identifiers() == [dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)]
+        except OperationNotSupported:
+            pass
 
     with pytest.raises(KeyAlreadyExists, match="Already existing"):
         keystore.set_keys(
@@ -39,20 +51,22 @@ def check_keystore_basic_get_set_api(keystore):
             keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"public_data2", private_key=b"private_data2"
         )
 
-    assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"public_data"
-    assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"private_data"
+    for _keystore in all_keystores:
 
-    with pytest.raises(KeyDoesNotExist, match="not found"):
-        keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo + "_")
+        assert _keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"public_data"
+        assert _keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"private_data"
 
-    with pytest.raises(KeyDoesNotExist, match="not found"):
-        keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo + "_")
+        with pytest.raises(KeyDoesNotExist, match="not found"):
+            _keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo + "_")
 
-    with pytest.raises(KeyDoesNotExist, match="not found"):
-        keystore.get_public_key(keychain_uid=keychain_uid_other, key_algo=key_algo)
+        with pytest.raises(KeyDoesNotExist, match="not found"):
+            _keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo + "_")
 
-    with pytest.raises(KeyDoesNotExist, match="not found"):
-        keystore.get_private_key(keychain_uid=keychain_uid_other, key_algo=key_algo)
+        with pytest.raises(KeyDoesNotExist, match="not found"):
+            _keystore.get_public_key(keychain_uid=keychain_uid_other, key_algo=key_algo)
+
+        with pytest.raises(KeyDoesNotExist, match="not found"):
+            _keystore.get_private_key(keychain_uid=keychain_uid_other, key_algo=key_algo)
 
     return locals()
 

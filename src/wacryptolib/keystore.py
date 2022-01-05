@@ -71,11 +71,11 @@ def load_keystore_metadata(keystore_dir: Path) -> dict:
     return metadata
 
 
+# FIXME use a 2-levels publicmethod->privatemethod system for better forward compatibility!!!!, like in _list_unordered....()
 class KeystoreReadBase(ABC):
     """
     Subclasses of this storage interface can be implemented to retrieve keys from
     miscellaneous locations (disk, database...), without permission checks.
-
     """
 
     @abstractmethod
@@ -101,6 +101,24 @@ class KeystoreReadBase(ABC):
         :return: private key in PEM format (potentially encrypted), or raise KeyDoesNotExist
         """
         raise NotImplementedError("KeystoreReadBase.get_private_key()")
+
+    def list_keypair_identifiers(self) -> list:
+        """
+        List identifiers of public keys present in the storage, along with their potential private key existence.
+
+        Might raise an OperationNotSupported exception if not supported by this keystore.
+
+        :return: a SORTED list of key information dicts with standard fields "keychain_uid" and "key_algo", as well as
+        a boolean "private_key_present" which is True if the related private key exists in storage.
+        Sorting is done by keychain_uid and then key_algo.
+        """
+        key_information_list = self._list_unordered_keypair_identifiers()
+        key_information_list.sort(key=lambda x: (x["keychain_uid"], x["key_algo"]))
+        return key_information_list
+
+    @abstractmethod
+    def _list_unordered_keypair_identifiers(self) -> list:  # UNORDERED LIST
+        raise NotImplementedError("KeystoreReadBase.list_keypair_identifiers()")
 
 
 class KeystoreWriteBase(ABC):
@@ -224,15 +242,16 @@ class DummyKeystore(KeystoreWriteBase, KeystoreReadBase):
         else:
             self._set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, keypair=keypair)
 
-    # def __TODO_later_list_keypair_identifiers(self):
-    #    keypair_identifiers = []
-    #    for keypair_identifier in keypair_identifiers:
-    #        pass
+    def _list_unordered_keypair_identifiers(self):
+        key_information_list = []
+        for (keychain_uid, key_algo), keypair in self._cached_keypairs.items():
+            key_information = dict(keychain_uid=keychain_uid, key_algo=key_algo,
+                                   private_key_present=bool(keypair["private_key"]))
+            key_information_list.append(key_information)
+        return key_information_list
 
 
-# FIXME add ReadonlyFilesystemKeystore and use it for IMPORTED keystores!!
-
-
+# FIXME use ReadonlyFilesystemKeystore for IMPORTED keystores!!
 class ReadonlyFilesystemKeystore(KeystoreReadBase):
     """
     Read-only filesystem-based key storage.
@@ -240,7 +259,7 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
     _lock = threading.Lock()
     _private_key_suffix = "_private_key.pem"
     _public_key_suffix = "_public_key.pem"
-    PUBLIC_KEY_FILENAME_REGEX = r"^(?P<keychain_uid>[-0-9a-z]+)_(?P<key_algo>[_A-Z]+)%s$" % _public_key_suffix
+    PUBLIC_KEY_FILENAME_REGEX = r"^(?P<keychain_uid>[-0-9a-z]+)_(?P<key_algo>[_a-zA-Z]+)%s$" % _public_key_suffix
 
     def __init__(self, keys_dir: Path):
         keys_dir = Path(keys_dir).absolute()
@@ -270,19 +289,13 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
         except FileNotFoundError:
             raise KeyDoesNotExist("Private filesystem key %s/%s not found" % (keychain_uid, key_algo))
 
-    def list_keypair_identifiers(self) -> list:
-        """
-        List metadata of public keys present in the storage, along with their potential private key existence.
-
-        Returns a SORTED list of key information dicts with standard fields "keychain_uid" and "key_algo", as well as
-        a boolean "private_key_present" which is True if the related private key exists in storage.
-        Sorting is done by keychain_uid and then key_algo.
-        """
+    def _list_unordered_keypair_identifiers(self):
 
         key_information_list = []
 
         public_key_pem_paths = glob.glob(join(self._keys_dir, "*" + self._public_key_suffix))
 
+        print(">>>>>>>", self._keys_dir, self._public_key_suffix, public_key_pem_paths)
         for public_key_pem_path in public_key_pem_paths:
 
             public_key_pem_filename = os.path.basename(public_key_pem_path)
@@ -318,7 +331,6 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
             )
             key_information_list.append(key_information)
 
-        key_information_list.sort(key=lambda x: (x["keychain_uid"], x["key_algo"]))
         return key_information_list
 
 
@@ -348,15 +360,12 @@ class FilesystemKeystore(KeystoreWriteBase, ReadonlyFilesystemKeystore):
         if self._keys_dir.joinpath(target_private_key_filename).exists():
             raise KeyAlreadyExists("Already existing filesystem keypair %s/%s" % (keychain_uid, key_algo))
 
-    @synchronized
+    @synchronized  # FIXME handle case when private_key is missing??
     def set_keys(self, *, keychain_uid, key_algo, public_key: bytes, private_key: bytes):
+        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
+        # We override (unexpected) already existing files
         target_public_key_filename = self._get_filename(keychain_uid, key_algo=key_algo, is_public=True)
         target_private_key_filename = self._get_filename(keychain_uid, key_algo=key_algo, is_public=False)
-
-        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
-
-        # We override (unexpected) already existing files
-
         self._write_to_storage_file(basename=target_public_key_filename, data=public_key)
         self._write_to_storage_file(basename=target_private_key_filename, data=private_key)
 

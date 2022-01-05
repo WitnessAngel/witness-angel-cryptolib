@@ -29,10 +29,14 @@ def test_keystore_basic_get_set_api(tmp_path):
 
     dummy_keystore = DummyKeystore()
     filesystem_keystore = FilesystemKeystore(keys_dir=tmp_path)
+    readonly_filesystem_keystore = ReadonlyFilesystemKeystore(keys_dir=tmp_path)
 
     filesystem_keystore_test_locals = None
-    for keystore in (dummy_keystore, filesystem_keystore):
-        res = check_keystore_basic_get_set_api(keystore=keystore)
+    for keystore, readonly_keystore in [
+        (dummy_keystore, None),
+        (filesystem_keystore, readonly_filesystem_keystore)
+    ]:
+        res = check_keystore_basic_get_set_api(keystore=keystore, readonly_keystore=readonly_keystore)
         if isinstance(keystore, FilesystemKeystore):
             filesystem_keystore_test_locals = res
 
@@ -87,7 +91,7 @@ def test_keystore_free_keys_concurrency(tmp_path):
         check_keystore_free_keys_concurrency(keystore)
 
 
-def test_keystore_list_keypair_identifiers(tmp_path: Path):
+def test_filesystem_keystore_list_keypair_identifiers(tmp_path: Path):
     def _check_key_dict_format(key):
         print(">> public key detected:", key)
 

@@ -34,6 +34,10 @@ class AuthorizationError(FunctionalError):
     pass
 
 
+class OperationNotSupported(FunctionalError):
+    pass  # E.g. listing keypairs from a big SQL database
+
+
 # ---
 
 

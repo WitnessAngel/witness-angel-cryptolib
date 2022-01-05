@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from wacryptolib.cryptainer import CryptainerStorage, LOCAL_FACTORY_TRUSTEE_MARKER
 from wacryptolib.sensor import TarfileRecordsAggregator
 
-ENCRYPTION_CRYPTOCONF = dict(
+CRYPTOCONF = dict(
     payload_cipher_layers=[
         dict(
             payload_cipher_algo="AES_EAX",
@@ -40,7 +40,7 @@ def profile_simple_encryption():
     now = datetime.now(tz=timezone.utc)
 
     cryptainer_storage = CryptainerStorage(
-        default_cryptoconf=ENCRYPTION_CRYPTOCONF,
+        default_cryptoconf=CRYPTOCONF,
         cryptainer_dir=tmp_path,
         offload_payload_ciphertext=True,
     )

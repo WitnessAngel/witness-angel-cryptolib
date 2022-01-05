@@ -59,17 +59,6 @@ from wacryptolib.utilities import (
 from wacryptolib.utilities import load_from_json_file
 
 
-def _get_binary_or_empty_content():
-    if random_bool():
-        bytes_length = random.randint(1, 1000)
-        return get_random_bytes(bytes_length)
-    return b""
-
-
-def _get_random_cryptainer_storage_class():
-    return random.choice([CryptainerStorage, ReadonlyCryptainerStorage])
-
-
 ENFORCED_UID1 = UUID("0e8e861e-f0f7-e54b-18ea-34798d5daaaa")
 ENFORCED_UID2 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeebbbb")
 
@@ -381,7 +370,7 @@ def COMPLEX_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
     }
 
 
-def _dump_to_raw_json_tree(data):
+def _convert_to_raw_extended_json_tree(data):
     """
     Turn a python tree (including UUIDs, bytes etc.) into its representation
     as Pymongo extended json (with $binary, $numberInt etc.)
@@ -395,13 +384,39 @@ def _dump_to_raw_json_tree(data):
     return json_str_lib
 
 
-def _intialize_cryptainer_with_single_file(tmp_path):  # FIXME generalize its use in different test functions below
+def _get_binary_or_empty_content():
+    if random_bool():
+        bytes_length = random.randint(1, 1000)
+        return get_random_bytes(bytes_length)
+    return b""
+
+
+def _get_random_cryptainer_storage_class():
+    return random.choice([CryptainerStorage, ReadonlyCryptainerStorage])
+
+
+def _intialize_real_cryptainer_with_single_file(tmp_path, allow_readonly_storage=False):
+
     storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainer_dir=tmp_path)
 
     storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", cryptainer_metadata=None)
     storage.wait_for_idle_state()
-    cryptainer_name, = storage.list_cryptainer_names()
+    (cryptainer_name,) = storage.list_cryptainer_names()
+
+    if allow_readonly_storage:
+        StorageClass = _get_random_cryptainer_storage_class()
+        storage = StorageClass(cryptainer_dir=tmp_path)  # We assume no default cryptoconf, then
+
     return storage, cryptainer_name
+
+
+def _corrupt_cryptainer_tree(storage, cryptainer_name, corruptor_callback):
+    cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
+    corruptor_callback(cryptainer)  # Modifies the cryptainer in-place
+    cryptainer_filepath = storage._make_absolute(cryptainer_name)
+    dump_cryptainer_to_filesystem(
+        cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False
+    )  # Don't touch existing offloaded payload
 
 
 @pytest.mark.parametrize(
@@ -763,6 +778,9 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     )
     storage.wait_for_idle_state()
 
+    StorageClass = _get_random_cryptainer_storage_class()  # Test READONLY mode too!
+    storage = StorageClass(tmp_path, keystore_pool=keystore_pool)
+
     cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
     print(">> cryptainer_names", cryptainer_names)
 
@@ -805,6 +823,22 @@ def test_get_proxy_for_trustee(tmp_path):
 
         with pytest.raises(ValueError):
             get_trustee_proxy(dict(urn="athena"), cryptainer_base._keystore_pool)
+
+
+def test_cryptainer_list_cryptainer_properties(tmp_path):
+    storage, cryptainer_name = _intialize_real_cryptainer_with_single_file(tmp_path, allow_readonly_storage=True)
+
+    properties = storage.list_cryptainer_properties()
+    assert properties == [dict(name=Path(cryptainer_name))]
+
+    properties = storage.list_cryptainer_properties(with_size=True)
+    assert properties == [dict(name=cryptainer_name, size=17065)]
+
+    properties = storage.list_cryptainer_properties(with_size=True, with_age=True)
+    (first_properties,) = properties
+    assert isinstance(first_properties["age"], timedelta)
+    del first_properties["age"]
+    assert first_properties == dict(name=cryptainer_name, size=17065)
 
 
 def test_cryptainer_storage_and_executor(tmp_path, caplog):
@@ -1173,7 +1207,6 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
 
 def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
     # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
-
     storage = CryptainerStorage(default_cryptoconf=None, cryptainer_dir=tmp_path)
 
     assert storage.list_cryptainer_names() == []
@@ -1193,6 +1226,9 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
     storage.enqueue_file_for_encryption("stuff_complex.txt", b"xxx", cryptainer_metadata=None, cryptoconf=COMPLEX_CRYPTOCONF)
     storage.wait_for_idle_state()
 
+    StorageClass = _get_random_cryptainer_storage_class()  # Test READONLY mode too!
+    storage = StorageClass(tmp_path)
+
     cryptainer_simple = storage.load_cryptainer_from_storage("stuff_simple.txt.crypt")
     assert len(cryptainer_simple["payload_cipher_layers"]) == 1
     cryptainer_complex = storage.load_cryptainer_from_storage("stuff_complex.txt.crypt")
@@ -1200,19 +1236,13 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
 
 
 def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
-    storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainer_dir=tmp_path)
 
-    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", cryptainer_metadata=None)
-    storage.wait_for_idle_state()
-    cryptainer_name, = storage.list_cryptainer_names()
+    # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
+    storage, cryptainer_name = _intialize_real_cryptainer_with_single_file(tmp_path, allow_readonly_storage=True)
 
-    cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
-    cryptainer["payload_cipher_layers"][0]["payload_macs"]["tag"] += b"hi"  # CORRUPTION of EAX
-
-    cryptainer_filepath = storage._make_absolute(cryptainer_name)
-    dump_cryptainer_to_filesystem(
-        cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False
-    )  # Don't touch existing offloaded data
+    def corrupt_eax_tag(cryptainer):
+        cryptainer["payload_cipher_layers"][0]["payload_macs"]["tag"] += b"hi"  # CORRUPTION of EAX
+    _corrupt_cryptainer_tree(storage, cryptainer_name=cryptainer_name,  corruptor_callback=corrupt_eax_tag)
 
     result = storage.decrypt_cryptainer_from_storage(cryptainer_name, verify=False)
     assert result == b"dogs\ncats\n"
@@ -1222,18 +1252,13 @@ def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
 
 
 def test_cryptainer_storage_check_cryptainer_sanity(tmp_path):
-    storage, cryptainer_name = _intialize_cryptainer_with_single_file(tmp_path)
+    storage, cryptainer_name = _intialize_real_cryptainer_with_single_file(tmp_path, allow_readonly_storage=True)
 
     storage.check_cryptainer_sanity(cryptainer_name_or_idx=cryptainer_name)
 
-    # FIXME deduplicate this bit with test_cryptainer_storage_decryption_authenticated_algo_verify()
-    cryptainer = storage.load_cryptainer_from_storage(cryptainer_name)
-    cryptainer["payload_cipher_layers"][0]["bad_name_of_attribute"] = 42
-    cryptainer_filepath = storage._make_absolute(cryptainer_name)
-    dump_cryptainer_to_filesystem(
-        cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False
-    )  # Don't touch existing
-    ##############
+    def add_wrong_attribute(cryptainer):
+        cryptainer["payload_cipher_layers"][0]["bad_name_of_attribute"] = 42
+    _corrupt_cryptainer_tree(storage, cryptainer_name=cryptainer_name,  corruptor_callback=add_wrong_attribute)
 
     with pytest.raises(ValidationError):
         storage.check_cryptainer_sanity(cryptainer_name_or_idx=cryptainer_name)
@@ -1254,7 +1279,6 @@ def test_readonly_cryptainer_storage_limitations(tmp_path):
         "wait_for_idle_state",
         # Attributes
         "_thread_pool_executor",
-        "_keystore_pool",
         "_default_cryptoconf",
     ]
 
@@ -1441,6 +1465,9 @@ def test_create_cryptainer_encryption_stream(tmp_path):
     cryptainer_encryption_stream.encrypt_chunk(b"everyone")
     cryptainer_encryption_stream.finalize()
 
+    StorageClass = _get_random_cryptainer_storage_class()  # Test READONLY mode too!
+    storage = StorageClass(cryptainer_dir)
+
     cryptainer = storage.load_cryptainer_from_storage("20200101_cryptainer_example.crypt")
     assert cryptainer["cryptainer_metadata"] == {"mymetadata": True}
     assert cryptainer["cryptainer_state"] == "FINISHED"
@@ -1455,7 +1482,7 @@ def test_create_cryptainer_encryption_stream(tmp_path):
 def test_conf_validation_success(cryptoconf):
     check_conf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
 
-    conf_json = _dump_to_raw_json_tree(cryptoconf)
+    conf_json = _convert_to_raw_extended_json_tree(cryptoconf)
     check_conf_sanity(cryptoconf=conf_json, jsonschema_mode=True)
 
 
@@ -1491,7 +1518,7 @@ def test_conf_validation_error(corrupted_conf):
         check_conf_sanity(cryptoconf=corrupted_conf, jsonschema_mode=False)
 
     with pytest.raises(ValidationError):
-        corrupted_conf_json = _dump_to_raw_json_tree(corrupted_conf)
+        corrupted_conf_json = _convert_to_raw_extended_json_tree(corrupted_conf)
         check_conf_sanity(cryptoconf=corrupted_conf_json, jsonschema_mode=True)
 
 
@@ -1504,7 +1531,7 @@ def test_cryptainer_validation_success(cryptoconf):
     )
     check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 
-    cryptainer_json = _dump_to_raw_json_tree(cryptainer)
+    cryptainer_json = _convert_to_raw_extended_json_tree(cryptainer)
     check_cryptainer_sanity(cryptainer=cryptainer_json, jsonschema_mode=True)
 
 
@@ -1537,5 +1564,5 @@ def test_cryptainer_validation_error(corrupted_cryptainer):
         check_cryptainer_sanity(cryptainer=corrupted_cryptainer, jsonschema_mode=True)
 
     with pytest.raises(ValidationError):
-        corrupted_cryptainer_json = _dump_to_raw_json_tree(corrupted_cryptainer)
+        corrupted_cryptainer_json = _convert_to_raw_extended_json_tree(corrupted_cryptainer)
         check_cryptainer_sanity(cryptainer=corrupted_cryptainer_json, jsonschema_mode=False)

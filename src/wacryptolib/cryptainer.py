@@ -1142,11 +1142,13 @@ class ReadonlyCryptainerStorage:
     This class provides read access to a directory filled with cryptainers..
 
     :param cryptainers_dir: the folder where cryptainer files are stored
+    :param keystore_pool: optional KeystorePool, which might be required by current cryptoconf
     """
-    def __init__(self,cryptainer_dir: Path):
+    def __init__(self, cryptainer_dir: Path,  keystore_pool: Optional[KeystorePoolBase] = None,):
         cryptainer_dir = Path(cryptainer_dir).absolute()
         assert cryptainer_dir.is_dir(), cryptainer_dir
         self._cryptainer_dir = cryptainer_dir
+        self._keystore_pool = keystore_pool
 
     def __len__(self):  # FIXME REMOVE THAT, DANGEROUS!!!!
         """Beware, might be SLOW if many files are present in folder."""
@@ -1241,6 +1243,13 @@ class ReadonlyCryptainerStorage:
         logger.info("Cryptainer %s successfully decrypted", cryptainer_name_or_idx)
         return result
 
+    def _decrypt_payload_from_cryptainer(
+        self, cryptainer: dict, passphrase_mapper: Optional[dict], verify: bool
+    ) -> bytes:
+        return decrypt_payload_from_cryptainer(
+            cryptainer, keystore_pool=self._keystore_pool, passphrase_mapper=passphrase_mapper, verify=verify
+        )  # Will fail if authorizations are not OK
+
     def check_cryptainer_sanity(self, cryptainer_name_or_idx):
         """Allows the validation of a cryptainer with a python"""
         cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_payload_ciphertext=True)
@@ -1256,11 +1265,11 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
     A thread pool is used to encrypt files in the background.
 
     :param cryptainers_dir: the folder where cryptainer files are stored
-    :param default_encryption_cryptoconf: cryptoconf to use when none is provided when enqueuing payload
+    :param keystore_pool: optional KeystorePool, which might be required by current cryptoconf
+    :param default_cryptoconf: cryptoconf to use when none is provided when enqueuing payload
     :param max_cryptainer_quota: if set, cryptainers are deleted if they exceed this size in bytes
     :param max_cryptainer_count: if set, oldest exceeding cryptainers (time taken from their name, else their file-stats) are automatically erased
     :param max_cryptainer_age: if set, cryptainers exceeding this age (taken from their name, else their file-stats) in days are automatically erased
-    :param keystore_pool: optional KeystorePool, which might be required by current encryptioncryptoconf
     :param max_workers: count of worker threads to use in parallel
     :param offload_payload_ciphertext: whether actual encrypted payload must be kept separated from structured cryptainer file
     """
@@ -1268,15 +1277,15 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
     def __init__(
         self,
         cryptainer_dir: Path,
+        keystore_pool: Optional[KeystorePoolBase] = None,
         default_cryptoconf: Optional[dict] = None,
         max_cryptainer_quota: Optional[int] = None,
         max_cryptainer_count: Optional[int] = None,
         max_cryptainer_age: Optional[timedelta] = None,
-        keystore_pool: Optional[KeystorePoolBase] = None,
         max_workers: int = 1,
         offload_payload_ciphertext=True,
     ):
-        super().__init__(cryptainer_dir=cryptainer_dir)
+        super().__init__(cryptainer_dir=cryptainer_dir, keystore_pool=keystore_pool)
         assert max_cryptainer_quota is None or max_cryptainer_quota >= 0, max_cryptainer_quota
         assert max_cryptainer_count is None or max_cryptainer_count >= 0, max_cryptainer_count
         assert max_cryptainer_age is None or max_cryptainer_age >= timedelta(seconds=0), max_cryptainer_age
@@ -1284,7 +1293,6 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         self._max_cryptainer_quota = max_cryptainer_quota
         self._max_cryptainer_count = max_cryptainer_count
         self._max_cryptainer_age = max_cryptainer_age
-        self._keystore_pool = keystore_pool
         self._thread_pool_executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="cryptainer_worker")
         self._pending_executor_futures = []
         self._lock = threading.Lock()
@@ -1357,13 +1365,6 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             keychain_uid=keychain_uid,
             keystore_pool=self._keystore_pool,
         )
-
-    def _decrypt_payload_from_cryptainer(
-        self, cryptainer: dict, passphrase_mapper: Optional[dict], verify: bool
-    ) -> bytes:
-        return decrypt_payload_from_cryptainer(
-            cryptainer, keystore_pool=self._keystore_pool, passphrase_mapper=passphrase_mapper, verify=verify
-        )  # Will fail if authorizations are not OK
 
     @catch_and_log_exception
     def _offloaded_encrypt_payload_and_dump_cryptainer(

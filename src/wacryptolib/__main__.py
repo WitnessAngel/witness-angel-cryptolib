@@ -21,7 +21,8 @@ DEFAULT_KEYSTORE_POOL_DIRNAME = ".keystore_pool"
 def _get_keystore_pool(ctx):
     keystore_pool_dir = ctx.obj["keystore_pool"]
     if not keystore_pool_dir:
-        keystore_pool_dir = Path().joinpath(DEFAULT_KEYSTORE_POOL_DIRNAME)
+        keystore_pool_dir = Path().joinpath(DEFAULT_KEYSTORE_POOL_DIRNAME).resolve()
+        click.echo("No keystore-pool directory provided, defaulting to '%s'" % keystore_pool_dir)
         keystore_pool_dir.mkdir(exist_ok=True)
     return FilesystemKeystorePool(keystore_pool_dir)
 
@@ -110,7 +111,7 @@ def encrypt(ctx, input_medium, output_cryptainer, cryptoconf):
     with output_cryptainer as f:
         f.write(cryptainer_bytes)
 
-    click.echo("Encryption finished")
+    click.echo("Encryption finished to file '%s'" % output_cryptainer.name)
 
 
 def _do_decrypt(cryptainer, keystore_pool):
@@ -141,7 +142,7 @@ def decrypt(ctx, input_cryptainer, output_medium):
     with output_medium:
         output_medium.write(medium_content)
 
-    click.echo("Decryption finished")
+    click.echo("Decryption finished to file '%s'" % output_medium.name)
 
 
 if __name__ == "__main__":

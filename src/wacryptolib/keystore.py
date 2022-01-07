@@ -466,7 +466,7 @@ class FilesystemKeystorePool(
     whereas imported key storages are supposed to be readonly, and only filled with keypairs imported from key-devices.
     """
 
-    LOCAL_FACTORY_KEYSTORE_DIRNAME = "local_keyfactory_keystore"
+    LOCAL_FACTORY_KEYSTORE_DIRNAME = "local_keyfactory_keystore"  # FIXME RENAME THIS URGENTLY!!!!!!!!!!!!!
     IMPORTED_KEYSTORES_DIRNAME = "imported_keystores"
     IMPORTED_KEYSTORE_PREFIX = "keystore_"
 

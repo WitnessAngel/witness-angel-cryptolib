@@ -1148,7 +1148,7 @@ class ReadonlyCryptainerStorage:
         cryptainer_dir = Path(cryptainer_dir).absolute()
         assert cryptainer_dir.is_dir(), cryptainer_dir
         self._cryptainer_dir = cryptainer_dir
-        self._keystore_pool = keystore_pool
+        self._keystore_pool = keystore_pool  # Might be None, in this case fallback to in-memory pool
 
     def __len__(self):  # FIXME REMOVE THAT, DANGEROUS!!!!
         """Beware, might be SLOW if many files are present in folder."""

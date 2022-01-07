@@ -78,7 +78,7 @@ DUMMY_KEYSTORE_POOL = InMemoryKeystorePool()  # Common fallback storage with in-
 class CRYPTAINER_TRUSTEE_TYPES:
     LOCAL_KEYFACTORY_TRUSTEE = "local_keyfactory"
     AUTHENTICATOR_TRUSTEE = "authenticator"
-    JSONRPC_TRUSTEE = "jsonrpc"
+    JSONRPC_API_TRUSTEE = "jsonrpc_api"
 
 
 # Shortcut helper, should NOT be modified
@@ -184,12 +184,12 @@ def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):
     trustee_type = trustee.get("trustee_type")  # Might be None
 
     if trustee_type == CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE:
-        return TrusteeApi(keystore_pool.get_local_keyfactory_keystore())
+        return TrusteeApi(keystore_pool.get_local_keyfactory())
     elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
         keystore_uid = trustee["keystore_uid"]  # ID of authenticator is identical to that of its keystore
         keystore = keystore_pool.get_imported_keystore(keystore_uid)
         return ReadonlyTrusteeApi(keystore)
-    elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_TRUSTEE:
+    elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE:
         return JsonRpcProxy(url=trustee["url"], response_error_handler=status_slugs_response_error_handler)
     raise ValueError("Unrecognized trustee identifiers: %s" % str(trustee))
 
@@ -1535,7 +1535,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
         LOCAL_KEYFACTORY_TRUSTEE_MARKER,
         {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE,
          "keystore_uid": micro_schema_uid},
-        {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.JSONRPC_TRUSTEE,
+        {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE,
          "jsonrpc_url": str},
     )
 

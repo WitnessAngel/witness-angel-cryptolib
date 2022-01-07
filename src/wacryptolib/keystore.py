@@ -438,7 +438,7 @@ class InMemoryKeystorePool(KeystorePoolBase):
         self._local_keystore = DummyKeystore()
         self._imported_keystores = {}
 
-    def get_local_keyfactory_keystore(self):
+    def get_local_keyfactory(self):
         return self._local_keystore
 
     def get_imported_keystore(self, keystore_uid):
@@ -466,7 +466,7 @@ class FilesystemKeystorePool(
     whereas imported key storages are supposed to be readonly, and only filled with keypairs imported from key-devices.
     """
 
-    LOCAL_FACTORY_KEYSTORE_DIRNAME = "local_keyfactory_keystore"  # FIXME RENAME THIS URGENTLY!!!!!!!!!!!!!
+    LOCAL_KEYFACTORY_DIRNAME = "local_keyfactory"
     IMPORTED_KEYSTORES_DIRNAME = "imported_keystores"
     IMPORTED_KEYSTORE_PREFIX = "keystore_"
 
@@ -475,9 +475,9 @@ class FilesystemKeystorePool(
         assert root_dir.is_dir(), root_dir
         self._root_dir = root_dir.absolute()
 
-    def get_local_keyfactory_keystore(self):
+    def get_local_keyfactory(self):
         """Storage automatically created if unexisting."""
-        local_keystore_dir = self._root_dir.joinpath(self.LOCAL_FACTORY_KEYSTORE_DIRNAME)
+        local_keystore_dir = self._root_dir.joinpath(self.LOCAL_KEYFACTORY_DIRNAME)
         local_keystore_dir.mkdir(exist_ok=True)
         # TODO initialize metadata for local keystore ??
         return FilesystemKeystore(local_keystore_dir)

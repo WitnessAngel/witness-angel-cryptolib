@@ -472,7 +472,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
     if keychain_uid:
         assert cryptainer["keychain_uid"] == keychain_uid
 
-    local_keypair_identifiers = keystore_pool.get_local_keyfactory_keystore()._cached_keypairs
+    local_keypair_identifiers = keystore_pool.get_local_keyfactory()._cached_keypairs
     print(">>> Test local_keypair_identifiers ->", list(local_keypair_identifiers.keys()))
 
     trustee_dependencies = gather_trustee_dependencies(cryptainers=[cryptainer])
@@ -633,7 +633,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     keystore_pool = InMemoryKeystorePool()
     keystore_pool._register_fake_imported_storage_uids(storage_uids=[keystore_uid1, keystore_uid2, keystore_uid3])
 
-    local_keystore = keystore_pool.get_local_keyfactory_keystore()
+    local_keystore = keystore_pool.get_local_keyfactory()
     generate_keypair_for_storage(
         key_algo="RSA_OAEP", keystore=local_keystore, keychain_uid=keychain_uid, passphrase=local_passphrase
     )
@@ -811,7 +811,7 @@ def test_get_proxy_for_trustee(tmp_path):
 
     for cryptainer_base in (cryptainer_base1, cryptainer_base2):
         proxy = get_trustee_proxy(
-            dict(trustee_type="jsonrpc", url="http://example.com/jsonrpc"), cryptainer_base._keystore_pool
+            dict(trustee_type="jsonrpc_api", url="http://example.com/jsonrpc"), cryptainer_base._keystore_pool
         )
         assert isinstance(proxy, JsonRpcProxy)  # It should expose identical methods to TrusteeApi
 
@@ -1319,7 +1319,7 @@ def test_get_cryptoconf_summary():
 
     CONF_WITH_TRUSTEE = copy.deepcopy(COMPLEX_CRYPTOCONF)
     CONF_WITH_TRUSTEE["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_cipher_trustee"] = dict(
-        trustee_type="jsonrpc", url="http://www.mydomain.com/json"
+        trustee_type="jsonrpc_api", url="http://www.mydomain.com/json"
     )
 
     summary = get_cryptoconf_summary(CONF_WITH_TRUSTEE)

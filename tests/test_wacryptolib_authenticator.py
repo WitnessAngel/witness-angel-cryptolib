@@ -29,12 +29,13 @@ def test_authenticator_basic_workflow(tmp_path):
         initialize_authenticator(acceptable_dir, keystore_owner="myuserX%s" % idx, keystore_passphrase_hint="Some hïnt")
         assert is_authenticator_initialized(acceptable_dir)
         metadata = load_keystore_metadata(acceptable_dir)
-        assert len(metadata) == 5
+        assert len(metadata) == 6
         assert metadata["keystore_type"] == "authenticator"
         assert isinstance(metadata["keystore_uid"], UUID)
         assert metadata["keystore_owner"] == "myuserX%s" % idx
         assert metadata["keystore_format"] == "keystore_1.0"
         assert metadata["keystore_passphrase_hint"] == "Some hïnt"
+        assert isinstance(metadata["keystore_secret_uid"], UUID)
 
         keystore_metadata_file_path = _get_keystore_metadata_file_path(acceptable_dir)
 

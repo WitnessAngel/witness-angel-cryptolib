@@ -45,6 +45,7 @@ KEYSTORE_SCHEMA = Schema(
         "keystore_uid": UUID,
         "keystore_owner": And(str, non_empty),
         OptionalKey("keystore_passphrase_hint"): And(str, non_empty),
+        "keystore_secret_uid": UUID,
     }
 )
 

@@ -39,11 +39,11 @@ class TimeLimitedAggregatorMixin:
         if self._current_start_time is not None:
             delay_s = get_utc_now_date() - self._current_start_time
             if delay_s.total_seconds() >= self._max_duration_s:
-                self._flush_aggregated_payload()
+                self._flush_aggregated_data()
         if self._current_start_time is None:
             self._current_start_time = get_utc_now_date()
 
-    def _flush_aggregated_payload(self):
+    def _flush_aggregated_data(self):
         """Call this AFTER really flushing data to the next step of the pipeline"""
         self._current_start_time = None
 
@@ -98,7 +98,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         assert " " not in filename, repr(filename)
         return filename
 
-    def _flush_aggregated_payload(self):
+    def _flush_aggregated_data(self):
 
         if not self._current_start_time:
             assert not self._current_records_count
@@ -118,7 +118,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         self._current_metadata = None
         self._current_records_count = 0
 
-        super()._flush_aggregated_payload()
+        super()._flush_aggregated_data()
 
     def _build_record_filename(self, sensor_name, from_datetime, to_datetime, extension):
         assert extension.startswith("."), extension
@@ -179,7 +179,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         Return the content of current tarfile as a bytestring, possibly empty, and reset the current tarfile.
         """
         assert self._current_records_count or not self._current_start_time  # INVARIANT of our system!
-        self._flush_aggregated_payload()
+        self._flush_aggregated_data()
 
     @staticmethod
     def read_tarfile_from_bytestring(payload: bytes):
@@ -199,7 +199,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
     """
 
     _tarfile_aggregator = None
-    _current_payload = None
+    _current_dataset = None
     _lock = None
 
     def __init__(self, tarfile_aggregator: TarfileRecordsAggregator, sensor_name: str, max_duration_s: float):
@@ -210,7 +210,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
         self._lock = threading.Lock()
 
     def get_data_count(self):
-        return len(self._current_payload) if self._current_payload else 0
+        return len(self._current_dataset) if self._current_dataset else 0
 
     @property
     def sensor_name(self):
@@ -218,43 +218,43 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
 
     def _notify_aggregation_operation(self):
         super()._notify_aggregation_operation()
-        if self._current_payload is None:
-            self._current_payload = []
+        if self._current_dataset is None:
+            self._current_dataset = []
 
-    def _flush_aggregated_payload(self):
+    def _flush_aggregated_data(self):
         if not self._current_start_time:
-            assert not self._current_payload
+            assert not self._current_dataset
             return
         end_time = get_utc_now_date()
-        payload_bytes = dump_to_json_bytes(self._current_payload)
+        payload = dump_to_json_bytes(self._current_dataset)
         self._tarfile_aggregator.add_record(
-            payload=payload_bytes,
+            payload=payload,
             sensor_name=self._sensor_name,
             from_datetime=self._current_start_time,
             to_datetime=end_time,
             extension=".json",
         )
-        self._current_payload = None
-        super()._flush_aggregated_payload()
+        self._current_dataset = None
+        super()._flush_aggregated_data()
 
     @synchronized
     def add_data(self, data_dict: dict):
         """
         Flush current data to the tarfile if needed, and append `data_dict` to the queue.
         """
-        assert self._current_payload or not self._current_start_time  # INVARIANT of our system!
+        assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
         assert isinstance(data_dict, dict), data_dict
         logger.debug("New data added to %s json builder: %s", self._sensor_name, data_dict)
         self._notify_aggregation_operation()
-        self._current_payload.append(data_dict)
+        self._current_dataset.append(data_dict)
 
     @synchronized
-    def flush_payload(self):
+    def flush_dataset(self):
         """
         Force the flushing of current data to the tarfile (e.g. when terminating the service).
         """
-        assert self._current_payload or not self._current_start_time  # INVARIANT of our system!
-        self._flush_aggregated_payload()
+        assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
+        self._flush_aggregated_data()
 
 
 class PeriodicValueMixin:

@@ -74,7 +74,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
         self._cryptainer_storage = cryptainer_storage
         self._lock = threading.Lock()
 
-    def __len__(self):
+    def get_record_count(self):
         return self._current_records_count
 
     def _notify_aggregation_operation(self):
@@ -209,7 +209,7 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
         self._sensor_name = sensor_name
         self._lock = threading.Lock()
 
-    def __len__(self):
+    def get_data_count(self):
         return len(self._current_payload) if self._current_payload else 0
 
     @property

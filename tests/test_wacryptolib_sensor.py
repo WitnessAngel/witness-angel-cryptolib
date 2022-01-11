@@ -55,7 +55,7 @@ def test_tarfile_aggregator(tmp_path):
     )
 
     tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=10)
-    assert len(tarfile_aggregator) == 0
+    assert tarfile_aggregator.get_record_count() == 0
     assert not tarfile_aggregator._current_start_time
     assert cryptainer_storage.get_cryptainer_count() == 0
 
@@ -63,7 +63,7 @@ def test_tarfile_aggregator(tmp_path):
 
         tarfile_aggregator.finalize_tarfile()
         cryptainer_storage.wait_for_idle_state()
-        assert len(tarfile_aggregator) == 0
+        assert tarfile_aggregator.get_record_count() == 0
         assert not tarfile_aggregator._current_start_time
         assert cryptainer_storage.get_cryptainer_count() == 0
 
@@ -75,7 +75,7 @@ def test_tarfile_aggregator(tmp_path):
             extension=".txt",
             payload=data1,
         )
-        assert len(tarfile_aggregator) == 1
+        assert tarfile_aggregator.get_record_count() == 1
         assert tarfile_aggregator._current_start_time
 
         data2 = b"123xyz"
@@ -86,7 +86,7 @@ def test_tarfile_aggregator(tmp_path):
             extension=".mp3",
             payload=data2,
         )
-        assert len(tarfile_aggregator) == 2
+        assert tarfile_aggregator.get_record_count() == 2
 
         frozen_datetime.tick(delta=timedelta(seconds=1))
 
@@ -95,7 +95,7 @@ def test_tarfile_aggregator(tmp_path):
         assert cryptainer_storage.get_cryptainer_count() == 1
         tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
         tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
-        assert len(tarfile_aggregator) == 0
+        assert tarfile_aggregator.get_record_count() == 0
         assert not tarfile_aggregator._current_start_time
 
         filenames = sorted(tar_file.getnames())
@@ -110,7 +110,7 @@ def test_tarfile_aggregator(tmp_path):
             frozen_datetime.tick(delta=timedelta(seconds=1))
             tarfile_aggregator.finalize_tarfile()
             cryptainer_storage.wait_for_idle_state()
-            assert len(tarfile_aggregator) == 0
+            assert tarfile_aggregator.get_record_count() == 0
             assert not tarfile_aggregator._current_start_time
             assert cryptainer_storage.get_cryptainer_count() == 1  # Unchanged
 
@@ -122,7 +122,7 @@ def test_tarfile_aggregator(tmp_path):
             extension=".avi",
             payload=data3,
         )
-        assert len(tarfile_aggregator) == 1
+        assert tarfile_aggregator.get_record_count() == 1
         assert tarfile_aggregator._current_start_time
 
         frozen_datetime.tick(delta=timedelta(seconds=1))
@@ -131,7 +131,7 @@ def test_tarfile_aggregator(tmp_path):
         assert cryptainer_storage.get_cryptainer_count() == 2
         tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
         tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
-        assert len(tarfile_aggregator) == 0
+        assert tarfile_aggregator.get_record_count() == 0
         assert not tarfile_aggregator._current_start_time
 
         filenames = sorted(tar_file.getnames())
@@ -142,7 +142,7 @@ def test_tarfile_aggregator(tmp_path):
             frozen_datetime.tick(delta=timedelta(seconds=1))
             tarfile_aggregator.finalize_tarfile()
             cryptainer_storage.wait_for_idle_state()
-            assert len(tarfile_aggregator) == 0
+            assert tarfile_aggregator.get_record_count() == 0
             assert not tarfile_aggregator._current_start_time
             assert cryptainer_storage.get_cryptainer_count() == 2  # Unchanged
 
@@ -155,7 +155,7 @@ def test_tarfile_aggregator(tmp_path):
             payload=b"hiiii",
         )
         simple_add_record()
-        assert len(tarfile_aggregator) == 1
+        assert tarfile_aggregator.get_record_count() == 1
         assert tarfile_aggregator._current_start_time
         current_start_time_saved = tarfile_aggregator._current_start_time
 
@@ -163,13 +163,13 @@ def test_tarfile_aggregator(tmp_path):
         assert get_utc_now_date() - tarfile_aggregator._current_start_time == timedelta(seconds=9)
 
         simple_add_record()
-        assert len(tarfile_aggregator) == 2
+        assert tarfile_aggregator.get_record_count() == 2
         assert tarfile_aggregator._current_start_time == current_start_time_saved
 
         frozen_datetime.tick(delta=timedelta(seconds=2))
 
         simple_add_record()
-        assert len(tarfile_aggregator) == 1
+        assert tarfile_aggregator.get_record_count() == 1
         assert tarfile_aggregator._current_start_time
         assert tarfile_aggregator._current_start_time != current_start_time_saved  # AUTO FLUSH occurred
         cryptainer_storage.wait_for_idle_state()
@@ -214,17 +214,17 @@ def test_json_aggregator(tmp_path):
 
     tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
 
-    assert len(tarfile_aggregator) == 0
+    assert tarfile_aggregator.get_record_count() == 0
 
     json_aggregator = JsonDataAggregator(
         max_duration_s=2, tarfile_aggregator=tarfile_aggregator, sensor_name="some_sensors"
     )
-    assert len(json_aggregator) == 0
+    assert json_aggregator.get_data_count() == 0
     assert json_aggregator.sensor_name == "some_sensors"
 
     json_aggregator.flush_payload()  # Does nothing
-    assert len(tarfile_aggregator) == 0
-    assert len(json_aggregator) == 0
+    assert tarfile_aggregator.get_record_count() == 0
+    assert json_aggregator.get_data_count() == 0
     assert not json_aggregator._current_start_time
 
     with freeze_time() as frozen_datetime:
@@ -232,45 +232,45 @@ def test_json_aggregator(tmp_path):
         json_aggregator.add_data(dict(pulse=42))
         json_aggregator.add_data(dict(timing=True))
 
-        assert len(tarfile_aggregator) == 0
-        assert len(json_aggregator) == 2
+        assert tarfile_aggregator.get_record_count() == 0
+        assert json_aggregator.get_data_count() == 2
         assert json_aggregator._current_start_time
 
         frozen_datetime.tick(delta=timedelta(seconds=1))
 
         json_aggregator.add_data(dict(abc=2.2))
 
-        assert len(tarfile_aggregator) == 0
-        assert len(json_aggregator) == 3
+        assert tarfile_aggregator.get_record_count() == 0
+        assert json_aggregator.get_data_count() == 3
 
         frozen_datetime.tick(delta=timedelta(seconds=1))
 
         json_aggregator.add_data(dict(x="abc"))
 
-        assert len(tarfile_aggregator) == 1  # Single json file
-        assert len(json_aggregator) == 1
+        assert tarfile_aggregator.get_record_count() == 1  # Single json file
+        assert json_aggregator.get_data_count() == 1
         assert json_aggregator._current_start_time
 
         json_aggregator.flush_payload()
         assert not json_aggregator._current_start_time
 
-        assert len(tarfile_aggregator) == 2  # 2 json files
-        assert len(json_aggregator) == 0
+        assert tarfile_aggregator.get_record_count() == 2  # 2 json files
+        assert json_aggregator.get_data_count() == 0
 
         frozen_datetime.tick(delta=timedelta(seconds=10))
 
         json_aggregator.flush_payload()
 
         # Unchanged
-        assert len(tarfile_aggregator) == 2
-        assert len(json_aggregator) == 0
+        assert tarfile_aggregator.get_record_count() == 2
+        assert json_aggregator.get_data_count() == 0
 
         tarfile_aggregator.finalize_tarfile()
         cryptainer_storage.wait_for_idle_state()
         assert cryptainer_storage.get_cryptainer_count() == 1
         tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
         tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
-        assert len(tarfile_aggregator) == 0
+        assert tarfile_aggregator.get_record_count() == 0
 
         filenames = sorted(tar_file.getnames())
         assert len(filenames) == 2
@@ -381,7 +381,7 @@ def test_periodic_value_poller(tmp_path):
 
     tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
 
-    assert len(tarfile_aggregator) == 0
+    assert tarfile_aggregator.get_record_count() == 0
 
     json_aggregator = JsonDataAggregator(
         max_duration_s=100, tarfile_aggregator=tarfile_aggregator, sensor_name="some_sensors"
@@ -395,12 +395,12 @@ def test_periodic_value_poller(tmp_path):
     check_sensor_state_machine(poller, run_duration=0.45)
 
     # We have variations due to machine load (but data was fetched immediately on start)
-    assert 5 <= len(json_aggregator) <= 6
+    assert 5 <= json_aggregator.get_data_count() <= 6
     data_sets = json_aggregator._current_payload
     assert all(rec["type"] == "current time" for rec in data_sets), data_sets
 
     json_aggregator.flush_payload()  # From here one, everything is just standard
-    assert len(json_aggregator) == 0
+    assert json_aggregator.get_data_count() == 0
 
     # CASE OF SLOW FETCHER #
 
@@ -414,12 +414,12 @@ def test_periodic_value_poller(tmp_path):
     poller.stop()
     poller.join()
 
-    assert len(json_aggregator) == 2  # Second fetching could complete
+    assert json_aggregator.get_data_count() == 2  # Second fetching could complete
     data_sets = json_aggregator._current_payload
     assert all(rec["type"] == "current time 2" for rec in data_sets), data_sets
 
     json_aggregator.flush_payload()  # From here one, everything is just standard
-    assert len(json_aggregator) == 0
+    assert json_aggregator.get_data_count() == 0
 
     # CASE OF BROKEN TASK #
 

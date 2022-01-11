@@ -48,7 +48,7 @@ class TimeLimitedAggregatorMixin:
         self._current_start_time = None
 
 
-class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
+class TarfileRecordAggregator(TimeLimitedAggregatorMixin):
     """
     This class allows sensors to aggregate file-like records of data in memory.
 
@@ -193,7 +193,7 @@ class TarfileRecordsAggregator(TimeLimitedAggregatorMixin):
 class JsonDataAggregator(TimeLimitedAggregatorMixin):
     """
     This class allows sensors to aggregate dicts of data, which are periodically pushed as a json bytestring
-    to the underlying TarfileRecordsAggregator.
+    to the underlying TarfileRecordAggregator.
 
     Public methods of this class are thread-safe.
     """
@@ -202,9 +202,9 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
     _current_dataset = None
     _lock = None
 
-    def __init__(self, tarfile_aggregator: TarfileRecordsAggregator, sensor_name: str, max_duration_s: float):
+    def __init__(self, tarfile_aggregator: TarfileRecordAggregator, sensor_name: str, max_duration_s: float):
         super().__init__(max_duration_s=max_duration_s)
-        assert isinstance(tarfile_aggregator, TarfileRecordsAggregator), tarfile_aggregator
+        assert isinstance(tarfile_aggregator, TarfileRecordAggregator), tarfile_aggregator
         self._tarfile_aggregator = tarfile_aggregator
         self._sensor_name = sensor_name
         self._lock = threading.Lock()

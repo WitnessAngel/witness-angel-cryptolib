@@ -8,7 +8,7 @@ from freezegun import freeze_time
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool
 from wacryptolib.scaffolding import check_sensor_state_machine
-from wacryptolib.sensor import TarfileRecordsAggregator, JsonDataAggregator, PeriodicValuePoller, SensorManager
+from wacryptolib.sensor import TarfileRecordAggregator, JsonDataAggregator, PeriodicValuePoller, SensorManager
 from wacryptolib.sensor import TimeLimitedAggregatorMixin
 from wacryptolib.utilities import load_from_json_bytes, TaskRunnerStateMachineBase, get_utc_now_date
 
@@ -54,7 +54,7 @@ def test_tarfile_aggregator(tmp_path):
         offload_payload_ciphertext=offload_payload_ciphertext,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=10)
+    tarfile_aggregator = TarfileRecordAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=10)
     assert tarfile_aggregator.get_record_count() == 0
     assert not tarfile_aggregator._current_start_time
     assert cryptainer_storage.get_cryptainer_count() == 0
@@ -94,7 +94,7 @@ def test_tarfile_aggregator(tmp_path):
         cryptainer_storage.wait_for_idle_state()
         assert cryptainer_storage.get_cryptainer_count() == 1
         tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
-        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+        tar_file = TarfileRecordAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert tarfile_aggregator.get_record_count() == 0
         assert not tarfile_aggregator._current_start_time
 
@@ -130,7 +130,7 @@ def test_tarfile_aggregator(tmp_path):
         cryptainer_storage.wait_for_idle_state()
         assert cryptainer_storage.get_cryptainer_count() == 2
         tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
-        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+        tar_file = TarfileRecordAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert tarfile_aggregator.get_record_count() == 0
         assert not tarfile_aggregator._current_start_time
 
@@ -196,7 +196,7 @@ def test_tarfile_aggregator(tmp_path):
         cryptainer_storage.wait_for_idle_state()
         assert cryptainer_storage.get_cryptainer_count() == 5
         tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
-        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+        tar_file = TarfileRecordAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tar_file.getmembers()) == 3
         assert len(tar_file.getnames()) == 3
         # The LAST record has priority over others with the same name
@@ -212,7 +212,7 @@ def test_json_aggregator(tmp_path):
         offload_payload_ciphertext=offload_payload_ciphertext,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
+    tarfile_aggregator = TarfileRecordAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
 
     assert tarfile_aggregator.get_record_count() == 0
 
@@ -269,7 +269,7 @@ def test_json_aggregator(tmp_path):
         cryptainer_storage.wait_for_idle_state()
         assert cryptainer_storage.get_cryptainer_count() == 1
         tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
-        tar_file = TarfileRecordsAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+        tar_file = TarfileRecordAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert tarfile_aggregator.get_record_count() == 0
 
         filenames = sorted(tar_file.getnames())
@@ -300,7 +300,7 @@ def test_aggregators_thread_safety(tmp_path):
         offload_payload_ciphertext=offload_payload_ciphertext,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
+    tarfile_aggregator = TarfileRecordAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
     json_aggregator = JsonDataAggregator(
         max_duration_s=1, tarfile_aggregator=tarfile_aggregator, sensor_name="some_sensors"
     )
@@ -341,7 +341,7 @@ def test_aggregators_thread_safety(tmp_path):
     ]
 
     tarfiles = [
-        TarfileRecordsAggregator.read_tarfile_from_bytestring(bytestring) for bytestring in tarfiles_bytes if bytestring
+        TarfileRecordAggregator.read_tarfile_from_bytestring(bytestring) for bytestring in tarfiles_bytes if bytestring
     ]
 
     tarfiles_count = len(tarfiles)
@@ -379,7 +379,7 @@ def test_periodic_value_poller(tmp_path):
         offload_payload_ciphertext=offload_payload_ciphertext,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
+    tarfile_aggregator = TarfileRecordAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
 
     assert tarfile_aggregator.get_record_count() == 0
 

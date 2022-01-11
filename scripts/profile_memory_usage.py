@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timezone
 
 from wacryptolib.cryptainer import CryptainerStorage, LOCAL_KEYFACTORY_TRUSTEE_MARKER
-from wacryptolib.sensor import TarfileRecordsAggregator
+from wacryptolib.sensor import TarfileRecordAggregator
 
 CRYPTOCONF = dict(
     payload_cipher_layers=[
@@ -45,7 +45,7 @@ def profile_simple_encryption():
         offload_payload_ciphertext=True,
     )
 
-    tarfile_aggregator = TarfileRecordsAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
+    tarfile_aggregator = TarfileRecordAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
 
     payload = b"abcdefghij" * 10 * 1024**2
 

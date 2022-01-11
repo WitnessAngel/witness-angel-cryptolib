@@ -1150,9 +1150,8 @@ class ReadonlyCryptainerStorage:
         self._cryptainer_dir = cryptainer_dir
         self._keystore_pool = keystore_pool  # Might be None, in this case fallback to in-memory pool
 
-    def __len__(self):  # FIXME REMOVE THAT, DANGEROUS!!!!
-        """Beware, might be SLOW if many files are present in folder."""
-        return len(self.list_cryptainer_names())  # No sorting, to be quicker
+    def get_cryptainer_count(self):
+        return len(self.list_cryptainer_names(as_absolute_paths=True))  # Fastest version
 
     def list_cryptainer_names(
         self, as_sorted_list: bool = False, as_absolute_paths: bool = False
@@ -1165,8 +1164,9 @@ class ReadonlyCryptainerStorage:
         if as_sorted_list:
             paths = sorted(paths)
         if not as_absolute_paths:
-            paths = (Path(p.name) for p in paths)  # beware, only works since we don't have subfolders for now!
-        return list(paths)
+            paths = [Path(p.name) for p in paths]  # beware, only works since we don't have subfolders for now!
+        assert isinstance(paths, list), paths
+        return paths
 
     def _get_cryptainer_datetime_utc(self, cryptainer_name):
         """Returns an UTC datetime corresponding to the creation time stored in filename, or else the file-stat mtime"""

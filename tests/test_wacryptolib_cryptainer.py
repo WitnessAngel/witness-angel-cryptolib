@@ -871,18 +871,18 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
     storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=cryptainer_dir)
     assert storage._max_cryptainer_count is None
-    assert len(storage) == 0
+    assert storage.get_cryptainer_count() == 0
     assert storage.list_cryptainer_names() == []
 
     storage.enqueue_file_for_encryption("animals.dat", animals_file_handle, cryptainer_metadata=None)
     storage.enqueue_file_for_encryption("empty.txt", b"", cryptainer_metadata=dict(somevalue=True))
-    assert len(storage) == 0  # Cryptainer threads are just beginning to work!
+    assert storage.get_cryptainer_count() == 0  # Cryptainer threads are just beginning to work!
 
     storage.wait_for_idle_state()
 
     assert not animals_file_path.is_file()  # AUTO-DELETED after encryption!
 
-    assert len(storage) == 2
+    assert storage.get_cryptainer_count() == 2
     assert storage.list_cryptainer_names(as_sorted_list=True) == [Path("animals.dat.crypt"), Path("empty.txt.crypt")]
     assert storage._cryptainer_dir.joinpath(
         "animals.dat.crypt.payload"
@@ -895,7 +895,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     )
     storage.enqueue_file_for_encryption("newfile.bmp", b"stuffs", cryptainer_metadata=None)
     storage.wait_for_idle_state()
-    assert len(storage) == 3
+    assert storage.get_cryptainer_count() == 3
     expected_cryptainer_names = [Path("animals.dat.crypt"), Path("empty.txt.crypt"), Path("newfile.bmp.crypt")]
     assert storage.list_cryptainer_names(as_sorted_list=True) == expected_cryptainer_names
     assert sorted(storage.list_cryptainer_names(as_sorted_list=False)) == expected_cryptainer_names
@@ -925,7 +925,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert "Caught exception" not in caplog.text, caplog.text
     storage.enqueue_file_for_encryption("something.mpg", b"#########", cryptainer_metadata=None)
     storage.wait_for_idle_state()
-    assert len(storage) == 3  # Unchanged
+    assert storage.get_cryptainer_count() == 3  # Unchanged
     assert "Caught exception" in caplog.text, caplog.text
     del storage._make_absolute
     assert storage._make_absolute  # Back to the method
@@ -940,11 +940,11 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     empty_content = storage.decrypt_cryptainer_from_storage("empty.txt.crypt")
     assert empty_content == b""
 
-    assert len(storage) == 3
+    assert storage.get_cryptainer_count() == 3
     os.remove(os.path.join(cryptainer_dir, "animals.dat.crypt"))
     os.remove(os.path.join(cryptainer_dir, "newfile.bmp.crypt"))
     assert storage.list_cryptainer_names(as_sorted_list=True) == [Path("empty.txt.crypt")]
-    assert len(storage) == 1  # Remaining offloaded data file is ignored
+    assert storage.get_cryptainer_count() == 1  # Remaining offloaded data file is ignored
 
     offload_payload_ciphertext1 = random_bool()
     storage = FakeTestCryptainerStorage(
@@ -955,9 +955,9 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert storage._max_cryptainer_count is None
     for i in range(10):
         storage.enqueue_file_for_encryption("file.dat", b"dogs\ncats\n", cryptainer_metadata=None)
-    assert len(storage) < 11  # In progress
+    assert storage.get_cryptainer_count() < 11  # In progress
     storage.wait_for_idle_state()
-    assert len(storage) == 11  # Still the older file remains
+    assert storage.get_cryptainer_count() == 11  # Still the older file remains
 
 
 def test_cryptainer_storage_purge_by_max_count(tmp_path):
@@ -974,7 +974,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
         storage.enqueue_file_for_encryption("xyz.dat", b"abc", cryptainer_metadata=None)
 
     storage.wait_for_idle_state()
-    assert len(storage) == 3  # Purged
+    assert storage.get_cryptainer_count() == 3  # Purged
     assert storage.list_cryptainer_names(as_sorted_list=True) == [
         Path("xyz.dat.000.crypt"),
         Path("xyz.dat.001.crypt"),
@@ -983,7 +983,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
 
     storage.enqueue_file_for_encryption("xyz.dat", b"abc", cryptainer_metadata=None)
     storage.wait_for_idle_state()
-    assert len(storage) == 3  # Purged
+    assert storage.get_cryptainer_count() == 3  # Purged
     assert storage.list_cryptainer_names(as_sorted_list=True) == [
         Path("xyz.dat.001.crypt"),
         Path("xyz.dat.002.crypt"),
@@ -999,13 +999,13 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
         max_cryptainer_count=4,
         offload_payload_ciphertext=offload_payload_ciphertext2,
     )
-    assert len(storage) == 3  # Retrieves existing cryptainers
+    assert storage.get_cryptainer_count() == 3  # Retrieves existing cryptainers
     storage.enqueue_file_for_encryption("aaa.dat", b"000", cryptainer_metadata=None)
     storage.wait_for_idle_state()
-    assert len(storage) == 4  # Unchanged
+    assert storage.get_cryptainer_count() == 4  # Unchanged
     storage.enqueue_file_for_encryption("zzz.dat", b"000", cryptainer_metadata=None)
     storage.wait_for_idle_state()
-    assert len(storage) == 4  # Purge occurred
+    assert storage.get_cryptainer_count() == 4  # Purge occurred
     assert storage.list_cryptainer_names(as_sorted_list=True) == [
         Path("aaa.dat.000.crypt"),  # It's the file timestamps that counts, not the name!
         Path("xyz.dat.002.crypt"),
@@ -1089,7 +1089,7 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
     assert Path("20301021_222711_oldfile.dat.crypt") in cryptainer_names
     assert Path("whatever_stuff.dat.005.crypt") in cryptainer_names
 
-    assert len(storage) == 4  # 2 listed just above + 2 recent "<date>_stuff.dat" from loop
+    assert storage.get_cryptainer_count() == 4  # 2 listed just above + 2 recent "<date>_stuff.dat" from loop
 
     # Change mtime to VERY old!
     os.utime(storage._make_absolute(Path("whatever_stuff.dat.005.crypt")), (1000, 1000))
@@ -1101,7 +1101,7 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
     assert Path("whatever_stuff.dat.005.crypt") not in cryptainer_names
     assert Path("abcde.dat.006.crypt") in cryptainer_names
 
-    assert len(storage) == 4
+    assert storage.get_cryptainer_count() == 4
 
     assert storage._max_cryptainer_age
     storage._max_cryptainer_age = timedelta(days=-1)
@@ -1123,7 +1123,7 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
         max_cryptainer_quota=8000,  # Beware of overhead of encryption and json structs!
         offload_payload_ciphertext=offload_payload_ciphertext,
     )
-    assert not len(storage)
+    assert not storage.get_cryptainer_count()
 
     storage.enqueue_file_for_encryption("20101021_222711_stuff.dat", b"a" * 2000, cryptainer_metadata=None)
     storage.enqueue_file_for_encryption("20301021_222711_stuff.dat", b"z" * 2000, cryptainer_metadata=None)

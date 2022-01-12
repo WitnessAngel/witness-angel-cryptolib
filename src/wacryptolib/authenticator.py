@@ -1,5 +1,7 @@
 import logging
+import secrets
 from pathlib import Path
+
 
 from wacryptolib.keystore import _validate_keystore_metadata, _get_keystore_metadata_file_path
 from wacryptolib.utilities import dump_to_json_file, generate_uuid0
@@ -46,7 +48,8 @@ def _initialize_authenticator_metadata(authenticator_dir: Path, keystore_owner: 
         "keystore_uid": generate_uuid0(),
         "keystore_owner": keystore_owner,
         "keystore_passphrase_hint": keystore_passphrase_hint,
-        "keystore_secret_uid": generate_uuid0(),
+        "keystore_secret": secrets.token_urlsafe(64),
+
     }
     _validate_keystore_metadata(metadata)  # Ensure no weird metadata is added!
     dump_to_json_file(metadata_file, metadata)

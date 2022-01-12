@@ -35,7 +35,7 @@ def test_authenticator_basic_workflow(tmp_path):
         assert metadata["keystore_owner"] == "myuserX%s" % idx
         assert metadata["keystore_format"] == "keystore_1.0"
         assert metadata["keystore_passphrase_hint"] == "Some hïnt"
-        assert isinstance(metadata["keystore_secret_uid"], UUID)
+        assert isinstance(metadata["keystore_secret"], str)
 
         keystore_metadata_file_path = _get_keystore_metadata_file_path(acceptable_dir)
 

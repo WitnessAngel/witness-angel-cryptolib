@@ -189,7 +189,7 @@ def load_from_json_str(data, **extra_options):
     try:
         return loads(data, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
     except JSONDecodeError as exc:
-        raise SchemaValidationError("Invalid JSON string: %r" % exc)
+        raise SchemaValidationError("Invalid JSON string: %r" % exc) from exc
 
 
 def dump_to_json_bytes(data, **extra_options):

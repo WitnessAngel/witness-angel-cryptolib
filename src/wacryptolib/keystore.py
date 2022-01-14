@@ -182,7 +182,7 @@ class KeystoreBase(KeystoreWriteBase, KeystoreReadBase):
     pass  # Derive from this class to have full-featured keystores
 
 
-class DummyKeystore(KeystoreWriteBase, KeystoreReadBase):
+class DummyKeystore(KeystoreBase):
     """
     Dummy key storage for use in tests, where keys are kepts only process-locally.
 
@@ -333,7 +333,7 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
         return key_information_list
 
 
-class FilesystemKeystore(KeystoreWriteBase, ReadonlyFilesystemKeystore):
+class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreBase):
     """
     Filesystem-based key storage.
 

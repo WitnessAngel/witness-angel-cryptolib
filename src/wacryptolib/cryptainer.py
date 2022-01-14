@@ -225,7 +225,7 @@ class CryptainerEncryptor(CryptainerBase):
 
     def build_cryptainer_and_encryption_pipeline(
         self, *, cryptoconf: dict, output_stream: BinaryIO, keychain_uid=None, cryptainer_metadata=None
-    ) -> dict:
+    ) -> tuple:
         """
         Build a base cryptainer to store encrypted keys, as well as a stream encryptor
         meant to process heavy payload chunk by chunk.

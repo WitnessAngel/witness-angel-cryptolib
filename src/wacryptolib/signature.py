@@ -37,7 +37,7 @@ def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_ALGOS) -
     return {"signature_timestamp_utc": timestamp_utc, "signature_value": signature}
 
 
-def _sign_with_pss(message: bytes, key: RSA.RsaKey, timestamp_utc: datetime) -> bytes:
+def _sign_with_pss(message: bytes, key: RSA.RsaKey, timestamp_utc: int) -> bytes:
     """Sign a bytes message with a private RSA key.
 
     :param message: the bytestring to sign
@@ -52,7 +52,7 @@ def _sign_with_pss(message: bytes, key: RSA.RsaKey, timestamp_utc: datetime) -> 
     return signature
 
 
-def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey], timestamp_utc: datetime) -> bytes:
+def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey], timestamp_utc: int) -> bytes:
     """Sign a bytes message with a private DSA or ECC key.
 
     We use the `fips-186-3` mode for the signer because signature is randomized,

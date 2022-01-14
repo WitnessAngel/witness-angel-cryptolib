@@ -73,7 +73,7 @@ EXAMPLE_CRYPTOCONF = dict(
     ),
 )
 @click.pass_context
-def cli(ctx, keystore_pool):
+def cli(ctx, keystore_pool) -> object:
     ctx.ensure_object(dict)
     ctx.obj["keystore_pool"] = keystore_pool
 
@@ -146,4 +146,5 @@ def decrypt(ctx, input_cryptainer, output_medium):
 
 
 if __name__ == "__main__":
-    cli()
+    fake_prog_name = "python -m wacryptolib"  # Else __init__.py is used in help text...
+    cli(prog_name=fake_prog_name)

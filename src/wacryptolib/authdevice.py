@@ -16,7 +16,7 @@ def list_available_authdevices() -> list:
     Generate a list of dictionaries representing mounted partitions of USB keys.
 
     :return: list of dicts having at least these fields:
-    
+
         - "device_type" (str): device type like "USBSTOR"
         - "partition_label" (str): possibly empty, label of the partition
         - "partition_mountpoint" (str):  mount point of device on the filesystem.

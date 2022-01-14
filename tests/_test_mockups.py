@@ -36,7 +36,7 @@ class FakeTestCryptainerStorage(CryptainerStorage):
         return cryptainer["payload_ciphertext_struct"]["ciphertext_value"]
 
 
-class WildcardUuid(object):
+class WildcardUuid:
     """Dummy UUID wildcard to compare data trees containing any UUID"""
 
     def __eq__(self, other):

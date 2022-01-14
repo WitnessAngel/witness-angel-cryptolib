@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 import jsonschema
-import schema
+import schema as pythonschema
 from jsonschema import validate as jsonschema_validate
 from schema import And, Or, Regex, Const, Schema, Optional as OptionalKey
 
@@ -500,57 +500,20 @@ class CryptainerEncryptor(CryptainerBase):
         cipherdict = encrypt_bytestring(plaintext=key_bytes, cipher_algo=cipher_algo, key_dict=dict(key=public_key))
         return cipherdict
 
-    def ____obsolete_____encrypt_shards(
-        self, shards: Sequence, key_shared_secret_shards: Sequence, keychain_uid: uuid.UUID
-    ) -> list:
-        """
-        Make a loop through all shards from shared secret algorithm to encrypt each of them.
-
-        :param shards: list of tuples containing an index and its shard payload
-        :param key_shared_secret_shards: cryptoconf subtree with shard trustee information
-        :param keychain_uid: uuid for the set of encryption keys used
-
-        :return: list of encrypted shards
-        """
-
-        all_encrypted_shards = []
-
-        assert len(shards) == len(key_shared_secret_shards)
-
-        for shard_idx, shard in enumerate(shards):
-            assert isinstance(shard[1], bytes), repr(shard)
-
-            conf_shard = key_shared_secret_shards[shard_idx]
-            shard_cipher_algo = conf_shard["shard_cipher_algo"]
-            shard_trustee = conf_shard["shard_trustee"]
-            keychain_uid_shard = conf_shard.get("keychain_uid") or keychain_uid
-
-            shard_cipherdict = self._encrypt_with_asymmetric_cipher(
-                cipher_algo=shard_cipher_algo,
-                keychain_uid=keychain_uid_shard,
-                key_bytes=shard[1],
-                trustee=shard_trustee,
-            )
-
-            all_encrypted_shards.append((shard[0], shard_cipherdict))
-
-        assert len(shards) == len(key_shared_secret_shards)
-        return all_encrypted_shards
-
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: list):
         keychain_uid = cryptainer["keychain_uid"]
 
         payload_cipher_layers = cryptainer["payload_cipher_layers"]
         assert len(payload_cipher_layers) == len(payload_integrity_tags)  # Sanity check
 
-        for payload_cipher_layer, payload_integrity_tags in zip(
+        for payload_cipher_layer, payload_integrity_tags_dict in zip(
             cryptainer["payload_cipher_layers"], payload_integrity_tags
         ):
 
             assert payload_cipher_layer["payload_macs"] is None  # Set at cryptainer build time
-            payload_cipher_layer["payload_macs"] = payload_integrity_tags["payload_macs"]
+            payload_cipher_layer["payload_macs"] = payload_integrity_tags_dict["payload_macs"]
 
-            payload_digests = payload_integrity_tags["payload_digests"]
+            payload_digests = payload_integrity_tags_dict["payload_digests"]
 
             _encountered_payload_digest_algos = set()
             for signature_conf in payload_cipher_layer["payload_signatures"]:
@@ -778,64 +741,6 @@ class CryptainerDecryptor(CryptainerBase):
             keychain_uid=keychain_uid, cipher_algo=cipher_algo, cipherdict=cipherdict, passphrases=passphrases
         )
         return symmetric_key_plaintext
-
-    def ________decrypt_symmetric_key_shard(
-        self, keychain_uid: uuid.UUID, symmetric_key_cipherdict: dict, cryptoconf: dict
-    ):
-        """
-        Make a loop through all encrypted shards to decrypt each of them
-        :param keychain_uid: uuid for the set of encryption keys used
-        :param symmetric_key_cipherdict: dictionary which contains every payload needed to decipher each shard
-        :param cryptoconf: configuration tree inside key_cipher_algo
-
-        :return: list of tuples of deciphered shards
-        """
-        key_shared_secret_shards = cryptoconf["key_shared_secret_shards"]
-        key_shared_secret_threshold = cryptoconf["key_shared_secret_threshold"]
-
-        decrypted_shards = []
-        decryption_errors = []
-
-        assert len(symmetric_key_cipherdict["shard_ciphertexts"]) <= len(
-            key_shared_secret_shards
-        )  # During tests we erase some cryptainer shards...
-
-        for shard_idx, shard_conf in enumerate(key_shared_secret_shards):
-
-            shard_cipher_algo = shard_conf["shard_cipher_algo"]
-            shard_trustee = shard_conf["shard_trustee"]
-            keychain_uid_shard = shard_conf.get("keychain_uid") or keychain_uid
-
-            try:
-                try:
-                    encrypted_shard = symmetric_key_cipherdict["shard_ciphertexts"][shard_idx]
-                except IndexError:
-                    raise ValueError("Missing shard at index %s" % shard_idx) from None
-
-                shard_plaintext = self._decrypt_with_asymmetric_cipher(
-                    cipher_algo=shard_cipher_algo,
-                    keychain_uid=keychain_uid_shard,
-                    cipherdict=encrypted_shard[1],
-                    trustee=shard_trustee,
-                )
-                shard = (encrypted_shard[0], shard_plaintext)
-                decrypted_shards.append(shard)
-
-            # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
-            except Exception as exc:  # If actual trustee doesn't work, we can go to next one
-                decryption_errors.append(exc)
-                logger.error("Error when decrypting shard of %s: %r" % (shard_trustee, exc), exc_info=True)
-
-            if len(decrypted_shards) == key_shared_secret_threshold:
-                logger.debug("A sufficient number of shards has been decrypted")
-                break
-
-        if len(decrypted_shards) < key_shared_secret_threshold:
-            raise DecryptionError(
-                "%s valid shard(s) missing for reconstitution of symmetric key (errors: %r)"
-                % (key_shared_secret_threshold - len(decrypted_shards), decryption_errors)
-            )
-        return decrypted_shards
 
     def _verify_payload_signature(self, keychain_uid: uuid.UUID, payload: bytes, cryptoconf: dict):
         """
@@ -1504,15 +1409,15 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
         _micro_schema_hex_uid = And(
             str,
             Or(
-                Regex("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$"),
-                Regex("[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"),
+                Regex(r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$"),
+                Regex(r"[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"),
             ),
         )
         micro_schema_uid = {"$binary": {"base64": _micro_schema_hex_uid, "subType": "03"}}
         micro_schema_binary = {
             "$binary": {
                 "base64": And(
-                    str, Regex("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$")
+                    str, Regex(r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$")
                 ),
                 "subType": "00",
             }
@@ -1521,12 +1426,12 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
             "$numberInt": And(
                 str,
                 Regex(
-                    "^(-?\d{1,9}|-?1\d{9}|-?20\d{8}|-?21[0-3]\d{7}|-?214[0-6]\d{6}|-?2147[0-3]\d{5}|-?21474[0-7]\d{4}|-?214748[012]\d{4}|-?2147483[0-5]\d{3}|-?21474836[0-3]\d{2}|214748364[0-7]|-214748364[0-8])$"
+                    r"^(-?\d{1,9}|-?1\d{9}|-?20\d{8}|-?21[0-3]\d{7}|-?214[0-6]\d{6}|-?2147[0-3]\d{5}|-?21474[0-7]\d{4}|-?214748[012]\d{4}|-?2147483[0-5]\d{3}|-?21474836[0-3]\d{2}|214748364[0-7]|-214748364[0-8])$"
                 ),
             )
         }
 
-        micro_schema_long = {"$numberLong": And(str, Regex("^([+-]?[0-9]\d*|0)$"))}
+        micro_schema_long = {"$numberLong": And(str, Regex(r"^([+-]?[0-9]\d*|0)$"))}
 
     extra_cryptainer = {}
     extra_payload_cipher_layer = {}
@@ -1630,7 +1535,7 @@ def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
         # we use the python schema module
         try:
             valid_schema.validate(data_tree)
-        except schema.SchemaError as exc:
+        except pythonschema.SchemaError as exc:
             raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
 
     else:

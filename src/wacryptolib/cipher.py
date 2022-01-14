@@ -294,15 +294,7 @@ class EncryptionNodeBase:
         return ciphertext
 
     def get_payload_integrity_tags(self) -> dict:
-        """ Get metadata
-        Digest all hash instance in a dictionnary , and return the hash as bytes.
-
-        DO NOT OVERRIDE
-
-            :return :  a dict with digest of hashers (ex: "SHA512": b"\sdddqsd")
-        """
         assert self._is_finished
-
         return dict(payload_macs=self._get_payload_macs(), payload_digests=self._get_payload_digests())
 
     def _get_payload_digests(self) -> dict:

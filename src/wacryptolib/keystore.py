@@ -546,8 +546,6 @@ def generate_keypair_for_storage(  # FIXME document this, or integrate to class?
 
     Returns the generated keypair dict.
     """
-    from wacryptolib.keygen import generate_keypair
-
     keychain_uid = keychain_uid or generate_uuid0()
     keypair = generate_keypair(key_algo=key_algo, serialize=True, passphrase=passphrase)
     keystore.set_keys(

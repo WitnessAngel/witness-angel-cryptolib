@@ -292,7 +292,7 @@ class SensorManager(
     """
     Manage a group of sensors for simultaneous starts/stops.
 
-    The underlying aggregators are not supposed to be directly impacted 
+    The underlying aggregators are not supposed to be directly impacted
     by these operations - they must be flushed separately.
     """
 

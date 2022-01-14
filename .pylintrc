@@ -60,7 +60,7 @@ confidence=
 # --enable=similarities". If you want to run only the classes checker, but have
 # no Warning level messages displayed, use"--disable=all --enable=classes
 # --disable=W"
-disable=locally-disabled,suppressed-message,too-few-public-methods,no-init,basestring-builtin,file-builtin,no-absolute-import,old-division,dict-iter-method,metaclass-assignment,missing-docstring,bad-continuation,too-many-ancestors,line-too-long,redefined-builtin,unused-wildcard-import,wildcard-import,unused-argument,protected-access,invalid-string-quote
+disable=locally-disabled,suppressed-message,too-few-public-methods,no-init,basestring-builtin,file-builtin,no-absolute-import,old-division,dict-iter-method,metaclass-assignment,missing-docstring,bad-continuation,too-many-ancestors,line-too-long,redefined-builtin,unused-wildcard-import,wildcard-import,unused-argument,protected-access,invalid-string-quote,arguments-differ,consider-using-f-string,import-outside-toplevel,import-error,wrong-import-position,wrong-import-order,invalid-name,fixme,no-self-use,unused-variable,possibly-unused-variable,too-many-lines,no-else-return,unnecessary-pass,logging-not-lazy,logging-fstring-interpolation,pointless-string-statement,superfluous-parens
 
 [REPORTS]
 

@@ -14,7 +14,7 @@ def test_list_available_authdevices():  # FIXME add mockups to simulate real USB
 
         assert len(authdevice) == 6  # Same format on all platforms
 
-        assert isinstance(authdevice, dict) or isinstance(authdevice, None)
+        assert isinstance(authdevice, dict)
 
         assert isinstance(authdevice["device_type"], str)
         assert authdevice["device_type"] == "USBSTOR"

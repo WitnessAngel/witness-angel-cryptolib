@@ -5,7 +5,7 @@ from typing import Optional, Sequence
 from wacryptolib.cipher import _decrypt_via_rsa_oaep
 from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, DecryptionError, KeyLoadingError
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
-from wacryptolib.keystore import KeystoreBase as KeystoreBase, generate_keypair_for_storage
+from wacryptolib.keystore import KeystoreBase, generate_keypair_for_storage
 from wacryptolib.signature import sign_message
 
 logger = logging.getLogger(__name__)

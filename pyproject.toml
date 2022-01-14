@@ -66,13 +66,13 @@ typeguard = "^2.10.0"
 
 # Linters and formatters
 black = {version = "^18.3-alpha.0", allow-prereleases = true}
-pylint = "^2.6"
-safety = "^1.10"
-yamllint = "^1.25"
-xenon = "^0.7.1"
-mypy = "^0.790"
-doc8 = "^0.8.1"
 darglint = "^1.8.1"
+pylint = "^2.6"
+mypy = "^0.790"
+xenon = "^0.7.1"
+safety = "^1.10"
+doc8 = "^0.8.1"
+
 
 # Documentation
 sphinx = "^3.4.1"

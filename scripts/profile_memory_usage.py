@@ -32,6 +32,7 @@ CRYPTOCONF = dict(
     ]
 )
 
+# REQUIRES "pip install memory_profiler"
 from memory_profiler import profile
 @profile(precision=4)
 def profile_simple_encryption():
@@ -49,11 +50,12 @@ def profile_simple_encryption():
 
     payload = b"abcdefghij" * 10 * 1024**2
 
-    copy_payload = io.BytesIO(payload)
+    copy_payload = io.BytesIO(payload)  # To stress memory
+    del copy_payload
 
     tarfile_aggregator.add_record(sensor_name="dummy_sensor", from_datetime=now, to_datetime=now, extension=".bin", payload=payload)
 
-    tarfile_aggregator._flush_aggregated_payload()
+    tarfile_aggregator._flush_aggregated_data()
 
     time.sleep(10)
 

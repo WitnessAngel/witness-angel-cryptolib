@@ -1,7 +1,7 @@
 Witness Angel Cryptolib
 #############################
 
-.. image:: https://travis-ci.com/WitnessAngel/witness-angel-cryptolib.svg?branch=master
+.. image:: https://ci.appveyor.com/api/projects/status/y7mfa00b6c34khe0?svg=true
     :target: https://travis-ci.com/WitnessAngel/witness-angel-cryptolib
 
 .. image:: https://readthedocs.org/projects/witness-angel-cryptolib/badge/?version=latest&style=flat

@@ -2,7 +2,20 @@
 Development
 =============
 
-TODO
+
+Version 0.7
+==================
+
+* Prefix WIP containers with ~ so that they don't show up in management interfaces
+* Make BIG REFACTORING (incompatible) of the codebase, with new naming of concepts and new container structure
+* Add docs/concepts.rst to describe new concepts of the lib
+* Change layout of user-profile directories
+* Make "payload_digest" and "payload_signature_struct" optional in data schema
+* Change exceptions hierarchy
+* Implement "--cryptoconf" argument for CLI
+* Add ReadonlyCryptainerStorage and ReadonlyFilesystemKeystore
+* Replace len(cryptainer_storage) by cryptainer_storage.get_cryptainer_count()
+* Replace len() of data aggregator and tarfile aggregator by custom methods
 
 
 Version 0.6

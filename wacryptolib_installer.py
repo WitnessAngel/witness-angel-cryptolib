@@ -2,9 +2,9 @@
 Quick installer for the wacryptolib.
 Requires Python3.7+
 
-Launch it from repsitory root folder, using a system-wide python executable (requires sudo in Linux) or the python from a virtual environment.
+Launch it from repository root folder, using a system-wide python executable (requires sudo in Linux) or the python executable from a virtual environment.
 
-Note that this installs the "poetry" package manager locally in the python environment, not system-wide.
+Note that this installs the "poetry" package manager in the current python environment, not system-wide with a dedicated python environment.
 """
 
 import subprocess

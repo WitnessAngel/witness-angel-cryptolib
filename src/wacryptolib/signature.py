@@ -70,9 +70,7 @@ def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey], timestamp
     return signature
 
 
-def verify_message_signature(
-    *, message: bytes, signature_algo: str, signature: dict, key: Union[KNOWN_KEY_ALGOS]
-):
+def verify_message_signature(*, message: bytes, signature_algo: str, signature: dict, key: Union[KNOWN_KEY_ALGOS]):
     """Verify the authenticity of a signature.
 
     Raises if signature is invalid.
@@ -96,9 +94,7 @@ def verify_message_signature(
     try:
         verifier.verify(hash_payload, signature["signature_value"])
     except ValueError as exc:
-        raise SignatureVerificationError(
-            "Failed %s signature verification (%s)" % (signature_algo, exc)
-        ) from exc
+        raise SignatureVerificationError("Failed %s signature verification (%s)" % (signature_algo, exc)) from exc
 
 
 def _get_utc_timestamp() -> int:

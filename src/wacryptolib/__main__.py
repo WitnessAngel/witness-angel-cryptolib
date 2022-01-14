@@ -82,7 +82,7 @@ def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):
 
     if not cryptoconf_fileobj:
         click.echo("No cryptoconf provided, defaulting to simple example conf")
-        cryptoconf=EXAMPLE_CRYPTOCONF
+        cryptoconf = EXAMPLE_CRYPTOCONF
     else:
         cryptoconf = load_from_json_bytes(cryptoconf_fileobj.read())
 

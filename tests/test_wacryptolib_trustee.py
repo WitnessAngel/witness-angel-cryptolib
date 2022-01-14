@@ -6,13 +6,13 @@ from Crypto.Random import get_random_bytes
 from wacryptolib.cipher import _encrypt_via_rsa_oaep
 from wacryptolib.exceptions import KeyDoesNotExist, SignatureVerificationError, DecryptionError
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
-from wacryptolib.keystore import DummyKeystore, generate_free_keypair_for_least_provisioned_key_algo, \
-    generate_keypair_for_storage
-from wacryptolib.signature import verify_message_signature
-from wacryptolib.trustee import (
-    TrusteeApi,
-    ReadonlyTrusteeApi,
+from wacryptolib.keystore import (
+    DummyKeystore,
+    generate_free_keypair_for_least_provisioned_key_algo,
+    generate_keypair_for_storage,
 )
+from wacryptolib.signature import verify_message_signature
+from wacryptolib.trustee import TrusteeApi, ReadonlyTrusteeApi
 from wacryptolib.utilities import generate_uuid0
 
 
@@ -71,9 +71,7 @@ def test_trustee_api_workflow():
     verify_message_signature(message=secret, signature=signature, key=public_key_dsa, signature_algo="DSA_DSS")
     signature["signature_value"] += b"xyz"
     with pytest.raises(SignatureVerificationError, match="Failed.*verification"):
-        verify_message_signature(
-            message=secret, signature=signature, key=public_key_dsa, signature_algo="DSA_DSS"
-        )
+        verify_message_signature(message=secret, signature=signature, key=public_key_dsa, signature_algo="DSA_DSS")
 
     # Keypair is well auto-created by get_message_signature(), even when no more free keys
     signature = trustee_api.get_message_signature(

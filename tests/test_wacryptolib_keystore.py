@@ -1,9 +1,9 @@
 import os
 import random
 import shutil
+import time
 from pathlib import Path
 from uuid import UUID
-import time
 
 import pytest
 
@@ -11,9 +11,16 @@ from _test_mockups import get_fake_authdevice, random_bool
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
-from wacryptolib.keystore import FilesystemKeystore, DummyKeystore, KeystoreBase, FilesystemKeystorePool, \
-    generate_free_keypair_for_least_provisioned_key_algo, get_free_keypair_generator_worker, \
-    generate_keypair_for_storage, ReadonlyFilesystemKeystore
+from wacryptolib.keystore import (
+    FilesystemKeystore,
+    DummyKeystore,
+    KeystoreBase,
+    FilesystemKeystorePool,
+    generate_free_keypair_for_least_provisioned_key_algo,
+    get_free_keypair_generator_worker,
+    generate_keypair_for_storage,
+    ReadonlyFilesystemKeystore,
+)
 from wacryptolib.scaffolding import (
     check_keystore_free_keys_concurrency,
     check_keystore_basic_get_set_api,
@@ -32,10 +39,7 @@ def test_keystore_basic_get_set_api(tmp_path):
     readonly_filesystem_keystore = ReadonlyFilesystemKeystore(keys_dir=tmp_path)
 
     filesystem_keystore_test_locals = None
-    for keystore, readonly_keystore in [
-        (dummy_keystore, None),
-        (filesystem_keystore, readonly_filesystem_keystore)
-    ]:
+    for keystore, readonly_keystore in [(dummy_keystore, None), (filesystem_keystore, readonly_filesystem_keystore)]:
         res = check_keystore_basic_get_set_api(keystore=keystore, readonly_keystore=readonly_keystore)
         if isinstance(keystore, FilesystemKeystore):
             filesystem_keystore_test_locals = res

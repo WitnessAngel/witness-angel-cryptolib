@@ -85,21 +85,28 @@ def test_cli_encryption_and_decryption(tmp_path):
             with open(cryptoconf_file, "wb") as f:
                 f.write(b"badcontent")
 
-            result = runner.invoke(cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file])
+            result = runner.invoke(
+                cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file]
+            )
             assert result.exit_code == 1
             assert not os.path.exists("specialconf.crypt")
 
-            simple_cryptoconf_tree = dict(payload_cipher_layers = [
+            simple_cryptoconf_tree = dict(
+                payload_cipher_layers=[
                     dict(
                         payload_cipher_algo="CHACHA20_POLY1305",
-                        key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
+                        key_cipher_layers=[
+                            dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                        ],
                         payload_signatures=[],
                     )
                 ]
             )
             dump_to_json_file(cryptoconf_file, simple_cryptoconf_tree)
 
-            result = runner.invoke(cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file])
+            result = runner.invoke(
+                cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file]
+            )
             assert result.exit_code == 0
             assert os.path.exists("specialconf.crypt")
 
@@ -107,7 +114,9 @@ def test_cli_encryption_and_decryption(tmp_path):
                 data = input_file.read()
                 assert "CHACHA20_POLY1305" in data
 
-            result = runner.invoke(cli, base_args + ["decrypt", "-i", "specialconf.crypt", "-o", "specialconf.crypt.decrypted"])
+            result = runner.invoke(
+                cli, base_args + ["decrypt", "-i", "specialconf.crypt", "-o", "specialconf.crypt.decrypted"]
+            )
             assert result.exit_code == 0
             assert os.path.exists("specialconf.crypt.decrypted")
 

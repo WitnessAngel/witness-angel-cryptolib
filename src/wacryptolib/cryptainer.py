@@ -335,7 +335,9 @@ class CryptainerEncryptor(CryptainerBase):
 
         return payload_current, payload_integrity_tags
 
-    def _generate_cryptainer_base_and_secrets(self, cryptoconf: dict, keychain_uid=None, cryptainer_metadata=None) -> tuple:
+    def _generate_cryptainer_base_and_secrets(
+        self, cryptoconf: dict, keychain_uid=None, cryptainer_metadata=None
+    ) -> tuple:
         """
         Build a payload-less and signature-less cryptainer, preconfigured with a set of symmetric keys
         under their final form (encrypted by trustees). A separate extract, with symmetric keys as well as algo names, is returned so that actual payload encryption and signature can be performed separately.
@@ -519,7 +521,9 @@ class CryptainerEncryptor(CryptainerBase):
             for signature_conf in payload_cipher_layer["payload_signatures"]:
                 payload_digest_algo = signature_conf["payload_digest_algo"]
 
-                signature_conf["payload_digest_value"] = payload_digests[payload_digest_algo]  # MUST exist, else incoherence
+                signature_conf["payload_digest_value"] = payload_digests[
+                    payload_digest_algo
+                ]  # MUST exist, else incoherence
 
                 payload_signature_struct = self._generate_message_signature(
                     keychain_uid=keychain_uid, cryptoconf=signature_conf
@@ -540,7 +544,9 @@ class CryptainerEncryptor(CryptainerBase):
         :return: dictionary with information needed to verify signature
         """
         payload_signature_algo = cryptoconf["payload_signature_algo"]
-        payload_digest = cryptoconf["payload_digest_value"]  # Must have been set before, using payload_digest_algo field
+        payload_digest = cryptoconf[
+            "payload_digest_value"
+        ]  # Must have been set before, using payload_digest_algo field
         assert payload_digest, payload_digest
 
         trustee_proxy = get_trustee_proxy(
@@ -621,7 +627,9 @@ class CryptainerDecryptor(CryptainerBase):
             assert isinstance(key_bytes, bytes), key_bytes
             symkey = load_from_json_bytes(key_bytes)
 
-            payload_macs = payload_cipher_layer["payload_macs"]  # FIXME handle if it's not there, missing integrity tags due to unfinished container!!
+            payload_macs = payload_cipher_layer[
+                "payload_macs"
+            ]  # FIXME handle if it's not there, missing integrity tags due to unfinished container!!
             payload_cipherdict = dict(ciphertext=payload_current, **payload_macs)
             payload_current = decrypt_bytestring(
                 cipherdict=payload_cipherdict, key_dict=symkey, cipher_algo=payload_cipher_algo, verify=verify
@@ -809,7 +817,10 @@ class CryptainerEncryptionPipeline:
 
         self._cryptainer_decryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
         self._wip_cryptainer, self._encryption_pipeline = self._cryptainer_decryptor.build_cryptainer_and_encryption_pipeline(
-            output_stream=self._output_data_stream, cryptoconf=cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=cryptainer_metadata
+            output_stream=self._output_data_stream,
+            cryptoconf=cryptoconf,
+            keychain_uid=keychain_uid,
+            cryptainer_metadata=cryptainer_metadata,
         )
         self._wip_cryptainer["payload_ciphertext_struct"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Important
 
@@ -843,7 +854,8 @@ class CryptainerEncryptionPipeline:
         # Emergency closing of open file on deletion
         if not self._output_data_stream.closed:
             logger.error(
-                "Encountered abnormal open file in __del__ of CryptainerEncryptionPipeline: %s" % self._output_data_stream
+                "Encountered abnormal open file in __del__ of CryptainerEncryptionPipeline: %s"
+                % self._output_data_stream
             )
             self._output_data_stream.close()
 
@@ -1043,6 +1055,7 @@ def get_cryptainer_size_on_filesystem(cryptainer_filepath):
 
 # FIXME add ReadonlyCryptainerStorage here!!
 
+
 class ReadonlyCryptainerStorage:
     """
     This class provides read access to a directory filled with cryptainers..
@@ -1050,7 +1063,8 @@ class ReadonlyCryptainerStorage:
     :param cryptainers_dir: the folder where cryptainer files are stored
     :param keystore_pool: optional KeystorePool, which might be required by current cryptoconf
     """
-    def __init__(self, cryptainer_dir: Path,  keystore_pool: Optional[KeystorePoolBase] = None,):
+
+    def __init__(self, cryptainer_dir: Path, keystore_pool: Optional[KeystorePoolBase] = None):
         cryptainer_dir = Path(cryptainer_dir).absolute()
         assert cryptainer_dir.is_dir(), cryptainer_dir
         self._cryptainer_dir = cryptainer_dir
@@ -1352,7 +1366,9 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         return cryptainer_encryption_stream
 
     @synchronized
-    def enqueue_file_for_encryption(self, filename_base, payload, cryptainer_metadata, keychain_uid=None, cryptoconf=None):
+    def enqueue_file_for_encryption(
+        self, filename_base, payload, cryptainer_metadata, keychain_uid=None, cryptoconf=None
+    ):
         """Enqueue a payload for asynchronous encryption and storage.
 
         The filename of final cryptainer might be different from provided one.
@@ -1439,16 +1455,14 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
 
     trustee_schemas = Or(
         LOCAL_KEYFACTORY_TRUSTEE_MARKER,
-        {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE,
-         "keystore_uid": micro_schema_uid},
-        {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE,
-         "jsonrpc_url": str},
+        {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE, "keystore_uid": micro_schema_uid},
+        {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE, "jsonrpc_url": str},
     )
 
     payload_signature = {
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
         "payload_signature_algo": Or(*SUPPORTED_SIGNATURE_ALGOS),
-        "payload_signature_trustee": trustee_schemas,   # FIXME test various trustee cases in unit-tests!!
+        "payload_signature_trustee": trustee_schemas,  # FIXME test various trustee cases in unit-tests!!
         OptionalKey("keychain_uid"): micro_schema_uid,
     }
 

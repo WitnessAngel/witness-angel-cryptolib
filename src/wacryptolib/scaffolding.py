@@ -38,7 +38,9 @@ def check_keystore_basic_get_set_api(keystore, readonly_keystore=None):
             _keystore.get_public_key(keychain_uid=keychain_uid, key_algo="abxz") == b"public_data"
         )  # Well readable even without any kind of "commit"
         try:
-            assert _keystore.list_keypair_identifiers() == [dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)]
+            assert _keystore.list_keypair_identifiers() == [
+                dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)
+            ]
         except OperationNotSupported:
             pass
 

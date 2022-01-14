@@ -4,8 +4,8 @@ import os
 import random
 import re
 import threading
-import uuid
 import time
+import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from os.path import join
@@ -23,8 +23,13 @@ from wacryptolib.exceptions import (
     SchemaValidationError,
 )
 from wacryptolib.keygen import generate_keypair, SUPPORTED_ASYMMETRIC_KEY_ALGOS
-from wacryptolib.utilities import synchronized, safe_copy_directory, load_from_json_file, PeriodicTaskHandler, \
-    generate_uuid0
+from wacryptolib.utilities import (
+    synchronized,
+    safe_copy_directory,
+    load_from_json_file,
+    PeriodicTaskHandler,
+    generate_uuid0,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -245,8 +250,9 @@ class DummyKeystore(KeystoreBase):
     def _list_unordered_keypair_identifiers(self):
         key_information_list = []
         for (keychain_uid, key_algo), keypair in self._cached_keypairs.items():
-            key_information = dict(keychain_uid=keychain_uid, key_algo=key_algo,
-                                   private_key_present=bool(keypair["private_key"]))
+            key_information = dict(
+                keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=bool(keypair["private_key"])
+            )
             key_information_list.append(key_information)
         return key_information_list
 
@@ -256,6 +262,7 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
     """
     Read-only filesystem-based key storage.
     """
+
     _lock = threading.Lock()
     _private_key_suffix = "_private_key.pem"
     _public_key_suffix = "_public_key.pem"
@@ -340,6 +347,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreBase):
     Protected by a process-wide lock, but not safe to use in multiprocessing environment, or in a process which can be brutally shutdown.
     To prevent corruption, caller should only persist UUIDs when the key storage operation is successfully finished.
     """
+
     _randint_args = (10 ** 10, 10 ** 11 - 1)
 
     def __init__(self, keys_dir: Path):

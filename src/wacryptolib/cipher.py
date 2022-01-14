@@ -151,7 +151,6 @@ def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict) -> dict:
 
     :param plaintext: the bytes to cipher
     :param key_dict: 32 bytes long cryptographic key and nonce
-    :param aad: optional "additional authenticated data"
 
     :return: dict with fields "ciphertext", "tag", and "header" as bytestrings"""
     main_key = key_dict["key"]

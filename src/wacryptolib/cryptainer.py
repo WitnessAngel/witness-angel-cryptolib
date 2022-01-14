@@ -423,10 +423,11 @@ class CryptainerEncryptor(CryptainerBase):
 
         :param keychain_uid: uuid for the set of encryption keys used
         :param key_bytes: symmetric key to encrypt (potentially already encrypted)
-        :param cryptoconf: dictionary which contain configuration tree
+        :param key_cipher_layer: part of the cryptoconf related to this key encryption layer
 
-        :return: if the scheme used is 'SHARED_SECRET', a list of encrypted shards is returned. If an asymmetric
-        algorithm has been used, a dictionary with all the information needed to decipher the symmetric key is returned.
+        :return: if the scheme used is 'SHARED_SECRET', a list of encrypted shards is returned.
+                 If an asymmetric algorithm has been used, a dictionary with all the information
+                 needed to decipher the symmetric key is returned.
         """
         assert isinstance(key_bytes, bytes), key_bytes
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
@@ -687,8 +688,8 @@ class CryptainerDecryptor(CryptainerBase):
         by a asymmetric algorithm.
 
         :param keychain_uid: uuid for the set of encryption keys used
-        :param symmetric_key_cipherdict: dictionary with input ata needed to decrypt symmetric key
-        :param cryptoconf: dictionary which contains crypto configuration tree
+        :param key_cipherdict: dictionary with input data needed to decrypt symmetric key
+        :param cipher_layer: part of the cryptainer related to this key encryption layer
 
         :return: deciphered symmetric key
         """

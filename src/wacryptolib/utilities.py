@@ -242,11 +242,10 @@ def generate_uuid0(ts: Optional[float] = None):
     return uuid0.generate(ts)
 
 
-def split_as_formatted_data(first_data: bytes, second_data: bytes, block_size: int):
-    """Split the sum of two data into formatted data (multiple of block size)
+def split_as_formatted_data(first_data: bytes, second_data: bytes, block_size: int):  # FIXME rename this utility
+    """PRIVATE API
 
-    :param block_size: size of which we want a multiple
-    :param formatted_data: data whose length is a multiple of the block size
+    Split the sum of two data into formatted data and remainder (multiple of block size)
 
     :return: memory view of formatted data and remainder
     """

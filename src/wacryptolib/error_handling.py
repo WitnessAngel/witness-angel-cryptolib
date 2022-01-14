@@ -94,7 +94,7 @@ def get_closest_exception_class_for_status_slugs(slugs, mapper_tree):
     If `slugs` is empty, or if no ancestor is found, the fallback exception of the mapper is returned instead.
 
     :param slugs: qualified status slugs
-    :param mapper: mapper tree constructed from selected exceptions
+    :param mapper_tree: mapper tree constructed from selected exceptions
     :return: exception class object
     """
     current = mapper_tree

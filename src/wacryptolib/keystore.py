@@ -109,8 +109,8 @@ class KeystoreReadBase(ABC):
         Might raise an OperationNotSupported exception if not supported by this keystore.
 
         :return: a SORTED list of key information dicts with standard fields "keychain_uid" and "key_algo", as well as
-        a boolean "private_key_present" which is True if the related private key exists in storage.
-        Sorting is done by keychain_uid and then key_algo.
+                 a boolean "private_key_present" which is True if the related private key exists in storage.
+                 Sorting is done by keychain_uid and then key_algo.
         """
         key_information_list = self._list_unordered_keypair_identifiers()
         key_information_list.sort(key=lambda x: (x["keychain_uid"], x["key_algo"]))

@@ -72,6 +72,7 @@ yamllint = "^1.25"
 xenon = "^0.7.1"
 mypy = "^0.790"
 doc8 = "^0.8.1"
+darglint = "^1.8.1"
 
 # Documentation
 sphinx = "^3.4.1"

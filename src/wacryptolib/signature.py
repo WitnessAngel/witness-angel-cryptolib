@@ -41,7 +41,7 @@ def _sign_with_pss(message: bytes, key: RSA.RsaKey, timestamp_utc: int) -> bytes
     """Sign a bytes message with a private RSA key.
 
     :param message: the bytestring to sign
-    :param private_key: the private key
+    :param key: the private RSA key
     :param timestamp_utc: the UTC timestamp of current time
 
     :return: signature as a bytestring"""
@@ -59,7 +59,7 @@ def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey], timestamp
     while it is not the case for the mode `deterministic-rfc6979`.
 
     :param message: the bytestring to sign
-    :param private_key: the private key
+    :param key: the private DSA/ECC key
     :param timestamp_utc: the UTC timestamp of current time
 
     :return: signature as a bytestring"""
@@ -114,7 +114,7 @@ def _compute_timestamped_hash(message: bytes, timestamp_utc: int):
     """Create a hash of content, including the timestamp.
 
     :param message: bytestring to sign
-    :param timestamp: integer UTC timestamp
+    :param timestamp_utc: integer UTC timestamp
 
     :return: stdlib hash object
     """

@@ -377,6 +377,18 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreBase):
         self._write_to_storage_file(basename=target_public_key_filename, data=public_key)
         self._write_to_storage_file(basename=target_private_key_filename, data=private_key)
 
+    @synchronized
+    def set_keys_from_web(self, *, keychain_uid, key_algo, public_key: bytes):
+        target_public_key_filename = self._get_filename(keychain_uid, key_algo=key_algo, is_public=True)
+        target_private_key_filename = self._get_filename(keychain_uid, key_algo=key_algo, is_public=False)
+
+        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
+
+        # We override (unexpected) already existing files
+
+        self._write_to_storage_file(basename=target_public_key_filename, data=public_key)
+
+
     # No need for lock here
     def get_free_keypairs_count(self, key_algo: str):
         subdir = self._free_keys_dir.joinpath(key_algo)  # Might not exist yet
@@ -526,6 +538,10 @@ class FilesystemKeystorePool(
 
         return metadata_mapper
 
+    def _ensure_keystore_does_not_exist(self, keystore_uid):
+        if keystore_uid in self.list_imported_keystore_uids():
+            raise KeystoreAlreadyExists("Key storage with UUID %s was already imported locally" % keystore_uid)
+
     def import_keystore_from_filesystem(self, keystore_dir: Path):
         """
         Create a local import of a remote key storage folder (which must have a proper metadata file).
@@ -537,8 +553,7 @@ class FilesystemKeystorePool(
         metadata = load_keystore_metadata(keystore_dir)
         keystore_uid = metadata["keystore_uid"]  # FIXME - Fails badly if metadata file is corrupted
 
-        if keystore_uid in self.list_imported_keystore_uids():
-            raise KeystoreAlreadyExists("Key storage with UUID %s was already imported locally" % keystore_uid)
+        self._ensure_key_storage_does_not_exist(keystore_uid)
 
         imported_keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
         safe_copy_directory(keystore_dir, imported_keystore_dir)  # Must not fail, due to previous checks

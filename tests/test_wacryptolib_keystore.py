@@ -49,8 +49,8 @@ def test_keystore_basic_get_set_api(tmp_path):
     keychain_uid = filesystem_keystore_test_locals["keychain_uid"]
 
     is_public = random_bool()
-    basename = filesystem_keystore._get_filename(keychain_uid, key_algo="abxz", is_public=is_public)
-    with open(os.path.join(str(tmp_path), basename), "rb") as f:
+    filepath = filesystem_keystore._get_filepath(keychain_uid, key_algo="abxz", is_public=is_public)
+    with open(filepath, "rb") as f:
         key_data = f.read()
         assert key_data == (b"public_data" if is_public else b"private_data")  # IMPORTANT no exchange of keys in files!
 
@@ -74,7 +74,9 @@ def test_readonly_keystore_limitations(tmp_path):
     readonly_keystore = ReadonlyFilesystemKeystore(keys_dir=tmp_path)
 
     forbidden_fields = [
-        "set_keys",
+        "set_keypair",
+        "set_public_key",
+        "set_private_key",
         "get_free_keypairs_count",
         "add_free_keypair",
         "attach_free_keypair_to_uuid",

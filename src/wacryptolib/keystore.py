@@ -64,7 +64,7 @@ def _get_keystore_metadata_file_path(keystore_dir: Path):
     return keystore_dir.joinpath(".metadata.json")
 
 
-def load_keystore_metadata(keystore_dir: Path) -> dict:
+def load_keystore_metadata(keystore_dir: Path) -> dict:  # FIXME rename to advertise that it VALiDATES data too?
     """
     Return the authenticator metadata stored in the given folder, after checking that it contains at least mandatory
     (keystore_owner and keystore_uid) fields.
@@ -87,6 +87,15 @@ class KeystoreBase(ABC):
     def _private_key_exists(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bool:  # pragma: no cover
         raise NotImplementedError("KeystoreBase._private_key_exists()")
 
+    def _check_public_key_does_not_exist(self, keychain_uid: uuid.UUID, key_algo: str):
+        if self._public_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
+            raise KeyAlreadyExists("Already existing public key %s/%s" % (keychain_uid, key_algo))
+        assert not self._private_key_exists(keychain_uid=keychain_uid, key_algo=key_algo)  # By construction
+
+    def _check_private_key_does_not_exist(self, keychain_uid: uuid.UUID, key_algo: str):
+        if self._private_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
+            raise KeyAlreadyExists("Already existing private key %s/%s" % (keychain_uid, key_algo))
+
 
 class KeystoreReadBase(KeystoreBase):
     """
@@ -104,7 +113,7 @@ class KeystoreReadBase(KeystoreBase):
         :return: public key in clear PEM format, or raise KeyDoesNotExist
         """
         if not self._public_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
-            raise KeyDoesNotExist("Missing public key %s/%s" % (keychain_uid, key_algo))
+            raise KeyDoesNotExist("Public key %s/%s not found" % (keychain_uid, key_algo))
         return self._get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
 
     def get_private_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
@@ -117,7 +126,7 @@ class KeystoreReadBase(KeystoreBase):
         :return: private key in PEM format (potentially passphrase-protected), or raise KeyDoesNotExist
         """
         if not self._private_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
-            raise KeyDoesNotExist("Missing private key %s/%s" % (keychain_uid, key_algo))
+            raise KeyDoesNotExist("Private key %s/%s not found" % (keychain_uid, key_algo))
         return self._get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
 
     def list_keypair_identifiers(self) -> list:
@@ -166,11 +175,12 @@ class KeystoreWriteBase(KeystoreBase):
         :param public_key: public key in clear PEM format
         :param private_key: private key in PEM format (potentially encrypted)
         """
-        if self._public_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
-            raise KeyAlreadyExists("Already existing public key %s/%s" % (keychain_uid, key_algo))
-        assert not self._private_key_exists(keychain_uid=keychain_uid, key_algo=key_algo)  # By construction
-        self._set_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
-        self._set_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
+        self._check_public_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
+        self._set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=public_key, private_key=private_key)
+
+    def _set_keypair(self, *, keychain_uid: uuid.UUID, key_algo: str, public_key: bytes, private_key: bytes) -> None:
+        self._set_public_key(keychain_uid=keychain_uid, key_algo=key_algo, public_key=public_key)
+        self._set_private_key(keychain_uid=keychain_uid, key_algo=key_algo, private_key=private_key)
 
     def set_public_key(self, *, keychain_uid, key_algo, public_key: bytes) -> None:
         """
@@ -180,8 +190,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :param public_key: public key in clear PEM format
         """
-        if self._public_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
-            raise KeyAlreadyExists("Already existing public key %s/%s" % (keychain_uid, key_algo))
+        self._check_public_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_public_key(keychain_uid=keychain_uid, key_algo=key_algo, public_key=public_key)
 
     def set_private_key(self, *, keychain_uid, key_algo, private_key: bytes) -> None:
@@ -195,10 +204,9 @@ class KeystoreWriteBase(KeystoreBase):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :param private_key: private key in PEM format (potentially encrypted)
         """
-        if self._public_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):  # We don't want lonely private keys
+        if not self._public_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):  # We don't want lonely private keys
             raise KeyDoesNotExist("Missing public key %s/%s to attach private key" % (keychain_uid, key_algo))
-        if self._private_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
-            raise KeyAlreadyExists("Already existing private key %s/%s" % (keychain_uid, key_algo))
+        self._check_private_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_private_key(keychain_uid=keychain_uid, key_algo=key_algo, private_key=private_key)
 
     def get_free_keypairs_count(self, key_algo: str) -> int:
@@ -230,6 +238,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :return: public key of the keypair, in clear PEM format
         """
+        self._check_public_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         return self._attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo=key_algo)
 
     @abstractmethod
@@ -273,11 +282,11 @@ class DummyKeystore(KeystoreReadWriteBase):
 
     def _public_key_exists(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bool:
         keypair_dict = self._get_keypair_dict_or_none(keychain_uid=keychain_uid, key_algo=key_algo)
-        return keypair_dict and keypair_dict.get("public_key")
+        return bool(keypair_dict and keypair_dict.get("public_key"))
 
     def _private_key_exists(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bool:
         keypair_dict = self._get_keypair_dict_or_none(keychain_uid=keychain_uid, key_algo=key_algo)
-        return keypair_dict and keypair_dict.get("private_key")
+        return bool(keypair_dict and keypair_dict.get("private_key"))
 
     def _get_public_key(self, *, keychain_uid, key_algo):
         keypair = self._get_keypair_dict_or_none(keychain_uid=keychain_uid, key_algo=key_algo)
@@ -311,14 +320,14 @@ class DummyKeystore(KeystoreReadWriteBase):
         sublist.append(keypair)
 
     def _attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_algo: str) -> None:
-        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         try:
             sublist = self._free_keypairs[key_algo]
             keypair = sublist.pop()
         except LookupError:
             raise KeyDoesNotExist("No free keypair of type %s available in dummy storage" % key_algo)
         else:
-            self._set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, keypair=keypair)
+            self._set_keypair(keychain_uid=keychain_uid, key_algo=key_algo,
+                              public_key=keypair["public_key"], private_key=keypair["private_key"])
 
 
 # FIXME use ReadonlyFilesystemKeystore for IMPORTED keystores!!
@@ -337,47 +346,29 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
         assert keys_dir.is_dir(), keys_dir
         self._keys_dir = keys_dir
 
-    def _get_filename(self, keychain_uid, key_algo, is_public: bool):
-        return "%s_%s%s" % (keychain_uid, key_algo, self._public_key_suffix if is_public else self._private_key_suffix)
+    def _get_filepath(self, keychain_uid, key_algo, is_public: bool):
+        filename = "%s_%s%s" % (keychain_uid, key_algo, self._public_key_suffix if is_public else self._private_key_suffix)
+        return self._keys_dir.joinpath(filename)
 
-    def _read_from_storage_file(self, basename: str):
-        assert os.sep not in basename, basename
-        return self._keys_dir.joinpath(basename).read_bytes()
-
+    def _read_from_storage_file(self, filepath: Path):
+        assert self._keys_dir in filepath.parents  # No weirdness with outside folders
+        return filepath.read_bytes()
 
     def _public_key_exists(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bool:
-        filename_public_key = self._get_filename(keychain_uid, key_algo=key_algo, is_public=True)
+        return self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True).exists()
 
     def _private_key_exists(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bool:
-        raise NotImplementedError("KeystoreBase._private_key_exists()")
+        return self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False).exists()
 
     def _get_public_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
-        raise NotImplementedError("KeystoreReadBase._get_public_key()")
+        filepath = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True)
+        return self._read_from_storage_file(filepath)
 
     def _get_private_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
-        raise NotImplementedError("KeystoreReadBase._get_private_key()")
+        filepath = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False)
+        return self._read_from_storage_file(filepath)
 
-    def _list_unordered_keypair_identifiers(self) -> list:  # pragma: no cover
-        raise NotImplementedError("KeystoreReadBase._list_unordered_keypair_identifiers()")
-
-
-    @synchronized
-    def get_public_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
-        filename_public_key = self._get_filename(keychain_uid, key_algo=key_algo, is_public=True)
-        try:
-            return self._read_from_storage_file(basename=filename_public_key)
-        except FileNotFoundError:
-            raise KeyDoesNotExist("Public filesystem key %s/%s not found" % (keychain_uid, key_algo))
-
-    @synchronized
-    def get_private_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
-        filename_private_key = self._get_filename(keychain_uid, key_algo=key_algo, is_public=False)
-        try:
-            return self._read_from_storage_file(basename=filename_private_key)
-        except FileNotFoundError:
-            raise KeyDoesNotExist("Private filesystem key %s/%s not found" % (keychain_uid, key_algo))
-
-    def _list_unordered_keypair_identifiers(self):
+    def _list_unordered_keypair_identifiers(self) -> list:
 
         key_information_list = []
 
@@ -412,7 +403,6 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
                 self._public_key_suffix, self._private_key_suffix
             )
             private_key_present = os.path.exists(join(self._keys_dir, private_key_pem_filename))
-
             key_information = dict(
                 keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=private_key_present
             )
@@ -435,57 +425,28 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         super().__init__(keys_dir=keys_dir)
         self._free_keys_dir = self._keys_dir.joinpath("free_keys")  # Might not exist yet
 
+    def _write_to_storage_file(self, filepath: Path, data: bytes):
+        assert self._keys_dir in filepath.parents  # No weirdness with outside folders
+        filepath.write_bytes(data)
+
+    def _set_public_key(self, *, keychain_uid, key_algo, public_key: bytes):
+        filepath = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True)
+        self._write_to_storage_file(filepath=filepath, data=public_key)
+
+    def _set_private_key(self, *, keychain_uid, key_algo, private_key: bytes):
+        target_private_key_filename = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False)
+        self._write_to_storage_file(filepath=target_private_key_filename, data=private_key)
+
     def _ensure_free_keys_dir_exists(self):
         self._free_keys_dir.mkdir(exist_ok=True)
 
-    def _write_to_storage_file(self, basename: str, data: bytes):
-        assert os.sep not in basename, basename
-        self._keys_dir.joinpath(basename).write_bytes(data)
-
-    def _check_keypair_does_not_exist(self, keychain_uid, key_algo):
-        # We use PUBLIC key as marker of existence, private key MIGHT not exist
-        target_public_key_filename = self._get_filename(keychain_uid, key_algo=key_algo, is_public=True)
-        if self._keys_dir.joinpath(target_public_key_filename).exists():
-            raise KeyAlreadyExists("Already existing filesystem keypair %s/%s" % (keychain_uid, key_algo))
-
-    @synchronized
-    def set_keypair(self, *, keychain_uid, key_algo, public_key: bytes, private_key: bytes):
-        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
-        # We override (unexpected) already existing files
-        target_private_key_filename = self._get_filename(keychain_uid, key_algo=key_algo, is_public=False)
-        self._write_to_storage_file(basename=target_private_key_filename, data=private_key)
-
-    def set_public_key(self, *, keychain_uid, key_algo, public_key: bytes):
-        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
-        target_public_key_filename = self._get_filename(keychain_uid, key_algo=key_algo, is_public=True)
-        self._write_to_storage_file(basename=target_public_key_filename, data=public_key)
-
-    def set_private_key(self, *, keychain_uid, key_algo, private_key: bytes):
-        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
-        target_private_key_filename = self._get_filename(keychain_uid, key_algo=key_algo, is_public=False)
-        self._write_to_storage_file(basename=target_private_key_filename, data=private_key)
-
-    @synchronized
-    def set_keys_from_web(self, *, keychain_uid, key_algo, public_key: bytes):
-        target_public_key_filename = self._get_filename(keychain_uid, key_algo=key_algo, is_public=True)
-        target_private_key_filename = self._get_filename(keychain_uid, key_algo=key_algo, is_public=False)
-
-        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
-
-        # We override (unexpected) already existing files
-
-        self._write_to_storage_file(basename=target_public_key_filename, data=public_key)
-
-
-    # No need for lock here
-    def get_free_keypairs_count(self, key_algo: str):
+    def _get_free_keypairs_count(self, key_algo: str):
         subdir = self._free_keys_dir.joinpath(key_algo)  # Might not exist yet
         if not subdir.is_dir():
             return 0
-        return len(list(subdir.glob("*" + self._private_key_suffix)))
+        return len(list(subdir.glob("*" + self._private_key_suffix)))  # PRIVATE keys show existence of FREE keypairs
 
-    @synchronized
-    def add_free_keypair(self, *, key_algo: str, public_key: bytes, private_key: bytes):
+    def _add_free_keypair(self, *, key_algo: str, public_key: bytes, private_key: bytes):
         self._ensure_free_keys_dir_exists()
         subdir = self._free_keys_dir.joinpath(key_algo)
         subdir.mkdir(exist_ok=True)
@@ -506,16 +467,10 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
             subdir.joinpath(random_name + self._private_key_suffix)
         )
 
-    @synchronized
-    def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_algo: str):
-        self._check_keypair_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
+    def _attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_algo: str):
 
-        target_public_key_filename = self._keys_dir.joinpath(
-            self._get_filename(keychain_uid, key_algo=key_algo, is_public=True)
-        )
-        target_private_key_filename = self._keys_dir.joinpath(
-            self._get_filename(keychain_uid, key_algo=key_algo, is_public=False)
-        )
+        target_public_key_filename = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True)
+        target_private_key_filename = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False)
 
         subdir = self._free_keys_dir.joinpath(key_algo)  # Might not exist
         globber = subdir.glob("*" + self._private_key_suffix)
@@ -526,7 +481,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         _free_public_key_name = free_private_key.name.replace(self._private_key_suffix, self._public_key_suffix)
         free_public_key = subdir.joinpath(_free_public_key_name)
 
-        # First move the private key, so that it's not shown anymore as "free"
+        # First move the PRIVATE key, so that it's not shown anymore as "free"
         free_private_key.replace(target_private_key_filename)
         free_public_key.replace(target_public_key_filename)
 
@@ -639,7 +594,7 @@ class FilesystemKeystorePool(
         assert keystore_dir.exists(), keystore_dir
 
         metadata = load_keystore_metadata(keystore_dir)
-        keystore_uid = metadata["keystore_uid"]  # FIXME - Fails badly if metadata file is corrupted
+        keystore_uid = metadata["keystore_uid"]
 
         self.ensure_imported_keystore_does_not_exist(keystore_uid)
 
@@ -714,7 +669,7 @@ def get_free_keypair_generator_worker(
     :return: periodic task handler
     """
 
-    def free_keypair_generator_task():  # FIXME add a @safe_catch_unhandled_exception
+    def free_keypair_generator_task():  # FIXME add a @safe_catch_unhandled_exception - like mechanism
         has_generated = generate_free_keypair_for_least_provisioned_key_algo(
             keystore=keystore, max_free_keys_per_algo=max_free_keys_per_algo, **extra_generation_kwargs
         )

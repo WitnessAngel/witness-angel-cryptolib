@@ -291,11 +291,11 @@ class DummyKeystore(KeystoreReadWriteBase):
     def _get_keypair_dict_or_none(self, *, keychain_uid, key_algo):
         return self._cached_keypairs.get((keychain_uid, key_algo))
 
-    def _public_key_exists(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bool:
+    def _public_key_exists(self, *, keychain_uid, key_algo):
         keypair_dict = self._get_keypair_dict_or_none(keychain_uid=keychain_uid, key_algo=key_algo)
         return bool(keypair_dict and keypair_dict.get("public_key"))
 
-    def _private_key_exists(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bool:
+    def _private_key_exists(self, *, keychain_uid, key_algo):
         keypair_dict = self._get_keypair_dict_or_none(keychain_uid=keychain_uid, key_algo=key_algo)
         return bool(keypair_dict and keypair_dict.get("private_key"))
 
@@ -316,21 +316,21 @@ class DummyKeystore(KeystoreReadWriteBase):
             key_information_list.append(key_information)
         return key_information_list
 
-    def _set_public_key(self, *, keychain_uid: uuid.UUID, key_algo: str, public_key: bytes) -> None:
+    def _set_public_key(self, *, keychain_uid: uuid.UUID, key_algo, public_key):
         self._cached_keypairs[(keychain_uid, key_algo)] = dict(public_key=public_key)
 
-    def _set_private_key(self, *, keychain_uid: uuid.UUID, key_algo: str, private_key: bytes) -> None:
+    def _set_private_key(self, *, keychain_uid: uuid.UUID, key_algo, private_key):
         self._cached_keypairs[(keychain_uid, key_algo)]["private_key"] = private_key
 
-    def _get_free_keypairs_count(self, key_algo: str) -> int:
+    def _get_free_keypairs_count(self, key_algo):
         return len(self._free_keypairs.get(key_algo, []))
 
-    def _add_free_keypair(self, *, key_algo: str, public_key: bytes, private_key: bytes) -> None:
+    def _add_free_keypair(self, *, key_algo, public_key, private_key):
         keypair = dict(public_key=public_key, private_key=private_key)
         sublist = self._free_keypairs.setdefault(key_algo, [])
         sublist.append(keypair)
 
-    def _attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_algo: str) -> None:
+    def _attach_free_keypair_to_uuid(self, *, keychain_uid, key_algo):
         try:
             sublist = self._free_keypairs[key_algo]
             keypair = sublist.pop()
@@ -364,21 +364,21 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
         assert self._keys_dir in filepath.parents  # No weirdness with outside folders
         return filepath.read_bytes()
 
-    def _public_key_exists(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bool:
+    def _public_key_exists(self, *, keychain_uid, key_algo):
         return self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True).exists()
 
-    def _private_key_exists(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bool:
+    def _private_key_exists(self, *, keychain_uid, key_algo) :
         return self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False).exists()
 
-    def _get_public_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
+    def _get_public_key(self, *, keychain_uid, key_algo):
         filepath = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True)
         return self._read_from_storage_file(filepath)
 
-    def _get_private_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
+    def _get_private_key(self, *, keychain_uid, key_algo):
         filepath = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False)
         return self._read_from_storage_file(filepath)
 
-    def _list_unordered_keypair_identifiers(self) -> list:
+    def _list_unordered_keypair_identifiers(self):
 
         key_information_list = []
 
@@ -439,24 +439,24 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         assert self._keys_dir in filepath.parents  # No weirdness with outside folders
         filepath.write_bytes(data)
 
-    def _set_public_key(self, *, keychain_uid, key_algo, public_key: bytes):
+    def _set_public_key(self, *, keychain_uid, key_algo, public_key):
         filepath = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True)
         self._write_to_storage_file(filepath=filepath, data=public_key)
 
-    def _set_private_key(self, *, keychain_uid, key_algo, private_key: bytes):
+    def _set_private_key(self, *, keychain_uid, key_algo, private_key):
         target_private_key_filename = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False)
         self._write_to_storage_file(filepath=target_private_key_filename, data=private_key)
 
     def _ensure_free_keys_dir_exists(self):
         self._free_keys_dir.mkdir(exist_ok=True)
 
-    def _get_free_keypairs_count(self, key_algo: str):
+    def _get_free_keypairs_count(self, key_algo):
         subdir = self._free_keys_dir.joinpath(key_algo)  # Might not exist yet
         if not subdir.is_dir():
             return 0
         return len(list(subdir.glob("*" + self._private_key_suffix)))  # PRIVATE keys show existence of FREE keypairs
 
-    def _add_free_keypair(self, *, key_algo: str, public_key: bytes, private_key: bytes):
+    def _add_free_keypair(self, *, key_algo, public_key, private_key):
         self._ensure_free_keys_dir_exists()
         subdir = self._free_keys_dir.joinpath(key_algo)
         subdir.mkdir(exist_ok=True)
@@ -477,7 +477,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
             subdir.joinpath(random_name + self._private_key_suffix)
         )
 
-    def _attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_algo: str):
+    def _attach_free_keypair_to_uuid(self, *, keychain_uid, key_algo):
 
         target_public_key_filename = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True)
         target_private_key_filename = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False)

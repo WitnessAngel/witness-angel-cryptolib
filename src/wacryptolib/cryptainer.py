@@ -1424,7 +1424,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
         # global SCHEMA_CRYPTAINERS
         _micro_schema_hex_uid = And(
             str,
-            Or(
+            Or(  # FIXME wrong, only base64 here!!!
                 Regex(r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$"),
                 Regex(r"[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"),
             ),

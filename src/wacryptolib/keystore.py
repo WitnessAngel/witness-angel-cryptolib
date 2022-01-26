@@ -445,7 +445,11 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreBase):
 
 class KeystorePoolBase:
     # FIXME fill base class with Python function signatures!! Like in KeystoreBase!
-    pass
+
+    def ensure_imported_keystore_does_not_exist(self, keystore_uid):
+        """Raises KeystoreAlreadyExists if imported keystore already exists."""
+        if keystore_uid in self.list_imported_keystore_uids():
+            raise KeystoreAlreadyExists("Key storage with UUID %s was already imported locally" % keystore_uid)
 
 
 class InMemoryKeystorePool(KeystorePoolBase):
@@ -538,10 +542,6 @@ class FilesystemKeystorePool(
 
         return metadata_mapper
 
-    def _ensure_keystore_does_not_exist(self, keystore_uid):
-        if keystore_uid in self.list_imported_keystore_uids():
-            raise KeystoreAlreadyExists("Key storage with UUID %s was already imported locally" % keystore_uid)
-
     def import_keystore_from_filesystem(self, keystore_dir: Path):
         """
         Create a local import of a remote key storage folder (which must have a proper metadata file).
@@ -553,7 +553,7 @@ class FilesystemKeystorePool(
         metadata = load_keystore_metadata(keystore_dir)
         keystore_uid = metadata["keystore_uid"]  # FIXME - Fails badly if metadata file is corrupted
 
-        self._ensure_key_storage_does_not_exist(keystore_uid)
+        self.ensure_imported_keystore_does_not_exist(keystore_uid)
 
         imported_keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
         safe_copy_directory(keystore_dir, imported_keystore_dir)  # Must not fail, due to previous checks

@@ -29,7 +29,7 @@ def check_keystore_basic_get_set_api(keystore, readonly_keystore=None):
         except OperationNotSupported:
             pass
 
-    keystore.set_keys(
+    keystore.set_keypair(
         keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"public_data", private_key=b"private_data"
     )
 
@@ -45,11 +45,11 @@ def check_keystore_basic_get_set_api(keystore, readonly_keystore=None):
             pass
 
     with pytest.raises(KeyAlreadyExists, match="Already existing"):
-        keystore.set_keys(
+        keystore.set_keypair(
             keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"public_data", private_key=b"private_data"
         )
     with pytest.raises(KeyAlreadyExists, match="Already existing"):
-        keystore.set_keys(
+        keystore.set_keypair(
             keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"public_data2", private_key=b"private_data2"
         )
 
@@ -81,7 +81,7 @@ def check_keystore_free_keys_api(keystore):
     keychain_uid_other = generate_uuid0()
 
     # This blocks free key attachment to this uid+type
-    keystore.set_keys(keychain_uid=keychain_uid, key_algo="type1", public_key=b"whatever1", private_key=b"whatever2")
+    keystore.set_keypair(keychain_uid=keychain_uid, key_algo="type1", public_key=b"whatever1", private_key=b"whatever2")
 
     keystore.add_free_keypair(key_algo="type1", public_key=b"public_data", private_key=b"private_data")
     keystore.add_free_keypair(key_algo="type1", public_key=b"public_data2", private_key=b"private_data2")

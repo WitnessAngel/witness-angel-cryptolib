@@ -200,7 +200,7 @@ def test_keystore_pool_basics(tmp_path: Path):
     assert isinstance(imported_keystore, FilesystemKeystore)
     assert not imported_keystore.list_keypair_identifiers()
 
-    imported_keystore.set_keys(
+    imported_keystore.set_keypair(
         keychain_uid=generate_uuid0(),
         key_algo="RSA_OAEP",
         public_key=keypair["public_key"],
@@ -233,7 +233,7 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     key_algo = "RSA_OAEP"
 
     remote_keystore = FilesystemKeystore(remote_keystore_dir)
-    remote_keystore.set_keys(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"555", private_key=b"okj")
+    remote_keystore.set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"555", private_key=b"okj")
 
     # Still untouched of course
     assert pool.list_imported_keystore_uids() == []

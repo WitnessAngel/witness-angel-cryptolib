@@ -79,6 +79,8 @@ def load_keystore_metadata(keystore_dir: Path) -> dict:  # FIXME rename to adver
 
 class KeystoreBase(ABC):
 
+    _lock = threading.Lock()
+
     @abstractmethod
     def _public_key_exists(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bool:  # pragma: no cover
         raise NotImplementedError("KeystoreBase._public_key_exists()")
@@ -103,6 +105,7 @@ class KeystoreReadBase(KeystoreBase):
     miscellaneous locations (disk, database...), without permission checks.
     """
 
+    @synchronized
     def get_public_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
         """
         Fetch a public key from persistent storage.
@@ -116,6 +119,7 @@ class KeystoreReadBase(KeystoreBase):
             raise KeyDoesNotExist("Public key %s/%s not found" % (keychain_uid, key_algo))
         return self._get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
 
+    @synchronized
     def get_private_key(self, *, keychain_uid: uuid.UUID, key_algo: str) -> bytes:
         """
         Fetch a private key from persistent storage.
@@ -129,6 +133,7 @@ class KeystoreReadBase(KeystoreBase):
             raise KeyDoesNotExist("Private key %s/%s not found" % (keychain_uid, key_algo))
         return self._get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
 
+    @synchronized
     def list_keypair_identifiers(self) -> list:
         """
         List identifiers of public keys present in the storage, along with their potential private key existence.
@@ -162,6 +167,7 @@ class KeystoreWriteBase(KeystoreBase):
     miscellaneous locations (disk, database...), without permission checks.
     """
 
+    @synchronized
     def set_keypair(
         self, *, keychain_uid: uuid.UUID, key_algo: str, public_key: bytes, private_key: bytes
     ) -> None:
@@ -182,6 +188,7 @@ class KeystoreWriteBase(KeystoreBase):
         self._set_public_key(keychain_uid=keychain_uid, key_algo=key_algo, public_key=public_key)
         self._set_private_key(keychain_uid=keychain_uid, key_algo=key_algo, private_key=private_key)
 
+    @synchronized
     def set_public_key(self, *, keychain_uid, key_algo, public_key: bytes) -> None:
         """
         Store a public key, which must not already exist - else KeyAlreadyExists is raised.
@@ -193,6 +200,7 @@ class KeystoreWriteBase(KeystoreBase):
         self._check_public_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_public_key(keychain_uid=keychain_uid, key_algo=key_algo, public_key=public_key)
 
+    @synchronized
     def set_private_key(self, *, keychain_uid, key_algo, private_key: bytes) -> None:
         """
         Store a private key, which must not already exist - else a KeyAlreadyExists is raised.
@@ -209,6 +217,7 @@ class KeystoreWriteBase(KeystoreBase):
         self._check_private_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_private_key(keychain_uid=keychain_uid, key_algo=key_algo, private_key=private_key)
 
+    @synchronized
     def get_free_keypairs_count(self, key_algo: str) -> int:
         """
         Calculate the count of keypairs of type `key_algo` which are free for subsequent attachment to an UUID.
@@ -218,6 +227,7 @@ class KeystoreWriteBase(KeystoreBase):
         """
         return self._get_free_keypairs_count(key_algo=key_algo)
 
+    @synchronized
     def add_free_keypair(self, *, key_algo: str, public_key: bytes, private_key: bytes) -> None:
         """
         Store a pair of asymmetric keys into storage, free for subsequent attachment to an UUID.
@@ -228,6 +238,7 @@ class KeystoreWriteBase(KeystoreBase):
         """
         return self._add_free_keypair(key_algo=key_algo, public_key=public_key, private_key=private_key)
 
+    @synchronized
     def attach_free_keypair_to_uuid(self, *, keychain_uid: uuid.UUID, key_algo: str) -> None:
         """
         Fetch one of the free keypairs of storage of type `key_algo`, and attach it to UUID `keychain_uid`.
@@ -336,7 +347,6 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
     Read-only filesystem-based key storage.
     """
 
-    _lock = threading.Lock()
     _private_key_suffix = "_private_key.pem"
     _public_key_suffix = "_public_key.pem"
     PUBLIC_KEY_FILENAME_REGEX = r"^(?P<keychain_uid>[-0-9a-z]+)_(?P<key_algo>[_a-zA-Z]+)%s$" % _public_key_suffix

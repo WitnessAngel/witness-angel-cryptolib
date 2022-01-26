@@ -60,7 +60,7 @@ from wacryptolib.utilities import (
     dump_to_json_bytes,
     generate_uuid0,
     get_utc_now_date,
-    dump_to_json_str,
+    dump_to_json_str, convert_native_tree_to_extended_json_tree,
 )
 from wacryptolib.utilities import load_from_json_file
 
@@ -375,18 +375,7 @@ def COMPLEX_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
     }
 
 
-def _convert_to_raw_extended_json_tree(data):
-    """
-    Turn a python tree (including UUIDs, bytes etc.) into its representation
-    as Pymongo extended json (with $binary, $numberInt etc.)
-    """
-    # Export in pymongo extended json format
-    json_std_lib = dump_to_json_str(data)
 
-    # Parse Json from string
-    json_str_lib = json.loads(json_std_lib)
-
-    return json_str_lib
 
 
 def _get_binary_or_empty_content():
@@ -1511,7 +1500,7 @@ def test_create_cryptainer_encryption_stream(tmp_path):
 def test_conf_validation_success(cryptoconf):
     check_conf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
 
-    conf_json = _convert_to_raw_extended_json_tree(cryptoconf)
+    conf_json = convert_native_tree_to_extended_json_tree(cryptoconf)
     check_conf_sanity(cryptoconf=conf_json, jsonschema_mode=True)
 
 
@@ -1547,7 +1536,7 @@ def test_conf_validation_error(corrupted_conf):
         check_conf_sanity(cryptoconf=corrupted_conf, jsonschema_mode=False)
 
     with pytest.raises(ValidationError):
-        corrupted_conf_json = _convert_to_raw_extended_json_tree(corrupted_conf)
+        corrupted_conf_json = convert_native_tree_to_extended_json_tree(corrupted_conf)
         check_conf_sanity(cryptoconf=corrupted_conf_json, jsonschema_mode=True)
 
 
@@ -1560,7 +1549,7 @@ def test_cryptainer_validation_success(cryptoconf):
     )
     check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 
-    cryptainer_json = _convert_to_raw_extended_json_tree(cryptainer)
+    cryptainer_json = convert_native_tree_to_extended_json_tree(cryptainer)
     check_cryptainer_sanity(cryptainer=cryptainer_json, jsonschema_mode=True)
 
 
@@ -1593,5 +1582,5 @@ def test_cryptainer_validation_error(corrupted_cryptainer):
         check_cryptainer_sanity(cryptainer=corrupted_cryptainer, jsonschema_mode=True)
 
     with pytest.raises(ValidationError):
-        corrupted_cryptainer_json = _convert_to_raw_extended_json_tree(corrupted_cryptainer)
+        corrupted_cryptainer_json = convert_native_tree_to_extended_json_tree(corrupted_cryptainer)
         check_cryptainer_sanity(cryptainer=corrupted_cryptainer_json, jsonschema_mode=False)

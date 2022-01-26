@@ -42,7 +42,7 @@ from wacryptolib.utilities import (
     get_utc_now_date,
     consume_bytes_as_chunks,
     delete_filesystem_node_for_stream,
-    SUPPORTED_HASH_ALGOS,
+    SUPPORTED_HASH_ALGOS, get_validation_micro_schemas,
 )
 
 logger = logging.getLogger(__name__)
@@ -1407,7 +1407,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         self._purge_exceeding_cryptainers()  # Good to have now
 
 
-def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME must support different types of trustee
+def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json_format: bool):
     """Create validation schema for confs and cryptainers.
     :param for_cryptainer: true if instance is a cryptainer
     :param extended_json_format: true if the scheme is extended to json format
@@ -1415,39 +1415,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
     :return: a schema.
     """
 
-    micro_schema_uid = UUID
-    micro_schema_binary = bytes
-    micro_schema_int = int
-    micro_schema_long = int
-
-    if extended_json_format:
-        # global SCHEMA_CRYPTAINERS
-        _micro_schema_hex_uid = And(
-            str,
-            Or(  # FIXME wrong, only base64 here!!!
-                Regex(r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$"),
-                Regex(r"[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"),
-            ),
-        )
-        micro_schema_uid = {"$binary": {"base64": _micro_schema_hex_uid, "subType": "03"}}
-        micro_schema_binary = {
-            "$binary": {
-                "base64": And(
-                    str, Regex(r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$")
-                ),
-                "subType": "00",
-            }
-        }
-        micro_schema_int = {
-            "$numberInt": And(
-                str,
-                Regex(
-                    r"^(-?\d{1,9}|-?1\d{9}|-?20\d{8}|-?21[0-3]\d{7}|-?214[0-6]\d{6}|-?2147[0-3]\d{5}|-?21474[0-7]\d{4}|-?214748[012]\d{4}|-?2147483[0-5]\d{3}|-?21474836[0-3]\d{2}|214748364[0-7]|-214748364[0-8])$"
-                ),
-            )
-        }
-
-        micro_schema_long = {"$numberLong": And(str, Regex(r"^([+-]?[0-9]\d*|0)$"))}
+    micro_schemas = get_validation_micro_schemas(extended_json_format=extended_json_format)
 
     extra_cryptainer = {}
     extra_payload_cipher_layer = {}
@@ -1455,7 +1423,7 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
 
     trustee_schemas = Or(
         LOCAL_KEYFACTORY_TRUSTEE_MARKER,
-        {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE, "keystore_uid": micro_schema_uid},
+        {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE, "keystore_uid": micro_schemas.schema_uid},
         {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE, "jsonrpc_url": str},
     )
 
@@ -1463,38 +1431,38 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
         "payload_signature_algo": Or(*SUPPORTED_SIGNATURE_ALGOS),
         "payload_signature_trustee": trustee_schemas,  # FIXME test various trustee cases in unit-tests!!
-        OptionalKey("keychain_uid"): micro_schema_uid,
+        OptionalKey("keychain_uid"): micro_schemas.schema_uid,
     }
 
     if for_cryptainer:
         extra_cryptainer = {
             "cryptainer_state": Or(CRYPTAINER_STATES.STARTED, CRYPTAINER_STATES.FINISHED),
             "cryptainer_format": "cryptainer_1.0",
-            "cryptainer_uid": micro_schema_uid,
+            "cryptainer_uid": micro_schemas.schema_uid,
             "payload_ciphertext_struct": Or(
-                {"ciphertext_location": PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE, "ciphertext_value": micro_schema_binary},
+                {"ciphertext_location": PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE, "ciphertext_value": micro_schemas.schema_binary},
                 OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
             ),
             "cryptainer_metadata": Or(dict, None),
         }
 
         extra_payload_cipher_layer = {
-            "key_ciphertext": micro_schema_binary,
-            "payload_macs": {OptionalKey("tag"): micro_schema_binary},  # For now only "tag" is used
+            "key_ciphertext": micro_schemas.schema_binary,
+            "payload_macs": {OptionalKey("tag"): micro_schemas.schema_binary},  # For now only "tag" is used
         }
 
         extra_payload_signature = {
-            OptionalKey("payload_digest_value"): micro_schema_binary,
+            OptionalKey("payload_digest_value"): micro_schemas.schema_binary,
             OptionalKey("payload_signature_struct"): {
-                "signature_value": micro_schema_binary,
-                "signature_timestamp_utc": Or(micro_schema_int, micro_schema_long, int),
+                "signature_value": micro_schemas.schema_binary,
+                "signature_timestamp_utc": micro_schemas.schema_int,
             },
         }
 
-    SIMPLE_CRYPTAINER_PIECE = {
+    CIPHER_ALGO_BLOCK = {
         "key_cipher_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
-        "key_cipher_trustee": Const(LOCAL_KEYFACTORY_TRUSTEE_MARKER),
-        OptionalKey("keychain_uid"): micro_schema_uid,
+        "key_cipher_trustee": trustee_schemas,
+        OptionalKey("keychain_uid"): micro_schemas.schema_uid,
     }
 
     RECURSIVE_SHARED_SECRET = []
@@ -1502,8 +1470,8 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
     SHARED_SECRET_CRYPTAINER_PIECE = Schema(
         {
             "key_cipher_algo": SHARED_SECRET_ALGO_MARKER,
-            "key_shared_secret_shards": [{"key_cipher_layers": [SIMPLE_CRYPTAINER_PIECE]}],
-            "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schema_int),
+            "key_shared_secret_shards": [{"key_cipher_layers": [CIPHER_ALGO_BLOCK]}],
+            "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schemas.schema_int),
         },
         name="recursive_shared_secret",
         as_reference=True,
@@ -1521,20 +1489,20 @@ def _create_schema(for_cryptainer: bool, extended_json_format: bool):  # FIXME m
                     "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
                     "payload_signatures": [payload_signature],
                     **extra_payload_cipher_layer,
-                    "key_cipher_layers": [SIMPLE_CRYPTAINER_PIECE, SHARED_SECRET_CRYPTAINER_PIECE],
+                    "key_cipher_layers": [CIPHER_ALGO_BLOCK, SHARED_SECRET_CRYPTAINER_PIECE],
                 }
             ],
-            OptionalKey("keychain_uid"): micro_schema_uid,
+            OptionalKey("keychain_uid"): micro_schemas.schema_uid,
         }
     )
 
     return SCHEMA_CRYPTAINERS
 
 
-CONF_SCHEMA_PYTHON = _create_schema(for_cryptainer=False, extended_json_format=False)
-CONF_SCHEMA_JSON = _create_schema(for_cryptainer=False, extended_json_format=True).json_schema("conf_schema.json")
-CRYPTAINER_SCHEMA_PYTHON = _create_schema(for_cryptainer=True, extended_json_format=False)
-CRYPTAINER_SCHEMA_JSON = _create_schema(for_cryptainer=True, extended_json_format=True).json_schema(
+CONF_SCHEMA_PYTHON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=False, extended_json_format=False)
+CONF_SCHEMA_JSON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=False, extended_json_format=True).json_schema("conf_schema.json")
+CRYPTAINER_SCHEMA_PYTHON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=True, extended_json_format=False)
+CRYPTAINER_SCHEMA_JSON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=True, extended_json_format=True).json_schema(
     "cryptainer_schema.json"
 )
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Union, BinaryIO
 
 import multitimer
+import schema
 import uuid0
 from Crypto.Util.Padding import pad, unpad
 from decorator import decorator
@@ -350,3 +351,56 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
         if timer_thread:
             assert timer_thread.stopevent.is_set()
             timer_thread.join()
+
+
+# Validation-related utilities
+
+
+def convert_native_tree_to_extended_json_tree(data):  # FIXME push to docs?
+    """
+    Turn a native python tree (including UUIDs, bytes etc.) into its representation
+    as Pymongo extended json (with nested $binary, $numberInt etc.)
+    """
+    import json
+
+    # Export to pymongo extended json format string
+    json_str = dump_to_json_str(data)
+
+    # Parse standard Json from string, without advanced type coercion
+    data_tree = json.loads(json_str)
+
+    return data_tree
+
+
+def get_validation_micro_schemas(extended_json_format=False):   # FIXME push to docs?
+    """
+    Get python-schema compatible microschemas for basic types,
+    for their python or extended-json representations.
+    """
+    import uuid
+    micro_schema_uid = uuid.UUID  # BASE CLASS, not uuid0's subclass
+    micro_schema_binary = bytes
+    micro_schema_int = int
+
+    if extended_json_format:
+
+        _micro_schema_integer = schema.And(str, schema.Regex(r"^[+-]?\d+$"))
+
+        _micro_schema_base64 = schema.And(
+            str, schema.Regex(r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$")
+        )
+
+        micro_schema_uid = {"$binary": {"base64": _micro_schema_base64, "subType": schema.Or("03", "04")}}  # Type 04 is the future!
+
+        micro_schema_binary = {"$binary": {"base64": _micro_schema_base64,"subType": "00"}}
+
+        micro_schema_int = schema.Or(
+            {"$numberInt": _micro_schema_integer},
+            {"$numberLong": _micro_schema_integer})
+
+    class MicroSchemas:
+        schema_uid = micro_schema_uid
+        schema_binary = micro_schema_binary
+        schema_int = micro_schema_int
+
+    return MicroSchemas

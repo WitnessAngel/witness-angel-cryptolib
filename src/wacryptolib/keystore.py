@@ -213,7 +213,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param private_key: private key in PEM format (potentially encrypted)
         """
         if not self._public_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):  # We don't want lonely private keys
-            raise KeyDoesNotExist("Missing public key %s/%s to attach private key" % (keychain_uid, key_algo))
+            raise KeyDoesNotExist("Public key %s/%s does not exist, cannot attach private key to it" % (keychain_uid, key_algo))
         self._check_private_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_private_key(keychain_uid=keychain_uid, key_algo=key_algo, private_key=private_key)
 
@@ -311,7 +311,7 @@ class DummyKeystore(KeystoreReadWriteBase):
         key_information_list = []
         for (keychain_uid, key_algo), keypair in self._cached_keypairs.items():
             key_information = dict(
-                keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=bool(keypair["private_key"])
+                keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=bool(keypair.get("private_key"))
             )
             key_information_list.append(key_information)
         return key_information_list

@@ -217,8 +217,50 @@ def test_keystore_pool_basics(tmp_path: Path):
     assert not imported_keystore2.list_keypair_identifiers()
 
 
-def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
+def test_keystore_import_from_keystore_tree(tmp_path: Path):
+    authdevice_path = tmp_path / "device"
+    authdevice_path.mkdir()
+    authdevice = get_fake_authdevice(authdevice_path)
+    remote_keystore_dir = authdevice["authenticator_dir"]
+    initialize_authenticator(remote_keystore_dir, keystore_owner="Jean-Jâcques", keystore_passphrase_hint="my-hint")
 
+    keychain_uid = generate_uuid0()
+    key_algo = "RSA_OAEP"
+
+    remote_keystore = FilesystemKeystore(remote_keystore_dir)
+    remote_keystore.set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"555", private_key=b"okj")
+
+    keystore_tree = remote_keystore.export_to_keystore_tree()
+
+    assert keystore_tree["keystore_owner"] == "Jean-Jâcques"
+    assert keystore_tree["keypairs"][0] == {'keychain_uid': keychain_uid, 'key_algo': 'RSA_OAEP', 'public_key': b'555','private_key': b'okj'}
+
+    pool_path = tmp_path / "pool"
+    pool_path.mkdir()
+    pool = FilesystemKeystorePool(pool_path)
+
+    remote_keystore.import_from_keystore_tree(pool, keystore_tree)
+
+    (keystore_uid,) = pool.list_imported_keystore_uids()
+    metadata_mapper = pool.get_imported_keystore_metadata()
+    assert tuple(metadata_mapper) == (keystore_uid,)
+
+    metadata = metadata_mapper[keystore_uid]
+    assert metadata["keystore_uid"] == keystore_uid
+    assert metadata["keystore_owner"] == "Jean-Jâcques"
+
+    assert pool.list_imported_keystore_uids() == [keystore_uid]
+    metadata_mapper2 = pool.get_imported_keystore_metadata()
+    assert metadata_mapper2 == metadata_mapper
+
+    keystore = pool.get_imported_keystore(keystore_uid)
+    assert keystore.list_keypair_identifiers() == [
+        dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)
+    ]
+    assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"555"
+    assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"okj"
+
+def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     pool_path = tmp_path / "pool"
     pool_path.mkdir()
     pool = FilesystemKeystorePool(pool_path)

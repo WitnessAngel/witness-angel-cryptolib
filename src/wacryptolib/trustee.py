@@ -2,8 +2,9 @@ import logging
 import uuid
 from typing import Optional, Sequence
 
-from wacryptolib.cipher import _decrypt_via_rsa_oaep
-from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, DecryptionError, KeyLoadingError
+from wacryptolib.cipher import _decrypt_via_rsa_oaep, decrypt_bytestring
+from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, DecryptionError, KeyLoadingError, \
+    ValidationError
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import KeystoreBase, generate_keypair_for_storage
 from wacryptolib.signature import sign_message
@@ -61,7 +62,7 @@ class TrusteeApi:
         """
 
         if len(message) > MAX_PAYLOAD_LENGTH_FOR_SIGNATURE:  # SECURITY
-            raise ValueError("Message too big for signing, only a hash should be sent")
+            raise ValidationError("Message too big for signing, only a hash should be sent")
 
         self._ensure_keypair_exists(keychain_uid=keychain_uid, key_algo=signature_algo)
 
@@ -186,7 +187,7 @@ class TrusteeApi:
             private_key_pem=private_key_pem, key_algo=cipher_algo, passphrases=passphrases
         )
 
-        secret = _decrypt_via_rsa_oaep(cipherdict=cipherdict, key_dict=dict(key=private_key))
+        secret = decrypt_bytestring(cipherdict=cipherdict, cipher_algo=cipher_algo, key_dict=dict(key=private_key))
         return secret
 
 

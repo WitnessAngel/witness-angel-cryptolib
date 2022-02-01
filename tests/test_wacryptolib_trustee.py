@@ -4,7 +4,7 @@ import pytest
 from Crypto.Random import get_random_bytes
 
 from wacryptolib.cipher import _encrypt_via_rsa_oaep
-from wacryptolib.exceptions import KeyDoesNotExist, SignatureVerificationError, DecryptionError
+from wacryptolib.exceptions import KeyDoesNotExist, SignatureVerificationError, DecryptionError, ValidationError
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import (
     DummyKeystore,
@@ -57,7 +57,7 @@ def test_trustee_api_workflow():
 
     signature = trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret, signature_algo="DSA_DSS")
 
-    with pytest.raises(ValueError, match="too big"):
+    with pytest.raises(ValidationError, match="too big"):
         trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret_too_big, signature_algo="DSA_DSS")
 
     assert keystore.get_free_keypairs_count("DSA_DSS") == 0  # Taken
@@ -99,7 +99,7 @@ def test_trustee_api_workflow():
 
     wrong_cipherdict = copy.deepcopy(cipherdict)
     wrong_cipherdict["digest_list"].append(b"aaabbbccc")
-    with pytest.raises(ValueError, match="Ciphertext with incorrect length"):
+    with pytest.raises(DecryptionError, match="Ciphertext with incorrect length"):
         trustee_api.decrypt_with_private_key(
             keychain_uid=keychain_uid, cipher_algo="RSA_OAEP", cipherdict=wrong_cipherdict
         )

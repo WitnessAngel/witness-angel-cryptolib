@@ -521,44 +521,30 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
             raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
 
     def export_to_keystore_tree(self):
-
         assert self._keys_dir.exists(), self._keys_dir
         metadata = load_keystore_metadata(self._keys_dir)
-
-        readonly_filesystem_keystorage = ReadonlyFilesystemKeystore(self._keys_dir)
-        keypair_identifiers = readonly_filesystem_keystorage.list_keypair_identifiers()
-
+        keypair_identifiers = self.list_keypair_identifiers()
         keypairs = []
-
         for keypair_identifier in keypair_identifiers:
             keypairs.append(
                 dict(
                     keychain_uid=keypair_identifier["keychain_uid"],
                     key_algo=keypair_identifier["key_algo"],
-                    public_key=readonly_filesystem_keystorage.get_public_key(keychain_uid=keypair_identifier["keychain_uid"],
-                                                                key_algo=keypair_identifier["key_algo"]),
-                    private_key=readonly_filesystem_keystorage.get_private_key(keychain_uid=keypair_identifier["keychain_uid"],
-                                                                  key_algo=keypair_identifier["key_algo"])
+                    public_key=self.get_public_key(keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"]),
+                    private_key=self.get_private_key(keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"])
                 )
             )
-        keystore_tree = {
-            "keystore_format": metadata["keystore_format"],
-            "keystore_type": metadata["keystore_type"],
-            "keystore_owner": metadata["keystore_owner"],
-            "keystore_uid": metadata["keystore_uid"],
-            "keystore_passphrase_hint": metadata["keystore_passphrase_hint"],
-            "keystore_secret": metadata["keystore_secret"],
-            "keypairs": keypairs
-        }
+        keystore_tree = metadata.copy()
+        keystore_tree["keypairs"] = keypairs
 
         self._validate_keystore_tree(keystore_tree)
 
         return keystore_tree
 
-    @staticmethod
-    def _dump_metadata_to_folder(imported_keystore_dir: Path, keystore_tree: dict):
-        metadata_file = _get_keystore_metadata_file_path(imported_keystore_dir)
+    def _dump_metadata_to_folder(self, keystore_tree: dict):
+        metadata_file = _get_keystore_metadata_file_path(self._keys_dir)
         metadata_file.parent.mkdir(parents=True, exist_ok=True)  # FIXME Create a temporary folder
+
         metadata = {}
         metadata.update(
             {"keystore_type": "authenticator",
@@ -571,21 +557,14 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         dump_to_json_file(metadata_file, metadata)
         return metadata
 
-    def import_from_keystore_tree(self, filesystem_keystore_pool, keystore_tree):
+    def import_from_keystore_tree(self, keystore_tree):
         self._validate_keystore_tree(keystore_tree)
 
-        #ensure_imported_keystore_does_not_exist(keystore_tree["keystore_uid"])
-
-        imported_keystore_dir = filesystem_keystore_pool._get_imported_keystore_dir(keystore_uid=keystore_tree["keystore_uid"])
-        print(imported_keystore_dir)
-        self._dump_metadata_to_folder(imported_keystore_dir, keystore_tree)
-        filesystem_keystore = filesystem_keystore_pool.get_imported_keystore(keystore_uid=keystore_tree["keystore_uid"])
-
-
+        self._dump_metadata_to_folder(keystore_tree)
 
         for keypair in keystore_tree["keypairs"]:
             if keypair["private_key"] is not None:
-                filesystem_keystore.set_keypair(
+                self.set_keypair(
                     keychain_uid=keypair["keychain_uid"],
                     key_algo=keypair["key_algo"],
                     public_key=keypair["public_key"],
@@ -593,7 +572,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
                 )
 
             else:
-                filesystem_keystore.set_public_key(
+                self.set_public_key(
                     keychain_uid=keypair["keychain_uid"],
                     key_algo=keypair["key_algo"],
                     public_key=keypair["public_key"],
@@ -739,6 +718,18 @@ class FilesystemKeystorePool(
         imported_keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
         safe_copy_directory(keystore_dir, imported_keystore_dir)  # Must not fail, due to previous checks
         assert imported_keystore_dir.exists()
+
+    def export_to_keystore_tree(self):
+
+        pass
+
+    def import_from_keystore_tree(self, keystore_tree):
+
+        self.ensure_imported_keystore_does_not_exist(keystore_tree["keystore_uid"])
+
+        imported_keystore = self.get_imported_keystore(keystore_tree["keystore_uid"])
+
+        imported_keystore.import_from_keystore_tree(keystore_tree)
 
 
 def generate_keypair_for_storage(  # FIXME document this, or integrate to class?

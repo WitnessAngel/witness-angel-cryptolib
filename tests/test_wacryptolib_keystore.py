@@ -239,7 +239,7 @@ def test_keystore_import_from_keystore_tree(tmp_path: Path):
     pool_path.mkdir()
     pool = FilesystemKeystorePool(pool_path)
 
-    remote_keystore.import_from_keystore_tree(pool, keystore_tree)
+    pool.import_from_keystore_tree(keystore_tree)
 
     (keystore_uid,) = pool.list_imported_keystore_uids()
     metadata_mapper = pool.get_imported_keystore_metadata()
@@ -248,6 +248,11 @@ def test_keystore_import_from_keystore_tree(tmp_path: Path):
     metadata = metadata_mapper[keystore_uid]
     assert metadata["keystore_uid"] == keystore_uid
     assert metadata["keystore_owner"] == "Jean-Jâcques"
+
+    with pytest.raises(KeystoreAlreadyExists, match=str(keystore_uid)):
+        pool.import_keystore_from_filesystem(remote_keystore_dir)
+
+    shutil.rmtree(authdevice_path)  # Not important anymore
 
     assert pool.list_imported_keystore_uids() == [keystore_uid]
     metadata_mapper2 = pool.get_imported_keystore_metadata()
@@ -259,6 +264,7 @@ def test_keystore_import_from_keystore_tree(tmp_path: Path):
     ]
     assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"555"
     assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"okj"
+
 
 def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     pool_path = tmp_path / "pool"

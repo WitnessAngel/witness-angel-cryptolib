@@ -22,7 +22,7 @@ from wacryptolib.exceptions import (
     KeyDoesNotExist,
     KeystoreDoesNotExist,
     KeystoreAlreadyExists,
-    SchemaValidationError,
+    SchemaValidationError, ValidationError,
 )
 from wacryptolib.keygen import generate_keypair, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.utilities import (
@@ -520,25 +520,29 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         except SchemaError as exc:
             raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
 
-    def export_to_keystore_tree(self):
+    def export_to_keystore_tree(self, include_private_keys=True):  # TODO add include_private_keys=bool
+
+        # TODO - bien tester les cas et erreurs du keystore vide ou corrompu
         assert self._keys_dir.exists(), self._keys_dir
         metadata = load_keystore_metadata(self._keys_dir)
         keypair_identifiers = self.list_keypair_identifiers()
         keypairs = []
+
         for keypair_identifier in keypair_identifiers:
-            keypairs.append(
-                dict(
-                    keychain_uid=keypair_identifier["keychain_uid"],
-                    key_algo=keypair_identifier["key_algo"],
-                    public_key=self.get_public_key(keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"]),
-                    private_key=self.get_private_key(keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"])
-                )
+            keypair = dict(
+                keychain_uid=keypair_identifier["keychain_uid"],
+                key_algo=keypair_identifier["key_algo"],
+                public_key=self.get_public_key(keychain_uid=keypair_identifier["keychain_uid"],
+                                               key_algo=keypair_identifier["key_algo"])
             )
+            if include_private_keys:
+                keypair["private_key"] = self.get_private_key(keychain_uid=keypair_identifier["keychain_uid"],
+                                                              key_algo=keypair_identifier["key_algo"])
+            keypairs.append(keypair)
+
         keystore_tree = metadata.copy()
         keystore_tree["keypairs"] = keypairs
-
         self._validate_keystore_tree(keystore_tree)
-
         return keystore_tree
 
     def _dump_metadata_to_folder(self, keystore_tree: dict):
@@ -558,9 +562,23 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         return metadata
 
     def import_from_keystore_tree(self, keystore_tree):
+        """
+        TODO dire comment on gère les overrides
+        Verifier que le keystore à été initialisé, si oui comparé les keystore_uid, si pas identique validation, sinon ajouter les clés
+        """
         self._validate_keystore_tree(keystore_tree)
 
-        self._dump_metadata_to_folder(keystore_tree)
+        # TODO tester cas keystore déjà initialisé
+        # Dans ce cas là, verifier que les keystore_uid sont les mêmes sinon, ERREUR ValidationError, puis NE PAS dumper les metadata, et juste dumper les fichiers key manquants
+
+        try:
+            metadata = load_keystore_metadata(self._keys_dir)
+            if keystore_tree["keystore_uid"] != metadata["keystore_uid"]:
+                print("nok")
+                raise ValidationError("Authenticator data has been corrupted")  # TODO Change this erreur to Incoherence/Illegal/Mismatch Error
+
+        except FileNotFoundError:  # TODO Redefine this Error
+            self._dump_metadata_to_folder(keystore_tree)
 
         for keypair in keystore_tree["keypairs"]:
             if keypair["private_key"] is not None:
@@ -673,6 +691,12 @@ class FilesystemKeystorePool(
         )
         return imported_keystore_dir
 
+    def _ensure_imported_keystore(self, keystore_uid):  # POUR L'iNSTANT, pas forcémenet INITIALIZED
+        imported_keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
+        if not imported_keystore_dir.exists():
+            imported_keystore_dir.mkdir(parents=True, exist_ok=True)
+        return FilesystemKeystore(imported_keystore_dir)
+
     def get_imported_keystore(self, keystore_uid):
         """The selected storage MUST exist, else a KeystoreDoesNotExist is raised."""
         imported_keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
@@ -719,17 +743,37 @@ class FilesystemKeystorePool(
         safe_copy_directory(keystore_dir, imported_keystore_dir)  # Must not fail, due to previous checks
         assert imported_keystore_dir.exists()
 
-    def export_to_keystore_tree(self):
+    def export_keystore_to_keystore_tree(self, keystore_uid, include_private_keys=True):  # TODO add include_private_keys=bool
+        """
+             METTRE DANS DOCSTRING que ça concerne que les imported keystore
 
-        pass
+        """
+        try:
+            imported_keystore = self.get_imported_keystore(keystore_uid)
+            keystore_tree = imported_keystore.export_to_keystore_tree(include_private_keys)
 
-    def import_from_keystore_tree(self, keystore_tree):
+        except KeystoreDoesNotExist:
+            raise KeystoreDoesNotExist("Key storage %s not found" % keystore_uid)
 
-        self.ensure_imported_keystore_does_not_exist(keystore_tree["keystore_uid"])
+        return keystore_tree
 
-        imported_keystore = self.get_imported_keystore(keystore_tree["keystore_uid"])
+        # faire get_imported_keystore(..)
+        # si erreur Keystoredoesnotexist, tout est ok
+        # si existe, appeler .export_to_keystore_tree() dessus, et retourner résultat
+        # CAS NOMINAL avec et sans include_private_keys
+
+    def import_keystore_from_keystore_tree(self, keystore_tree):
+        """
+            # METTRE DANS DOCSTRING que ça concerne que les imported keystore
+
+        """
+        imported_keystore = self._ensure_imported_keystore(keystore_tree["keystore_uid"])
 
         imported_keystore.import_from_keystore_tree(keystore_tree)
+
+
+        # CAS/ERREURS A TESTER/GERER : keystore_uid non exists, depot corrompu, mismatch de keystore_uid, shcema invalide du keystore_tree
+        # CAS NOMINAL
 
 
 def generate_keypair_for_storage(  # FIXME document this, or integrate to class?

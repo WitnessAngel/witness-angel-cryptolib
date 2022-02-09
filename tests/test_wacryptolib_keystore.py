@@ -1,5 +1,6 @@
 import os
 import random
+import secrets
 import shutil
 import time
 from pathlib import Path
@@ -9,7 +10,7 @@ import pytest
 
 from _test_mockups import get_fake_authdevice, random_bool
 from wacryptolib.authenticator import initialize_authenticator
-from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists
+from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists, SchemaValidationError, ValidationError
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import (
     FilesystemKeystore,
@@ -19,7 +20,7 @@ from wacryptolib.keystore import (
     generate_free_keypair_for_least_provisioned_key_algo,
     get_free_keypair_generator_worker,
     generate_keypair_for_storage,
-    ReadonlyFilesystemKeystore,
+    ReadonlyFilesystemKeystore, load_keystore_metadata,
 )
 from wacryptolib.scaffolding import (
     check_keystore_free_keys_concurrency,
@@ -217,53 +218,128 @@ def test_keystore_pool_basics(tmp_path: Path):
     assert not imported_keystore2.list_keypair_identifiers()
 
 
-def test_keystore_import_from_keystore_tree(tmp_path: Path):
-    authdevice_path = tmp_path / "device"
+def test_keystore_export_from_keystore_tree(tmp_path: Path):
+    authdevice_path = tmp_path / "device1"
     authdevice_path.mkdir()
     authdevice = get_fake_authdevice(authdevice_path)
+
     remote_keystore_dir = authdevice["authenticator_dir"]
+
     initialize_authenticator(remote_keystore_dir, keystore_owner="Jean-Jâcques", keystore_passphrase_hint="my-hint")
+
+    remote_keystore = FilesystemKeystore(remote_keystore_dir)
 
     keychain_uid = generate_uuid0()
     key_algo = "RSA_OAEP"
 
-    remote_keystore = FilesystemKeystore(remote_keystore_dir)
     remote_keystore.set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"555", private_key=b"okj")
 
-    keystore_tree = remote_keystore.export_to_keystore_tree()
+    keystore_tree = remote_keystore.export_to_keystore_tree(include_private_keys=True)
 
     assert keystore_tree["keystore_owner"] == "Jean-Jâcques"
-    assert keystore_tree["keypairs"][0] == {'keychain_uid': keychain_uid, 'key_algo': 'RSA_OAEP', 'public_key': b'555','private_key': b'okj'}
+    assert keystore_tree["keypairs"][0] == {"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"555",
+                                            "private_key": b"okj"}
 
-    pool_path = tmp_path / "pool"
-    pool_path.mkdir()
-    pool = FilesystemKeystorePool(pool_path)
+    # tester le cas où mon mon keystore est vide ou corrompu
 
-    pool.import_from_keystore_tree(keystore_tree)
+    # corrompre le schéma de validation avec key_algo="keystore_algo"
+    with pytest.raises(SchemaValidationError):
+        remote_keystore.set_keypair(keychain_uid=keychain_uid, key_algo="keystore_algo", public_key=b"555",
+                                    private_key=b"okj")
+        remote_keystore.export_to_keystore_tree(include_private_keys=True)
 
-    (keystore_uid,) = pool.list_imported_keystore_uids()
-    metadata_mapper = pool.get_imported_keystore_metadata()
-    assert tuple(metadata_mapper) == (keystore_uid,)
+    # Créaion d'un keystore non initialisé(vide)
+    authdevice_path = tmp_path / "device2"
+    authdevice_path.mkdir()
+    authdevice = get_fake_authdevice(authdevice_path)
 
-    metadata = metadata_mapper[keystore_uid]
+    remote_keystore_dir = authdevice["authenticator_dir"]
+    remote_keystore_dir.mkdir()
+    remote_keystore = FilesystemKeystore(remote_keystore_dir)
+    with pytest.raises(FileNotFoundError):
+        remote_keystore.export_to_keystore_tree()
+
+
+def test_keystore_import_to_keystore_tree(tmp_path: Path):
+    authdevice_path = tmp_path / "device"
+    authdevice_path.mkdir()
+    filesystem_keystore = FilesystemKeystore(authdevice_path)
+
+    keystore_uid = generate_uuid0()
+    keychain_uid = generate_uuid0()
+    key_algo = "RSA_OAEP"
+    keystore_secret = secrets.token_urlsafe(64)
+
+    keystore_tree = {
+        "keystore_type": "authenticator",
+        "keystore_format": "keystore_1.0",
+        "keystore_owner": "Jacques",
+        "keystore_uid": keystore_uid,
+        "keystore_secret": keystore_secret,
+        "keypairs": [{"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"555", "private_key": b"okj"}]
+
+    }
+
+    filesystem_keystore.import_from_keystore_tree(keystore_tree)
+
+    metadata = load_keystore_metadata(authdevice_path)
+
     assert metadata["keystore_uid"] == keystore_uid
-    assert metadata["keystore_owner"] == "Jean-Jâcques"
+    assert metadata["keystore_owner"] == "Jacques"
 
-    with pytest.raises(KeystoreAlreadyExists, match=str(keystore_uid)):
-        pool.import_keystore_from_filesystem(remote_keystore_dir)
-
-    shutil.rmtree(authdevice_path)  # Not important anymore
-
-    assert pool.list_imported_keystore_uids() == [keystore_uid]
-    metadata_mapper2 = pool.get_imported_keystore_metadata()
-    assert metadata_mapper2 == metadata_mapper
-
-    keystore = pool.get_imported_keystore(keystore_uid)
-    assert keystore.list_keypair_identifiers() == [
+    assert filesystem_keystore.list_keypair_identifiers() == [
         dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)
     ]
-    assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"555"
-    assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"okj"
+
+    assert filesystem_keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"555"
+    assert filesystem_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"okj"
+
+    # mismatch de keystore_uid
+    keystore_tree["keystore_uid"] = generate_uuid0()
+
+    with pytest.raises(ValidationError):
+        filesystem_keystore.import_from_keystore_tree(keystore_tree)
+
+    # Corrompre le keystore_tree
+    del keystore_tree["keystore_secret"]
+
+    with pytest.raises(SchemaValidationError):
+        filesystem_keystore.import_from_keystore_tree(keystore_tree)
+
+
+def test_keystorepool_export_and_import_keystore_to_keystore_tree(tmp_path: Path):
+    keystore_uid = generate_uuid0()
+    keychain_uid = generate_uuid0()
+    key_algo = "RSA_OAEP"
+    keystore_secret = secrets.token_urlsafe(64)
+
+    keystore_tree = {
+        "keystore_type": "authenticator",
+        "keystore_format": "keystore_1.0",
+        "keystore_owner": "Jacques",
+        "keystore_uid": keystore_uid,
+        "keystore_secret": keystore_secret,
+        "keypairs": [{"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"555", "private_key": b"okj"}]
+
+    }
+    authdevice_path = tmp_path / "device"
+    authdevice_path.mkdir()
+
+    keystore_pool = FilesystemKeystorePool(authdevice_path)
+    keystore_pool.import_keystore_from_keystore_tree(keystore_tree)
+    imported_keystore_dir = keystore_pool._get_imported_keystore_dir(keystore_uid)
+    metadata = load_keystore_metadata(imported_keystore_dir)
+    print(metadata)
+
+    keystore_tree = keystore_pool.export_keystore_to_keystore_tree(metadata["keystore_uid"], include_private_keys=True)
+
+    imported_keystore = keystore_pool.get_imported_keystore(keystore_uid)
+
+    assert imported_keystore.list_keypair_identifiers() == [
+        dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)
+    ]
+    assert imported_keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == keystore_tree["keypairs"][0]["public_key"]
+    assert imported_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) ==  keystore_tree["keypairs"][0]["private_key"]
 
 
 def test_keystore_import_keystore_from_filesystem(tmp_path: Path):

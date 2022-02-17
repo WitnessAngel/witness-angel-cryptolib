@@ -581,7 +581,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
             self._dump_metadata_to_folder(keystore_tree)
 
         for keypair in keystore_tree["keypairs"]:
-            if keypair["private_key"] is not None:
+            if "private_key" in keypair:
                 self.set_keypair(
                     keychain_uid=keypair["keychain_uid"],
                     key_algo=keypair["key_algo"],

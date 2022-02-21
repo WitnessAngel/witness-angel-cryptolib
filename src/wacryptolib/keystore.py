@@ -574,7 +574,6 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         try:
             metadata = load_keystore_metadata(self._keys_dir)
             if keystore_tree["keystore_uid"] != metadata["keystore_uid"]:
-                print("nok")
                 raise ValidationError("Authenticator data has been corrupted")  # TODO Change this erreur to Incoherence/Illegal/Mismatch Error
 
         except FileNotFoundError:  # TODO Redefine this Error

@@ -240,19 +240,15 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
     assert keystore_tree["keypairs"][0] == {"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"555",
                                             "private_key": b"okj"}
 
-    # tester le cas où mon mon keystore est vide ou corrompu
-
-    # corrompre le schéma de validation avec key_algo="keystore_algo"
     with pytest.raises(SchemaValidationError):
-        remote_keystore.set_keypair(keychain_uid=keychain_uid, key_algo="keystore_algo", public_key=b"555",
+        remote_keystore.set_keypair(keychain_uid=keychain_uid, key_algo="bad_algo", public_key=b"555",
                                     private_key=b"okj")
         remote_keystore.export_to_keystore_tree(include_private_keys=True)
 
-    # Créaion d'un keystore non initialisé(vide)
+    # Create uninitialized keystore (no metadata file)
     authdevice_path = tmp_path / "device2"
     authdevice_path.mkdir()
     authdevice = get_fake_authdevice(authdevice_path)
-
     remote_keystore_dir = authdevice["authenticator_dir"]
     remote_keystore_dir.mkdir()
     remote_keystore = FilesystemKeystore(remote_keystore_dir)
@@ -300,13 +296,13 @@ def test_keystore_import_to_keystore_tree(tmp_path: Path):
         filesystem_keystore.import_from_keystore_tree(keystore_tree)
 
     # Corrompre le keystore_tree
-    del keystore_tree["keystore_secret"]
+    del keystore_tree["keystore_owner"]
 
     with pytest.raises(SchemaValidationError):
         filesystem_keystore.import_from_keystore_tree(keystore_tree)
 
 
-def test_keystorepool_export_and_import_keystore_to_keystore_tree(tmp_path: Path):
+def test_keystorepool_export_and_import_foreign_keystore_to_keystore_tree(tmp_path: Path):
     keystore_uid = generate_uuid0()
     keychain_uid = generate_uuid0()
     key_algo = "RSA_OAEP"
@@ -325,12 +321,12 @@ def test_keystorepool_export_and_import_keystore_to_keystore_tree(tmp_path: Path
     authdevice_path.mkdir()
 
     keystore_pool = FilesystemKeystorePool(authdevice_path)
-    keystore_pool.import_keystore_from_keystore_tree(keystore_tree)
+    keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree)
     foreign_keystore_dir = keystore_pool._get_foreign_keystore_dir(keystore_uid)
     metadata = load_keystore_metadata(foreign_keystore_dir)
     print(metadata)
 
-    keystore_tree = keystore_pool.export_keystore_to_keystore_tree(metadata["keystore_uid"], include_private_keys=True)
+    keystore_tree = keystore_pool.export_foreign_keystore_to_keystore_tree(metadata["keystore_uid"], include_private_keys=True)
 
     foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
 
@@ -341,7 +337,7 @@ def test_keystorepool_export_and_import_keystore_to_keystore_tree(tmp_path: Path
     assert foreign_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) ==  keystore_tree["keypairs"][0]["private_key"]
 
 
-def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
+def test_keystore_import_foreign_keystore_from_filesystem(tmp_path: Path):
     pool_path = tmp_path / "pool"
     pool_path.mkdir()
     pool = FilesystemKeystorePool(pool_path)
@@ -364,7 +360,7 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     assert pool.list_foreign_keystore_uids() == []
     assert pool.get_foreign_keystore_metadata() == {}
 
-    pool.import_keystore_from_filesystem(remote_keystore_dir)
+    pool.import_foreign_keystore_from_filesystem(remote_keystore_dir)
 
     (keystore_uid,) = pool.list_foreign_keystore_uids()
     metadata_mapper = pool.get_foreign_keystore_metadata()
@@ -375,7 +371,7 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     assert metadata["keystore_owner"] == "Jean-Jâcques"
 
     with pytest.raises(KeystoreAlreadyExists, match=str(keystore_uid)):
-        pool.import_keystore_from_filesystem(remote_keystore_dir)
+        pool.import_foreign_keystore_from_filesystem(remote_keystore_dir)
 
     shutil.rmtree(authdevice_path)  # Not important anymore
 

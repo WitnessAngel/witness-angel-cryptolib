@@ -65,7 +65,7 @@ KEYSTORE_TREE_SCHEMA = Schema(
                 "keychain_uid": UUID,
                 "key_algo": Or(*SUPPORTED_CIPHER_ALGOS),
                 "public_key": bytes,
-                OptionalKey("private_key"): bytes,
+                "private_key": Or(None, bytes),
             }
         ]
     }
@@ -347,6 +347,7 @@ class DummyKeystore(KeystoreReadWriteBase):
         return key_information_list
 
     def _set_public_key(self, *, keychain_uid: uuid.UUID, key_algo, public_key):
+        assert (keychain_uid, key_algo) not in self._cached_keypairs
         self._cached_keypairs[(keychain_uid, key_algo)] = dict(public_key=public_key)
 
     def _set_private_key(self, *, keychain_uid: uuid.UUID, key_algo, private_key):
@@ -565,7 +566,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         dump_to_json_file(metadata_file, metadata)
         return metadata
 
-    def import_from_keystore_tree(self, keystore_tree):
+    def import_from_keystore_tree(self, keystore_tree):  # FIXME must allow override of partial import with new private keys!!!
         # TODO DOCSTRING
         validate_keystore_tree(keystore_tree)
 
@@ -577,8 +578,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
             self._initialize_metadata_from_keystore_tree(keystore_tree)
 
         for keypair in keystore_tree["keypairs"]:
-            if "private_key" in keypair:
-                assert keypair["private_key"]  # Can't be None, due to Schema
+            if keypair["private_key"]:  # Key must exist, due to Schema
                 self.set_keypair(
                     keychain_uid=keypair["keychain_uid"],
                     key_algo=keypair["key_algo"],

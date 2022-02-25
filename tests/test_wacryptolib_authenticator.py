@@ -4,7 +4,7 @@ import pytest
 
 from wacryptolib.authenticator import initialize_authenticator, is_authenticator_initialized
 from wacryptolib.exceptions import ValidationError
-from wacryptolib.keystore import load_keystore_metadata, _get_keystore_metadata_file_path
+from wacryptolib.keystore import load_keystore_metadata, _get_keystore_metadata_file_path, KEYSTORE_FORMAT
 
 
 def test_authenticator_basic_workflow(tmp_path):

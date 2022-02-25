@@ -47,9 +47,11 @@ _KEYSTORE_METADATA_SCHEMA = {
     "keystore_format": KEYSTORE_FORMAT,  # For forward compatibility
     "keystore_uid": UUID,
     "keystore_owner": And(str, non_empty),
-    "keystore_secret": str,
+    OptionalKey("keystore_secret"): str,
     OptionalKey("keystore_passphrase_hint"): And(str, non_empty),  # For authenticators
 }
+
+# FIXME add dedicated KEYSTORE_METADATA_SCHEMA for AUTHENTICATORS
 
 KEYSTORE_METADATA_SCHEMA = Schema({
     **_KEYSTORE_METADATA_SCHEMA
@@ -70,12 +72,19 @@ KEYSTORE_TREE_SCHEMA = Schema(
 )
 
 
-def _validate_keystore_metadata(keystore_metadata):
+def validate_keystore_metadata(keystore_metadata):
     try:
         KEYSTORE_METADATA_SCHEMA.validate(keystore_metadata)
     except SchemaError as exc:
         raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
 
+
+def validate_keystore_tree(authenticator):  # FIXME setup utility validate_with_python_schema() to handle exceptions always
+    try:
+        KEYSTORE_TREE_SCHEMA.validate(authenticator)
+    except SchemaError as exc:
+        raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
+    
 
 def _get_keystore_metadata_file_path(keystore_dir: Path):
     """
@@ -93,7 +102,7 @@ def load_keystore_metadata(keystore_dir: Path) -> dict:  # FIXME rename to adver
     """
     metadata_file = _get_keystore_metadata_file_path(keystore_dir)
     metadata = load_from_json_file(metadata_file)
-    _validate_keystore_metadata(metadata)
+    validate_keystore_metadata(metadata)
     return metadata
 
 
@@ -201,6 +210,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param public_key: public key in clear PEM format
         :param private_key: private key in PEM format (potentially encrypted)
         """
+        assert public_key and private_key, (public_key, private_key)
         self._check_public_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=public_key, private_key=private_key)
 
@@ -515,13 +525,8 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         free_private_key.replace(target_private_key_filename)
         free_public_key.replace(target_public_key_filename)
 
-    def _validate_keystore_tree(self, authenticator):
-        try:
-            KEYSTORE_TREE_SCHEMA.validate(authenticator)
-        except SchemaError as exc:
-            raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
-
     def export_to_keystore_tree(self, include_private_keys=True):  # TODO add include_private_keys=bool
+        # TODO DOCSTRING
 
         # TODO - bien tester les cas et erreurs du keystore vide ou corrompu
         assert self._keys_dir.exists(), self._keys_dir
@@ -543,82 +548,53 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
 
         keystore_tree = metadata.copy()
         keystore_tree["keypairs"] = keypairs
-        self._validate_keystore_tree(keystore_tree)
+        self.validate_keystore_tree(keystore_tree)  # Safety
         return keystore_tree
 
-    def _dump_metadata_to_folder(self, keystore_tree: dict):
+    def _initialize_metadata_from_keystore_tree(self, keystore_tree: dict):
         metadata_file = _get_keystore_metadata_file_path(self._keys_dir)
-        metadata_file.parent.mkdir(parents=True, exist_ok=True)  # FIXME Create a temporary folder
+        metadata_file.parent.mkdir(parents=True, exist_ok=True)  # FIXME Create a temporary folder for ATOMIC copy
 
-        metadata = {}
-        metadata.update(
-            {"keystore_type": "authenticator",
-             "keystore_format": "keystore_1.0",
-             "keystore_uid": keystore_tree["keystore_uid"],
-             "keystore_owner": keystore_tree["keystore_owner"],
-             "keystore_secret": secrets.token_urlsafe(64),
-             })
-        _validate_keystore_metadata(metadata)
+        metadata= {
+            "keystore_type": "authenticator",
+            "keystore_format": KEYSTORE_FORMAT,
+            "keystore_uid": keystore_tree["keystore_uid"],
+            "keystore_owner": keystore_tree["keystore_owner"],
+            "keystore_secret": secrets.token_urlsafe(64),
+        }
+        validate_keystore_metadata(metadata)  # Safety
         dump_to_json_file(metadata_file, metadata)
         return metadata
 
     def import_from_keystore_tree(self, keystore_tree):
-        """
-        TODO dire comment on gère les overrides
-        Verifier que le keystore à été initialisé, si oui comparé les keystore_uid, si pas identique validation, sinon ajouter les clés
-        """
-        self._validate_keystore_tree(keystore_tree)
+        # TODO DOCSTRING
+        self.validate_keystore_tree(keystore_tree)
 
-        # TODO tester cas keystore déjà initialisé
+        # TODO décrire cas du keystore déjà initialisé
         # Dans ce cas là, verifier que les keystore_uid sont les mêmes sinon, ERREUR ValidationError, puis NE PAS dumper les metadata, et juste dumper les fichiers key manquants
 
         try:
             metadata = load_keystore_metadata(self._keys_dir)
             if keystore_tree["keystore_uid"] != metadata["keystore_uid"]:
-                raise ValidationError("Authenticator data has been corrupted")  # TODO Change this erreur to Incoherence/Illegal/Mismatch Error
-
+                raise ValidationError("Authenticator data has been corrupted")  # TODO Change this erreur to Incoherence/Illegal/Mismatch Error?
         except FileNotFoundError:  # TODO Redefine this Error
-            self._dump_metadata_to_folder(keystore_tree)
+            self._initialize_metadata_from_keystore_tree(keystore_tree)
 
         for keypair in keystore_tree["keypairs"]:
             if "private_key" in keypair:
+                assert keypair["private_key"]  # Can't be None, due to Schema
                 self.set_keypair(
                     keychain_uid=keypair["keychain_uid"],
                     key_algo=keypair["key_algo"],
                     public_key=keypair["public_key"],
                     private_key=keypair["private_key"],
                 )
-
             else:
                 self.set_public_key(
                     keychain_uid=keypair["keychain_uid"],
                     key_algo=keypair["key_algo"],
                     public_key=keypair["public_key"],
                 )
-
-    def _convert_from_public_authenticator_to_keystore_tree(self, public_authenticator):
-        keypairs = []
-
-        for public_key in public_authenticator["public_keys"]:
-            keypairs.append(
-                dict(
-                    keychain_uid=public_key["keychain_uid"],
-                    key_algo=public_key["key_algo"],
-                    public_key=public_key["key_value"],
-                    private_key=None
-                )
-            )
-
-        keystore_tree = {
-            "keystore_type": "authenticator",
-            "keystore_format": "keystore_1.0",
-            "keystore_owner": public_authenticator["keystore_owner"],
-            "keystore_uid": public_authenticator["keystore_uid"],
-            "keystore_secret": secrets.token_urlsafe(64),
-            "keypairs": keypairs
-        }
-
-        return keystore_tree
 
 
 class KeystorePoolBase:

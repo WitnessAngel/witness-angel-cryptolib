@@ -20,7 +20,7 @@ from wacryptolib.keystore import (
     generate_free_keypair_for_least_provisioned_key_algo,
     get_free_keypair_generator_worker,
     generate_keypair_for_storage,
-    ReadonlyFilesystemKeystore, load_keystore_metadata,
+    ReadonlyFilesystemKeystore, load_keystore_metadata, KEYSTORE_FORMAT,
 )
 from wacryptolib.scaffolding import (
     check_keystore_free_keys_concurrency,
@@ -272,12 +272,11 @@ def test_keystore_import_to_keystore_tree(tmp_path: Path):
 
     keystore_tree = {
         "keystore_type": "authenticator",
-        "keystore_format": "keystore_1.0",
+        "keystore_format": KEYSTORE_FORMAT,
         "keystore_owner": "Jacques",
         "keystore_uid": keystore_uid,
         "keystore_secret": keystore_secret,
         "keypairs": [{"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"555", "private_key": b"okj"}]
-
     }
 
     filesystem_keystore.import_from_keystore_tree(keystore_tree)
@@ -315,7 +314,7 @@ def test_keystorepool_export_and_import_keystore_to_keystore_tree(tmp_path: Path
 
     keystore_tree = {
         "keystore_type": "authenticator",
-        "keystore_format": "keystore_1.0",
+        "keystore_format": KEYSTORE_FORMAT,
         "keystore_owner": "Jacques",
         "keystore_uid": keystore_uid,
         "keystore_secret": keystore_secret,

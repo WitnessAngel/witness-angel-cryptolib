@@ -180,30 +180,30 @@ def test_keystore_pool_basics(tmp_path: Path):
 
     assert len(local_keystore.list_keypair_identifiers()) == 1
 
-    assert pool.list_imported_keystore_uids() == []
+    assert pool.list_foreign_keystore_uids() == []
 
-    imported_keystore_uid = generate_uuid0()
+    foreign_keystore_uid = generate_uuid0()
     mirror_path = tmp_path.joinpath(
-        pool.IMPORTED_KEYSTORES_DIRNAME, pool.IMPORTED_KEYSTORE_PREFIX + str(imported_keystore_uid)
+        pool.FOREIGN_KEYSTORES_DIRNAME, pool.FOREIGN_KEYSTORE_PREFIX + str(foreign_keystore_uid)
     )
     mirror_path.mkdir(parents=True, exist_ok=False)
 
-    imported_keystore_uid2 = generate_uuid0()
+    foreign_keystore_uid2 = generate_uuid0()
     mirror_path2 = tmp_path.joinpath(
-        pool.IMPORTED_KEYSTORES_DIRNAME, pool.IMPORTED_KEYSTORE_PREFIX + str(imported_keystore_uid2)
+        pool.FOREIGN_KEYSTORES_DIRNAME, pool.FOREIGN_KEYSTORE_PREFIX + str(foreign_keystore_uid2)
     )
     mirror_path2.mkdir(parents=True, exist_ok=False)
 
-    assert pool.list_imported_keystore_uids() == sorted([imported_keystore_uid, imported_keystore_uid2])
+    assert pool.list_foreign_keystore_uids() == sorted([foreign_keystore_uid, foreign_keystore_uid2])
 
     with pytest.raises(KeystoreDoesNotExist, match="not found"):
-        pool.get_imported_keystore(generate_uuid0())
+        pool.get_foreign_keystore(generate_uuid0())
 
-    imported_keystore = pool.get_imported_keystore(imported_keystore_uid)
-    assert isinstance(imported_keystore, FilesystemKeystore)
-    assert not imported_keystore.list_keypair_identifiers()
+    foreign_keystore = pool.get_foreign_keystore(foreign_keystore_uid)
+    assert isinstance(foreign_keystore, FilesystemKeystore)
+    assert not foreign_keystore.list_keypair_identifiers()
 
-    imported_keystore.set_keypair(
+    foreign_keystore.set_keypair(
         keychain_uid=generate_uuid0(),
         key_algo="RSA_OAEP",
         public_key=keypair["public_key"],
@@ -211,11 +211,11 @@ def test_keystore_pool_basics(tmp_path: Path):
     )
 
     assert len(local_keystore.list_keypair_identifiers()) == 1  # Unchanged
-    assert len(imported_keystore.list_keypair_identifiers()) == 1
+    assert len(foreign_keystore.list_keypair_identifiers()) == 1
 
-    imported_keystore2 = pool.get_imported_keystore(imported_keystore_uid2)
-    assert isinstance(imported_keystore2, FilesystemKeystore)
-    assert not imported_keystore2.list_keypair_identifiers()
+    foreign_keystore2 = pool.get_foreign_keystore(foreign_keystore_uid2)
+    assert isinstance(foreign_keystore2, FilesystemKeystore)
+    assert not foreign_keystore2.list_keypair_identifiers()
 
 
 def test_keystore_export_from_keystore_tree(tmp_path: Path):
@@ -327,27 +327,27 @@ def test_keystorepool_export_and_import_keystore_to_keystore_tree(tmp_path: Path
 
     keystore_pool = FilesystemKeystorePool(authdevice_path)
     keystore_pool.import_keystore_from_keystore_tree(keystore_tree)
-    imported_keystore_dir = keystore_pool._get_imported_keystore_dir(keystore_uid)
-    metadata = load_keystore_metadata(imported_keystore_dir)
+    foreign_keystore_dir = keystore_pool._get_foreign_keystore_dir(keystore_uid)
+    metadata = load_keystore_metadata(foreign_keystore_dir)
     print(metadata)
 
     keystore_tree = keystore_pool.export_keystore_to_keystore_tree(metadata["keystore_uid"], include_private_keys=True)
 
-    imported_keystore = keystore_pool.get_imported_keystore(keystore_uid)
+    foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
 
-    assert imported_keystore.list_keypair_identifiers() == [
+    assert foreign_keystore.list_keypair_identifiers() == [
         dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)
     ]
-    assert imported_keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == keystore_tree["keypairs"][0]["public_key"]
-    assert imported_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) ==  keystore_tree["keypairs"][0]["private_key"]
+    assert foreign_keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == keystore_tree["keypairs"][0]["public_key"]
+    assert foreign_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) ==  keystore_tree["keypairs"][0]["private_key"]
 
 
 def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     pool_path = tmp_path / "pool"
     pool_path.mkdir()
     pool = FilesystemKeystorePool(pool_path)
-    assert pool.list_imported_keystore_uids() == []
-    assert pool.get_imported_keystore_metadata() == {}
+    assert pool.list_foreign_keystore_uids() == []
+    assert pool.get_foreign_keystore_metadata() == {}
 
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()
@@ -362,13 +362,13 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
     remote_keystore.set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"555", private_key=b"okj")
 
     # Still untouched of course
-    assert pool.list_imported_keystore_uids() == []
-    assert pool.get_imported_keystore_metadata() == {}
+    assert pool.list_foreign_keystore_uids() == []
+    assert pool.get_foreign_keystore_metadata() == {}
 
     pool.import_keystore_from_filesystem(remote_keystore_dir)
 
-    (keystore_uid,) = pool.list_imported_keystore_uids()
-    metadata_mapper = pool.get_imported_keystore_metadata()
+    (keystore_uid,) = pool.list_foreign_keystore_uids()
+    metadata_mapper = pool.get_foreign_keystore_metadata()
     assert tuple(metadata_mapper) == (keystore_uid,)
 
     metadata = metadata_mapper[keystore_uid]
@@ -380,11 +380,11 @@ def test_keystore_import_keystore_from_filesystem(tmp_path: Path):
 
     shutil.rmtree(authdevice_path)  # Not important anymore
 
-    assert pool.list_imported_keystore_uids() == [keystore_uid]
-    metadata_mapper2 = pool.get_imported_keystore_metadata()
+    assert pool.list_foreign_keystore_uids() == [keystore_uid]
+    metadata_mapper2 = pool.get_foreign_keystore_metadata()
     assert metadata_mapper2 == metadata_mapper
 
-    keystore = pool.get_imported_keystore(keystore_uid)
+    keystore = pool.get_foreign_keystore(keystore_uid)
     assert keystore.list_keypair_identifiers() == [
         dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)
     ]

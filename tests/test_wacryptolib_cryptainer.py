@@ -635,15 +635,15 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     generate_keypair_for_storage(
         key_algo="RSA_OAEP", keystore=local_keystore, keychain_uid=keychain_uid, passphrase=local_passphrase
     )
-    keystore1 = keystore_pool.get_imported_keystore(keystore_uid1)
+    keystore1 = keystore_pool.get_foreign_keystore(keystore_uid1)
     generate_keypair_for_storage(
         key_algo="RSA_OAEP", keystore=keystore1, keychain_uid=keychain_uid_trustee, passphrase=passphrase1
     )
-    keystore2 = keystore_pool.get_imported_keystore(keystore_uid2)
+    keystore2 = keystore_pool.get_foreign_keystore(keystore_uid2)
     generate_keypair_for_storage(
         key_algo="RSA_OAEP", keystore=keystore2, keychain_uid=keychain_uid, passphrase=passphrase2
     )
-    keystore3 = keystore_pool.get_imported_keystore(keystore_uid3)
+    keystore3 = keystore_pool.get_foreign_keystore(keystore_uid3)
     generate_keypair_for_storage(
         key_algo="RSA_OAEP", keystore=keystore3, keychain_uid=keychain_uid, passphrase=passphrase3
     )

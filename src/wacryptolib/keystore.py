@@ -624,9 +624,9 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
 class KeystorePoolBase:
     # FIXME fill base class with Python function signatures!! Like in KeystoreBase!
 
-    def ensure_imported_keystore_does_not_exist(self, keystore_uid):
+    def ensure_foreign_keystore_does_not_exist(self, keystore_uid):
         """Raises KeystoreAlreadyExists if imported keystore already exists."""
-        if keystore_uid in self.list_imported_keystore_uids():
+        if keystore_uid in self.list_foreign_keystore_uids():
             raise KeystoreAlreadyExists("Key storage with UUID %s was already imported locally" % keystore_uid)
 
 
@@ -639,25 +639,25 @@ class InMemoryKeystorePool(KeystorePoolBase):
 
     def __init__(self):
         self._local_keystore = DummyKeystore()
-        self._imported_keystores = {}
+        self._foreign_keystores = {}
 
     def get_local_keyfactory(self):
         return self._local_keystore
 
-    def get_imported_keystore(self, keystore_uid):
-        imported_keystore = self._imported_keystores.get(keystore_uid)
-        if not imported_keystore:
+    def get_foreign_keystore(self, keystore_uid):
+        foreign_keystore = self._foreign_keystores.get(keystore_uid)
+        if not foreign_keystore:
             raise KeystoreDoesNotExist("Key storage %s not found" % keystore_uid)
-        return imported_keystore
+        return foreign_keystore
 
-    def list_imported_keystore_uids(self):
-        return list(self._imported_keystores.keys())
+    def list_foreign_keystore_uids(self):
+        return list(self._foreign_keystores.keys())
 
     def _register_fake_imported_storage_uids(self, storage_uids: Sequence):
         """Test-specific API"""
-        assert not (set(storage_uids) & set(self._imported_keystores.keys()))
+        assert not (set(storage_uids) & set(self._foreign_keystores.keys()))
         new_storages = {storage_uid: DummyKeystore() for storage_uid in storage_uids}
-        self._imported_keystores.update(new_storages)
+        self._foreign_keystores.update(new_storages)
 
 
 class FilesystemKeystorePool(
@@ -670,8 +670,8 @@ class FilesystemKeystorePool(
     """
 
     LOCAL_KEYFACTORY_DIRNAME = "local_keyfactory"
-    IMPORTED_KEYSTORES_DIRNAME = "imported_keystores"
-    IMPORTED_KEYSTORE_PREFIX = "keystore_"
+    FOREIGN_KEYSTORES_DIRNAME = "foreign_keystores"
+    FOREIGN_KEYSTORE_PREFIX = "keystore_"
 
     def __init__(self, root_dir):
         root_dir = Path(root_dir)
@@ -685,42 +685,42 @@ class FilesystemKeystorePool(
         # TODO initialize metadata for local keystore ??
         return FilesystemKeystore(local_keystore_dir)
 
-    def _get_imported_keystore_dir(self, keystore_uid):
-        imported_keystore_dir = self._root_dir.joinpath(
-            self.IMPORTED_KEYSTORES_DIRNAME, "%s%s" % (self.IMPORTED_KEYSTORE_PREFIX, keystore_uid)
+    def _get_foreign_keystore_dir(self, keystore_uid):
+        foreign_keystore_dir = self._root_dir.joinpath(
+            self.FOREIGN_KEYSTORES_DIRNAME, "%s%s" % (self.FOREIGN_KEYSTORE_PREFIX, keystore_uid)
         )
-        return imported_keystore_dir
+        return foreign_keystore_dir
 
-    def _ensure_imported_keystore(self, keystore_uid):  # POUR L'iNSTANT, pas forcémenet INITIALIZED
-        imported_keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
-        if not imported_keystore_dir.exists():
-            imported_keystore_dir.mkdir(parents=True, exist_ok=True)
-        return FilesystemKeystore(imported_keystore_dir)
+    def _ensure_foreign_keystore(self, keystore_uid):  # POUR L'iNSTANT, pas forcémenet INITIALIZED
+        foreign_keystore_dir = self._get_foreign_keystore_dir(keystore_uid=keystore_uid)
+        if not foreign_keystore_dir.exists():
+            foreign_keystore_dir.mkdir(parents=True, exist_ok=True)
+        return FilesystemKeystore(foreign_keystore_dir)
 
-    def get_imported_keystore(self, keystore_uid):
+    def get_foreign_keystore(self, keystore_uid):
         """The selected storage MUST exist, else a KeystoreDoesNotExist is raised."""
-        imported_keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
-        if not imported_keystore_dir.exists():
+        foreign_keystore_dir = self._get_foreign_keystore_dir(keystore_uid=keystore_uid)
+        if not foreign_keystore_dir.exists():
             raise KeystoreDoesNotExist("Key storage %s not found" % keystore_uid)
-        return FilesystemKeystore(imported_keystore_dir)
+        return FilesystemKeystore(foreign_keystore_dir)
 
-    def list_imported_keystore_uids(self) -> list:
+    def list_foreign_keystore_uids(self) -> list:
         """Return a sorted list of UUIDs of key storages, corresponding
         to the keystore_uid of their origin authentication devices."""
-        imported_keystores_dir = self._root_dir.joinpath(self.IMPORTED_KEYSTORES_DIRNAME)
-        paths = imported_keystores_dir.glob("%s*" % self.IMPORTED_KEYSTORE_PREFIX)  # This excludes TEMP folders
-        return sorted([uuid.UUID(d.name.replace(self.IMPORTED_KEYSTORE_PREFIX, "")) for d in paths])
+        foreign_keystores_dir = self._root_dir.joinpath(self.FOREIGN_KEYSTORES_DIRNAME)
+        paths = foreign_keystores_dir.glob("%s*" % self.FOREIGN_KEYSTORE_PREFIX)  # This excludes TEMP folders
+        return sorted([uuid.UUID(d.name.replace(self.FOREIGN_KEYSTORE_PREFIX, "")) for d in paths])
 
-    def get_imported_keystore_metadata(self) -> dict:
+    def get_foreign_keystore_metadata(self) -> dict:
         """Return a dict mapping key storage UUIDs to the dicts of their metadata.
 
         Raises if any metadata loading fails.
         """
-        keystore_uids = self.list_imported_keystore_uids()
+        keystore_uids = self.list_foreign_keystore_uids()
 
         metadata_mapper = {}
         for keystore_uid in keystore_uids:
-            keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
+            keystore_dir = self._get_foreign_keystore_dir(keystore_uid=keystore_uid)
             metadata = load_keystore_metadata(keystore_dir)
             metadata_mapper[keystore_uid] = metadata
 
@@ -737,11 +737,11 @@ class FilesystemKeystorePool(
         metadata = load_keystore_metadata(keystore_dir)
         keystore_uid = metadata["keystore_uid"]
 
-        self.ensure_imported_keystore_does_not_exist(keystore_uid)
+        self.ensure_foreign_keystore_does_not_exist(keystore_uid)
 
-        imported_keystore_dir = self._get_imported_keystore_dir(keystore_uid=keystore_uid)
-        safe_copy_directory(keystore_dir, imported_keystore_dir)  # Must not fail, due to previous checks
-        assert imported_keystore_dir.exists()
+        foreign_keystore_dir = self._get_foreign_keystore_dir(keystore_uid=keystore_uid)
+        safe_copy_directory(keystore_dir, foreign_keystore_dir)  # Must not fail, due to previous checks
+        assert foreign_keystore_dir.exists()
 
     def export_keystore_to_keystore_tree(self, keystore_uid, include_private_keys=True):  # TODO add include_private_keys=bool
         """
@@ -749,15 +749,15 @@ class FilesystemKeystorePool(
 
         """
         try:
-            imported_keystore = self.get_imported_keystore(keystore_uid)
-            keystore_tree = imported_keystore.export_to_keystore_tree(include_private_keys)
+            foreign_keystore = self.get_foreign_keystore(keystore_uid)
+            keystore_tree = foreign_keystore.export_to_keystore_tree(include_private_keys)
 
         except KeystoreDoesNotExist:
             raise KeystoreDoesNotExist("Key storage %s not found" % keystore_uid)
 
         return keystore_tree
 
-        # faire get_imported_keystore(..)
+        # faire get_foreign_keystore(..)
         # si erreur Keystoredoesnotexist, tout est ok
         # si existe, appeler .export_to_keystore_tree() dessus, et retourner résultat
         # CAS NOMINAL avec et sans include_private_keys
@@ -767,9 +767,9 @@ class FilesystemKeystorePool(
             # METTRE DANS DOCSTRING que ça concerne que les imported keystore
 
         """
-        imported_keystore = self._ensure_imported_keystore(keystore_tree["keystore_uid"])
+        foreign_keystore = self._ensure_foreign_keystore(keystore_tree["keystore_uid"])
 
-        imported_keystore.import_from_keystore_tree(keystore_tree)
+        foreign_keystore.import_from_keystore_tree(keystore_tree)
 
 
         # CAS/ERREURS A TESTER/GERER : keystore_uid non exists, depot corrompu, mismatch de keystore_uid, shcema invalide du keystore_tree

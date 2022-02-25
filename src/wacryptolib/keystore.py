@@ -40,13 +40,15 @@ def non_empty(value):
     return bool(value)
 
 
+KEYSTORE_FORMAT = "keystore_1.0"
+
 _KEYSTORE_METADATA_SCHEMA = {
-    "keystore_type": Or("localfactory", "authenticator", "gateway"),
-    "keystore_format": "keystore_1.0",  # For forward compatibility
+    "keystore_type": Or("keyfactory", "authenticator"),
+    "keystore_format": KEYSTORE_FORMAT,  # For forward compatibility
     "keystore_uid": UUID,
     "keystore_owner": And(str, non_empty),
-    OptionalKey("keystore_passphrase_hint"): And(str, non_empty),
     "keystore_secret": str,
+    OptionalKey("keystore_passphrase_hint"): And(str, non_empty),  # For authenticators
 }
 
 KEYSTORE_METADATA_SCHEMA = Schema({
@@ -62,7 +64,6 @@ KEYSTORE_TREE_SCHEMA = Schema(
                 "key_algo": Or(*SUPPORTED_CIPHER_ALGOS),
                 "public_key": bytes,
                 OptionalKey("private_key"): bytes,
-
             }
         ]
     }

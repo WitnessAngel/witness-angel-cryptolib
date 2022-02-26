@@ -539,7 +539,8 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
                 keychain_uid=keypair_identifier["keychain_uid"],
                 key_algo=keypair_identifier["key_algo"],
                 public_key=self.get_public_key(keychain_uid=keypair_identifier["keychain_uid"],
-                                               key_algo=keypair_identifier["key_algo"])
+                                               key_algo=keypair_identifier["key_algo"]),
+                private_key = None,
             )
             if include_private_keys:
                 keypair["private_key"] = self.get_private_key(keychain_uid=keypair_identifier["keychain_uid"],

@@ -11,7 +11,7 @@ from Crypto.Random.random import randint
 import wacryptolib
 from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipeline
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
-from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError
+from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError, OperationNotSupported
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey
 from wacryptolib.utilities import SUPPORTED_HASH_ALGOS, hash_message
 
@@ -153,12 +153,12 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
         )
 
 
-# test each node separately, then a pipeline with all nodes
+# Test each node separately, then a pipeline with all nodes
 _stream_algo_nodes = [[algo] for algo in STREAMABLE_CIPHER_ALGOS] + [STREAMABLE_CIPHER_ALGOS]
 
 
 @pytest.mark.parametrize("cipher_algo_list", _stream_algo_nodes)
-def test_stream_manager(cipher_algo_list):
+def test_valid_payload_encryption_pipeline(cipher_algo_list):
 
     output_stream = io.BytesIO()
 
@@ -210,6 +210,19 @@ def test_stream_manager(cipher_algo_list):
         current_ciphertext = decrypted_ciphertext
 
     assert decrypted_ciphertext == plaintext_full
+
+
+def test_invalid_payload_encryption_pipeline():
+    payload_cipher_layers_extract = {
+                "cipher_algo": "RSA_OAEP",
+                "symkey": b"123",
+                "payload_digest_algos": SUPPORTED_HASH_ALGOS[0],
+            }
+    output_stream = io.BytesIO()
+    with pytest.raises(OperationNotSupported):
+        PayloadEncryptionPipeline(
+                payload_cipher_layer_extracts=[payload_cipher_layers_extract], output_stream=output_stream
+            )
 
 
 @pytest.mark.parametrize("cipher_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)

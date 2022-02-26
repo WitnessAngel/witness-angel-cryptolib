@@ -2,7 +2,7 @@ import logging
 import secrets
 from pathlib import Path
 
-
+from wacryptolib.exceptions import KeystoreAlreadyExists
 from wacryptolib.keystore import validate_keystore_metadata, _get_keystore_metadata_file_path, KEYSTORE_FORMAT
 from wacryptolib.utilities import dump_to_json_file, generate_uuid0
 
@@ -26,7 +26,7 @@ def initialize_authenticator(authenticator_dir: Path, keystore_owner: str, keyst
     """
 
     if is_authenticator_initialized(authenticator_dir):
-        raise RuntimeError("Authenticator at path %s is already initialized" % authenticator_dir)
+        raise KeystoreAlreadyExists("Authenticator at path %s is already initialized" % authenticator_dir)
 
     metadata = _initialize_authenticator_metadata(
         authenticator_dir=authenticator_dir,

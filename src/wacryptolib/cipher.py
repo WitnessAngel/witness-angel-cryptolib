@@ -7,7 +7,7 @@ from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
 from Crypto.Util.Padding import pad, unpad
 
 from wacryptolib import utilities
-from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionIntegrityError
+from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionIntegrityError, OperationNotSupported
 from wacryptolib.keygen import (
     _check_symmetric_key_length_bytes,
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
@@ -369,7 +369,7 @@ class PayloadEncryptionPipeline:
             encryption_class = cipher_algo_conf["encryption_node_class"]
 
             if encryption_class is None:
-                raise ValueError(
+                raise OperationNotSupported(
                     "Node class %s is not implemented" % payload_cipher_algo
                 )  # FIXME use custom exception class
 

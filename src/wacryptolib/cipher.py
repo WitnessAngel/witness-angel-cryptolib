@@ -354,6 +354,7 @@ class PayloadEncryptionPipeline:
     Pipeline to encrypt data through several encryption nodes, and stream it to an output
     binary stream (e.g. file or ByteIO)
     """
+    _finalized = False
 
     def __init__(self, output_stream: BinaryIO, payload_cipher_layer_extracts: list):
 
@@ -376,14 +377,15 @@ class PayloadEncryptionPipeline:
             self._cipher_streams.append(encryption_class(key_dict=symkey, payload_digest_algo=payload_digest_algos))
 
     def encrypt_chunk(self, chunk):
+        assert not self._finalized
         for cipher in self._cipher_streams:
             ciphertext = cipher.encrypt(chunk)
             chunk = ciphertext
         self._output_stream.write(ciphertext)
 
     def finalize(self):
+        assert not self._finalized
         current_plaintext = b""
-
         for cipher in self._cipher_streams:
             ciphertext = b""
             if current_plaintext:
@@ -392,6 +394,7 @@ class PayloadEncryptionPipeline:
             current_plaintext = ciphertext
         self._output_stream.write(ciphertext)
         self._output_stream.flush()
+        self._finalized = True
 
     def get_payload_integrity_tags(self) -> list:
         integrity_tags_list = []

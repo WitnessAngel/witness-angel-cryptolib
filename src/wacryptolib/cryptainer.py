@@ -842,7 +842,7 @@ class CryptainerEncryptionPipeline:
         self._encryption_pipeline.encrypt_chunk(chunk)
 
     def finalize(self):
-        self._encryption_pipeline.finalize()
+        self._encryption_pipeline.finalize()  # Would raise if statemachine incoherence
         self._output_data_stream.close()  # Important
 
         payload_integrity_tags = self._encryption_pipeline.get_payload_integrity_tags()

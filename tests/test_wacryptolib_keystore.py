@@ -23,7 +23,7 @@ from wacryptolib.keystore import (
     generate_free_keypair_for_least_provisioned_key_algo,
     get_free_keypair_generator_worker,
     generate_keypair_for_storage,
-    ReadonlyFilesystemKeystore, load_keystore_metadata, KEYSTORE_FORMAT,
+    ReadonlyFilesystemKeystore, load_keystore_metadata, KEYSTORE_FORMAT, InMemoryKeystorePool,
 )
 from wacryptolib.scaffolding import (
     check_keystore_free_keys_concurrency,
@@ -171,7 +171,20 @@ def test_filesystem_keystore_list_keypair_identifiers(tmp_path: Path):
     assert keystore.list_keypair_identifiers() == []
 
 
-def test_keystore_pool_basics(tmp_path: Path):
+def test_in_memory_keystore_pool_corner_cases():
+
+    keystore_uid = generate_uuid0()
+
+    pool = InMemoryKeystorePool()
+
+    assert pool.get_local_keyfactory()
+    with pytest.raises(KeystoreDoesNotExist):
+        pool.get_foreign_keystore(keystore_uid)
+
+    assert pool.list_foreign_keystore_uids() == []
+
+
+def test_filesystem_keystore_pool_basics(tmp_path: Path):
 
     pool = FilesystemKeystorePool(tmp_path)
 
@@ -370,21 +383,25 @@ def test_keystorepool_export_and_import_foreign_keystore_to_keystore_tree(tmp_pa
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()
 
-    keystore_pool = FilesystemKeystorePool(authdevice_path)
-    keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree)
-    foreign_keystore_dir = keystore_pool._get_foreign_keystore_dir(keystore_uid)
-    metadata = load_keystore_metadata(foreign_keystore_dir)
-    print(metadata)
+    for idx in range(2):  # Import is idempotent
 
-    keystore_tree = keystore_pool.export_foreign_keystore_to_keystore_tree(metadata["keystore_uid"], include_private_keys=True)
+        keystore_pool = FilesystemKeystorePool(authdevice_path)
+        updated = keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree)
+        assert updated == bool(idx)  # Second import is an update
 
-    foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+        foreign_keystore_dir = keystore_pool._get_foreign_keystore_dir(keystore_uid)
+        metadata = load_keystore_metadata(foreign_keystore_dir)
+        #print(metadata)
 
-    assert foreign_keystore.list_keypair_identifiers() == [
-        dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)
-    ]
-    assert foreign_keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == keystore_tree["keypairs"][0]["public_key"]
-    assert foreign_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) ==  keystore_tree["keypairs"][0]["private_key"]
+        keystore_tree = keystore_pool.export_foreign_keystore_to_keystore_tree(metadata["keystore_uid"], include_private_keys=True)
+
+        foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+
+        assert foreign_keystore.list_keypair_identifiers() == [
+            dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)
+        ]
+        assert foreign_keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == keystore_tree["keypairs"][0]["public_key"]
+        assert foreign_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) ==  keystore_tree["keypairs"][0]["private_key"]
 
 
 def test_keystore_import_foreign_keystore_from_filesystem(tmp_path: Path):

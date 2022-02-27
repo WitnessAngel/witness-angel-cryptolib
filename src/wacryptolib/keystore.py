@@ -734,11 +734,11 @@ class FilesystemKeystorePool(
         keystore_tree = foreign_keystore.export_to_keystore_tree(include_private_keys)
         return keystore_tree
 
-    def import_foreign_keystore_from_keystore_tree(self, keystore_tree):
+    def import_foreign_keystore_from_keystore_tree(self, keystore_tree) -> bool:
         # TODO DOCSTRING
         self._ensure_foreign_keystore_dir_exists(keystore_tree["keystore_uid"])
         foreign_keystore = self.get_foreign_keystore(keystore_tree["keystore_uid"])
-        foreign_keystore.import_from_keystore_tree(keystore_tree)
+        return foreign_keystore.import_from_keystore_tree(keystore_tree)
 
 
 def generate_keypair_for_storage(  # FIXME document this, or integrate to class?

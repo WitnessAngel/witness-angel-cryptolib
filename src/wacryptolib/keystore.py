@@ -64,7 +64,7 @@ KEYSTORE_TREE_SCHEMA = Schema(
             {
                 "keychain_uid": UUID,
                 "key_algo": Or(*SUPPORTED_CIPHER_ALGOS),
-                "public_key": bytes,
+                "public_key": bytes,  # MANDATORY
                 "private_key": Or(None, bytes),
             }
         ]
@@ -570,31 +570,41 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         dump_to_json_file(metadata_file, metadata)
         return metadata
 
-    def import_from_keystore_tree(self, keystore_tree):  # FIXME must allow override of partial import with new private keys!!!
+    def import_from_keystore_tree(self, keystore_tree) -> bool:
         # TODO DOCSTRING
         validate_keystore_tree(keystore_tree)
 
         try:
             metadata = load_keystore_metadata(self._keys_dir)
             if keystore_tree["keystore_uid"] != metadata["keystore_uid"]:
-                raise ValidationError("Authenticator data has been corrupted")  # TODO Change this erreur to Incoherence/Illegal/Mismatch Error?
-        except FileNotFoundError:  # TODO Redefine this Error
+                raise ValidationError("Mismatch between existing and incoming keystore UIDs")
+            keystore_updated = True
+        except KeystoreDoesNotExist:
             self._initialize_metadata_from_keystore_tree(keystore_tree)
+            keystore_updated = False
 
         for keypair in keystore_tree["keypairs"]:
-            if keypair["private_key"]:  # Key must exist, due to Schema
-                self.set_keypair(
-                    keychain_uid=keypair["keychain_uid"],
-                    key_algo=keypair["key_algo"],
-                    public_key=keypair["public_key"],
-                    private_key=keypair["private_key"],
-                )
-            else:
+
+            try:
                 self.set_public_key(
                     keychain_uid=keypair["keychain_uid"],
                     key_algo=keypair["key_algo"],
                     public_key=keypair["public_key"],
                 )
+            except KeyAlreadyExists:
+                pass  # We ASSUME that it's the same key content
+
+            if keypair["private_key"]:  # Field must exist, due to Schema
+                try:
+                    self.set_private_key(
+                        keychain_uid=keypair["keychain_uid"],
+                        key_algo=keypair["key_algo"],
+                        private_key=keypair["private_key"],
+                    )
+                except KeyAlreadyExists:
+                    pass  # We ASSUME that it's the same key content
+
+        return keystore_updated
 
 
 class KeystorePoolBase:

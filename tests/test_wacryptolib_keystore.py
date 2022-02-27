@@ -12,7 +12,8 @@ import pytest
 
 from _test_mockups import get_fake_authdevice, random_bool
 from wacryptolib.authenticator import initialize_authenticator
-from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists, SchemaValidationError, ValidationError
+from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists, SchemaValidationError, ValidationError, \
+    KeyDoesNotExist
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import (
     FilesystemKeystore,
@@ -279,15 +280,20 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
         remote_keystore.export_to_keystore_tree()
 
 
-def test_keystore_import_to_keystore_tree(tmp_path: Path):
+def test_keystore_import_from_keystore_tree(tmp_path: Path):
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()
     filesystem_keystore = FilesystemKeystore(authdevice_path)
 
     keystore_uid = generate_uuid0()
     keychain_uid = generate_uuid0()
+    keychain_uid_bis = generate_uuid0()
     key_algo = "RSA_OAEP"
     keystore_secret = secrets.token_urlsafe(64)
+
+    keypairs1 = [{"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"555", "private_key": None}]
+    keypairs2 = [{"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"8888", "private_key": b"okj"},
+                 {"keychain_uid": keychain_uid_bis, "key_algo": key_algo, "public_key": b"23", "private_key": b"3234"}]
 
     keystore_tree = {
         "keystore_type": "authenticator",
@@ -295,32 +301,53 @@ def test_keystore_import_to_keystore_tree(tmp_path: Path):
         "keystore_owner": "Jacques",
         "keystore_uid": keystore_uid,
         "keystore_secret": keystore_secret,
-        "keypairs": [{"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"555", "private_key": b"okj"}]
+        "keypairs": keypairs1,
     }
 
-    filesystem_keystore.import_from_keystore_tree(keystore_tree)
+    # Initial import
+
+    updated = filesystem_keystore.import_from_keystore_tree(keystore_tree)
+    assert not updated
 
     metadata = load_keystore_metadata(authdevice_path)
-
     assert metadata["keystore_uid"] == keystore_uid
     assert metadata["keystore_owner"] == "Jacques"
 
     assert filesystem_keystore.list_keypair_identifiers() == [
-        dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)
+        dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=False)
     ]
-
     assert filesystem_keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"555"
-    assert filesystem_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"okj"
+    with pytest.raises(KeyDoesNotExist):
+        filesystem_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
 
-    # mismatch de keystore_uid
+    # Update import
+
+    for i in range(2):  # IDEMPOTENT
+
+        keystore_tree["keypairs"] = keypairs2
+        updated = filesystem_keystore.import_from_keystore_tree(keystore_tree)
+        assert updated
+
+        metadata = load_keystore_metadata(authdevice_path)
+        assert metadata["keystore_uid"] == keystore_uid
+        assert metadata["keystore_owner"] == "Jacques"
+
+        expected_keypair_identifiers = [
+            dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True),
+            dict(keychain_uid=keychain_uid_bis, key_algo=key_algo, private_key_present=True),
+        ]
+        expected_keypair_identifiers.sort(key=lambda x: (x["keychain_uid"], x["key_algo"]))
+        assert filesystem_keystore.list_keypair_identifiers() == expected_keypair_identifiers
+        assert filesystem_keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"555"  # NOT changed
+        assert filesystem_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"okj"  # Added
+
+    # Mismatch of keystore_uid
     keystore_tree["keystore_uid"] = generate_uuid0()
-
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match="Mismatch"):
         filesystem_keystore.import_from_keystore_tree(keystore_tree)
 
-    # Corrompre le keystore_tree
+    # Corrupt the keystore_tree
     del keystore_tree["keystore_owner"]
-
     with pytest.raises(SchemaValidationError):
         filesystem_keystore.import_from_keystore_tree(keystore_tree)
 

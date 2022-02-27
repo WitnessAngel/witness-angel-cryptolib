@@ -16,7 +16,7 @@ def test_authenticator_basic_workflow(tmp_path):
     with pytest.raises(FileNotFoundError):
         # Too many missing parent folders
         initialize_authenticator(wrong_dir, keystore_owner="myuser", keystore_passphrase_hint="stuffs")
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(KeystoreDoesNotExist):
         load_keystore_metadata(wrong_dir)
     assert not is_authenticator_initialized(wrong_dir)
 

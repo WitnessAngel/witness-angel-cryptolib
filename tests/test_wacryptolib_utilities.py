@@ -197,7 +197,7 @@ def test_delete_filesystem_node_for_stream(tmp_path):
     delete_filesystem_node_for_stream(BytesIO())  # Does nothing
 
     target_file = tmp_path / "target_file.txt"
-    with open(target_file, "w") as stream:
+    with open(target_file, "wb") as stream:
         stream.write(b"777")
     assert target_file.exists()
     delete_filesystem_node_for_stream(stream)

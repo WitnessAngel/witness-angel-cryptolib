@@ -4,6 +4,8 @@ import secrets
 import shutil
 import time
 from pathlib import Path
+from pprint import pprint
+from unittest.mock import ANY
 from uuid import UUID
 
 import pytest
@@ -235,24 +237,45 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
     remote_keystore.set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"555", private_key=b"okj")
 
     keystore_tree = remote_keystore.export_to_keystore_tree(include_private_keys=True)
+    assert keystore_tree == {
+        'keypairs': [{'key_algo': 'RSA_OAEP',
+                   'keychain_uid': keychain_uid,
+                   'private_key': b'okj',
+                   'public_key': b'555'}],
+         'keystore_format': 'keystore_1.0',
+         'keystore_owner': 'Jean-Jâcques',
+         'keystore_passphrase_hint': 'my-hint',
+         'keystore_secret': ANY,
+         'keystore_type': 'authenticator',
+         'keystore_uid': ANY}
 
-    assert keystore_tree["keystore_owner"] == "Jean-Jâcques"
-    assert keystore_tree["keypairs"][0] == {"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"555",
-                                            "private_key": b"okj"}
+    keystore_tree = remote_keystore.export_to_keystore_tree(include_private_keys=False)
+    assert keystore_tree == {
+        'keypairs': [{'key_algo': 'RSA_OAEP',
+                   'keychain_uid': keychain_uid,
+                   'private_key': None,
+                   'public_key': b'555'}],
+         'keystore_format': 'keystore_1.0',
+         'keystore_owner': 'Jean-Jâcques',
+         'keystore_passphrase_hint': 'my-hint',
+         'keystore_secret': ANY,
+         'keystore_type': 'authenticator',
+         'keystore_uid': ANY}
 
     with pytest.raises(SchemaValidationError):
+        # FIXME - set_keypair() should actually validate data too
         remote_keystore.set_keypair(keychain_uid=keychain_uid, key_algo="bad_algo", public_key=b"555",
                                     private_key=b"okj")
-        remote_keystore.export_to_keystore_tree(include_private_keys=True)
+        remote_keystore.export_to_keystore_tree()  # Raises because of bad_algo
 
-    # Create uninitialized keystore (no metadata file)
+    # Create uninitialized keystore (no metadata file) and try to export it
     authdevice_path = tmp_path / "device2"
     authdevice_path.mkdir()
     authdevice = get_fake_authdevice(authdevice_path)
     remote_keystore_dir = authdevice["authenticator_dir"]
     remote_keystore_dir.mkdir()
     remote_keystore = FilesystemKeystore(remote_keystore_dir)
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(KeystoreDoesNotExist):
         remote_keystore.export_to_keystore_tree()
 
 

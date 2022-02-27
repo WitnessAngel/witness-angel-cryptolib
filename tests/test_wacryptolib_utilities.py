@@ -2,6 +2,7 @@ import os
 import shutil
 import uuid
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -22,7 +23,7 @@ from wacryptolib.utilities import (
     SUPPORTED_HASH_ALGOS,
     hash_message,
     safe_copy_directory,
-    get_utc_now_date,
+    get_utc_now_date, get_memory_rss_bytes, delete_filesystem_node_for_stream,
 )
 
 
@@ -186,3 +187,18 @@ def test_safe_copy_directory(tmp_path: Path):
     assert not (tmp_path / "__other_target").exists()
     assert (tmp_path / "other_target").exists()
     assert set(i.name for i in (tmp_path / "other_target").iterdir()) == set(str(i) for i in range(10))
+
+
+def test_get_memory_rss_bytes():
+    assert 30 * 1024**2 < get_memory_rss_bytes() < 200 * 1024**2
+
+
+def test_delete_filesystem_node_for_stream(tmp_path):
+    delete_filesystem_node_for_stream(BytesIO())  # Does nothing
+
+    target_file = tmp_path / "target_file.txt"
+    with open(target_file, "w") as stream:
+        stream.write(b"777")
+    assert target_file.exists()
+    delete_filesystem_node_for_stream(stream)
+    assert not target_file.exists()

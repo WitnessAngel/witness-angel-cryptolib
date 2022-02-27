@@ -101,7 +101,10 @@ def load_keystore_metadata(keystore_dir: Path) -> dict:  # FIXME rename to adver
     Raises SchemaValidationError if device appears initialized, but has corrupted metadata (or invalid json payload).
     """
     metadata_file = _get_keystore_metadata_file_path(keystore_dir)
-    metadata = load_from_json_file(metadata_file)
+    try:
+        metadata = load_from_json_file(metadata_file)
+    except FileNotFoundError as exc:
+        raise KeystoreDoesNotExist('Keystore metadata file %s does not exist' % metadata_file) from exc
     validate_keystore_metadata(metadata)
     return metadata
 

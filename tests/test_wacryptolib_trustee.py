@@ -1,10 +1,12 @@
 import copy
+from unittest import mock
 
 import pytest
 from Crypto.Random import get_random_bytes
 
 from wacryptolib.cipher import _encrypt_via_rsa_oaep
-from wacryptolib.exceptions import KeyDoesNotExist, SignatureVerificationError, DecryptionError, ValidationError
+from wacryptolib.exceptions import KeyDoesNotExist, SignatureVerificationError, DecryptionError, ValidationError, \
+    AuthorizationError
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import (
     DummyKeystore,
@@ -106,6 +108,7 @@ def test_trustee_api_workflow():
 
     with pytest.raises(ValueError, match="empty"):
         trustee_api.request_decryption_authorization(keypair_identifiers=[], request_message="I need this decryption!")
+
     # Authorization always granted for now, in dummy implementation
     result = trustee_api.request_decryption_authorization(
         keypair_identifiers=[dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP")],
@@ -114,6 +117,15 @@ def test_trustee_api_workflow():
     assert "accepted" in result["response_message"]
     assert not result["has_errors"]
     assert result["keypair_statuses"]["accepted"]
+
+    with mock.patch("wacryptolib.trustee.TrusteeApi._check_keypair_authorization", side_effect=AuthorizationError):
+        result = trustee_api.request_decryption_authorization(
+            keypair_identifiers=[dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP")],
+            request_message="I need this decryption too!",
+        )
+        assert "denied" in result["response_message"]
+        assert result["has_errors"]
+        assert result["keypair_statuses"]["authorization_missing"]
 
     # TEST PASSPHRASE PROTECTIONS
 

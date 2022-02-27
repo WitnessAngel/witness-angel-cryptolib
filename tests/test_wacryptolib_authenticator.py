@@ -3,7 +3,7 @@ from uuid import UUID
 import pytest
 
 from wacryptolib.authenticator import initialize_authenticator, is_authenticator_initialized
-from wacryptolib.exceptions import ValidationError, KeystoreAlreadyExists
+from wacryptolib.exceptions import ValidationError, KeystoreAlreadyExists, KeystoreDoesNotExist
 from wacryptolib.keystore import load_keystore_metadata, _get_keystore_metadata_file_path, KEYSTORE_FORMAT
 
 
@@ -25,7 +25,11 @@ def test_authenticator_basic_workflow(tmp_path):
     acceptable_path2.mkdir()  # Directory already exists on this one only
 
     for idx, acceptable_dir in enumerate([acceptable_path1, acceptable_path2]):
+
         assert not is_authenticator_initialized(acceptable_dir)
+        with pytest.raises(KeystoreDoesNotExist):
+            load_keystore_metadata(acceptable_dir)  # Not initialized yet!
+
         initialize_authenticator(acceptable_dir, keystore_owner="myuserX%s" % idx, keystore_passphrase_hint="Some hïnt")
         assert is_authenticator_initialized(acceptable_dir)
 
@@ -49,3 +53,4 @@ def test_authenticator_basic_workflow(tmp_path):
             assert is_authenticator_initialized(acceptable_dir)  # Still seen as "initialized"
             with pytest.raises(ValidationError):
                 load_keystore_metadata(acceptable_dir)
+

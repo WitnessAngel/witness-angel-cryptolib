@@ -9,7 +9,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Union, Sequence, BinaryIO
 from urllib.parse import urlparse
-from uuid import UUID
 
 import jsonschema
 import schema as pythonschema
@@ -344,7 +343,7 @@ class CryptainerEncryptor(CryptainerBase):
 
         :param cryptoconf: configuration tree
         :param keychain_uid: uuid for the set of encryption keys used
-        :param cryptainer_metadata: additional payload to store unencrypted in cryptainer
+        :param cryptainer_metadata: additional payload to store unencrypted in cryptainer, and also inside encrypted keys/shards
 
         :return: a (cryptainer: dict, secrets: list) tuple, where each secret has keys cipher_algo, symmetric_key and payload_digest_algos.
         """
@@ -373,7 +372,7 @@ class CryptainerEncryptor(CryptainerBase):
             key_cipher_layers = payload_cipher_layer["key_cipher_layers"]
 
             key_ciphertext = self._encrypt_key_through_multiple_layers(
-                keychain_uid=keychain_uid, key_bytes=key_bytes, key_cipher_layers=key_cipher_layers
+                keychain_uid=keychain_uid, key_bytes=key_bytes, key_cipher_layers=key_cipher_layers, cryptainer_metadata=cryptainer_metadata
             )
             payload_cipher_layer["key_ciphertext"] = key_ciphertext
 
@@ -397,7 +396,7 @@ class CryptainerEncryptor(CryptainerBase):
         return cryptainer, payload_cipher_layer_extracts
 
     def _encrypt_key_through_multiple_layers(
-        self, keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layers: list
+        self, keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layers: list, cryptainer_metadata: Optional[dict]
     ) -> bytes:
         # HERE KEY IS REAL KEY OR SHARE !!!
 
@@ -407,14 +406,14 @@ class CryptainerEncryptor(CryptainerBase):
         key_ciphertext = key_bytes
         for key_cipher_layer in key_cipher_layers:
             key_ciphertext_dict = self._encrypt_key_through_single_layer(
-                keychain_uid=keychain_uid, key_bytes=key_ciphertext, key_cipher_layer=key_cipher_layer
+                keychain_uid=keychain_uid, key_bytes=key_ciphertext, key_cipher_layer=key_cipher_layer, cryptainer_metadata=cryptainer_metadata
             )
             key_ciphertext = dump_to_json_bytes(key_ciphertext_dict)  # Thus its remains as bytes all along
 
         return key_ciphertext
 
     def _encrypt_key_through_single_layer(
-        self, keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layer: dict
+        self, keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layer: dict, cryptainer_metadata: Optional[dict]
     ) -> dict:
         """
         Encrypt a symmetric key using an asymmetric encryption scheme.
@@ -461,6 +460,7 @@ class CryptainerEncryptor(CryptainerBase):
                     keychain_uid=keychain_uid,
                     key_bytes=shard_bytes,
                     key_cipher_layers=trustee_conf["key_cipher_layers"],
+                    cryptainer_metadata=cryptainer_metadata,
                 )  # Recursive structure
                 shard_ciphertexts.append(shard_ciphertext)
 
@@ -474,15 +474,16 @@ class CryptainerEncryptor(CryptainerBase):
                 keychain_uid=keychain_uid_encryption,
                 key_bytes=key_bytes,
                 trustee=key_cipher_layer["key_cipher_trustee"],
+                cryptainer_metadata=cryptainer_metadata,
             )
 
         return key_cipherdict
 
     def _encrypt_with_asymmetric_cipher(
-        self, cipher_algo: str, keychain_uid: uuid.UUID, key_bytes: bytes, trustee
+        self, cipher_algo: str, keychain_uid: uuid.UUID, key_bytes: bytes, trustee: dict, cryptainer_metadata: Optional[dict]
     ) -> dict:
         """
-        Encrypt given payload with an asymmetric algorithm.
+        Encrypt given payload (representing a symmetric key) with an asymmetric algorithm.
 
         :param cipher_algo: string with name of algorithm to use
         :param keychain_uid: uuid for the set of encryption keys used
@@ -496,10 +497,12 @@ class CryptainerEncryptor(CryptainerBase):
         logger.debug("Generating asymmetric key of type %r", cipher_algo)
         public_key_pem = trustee_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=cipher_algo)
 
-        logger.debug("Encrypting symmetric key with asymmetric key of type %r", cipher_algo)
+        logger.debug("Encrypting symmetric key struct with asymmetric key of type %r", cipher_algo)
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=cipher_algo)
 
-        cipherdict = encrypt_bytestring(plaintext=key_bytes, cipher_algo=cipher_algo, key_dict=dict(key=public_key))
+        key_struct = dict(key_bytes=key_bytes, cryptainer_metadata=cryptainer_metadata)  # SPECIAL FORMAT FOR CHECKUPS
+        key_struct_bytes = dump_to_json_bytes(key_struct)
+        cipherdict = encrypt_bytestring(plaintext=key_struct_bytes, cipher_algo=cipher_algo, key_dict=dict(key=public_key))
         return cipherdict
 
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: list):
@@ -604,6 +607,8 @@ class CryptainerDecryptor(CryptainerBase):
 
         keychain_uid = cryptainer["keychain_uid"]
 
+        cryptainer_metadata = cryptainer["cryptainer_metadata"]
+
         payload_current = _get_cryptainer_inline_ciphertext_value(cryptainer)
 
         for payload_cipher_layer in reversed(
@@ -623,6 +628,7 @@ class CryptainerDecryptor(CryptainerBase):
                 keychain_uid=keychain_uid,
                 key_ciphertext=key_ciphertext,
                 cipher_layers=payload_cipher_layer["key_cipher_layers"],
+                cryptainer_metadata=cryptainer_metadata,
             )
             assert isinstance(key_bytes, bytes), key_bytes
             symkey = load_from_json_bytes(key_bytes)
@@ -639,20 +645,20 @@ class CryptainerDecryptor(CryptainerBase):
         return data
 
     def _decrypt_key_through_multiple_layers(
-        self, keychain_uid: uuid.UUID, key_ciphertext: bytes, cipher_layers: list
+        self, keychain_uid: uuid.UUID, key_ciphertext: bytes, cipher_layers: list, cryptainer_metadata: Optional[dict]
     ) -> bytes:
         key_bytes = key_ciphertext
 
         for key_cipher_layer in reversed(cipher_layers):  # Non-emptiness of this will be checked by validator
             key_cipherdict = load_from_json_bytes(key_bytes)  # We remain as bytes all along
             key_bytes = self._decrypt_key_through_single_layer(
-                keychain_uid=keychain_uid, key_cipherdict=key_cipherdict, cipher_layer=key_cipher_layer
+                keychain_uid=keychain_uid, key_cipherdict=key_cipherdict, cipher_layer=key_cipher_layer, cryptainer_metadata=cryptainer_metadata
             )
 
         return key_bytes
 
     def _decrypt_key_through_single_layer(
-        self, keychain_uid: uuid.UUID, key_cipherdict: dict, cipher_layer: dict
+        self, keychain_uid: uuid.UUID, key_cipherdict: dict, cipher_layer: dict, cryptainer_metadata: Optional[dict]
     ) -> bytes:
         """
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
@@ -686,6 +692,7 @@ class CryptainerDecryptor(CryptainerBase):
                         keychain_uid=keychain_uid,
                         key_ciphertext=shard_ciphertext,
                         cipher_layers=trustee_conf["key_cipher_layers"],
+                        cryptainer_metadata=cryptainer_metadata,
                     )  # Recursive structure
                     shard = load_from_json_bytes(
                         shard_bytes
@@ -720,11 +727,12 @@ class CryptainerDecryptor(CryptainerBase):
                 keychain_uid=keychain_uid_encryption,
                 cipherdict=key_cipherdict,
                 trustee=cipher_layer["key_cipher_trustee"],
+                cryptainer_metadata=cryptainer_metadata,
             )
             return key_bytes
 
     def _decrypt_with_asymmetric_cipher(
-        self, cipher_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, trustee: dict
+        self, cipher_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, trustee: dict, cryptainer_metadata: Optional[dict]
     ) -> bytes:
         """
         Decrypt given cipherdict with an asymmetric algorithm.
@@ -745,10 +753,17 @@ class CryptainerDecryptor(CryptainerBase):
         passphrases += self._passphrase_mapper.get(None) or []  # Add COMMON passphrases
 
         # We expect decryption authorization requests to have already been done properly
-        symmetric_key_plaintext = trustee_proxy.decrypt_with_private_key(
-            keychain_uid=keychain_uid, cipher_algo=cipher_algo, cipherdict=cipherdict, passphrases=passphrases
+        key_struct_bytes = trustee_proxy.decrypt_with_private_key(
+            keychain_uid=keychain_uid, cipher_algo=cipher_algo, cipherdict=cipherdict, passphrases=passphrases, cryptainer_metadata=cryptainer_metadata
         )
-        return symmetric_key_plaintext
+        key_struct = load_from_json_bytes(key_struct_bytes)
+
+        actual_cryptainer_metadata = key_struct["cryptainer_metadata"]  # Metadata stored along the encrypted key!
+        del actual_cryptainer_metadata  # No use for now
+
+        key_bytes = key_struct["key_bytes"]
+        assert isinstance(key_bytes, bytes), key_bytes
+        return key_bytes
 
     def _verify_payload_signature(self, keychain_uid: uuid.UUID, payload: bytes, cryptoconf: dict):
         """

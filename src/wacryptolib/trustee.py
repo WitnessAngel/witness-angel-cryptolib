@@ -8,6 +8,7 @@ from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, Decrypti
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import KeystoreBase, generate_keypair_for_storage
 from wacryptolib.signature import sign_message
+from wacryptolib.utilities import load_from_json_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ class TrusteeApi:
         )
 
     def request_decryption_authorization(
-        self, keypair_identifiers: Sequence, request_message: str, passphrases: Optional[Sequence] = None
+        self, keypair_identifiers: Sequence, request_message: str, passphrases: Optional[Sequence] = None, cryptainer_metadata: Optional[dict]=None
     ) -> dict:
         """
         Send a list of keypairs for which decryption access is requested, with the reason why.
@@ -107,6 +108,8 @@ class TrusteeApi:
         :param keypair_identifiers: list of dicts with (keychain_uid, key_algo) indices to authorize
         :param request_message: user text explaining the reasons for the decryption (and the legal procedures involved)
         :param passphrases: optional list of passphrases to be tried on private keys
+        :param cryptainer_metadata: metadata of the concerned cryptainer
+
         :return: a dict with at least a string field "response_message" detailing the status of the request.
         """
 
@@ -168,11 +171,11 @@ class TrusteeApi:
         )  # TODO localize (i18n) string field!
 
     def decrypt_with_private_key(
-        self, *, keychain_uid: uuid.UUID, cipher_algo: str, cipherdict: dict, passphrases: Optional[list] = None
+        self, *, keychain_uid: uuid.UUID, cipher_algo: str, cipherdict: dict, passphrases: Optional[list] = None, cryptainer_metadata: Optional[dict]=None
     ) -> bytes:
         """
         Return the message (probably a symmetric key) decrypted with the corresponding key,
-        as bytestring.
+        as bytestring. Here again passphrases and cryptainer_metadata can be provided.
 
         Raises if key existence, authorization or passphrase errors occur.
         """
@@ -187,8 +190,10 @@ class TrusteeApi:
             private_key_pem=private_key_pem, key_algo=cipher_algo, passphrases=passphrases
         )
 
-        secret = decrypt_bytestring(cipherdict=cipherdict, cipher_algo=cipher_algo, key_dict=dict(key=private_key))
-        return secret
+        # We expect a well-formed JSON structure in key_struct_bytes, to possibly check its metadata
+        key_struct_bytes = decrypt_bytestring(cipherdict=cipherdict, cipher_algo=cipher_algo, key_dict=dict(key=private_key))
+        assert isinstance(key_struct_bytes, bytes), key_struct_bytes
+        return key_struct_bytes
 
 
 class ReadonlyTrusteeApi(TrusteeApi):

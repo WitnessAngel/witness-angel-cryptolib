@@ -3,6 +3,18 @@ Development
 =============
 
 
+Version 0.8dev
+==================
+
+* Change the filename and fields of keystore metadata
+* Add methods to import/export data in keystores and keystore-pools
+* Gather small functions in utilities.py
+* Add schema validators for internal use
+* Rename "verify" argument of decryptors to "verify_integrity_tags"
+* Change cryptainer algorithm to always store cryptainer_metadata along the encrypted symkey, and access them in Trustee API
+* Rename DummyKeystore to InMemoryKeystore
+
+
 Version 0.7
 ==================
 

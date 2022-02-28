@@ -13,12 +13,18 @@ import schema
 import uuid0
 from Crypto.Util.Padding import pad, unpad
 from decorator import decorator
+from bson.json_util import dumps, loads, JSONOptions, JSONMode
+from bson.binary import UuidRepresentation
 
 from wacryptolib.exceptions import SchemaValidationError
 
 logger = logging.getLogger(__name__)
 
 UTF8_ENCODING = "utf8"
+
+WACRYPTOLIB_JSON_OPTIONS = JSONOptions(
+    json_mode=JSONMode.CANONICAL,  # Preserve all type information
+    uuid_representation=UuidRepresentation.STANDARD)  # Same as PythonLegacy
 
 
 ### Private utilities ###
@@ -170,11 +176,8 @@ def dump_to_json_str(data, **extra_options):
     Dump a data tree to a json representation as string.
     Supports advanced types like bytes, uuids, dates...
     """
-    from bson.json_util import dumps, CANONICAL_JSON_OPTIONS
-
     sort_keys = extra_options.pop("sort_keys", True)
-
-    json_str = dumps(data, sort_keys=sort_keys, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
+    json_str = dumps(data, sort_keys=sort_keys, json_options=WACRYPTOLIB_JSON_OPTIONS, **extra_options)
     return json_str
 
 
@@ -185,11 +188,9 @@ def load_from_json_str(data, **extra_options):
 
     Raises permissions.ValidationError on loading error
     """
-    from bson.json_util import loads, CANONICAL_JSON_OPTIONS
-
     assert isinstance(data, str), data
     try:
-        return loads(data, json_options=CANONICAL_JSON_OPTIONS, **extra_options)
+        return loads(data, json_options=WACRYPTOLIB_JSON_OPTIONS, **extra_options)
     except JSONDecodeError as exc:
         raise SchemaValidationError("Invalid JSON string: %r" % exc) from exc
 

@@ -22,12 +22,12 @@ def test_jsonrpc_extended_json_calls():
         assert request_message["params"] == [
             {"$numberInt": "42"},
             {"$binary": {"base64": b64encode(b"xyz").decode("ascii"), "subType": "00"}},
-            {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "03"}},
+            {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "04"}},
         ]
         return (
             200,
             {},
-            u'{"jsonrpc": "2.0", "result": {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "03"}}, "id": 1}',
+            u'{"jsonrpc": "2.0", "result": {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "04"}}, "id": 1}',
         )
 
     responses.add_callback(responses.POST, "http://mock/xmlrpc", content_type="application/json", callback=callback1)
@@ -40,7 +40,7 @@ def test_jsonrpc_extended_json_calls():
         assert request_message["params"] == {
             "x": {"$numberInt": "42"},
             "y": {"$binary": {"base64": "eHl6", "subType": "00"}},
-            "z": {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "03"}},
+            "z": {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "04"}},
         }
         return (200, {}, u'{"jsonrpc": "2.0", "result": {"$binary": {"base64": "eHl6", "subType": "00"}}, "id": 1}')
 

@@ -90,7 +90,7 @@ def _get_keystore_metadata_file_path(keystore_dir: Path):
     """
     Return path of standard metadata file for key/cryptainer storage.
     """
-    return keystore_dir.joinpath(".metadata.json")
+    return keystore_dir.joinpath(".keystore.json")
 
 
 def load_keystore_metadata(keystore_dir: Path) -> dict:  # FIXME rename to advertise that it VALiDATES data too?

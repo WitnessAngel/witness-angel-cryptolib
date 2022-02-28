@@ -5,4 +5,3 @@ This module detects potential "authentication devices", typically USB keys which
 
 
 .. autofunction:: wacryptolib.authdevice.list_available_authdevices
-   

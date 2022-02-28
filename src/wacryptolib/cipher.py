@@ -46,7 +46,9 @@ def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) ->
     return cipherdict
 
 
-def decrypt_bytestring(cipherdict: dict, *, cipher_algo: str, key_dict: dict, verify_integrity_tags: bool = True) -> bytes:
+def decrypt_bytestring(
+    cipherdict: dict, *, cipher_algo: str, key_dict: dict, verify_integrity_tags: bool = True
+) -> bytes:
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
@@ -61,7 +63,9 @@ def decrypt_bytestring(cipherdict: dict, *, cipher_algo: str, key_dict: dict, ve
     cipher_algo_conf = _get_cipher_algo_conf(cipher_algo)
     decryption_function = cipher_algo_conf["decryption_function"]
     try:
-        plaintext = decryption_function(key_dict=key_dict, cipherdict=cipherdict, verify_integrity_tags=verify_integrity_tags)
+        plaintext = decryption_function(
+            key_dict=key_dict, cipherdict=cipherdict, verify_integrity_tags=verify_integrity_tags
+        )
     except ValueError as exc:
         if "MAC check failed" in str(exc):  # Hackish check for pycryptodome
             raise DecryptionIntegrityError("Failed %s decryption authentication (%s)" % (cipher_algo, exc)) from exc
@@ -354,6 +358,7 @@ class PayloadEncryptionPipeline:
     Pipeline to encrypt data through several encryption nodes, and stream it to an output
     binary stream (e.g. file or ByteIO)
     """
+
     _finalized = False
 
     def __init__(self, output_stream: BinaryIO, payload_cipher_layer_extracts: list):

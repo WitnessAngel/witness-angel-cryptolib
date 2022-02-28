@@ -214,15 +214,15 @@ def test_valid_payload_encryption_pipeline(cipher_algo_list):
 
 def test_invalid_payload_encryption_pipeline():
     payload_cipher_layers_extract = {
-                "cipher_algo": "RSA_OAEP",
-                "symkey": b"123",
-                "payload_digest_algos": SUPPORTED_HASH_ALGOS[0],
-            }
+        "cipher_algo": "RSA_OAEP",
+        "symkey": b"123",
+        "payload_digest_algos": SUPPORTED_HASH_ALGOS[0],
+    }
     output_stream = io.BytesIO()
     with pytest.raises(OperationNotSupported):
         PayloadEncryptionPipeline(
-                payload_cipher_layer_extracts=[payload_cipher_layers_extract], output_stream=output_stream
-            )
+            payload_cipher_layer_extracts=[payload_cipher_layers_extract], output_stream=output_stream
+        )
 
 
 @pytest.mark.parametrize("cipher_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)

@@ -22,7 +22,8 @@ from wacryptolib.exceptions import (
     KeyDoesNotExist,
     KeystoreDoesNotExist,
     KeystoreAlreadyExists,
-    SchemaValidationError, ValidationError,
+    SchemaValidationError,
+    ValidationError,
 )
 from wacryptolib.keygen import generate_keypair, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.utilities import (
@@ -30,7 +31,8 @@ from wacryptolib.utilities import (
     safe_copy_directory,
     load_from_json_file,
     PeriodicTaskHandler,
-    generate_uuid0, dump_to_json_file,
+    generate_uuid0,
+    dump_to_json_file,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,9 +55,7 @@ _KEYSTORE_METADATA_SCHEMA = {
 
 # FIXME add dedicated KEYSTORE_METADATA_SCHEMA for AUTHENTICATORS
 
-KEYSTORE_METADATA_SCHEMA = Schema({
-    **_KEYSTORE_METADATA_SCHEMA
-})
+KEYSTORE_METADATA_SCHEMA = Schema({**_KEYSTORE_METADATA_SCHEMA})
 
 KEYSTORE_TREE_SCHEMA = Schema(
     {
@@ -67,7 +67,7 @@ KEYSTORE_TREE_SCHEMA = Schema(
                 "public_key": bytes,  # MANDATORY
                 "private_key": Or(None, bytes),
             }
-        ]
+        ],
     }
 )
 
@@ -79,12 +79,14 @@ def validate_keystore_metadata(keystore_metadata):
         raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
 
 
-def validate_keystore_tree(authenticator):  # FIXME setup utility validate_with_python_schema() to handle exceptions always
+def validate_keystore_tree(
+    authenticator
+):  # FIXME setup utility validate_with_python_schema() to handle exceptions always
     try:
         KEYSTORE_TREE_SCHEMA.validate(authenticator)
     except SchemaError as exc:
         raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
-    
+
 
 def _get_keystore_metadata_file_path(keystore_dir: Path):
     """
@@ -104,7 +106,7 @@ def load_keystore_metadata(keystore_dir: Path) -> dict:  # FIXME rename to adver
     try:
         metadata = load_from_json_file(metadata_file)
     except FileNotFoundError as exc:
-        raise KeystoreDoesNotExist('Keystore metadata file %s does not exist' % metadata_file) from exc
+        raise KeystoreDoesNotExist("Keystore metadata file %s does not exist" % metadata_file) from exc
     validate_keystore_metadata(metadata)
     return metadata
 
@@ -200,9 +202,7 @@ class KeystoreWriteBase(KeystoreBase):
     """
 
     @synchronized
-    def set_keypair(
-        self, *, keychain_uid: uuid.UUID, key_algo: str, public_key: bytes, private_key: bytes
-    ) -> None:
+    def set_keypair(self, *, keychain_uid: uuid.UUID, key_algo: str, public_key: bytes, private_key: bytes) -> None:
         """
         Store a pair of asymmetric keys into storage, attached to a specific UUID.
 
@@ -245,8 +245,12 @@ class KeystoreWriteBase(KeystoreBase):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :param private_key: private key in PEM format (potentially encrypted)
         """
-        if not self._public_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):  # We don't want lonely private keys
-            raise KeyDoesNotExist("Public key %s/%s does not exist, cannot attach private key to it" % (keychain_uid, key_algo))
+        if not self._public_key_exists(
+            keychain_uid=keychain_uid, key_algo=key_algo
+        ):  # We don't want lonely private keys
+            raise KeyDoesNotExist(
+                "Public key %s/%s does not exist, cannot attach private key to it" % (keychain_uid, key_algo)
+            )
         self._check_private_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_private_key(keychain_uid=keychain_uid, key_algo=key_algo, private_key=private_key)
 
@@ -290,7 +294,9 @@ class KeystoreWriteBase(KeystoreBase):
         raise NotImplementedError("KeystoreWriteBase._set_public_key()")
 
     @abstractmethod
-    def _set_private_key(self, *, keychain_uid: uuid.UUID, key_algo: str, private_key: bytes) -> None:  # pragma: no cover
+    def _set_private_key(
+        self, *, keychain_uid: uuid.UUID, key_algo: str, private_key: bytes
+    ) -> None:  # pragma: no cover
         raise NotImplementedError("KeystoreWriteBase._set_private_key()")
 
     @abstractmethod
@@ -371,8 +377,12 @@ class InMemoryKeystore(KeystoreReadWriteBase):
         except LookupError:
             raise KeyDoesNotExist("No free keypair of type %s available in dummy storage" % key_algo)
         else:
-            self._set_keypair(keychain_uid=keychain_uid, key_algo=key_algo,
-                              public_key=keypair["public_key"], private_key=keypair["private_key"])
+            self._set_keypair(
+                keychain_uid=keychain_uid,
+                key_algo=key_algo,
+                public_key=keypair["public_key"],
+                private_key=keypair["private_key"],
+            )
 
 
 # FIXME use ReadonlyFilesystemKeystore for IMPORTED keystores!!
@@ -391,7 +401,11 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
         self._keys_dir = keys_dir
 
     def _get_filepath(self, keychain_uid, key_algo, is_public: bool):
-        filename = "%s_%s%s" % (keychain_uid, key_algo, self._public_key_suffix if is_public else self._private_key_suffix)
+        filename = "%s_%s%s" % (
+            keychain_uid,
+            key_algo,
+            self._public_key_suffix if is_public else self._private_key_suffix,
+        )
         return self._keys_dir.joinpath(filename)
 
     def _read_from_storage_file(self, filepath: Path):
@@ -401,7 +415,7 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
     def _public_key_exists(self, *, keychain_uid, key_algo):
         return self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True).exists()
 
-    def _private_key_exists(self, *, keychain_uid, key_algo) :
+    def _private_key_exists(self, *, keychain_uid, key_algo):
         return self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False).exists()
 
     def _get_public_key(self, *, keychain_uid, key_algo):
@@ -544,13 +558,15 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
             keypair = dict(
                 keychain_uid=keypair_identifier["keychain_uid"],
                 key_algo=keypair_identifier["key_algo"],
-                public_key=self.get_public_key(keychain_uid=keypair_identifier["keychain_uid"],
-                                               key_algo=keypair_identifier["key_algo"]),
-                private_key = None,
+                public_key=self.get_public_key(
+                    keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"]
+                ),
+                private_key=None,
             )
             if include_private_keys:
-                keypair["private_key"] = self.get_private_key(keychain_uid=keypair_identifier["keychain_uid"],
-                                                              key_algo=keypair_identifier["key_algo"])
+                keypair["private_key"] = self.get_private_key(
+                    keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"]
+                )
             keypairs.append(keypair)
 
         keystore_tree = metadata.copy()
@@ -562,7 +578,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         metadata_file = _get_keystore_metadata_file_path(self._keys_dir)
         metadata_file.parent.mkdir(parents=True, exist_ok=True)  # FIXME Create a temporary folder for ATOMIC copy
 
-        metadata= {
+        metadata = {
             "keystore_type": "authenticator",
             "keystore_format": KEYSTORE_FORMAT,
             "keystore_uid": keystore_tree["keystore_uid"],
@@ -596,9 +612,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
 
             try:
                 self.set_public_key(
-                    keychain_uid=keypair["keychain_uid"],
-                    key_algo=keypair["key_algo"],
-                    public_key=keypair["public_key"],
+                    keychain_uid=keypair["keychain_uid"], key_algo=keypair["key_algo"], public_key=keypair["public_key"]
                 )
             except KeyAlreadyExists:
                 pass  # We ASSUME that it's the same key content

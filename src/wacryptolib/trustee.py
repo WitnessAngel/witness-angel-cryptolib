@@ -3,8 +3,13 @@ import uuid
 from typing import Optional, Sequence
 
 from wacryptolib.cipher import decrypt_bytestring
-from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, DecryptionError, KeyLoadingError, \
-    ValidationError
+from wacryptolib.exceptions import (
+    KeyDoesNotExist,
+    AuthorizationError,
+    DecryptionError,
+    KeyLoadingError,
+    ValidationError,
+)
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import KeystoreBase, generate_keypair_for_storage
 from wacryptolib.signature import sign_message
@@ -96,7 +101,11 @@ class TrusteeApi:
         )
 
     def request_decryption_authorization(
-        self, keypair_identifiers: Sequence, request_message: str, passphrases: Optional[Sequence] = None, cryptainer_metadata: Optional[dict]=None
+        self,
+        keypair_identifiers: Sequence,
+        request_message: str,
+        passphrases: Optional[Sequence] = None,
+        cryptainer_metadata: Optional[dict] = None,
     ) -> dict:
         """
         Send a list of keypairs for which decryption access is requested, with the reason why.
@@ -170,7 +179,13 @@ class TrusteeApi:
         )  # TODO localize (i18n) string field!
 
     def decrypt_with_private_key(
-        self, *, keychain_uid: uuid.UUID, cipher_algo: str, cipherdict: dict, passphrases: Optional[list] = None, cryptainer_metadata: Optional[dict]=None
+        self,
+        *,
+        keychain_uid: uuid.UUID,
+        cipher_algo: str,
+        cipherdict: dict,
+        passphrases: Optional[list] = None,
+        cryptainer_metadata: Optional[dict] = None
     ) -> bytes:
         """
         Return the message (probably a symmetric key) decrypted with the corresponding key,
@@ -190,7 +205,9 @@ class TrusteeApi:
         )
 
         # We expect a well-formed JSON structure in key_struct_bytes, to possibly check its metadata
-        key_struct_bytes = decrypt_bytestring(cipherdict=cipherdict, cipher_algo=cipher_algo, key_dict=dict(key=private_key))
+        key_struct_bytes = decrypt_bytestring(
+            cipherdict=cipherdict, cipher_algo=cipher_algo, key_dict=dict(key=private_key)
+        )
         assert isinstance(key_struct_bytes, bytes), key_struct_bytes
         return key_struct_bytes
 

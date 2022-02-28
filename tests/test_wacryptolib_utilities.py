@@ -23,7 +23,9 @@ from wacryptolib.utilities import (
     SUPPORTED_HASH_ALGOS,
     hash_message,
     safe_copy_directory,
-    get_utc_now_date, get_memory_rss_bytes, delete_filesystem_node_for_stream,
+    get_utc_now_date,
+    get_memory_rss_bytes,
+    delete_filesystem_node_for_stream,
 )
 
 
@@ -190,7 +192,7 @@ def test_safe_copy_directory(tmp_path: Path):
 
 
 def test_get_memory_rss_bytes():
-    assert 30 * 1024**2 < get_memory_rss_bytes() < 200 * 1024**2
+    assert 30 * 1024 ** 2 < get_memory_rss_bytes() < 200 * 1024 ** 2
 
 
 def test_delete_filesystem_node_for_stream(tmp_path):

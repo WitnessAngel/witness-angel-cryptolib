@@ -34,8 +34,7 @@ def test_authenticator_basic_workflow(tmp_path):
         assert is_authenticator_initialized(acceptable_dir)
 
         with pytest.raises(KeystoreAlreadyExists):
-            initialize_authenticator(
-                acceptable_dir, keystore_owner="sdsdfsfxx", keystore_passphrase_hint="ze zsddqs")
+            initialize_authenticator(acceptable_dir, keystore_owner="sdsdfsfxx", keystore_passphrase_hint="ze zsddqs")
 
         metadata = load_keystore_metadata(acceptable_dir)
         assert len(metadata) == 6
@@ -53,4 +52,3 @@ def test_authenticator_basic_workflow(tmp_path):
             assert is_authenticator_initialized(acceptable_dir)  # Still seen as "initialized"
             with pytest.raises(ValidationError):
                 load_keystore_metadata(acceptable_dir)
-

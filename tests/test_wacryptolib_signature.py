@@ -86,11 +86,12 @@ def test_generic_signature_errors():
         )
 
     with pytest.raises(SignatureCreationError):
-        with mock.patch("wacryptolib.signature._compute_timestamped_hash", side_effect=ValueError):  # Test rare cas where signing would be broken
+        with mock.patch(
+            "wacryptolib.signature._compute_timestamped_hash", side_effect=ValueError
+        ):  # Test rare cas where signing would be broken
             wacryptolib.signature.sign_message(key=keypair["private_key"], message=message, signature_algo="RSA_PSS")
 
     with pytest.raises(ValueError, match="Unknown signature algorithm"):
         wacryptolib.signature.verify_message_signature(
             key=keypair["public_key"], message=message, signature=signature, signature_algo="XPZH"
         )
-

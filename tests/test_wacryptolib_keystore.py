@@ -11,8 +11,13 @@ import pytest
 
 from _test_mockups import get_fake_authdevice, random_bool
 from wacryptolib.authenticator import initialize_authenticator
-from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists, SchemaValidationError, ValidationError, \
-    KeyDoesNotExist
+from wacryptolib.exceptions import (
+    KeystoreDoesNotExist,
+    KeystoreAlreadyExists,
+    SchemaValidationError,
+    ValidationError,
+    KeyDoesNotExist,
+)
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import (
     FilesystemKeystore,
@@ -22,7 +27,10 @@ from wacryptolib.keystore import (
     generate_free_keypair_for_least_provisioned_key_algo,
     get_free_keypair_generator_worker,
     generate_keypair_for_storage,
-    ReadonlyFilesystemKeystore, load_keystore_metadata, KEYSTORE_FORMAT, InMemoryKeystorePool,
+    ReadonlyFilesystemKeystore,
+    load_keystore_metadata,
+    KEYSTORE_FORMAT,
+    InMemoryKeystorePool,
 )
 from wacryptolib.scaffolding import (
     check_keystore_free_keys_concurrency,
@@ -251,34 +259,33 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
 
     keystore_tree = remote_keystore.export_to_keystore_tree(include_private_keys=True)
     assert keystore_tree == {
-        'keypairs': [{'key_algo': 'RSA_OAEP',
-                   'keychain_uid': keychain_uid,
-                   'private_key': b'okj',
-                   'public_key': b'555'}],
-         'keystore_format': 'keystore_1.0',
-         'keystore_owner': 'Jean-Jâcques',
-         'keystore_passphrase_hint': 'my-hint',
-         'keystore_secret': ANY,
-         'keystore_type': 'authenticator',
-         'keystore_uid': ANY}
+        "keypairs": [
+            {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid, "private_key": b"okj", "public_key": b"555"}
+        ],
+        "keystore_format": "keystore_1.0",
+        "keystore_owner": "Jean-Jâcques",
+        "keystore_passphrase_hint": "my-hint",
+        "keystore_secret": ANY,
+        "keystore_type": "authenticator",
+        "keystore_uid": ANY,
+    }
 
     keystore_tree = remote_keystore.export_to_keystore_tree(include_private_keys=False)
     assert keystore_tree == {
-        'keypairs': [{'key_algo': 'RSA_OAEP',
-                   'keychain_uid': keychain_uid,
-                   'private_key': None,
-                   'public_key': b'555'}],
-         'keystore_format': 'keystore_1.0',
-         'keystore_owner': 'Jean-Jâcques',
-         'keystore_passphrase_hint': 'my-hint',
-         'keystore_secret': ANY,
-         'keystore_type': 'authenticator',
-         'keystore_uid': ANY}
+        "keypairs": [{"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid, "private_key": None, "public_key": b"555"}],
+        "keystore_format": "keystore_1.0",
+        "keystore_owner": "Jean-Jâcques",
+        "keystore_passphrase_hint": "my-hint",
+        "keystore_secret": ANY,
+        "keystore_type": "authenticator",
+        "keystore_uid": ANY,
+    }
 
     with pytest.raises(SchemaValidationError):
         # FIXME - set_keypair() should actually validate data too
-        remote_keystore.set_keypair(keychain_uid=keychain_uid, key_algo="bad_algo", public_key=b"555",
-                                    private_key=b"okj")
+        remote_keystore.set_keypair(
+            keychain_uid=keychain_uid, key_algo="bad_algo", public_key=b"555", private_key=b"okj"
+        )
         remote_keystore.export_to_keystore_tree()  # Raises because of bad_algo
 
     # Create uninitialized keystore (no metadata file) and try to export it
@@ -304,8 +311,10 @@ def test_keystore_import_from_keystore_tree(tmp_path: Path):
     keystore_secret = secrets.token_urlsafe(64)
 
     keypairs1 = [{"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"555", "private_key": None}]
-    keypairs2 = [{"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"8888", "private_key": b"okj"},
-                 {"keychain_uid": keychain_uid_bis, "key_algo": key_algo, "public_key": b"23", "private_key": b"3234"}]
+    keypairs2 = [
+        {"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"8888", "private_key": b"okj"},
+        {"keychain_uid": keychain_uid_bis, "key_algo": key_algo, "public_key": b"23", "private_key": b"3234"},
+    ]
 
     keystore_tree = {
         "keystore_type": "authenticator",
@@ -376,8 +385,7 @@ def test_keystorepool_export_and_import_foreign_keystore_to_keystore_tree(tmp_pa
         "keystore_owner": "Jacques",
         "keystore_uid": keystore_uid,
         "keystore_secret": keystore_secret,
-        "keypairs": [{"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"555", "private_key": b"okj"}]
-
+        "keypairs": [{"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"555", "private_key": b"okj"}],
     }
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()
@@ -390,17 +398,25 @@ def test_keystorepool_export_and_import_foreign_keystore_to_keystore_tree(tmp_pa
 
         foreign_keystore_dir = keystore_pool._get_foreign_keystore_dir(keystore_uid)
         metadata = load_keystore_metadata(foreign_keystore_dir)
-        #print(metadata)
+        # print(metadata)
 
-        keystore_tree = keystore_pool.export_foreign_keystore_to_keystore_tree(metadata["keystore_uid"], include_private_keys=True)
+        keystore_tree = keystore_pool.export_foreign_keystore_to_keystore_tree(
+            metadata["keystore_uid"], include_private_keys=True
+        )
 
         foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
 
         assert foreign_keystore.list_keypair_identifiers() == [
             dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)
         ]
-        assert foreign_keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == keystore_tree["keypairs"][0]["public_key"]
-        assert foreign_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) ==  keystore_tree["keypairs"][0]["private_key"]
+        assert (
+            foreign_keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
+            == keystore_tree["keypairs"][0]["public_key"]
+        )
+        assert (
+            foreign_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
+            == keystore_tree["keypairs"][0]["private_key"]
+        )
 
 
 def test_keystore_import_foreign_keystore_from_filesystem(tmp_path: Path):

@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 UTF8_ENCODING = "utf8"
 
 WACRYPTOLIB_JSON_OPTIONS = JSONOptions(
-    json_mode=JSONMode.CANONICAL,  # Preserve all type information
-    uuid_representation=UuidRepresentation.STANDARD)  # Same as PythonLegacy
+    json_mode=JSONMode.CANONICAL, uuid_representation=UuidRepresentation.STANDARD  # Preserve all type information
+)  # Same as PythonLegacy
 
 
 ### Private utilities ###
@@ -373,12 +373,13 @@ def convert_native_tree_to_extended_json_tree(data):  # FIXME push to docs?
     return data_tree
 
 
-def get_validation_micro_schemas(extended_json_format=False):   # FIXME push to docs?
+def get_validation_micro_schemas(extended_json_format=False):  # FIXME push to docs?
     """
     Get python-schema compatible microschemas for basic types,
     for their python or extended-json representations.
     """
     import uuid
+
     micro_schema_uid = uuid.UUID  # BASE CLASS, not uuid0's subclass
     micro_schema_binary = bytes
     micro_schema_int = int
@@ -391,13 +392,13 @@ def get_validation_micro_schemas(extended_json_format=False):   # FIXME push to 
             str, schema.Regex(r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$")
         )
 
-        micro_schema_uid = {"$binary": {"base64": _micro_schema_base64, "subType": schema.Or("03", "04")}}  # Type 04 is the future!
+        micro_schema_uid = {
+            "$binary": {"base64": _micro_schema_base64, "subType": schema.Or("03", "04")}
+        }  # Type 04 is the future!
 
-        micro_schema_binary = {"$binary": {"base64": _micro_schema_base64,"subType": "00"}}
+        micro_schema_binary = {"$binary": {"base64": _micro_schema_base64, "subType": "00"}}
 
-        micro_schema_int = schema.Or(
-            {"$numberInt": _micro_schema_integer},
-            {"$numberLong": _micro_schema_integer})
+        micro_schema_int = schema.Or({"$numberInt": _micro_schema_integer}, {"$numberLong": _micro_schema_integer})
 
     class MicroSchemas:
         schema_uid = micro_schema_uid

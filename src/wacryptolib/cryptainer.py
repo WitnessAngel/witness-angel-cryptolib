@@ -41,7 +41,8 @@ from wacryptolib.utilities import (
     get_utc_now_date,
     consume_bytes_as_chunks,
     delete_filesystem_node_for_stream,
-    SUPPORTED_HASH_ALGOS, get_validation_micro_schemas,
+    SUPPORTED_HASH_ALGOS,
+    get_validation_micro_schemas,
 )
 
 logger = logging.getLogger(__name__)
@@ -372,7 +373,10 @@ class CryptainerEncryptor(CryptainerBase):
             key_cipher_layers = payload_cipher_layer["key_cipher_layers"]
 
             key_ciphertext = self._encrypt_key_through_multiple_layers(
-                keychain_uid=keychain_uid, key_bytes=key_bytes, key_cipher_layers=key_cipher_layers, cryptainer_metadata=cryptainer_metadata
+                keychain_uid=keychain_uid,
+                key_bytes=key_bytes,
+                key_cipher_layers=key_cipher_layers,
+                cryptainer_metadata=cryptainer_metadata,
             )
             payload_cipher_layer["key_ciphertext"] = key_ciphertext
 
@@ -406,7 +410,10 @@ class CryptainerEncryptor(CryptainerBase):
         key_ciphertext = key_bytes
         for key_cipher_layer in key_cipher_layers:
             key_ciphertext_dict = self._encrypt_key_through_single_layer(
-                keychain_uid=keychain_uid, key_bytes=key_ciphertext, key_cipher_layer=key_cipher_layer, cryptainer_metadata=cryptainer_metadata
+                keychain_uid=keychain_uid,
+                key_bytes=key_ciphertext,
+                key_cipher_layer=key_cipher_layer,
+                cryptainer_metadata=cryptainer_metadata,
             )
             key_ciphertext = dump_to_json_bytes(key_ciphertext_dict)  # Thus its remains as bytes all along
 
@@ -480,7 +487,12 @@ class CryptainerEncryptor(CryptainerBase):
         return key_cipherdict
 
     def _encrypt_with_asymmetric_cipher(
-        self, cipher_algo: str, keychain_uid: uuid.UUID, key_bytes: bytes, trustee: dict, cryptainer_metadata: Optional[dict]
+        self,
+        cipher_algo: str,
+        keychain_uid: uuid.UUID,
+        key_bytes: bytes,
+        trustee: dict,
+        cryptainer_metadata: Optional[dict],
     ) -> dict:
         """
         Encrypt given payload (representing a symmetric key) with an asymmetric algorithm.
@@ -502,7 +514,9 @@ class CryptainerEncryptor(CryptainerBase):
 
         key_struct = dict(key_bytes=key_bytes, cryptainer_metadata=cryptainer_metadata)  # SPECIAL FORMAT FOR CHECKUPS
         key_struct_bytes = dump_to_json_bytes(key_struct)
-        cipherdict = encrypt_bytestring(plaintext=key_struct_bytes, cipher_algo=cipher_algo, key_dict=dict(key=public_key))
+        cipherdict = encrypt_bytestring(
+            plaintext=key_struct_bytes, cipher_algo=cipher_algo, key_dict=dict(key=public_key)
+        )
         return cipherdict
 
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: list):
@@ -638,7 +652,10 @@ class CryptainerDecryptor(CryptainerBase):
             ]  # FIXME handle if it's not there, missing integrity tags due to unfinished container!!
             payload_cipherdict = dict(ciphertext=payload_current, **payload_macs)
             payload_current = decrypt_bytestring(
-                cipherdict=payload_cipherdict, key_dict=symkey, cipher_algo=payload_cipher_algo, verify_integrity_tags=verify_integrity_tags
+                cipherdict=payload_cipherdict,
+                key_dict=symkey,
+                cipher_algo=payload_cipher_algo,
+                verify_integrity_tags=verify_integrity_tags,
             )
 
         data = payload_current  # Now decrypted
@@ -652,7 +669,10 @@ class CryptainerDecryptor(CryptainerBase):
         for key_cipher_layer in reversed(cipher_layers):  # Non-emptiness of this will be checked by validator
             key_cipherdict = load_from_json_bytes(key_bytes)  # We remain as bytes all along
             key_bytes = self._decrypt_key_through_single_layer(
-                keychain_uid=keychain_uid, key_cipherdict=key_cipherdict, cipher_layer=key_cipher_layer, cryptainer_metadata=cryptainer_metadata
+                keychain_uid=keychain_uid,
+                key_cipherdict=key_cipherdict,
+                cipher_layer=key_cipher_layer,
+                cryptainer_metadata=cryptainer_metadata,
             )
 
         return key_bytes
@@ -732,7 +752,12 @@ class CryptainerDecryptor(CryptainerBase):
             return key_bytes
 
     def _decrypt_with_asymmetric_cipher(
-        self, cipher_algo: str, keychain_uid: uuid.UUID, cipherdict: dict, trustee: dict, cryptainer_metadata: Optional[dict]
+        self,
+        cipher_algo: str,
+        keychain_uid: uuid.UUID,
+        cipherdict: dict,
+        trustee: dict,
+        cryptainer_metadata: Optional[dict],
     ) -> bytes:
         """
         Decrypt given cipherdict with an asymmetric algorithm.
@@ -754,7 +779,11 @@ class CryptainerDecryptor(CryptainerBase):
 
         # We expect decryption authorization requests to have already been done properly
         key_struct_bytes = trustee_proxy.decrypt_with_private_key(
-            keychain_uid=keychain_uid, cipher_algo=cipher_algo, cipherdict=cipherdict, passphrases=passphrases, cryptainer_metadata=cryptainer_metadata
+            keychain_uid=keychain_uid,
+            cipher_algo=cipher_algo,
+            cipherdict=cipherdict,
+            passphrases=passphrases,
+            cryptainer_metadata=cryptainer_metadata,
         )
         key_struct = load_from_json_bytes(key_struct_bytes)
 
@@ -1174,7 +1203,9 @@ class ReadonlyCryptainerStorage:
 
         cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_payload_ciphertext=True)
 
-        result = self._decrypt_payload_from_cryptainer(cryptainer, passphrase_mapper=passphrase_mapper, verify_integrity_tags=verify_integrity_tags)
+        result = self._decrypt_payload_from_cryptainer(
+            cryptainer, passphrase_mapper=passphrase_mapper, verify_integrity_tags=verify_integrity_tags
+        )
         logger.info("Cryptainer %s successfully decrypted", cryptainer_name_or_idx)
         return result
 
@@ -1182,7 +1213,10 @@ class ReadonlyCryptainerStorage:
         self, cryptainer: dict, passphrase_mapper: Optional[dict], verify_integrity_tags: bool
     ) -> bytes:
         return decrypt_payload_from_cryptainer(
-            cryptainer, keystore_pool=self._keystore_pool, passphrase_mapper=passphrase_mapper, verify_integrity_tags=verify_integrity_tags
+            cryptainer,
+            keystore_pool=self._keystore_pool,
+            passphrase_mapper=passphrase_mapper,
+            verify_integrity_tags=verify_integrity_tags,
         )  # Will fail if authorizations are not OK
 
     def check_cryptainer_sanity(self, cryptainer_name_or_idx):
@@ -1455,7 +1489,10 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
             "cryptainer_format": "cryptainer_1.0",
             "cryptainer_uid": micro_schemas.schema_uid,
             "payload_ciphertext_struct": Or(
-                {"ciphertext_location": PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE, "ciphertext_value": micro_schemas.schema_binary},
+                {
+                    "ciphertext_location": PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE,
+                    "ciphertext_value": micro_schemas.schema_binary,
+                },
                 OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
             ),
             "cryptainer_metadata": Or(dict, None),
@@ -1515,11 +1552,13 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
 
 
 CONF_SCHEMA_PYTHON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=False, extended_json_format=False)
-CONF_SCHEMA_JSON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=False, extended_json_format=True).json_schema("conf_schema.json")
+CONF_SCHEMA_JSON = _create_cryptainer_and_cryptoconf_schema(
+    for_cryptainer=False, extended_json_format=True
+).json_schema("conf_schema.json")
 CRYPTAINER_SCHEMA_PYTHON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=True, extended_json_format=False)
-CRYPTAINER_SCHEMA_JSON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=True, extended_json_format=True).json_schema(
-    "cryptainer_schema.json"
-)
+CRYPTAINER_SCHEMA_JSON = _create_cryptainer_and_cryptoconf_schema(
+    for_cryptainer=True, extended_json_format=True
+).json_schema("cryptainer_schema.json")
 
 
 def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):

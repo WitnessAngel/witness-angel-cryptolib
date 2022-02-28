@@ -41,12 +41,8 @@ def check_keystore_basic_get_set_api(keystore, readonly_keystore=None):
     )
 
     for _keystore in all_keystores:
-        assert (
-            _keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"public_data"
-        )
-        assert (
-            _keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"private_data"
-        )
+        assert _keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"public_data"
+        assert _keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"private_data"
         try:
             assert _keystore.list_keypair_identifiers() == [
                 dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True)
@@ -73,13 +69,12 @@ def check_keystore_basic_get_set_api(keystore, readonly_keystore=None):
         keychain_uid=keychain_uid_separated_keys, key_algo=key_algo, public_key=b"separated_public_data"
     )
     with pytest.raises(KeyAlreadyExists, match="Already existing"):
-        keystore.set_public_key(
-            keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"separated_public_data2"
-        )
+        keystore.set_public_key(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"separated_public_data2")
 
     for _keystore in all_keystores:
         assert (
-            _keystore.get_public_key(keychain_uid=keychain_uid_separated_keys, key_algo=key_algo) == b"separated_public_data"
+            _keystore.get_public_key(keychain_uid=keychain_uid_separated_keys, key_algo=key_algo)
+            == b"separated_public_data"
         )
         with pytest.raises(KeyDoesNotExist, match="not found"):
             _keystore.get_private_key(keychain_uid=keychain_uid_separated_keys, key_algo=key_algo)
@@ -95,16 +90,16 @@ def check_keystore_basic_get_set_api(keystore, readonly_keystore=None):
         keychain_uid=keychain_uid_separated_keys, key_algo=key_algo, private_key=b"separated_private_data"
     )
     with pytest.raises(KeyAlreadyExists, match="Already existing"):
-        keystore.set_private_key(
-            keychain_uid=keychain_uid, key_algo=key_algo, private_key=b"separated_private_data2"
-        )
+        keystore.set_private_key(keychain_uid=keychain_uid, key_algo=key_algo, private_key=b"separated_private_data2")
 
     for _keystore in all_keystores:
         assert (
-            _keystore.get_public_key(keychain_uid=keychain_uid_separated_keys, key_algo=key_algo) == b"separated_public_data"
+            _keystore.get_public_key(keychain_uid=keychain_uid_separated_keys, key_algo=key_algo)
+            == b"separated_public_data"
         )
         assert (
-            _keystore.get_private_key(keychain_uid=keychain_uid_separated_keys, key_algo=key_algo) == b"separated_private_data"
+            _keystore.get_private_key(keychain_uid=keychain_uid_separated_keys, key_algo=key_algo)
+            == b"separated_private_data"
         )
         try:
             assert _keystore.list_keypair_identifiers() == [

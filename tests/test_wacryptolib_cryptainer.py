@@ -41,10 +41,16 @@ from wacryptolib.cryptainer import (
     check_cryptainer_sanity,
     CRYPTAINER_TEMP_SUFFIX,
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
-    ReadonlyCryptainerStorage, CryptainerEncryptionPipeline,
+    ReadonlyCryptainerStorage,
+    CryptainerEncryptionPipeline,
 )
-from wacryptolib.exceptions import DecryptionError, DecryptionIntegrityError, ValidationError, SchemaValidationError, \
-    SignatureVerificationError
+from wacryptolib.exceptions import (
+    DecryptionError,
+    DecryptionIntegrityError,
+    ValidationError,
+    SchemaValidationError,
+    SignatureVerificationError,
+)
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_keypair
 from wacryptolib.keystore import (
@@ -375,9 +381,6 @@ def COMPLEX_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
     }
 
 
-
-
-
 def _get_binary_or_empty_content():
     if random_bool():
         bytes_length = random.randint(1, 1000)
@@ -430,7 +433,7 @@ def test_void_cryptoconfs(cryptoconf):
 
 
 def test_encrypt_payload_into_cryptainer_from_file_object(tmp_path):
-    source = (tmp_path/"source.media")
+    source = tmp_path / "source.media"
     source.write_bytes(b"12345")
     assert source.exists()
 
@@ -453,7 +456,8 @@ def test_cryptainer_encryption_pipeline_autocleanup(tmp_path):
     pipeline = CryptainerEncryptionPipeline(
         cryptainer_filepath=tmp_path.joinpath("destination.crypt"),
         cryptoconf=SIMPLE_CRYPTOCONF,
-        cryptainer_metadata= None)
+        cryptainer_metadata=None,
+    )
     assert not pipeline._output_data_stream.closed
     pipeline.encrypt_chunk(b"abc")
     pipeline.encrypt_chunk(b"123")
@@ -463,7 +467,8 @@ def test_cryptainer_encryption_pipeline_autocleanup(tmp_path):
     pipeline2 = CryptainerEncryptionPipeline(
         cryptainer_filepath=tmp_path.joinpath("destination.crypt"),
         cryptoconf=SIMPLE_CRYPTOCONF,
-        cryptainer_metadata= None)
+        cryptainer_metadata=None,
+    )
     output_data_stream2 = pipeline2._output_data_stream
     assert not output_data_stream2.closed
     del pipeline2
@@ -479,7 +484,9 @@ def test_is_cryptainer_cryptoconf_streamable():
         payload_cipher_layers=[
             dict(
                 payload_cipher_algo="RSA_OAEP",
-                key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
+                key_cipher_layers=[
+                    dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                ],
             )
         ]
     )
@@ -564,7 +571,9 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
         assert not keypair_statuses["missing_private_key"]
 
     verify_integrity_tags = random_bool()
-    result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer, keystore_pool=keystore_pool, verify_integrity_tags=verify_integrity_tags)
+    result_payload = decrypt_payload_from_cryptainer(
+        cryptainer=cryptainer, keystore_pool=keystore_pool, verify_integrity_tags=verify_integrity_tags
+    )
     # pprint.pprint(result, width=120)
     assert result_payload == payload
 
@@ -676,20 +685,21 @@ def test_decrypt_payload_from_cryptainer_signature_troubles():
     verify_integrity_tags = random_bool()
 
     cryptainer_original = encrypt_payload_into_cryptainer(
-        payload=b"1234abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+        payload=b"1234abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None
+    )
 
     result = decrypt_payload_from_cryptainer(cryptainer_original, verify_integrity_tags=verify_integrity_tags)
     assert result == b"1234abc"
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
-    #pprint(cryptainer_corrupted)
+    # pprint(cryptainer_corrupted)
     del cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_digest_value"]
 
     result = decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
     assert result == b"1234abc"  # Missing the payload_digest_value is OK
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
-    #pprint(cryptainer_corrupted)
+    # pprint(cryptainer_corrupted)
     cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_digest_value"] = b"000"
 
     with pytest.raises(RuntimeError, match="Mismatch"):
@@ -702,8 +712,10 @@ def test_decrypt_payload_from_cryptainer_signature_troubles():
         decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
-    cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_signature_struct"] = \
-        {'signature_timestamp_utc': 1645905017, 'signature_value': b'abc'}
+    cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_signature_struct"] = {
+        "signature_timestamp_utc": 1645905017,
+        "signature_value": b"abc",
+    }
 
     with pytest.raises(SignatureVerificationError, match="signature verification"):
         decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)

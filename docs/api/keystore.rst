@@ -18,7 +18,7 @@ Each of these key storages theoretically belongs to a single user.
     :inherited-members:
 
 
-Key storage pools
+Keystore pools
 -----------------------
 
 These combine local and imported key storages under a single interface.

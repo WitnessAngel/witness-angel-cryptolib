@@ -564,8 +564,8 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
         assert not keypair_statuses["missing_passphrase"]
         assert not keypair_statuses["missing_private_key"]
 
-    verify = random_bool()
-    result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer, keystore_pool=keystore_pool, verify=verify)
+    verify_integrity_tags = random_bool()
+    result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer, keystore_pool=keystore_pool, verify_integrity_tags=verify_integrity_tags)
     # pprint.pprint(result, width=120)
     assert result_payload == payload
 
@@ -623,8 +623,8 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
 
     payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
-    verify = random_bool()
-    result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer, verify=verify)
+    verify_integrity_tags = random_bool()
+    result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer, verify_integrity_tags=verify_integrity_tags)
     assert result_payload == payload
 
     # Another share is deleted
@@ -660,33 +660,33 @@ def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
 
     cryptainer = encrypt_payload_into_cryptainer(payload=b"1234", cryptoconf=cryptoconf, cryptainer_metadata=None)
 
-    result = decrypt_payload_from_cryptainer(cryptainer, verify=True)
+    result = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=True)
     assert result == b"1234"
 
     cryptainer["payload_cipher_layers"][0]["payload_macs"]["tag"] += b"hi"  # CORRUPTION
 
-    result = decrypt_payload_from_cryptainer(cryptainer, verify=False)
+    result = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=False)
     assert result == b"1234"
 
     with pytest.raises(DecryptionIntegrityError):
-        decrypt_payload_from_cryptainer(cryptainer, verify=True)
+        decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=True)
 
 
 def test_decrypt_payload_from_cryptainer_signature_troubles():
 
-    verify = random_bool()
+    verify_integrity_tags = random_bool()
 
     cryptainer_original = encrypt_payload_into_cryptainer(
         payload=b"1234abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
 
-    result = decrypt_payload_from_cryptainer(cryptainer_original, verify=verify)
+    result = decrypt_payload_from_cryptainer(cryptainer_original, verify_integrity_tags=verify_integrity_tags)
     assert result == b"1234abc"
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
     #pprint(cryptainer_corrupted)
     del cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_digest_value"]
 
-    result = decrypt_payload_from_cryptainer(cryptainer_corrupted, verify=verify)
+    result = decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
     assert result == b"1234abc"  # Missing the payload_digest_value is OK
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
@@ -694,20 +694,20 @@ def test_decrypt_payload_from_cryptainer_signature_troubles():
     cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_digest_value"] = b"000"
 
     with pytest.raises(RuntimeError, match="Mismatch"):
-        decrypt_payload_from_cryptainer(cryptainer_corrupted, verify=verify)
+        decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
     del cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_signature_struct"]
 
     with pytest.raises(RuntimeError, match="Missing signature structure"):
-        decrypt_payload_from_cryptainer(cryptainer_corrupted, verify=verify)
+        decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
     cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_signature_struct"] = \
         {'signature_timestamp_utc': 1645905017, 'signature_value': b'abc'}
 
     with pytest.raises(SignatureVerificationError, match="signature verification"):
-        decrypt_payload_from_cryptainer(cryptainer_corrupted, verify=verify)
+        decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
 
 
 def test_passphrase_mapping_during_decryption(tmp_path):
@@ -889,9 +889,9 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     with pytest.raises(DecryptionError):
         storage.decrypt_cryptainer_from_storage("beauty.txt.crypt")
 
-    verify = random_bool()
+    verify_integrity_tags = random_bool()
     decrypted = storage.decrypt_cryptainer_from_storage(
-        "beauty.txt.crypt", passphrase_mapper={None: all_passphrases}, verify=verify
+        "beauty.txt.crypt", passphrase_mapper={None: all_passphrases}, verify_integrity_tags=verify_integrity_tags
     )
     assert decrypted == payload
 
@@ -1358,11 +1358,11 @@ def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
 
     _corrupt_cryptainer_tree(storage, cryptainer_name=cryptainer_name, corruptor_callback=corrupt_eax_tag)
 
-    result = storage.decrypt_cryptainer_from_storage(cryptainer_name, verify=False)
+    result = storage.decrypt_cryptainer_from_storage(cryptainer_name, verify_integrity_tags=False)
     assert result == b"dogs\ncats\n"
 
     with pytest.raises(DecryptionIntegrityError):
-        storage.decrypt_cryptainer_from_storage(cryptainer_name, verify=True)
+        storage.decrypt_cryptainer_from_storage(cryptainer_name, verify_integrity_tags=True)
 
 
 def test_cryptainer_storage_check_cryptainer_sanity(tmp_path):

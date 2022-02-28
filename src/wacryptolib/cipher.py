@@ -46,7 +46,7 @@ def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) ->
     return cipherdict
 
 
-def decrypt_bytestring(cipherdict: dict, *, cipher_algo: str, key_dict: dict, verify: bool = True) -> bytes:
+def decrypt_bytestring(cipherdict: dict, *, cipher_algo: str, key_dict: dict, verify_integrity_tags: bool = True) -> bytes:
     """Decrypt a bytestring with the selected algorithm for the given encrypted data dict,
     using the provided key (which must be of a compatible type and length).
 
@@ -55,13 +55,13 @@ def decrypt_bytestring(cipherdict: dict, *, cipher_algo: str, key_dict: dict, ve
         as bytestrings
     :param cipher_algo: one of the supported encryption algorithms
     :param key_dict: dict with secret key fields
-    :param verify: whether to check MAC tags of the ciphertext
+    :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
     :return: dictionary with encryption data."""
     cipher_algo_conf = _get_cipher_algo_conf(cipher_algo)
     decryption_function = cipher_algo_conf["decryption_function"]
     try:
-        plaintext = decryption_function(key_dict=key_dict, cipherdict=cipherdict, verify=verify)
+        plaintext = decryption_function(key_dict=key_dict, cipherdict=cipherdict, verify_integrity_tags=verify_integrity_tags)
     except ValueError as exc:
         if "MAC check failed" in str(exc):  # Hackish check for pycryptodome
             raise DecryptionIntegrityError("Failed %s decryption authentication (%s)" % (cipher_algo, exc)) from exc
@@ -88,12 +88,12 @@ def _encrypt_via_aes_cbc(plaintext: bytes, key_dict: dict) -> dict:
     return cipherdict
 
 
-def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
+def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict, verify_integrity_tags: bool = True) -> bytes:
     """Decrypt a bytestring using AES (CBC mode).
 
     :param cipherdict: dict with field "ciphertext" as bytestring
     :param key_dict: dict with AES cryptographic main key and nonce.
-    :param verify: whether to check MAC tags of the ciphertext
+    :param verify_integrity_tags: whether to check MAC tags of the ciphertext
         (not applicable for this cipher)
 
     :return: the decrypted bytestring"""
@@ -125,12 +125,12 @@ def _encrypt_via_aes_eax(plaintext: bytes, key_dict: dict) -> dict:
     return cipherdict
 
 
-def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
+def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify_integrity_tags: bool = True) -> bytes:
     """Decrypt a bytestring using AES (EAX mode).
 
     :param cipherdict: dict with fields "ciphertext", "tag" as bytestrings
     :param key_dict: dict with AES cryptographic main key and nonce.
-    :param verify: whether to check MAC tags of the ciphertext
+    :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
     :return: the decrypted bytestring"""
     main_key = key_dict["key"]
@@ -138,7 +138,7 @@ def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify: bool = True) 
     _check_symmetric_key_length_bytes(len(main_key))
     decipher = AES.new(main_key, AES.MODE_EAX, nonce=nonce)
     plaintext = decipher.decrypt(cipherdict["ciphertext"])
-    if verify:
+    if verify_integrity_tags:
         decipher.verify(cipherdict["tag"])
     return plaintext
 
@@ -163,12 +163,12 @@ def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict) -> dict:
     return encryption
 
 
-def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
+def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify_integrity_tags: bool = True) -> bytes:
     """Decrypt a bytestring with the stream cipher ChaCha20.
 
     :param cipherdict: dict with fields "ciphertext", "tag" and "nonce" as bytestrings
     :param key_dict: 32 bytes long cryptographic key and nonce
-    :param verify: whether to check MAC tags of the ciphertext
+    :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
     :return: the decrypted bytestring"""
     main_key = key_dict["key"]
@@ -176,7 +176,7 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify: boo
     _check_symmetric_key_length_bytes(len(main_key))
     decipher = ChaCha20_Poly1305.new(key=main_key, nonce=nonce)
     # decipher.update(cipherdict["aad"])  UNUSED
-    if verify:
+    if verify_integrity_tags:
         plaintext = decipher.decrypt_and_verify(ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"])
     else:
         plaintext = decipher.decrypt(ciphertext=cipherdict["ciphertext"])
@@ -203,12 +203,12 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
     return dict(digest_list=encrypted_chunks)
 
 
-def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify: bool = True) -> bytes:
+def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify_integrity_tags: bool = True) -> bytes:
     """Decrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
     :param cipherdict: list of ciphertext chunks
     :param key_dict: dict with PRIVATE RSA key object (RSA.RsaKey)
-    :param verify: whether to check MAC tags of the ciphertext
+    :param verify_integrity_tags: whether to check MAC tags of the ciphertext
         (not applicable for this cipher)
 
     :return: the decrypted bytestring"""

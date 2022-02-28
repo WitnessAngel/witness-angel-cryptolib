@@ -243,17 +243,17 @@ def test_symmetric_decryption_verify(cipher_algo):
         # Replace the attribute with random bytes
         cipherdict[attribute_to_corrupt] = get_random_bytes(len(cipherdict[attribute_to_corrupt]))
 
-    # Decryption should not fail if verify==False
+    # Decryption should not fail if verify_integrity_tags==False
     decrypted_content = wacryptolib.cipher.decrypt_bytestring(
-        key_dict=key_dict, cipherdict=cipherdict, cipher_algo=cipher_algo, verify=False
+        key_dict=key_dict, cipherdict=cipherdict, cipher_algo=cipher_algo, verify_integrity_tags=False
     )
     assert decrypted_content == binary_content
 
     decryption_callable = lambda: wacryptolib.cipher.decrypt_bytestring(
-        key_dict=key_dict, cipherdict=cipherdict, cipher_algo=cipher_algo, verify=True
+        key_dict=key_dict, cipherdict=cipherdict, cipher_algo=cipher_algo, verify_integrity_tags=True
     )
 
-    # Decryption should fail if verify==True, but only for algorithms that enforce an authentication check
+    # Decryption should fail if verify_integrity_tags==True, but only for algorithms that enforce an authentication check
     if is_corruptable:
         with pytest.raises(DecryptionIntegrityError):
             decryption_callable()

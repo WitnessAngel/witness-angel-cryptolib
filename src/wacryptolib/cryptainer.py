@@ -541,7 +541,7 @@ class CryptainerEncryptor(CryptainerBase):
 
         :param keychain_uid: uuid for the set of encryption keys used
         :param cryptoconf: configuration tree inside payload_signatures, which MUST already contain the message digest
-        :return: dictionary with information needed to verify signature
+        :return: dictionary with information needed to verify_integrity_tags signature
         """
         payload_signature_algo = cryptoconf["payload_signature_algo"]
         payload_digest = cryptoconf[
@@ -584,12 +584,12 @@ class CryptainerDecryptor(CryptainerBase):
         assert isinstance(cryptainer, dict), cryptainer
         return cryptainer["cryptainer_metadata"]
 
-    def decrypt_payload(self, cryptainer: dict, verify: bool = True) -> bytes:
+    def decrypt_payload(self, cryptainer: dict, verify_integrity_tags: bool = True) -> bytes:
         """
         Loop through cryptainer layers, to decipher payload with the right algorithms.
 
         :param cryptainer: dictionary previously built with CryptainerEncryptor method
-        :param verify: whether to check MAC tags of the ciphertext
+        :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
         :return: deciphered plaintext
         """
@@ -632,7 +632,7 @@ class CryptainerDecryptor(CryptainerBase):
             ]  # FIXME handle if it's not there, missing integrity tags due to unfinished container!!
             payload_cipherdict = dict(ciphertext=payload_current, **payload_macs)
             payload_current = decrypt_bytestring(
-                cipherdict=payload_cipherdict, key_dict=symkey, cipher_algo=payload_cipher_algo, verify=verify
+                cipherdict=payload_cipherdict, key_dict=symkey, cipher_algo=payload_cipher_algo, verify_integrity_tags=verify_integrity_tags
             )
 
         data = payload_current  # Now decrypted
@@ -928,19 +928,19 @@ def decrypt_payload_from_cryptainer(
     *,
     keystore_pool: Optional[KeystorePoolBase] = None,
     passphrase_mapper: Optional[dict] = None,
-    verify: bool = True
+    verify_integrity_tags: bool = True
 ) -> bytes:
     """Decrypt a cryptainer with the help of third-parties.
 
     :param cryptainer: the cryptainer tree, which holds all information about involved keys
     :param keystore_pool: optional key storage pool
     :param passphrase_mapper: optional dict mapping trustee IDs to their lists of passphrases
-    :param verify: whether to check MAC tags of the ciphertext
+    :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
     :return: raw bytestring
     """
     cryptainer_decryptor = CryptainerDecryptor(keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
-    data = cryptainer_decryptor.decrypt_payload(cryptainer=cryptainer, verify=verify)
+    data = cryptainer_decryptor.decrypt_payload(cryptainer=cryptainer, verify_integrity_tags=verify_integrity_tags)
     return data
 
 
@@ -1149,7 +1149,7 @@ class ReadonlyCryptainerStorage:
         return cryptainer
 
     def decrypt_cryptainer_from_storage(
-        self, cryptainer_name_or_idx, passphrase_mapper: Optional[dict] = None, verify: bool = True
+        self, cryptainer_name_or_idx, passphrase_mapper: Optional[dict] = None, verify_integrity_tags: bool = True
     ) -> bytes:
         """
         Return the decrypted content of the cryptainer `cryptainer_name_or_idx` (which must be in `list_cryptainer_names()`,
@@ -1159,15 +1159,15 @@ class ReadonlyCryptainerStorage:
 
         cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_payload_ciphertext=True)
 
-        result = self._decrypt_payload_from_cryptainer(cryptainer, passphrase_mapper=passphrase_mapper, verify=verify)
+        result = self._decrypt_payload_from_cryptainer(cryptainer, passphrase_mapper=passphrase_mapper, verify_integrity_tags=verify_integrity_tags)
         logger.info("Cryptainer %s successfully decrypted", cryptainer_name_or_idx)
         return result
 
     def _decrypt_payload_from_cryptainer(
-        self, cryptainer: dict, passphrase_mapper: Optional[dict], verify: bool
+        self, cryptainer: dict, passphrase_mapper: Optional[dict], verify_integrity_tags: bool
     ) -> bytes:
         return decrypt_payload_from_cryptainer(
-            cryptainer, keystore_pool=self._keystore_pool, passphrase_mapper=passphrase_mapper, verify=verify
+            cryptainer, keystore_pool=self._keystore_pool, passphrase_mapper=passphrase_mapper, verify_integrity_tags=verify_integrity_tags
         )  # Will fail if authorizations are not OK
 
     def check_cryptainer_sanity(self, cryptainer_name_or_idx):

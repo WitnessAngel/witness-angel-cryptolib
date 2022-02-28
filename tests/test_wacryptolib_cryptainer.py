@@ -1,5 +1,4 @@
 import copy
-import json
 import os
 import random
 import textwrap
@@ -61,7 +60,7 @@ from wacryptolib.utilities import (
     dump_to_json_bytes,
     generate_uuid0,
     get_utc_now_date,
-    dump_to_json_str, convert_native_tree_to_extended_json_tree,
+    convert_native_tree_to_extended_json_tree,
 )
 from wacryptolib.utilities import load_from_json_file
 

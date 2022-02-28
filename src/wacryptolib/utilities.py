@@ -12,9 +12,9 @@ import multitimer
 import schema
 import uuid0
 from Crypto.Util.Padding import pad, unpad
-from decorator import decorator
-from bson.json_util import dumps, loads, JSONOptions, JSONMode
 from bson.binary import UuidRepresentation
+from bson.json_util import dumps, loads, JSONOptions, JSONMode
+from decorator import decorator
 
 from wacryptolib.exceptions import SchemaValidationError
 

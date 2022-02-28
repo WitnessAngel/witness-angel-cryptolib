@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 import jsonschema
 import schema as pythonschema
 from jsonschema import validate as jsonschema_validate
-from schema import And, Or, Regex, Const, Schema, Optional as OptionalKey
+from schema import And, Or, Schema, Optional as OptionalKey
 
 from wacryptolib.cipher import (
     encrypt_bytestring,

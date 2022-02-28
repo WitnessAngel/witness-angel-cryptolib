@@ -1,4 +1,5 @@
 import copy
+import random
 from unittest import mock
 
 import pytest
@@ -113,6 +114,7 @@ def test_trustee_api_workflow():
     result = trustee_api.request_decryption_authorization(
         keypair_identifiers=[dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP")],
         request_message="I need this decryption!",
+        cryptainer_metadata=random.choice((None, {"hello": "bye"}))
     )
     assert "accepted" in result["response_message"]
     assert not result["has_errors"]
@@ -157,6 +159,7 @@ def test_trustee_api_workflow():
         keypair_identifiers=[dict(keychain_uid=keychain_uid_passphrased, key_algo="RSA_OAEP")],
         request_message="I need this decryption too!",
         passphrases=["dsd", good_passphrase],
+        cryptainer_metadata=random.choice((None, {"hello": "bye"}))
     )
     assert "accepted" in result["response_message"]
     assert not result["has_errors"]
@@ -178,6 +181,7 @@ def test_trustee_api_workflow():
             cipher_algo="RSA_OAEP",
             cipherdict=cipherdict,
             passphrases=["something"],
+            cryptainer_metadata=random.choice((None, {"hello": "bye"}))
         )
 
     decrypted = trustee_api.decrypt_with_private_key(
@@ -185,6 +189,7 @@ def test_trustee_api_workflow():
         cipher_algo="RSA_OAEP",
         cipherdict=cipherdict,
         passphrases=[good_passphrase],
+        cryptainer_metadata=random.choice((None, {"hello": "bye"}))
     )
     assert decrypted == secret
 

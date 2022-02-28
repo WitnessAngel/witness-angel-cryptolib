@@ -9,7 +9,7 @@ from wacryptolib.exceptions import KeyDoesNotExist, SignatureVerificationError, 
     AuthorizationError
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import (
-    DummyKeystore,
+    InMemoryKeystore,
     generate_free_keypair_for_least_provisioned_key_algo,
     generate_keypair_for_storage,
 )
@@ -20,7 +20,7 @@ from wacryptolib.utilities import generate_uuid0
 
 def test_trustee_api_workflow():
 
-    keystore = DummyKeystore()
+    keystore = InMemoryKeystore()
     trustee_api = TrusteeApi(keystore=keystore)
 
     keychain_uid = generate_uuid0()
@@ -196,7 +196,7 @@ def test_trustee_api_workflow():
 
 def test_readonly_trustee_api_behaviour():
 
-    keystore = DummyKeystore()
+    keystore = InMemoryKeystore()
     trustee_api = ReadonlyTrusteeApi(keystore=keystore)
 
     keychain_uid = generate_uuid0()

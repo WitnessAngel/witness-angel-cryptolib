@@ -49,7 +49,7 @@ from wacryptolib.exceptions import DecryptionError, DecryptionIntegrityError, Va
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_keypair
 from wacryptolib.keystore import (
-    DummyKeystore,
+    InMemoryKeystore,
     FilesystemKeystore,
     FilesystemKeystorePool,
     InMemoryKeystorePool,
@@ -900,7 +900,7 @@ def test_get_proxy_for_trustee(tmp_path):
     cryptainer_base1 = CryptainerBase()
     proxy1 = get_trustee_proxy(LOCAL_KEYFACTORY_TRUSTEE_MARKER, cryptainer_base1._keystore_pool)
     assert isinstance(proxy1, TrusteeApi)  # Local Trustee
-    assert isinstance(proxy1._keystore, DummyKeystore)  # Default type
+    assert isinstance(proxy1._keystore, InMemoryKeystore)  # Default type
 
     cryptainer_base1_bis = CryptainerBase()
     proxy1_bis = get_trustee_proxy(LOCAL_KEYFACTORY_TRUSTEE_MARKER, cryptainer_base1_bis._keystore_pool)

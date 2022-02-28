@@ -310,7 +310,7 @@ class KeystoreReadWriteBase(KeystoreWriteBase, KeystoreReadBase):
     pass  # Derive from this class to have full-featured keystores
 
 
-class DummyKeystore(KeystoreReadWriteBase):
+class InMemoryKeystore(KeystoreReadWriteBase):
     """
     Dummy key storage for use in tests, where keys are kepts only process-locally.
 
@@ -633,7 +633,7 @@ class InMemoryKeystorePool(KeystorePoolBase):
     """
 
     def __init__(self):
-        self._local_keystore = DummyKeystore()
+        self._local_keystore = InMemoryKeystore()
         self._foreign_keystores = {}
 
     def get_local_keyfactory(self):
@@ -651,7 +651,7 @@ class InMemoryKeystorePool(KeystorePoolBase):
     def _register_fake_imported_storage_uids(self, storage_uids: Sequence):
         """Test-specific API"""
         assert not (set(storage_uids) & set(self._foreign_keystores.keys()))
-        new_storages = {storage_uid: DummyKeystore() for storage_uid in storage_uids}
+        new_storages = {storage_uid: InMemoryKeystore() for storage_uid in storage_uids}
         self._foreign_keystores.update(new_storages)
 
 

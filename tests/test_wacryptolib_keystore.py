@@ -17,7 +17,7 @@ from wacryptolib.exceptions import KeystoreDoesNotExist, KeystoreAlreadyExists, 
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import (
     FilesystemKeystore,
-    DummyKeystore,
+    InMemoryKeystore,
     KeystoreBase,
     FilesystemKeystorePool,
     generate_free_keypair_for_least_provisioned_key_algo,
@@ -38,7 +38,7 @@ def test_keystore_basic_get_set_api(tmp_path):
     with pytest.raises(TypeError, match="Can't instantiate abstract class"):
         KeystoreBase()
 
-    dummy_keystore = DummyKeystore()
+    dummy_keystore = InMemoryKeystore()
     filesystem_keystore = FilesystemKeystore(keys_dir=tmp_path)
     readonly_filesystem_keystore = ReadonlyFilesystemKeystore(keys_dir=tmp_path)
 
@@ -61,7 +61,7 @@ def test_keystore_basic_get_set_api(tmp_path):
 
 def test_keystore_free_keys_api(tmp_path):
 
-    dummy_keystore = DummyKeystore()
+    dummy_keystore = InMemoryKeystore()
     filesystem_keystore = FilesystemKeystore(keys_dir=tmp_path)
     assert not filesystem_keystore._free_keys_dir.exists()
 
@@ -94,7 +94,7 @@ def test_readonly_keystore_limitations(tmp_path):
 
 def test_keystore_free_keys_concurrency(tmp_path):
 
-    dummy_keystore = DummyKeystore()
+    dummy_keystore = InMemoryKeystore()
     filesystem_keystore = FilesystemKeystore(keys_dir=tmp_path)
 
     for keystore in (dummy_keystore, filesystem_keystore):
@@ -465,7 +465,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
 
     # Check the fallback on "all types of keys" for key_algos parameter
 
-    keystore = DummyKeystore()
+    keystore = InMemoryKeystore()
 
     for _ in range(4):
         res = generate_free_keypair_for_least_provisioned_key_algo(
@@ -484,7 +484,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
 
     # Now test with a restricted set of key types
 
-    keystore = DummyKeystore()
+    keystore = InMemoryKeystore()
     restricted_key_algos = ["DSA_DSS", "ECC_DSS", "RSA_OAEP"]
     generated_keys_count = 0
 
@@ -546,7 +546,7 @@ def test_get_free_keypair_generator_worker():
 
     generated_keys_count = 0
 
-    keystore = DummyKeystore()
+    keystore = InMemoryKeystore()
 
     def keygen_func(key_algo, serialize):
         nonlocal generated_keys_count

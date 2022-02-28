@@ -11,7 +11,7 @@ Each of these key storages theoretically belongs to a single user.
 
 .. autofunction:: wacryptolib.keystore.load_keystore_metadata
 
-.. autoclass:: wacryptolib.keystore.DummyKeystore
+.. autoclass:: wacryptolib.keystore.InMemoryKeystore
     :inherited-members:
 
 .. autoclass:: wacryptolib.keystore.FilesystemKeystore

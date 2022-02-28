@@ -11,11 +11,11 @@ Each of these key storages theoretically belongs to a single user.
 
 .. autofunction:: wacryptolib.keystore.load_keystore_metadata
 
-.. autoclass:: wacryptolib.keystore.KeystoreBase
-
 .. autoclass:: wacryptolib.keystore.DummyKeystore
+    :inherited-members:
 
 .. autoclass:: wacryptolib.keystore.FilesystemKeystore
+    :inherited-members:
 
 
 Key storage pools
@@ -23,8 +23,8 @@ Key storage pools
 
 These combine local and imported key storages under a single interface.
 
-.. autoclass:: wacryptolib.keystore.KeystorePoolBase
-
 .. autoclass:: wacryptolib.keystore.InMemoryKeystorePool
+    :inherited-members:
 
 .. autoclass:: wacryptolib.keystore.FilesystemKeystorePool
+    :inherited-members:

@@ -530,7 +530,10 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         free_public_key.replace(target_public_key_filename)
 
     def export_to_keystore_tree(self, include_private_keys=True):  # TODO add include_private_keys=bool
-        # TODO DOCSTRING
+        """
+        Export keystore metadata and keys (public and, if include_private_keys is true, private)
+        to a data tree.
+        """
 
         assert self._keys_dir.exists(), self._keys_dir
         metadata = load_keystore_metadata(self._keys_dir)
@@ -571,7 +574,13 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         return metadata
 
     def import_from_keystore_tree(self, keystore_tree) -> bool:
-        # TODO DOCSTRING
+        """
+        Import keystore metadata and keys (public and, if included, private) fom a data tree.
+
+        If keystore already exists, it is completed with new keys.
+
+        Returns True if and only if keystore was updated instead of created.
+        """
         validate_keystore_tree(keystore_tree)
 
         try:
@@ -729,13 +738,17 @@ class FilesystemKeystorePool(
         assert foreign_keystore_dir.exists()
 
     def export_foreign_keystore_to_keystore_tree(self, keystore_uid, include_private_keys=True):
-        # TODO DOCSTRING
+        """
+        Exports data tree from the keystore targeted by keystore_uid.
+        """
         foreign_keystore = self.get_foreign_keystore(keystore_uid)
         keystore_tree = foreign_keystore.export_to_keystore_tree(include_private_keys)
         return keystore_tree
 
     def import_foreign_keystore_from_keystore_tree(self, keystore_tree) -> bool:
-        # TODO DOCSTRING
+        """
+        Imports/updates data tree into the keystore targeted by keystore_uid.
+        """
         self._ensure_foreign_keystore_dir_exists(keystore_tree["keystore_uid"])
         foreign_keystore = self.get_foreign_keystore(keystore_tree["keystore_uid"])
         return foreign_keystore.import_from_keystore_tree(keystore_tree)

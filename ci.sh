@@ -6,7 +6,7 @@ set -o nounset
 
 pyclean () {
   # Cleaning cache:
-  find . | grep -E '(__pycache__|\.py[cod]$)' | xargs rm -rf
+  find . | grep -E '(__pycache__|\.py[co]$)' | xargs rm -rf
 }
 
 run_ci () {

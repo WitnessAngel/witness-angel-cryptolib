@@ -35,7 +35,7 @@ class TrusteeApi:
         """Create a keypair if it doesn't exist."""
 
         try:
-            self._keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
+            self._keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)  ### FIXME ULTRA BUGGY, we need PRIVATE KEY too!!!!
         except KeyDoesNotExist:
             pass
         else:
@@ -83,7 +83,7 @@ class TrusteeApi:
         return  # In this base implementation we always allow decryption!
 
     def _decrypt_private_key_pem_with_passphrases(
-        self, *, private_key_pem: bytes, key_algo: str, passphrases: Optional[list]
+        self, *, private_key_pem: bytes, keychain_uid: uuid.UUID, key_algo: str, passphrases: Optional[list]
     ):
         """
         Attempt decryption of key with and without provided passphrases, and raise if all fail.
@@ -97,7 +97,7 @@ class TrusteeApi:
             except KeyLoadingError:
                 pass
         raise DecryptionError(
-            "Could not decrypt private key of type %s (passphrases provided: %d)" % (key_algo, len(passphrases))
+            "Could not decrypt private key %s of type %s (passphrases provided: %d)" % (keychain_uid, key_algo, len(passphrases))
         )
 
     def request_decryption_authorization(
@@ -153,7 +153,7 @@ class TrusteeApi:
 
             try:
                 res = self._decrypt_private_key_pem_with_passphrases(
-                    private_key_pem=private_key_pem, key_algo=key_algo, passphrases=passphrases
+                    private_key_pem=private_key_pem, keychain_uid=keychain_uid, key_algo=key_algo, passphrases=passphrases
                 )
                 assert res, repr(res)
             except DecryptionError:
@@ -201,7 +201,7 @@ class TrusteeApi:
         private_key_pem = self._keystore.get_private_key(keychain_uid=keychain_uid, key_algo=cipher_algo)
 
         private_key = self._decrypt_private_key_pem_with_passphrases(
-            private_key_pem=private_key_pem, key_algo=cipher_algo, passphrases=passphrases
+            private_key_pem=private_key_pem, keychain_uid=keychain_uid, key_algo=cipher_algo, passphrases=passphrases
         )
 
         # We expect a well-formed JSON structure in key_struct_bytes, to possibly check its metadata

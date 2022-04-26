@@ -200,11 +200,8 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
     cipher = PKCS1_OAEP.new(key=key, hashAlgo=RSA_OAEP_HASHER)
     chunks = split_as_chunks(plaintext, chunk_size=RSA_OAEP_CHUNKS_SIZE, must_pad=False, accept_incomplete_chunk=True)
 
-    encrypted_chunks = []
-    for chunk in chunks:
-        encrypted_chunk = cipher.encrypt(chunk)
-        encrypted_chunks.append(encrypted_chunk)
-    return dict(digest_list=encrypted_chunks)
+    ciphertext_chunks = [cipher.encrypt(chunk) for chunk in chunks]
+    return dict(ciphertext_chunks=ciphertext_chunks)
 
 
 def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify_integrity_tags: bool = True) -> bytes:
@@ -221,7 +218,9 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify_integrity_tag
 
     decipher = PKCS1_OAEP.new(key, hashAlgo=RSA_OAEP_HASHER)
 
-    encrypted_chunks = cipherdict["digest_list"]
+    # Retrocompatibility for previous (incorrect) "digest_list" naming
+    field_name = "digest_list" if "digest_list" in cipherdict else "ciphertext_chunks"
+    encrypted_chunks = cipherdict[field_name]
 
     decrypted_chunks = []
     for encrypted_chunk in encrypted_chunks:

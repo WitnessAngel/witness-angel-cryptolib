@@ -106,7 +106,7 @@ def test_trustee_api_workflow():
         )
 
     wrong_cipherdict = copy.deepcopy(cipherdict)
-    wrong_cipherdict["digest_list"].append(b"aaabbbccc")
+    wrong_cipherdict["ciphertext_chunks"].append(b"aaabbbccc")
     with pytest.raises(DecryptionError, match="Ciphertext with incorrect length"):
         trustee_api.decrypt_with_private_key(
             keychain_uid=keychain_uid, cipher_algo="RSA_OAEP", cipherdict=wrong_cipherdict

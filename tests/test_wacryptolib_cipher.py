@@ -48,10 +48,10 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
 
         encryption = copy.deepcopy(initial_cipherdict)
 
-        if encryption.get("digest_list"):  # RSA OAEP CASE
-            digest_list = encryption["digest_list"][:]
-            idx = random.randint(0, len(digest_list) - 1)
-            encryption["digest_list"][idx] = get_random_bytes(random.randint(1, 10))
+        if encryption.get("ciphertext_chunks"):  # RSA OAEP CASE
+            ciphertext_chunks = encryption["ciphertext_chunks"][:]
+            idx = random.randint(0, len(ciphertext_chunks) - 1)
+            encryption["ciphertext_chunks"][idx] = get_random_bytes(random.randint(1, 10))
         else:
             original_ciphertext = encryption["ciphertext"]
             editable_ciphertext = bytearray(original_ciphertext)
@@ -67,8 +67,8 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
         # Test extension of encrypetd data with random bytes
 
         suffix = get_random_bytes(random.randint(4, 10))
-        if encryption.get("digest_list"):
-            encryption["digest_list"].append(suffix)
+        if encryption.get("ciphertext_chunks"):
+            encryption["ciphertext_chunks"].append(suffix)
         else:
             encryption["ciphertext"] += suffix
 

@@ -117,10 +117,13 @@ def _list_available_authdevices_linux():
 
 
 def _list_available_authdevices_darwin():
-    import subprocess, plistlib
-    usb_plist = subprocess.check_output(['system_profiler', '-xml', 'SPUSBDataType'], shell=True)
+    import subprocess, plistlib, shutil
+    system_profiler_location = shutil.which("system_profiler")
+    if not system_profiler_location:
+        raise RuntimeError("system_profiler executable not found")
+    usb_plist = subprocess.check_output([system_profiler_location, '-xml', 'SPUSBDataType'], shell=False)
     device_list = plistlib.loads(usb_plist)
-    return _find_authdevices_in_macosx_system_profiler_data-device_list()
+    return _find_authdevices_in_macosx_system_profiler_data(device_list)
 
 
 def _find_authdevices_in_macosx_system_profiler_data(device_list):

@@ -25,10 +25,12 @@ def list_available_authdevices() -> list:
         - "authenticator_dir" (Path): Theoretical absolute path to the authenticator (might not exist yet)
     """
 
-    if sys_platform == "win32":
+    if sys_platform.startswith("win32"):
         authdevices = _list_available_authdevices_win32()
-    else:  # Linux, MacOS etc.
+    elif sys_platform.startswith("linux"):
         authdevices = _list_available_authdevices_linux()
+    else:  # MACOSX platform, we guess?
+        authdevices = _list_available_authdevices_darwin()
 
     for authdevice in authdevices:
         authdevice["authenticator_dir"] = _get_authenticator_dir_for_authdevice(authdevice)
@@ -63,9 +65,8 @@ def _list_available_authdevices_win32():
                     logging.warning("Skipping faulty device %s: %r", device_path, exc)
                     continue
 
-                authdevice["device_type"] = pnp_dev_id[0]  # type like 'USBSTOR'
+                authdevice["device_type"] = "USBSTOR"  # type like 'USBSTOR'
                 authdevice["partition_mountpoint"] = device_path  # E.g. 'E:\\'
-                assert drive.Size, drive.Size
                 authdevice["filesystem_size"] = int(partition.Size)  # In bytes
                 authdevice["filesystem_format"] = logical_disk.FileSystem.lower()  # E.g 'fat32'
                 authdevice_list.append(authdevice)
@@ -111,5 +112,72 @@ def _list_available_authdevices_linux():
         authdevice["filesystem_format"] = p.fstype  # E.g: 'vfat'
         # authdevice["partition"] = p.device  # E.g: '/dev/sda1' if needed one day
         authdevice_list.append(authdevice)
+
+    return authdevice_list
+
+
+def _list_available_authdevices_darwin():
+    import subprocess, plistlib
+    usb_plist = subprocess.check_output(['system_profiler', '-xml', 'SPUSBDataType'], shell=True)
+    device_list = plistlib.loads(usb_plist)
+    return _find_authdevices_in_macosx_system_profiler_data-device_list()
+
+
+def _find_authdevices_in_macosx_system_profiler_data(device_list):
+
+    authdevice_list = []
+
+    def _is_plist_property_true(value):
+        return value.lower() == "yes"
+
+    def find_authdevices(item_list):
+        for device in item_list:
+            if "_items" in device:
+                find_authdevices(device["_items"])
+                continue  # We're at a USB HUB or something like that
+
+            if _is_plist_property_true(device.get("Built-in_Device", "")):
+                print("CODE 1", device)
+                continue
+
+            if not device.get("Media"):
+                print("CODE 2", device)
+                continue
+
+            media_list = device["Media"]
+            assert media_list  # By construction, not empty
+
+            for media in media_list:
+
+                if not _is_plist_property_true(media.get("removable_media", "")):
+                    print("CODE 3", media)
+                    continue
+
+                if not media.get("volumes"):
+                    print("CODE 4", media)
+                    continue
+
+                volumes = media["volumes"]
+                assert volumes  # By construction, not empty
+
+                for volume in volumes:
+                    if not _is_plist_property_true(volume["writable"]):
+                        print("CODE 4", volume)
+                        continue
+
+                    if not volume.get("mount_point"):
+                        print("CODE 5", volume)
+                        continue
+
+                    authdevice = {}
+                    authdevice["device_type"] = "USBSTOR"
+                    authdevice["partition_label"] = volume["_name"]
+                    authdevice["partition_mountpoint"] = volume["mount_point"]
+                    authdevice["filesystem_size"] = volume["size_in_bytes"]
+                    authdevice["filesystem_format"] = volume["file_system"]
+
+                    authdevice_list.append(authdevice)
+
+    find_authdevices(device_list)
 
     return authdevice_list

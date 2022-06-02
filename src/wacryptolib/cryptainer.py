@@ -91,11 +91,19 @@ class CRYPTAINER_STATES:
 
 
 def _get_trustee_id(trustee_conf: dict) -> str:
-    """Build opaque unique identifier for a specific trustee.
+    """Build opaque identifier unique for a given trustee."""
+    trustee_type = trustee_conf["trustee_type"]
 
-    Remains the same as long as trustee dict is completely unmodified.
-    """
-    return str(sorted(trustee_conf.items()))
+    if trustee_type == CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE:
+        trustee_specifier = None  # Nothing to add for local keyfactory
+    elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
+        trustee_specifier = str(trustee_conf["keystore_uid"])
+    else:
+        assert trustee_type == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE
+        trustee_specifier = trustee_conf["jsonrpc_url"]
+
+    trustee_id = (trustee_type + "@" + trustee_specifier) if trustee_specifier else trustee_type
+    return trustee_id
 
 
 def gather_trustee_dependencies(cryptainers: Sequence) -> dict:

@@ -104,7 +104,7 @@ SIGNATURELESS_CRYPTOCONF = dict(
 
 SIGNATURELESS_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
-        "[('trustee_type', 'local_keyfactory')]": (
+        "local_keyfactory": (
             {"trustee_type": "local_keyfactory"},
             [{"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid}],
         )
@@ -130,13 +130,13 @@ SIMPLE_CRYPTOCONF = dict(
 
 SIMPLE_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
-        "[('trustee_type', 'local_keyfactory')]": (
+        "local_keyfactory": (
             {"trustee_type": "local_keyfactory"},
             [{"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid}],
         )
     },
     "signature": {
-        "[('trustee_type', 'local_keyfactory')]": (
+        "local_keyfactory": (
             {"trustee_type": "local_keyfactory"},
             [{"key_algo": "DSA_DSS", "keychain_uid": keychain_uid}],
         )
@@ -192,7 +192,7 @@ COMPLEX_CRYPTOCONF = dict(
 
 COMPLEX_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
-        "[('trustee_type', 'local_keyfactory')]": (
+        "local_keyfactory": (
             {"trustee_type": "local_keyfactory"},
             [
                 {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
@@ -201,7 +201,7 @@ COMPLEX_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
         )
     },
     "signature": {
-        "[('trustee_type', 'local_keyfactory')]": (
+        "local_keyfactory": (
             {"trustee_type": "local_keyfactory"},
             [
                 {"key_algo": "DSA_DSS", "keychain_uid": keychain_uid},
@@ -269,7 +269,7 @@ SIMPLE_SHAMIR_CRYPTOCONF = dict(
 def SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
     return {
         "encryption": {
-            "[('trustee_type', 'local_keyfactory')]": (
+            "local_keyfactory": (
                 {"trustee_type": "local_keyfactory"},
                 [
                     {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
@@ -278,7 +278,7 @@ def SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
             )
         },
         "signature": {
-            "[('trustee_type', 'local_keyfactory')]": (
+            "local_keyfactory": (
                 {"trustee_type": "local_keyfactory"},
                 [{"key_algo": "DSA_DSS", "keychain_uid": keychain_uid}],
             )
@@ -360,7 +360,7 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
 def COMPLEX_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
     return {
         "encryption": {
-            "[('trustee_type', 'local_keyfactory')]": (
+            "local_keyfactory": (
                 {"trustee_type": "local_keyfactory"},
                 [
                     {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
@@ -369,7 +369,7 @@ def COMPLEX_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
             )
         },
         "signature": {
-            "[('trustee_type', 'local_keyfactory')]": (
+            "local_keyfactory": (
                 {"trustee_type": "local_keyfactory"},
                 [
                     {"key_algo": "DSA_DSS", "keychain_uid": keychain_uid},

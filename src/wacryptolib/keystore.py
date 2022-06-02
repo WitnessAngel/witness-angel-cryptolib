@@ -719,7 +719,7 @@ class FilesystemKeystorePool(
         paths = foreign_keystores_dir.glob("%s*" % self.FOREIGN_KEYSTORE_PREFIX)  # This excludes TEMP folders
         return sorted([uuid.UUID(d.name.replace(self.FOREIGN_KEYSTORE_PREFIX, "")) for d in paths])
 
-    def get_foreign_keystore_metadata(self) -> dict:
+    def get_all_foreign_keystore_metadata(self) -> dict:
         """Return a dict mapping key storage UUIDs to the dicts of their metadata.
 
         Raises if any metadata loading fails.

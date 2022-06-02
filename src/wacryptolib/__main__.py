@@ -9,7 +9,7 @@ from wacryptolib.cryptainer import (
     decrypt_payload_from_cryptainer,
     CRYPTAINER_SUFFIX,
     DECRYPTED_FILE_SUFFIX,
-    SHARED_SECRET_ALGO_MARKER,
+    SHARED_SECRET_ALGO_MARKER, check_conf_sanity, check_cryptainer_sanity,
 )
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
@@ -86,6 +86,8 @@ def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):
     else:
         cryptoconf = load_from_json_bytes(cryptoconf_fileobj.read())
 
+    check_conf_sanity(cryptoconf)
+
     cryptainer = encrypt_payload_into_cryptainer(
         payload, cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
     )
@@ -115,6 +117,7 @@ def encrypt(ctx, input_medium, output_cryptainer, cryptoconf):
 
 
 def _do_decrypt(cryptainer, keystore_pool):
+    check_cryptainer_sanity(cryptainer)
     payload = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
     return payload
 

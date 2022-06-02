@@ -97,7 +97,7 @@ def get_trustee_id(trustee_conf: dict) -> str:
     if trustee_type == CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE:
         trustee_specifier = None  # Nothing to add for local keyfactory
     elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
-        trustee_specifier = str(trustee_conf["keystore_uid"])
+        trustee_specifier = str(trustee_conf["keystore_uid"])  # Ignore optional keystore_owner
     else:
         assert trustee_type == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE
         trustee_specifier = trustee_conf["jsonrpc_url"]
@@ -1480,8 +1480,15 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
 
     trustee_schemas = Or(
         LOCAL_KEYFACTORY_TRUSTEE_MARKER,
-        {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE, "keystore_uid": micro_schemas.schema_uid},
-        {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE, "jsonrpc_url": str},
+        {
+         "trustee_type": CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE,
+         "keystore_uid": micro_schemas.schema_uid,
+         OptionalKey("keystore_owner"): str,  # Optional for retrocompatibility only, may be left empty even if present!
+         },
+        {
+         "trustee_type": CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE,
+         "jsonrpc_url": str
+        },
     )
 
     payload_signature = {
@@ -1591,7 +1598,7 @@ def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
             raise SchemaValidationError("Error validating data tree with json-schema: {}".format(exc)) from exc
 
 
-def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode: False):
+def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False):
     """Validate the format of a cryptainer.
 
     :param jsonschema_mode: If True, the cryptainer must have been loaded as raw json
@@ -1603,7 +1610,7 @@ def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode: False):
     _validate_data_tree(data_tree=cryptainer, valid_schema=schema)
 
 
-def check_conf_sanity(cryptoconf: dict, jsonschema_mode: False):
+def check_conf_sanity(cryptoconf: dict, jsonschema_mode=False):
     """Validate the format of a conf.
 
     :param jsonschema_mode: If True, the cryptainer must have been loaded as raw json

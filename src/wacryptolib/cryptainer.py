@@ -90,7 +90,7 @@ class CRYPTAINER_STATES:
     FINISHED = "FINISHED"
 
 
-def _get_trustee_id(trustee_conf: dict) -> str:
+def get_trustee_id(trustee_conf: dict) -> str:
     """Build opaque identifier unique for a given trustee."""
     trustee_type = trustee_conf["trustee_type"]
 
@@ -116,7 +116,7 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
     cipher_dependencies = {}
 
     def _add_keypair_identifiers_for_trustee(mapper, trustee_conf, keychain_uid, key_algo):
-        trustee_id = _get_trustee_id(trustee_conf=trustee_conf)
+        trustee_id = get_trustee_id(trustee_conf=trustee_conf)
         keypair_identifiers = dict(keychain_uid=keychain_uid, key_algo=key_algo)
         mapper.setdefault(trustee_id, (trustee_conf, []))
         keypair_identifiers_list = mapper[trustee_id][1]
@@ -779,7 +779,7 @@ class CryptainerDecryptor(CryptainerBase):
         """
         trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
 
-        trustee_id = _get_trustee_id(trustee)
+        trustee_id = get_trustee_id(trustee)
         passphrases = self._passphrase_mapper.get(trustee_id) or []
         assert isinstance(passphrases, list), repr(passphrases)  # No SINGLE passphrase here
 

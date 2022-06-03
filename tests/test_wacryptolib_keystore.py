@@ -425,6 +425,8 @@ def test_keystore_import_foreign_keystore_from_filesystem(tmp_path: Path):
     pool = FilesystemKeystorePool(pool_path)
     assert pool.list_foreign_keystore_uids() == []
     assert pool.get_all_foreign_keystore_metadata() == {}
+    with pytest.raises(KeystoreDoesNotExist):
+        pool.get_keystore_metadata(generate_uuid0())
 
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()
@@ -451,6 +453,7 @@ def test_keystore_import_foreign_keystore_from_filesystem(tmp_path: Path):
     metadata = metadata_mapper[keystore_uid]
     assert metadata["keystore_uid"] == keystore_uid
     assert metadata["keystore_owner"] == "Jean-Jâcques"
+    assert metadata == pool.get_keystore_metadata(keystore_uid)
 
     with pytest.raises(KeystoreAlreadyExists, match=str(keystore_uid)):
         pool.import_foreign_keystore_from_filesystem(remote_keystore_dir)

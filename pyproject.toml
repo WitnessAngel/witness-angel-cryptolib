@@ -27,8 +27,8 @@ classifiers = [
     "Operating System :: Unix",
     "Operating System :: MacOS :: MacOS X",
 ]
-include = ["CHANGELOG", "tox.ini", "docs/*", "docs/api/*", "tests/*.py"]
-exclude = ["_build"]
+include = []
+exclude = []
 
 [tool.poetry.dependencies]
 python = ">=3.7, <=3.10"

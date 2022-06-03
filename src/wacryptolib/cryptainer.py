@@ -1610,7 +1610,7 @@ def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False):
     _validate_data_tree(data_tree=cryptainer, valid_schema=schema)
 
 
-def check_conf_sanity(cryptoconf: dict, jsonschema_mode=False):
+def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
     """Validate the format of a conf.
 
     :param jsonschema_mode: If True, the cryptainer must have been loaded as raw json

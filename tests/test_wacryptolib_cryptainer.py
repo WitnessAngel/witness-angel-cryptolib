@@ -37,7 +37,7 @@ from wacryptolib.cryptainer import (
     CryptainerEncryptor,
     encrypt_payload_and_stream_cryptainer_to_filesystem,
     is_cryptainer_cryptoconf_streamable,
-    check_conf_sanity,
+    check_cryptoconf_sanity,
     check_cryptainer_sanity,
     CRYPTAINER_TEMP_SUFFIX,
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
@@ -1615,10 +1615,10 @@ def test_create_cryptainer_encryption_stream(tmp_path):
     "cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF]
 )
 def test_conf_validation_success(cryptoconf):
-    check_conf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
+    check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
 
     conf_json = convert_native_tree_to_extended_json_tree(cryptoconf)
-    check_conf_sanity(cryptoconf=conf_json, jsonschema_mode=True)
+    check_cryptoconf_sanity(cryptoconf=conf_json, jsonschema_mode=True)
 
 
 def _generate_corrupted_confs(cryptoconf):
@@ -1650,11 +1650,11 @@ def _generate_corrupted_confs(cryptoconf):
 @pytest.mark.parametrize("corrupted_conf", _generate_corrupted_confs(COMPLEX_SHAMIR_CRYPTOCONF))
 def test_conf_validation_error(corrupted_conf):
     with pytest.raises(ValidationError):
-        check_conf_sanity(cryptoconf=corrupted_conf, jsonschema_mode=False)
+        check_cryptoconf_sanity(cryptoconf=corrupted_conf, jsonschema_mode=False)
 
     with pytest.raises(ValidationError):
         corrupted_conf_json = convert_native_tree_to_extended_json_tree(corrupted_conf)
-        check_conf_sanity(cryptoconf=corrupted_conf_json, jsonschema_mode=True)
+        check_cryptoconf_sanity(cryptoconf=corrupted_conf_json, jsonschema_mode=True)
 
 
 @pytest.mark.parametrize(

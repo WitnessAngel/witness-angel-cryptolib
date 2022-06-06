@@ -107,18 +107,17 @@ def test_ecc_keypair_generation():
         assert isinstance(key, ecc_key_class_fetcher())
 
 
-def test_load_asymmetric_key_from_pem_bytestring():
+@pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
+def test_load_asymmetric_key_from_pem_bytestring(key_algo):
 
-    for key_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo)
 
-        keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo)
+    for field in ["private_key", "public_key"]:
+        key = load_asymmetric_key_from_pem_bytestring(key_pem=keypair[field], key_algo=key_algo)
+        assert key.export_key  # Method of Key object
 
-        for field in ["private_key", "public_key"]:
-            key = load_asymmetric_key_from_pem_bytestring(key_pem=keypair[field], key_algo=key_algo)
-            assert key.export_key  # Method of Key object
-
-        with pytest.raises(ValueError, match="Unknown key type"):
-            load_asymmetric_key_from_pem_bytestring(key_pem=keypair["private_key"], key_algo="ZHD")
+    with pytest.raises(ValueError, match="Unknown key type"):
+        load_asymmetric_key_from_pem_bytestring(key_pem=keypair["private_key"], key_algo="ZHD")
 
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)

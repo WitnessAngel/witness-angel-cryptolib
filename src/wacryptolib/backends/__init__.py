@@ -68,6 +68,27 @@ if use_fallback_backend :
         if hasattr(module, "_pbkdf2_hmac_assist"):
             del module._pbkdf2_hmac_assist  # Force slow code path, not requiring advanced hasher capabilities
 
+    import Crypto.Cipher.AES
+    import pyaes
+    def patched_aes_new(key, mode, iv, *args, **kwargs):
+        assert mode == Crypto.Cipher.AES.MODE_CBC, mode
+        cipher = pyaes.AESModeOfOperationCBC(key=key, iv=iv)
+        cipher.block_size = Crypto.Cipher.AES.block_size
+        original_cipher_encrypt = cipher.encrypt
+
+        def patched_encrypt(plaintext):
+            result = b""
+            while plaintext:
+                chunk = plaintext[:cipher.block_size]
+                plaintext = plaintext[cipher.block_size:]
+                result += original_cipher_encrypt(chunk)
+            return result
+        cipher.encrypt = patched_encrypt
+
+        return cipher
+    Crypto.Cipher.AES.new = patched_aes_new
+
+
 from .pycryptodome import encrypt_via_aes_cbc, decrypt_via_aes_cbc, encrypt_via_aes_eax, decrypt_via_aes_eax,\
     encrypt_via_chacha20_poly1305, decrypt_via_chacha20_poly1305, build_rsa_oaep_cipher,\
     build_aes_cbc_cipher, build_aes_eax_cipher, build_chacha20_poly1305_cipher, AES_BLOCK_SIZE

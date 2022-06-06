@@ -21,4 +21,5 @@ def generate_rsa_keypair(key_length_bits):
 def get_hasher_instance(hash_algo):
     import hashlib
     hasher_class = getattr(hashlib, hash_algo.lower())
-    return hasher_class()
+    hasher_instance = hasher_class()
+    return hasher_instance

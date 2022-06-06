@@ -75,7 +75,7 @@ def _get_utc_timestamp() -> int:
     return timestamp_utc
 
 
-def _compute_timestamped_hash(message: bytes, timestamp_utc: int):
+def _compute_timestamped_hash(message: bytes, timestamp_utc: int) -> object:
     """Create a hash of content, including the timestamp.
 
     :param message: bytestring to sign
@@ -84,11 +84,12 @@ def _compute_timestamped_hash(message: bytes, timestamp_utc: int):
     :return: stdlib hash object
     """
     signature_hasher = get_hasher_instance("SHA512")  # ALWAYS USE THIS ONE!
-    plaintext_hash_bytes = signature_hasher.new(message).digest()
+    signature_hasher.update(message)
+
     timestamp_bytes = str(timestamp_utc).encode("ascii")
-    timestamped_payload = plaintext_hash_bytes + timestamp_bytes
-    payload_hash = signature_hasher.new(timestamped_payload)
-    return payload_hash  # FIXME HOW IS IT POSSIBLE????
+    signature_hasher.update(timestamp_bytes)
+
+    return signature_hasher  # NOT a bytestring but a full hash object!
 
 
 SIGNATURE_ALGOS_REGISTRY = dict(

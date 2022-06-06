@@ -1,7 +1,7 @@
 import logging
 from typing import Sequence
 
-from Crypto.Protocol.SecretSharing import Shamir
+from wacryptolib.backends import shamir_split, shamir_combine
 
 from wacryptolib.utilities import split_as_chunks, recombine_chunks
 
@@ -92,7 +92,7 @@ def _split_128b_bytestring_into_shards(secret: bytes, shard_count: int, threshol
         :return: list of tuples (index, shard)"""
 
     assert len(secret) == 16
-    shards = Shamir.split(k=threshold_count, n=shard_count, secret=secret)
+    shards = shamir_split(k=threshold_count, n=shard_count, secret=secret)
     assert len(shards) == shard_count, shards
     return shards
 
@@ -104,5 +104,5 @@ def _recombine_128b_shards_into_bytestring(shards: Sequence[tuple]) -> bytes:
 
         :return: list of tuples (index, shard)"""
 
-    secret = Shamir.combine(shards)
+    secret = shamir_combine(shards)
     return secret

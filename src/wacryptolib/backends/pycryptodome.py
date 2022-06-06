@@ -2,11 +2,16 @@ import importlib
 
 import Crypto.Hash.SHA512
 from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
+from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Util.Padding import pad, unpad
+import Crypto.Random
+
 
 RSA_OAEP_HASHER = Crypto.Hash.SHA512
 
 AES_BLOCK_SIZE = AES.block_size
+
+get_random_bytes = Crypto.Random.get_random_bytes
 
 
 # AES CBC CIPHER #
@@ -87,3 +92,51 @@ def get_hasher_instance(hash_algo):
     module = importlib.import_module("Crypto.Hash.%s" % hash_algo)
     hasher_instance = module.new()
     return hasher_instance
+
+
+# RSA KEY GENERATION, AND IMPORT/EXPORT #
+
+def generate_rsa_keypair(key_length_bits):
+    private_key = RSA.generate(key_length_bits)
+    public_key = private_key.publickey()
+    return public_key, private_key
+
+
+def generate_dsa_keypair(key_length_bits):
+    private_key = DSA.generate(key_length_bits)
+    public_key = private_key.publickey()
+    return public_key, private_key
+
+
+def generate_ecc_keypair(curve):
+    if curve not in ECC._curves:
+        raise ValueError("Unexisting ECC curve '%s', must be one of '%s'" % (curve, sorted(ECC._curves.keys())))
+    private_key = ECC.generate(curve=curve)
+    public_key = private_key.public_key()
+    return public_key, private_key
+
+
+import_rsa_key_from_pem = RSA.import_key
+import_dsa_key_from_pem = DSA.import_key
+import_ecc_key_from_pem = ECC.import_key
+
+
+def export_rsa_key_to_pem(private_key, passphrase=None):
+    extra_params = dict(passphrase=passphrase, pkcs=8, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC") if passphrase else {}
+    return private_key.export_key(format="PEM", **extra_params)
+
+def export_dsa_key_to_pem(private_key, passphrase=None):
+    extra_params = dict(passphrase=passphrase, pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC") if passphrase else {}
+    return private_key.export_key(format="PEM", **extra_params)
+
+def export_ecc_key_to_pem(private_key, passphrase=None):
+    extra_params = dict(passphrase=passphrase, use_pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndAES128-CBC") if passphrase else {}
+    return private_key.export_key(format="PEM", **extra_params)
+
+
+# SHAMIR SHARED SECRETS #
+
+from Crypto.Protocol.SecretSharing import Shamir
+
+shamir_split = Shamir.split
+shamir_combine= Shamir.combine

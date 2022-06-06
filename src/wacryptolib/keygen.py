@@ -2,11 +2,11 @@ import logging
 import unicodedata
 from typing import Optional, AnyStr
 
-from Crypto.PublicKey import RSA, DSA, ECC
-from Crypto.Random import get_random_bytes
-
 from wacryptolib.backends import AES_BLOCK_SIZE
 from wacryptolib.exceptions import KeyLoadingError
+from wacryptolib.backends import generate_rsa_keypair, generate_dsa_keypair, generate_ecc_keypair, \
+    import_rsa_key_from_pem, import_dsa_key_from_pem, import_ecc_key_from_pem, export_rsa_key_to_pem, \
+    export_dsa_key_to_pem, export_ecc_key_to_pem, get_random_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -126,9 +126,7 @@ def _generate_rsa_keypair_as_objects(key_length_bits: int) -> dict:
     :return: dictionary with "private_key" and "public_key" fields as objects."""
 
     _check_asymmetric_key_length_bits(key_length_bits)
-
-    private_key = RSA.generate(key_length_bits)
-    public_key = private_key.publickey()
+    public_key, private_key = generate_rsa_keypair(key_length_bits)
     keypair = {"public_key": public_key, "private_key": private_key}
     return keypair
 
@@ -143,9 +141,7 @@ def _generate_dsa_keypair_as_objects(key_length_bits: int) -> dict:
     :return: dictionary with "private_key" and "public_key" fields as objects."""
 
     _check_asymmetric_key_length_bits(key_length_bits)
-
-    private_key = DSA.generate(key_length_bits)
-    public_key = private_key.publickey()
+    public_key, private_key = generate_dsa_keypair(key_length_bits)
     keypair = {"public_key": public_key, "private_key": private_key}
     return keypair
 
@@ -159,11 +155,7 @@ def _generate_ecc_keypair_as_objects(curve: str) -> dict:
 
     :return: dictionary with "private_key" and "public_key" fields as objects."""
 
-    if curve not in ECC._curves:
-        raise ValueError("Unexisting ECC curve '%s', must be one of '%s'" % (curve, sorted(ECC._curves.keys())))
-
-    private_key = ECC.generate(curve=curve)
-    public_key = private_key.public_key()
+    public_key, private_key = generate_ecc_keypair(curve)
     keypair = {"public_key": public_key, "private_key": private_key}
     return keypair
 
@@ -176,13 +168,10 @@ def _serialize_key_object_to_pem_bytestring(key, key_algo: str, passphrase: Opti
     assert passphrase is None or (isinstance(passphrase, bytes) and passphrase), repr(
         passphrase
     )  # No implicit encoding here
-    extra_params = {}
-    if passphrase:
-        extra_params = dict(passphrase=passphrase)
-        extra_params.update(ASYMMETRIC_KEY_ALGOS_REGISTRY[key_algo]["pem_export_private_key_encryption_kwargs"])
-    key_pem = key.export_key(format="PEM", **extra_params)
+    pem_export_function = ASYMMETRIC_KEY_ALGOS_REGISTRY[key_algo]["pem_export_function"]
+    key_pem = pem_export_function(key, passphrase=passphrase)
     if isinstance(key_pem, str):
-        key_pem = key_pem.encode("ascii")  # Some types deliver ascii bytestrings, let's normalize
+        key_pem = key_pem.encode("ascii")  # Some APIs deliver ascii bytestrings, let's normalize to bytes...
     return key_pem
 
 
@@ -209,27 +198,27 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
     RSA_OAEP={
         "generation_function": _generate_rsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length_bits"],
-        "pem_export_private_key_encryption_kwargs": dict(pkcs=8, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC"),
-        "pem_import_function": RSA.import_key,
+        "pem_import_function": import_rsa_key_from_pem,
+        "pem_export_function": export_rsa_key_to_pem,
     },
     ## KEYS FOR SIGNATURE ##
     RSA_PSS={  # Same parameters as RSA_OAEP for now
         "generation_function": _generate_rsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length_bits"],
-        "pem_export_private_key_encryption_kwargs": dict(pkcs=8, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC"),
-        "pem_import_function": RSA.import_key,
+        "pem_import_function": import_rsa_key_from_pem,
+        "pem_export_function": export_rsa_key_to_pem,
     },
     DSA_DSS={
         "generation_function": _generate_dsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length_bits"],
-        "pem_export_private_key_encryption_kwargs": dict(pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC"),
-        "pem_import_function": DSA.import_key,
+        "pem_import_function": import_dsa_key_from_pem,
+        "pem_export_function": export_dsa_key_to_pem,
     },
     ECC_DSS={
         "generation_function": _generate_ecc_keypair_as_objects,
         "generation_extra_parameters": ["curve"],
-        "pem_export_private_key_encryption_kwargs": dict(use_pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndAES128-CBC"),
-        "pem_import_function": ECC.import_key,
+        "pem_import_function": import_ecc_key_from_pem,
+        "pem_export_function": export_ecc_key_to_pem,
     },
 )
 

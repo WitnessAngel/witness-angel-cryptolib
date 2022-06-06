@@ -2,10 +2,10 @@ import logging
 import unicodedata
 from typing import Optional, AnyStr
 
-from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA, DSA, ECC
 from Crypto.Random import get_random_bytes
 
+from wacryptolib.backends import AES_BLOCK_SIZE
 from wacryptolib.exceptions import KeyLoadingError
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ def generate_symkey(cipher_algo: str) -> dict:
 
 
 def _generate_aes_cbc_key_dict():
-    return dict(key=get_random_bytes(32), iv=get_random_bytes(AES.block_size))
+    return dict(key=get_random_bytes(32), iv=get_random_bytes(AES_BLOCK_SIZE))
 
 
 def _generate_aes_eax_key_dict():

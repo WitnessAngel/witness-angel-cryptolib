@@ -2,11 +2,13 @@ import importlib
 import logging
 from typing import BinaryIO
 
-import Crypto.Hash.SHA512
-from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
-from Crypto.Util.Padding import pad, unpad
+
 
 from wacryptolib import utilities
+from wacryptolib.backends import decrypt_via_aes_cbc, encrypt_via_aes_cbc, encrypt_via_aes_eax, decrypt_via_aes_eax, \
+    encrypt_via_chacha20_poly1305, decrypt_via_chacha20_poly1305, build_rsa_oaep_cipher, \
+    pad, unpad, AES_BLOCK_SIZE, build_aes_cbc_cipher, build_aes_eax_cipher, build_chacha20_poly1305_cipher, \
+    get_hasher_instance
 from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionIntegrityError, OperationNotSupported
 from wacryptolib.keygen import (
     _check_symmetric_key_length_bytes,
@@ -18,7 +20,6 @@ from wacryptolib.utilities import split_as_chunks
 logger = logging.getLogger(__name__)
 
 RSA_OAEP_CHUNKS_SIZE = 60
-RSA_OAEP_HASHER = Crypto.Hash.SHA512
 
 
 def _get_cipher_algo_conf(cipher_algo):
@@ -82,12 +83,10 @@ def _encrypt_via_aes_cbc(plaintext: bytes, key_dict: dict) -> dict:
         (respectively for *AES-128*, *AES-192* or *AES-256*).
 
     :return: dict with field "ciphertext" as bytestring"""
-    main_key = key_dict["key"]
+    key = key_dict["key"]
     iv = key_dict["iv"]
-    _check_symmetric_key_length_bytes(len(main_key))
-    cipher = AES.new(main_key, AES.MODE_CBC, iv=iv)
-    plaintext_padded = pad(plaintext, block_size=AES.block_size)
-    ciphertext = cipher.encrypt(plaintext_padded)
+    _check_symmetric_key_length_bytes(len(key))
+    ciphertext = encrypt_via_aes_cbc(plaintext, key=key, iv=iv)
     cipherdict = {"ciphertext": ciphertext}
     return cipherdict
 
@@ -101,13 +100,12 @@ def _decrypt_via_aes_cbc(cipherdict: dict, key_dict: dict, verify_integrity_tags
         (not applicable for this cipher)
 
     :return: the decrypted bytestring"""
-    main_key = key_dict["key"]
+    del verify_integrity_tags  # No use here
+    key = key_dict["key"]
     iv = key_dict["iv"]
-    _check_symmetric_key_length_bytes(len(main_key))
+    _check_symmetric_key_length_bytes(len(key))
     ciphertext = cipherdict["ciphertext"]
-    decipher = AES.new(main_key, AES.MODE_CBC, iv=iv)
-    plaintext_padded = decipher.decrypt(ciphertext)
-    plaintext = unpad(plaintext_padded, block_size=AES.block_size)
+    plaintext = decrypt_via_aes_cbc(ciphertext, key=key, iv=iv)
     return plaintext
 
 
@@ -120,11 +118,10 @@ def _encrypt_via_aes_eax(plaintext: bytes, key_dict: dict) -> dict:
         (respectively for *AES-128*, *AES-192* or *AES-256*).
 
     :return: dict with fields "ciphertext" and "tag" as bytestrings"""
-    main_key = key_dict["key"]
+    key = key_dict["key"]
     nonce = key_dict["nonce"]
-    _check_symmetric_key_length_bytes(len(main_key))
-    cipher = AES.new(main_key, AES.MODE_EAX, nonce=nonce)
-    ciphertext, tag = cipher.encrypt_and_digest(plaintext)
+    _check_symmetric_key_length_bytes(len(key))
+    ciphertext, tag = encrypt_via_aes_eax(plaintext, key=key, nonce=nonce)
     cipherdict = {"ciphertext": ciphertext, "tag": tag}
     return cipherdict
 
@@ -137,13 +134,11 @@ def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify_integrity_tags
     :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
     :return: the decrypted bytestring"""
-    main_key = key_dict["key"]
+    key = key_dict["key"]
     nonce = key_dict["nonce"]
-    _check_symmetric_key_length_bytes(len(main_key))
-    decipher = AES.new(main_key, AES.MODE_EAX, nonce=nonce)
-    plaintext = decipher.decrypt(cipherdict["ciphertext"])
-    if verify_integrity_tags:
-        decipher.verify(cipherdict["tag"])
+    _check_symmetric_key_length_bytes(len(key))
+    plaintext = decrypt_via_aes_eax(cipherdict["ciphertext"], tag=cipherdict["tag"], key=key, nonce=nonce,
+                                    verify_integrity_tags=verify_integrity_tags)
     return plaintext
 
 
@@ -157,12 +152,10 @@ def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict) -> dict:
     :param key_dict: 32 bytes long cryptographic key and nonce
 
     :return: dict with fields "ciphertext", "tag", and "header" as bytestrings"""
-    main_key = key_dict["key"]
+    key = key_dict["key"]
     nonce = key_dict["nonce"]
-    _check_symmetric_key_length_bytes(len(main_key))
-    cipher = ChaCha20_Poly1305.new(key=main_key, nonce=nonce)
-    # cipher.update(aad)  UNUSED
-    ciphertext, tag = cipher.encrypt_and_digest(plaintext)
+    _check_symmetric_key_length_bytes(len(key))
+    ciphertext, tag = encrypt_via_chacha20_poly1305(plaintext, key=key, nonce=nonce)
     encryption = {"ciphertext": ciphertext, "tag": tag}
     return encryption
 
@@ -175,15 +168,11 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify_inte
     :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
     :return: the decrypted bytestring"""
-    main_key = key_dict["key"]
+    key = key_dict["key"]
     nonce = key_dict["nonce"]
-    _check_symmetric_key_length_bytes(len(main_key))
-    decipher = ChaCha20_Poly1305.new(key=main_key, nonce=nonce)
-    # decipher.update(cipherdict["aad"])  UNUSED
-    if verify_integrity_tags:
-        plaintext = decipher.decrypt_and_verify(ciphertext=cipherdict["ciphertext"], received_mac_tag=cipherdict["tag"])
-    else:
-        plaintext = decipher.decrypt(ciphertext=cipherdict["ciphertext"])
+    _check_symmetric_key_length_bytes(len(key))
+    plaintext = decrypt_via_chacha20_poly1305(cipherdict["ciphertext"], tag=cipherdict["tag"], key=key, nonce=nonce, verify_integrity_tags=verify_integrity_tags)
+
     return plaintext
 
 
@@ -197,10 +186,10 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
     key = key_dict["key"]
     _check_asymmetric_key_length_bits(key.size_in_bits())
 
-    cipher = PKCS1_OAEP.new(key=key, hashAlgo=RSA_OAEP_HASHER)
+    encrypter = build_rsa_oaep_cipher(key).encrypt
     chunks = split_as_chunks(plaintext, chunk_size=RSA_OAEP_CHUNKS_SIZE, must_pad=False, accept_incomplete_chunk=True)
 
-    ciphertext_chunks = [cipher.encrypt(chunk) for chunk in chunks]
+    ciphertext_chunks = [encrypter(chunk) for chunk in chunks]
     return dict(ciphertext_chunks=ciphertext_chunks)
 
 
@@ -216,7 +205,7 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify_integrity_tag
     key = key_dict["key"]
     _check_asymmetric_key_length_bits(key.size_in_bits())
 
-    decipher = PKCS1_OAEP.new(key, hashAlgo=RSA_OAEP_HASHER)
+    decrypter = build_rsa_oaep_cipher(key).decrypt
 
     # Retrocompatibility for previous (incorrect) "digest_list" naming
     field_name = "digest_list" if "digest_list" in cipherdict else "ciphertext_chunks"
@@ -224,7 +213,7 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify_integrity_tag
 
     decrypted_chunks = []
     for encrypted_chunk in encrypted_chunks:
-        decrypted_chunk = decipher.decrypt(encrypted_chunk)
+        decrypted_chunk = decrypter(encrypted_chunk)
         decrypted_chunks.append(decrypted_chunk)
     return b"".join(decrypted_chunks)
 
@@ -248,8 +237,7 @@ class EncryptionNodeBase:
         hashers_dict = {}
 
         for hash_algo in payload_digest_algo:
-            module = importlib.import_module("Crypto.Hash.%s" % hash_algo)
-            hasher_instance = module.new()
+            hasher_instance = get_hasher_instance(hash_algo)
             hashers_dict[hash_algo] = hasher_instance
 
         self._hashers_dict = hashers_dict
@@ -315,13 +303,13 @@ class EncryptionNodeBase:
 class AesCbcEncryptionNode(EncryptionNodeBase):
     """Encrypt a bytestring using AES (CBC mode)."""
 
-    BLOCK_SIZE = AES.block_size
+    BLOCK_SIZE = AES_BLOCK_SIZE
 
     def __init__(self, key_dict: dict, payload_digest_algo=()):
         super().__init__(payload_digest_algo=payload_digest_algo)
         self._key = key_dict["key"]
         self._iv = key_dict["iv"]
-        self._cipher = AES.new(self._key, AES.MODE_CBC, self._iv)
+        self._cipher = build_aes_cbc_cipher(self._key, iv=self._iv)
 
 
 class AesEaxEncryptionNode(EncryptionNodeBase):
@@ -331,7 +319,7 @@ class AesEaxEncryptionNode(EncryptionNodeBase):
         super().__init__(payload_digest_algo=payload_digest_algo)
         self._key = key_dict["key"]
         self._nonce = key_dict["nonce"]
-        self._cipher = AES.new(self._key, AES.MODE_EAX, nonce=self._nonce)
+        self._cipher = build_aes_eax_cipher(self._key, nonce=self._nonce)
 
     def _get_payload_macs(self) -> dict:
         return {"tag": self._cipher.digest()}
@@ -345,7 +333,7 @@ class Chacha20Poly1305EncryptionNode(EncryptionNodeBase):
 
         self._key = key_dict["key"]
         self._nonce = key_dict["nonce"]
-        self._cipher = ChaCha20_Poly1305.new(key=self._key, nonce=self._nonce)
+        self._cipher = build_chacha20_poly1305_cipher(self._key, nonce=self._nonce)
 
     def _get_payload_macs(self) -> dict:
         return {"tag": self._cipher.digest()}

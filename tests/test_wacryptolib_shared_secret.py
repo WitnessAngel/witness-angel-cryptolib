@@ -1,9 +1,9 @@
 import random
 
 import pytest
-from Crypto.Random import get_random_bytes
 
 import wacryptolib.shared_secret
+from wacryptolib.backends import get_random_bytes
 
 
 def test_shared_secret_normal_cases():

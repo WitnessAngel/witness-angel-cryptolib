@@ -3,8 +3,8 @@ import random
 from unittest import mock
 
 import pytest
-from Crypto.Random import get_random_bytes
 
+from wacryptolib.backends import get_random_bytes
 from wacryptolib.cipher import _encrypt_via_rsa_oaep
 from wacryptolib.exceptions import (
     KeyDoesNotExist,

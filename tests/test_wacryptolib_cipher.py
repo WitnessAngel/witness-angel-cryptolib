@@ -4,11 +4,9 @@ import io
 import random
 
 import pytest
-from Crypto.PublicKey import RSA
-from Crypto.Random import get_random_bytes
-from Crypto.Random.random import randint
 
 import wacryptolib
+from wacryptolib.backends import get_random_bytes, generate_rsa_keypair
 from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipeline
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
 from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError, OperationNotSupported
@@ -139,8 +137,7 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
     )
     _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
 
-    private_key_too_short = RSA.generate(1024)
-    public_key_too_short = private_key_too_short.publickey()
+    public_key_too_short, private_key_too_short = generate_rsa_keypair(1024)
 
     with pytest.raises(EncryptionError, match="asymmetric key length"):
         wacryptolib.cipher.encrypt_bytestring(
@@ -167,7 +164,7 @@ def test_valid_payload_encryption_pipeline(cipher_algo_list):
         payload_cipher_layers_extract = {
             "cipher_algo": cipher_algo,
             "symkey": generate_symkey(cipher_algo),
-            "payload_digest_algos": random.choices(SUPPORTED_HASH_ALGOS, k=randint(1, len(SUPPORTED_HASH_ALGOS))),
+            "payload_digest_algos": random.choices(SUPPORTED_HASH_ALGOS, k=random.randint(1, len(SUPPORTED_HASH_ALGOS))),
         }
         payload_cipher_layer_extracts.append(payload_cipher_layers_extract)
     print(payload_cipher_layer_extracts)
@@ -176,11 +173,11 @@ def test_valid_payload_encryption_pipeline(cipher_algo_list):
         payload_cipher_layer_extracts=payload_cipher_layer_extracts, output_stream=output_stream
     )
 
-    plaintext_full = get_random_bytes(randint(10, 10000))
+    plaintext_full = get_random_bytes(random.randint(10, 10000))
 
     plaintext_current = plaintext_full
     while plaintext_current:  # TODO factorize this utility of looping through chunks!
-        chunk_length = randint(1, 300)
+        chunk_length = random.randint(1, 300)
         chunk = plaintext_current[0:chunk_length]
         plaintext_current = plaintext_current[chunk_length:]
         encryption_pipeline.encrypt_chunk(chunk)

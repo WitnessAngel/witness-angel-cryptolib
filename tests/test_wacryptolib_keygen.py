@@ -1,9 +1,10 @@
 import unicodedata
 
 import pytest
-from Crypto.PublicKey import RSA, ECC, DSA
 
 import wacryptolib
+from wacryptolib.backends import RSA_KEY_CLASS, DSA_KEY_CLASS, ECC_KEY_CLASS, import_ecc_key_from_pem, \
+    import_dsa_key_from_pem, import_rsa_key_from_pem
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
 from wacryptolib.exceptions import KeyLoadingError
 from wacryptolib.keygen import (
@@ -72,8 +73,8 @@ def test_rsa_keypair_generation():
             assert isinstance(keypair["private_key"], bytes), keypair
             assert isinstance(keypair["public_key"], bytes), keypair
 
-            key = RSA.import_key(keypair["private_key"])
-            assert isinstance(key, RSA.RsaKey)
+            key = import_rsa_key_from_pem(keypair["private_key"])
+            assert isinstance(key, RSA_KEY_CLASS)
 
 
 def test_dsa_keypair_generation():
@@ -87,8 +88,8 @@ def test_dsa_keypair_generation():
         assert isinstance(keypair["private_key"], bytes), keypair
         assert isinstance(keypair["public_key"], bytes), keypair
 
-        key = DSA.import_key(keypair["private_key"])
-        assert isinstance(key, DSA.DsaKey)
+        key = import_dsa_key_from_pem(keypair["private_key"])
+        assert isinstance(key, DSA_KEY_CLASS)
 
 
 def test_ecc_keypair_generation():
@@ -102,8 +103,8 @@ def test_ecc_keypair_generation():
         assert isinstance(keypair["private_key"], bytes), keypair
         assert isinstance(keypair["public_key"], bytes), keypair
 
-        key = ECC.import_key(keypair["private_key"])
-        assert isinstance(key, ECC.EccKey)
+        key = import_ecc_key_from_pem(keypair["private_key"])
+        assert isinstance(key, ECC_KEY_CLASS)
 
 
 def test_load_asymmetric_key_from_pem_bytestring():

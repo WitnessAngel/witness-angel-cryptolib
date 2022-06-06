@@ -2,75 +2,53 @@ import logging
 from datetime import datetime
 from typing import Union
 
-import Crypto.Hash.SHA512
-from Crypto.PublicKey import RSA, DSA, ECC
-from Crypto.Signature import pss, DSS
+from wacryptolib.backends import sign_with_pss, verify_with_pss, sign_with_dss, verify_with_dss, RSA_KEY_CLASS, \
+    DSA_KEY_CLASS, ECC_KEY_CLASS, get_hasher_instance
 
 from wacryptolib.exceptions import SignatureCreationError, SignatureVerificationError
 
-KNOWN_KEY_ALGOS = Union[RSA.RsaKey, DSA.DsaKey, ECC.EccKey]
-SIGNATURE_HASHER = Crypto.Hash.SHA512
+KNOWN_KEY_CLASSES = Union[RSA_KEY_CLASS, DSA_KEY_CLASS, ECC_KEY_CLASS]
+
+SIGNATURE_HASHER = get_hasher_instance("SHA512")  # ALWAYS USE THIS ONE!
 
 logger = logging.getLogger(__name__)
 
 
-def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_ALGOS) -> dict:
-    """
-    Return a timestamped signature of the chosen type for the given payload,
-    with the provided key (which must be of a compatible type).
-
-    :return: dictionary with signature data"""
-
+def _get_signature_conf(signature_algo, key):
     assert signature_algo, signature_algo
     signature_algo = signature_algo.upper()
     signature_conf = SIGNATURE_ALGOS_REGISTRY.get(signature_algo)
     if signature_conf is None:
         raise ValueError("Unknown signature algorithm '%s'" % signature_algo)
-    if not isinstance(key, signature_conf["compatible_key_algo"]):
+    if not isinstance(key, signature_conf["compatible_key_class"]):
         raise ValueError("Incompatible key type %s for signature algorithm %s" % (type(key), signature_algo))
+    return signature_conf
+
+
+# FIXME rename "key" to "private_key", here? Or no need?
+def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_CLASSES) -> dict:
+    """
+    Return a timestamped signature of the chosen type for the given payload,
+    with the provided key (which must be of a compatible type).
+
+    Signature is actually performed on a SHA512 DIGEST of the message.
+
+    :return: dictionary with signature data"""
+
+    signature_conf = _get_signature_conf(signature_algo=signature_algo, key=key)
     signature_function = signature_conf["signature_function"]
     timestamp_utc = _get_utc_timestamp()
+
     try:
-        signature = signature_function(key=key, message=message, timestamp_utc=timestamp_utc)
+        hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=timestamp_utc)
+        signature = signature_function(message=hash_payload, private_key=key)
     except ValueError as exc:
         raise SignatureCreationError("Failed %s signature creation (%s)" % (signature_algo, exc)) from exc
     return {"signature_timestamp_utc": timestamp_utc, "signature_value": signature}
 
 
-def _sign_with_pss(message: bytes, key: RSA.RsaKey, timestamp_utc: int) -> bytes:
-    """Sign a bytes message with a private RSA key.
-
-    :param message: the bytestring to sign
-    :param key: the private RSA key
-    :param timestamp_utc: the UTC timestamp of current time
-
-    :return: signature as a bytestring"""
-
-    hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=timestamp_utc)
-    signer = pss.new(key)
-    signature = signer.sign(hash_payload)
-    return signature
-
-
-def _sign_with_dss(message: bytes, key: Union[DSA.DsaKey, ECC.EccKey], timestamp_utc: int) -> bytes:
-    """Sign a bytes message with a private DSA or ECC key.
-
-    We use the `fips-186-3` mode for the signer because signature is randomized,
-    while it is not the case for the mode `deterministic-rfc6979`.
-
-    :param message: the bytestring to sign
-    :param key: the private DSA/ECC key
-    :param timestamp_utc: the UTC timestamp of current time
-
-    :return: signature as a bytestring"""
-
-    hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=timestamp_utc)
-    signer = DSS.new(key, "fips-186-3")
-    signature = signer.sign(hash_payload)
-    return signature
-
-
-def verify_message_signature(*, message: bytes, signature_algo: str, signature: dict, key: Union[KNOWN_KEY_ALGOS]):
+# FIXME rename "key" to "public_key", here? Or no need?
+def verify_message_signature(*, message: bytes, signature_algo: str, signature: dict, key: KNOWN_KEY_CLASSES):
     """Verify the authenticity of a signature.
 
     Raises if signature is invalid.
@@ -80,19 +58,13 @@ def verify_message_signature(*, message: bytes, signature_algo: str, signature: 
     :param signature: structure describing the signature
     :param key: the cryptographic key used to verify the signature
     """
-    # TODO refactor this with new SIGNATURE_ALGOS_REGISTRY fields to be added
-    signature_algo = signature_algo.upper()
-    if signature_algo == "RSA_PSS":
-        verifier = pss.new(key)
-    elif signature_algo in ["DSA_DSS", "ECC_DSS"]:
-        verifier = DSS.new(key, "fips-186-3")
-    else:
-        raise ValueError("Unknown signature algorithm %s" % signature_algo)
 
-    hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=signature["signature_timestamp_utc"])
+    signature_conf = _get_signature_conf(signature_algo=signature_algo, key=key)
+    verification_function = signature_conf["verification_function"]
 
     try:
-        verifier.verify(hash_payload, signature["signature_value"])
+        hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=signature["signature_timestamp_utc"])
+        verification_function(message=hash_payload, signature=signature["signature_value"], public_key=key)
     except ValueError as exc:
         raise SignatureVerificationError("Failed %s signature verification (%s)" % (signature_algo, exc)) from exc
 
@@ -122,9 +94,9 @@ def _compute_timestamped_hash(message: bytes, timestamp_utc: int):
 
 
 SIGNATURE_ALGOS_REGISTRY = dict(
-    RSA_PSS={"signature_function": _sign_with_pss, "compatible_key_algo": RSA.RsaKey},
-    DSA_DSS={"signature_function": _sign_with_dss, "compatible_key_algo": DSA.DsaKey},
-    ECC_DSS={"signature_function": _sign_with_dss, "compatible_key_algo": ECC.EccKey},
+    RSA_PSS={"signature_function": sign_with_pss, "verification_function": verify_with_pss, "compatible_key_class": RSA_KEY_CLASS},
+    DSA_DSS={"signature_function": sign_with_dss, "verification_function": verify_with_dss, "compatible_key_class": DSA_KEY_CLASS},
+    ECC_DSS={"signature_function": sign_with_dss, "verification_function": verify_with_dss, "compatible_key_class": ECC_KEY_CLASS},
 )
 
 #: These values can be used as 'payload_signature_algo' parameters.

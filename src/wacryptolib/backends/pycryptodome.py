@@ -3,11 +3,10 @@ import importlib
 import Crypto.Hash.SHA512
 from Crypto.Cipher import AES, ChaCha20_Poly1305, PKCS1_OAEP
 from Crypto.PublicKey import RSA, DSA, ECC
+from Crypto.Signature import pss, DSS
 from Crypto.Util.Padding import pad, unpad
 import Crypto.Random
 
-
-RSA_OAEP_HASHER = Crypto.Hash.SHA512
 
 AES_BLOCK_SIZE = AES.block_size
 
@@ -83,7 +82,8 @@ def decrypt_via_chacha20_poly1305(ciphertext, tag, key, nonce, verify_integrity_
 
 def build_rsa_oaep_cipher(key):
     # Returned object has encrypt() and decrypt() methods
-    return PKCS1_OAEP.new(key=key, hashAlgo=RSA_OAEP_HASHER)
+    rsa_oaep_hasher = Crypto.Hash.SHA512
+    return PKCS1_OAEP.new(key=key, hashAlgo=rsa_oaep_hasher)
 
 
 # HASHER FACTORY #
@@ -95,6 +95,10 @@ def get_hasher_instance(hash_algo):
 
 
 # RSA KEY GENERATION, AND IMPORT/EXPORT #
+
+RSA_KEY_CLASS = RSA.RsaKey
+DSA_KEY_CLASS = DSA.DsaKey
+ECC_KEY_CLASS = ECC.EccKey
 
 def generate_rsa_keypair(key_length_bits):
     private_key = RSA.generate(key_length_bits)
@@ -140,3 +144,28 @@ from Crypto.Protocol.SecretSharing import Shamir
 
 shamir_split = Shamir.split
 shamir_combine= Shamir.combine
+
+
+# MESSAGE SIGNATURES #
+
+def sign_with_pss(message, private_key):
+    signer = pss.new(private_key)
+    signature = signer.sign(message)
+    return signature
+
+
+def verify_with_pss(message, signature, public_key):
+    verifier = pss.new(public_key)
+    verifier.verify(message, signature)  # Raise ValueError if failure
+
+
+def sign_with_dss(message, private_key):
+    signer = DSS.new(private_key, "fips-186-3")
+    signature = signer.sign(message)
+    return signature
+
+
+def verify_with_dss(message, signature, public_key):
+    verifier = DSS.new(public_key, "fips-186-3")
+    verifier.verify(message, signature)  # Raise ValueError if failure
+

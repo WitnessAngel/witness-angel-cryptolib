@@ -11,7 +11,7 @@ from typing import List, Optional, Sequence, Union, BinaryIO
 import multitimer
 import schema
 import uuid0
-from Crypto.Util.Padding import pad, unpad
+from wacryptolib.backends import pad, unpad, get_hasher_instance
 from bson.binary import UuidRepresentation
 from bson.json_util import dumps, loads, JSONOptions, JSONMode
 from decorator import decorator
@@ -107,8 +107,9 @@ def hash_message(message: bytes, hash_algo: str):
     """Hash a message with the selected hash algorithm, and return the hash as bytes."""
     if hash_algo not in SUPPORTED_HASH_ALGOS:
         raise ValueError("Unsupported hash algorithm %r" % hash_algo)
-    module = importlib.import_module("Crypto.Hash.%s" % hash_algo)
-    digest = module.new(message).digest()
+    hasher = get_hasher_instance(hash_algo)
+    hasher.update(message)
+    digest = hasher.digest()
     assert 32 <= len(digest) <= 64, len(digest)
     return digest
 

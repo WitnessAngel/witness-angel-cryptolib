@@ -61,7 +61,7 @@ def test_generic_keypair_generation_errors():
 
 def test_rsa_keypair_generation():
 
-    for key_algo in ("RSA_OAEP", "RSA_PSS"):  # Both use teh same RSA keys
+    for key_algo in ("RSA_OAEP", "RSA_PSS"):  # Both use the same RSA keys
 
         with pytest.raises(ValueError, match="asymmetric key length"):
             wacryptolib.keygen.generate_keypair(key_algo=key_algo, key_length_bits=1024)

@@ -1692,12 +1692,15 @@ def _generate_corrupted_cryptainers(cryptoconf):
     return corrupted_cryptainers
 
 
-@pytest.mark.parametrize("corrupted_cryptainer", _generate_corrupted_cryptainers(SIMPLE_CRYPTOCONF))
-def test_cryptainer_validation_error(corrupted_cryptainer):
+def test_cryptainer_validation_error():
 
-    with pytest.raises(ValidationError):
-        check_cryptainer_sanity(cryptainer=corrupted_cryptainer, jsonschema_mode=True)
+    corrupted_cryptainers = _generate_corrupted_cryptainers(SIMPLE_CRYPTOCONF)
 
-    with pytest.raises(ValidationError):
-        corrupted_cryptainer_json = convert_native_tree_to_extended_json_tree(corrupted_cryptainer)
-        check_cryptainer_sanity(cryptainer=corrupted_cryptainer_json, jsonschema_mode=False)
+    for corrupted_cryptainer in corrupted_cryptainers:
+
+        with pytest.raises(ValidationError):
+            check_cryptainer_sanity(cryptainer=corrupted_cryptainer, jsonschema_mode=True)
+
+        with pytest.raises(ValidationError):
+            corrupted_cryptainer_json = convert_native_tree_to_extended_json_tree(corrupted_cryptainer)
+            check_cryptainer_sanity(cryptainer=corrupted_cryptainer_json, jsonschema_mode=False)

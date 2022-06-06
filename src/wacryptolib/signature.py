@@ -2,14 +2,10 @@ import logging
 from datetime import datetime
 from typing import Union
 
-from wacryptolib.backends import sign_with_pss, verify_with_pss, sign_with_dss, verify_with_dss, RSA_KEY_CLASS, \
-    DSA_KEY_CLASS, ECC_KEY_CLASS, get_hasher_instance
+from wacryptolib.backends import sign_with_pss, verify_with_pss, sign_with_dss, verify_with_dss, rsa_key_class_fetcher, dsa_key_class_fetcher, ecc_key_class_fetcher, get_hasher_instance
 
 from wacryptolib.exceptions import SignatureCreationError, SignatureVerificationError
 
-KNOWN_KEY_CLASSES = Union[RSA_KEY_CLASS, DSA_KEY_CLASS, ECC_KEY_CLASS]
-
-SIGNATURE_HASHER = get_hasher_instance("SHA512")  # ALWAYS USE THIS ONE!
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +16,14 @@ def _get_signature_conf(signature_algo, key):
     signature_conf = SIGNATURE_ALGOS_REGISTRY.get(signature_algo)
     if signature_conf is None:
         raise ValueError("Unknown signature algorithm '%s'" % signature_algo)
-    if not isinstance(key, signature_conf["compatible_key_class"]):
-        raise ValueError("Incompatible key type %s for signature algorithm %s" % (type(key), signature_algo))
+    compatible_key_class = signature_conf["compatible_key_class_fetcher"]()
+    if not isinstance(key, compatible_key_class):
+        raise ValueError("Incompatible key type %s for signature algorithm %s (should be %s)" % (type(key), signature_algo, compatible_key_class))
     return signature_conf
 
 
 # FIXME rename "key" to "private_key", here? Or no need?
-def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_CLASSES) -> dict:
+def sign_message(message: bytes, *, signature_algo: str, key: object) -> dict:
     """
     Return a timestamped signature of the chosen type for the given payload,
     with the provided key (which must be of a compatible type).
@@ -48,7 +45,7 @@ def sign_message(message: bytes, *, signature_algo: str, key: KNOWN_KEY_CLASSES)
 
 
 # FIXME rename "key" to "public_key", here? Or no need?
-def verify_message_signature(*, message: bytes, signature_algo: str, signature: dict, key: KNOWN_KEY_CLASSES):
+def verify_message_signature(*, message: bytes, signature_algo: str, signature: dict, key: object):
     """Verify the authenticity of a signature.
 
     Raises if signature is invalid.
@@ -86,17 +83,18 @@ def _compute_timestamped_hash(message: bytes, timestamp_utc: int):
 
     :return: stdlib hash object
     """
-    plaintext_hash_bytes = SIGNATURE_HASHER.new(message).digest()
+    signature_hasher = get_hasher_instance("SHA512")  # ALWAYS USE THIS ONE!
+    plaintext_hash_bytes = signature_hasher.new(message).digest()
     timestamp_bytes = str(timestamp_utc).encode("ascii")
     timestamped_payload = plaintext_hash_bytes + timestamp_bytes
-    payload_hash = SIGNATURE_HASHER.new(timestamped_payload)
-    return payload_hash
+    payload_hash = signature_hasher.new(timestamped_payload)
+    return payload_hash  # FIXME HOW IS IT POSSIBLE????
 
 
 SIGNATURE_ALGOS_REGISTRY = dict(
-    RSA_PSS={"signature_function": sign_with_pss, "verification_function": verify_with_pss, "compatible_key_class": RSA_KEY_CLASS},
-    DSA_DSS={"signature_function": sign_with_dss, "verification_function": verify_with_dss, "compatible_key_class": DSA_KEY_CLASS},
-    ECC_DSS={"signature_function": sign_with_dss, "verification_function": verify_with_dss, "compatible_key_class": ECC_KEY_CLASS},
+    RSA_PSS={"signature_function": sign_with_pss, "verification_function": verify_with_pss, "compatible_key_class_fetcher": rsa_key_class_fetcher},
+    DSA_DSS={"signature_function": sign_with_dss, "verification_function": verify_with_dss, "compatible_key_class_fetcher": dsa_key_class_fetcher},
+    ECC_DSS={"signature_function": sign_with_dss, "verification_function": verify_with_dss, "compatible_key_class_fetcher": ecc_key_class_fetcher},
 )
 
 #: These values can be used as 'payload_signature_algo' parameters.

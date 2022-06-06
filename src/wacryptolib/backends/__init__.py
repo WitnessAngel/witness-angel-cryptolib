@@ -45,7 +45,7 @@ from .pycryptodome import sign_with_pss, verify_with_pss, sign_with_dss, verify_
 
 if use_fallback_backend:
 
-
+    from  .fallback import get_hasher_instance
     ##from .fallback import AES_BLOCK_SIZE
     ###from .fallback import generate_rsa_keypair, RSA_KEY_CLASS
     ##from .fallback import get_random_bytes, pad, unpad

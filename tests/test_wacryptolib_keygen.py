@@ -121,41 +121,40 @@ def test_load_asymmetric_key_from_pem_bytestring():
             load_asymmetric_key_from_pem_bytestring(key_pem=keypair["private_key"], key_algo="ZHD")
 
 
-def test_generate_and_load_passphrase_protected_asymmetric_key():
+@pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
+def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
 
     # Both Unicode and Bytes are supported
     passphrases = ["Thïs is a passphrâse", b"aoh18726"]
 
     for passphrase in passphrases:
 
-        for key_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
+        keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, passphrase=passphrase)
 
-            keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, passphrase=passphrase)
+        public_key = load_asymmetric_key_from_pem_bytestring(
+            key_pem=keypair["public_key"], key_algo=key_algo  # NOT encrypted
+        )
+        assert public_key.export_key
 
-            public_key = load_asymmetric_key_from_pem_bytestring(
-                key_pem=keypair["public_key"], key_algo=key_algo  # NOT encrypted
+        if isinstance(passphrase, str):  # Different unicode représentations work fine
+            passphrase = unicodedata.normalize("NFD", passphrase)
+
+        private_key = load_asymmetric_key_from_pem_bytestring(
+            key_pem=keypair["private_key"], key_algo=key_algo, passphrase=passphrase  # Encrypted
+        )
+        assert private_key.export_key
+
+        error_matcher = "key format is not supported|Invalid DER encoding"
+
+        with pytest.raises(KeyLoadingError, match=error_matcher):
+            load_asymmetric_key_from_pem_bytestring(
+                key_pem=keypair["private_key"], key_algo=key_algo, passphrase=b"wrong passphrase"
             )
-            assert public_key.export_key
 
-            if isinstance(passphrase, str):  # Different unicode représentations work fine
-                passphrase = unicodedata.normalize("NFD", passphrase)
-
-            private_key = load_asymmetric_key_from_pem_bytestring(
-                key_pem=keypair["private_key"], key_algo=key_algo, passphrase=passphrase  # Encrypted
+        with pytest.raises(KeyLoadingError, match=error_matcher):
+            load_asymmetric_key_from_pem_bytestring(
+                key_pem=keypair["private_key"], key_algo=key_algo, passphrase=None  # Missing passphrase
             )
-            assert private_key.export_key
-
-            error_matcher = "key format is not supported|Invalid DER encoding"
-
-            with pytest.raises(KeyLoadingError, match=error_matcher):
-                load_asymmetric_key_from_pem_bytestring(
-                    key_pem=keypair["private_key"], key_algo=key_algo, passphrase=b"wrong passphrase"
-                )
-
-            with pytest.raises(KeyLoadingError, match=error_matcher):
-                load_asymmetric_key_from_pem_bytestring(
-                    key_pem=keypair["private_key"], key_algo=key_algo, passphrase=None  # Missing passphrase
-                )
 
 
 def test_key_algos_mapping_and_isolation():

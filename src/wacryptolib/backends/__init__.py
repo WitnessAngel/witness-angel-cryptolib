@@ -69,7 +69,7 @@ if use_fallback_backend :
             del module._pbkdf2_hmac_assist  # Force slow code path, not requiring advanced hasher capabilities
 
     import Crypto.Cipher.AES
-    import pyaes
+    import pyaes  # BEWARE - MUST BE INSTALLED!
     def patched_aes_new(key, mode, iv, *args, **kwargs):
         assert mode == Crypto.Cipher.AES.MODE_CBC, mode
         cipher = pyaes.AESModeOfOperationCBC(key=key, iv=iv)

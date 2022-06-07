@@ -29,7 +29,9 @@ def list_available_authdevices() -> list:
         authdevices = _list_available_authdevices_win32()
     elif sys_platform.startswith("linux"):
         authdevices = _list_available_authdevices_linux()
-    else:  # MACOSX platform, we guess?
+    elif sys_platform.startswith("ios"):
+        authdevices = []  # No detection of OTG usb keys for now
+    else:  # MACOSX platform, we guess (possibly iphone simulator too)?
         assert sys_platform.startswith("darwin"), sys_platform
         authdevices = _list_available_authdevices_darwin()
 
@@ -121,7 +123,7 @@ def _list_available_authdevices_darwin():
     import subprocess, plistlib, shutil
     system_profiler_location = shutil.which("system_profiler")
     if not system_profiler_location:
-        logger.warning("Can't list USB devices due to 'system_profiler' executable not found, this is only normal on iOS")
+        logger.warning("Can't list USB devices due to 'system_profiler' executable not found, this is only normal on iphone-simulator")
         return []
     usb_plist = subprocess.check_output([system_profiler_location, '-xml', 'SPUSBDataType'], shell=False)
     device_list = plistlib.loads(usb_plist)

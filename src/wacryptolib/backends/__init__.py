@@ -75,15 +75,25 @@ if use_fallback_backend :
         cipher = pyaes.AESModeOfOperationCBC(key=key, iv=iv)
         cipher.block_size = Crypto.Cipher.AES.block_size
         original_cipher_encrypt = cipher.encrypt
+        original_cipher_decrypt = cipher.decrypt
 
         def patched_encrypt(plaintext):
-            result = b""
+            ciphertext = b""
             while plaintext:
                 chunk = plaintext[:cipher.block_size]
                 plaintext = plaintext[cipher.block_size:]
-                result += original_cipher_encrypt(chunk)
-            return result
+                ciphertext += original_cipher_encrypt(chunk)
+            return ciphertext
         cipher.encrypt = patched_encrypt
+
+        def patched_decrypt(ciphertext):
+            plaintext = b""
+            while ciphertext:
+                chunk = ciphertext[:cipher.block_size]
+                ciphertext = ciphertext[cipher.block_size:]
+                plaintext += original_cipher_decrypt(chunk)
+            return plaintext
+        cipher.decrypt = patched_decrypt
 
         return cipher
     Crypto.Cipher.AES.new = patched_aes_new

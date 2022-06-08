@@ -2,11 +2,8 @@ import logging
 import unicodedata
 from typing import Optional, AnyStr
 
-from wacryptolib.backends import AES_BLOCK_SIZE
+from wacryptolib import _crypto_backend
 from wacryptolib.exceptions import KeyLoadingError
-from wacryptolib.backends import generate_rsa_keypair, generate_dsa_keypair, generate_ecc_keypair, \
-    import_rsa_key_from_pem, import_dsa_key_from_pem, import_ecc_key_from_pem, export_rsa_key_to_pem, \
-    export_dsa_key_to_pem, export_ecc_key_to_pem, get_random_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -34,15 +31,15 @@ def generate_symkey(cipher_algo: str) -> dict:
 
 
 def _generate_aes_cbc_key_dict():
-    return dict(key=get_random_bytes(32), iv=get_random_bytes(AES_BLOCK_SIZE))
+    return dict(key=_crypto_backend.get_random_bytes(32), iv=_crypto_backend.get_random_bytes(_crypto_backend.AES_BLOCK_SIZE))
 
 
 def _generate_aes_eax_key_dict():
-    return dict(key=get_random_bytes(32), nonce=get_random_bytes(16))  # Recommended length, could be bigger
+    return dict(key=_crypto_backend.get_random_bytes(32), nonce=_crypto_backend.get_random_bytes(16))  # Recommended length, could be bigger
 
 
 def _generate_chacha20_poly1305_key_dict():
-    return dict(key=get_random_bytes(32), nonce=get_random_bytes(12))  # We could switch to 24 for XChaCha20
+    return dict(key=_crypto_backend.get_random_bytes(32), nonce=_crypto_backend.get_random_bytes(12))  # We could switch to 24 for XChaCha20
 
 
 def generate_keypair(
@@ -126,7 +123,7 @@ def _generate_rsa_keypair_as_objects(key_length_bits: int) -> dict:
     :return: dictionary with "private_key" and "public_key" fields as objects."""
 
     _check_asymmetric_key_length_bits(key_length_bits)
-    public_key, private_key = generate_rsa_keypair(key_length_bits)
+    public_key, private_key = _crypto_backend.generate_rsa_keypair(key_length_bits)
     keypair = {"public_key": public_key, "private_key": private_key}
     return keypair
 
@@ -141,7 +138,7 @@ def _generate_dsa_keypair_as_objects(key_length_bits: int) -> dict:
     :return: dictionary with "private_key" and "public_key" fields as objects."""
 
     _check_asymmetric_key_length_bits(key_length_bits)
-    public_key, private_key = generate_dsa_keypair(key_length_bits)
+    public_key, private_key = _crypto_backend.generate_dsa_keypair(key_length_bits)
     keypair = {"public_key": public_key, "private_key": private_key}
     return keypair
 
@@ -155,7 +152,7 @@ def _generate_ecc_keypair_as_objects(curve: str) -> dict:
 
     :return: dictionary with "private_key" and "public_key" fields as objects."""
 
-    public_key, private_key = generate_ecc_keypair(curve)
+    public_key, private_key = _crypto_backend.generate_ecc_keypair(curve)
     keypair = {"public_key": public_key, "private_key": private_key}
     return keypair
 
@@ -198,27 +195,27 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
     RSA_OAEP={
         "generation_function": _generate_rsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length_bits"],
-        "pem_import_function": import_rsa_key_from_pem,
-        "pem_export_function": export_rsa_key_to_pem,
+        "pem_import_function": _crypto_backend.import_rsa_key_from_pem,
+        "pem_export_function": _crypto_backend.export_rsa_key_to_pem,
     },
     ## KEYS FOR SIGNATURE ##
     RSA_PSS={  # Same parameters as RSA_OAEP for now
         "generation_function": _generate_rsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length_bits"],
-        "pem_import_function": import_rsa_key_from_pem,
-        "pem_export_function": export_rsa_key_to_pem,
+        "pem_import_function": _crypto_backend.import_rsa_key_from_pem,
+        "pem_export_function": _crypto_backend.export_rsa_key_to_pem,
     },
     DSA_DSS={
         "generation_function": _generate_dsa_keypair_as_objects,
         "generation_extra_parameters": ["key_length_bits"],
-        "pem_import_function": import_dsa_key_from_pem,
-        "pem_export_function": export_dsa_key_to_pem,
+        "pem_import_function": _crypto_backend.import_dsa_key_from_pem,
+        "pem_export_function": _crypto_backend.export_dsa_key_to_pem,
     },
     ECC_DSS={
         "generation_function": _generate_ecc_keypair_as_objects,
         "generation_extra_parameters": ["curve"],
-        "pem_import_function": import_ecc_key_from_pem,
-        "pem_export_function": export_ecc_key_to_pem,
+        "pem_import_function": _crypto_backend.import_ecc_key_from_pem,
+        "pem_export_function": _crypto_backend.export_ecc_key_to_pem,
     },
 )
 

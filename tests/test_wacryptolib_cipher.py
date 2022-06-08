@@ -6,7 +6,7 @@ import random
 import pytest
 
 import wacryptolib
-from wacryptolib.backends import get_random_bytes, generate_rsa_keypair
+from wacryptolib._crypto_backend import get_random_bytes, generate_rsa_keypair
 from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipeline
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
 from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError, OperationNotSupported

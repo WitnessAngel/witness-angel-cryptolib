@@ -2,7 +2,7 @@ import sys
 
 try:
     # Impossible to use pycryptodome package on iOS due to forbidden dlopen()...
-    import ios
+    import os
     use_fallback_backend = True
 except ImportError:
     use_fallback_backend = False

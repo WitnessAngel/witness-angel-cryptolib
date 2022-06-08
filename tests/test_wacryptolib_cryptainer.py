@@ -14,7 +14,7 @@ from uuid import UUID
 import pytest
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool
-from wacryptolib.backends import get_random_bytes
+from wacryptolib._crypto_backend import get_random_bytes
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS, AUTHENTICATED_CIPHER_ALGOS
 from wacryptolib.cryptainer import (
     LOCAL_KEYFACTORY_TRUSTEE_MARKER,

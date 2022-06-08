@@ -1,8 +1,7 @@
 import logging
 from datetime import datetime
-from typing import Union
 
-from wacryptolib.backends import sign_with_pss, verify_with_pss, sign_with_dss, verify_with_dss, rsa_key_class_fetcher, dsa_key_class_fetcher, ecc_key_class_fetcher, get_hasher_instance
+from wacryptolib import _crypto_backend
 
 from wacryptolib.exceptions import SignatureCreationError, SignatureVerificationError
 
@@ -83,7 +82,7 @@ def _compute_timestamped_hash(message: bytes, timestamp_utc: int) -> object:
 
     :return: stdlib hash object
     """
-    signature_hasher = get_hasher_instance("SHA512")  # ALWAYS USE THIS ONE!
+    signature_hasher = _crypto_backend.get_hasher_instance("SHA512")  # ALWAYS USE THIS ONE!
     signature_hasher.update(message)
 
     timestamp_bytes = str(timestamp_utc).encode("ascii")
@@ -93,9 +92,9 @@ def _compute_timestamped_hash(message: bytes, timestamp_utc: int) -> object:
 
 
 SIGNATURE_ALGOS_REGISTRY = dict(
-    RSA_PSS={"signature_function": sign_with_pss, "verification_function": verify_with_pss, "compatible_key_class_fetcher": rsa_key_class_fetcher},
-    DSA_DSS={"signature_function": sign_with_dss, "verification_function": verify_with_dss, "compatible_key_class_fetcher": dsa_key_class_fetcher},
-    ECC_DSS={"signature_function": sign_with_dss, "verification_function": verify_with_dss, "compatible_key_class_fetcher": ecc_key_class_fetcher},
+    RSA_PSS={"signature_function": _crypto_backend.sign_with_pss, "verification_function": _crypto_backend.verify_with_pss, "compatible_key_class_fetcher": _crypto_backend.rsa_key_class_fetcher},
+    DSA_DSS={"signature_function": _crypto_backend.sign_with_dss, "verification_function": _crypto_backend.verify_with_dss, "compatible_key_class_fetcher": _crypto_backend.dsa_key_class_fetcher},
+    ECC_DSS={"signature_function": _crypto_backend.sign_with_dss, "verification_function": _crypto_backend.verify_with_dss, "compatible_key_class_fetcher": _crypto_backend.ecc_key_class_fetcher},
 )
 
 #: These values can be used as 'payload_signature_algo' parameters.

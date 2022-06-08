@@ -11,7 +11,7 @@ from typing import List, Optional, Sequence, Union, BinaryIO
 import multitimer
 import schema
 import uuid0
-from wacryptolib.backends import pad, unpad, get_hasher_instance
+from wacryptolib import _crypto_backend
 from bson.binary import UuidRepresentation
 from bson.json_util import dumps, loads, JSONOptions, JSONMode
 from decorator import decorator
@@ -107,7 +107,7 @@ def hash_message(message: bytes, hash_algo: str):
     """Hash a message with the selected hash algorithm, and return the hash as bytes."""
     if hash_algo not in SUPPORTED_HASH_ALGOS:
         raise ValueError("Unsupported hash algorithm %r" % hash_algo)
-    hasher = get_hasher_instance(hash_algo)
+    hasher = _crypto_backend.get_hasher_instance(hash_algo)
     hasher.update(message)
     digest = hasher.digest()
     assert 32 <= len(digest) <= 64, len(digest)
@@ -144,7 +144,7 @@ def split_as_chunks(
     assert chunk_size > 0, chunk_size
 
     if must_pad:
-        bytestring = pad(bytestring, block_size=chunk_size)
+        bytestring = _crypto_backend.pad(bytestring, block_size=chunk_size)
     if len(bytestring) % chunk_size and not accept_incomplete_chunk:
         raise ValueError("If no padding occurs, bytestring must have a size multiple of chunk_size")
 
@@ -168,7 +168,7 @@ def recombine_chunks(chunks: Sequence[bytes], *, chunk_size: int, must_unpad: bo
         :return: initial bytestring"""
     bytestring = b"".join(chunks)
     if must_unpad:
-        bytestring = unpad(bytestring, block_size=chunk_size)
+        bytestring = _crypto_backend.unpad(bytestring, block_size=chunk_size)
     return bytestring
 
 

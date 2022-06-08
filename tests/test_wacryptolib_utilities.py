@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import pytz
 
-from wacryptolib.backends import get_random_bytes
+from wacryptolib._crypto_backend import get_random_bytes
 from wacryptolib.utilities import (
     split_as_chunks,
     recombine_chunks,

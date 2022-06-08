@@ -4,7 +4,7 @@ from unittest import mock
 
 import pytest
 
-from wacryptolib.backends import get_random_bytes
+from wacryptolib._crypto_backend import get_random_bytes
 from wacryptolib.cipher import _encrypt_via_rsa_oaep
 from wacryptolib.exceptions import (
     KeyDoesNotExist,

@@ -3,7 +3,7 @@ import random
 import pytest
 
 import wacryptolib.shared_secret
-from wacryptolib.backends import get_random_bytes
+from wacryptolib._crypto_backend import get_random_bytes
 
 
 def test_shared_secret_normal_cases():

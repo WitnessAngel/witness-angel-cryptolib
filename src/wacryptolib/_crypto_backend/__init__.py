@@ -2,13 +2,15 @@ import sys
 
 try:
     # Impossible to use pycryptodome package on iOS due to forbidden dlopen()...
-    import os
+    import ios
     use_fallback_backend = True
 except ImportError:
     use_fallback_backend = False
 
 
 if use_fallback_backend :
+
+    # BEWARE - to test this fallback mode on a normal PC, erase all .so/.dll files of pycrptodome, and for use_fallback_backend to True #
 
     print("Couldn't import full pycryptodome utilities, injecting fake C extensions")
 

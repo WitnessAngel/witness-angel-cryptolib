@@ -133,7 +133,7 @@ def dsa_key_class_fetcher():
 
 def ecc_key_class_fetcher():
     from Crypto.PublicKey import ECC
-    return ECC.RsaKey
+    return ECC.EccKey
 
 
 def generate_rsa_keypair(key_length_bits):

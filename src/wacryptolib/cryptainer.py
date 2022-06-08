@@ -612,6 +612,79 @@ class CryptainerDecryptor(CryptainerBase):
         assert isinstance(cryptainer, dict), cryptainer
         return cryptainer["cryptainer_metadata"]
 
+    def _decrypt_with_local_private_key(self, cipherdict: dict, keychain_uid: uuid.UUID,
+                        cipher_algo: str):  # TODO Change the of this function
+        errors = []
+
+        keystore = self._keystore_pool.get_local_keyfactory()
+
+        private_key_pem = keystore.get_private_key(keychain_uid=keychain_uid, key_algo=cipher_algo)
+
+        private_key = load_asymmetric_key_from_pem_bytestring(
+            key_pem=private_key_pem, key_algo=cipher_algo)
+
+        key_struct_bytes = decrypt_bytestring(
+            cipherdict=cipherdict, cipher_algo=cipher_algo, key_dict=dict(key=private_key)
+        )
+
+        return key_struct_bytes, errors
+
+    def _extract_predecrypted_symkey_decryptions(self, symkey_decryptions_succesful):
+
+        predecrypted_symmetric_keys = {}
+
+        for symkey_decryption in symkey_decryptions_succesful:
+            keychain_uid = symkey_decryption["decryption_request"]["response_public_key"]
+            cipher_algo = symkey_decryption["decryption_request"]["response_key_algo"]
+
+            ffff = symkey_decryption["request_data"]
+
+            cipherdict = load_from_json_bytes(symkey_decryption["response_data"])
+
+            (key_struct_bytes, errors) = self._decrypt_with_local_private_key(cipherdict=cipherdict, keychain_uid=keychain_uid,
+                                                              cipher_algo=cipher_algo)
+
+            predecrypted_symmetric_key = key_struct_bytes
+
+            predecrypted_symmetric_keys.setdefault(ffff, predecrypted_symmetric_key)
+
+            return predecrypted_symmetric_keys
+
+    def _get_symkey_decryptions_succesful_for_cryptainer(self, cryptainer: dict,
+                                                         requester_uid: uuid.UUID = None) -> list:
+
+        decryption_requests_all_gateway = []
+        for gateway_url in self.gateway_url_list:
+            jsonrpc_url = gateway_url + "/jsonrpc/"
+
+            gateway_proxy = JsonRpcProxy(
+                url=jsonrpc_url, response_error_handler=status_slugs_response_error_handler
+            )
+
+            list_decryption_requests = gateway_proxy.list_wadevice_decryption_requests(requester_uid=requester_uid)
+
+            decryption_requests_all_gateway.extend(list_decryption_requests)
+
+        symkey_decryptions_succesful = []
+
+        for decryption_request in decryption_requests_all_gateway:
+
+            decryption_request_per_symkey = {key: value for key, value in decryption_request.items() if
+                                             key != 'symkeys_decryption'}
+
+            # Allow not to verify all decryption requests
+            if decryption_request["request_status"] == "ACCEPTED":  # TODO create a variable accepted #
+
+                for symkey_decryption in decryption_request["symkeys_decryption"]:
+                    if symkey_decryption["cryptainer_uid"] == cryptainer and symkey_decryption["decryption_status"] == "ACCEPTED":
+
+                        symkey_decryption_accepted_for_cryptainer = symkey_decryption
+                        symkey_decryption_accepted_for_cryptainer["decryption_request"] = decryption_request_per_symkey
+
+                        symkey_decryptions_succesful.append(symkey_decryption_accepted_for_cryptainer)
+
+        return symkey_decryptions_succesful
+
     def decrypt_payload(self, cryptainer: dict, verify_integrity_tags: bool = True,
                         requester_uid: uuid.UUID = None) -> bytes:
         """
@@ -622,31 +695,14 @@ class CryptainerDecryptor(CryptainerBase):
 
         :return: deciphered plaintext
         """
-        # requeter les passerelles self.gateway_list
-        #initialise list_decryption_requests_accepted_for_cryptainer=[]
+        predecrypted_symmetric_keys = None
+
         if requester_uid:
-            # mettre tout ca dans une fonction privée
-            list_decryption_requests_all_gateway = []
-            for gateway_url in self.gateway_url_list:
-                jsonrpc_url = gateway_url + "/jsonrpc/"
-                gateway_proxy = JsonRpcProxy(
-                    url=jsonrpc_url, response_error_handler=status_slugs_response_error_handler
-                )
-                list_decryption_requests = gateway_proxy.list_wadevice_decryption_requests(requester_uid=requester_uid)
+            symkey_decryptions_succesful = self._get_symkey_decryptions_succesful_for_cryptainer(cryptainer=cryptainer,
+                                                                                                 requester_uid=requester_uid)
 
-                list_decryption_requests_all_gateway.extend(list_decryption_requests)
-
-            decryption_requests_accepted_for_cryptainer = [] #remove list
-
-            for decryption_request in list_decryption_requests_all_gateway:
-                if decryption_request["request_status"] == "ACCEPTED":  # TODO create a variable accepted
-                    for symkey_decryption in decryption_request["symkeys_decryption"]:
-                        if cryptainer != symkey_decryption["cryptainer_uid"]:
-                            decryption_request["symkeys_decryption"].remove(symkey_decryption)
-                    list_decryption_requests_accepted_for_cryptainer.append(decryption_request)
-                    # retourner la liste pour le chaque symkey et la demande de déchiffrement
-                    #simplifier sous forme de mapper {symkeyciphertext =symkey_shard}
-                    #fouiller dans le keystore pour trouver le private key
+            predecrypted_symmetric_keys = self._extract_predecrypted_symkey_decryptions(
+                symkey_decryptions_succesful=symkey_decryptions_succesful)
 
         assert isinstance(cryptainer, dict), cryptainer
 
@@ -681,8 +737,8 @@ class CryptainerDecryptor(CryptainerBase):
                 key_ciphertext=key_ciphertext,
                 cipher_layers=payload_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
-                # decryption_request_response=list_decryption_requests_accepted_for_cryptainer
-                # metrre aussi dans le _decrypt_key_through_single_layer
+                predecrypted_symmetric_keys=predecrypted_symmetric_keys
+
             )
             assert isinstance(key_bytes, bytes), key_bytes
             symkey = load_from_json_bytes(key_bytes)
@@ -703,23 +759,25 @@ class CryptainerDecryptor(CryptainerBase):
 
     def _decrypt_key_through_multiple_layers(
             self, keychain_uid: uuid.UUID, key_ciphertext: bytes, cipher_layers: list,
-            cryptainer_metadata: Optional[dict],decryption_request_response:list
+            cryptainer_metadata: Optional[dict], predecrypted_symmetric_keys: dict
     ) -> bytes:
         key_bytes = key_ciphertext
 
         for key_cipher_layer in reversed(cipher_layers):  # Non-emptiness of this will be checked by validator
-            key_cipherdict = load_from_json_bytes(key_bytes)  # We remain as bytes all along
+            # key_cipherdict = load_from_json_bytes(key_bytes)  # We remain as bytes all along
             key_bytes = self._decrypt_key_through_single_layer(
                 keychain_uid=keychain_uid,
-                key_cipherdict=key_cipherdict,
+                key_bytes=key_bytes,
                 cipher_layer=key_cipher_layer,
                 cryptainer_metadata=cryptainer_metadata,
+                predecrypted_symmetric_keys=predecrypted_symmetric_keys
             )
 
         return key_bytes
 
     def _decrypt_key_through_single_layer(
-            self, keychain_uid: uuid.UUID, key_cipherdict: dict, cipher_layer: dict, cryptainer_metadata: Optional[dict, decryption_request_response:list]
+            self, keychain_uid: uuid.UUID, key_bytes: bytes, cipher_layer: dict,
+            cryptainer_metadata: Optional[dict, list], predecrypted_symmetric_keys: dict
     ) -> bytes:
         """
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
@@ -731,7 +789,12 @@ class CryptainerDecryptor(CryptainerBase):
 
         :return: deciphered symmetric key
         """
-        assert isinstance(key_cipherdict, dict), key_cipherdict
+        # assert isinstance(key_cipherdict, dict), key_cipherdict
+
+        assert isinstance(key_bytes, bytes), key_bytes
+
+        key_cipherdict = load_from_json_bytes(key_bytes)
+
         key_cipher_algo = cipher_layer["key_cipher_algo"]
 
         if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
@@ -782,16 +845,41 @@ class CryptainerDecryptor(CryptainerBase):
         else:  # Using asymmetric algorithm
 
             keychain_uid_encryption = cipher_layer.get("keychain_uid") or keychain_uid
-            # faire la'appel si pr..... est vide sinon retourner le key_bytes qui est contenu dedans
+            trustee = cipher_layer["key_cipher_trustee"]
 
-            key_bytes = self._decrypt_with_asymmetric_cipher(
-                cipher_algo=key_cipher_algo,
-                keychain_uid=keychain_uid_encryption,
-                cipherdict=key_cipherdict,
-                trustee=cipher_layer["key_cipher_trustee"],
-                cryptainer_metadata=cryptainer_metadata,
-            )
+            predecrypted_symmetric_key = self._get_predecrypted_symmetric_keys_or_none(key_bytes)
+            key_bytes = predecrypted_symmetric_key
+
+            if predecrypted_symmetric_key is None:
+                key_bytes = self._decrypt_with_asymmetric_cipher(
+                    cipher_algo=key_cipher_algo,
+                    keychain_uid=keychain_uid_encryption,
+                    cipherdict=key_cipherdict,
+                    trustee=trustee,
+                    cryptainer_metadata=cryptainer_metadata,
+                )
+
             return key_bytes
+
+    @staticmethod
+    def _get_predecrypted_symmetric_keys_or_none(key_bytes, predecrypted_symmetric_keys):
+        predecrypted_symmetric_key = None
+
+        if key_bytes == predecrypted_symmetric_keys.keys():
+            predecrypted_symmetric_key = predecrypted_symmetric_keys["key_bytes"]
+
+        return predecrypted_symmetric_key
+
+    @staticmethod
+    def _build_error_report_message(error_type, error_message, exception):
+        error = {
+            "error_type": error_type,
+            "error_message": error_message,
+        }
+        if exception:
+            error["exception"] = exception
+
+        return error
 
     def _decrypt_with_asymmetric_cipher(
             self,

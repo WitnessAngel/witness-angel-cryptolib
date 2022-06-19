@@ -199,7 +199,7 @@ def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):
         keystore = keystore_pool.get_foreign_keystore(keystore_uid)
         return ReadonlyTrusteeApi(keystore)
     elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE:
-        return JsonRpcProxy(url=trustee["url"], response_error_handler=status_slugs_response_error_handler)
+        return JsonRpcProxy(url=trustee["jsonrpc_url"], response_error_handler=status_slugs_response_error_handler)
     raise ValueError("Unrecognized trustee identifiers: %s" % str(trustee))
 
 
@@ -823,7 +823,7 @@ class CryptainerDecryptor(CryptainerBase):
 
     def _decrypt_key_through_single_layer(
             self, keychain_uid: uuid.UUID, key_bytes: bytes, cipher_layer: dict,
-            cryptainer_metadata: Optional[dict, list], predecrypted_symmetric_keys: dict
+            cryptainer_metadata: Optional[dict], predecrypted_symmetric_keys: dict
     ) -> tuple:
         """
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or

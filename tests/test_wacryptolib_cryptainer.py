@@ -930,12 +930,15 @@ def test_get_proxy_for_trustee(tmp_path):
 
     for cryptainer_base in (cryptainer_base1, cryptainer_base2):
         proxy = get_trustee_proxy(
-            dict(trustee_type="jsonrpc_api", url="http://example.com/jsonrpc"), cryptainer_base._keystore_pool
+            dict(trustee_type="jsonrpc_api", jsonrpc_url="http://example.com/jsonrpc"), cryptainer_base._keystore_pool
         )
         assert isinstance(proxy, JsonRpcProxy)  # It should expose identical methods to TrusteeApi
 
         assert proxy._url == "http://example.com/jsonrpc"
         assert proxy._response_error_handler == status_slugs_response_error_handler
+
+        with pytest.raises(ValueError):
+            get_trustee_proxy(dict(trustee_type="jsonrpc_api", api_url="http://example.com/jsonrpc"), cryptainer_base._keystore_pool)  # Wrong parameter "api_url"
 
         with pytest.raises(ValueError):
             get_trustee_proxy(dict(trustee_type="something-wrong"), cryptainer_base._keystore_pool)

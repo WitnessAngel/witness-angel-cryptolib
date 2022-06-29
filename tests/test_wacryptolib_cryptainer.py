@@ -8,8 +8,7 @@ from datetime import timedelta
 from itertools import product
 from pathlib import Path
 from pprint import pprint
-from unittest import TestCase
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 from uuid import UUID
 
 import pytest
@@ -43,7 +42,7 @@ from wacryptolib.cryptainer import (
     CRYPTAINER_TEMP_SUFFIX,
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
     ReadonlyCryptainerStorage,
-    CryptainerEncryptionPipeline, CRYPTAINER_TRUSTEE_TYPES,
+    CryptainerEncryptionPipeline,
 )
 from wacryptolib.exceptions import (
     DecryptionError,
@@ -101,6 +100,7 @@ SIGNATURELESS_CRYPTOCONF = dict(
         )
     ]
 )
+
 
 SIGNATURELESS_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
@@ -393,6 +393,7 @@ def _get_random_cryptainer_storage_class():
 
 
 def _intialize_real_cryptainer_with_single_file(tmp_path, allow_readonly_storage=False):
+
     storage = CryptainerStorage(default_cryptoconf=COMPLEX_CRYPTOCONF, cryptainer_dir=tmp_path)
 
     storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", cryptainer_metadata=None)
@@ -417,10 +418,8 @@ def _corrupt_cryptainer_tree(storage, cryptainer_name, corruptor_callback):
 
 def test_get_trustee_id():
     assert get_trustee_id(LOCAL_KEYFACTORY_TRUSTEE_MARKER) == "local_keyfactory"
-    assert get_trustee_id({"trustee_type": "authenticator", "keystore_uid": UUID(
-        "b6c576e1-ae1e-4154-ad71-4d564b4673de")}) == "authenticator@b6c576e1-ae1e-4154-ad71-4d564b4673de"
-    assert get_trustee_id({"trustee_type": "jsonrpc_api",
-                           "jsonrpc_url": "https://my.api.com/jsonrpc/"}) == "jsonrpc_api@https://my.api.com/jsonrpc/"
+    assert get_trustee_id({"trustee_type": "authenticator", "keystore_uid": UUID("b6c576e1-ae1e-4154-ad71-4d564b4673de")}) == "authenticator@b6c576e1-ae1e-4154-ad71-4d564b4673de"
+    assert get_trustee_id({"trustee_type": "jsonrpc_api", "jsonrpc_url": "https://my.api.com/jsonrpc/"}) == "jsonrpc_api@https://my.api.com/jsonrpc/"
 
 
 @pytest.mark.parametrize(
@@ -459,6 +458,7 @@ def test_encrypt_payload_into_cryptainer_from_file_object(tmp_path):
 
 
 def test_cryptainer_encryption_pipeline_autocleanup(tmp_path):
+
     pipeline = CryptainerEncryptionPipeline(
         cryptainer_filepath=tmp_path.joinpath("destination.crypt"),
         cryptoconf=SIMPLE_CRYPTOCONF,
@@ -482,6 +482,7 @@ def test_cryptainer_encryption_pipeline_autocleanup(tmp_path):
 
 
 def test_is_cryptainer_cryptoconf_streamable():
+
     assert is_cryptainer_cryptoconf_streamable(SIMPLE_CRYPTOCONF)
     assert is_cryptainer_cryptoconf_streamable(COMPLEX_SHAMIR_CRYPTOCONF)
 
@@ -506,7 +507,6 @@ def test_is_cryptainer_cryptoconf_streamable():
         (COMPLEX_CRYPTOCONF, COMPLEX_CRYPTAINER_TRUSTEE_DEPENDENCIES),
     ],
 )
-# with local keyfactory
 def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, trustee_dependencies_builder):
     payload = _get_binary_or_empty_content()
 
@@ -577,12 +577,10 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
         assert not keypair_statuses["missing_private_key"]
 
     verify_integrity_tags = random_bool()
-    result_payload, error_report = decrypt_payload_from_cryptainer(
+    result_payload = decrypt_payload_from_cryptainer(
         cryptainer=cryptainer, keystore_pool=keystore_pool, verify_integrity_tags=verify_integrity_tags
     )
-    assert error_report == []
     # pprint.pprint(result, width=120)
-
     assert result_payload == payload
 
     result_metadata = extract_metadata_from_cryptainer(cryptainer=cryptainer)
@@ -591,143 +589,6 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
     cryptainer["cryptainer_format"] = "OAJKB"
     with pytest.raises(ValueError, match="Unknown cryptainer format"):
         decrypt_payload_from_cryptainer(cryptainer=cryptainer)
-
-    # Cryptainer decryption with remote revelation requests
-    gateway_url_lists = ["http://127.0.0.1:8000/gateway"]
-
-    revelation_requestor_uid = generate_uuid0()
-
-    result_payload, error_report = decrypt_payload_from_cryptainer(
-        cryptainer=cryptainer, keystore_pool=keystore_pool, verify_integrity_tags=verify_integrity_tags,
-        gateway_url_list=gateway_url_lists, revelation_requestor_uid=revelation_requestor_uid
-    )
-    assert error_report == []
-    # pprint.pprint(result, width=120)
-
-    assert result_payload == payload
-
-    result_metadata = extract_metadata_from_cryptainer(cryptainer=cryptainer)
-    assert result_metadata == metadata
-
-
-# faire un autre test pour le dechiffrement à distance avec cryptoconf
-def test_standard_cryptainer_encryption_and_decryption_with_authenticator(tmp_path):
-    # Create authenticators
-    keystore_tree = {
-        "keystore_type": "authenticator",
-        "keystore_format": "keystore_1.0",
-        "keystore_uid": generate_uuid0(),
-        "keystore_owner": "keystore_owner",
-        "keystore_secret": "keystore_secret",
-        "keystore_passphrase_hint": "keystore_passphrase_hint",
-        "keypairs": [
-            {
-                "keychain_uid": generate_uuid0(),
-                "key_algo": "RSA_OAEP",
-                "public_key": get_random_bytes(20),
-                "private_key": get_random_bytes(20),
-            }
-        ],
-
-    }
-
-    # ou importer les foreign keystore
-    keystore_pool = FilesystemKeystorePool()
-    keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree=keystore_tree)
-
-    keystore = keystore_pool.get_foreign_keystore(keystore_tree["keystore_uid"])
-    print(keystore)
-
-    # creer un crypconf qui crypte avec authentifieur
-    cryptoconf = dict(payload_cipher_layers=[
-        dict(
-            payload_cipher_algo="AES_CBC",
-            key_cipher_layers=[
-                dict(
-                    key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
-                    key_shared_secret_threshold=1,
-                    key_shared_secret_shards=[
-                        dict(key_cipher_layers=[
-                            dict(
-                                key_cipher_algo=keystore_tree["keypairs"][0]["key_algo"],
-                                keychain_uid=keystore_tree["keypairs"][0]["keychain_uid"],
-                                key_cipher_trustee=dict(
-                                    trustee_type=CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE,
-                                    keystore_uid=keystore_tree["keystore_uid"],
-                                    keystore_owner=keystore_tree["keystore_owner"],
-                                ),
-                            )])],
-                )
-            ],
-            payload_signatures=[])
-    ])
-
-    # Encrypt data into cryptainer
-    payload = _get_binary_or_empty_content()
-    keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
-    keystore_pool = InMemoryKeystorePool()
-    metadata = random.choice([None, dict(a=[123])])
-    cryptainer = encrypt_payload_into_cryptainer(
-        payload=payload,
-        cryptoconf=cryptoconf,
-        keychain_uid=keychain_uid,
-        cryptainer_metadata=metadata,
-        keystore_pool=keystore_pool,
-    )
-
-    assert cryptainer["keychain_uid"]
-    if keychain_uid:
-        assert cryptainer["keychain_uid"] == keychain_uid
-
-    verify_integrity_tags = random_bool()
-    result_payload, error_report = decrypt_payload_from_cryptainer(
-        cryptainer=cryptainer, keystore_pool=keystore_pool, verify_integrity_tags=verify_integrity_tags
-    )
-    assert error_report == []
-    # pprint.pprint(result, width=120)
-
-    assert result_payload == payload
-
-    result_metadata = extract_metadata_from_cryptainer(cryptainer=cryptainer)
-    assert result_metadata == metadata
-
-
-def _get_fake_revelation_request_for_requestor_uid(gateway_url, revelation_requestor_uid):
-    list_revelation_requests = [{
-        "target_public_authenticator": [{
-            "keystore_owner": "",
-            "keystore_uid": "",
-            "public_keys": [
-                {
-                    "keychain_uid": "",
-                    "key_algo": "",
-                    "key_value": ""
-                }],
-            "revelation_request_uid": "",
-            "revelation_requestor_uid": "",
-            "revelation_request_description": "",
-            "revelation_response_public_key": "",
-            "revelation_response_keychain_uid": "",
-            "revelation_response_key_algo": "",
-            "revelation_request_status": "",
-            "symkey_decryption_requests": [
-                {
-                    "target_public_authenticator_key": [{
-                        "keychain_uid": "",
-                        "key_algo": "",
-                        "key_value": ""
-                    }],
-                    "cryptainer_uid": "",
-                    "cryptainer_metadata": "",
-                    "symkey_decryption_request_data": "",
-                    "symkey_decryption_response_data": "",
-                    "symkey_decryption_status": ""
-                }]
-        }]
-    }]
-
-    return list_revelation_requests
-
 
 
 @pytest.mark.parametrize(
@@ -757,10 +618,9 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
 
     assert isinstance(cryptainer["payload_ciphertext_struct"], dict)
 
-    result_payload, error_report = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
+    result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
     assert result_payload == payload
-    assert error_report == []
 
     payload_encryption_shamir = {}
     # Delete 1, 2 and too many share(s) from cipherdict key
@@ -778,10 +638,8 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
     payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
     verify_integrity_tags = random_bool()
-    result_payload, error_report = decrypt_payload_from_cryptainer(cryptainer=cryptainer,
-                                                                   verify_integrity_tags=verify_integrity_tags)
+    result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer, verify_integrity_tags=verify_integrity_tags)
     assert result_payload == payload
-    assert error_report == []
 
     # Another share is deleted
 
@@ -789,9 +647,8 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
 
     payload_encryption_shamir["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_shards)
 
-    result_payload, error_report = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
+    result_payload = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
     assert result_payload == payload
-    assert error_report == []
 
     # Another share is deleted and now there aren't enough valid ones to decipher data
 
@@ -817,12 +674,12 @@ def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
 
     cryptainer = encrypt_payload_into_cryptainer(payload=b"1234", cryptoconf=cryptoconf, cryptainer_metadata=None)
 
-    result, error_report = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=True)
+    result = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=True)
     assert result == b"1234"
 
     cryptainer["payload_cipher_layers"][0]["payload_macs"]["tag"] += b"hi"  # CORRUPTION
 
-    result, error_report = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=False)
+    result = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=False)
     assert result == b"1234"
 
     with pytest.raises(DecryptionIntegrityError):
@@ -830,22 +687,21 @@ def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
 
 
 def test_decrypt_payload_from_cryptainer_signature_troubles():
+
     verify_integrity_tags = random_bool()
 
     cryptainer_original = encrypt_payload_into_cryptainer(
         payload=b"1234abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None
     )
 
-    result, error_report = decrypt_payload_from_cryptainer(cryptainer_original,
-                                                           verify_integrity_tags=verify_integrity_tags)
+    result = decrypt_payload_from_cryptainer(cryptainer_original, verify_integrity_tags=verify_integrity_tags)
     assert result == b"1234abc"
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
     # pprint(cryptainer_corrupted)
     del cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_digest_value"]
 
-    result, error_report = decrypt_payload_from_cryptainer(cryptainer_corrupted,
-                                                           verify_integrity_tags=verify_integrity_tags)
+    result = decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
     assert result == b"1234abc"  # Missing the payload_digest_value is OK
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
@@ -952,8 +808,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                     dict(
                         payload_digest_algo="SHA256",
                         payload_signature_algo="DSA_DSS",
-                        payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
-                        # Uses separate keypair, no passphrase here
+                        payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,  # Uses separate keypair, no passphrase here
                     )
                 ],
             )
@@ -1010,7 +865,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
             },
         )
 
-    decrypted, error_report = decrypt_payload_from_cryptainer(
+    decrypted = decrypt_payload_from_cryptainer(
         cryptainer,
         keystore_pool=keystore_pool,
         passphrase_mapper={
@@ -1022,7 +877,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     assert decrypted == payload
 
     # Passphrases of `None` key are always used
-    decrypted, error_report = decrypt_payload_from_cryptainer(
+    decrypted = decrypt_payload_from_cryptainer(
         cryptainer,
         keystore_pool=keystore_pool,
         passphrase_mapper={
@@ -1081,6 +936,9 @@ def test_get_proxy_for_trustee(tmp_path):
 
         assert proxy._url == "http://example.com/jsonrpc"
         assert proxy._response_error_handler == status_slugs_response_error_handler
+
+        with pytest.raises(ValueError):
+            get_trustee_proxy(dict(trustee_type="jsonrpc_api", api_url="http://example.com/jsonrpc"), cryptainer_base._keystore_pool)  # Wrong parameter "api_url"
 
         with pytest.raises(ValueError):
             get_trustee_proxy(dict(trustee_type="something-wrong"), cryptainer_base._keystore_pool)
@@ -1198,10 +1056,10 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert len(abs_entries) == 3  # Unchanged
     assert all(entry.is_absolute() for entry in abs_entries)
 
-    animals_content, error_report = storage.decrypt_cryptainer_from_storage("animals.dat.crypt")
+    animals_content = storage.decrypt_cryptainer_from_storage("animals.dat.crypt")
     assert animals_content == b"dogs\ncats\n"
 
-    empty_content, error_report = storage.decrypt_cryptainer_from_storage("empty.txt.crypt")
+    empty_content = storage.decrypt_cryptainer_from_storage("empty.txt.crypt")
     assert empty_content == b""
 
     assert storage.get_cryptainer_count() == 3
@@ -1511,6 +1369,7 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
 
 
 def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
+
     # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
     storage, cryptainer_name = _intialize_real_cryptainer_with_single_file(tmp_path, allow_readonly_storage=True)
 
@@ -1519,7 +1378,7 @@ def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
 
     _corrupt_cryptainer_tree(storage, cryptainer_name=cryptainer_name, corruptor_callback=corrupt_eax_tag)
 
-    result, error_report = storage.decrypt_cryptainer_from_storage(cryptainer_name, verify_integrity_tags=False)
+    result = storage.decrypt_cryptainer_from_storage(cryptainer_name, verify_integrity_tags=False)
     assert result == b"dogs\ncats\n"
 
     with pytest.raises(DecryptionIntegrityError):
@@ -1588,7 +1447,7 @@ def test_get_cryptoconf_summary():
 
     CONF_WITH_TRUSTEE = copy.deepcopy(COMPLEX_CRYPTOCONF)
     CONF_WITH_TRUSTEE["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_cipher_trustee"] = dict(
-        trustee_type="jsonrpc_api", jsonrpc_url="http://www.mydomain.com/json"
+        trustee_type="jsonrpc_api", url="http://www.mydomain.com/json"
     )
 
     summary = get_cryptoconf_summary(CONF_WITH_TRUSTEE)
@@ -1660,7 +1519,7 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
     assert cryptainer_truncated == cryptainer_without_ciphertext
 
     assert (
-            cryptainer["payload_ciphertext_struct"] == cryptainer_ciphertext_struct_before_dump
+        cryptainer["payload_ciphertext_struct"] == cryptainer_ciphertext_struct_before_dump
     )  # Original dict unchanged
 
     size1 = get_cryptainer_size_on_filesystem(cryptainer_filepath)
@@ -1688,7 +1547,7 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
     assert cryptainer_truncated == cryptainer_without_ciphertext
 
     assert (
-            cryptainer["payload_ciphertext_struct"] == cryptainer_ciphertext_struct_before_dump
+        cryptainer["payload_ciphertext_struct"] == cryptainer_ciphertext_struct_before_dump
     )  # Original dict unchanged
 
     size2 = get_cryptainer_size_on_filesystem(cryptainer_filepath)
@@ -1751,7 +1610,7 @@ def test_create_cryptainer_encryption_stream(tmp_path):
     assert cryptainer["cryptainer_metadata"] == {"mymetadata": True}
     assert cryptainer["cryptainer_state"] == "FINISHED"
 
-    plaintext, error_report = storage.decrypt_cryptainer_from_storage("20200101_cryptainer_example.crypt")
+    plaintext = storage.decrypt_cryptainer_from_storage("20200101_cryptainer_example.crypt")
     assert plaintext == b"bonjoureveryone"
 
 
@@ -1815,6 +1674,7 @@ def test_cryptainer_validation_success(cryptoconf):
 
 
 def _generate_corrupted_cryptainers(cryptoconf):
+
     cryptainer = encrypt_payload_into_cryptainer(
         payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, cryptainer_metadata=None
     )
@@ -1836,9 +1696,11 @@ def _generate_corrupted_cryptainers(cryptoconf):
 
 
 def test_cryptainer_validation_error():
+
     corrupted_cryptainers = _generate_corrupted_cryptainers(SIMPLE_CRYPTOCONF)
 
     for corrupted_cryptainer in corrupted_cryptainers:
+
         with pytest.raises(ValidationError):
             check_cryptainer_sanity(cryptainer=corrupted_cryptainer, jsonschema_mode=True)
 

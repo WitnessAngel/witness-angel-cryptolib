@@ -213,8 +213,7 @@ class CryptainerBase:
     passphrases for all trustees.
     """
 
-    def __init__(self, keystore_pool: KeystorePoolBase = None, passphrase_mapper: Optional[dict] = None,
-                 gateway_url_list: list = None):
+    def __init__(self, keystore_pool: KeystorePoolBase = None, passphrase_mapper: Optional[dict] = None):
         if not keystore_pool:
             logger.warning(
                 "No key storage pool provided for %s instance, falling back to common InMemoryKeystorePool()",
@@ -224,7 +223,6 @@ class CryptainerBase:
         assert isinstance(keystore_pool, KeystorePoolBase), keystore_pool
         self._keystore_pool = keystore_pool
         self._passphrase_mapper = passphrase_mapper or {}
-        self.gateway_url_list = gateway_url_list
 
 
 class CryptainerEncryptor(CryptainerBase):
@@ -681,25 +679,31 @@ class CryptainerDecryptor(CryptainerBase):
 
         return predecrypted_symmetric_keys, errors
 
-    def _get_symkey_decryptions_succesful_for_cryptainer(self, cryptainer: dict,
-                                                         requester_uid: uuid.UUID = None) -> tuple:
+    def _get_revelation_request_for_requestor_uid(self, gateway_url, revelation_requestor_uid):
+
+        jsonrpc_url = gateway_url + "/jsonrpc/"
+
+        gateway_proxy = JsonRpcProxy(
+            url=jsonrpc_url, response_error_handler=status_slugs_response_error_handler
+        )
+
+        list_revelation_requests = gateway_proxy.list_wadevice_decryption_requests(
+            revelation_requestor_uid=revelation_requestor_uid)
+        return list_revelation_requests
+
+    def _get_symkey_decryptions_succesful_for_cryptainer(self, cryptainer: dict, gateway_url_list: list,
+                                                         revelation_requestor_uid: uuid.UUID = None) -> tuple:
 
         decryption_requests_all_gateway = []
         errors = []
-        for gateway_url in self.gateway_url_list:
-            jsonrpc_url = gateway_url + "/jsonrpc/"
-
-            gateway_proxy = JsonRpcProxy(
-                url=jsonrpc_url, response_error_handler=status_slugs_response_error_handler
-            )
-
+        for gateway_url in gateway_url_list:
             try:
-                list_decryption_requests = gateway_proxy.list_wadevice_decryption_requests(requester_uid=requester_uid)
-                decryption_requests_all_gateway.extend(list_decryption_requests)
+                list_revelation_requests= self._get_revelation_request_for_requestor_uid(gateway_url, revelation_requestor_uid)
+                decryption_requests_all_gateway.append(list_revelation_requests)
 
             except ExistenceError:  # TODO Add JSONRPCError or OSError ???
                 error_type = "Remote Decryption Error"
-                error_message = "No decryption request requester uid %s" % requester_uid
+                error_message = "No decryption request requester uid %s" % revelation_requestor_uid
                 error_exception = "ExistenceError"
                 error = self._build_error_report_message(error_type=error_type, error_message=error_message,
                                                          error_exception=error_exception)
@@ -716,16 +720,19 @@ class CryptainerDecryptor(CryptainerBase):
             if decryption_request["request_status"] == "ACCEPTED":  # TODO create a variable accepted #
 
                 for symkey_decryption in decryption_request["symkeys_decryption"]:
-                    if symkey_decryption["cryptainer_uid"] == cryptainer and symkey_decryption["decryption_status"] == "ACCEPTED":
+                    if symkey_decryption["cryptainer_uid"] == cryptainer and symkey_decryption[
+                        "decryption_status"] == "ACCEPTED":
                         symkey_decryption_accepted_for_cryptainer = symkey_decryption
                         symkey_decryption_accepted_for_cryptainer["decryption_request"] = decryption_request_per_symkey
 
                         symkey_decryptions_succesful.append(symkey_decryption_accepted_for_cryptainer)
 
+        # FIXME add error for rejected request???
         return symkey_decryptions_succesful, errors
 
     def decrypt_payload(self, cryptainer: dict, verify_integrity_tags: bool = True,
-                        requester_uid: uuid.UUID = None) -> tuple:
+                        gateway_url_list: list = None,
+                        revelation_requestor_uid: uuid.UUID = None) -> tuple:
         """
         Loop through cryptainer layers, to decipher payload with the right algorithms.
 
@@ -737,10 +744,10 @@ class CryptainerDecryptor(CryptainerBase):
         predecrypted_symmetric_keys = None
         errors = []
 
-        if requester_uid:
+        if revelation_requestor_uid:
             symkey_decryptions_succesful, remote_decryption_errors = self._get_symkey_decryptions_succesful_for_cryptainer(
                 cryptainer=cryptainer,
-                requester_uid=requester_uid)
+                revelation_requestor_uid=revelation_requestor_uid)
             errors.extend(remote_decryption_errors)
 
             predecrypted_symmetric_keys, local_decryption_errors = self._extract_predecrypted_symkey_decryptions(
@@ -804,7 +811,7 @@ class CryptainerDecryptor(CryptainerBase):
 
     def _decrypt_key_through_multiple_layers(
             self, keychain_uid: uuid.UUID, key_ciphertext: bytes, cipher_layers: list,
-            cryptainer_metadata: Optional[dict], predecrypted_symmetric_keys: dict
+            cryptainer_metadata: Optional[dict], predecrypted_symmetric_keys: Optional[dict] = None
     ) -> tuple:
         key_bytes = key_ciphertext
         errors = []
@@ -823,7 +830,7 @@ class CryptainerDecryptor(CryptainerBase):
 
     def _decrypt_key_through_single_layer(
             self, keychain_uid: uuid.UUID, key_bytes: bytes, cipher_layer: dict,
-            cryptainer_metadata: Optional[dict], predecrypted_symmetric_keys: dict
+            cryptainer_metadata: Optional[dict], predecrypted_symmetric_keys: Optional[dict] = None
     ) -> tuple:
         """
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
@@ -891,7 +898,7 @@ class CryptainerDecryptor(CryptainerBase):
             if len(decrypted_shards) < key_shared_secret_threshold:
                 error_type = "Shard Decryption Error"
                 error_message = "%s valid shard(s) missing for reconstitution of symmetric key (errors: %r)" % (
-                key_shared_secret_threshold - len(decrypted_shards), decryption_errors)
+                    key_shared_secret_threshold - len(decrypted_shards), decryption_errors)
                 error_exception = "DecryptionError"
                 error = self._build_error_report_message(error_type=error_type, error_message=error_message,
                                                          error_exception=error_exception)
@@ -913,9 +920,9 @@ class CryptainerDecryptor(CryptainerBase):
 
             predecrypted_symmetric_key = self._get_predecrypted_symmetric_keys_or_none(key_bytes,
                                                                                        predecrypted_symmetric_keys)
-            key_bytes = predecrypted_symmetric_key
-
-            if predecrypted_symmetric_key is None:
+            if predecrypted_symmetric_key:
+                key_bytes = predecrypted_symmetric_key  # TODO Rename key_bytes to encrypted_key_bytes
+            else:
                 key_bytes, asymetric_decryption_errors = self._decrypt_with_asymmetric_cipher(
                     cipher_algo=key_cipher_algo,
                     keychain_uid=keychain_uid_encryption,
@@ -923,7 +930,7 @@ class CryptainerDecryptor(CryptainerBase):
                     trustee=trustee,
                     cryptainer_metadata=cryptainer_metadata,
                 )
-                errors.append(asymetric_decryption_errors)
+                errors.extend(asymetric_decryption_errors)
 
             return key_bytes, errors
 
@@ -931,13 +938,13 @@ class CryptainerDecryptor(CryptainerBase):
     def _get_predecrypted_symmetric_keys_or_none(key_bytes, predecrypted_symmetric_keys):
         predecrypted_symmetric_key = None
 
-        if key_bytes == predecrypted_symmetric_keys.keys():
+        if predecrypted_symmetric_keys and key_bytes == predecrypted_symmetric_keys.keys():
             predecrypted_symmetric_key = predecrypted_symmetric_keys["key_bytes"]
 
         return predecrypted_symmetric_key
 
     @staticmethod
-    def _build_error_report_message(error_type, error_message, error_exception):
+    def _build_error_report_message(error_type, error_message, error_exception) -> dict:
         error = {
             "error_type": error_type,
             "error_message": error_message,
@@ -1197,8 +1204,10 @@ def decrypt_payload_from_cryptainer(
         *,
         keystore_pool: Optional[KeystorePoolBase] = None,
         passphrase_mapper: Optional[dict] = None,
-        verify_integrity_tags: bool = True
-) -> bytes:
+        verify_integrity_tags: bool = True,
+        gateway_url_list: Optional[list] = None,
+        revelation_requestor_uid: uuid.UUID = None
+) -> tuple:
     """Decrypt a cryptainer with the help of third-parties.
 
     :param cryptainer: the cryptainer tree, which holds all information about involved keys
@@ -1209,8 +1218,11 @@ def decrypt_payload_from_cryptainer(
     :return: raw bytestring
     """
     cryptainer_decryptor = CryptainerDecryptor(keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
-    data = cryptainer_decryptor.decrypt_payload(cryptainer=cryptainer, verify_integrity_tags=verify_integrity_tags)
-    return data
+    data, error_report = cryptainer_decryptor.decrypt_payload(cryptainer=cryptainer,
+                                                              verify_integrity_tags=verify_integrity_tags,
+                                                              gateway_url_list=gateway_url_list,
+                                                              revelation_requestor_uid=revelation_requestor_uid)
+    return data, error_report
 
 
 def extract_metadata_from_cryptainer(cryptainer: dict) -> Optional[dict]:
@@ -1235,8 +1247,8 @@ def get_cryptoconf_summary(conf_or_cryptainer):
     def _get_trustee_displayable_identifier(_trustee):
         if _trustee == LOCAL_KEYFACTORY_TRUSTEE_MARKER:
             _trustee = "local device"
-        elif "url" in _trustee:
-            _trustee = urlparse(_trustee["url"]).netloc
+        elif "jsonrpc_url" in _trustee:
+            _trustee = urlparse(_trustee["jsonrpc_url"]).netloc
         else:
             raise ValueError("Unrecognized key trustee %s" % _trustee)
         return _trustee
@@ -1419,7 +1431,7 @@ class ReadonlyCryptainerStorage:
 
     def decrypt_cryptainer_from_storage(
             self, cryptainer_name_or_idx, passphrase_mapper: Optional[dict] = None, verify_integrity_tags: bool = True
-    ) -> bytes:
+    ) -> tuple:
         """
         Return the decrypted content of the cryptainer `cryptainer_name_or_idx` (which must be in `list_cryptainer_names()`,
         or an index suitable for this sorted list).
@@ -1428,15 +1440,15 @@ class ReadonlyCryptainerStorage:
 
         cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_payload_ciphertext=True)
 
-        result = self._decrypt_payload_from_cryptainer(
+        result, error_report = self._decrypt_payload_from_cryptainer(
             cryptainer, passphrase_mapper=passphrase_mapper, verify_integrity_tags=verify_integrity_tags
         )
         logger.info("Cryptainer %s successfully decrypted", cryptainer_name_or_idx)
-        return result
+        return result, error_report
 
     def _decrypt_payload_from_cryptainer(
             self, cryptainer: dict, passphrase_mapper: Optional[dict], verify_integrity_tags: bool
-    ) -> bytes:
+    ) -> tuple:
         return decrypt_payload_from_cryptainer(
             cryptainer,
             keystore_pool=self._keystore_pool,
@@ -1698,13 +1710,14 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
     trustee_schemas = Or(
         LOCAL_KEYFACTORY_TRUSTEE_MARKER,
         {
-         "trustee_type": CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE,
-         "keystore_uid": micro_schemas.schema_uid,
-         OptionalKey("keystore_owner"): str,  # Optional for retrocompatibility only, may be left empty even if present!
-         },
+            "trustee_type": CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE,
+            "keystore_uid": micro_schemas.schema_uid,
+            OptionalKey("keystore_owner"): str,
+            # Optional for retrocompatibility only, may be left empty even if present!
+        },
         {
-         "trustee_type": CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE,
-         "jsonrpc_url": str
+            "trustee_type": CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE,
+            "jsonrpc_url": str
         },
     )
 

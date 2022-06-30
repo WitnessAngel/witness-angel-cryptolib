@@ -679,7 +679,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         return predecrypted_symmetric_keys, errors
 
-    def _get_revelation_request_for_requestor_uid(self, gateway_url, revelation_requestor_uid):
+    def _get_revelation_request_for_requestor_uid(self, gateway_url: str, revelation_requestor_uid: uuid.UUID):
 
         jsonrpc_url = gateway_url + "/jsonrpc/"
 
@@ -692,13 +692,15 @@ class CryptainerDecryptor(CryptainerBase):
         return list_revelation_requests
 
     def _get_symkey_decryptions_succesful_for_cryptainer(self, cryptainer: dict, gateway_url_list: list,
-                                                         revelation_requestor_uid: uuid.UUID = None) -> tuple:
+                                                         revelation_requestor_uid: uuid.UUID) -> tuple:
 
         decryption_requests_all_gateway = []
         errors = []
+
         for gateway_url in gateway_url_list:
             try:
-                list_revelation_requests= self._get_revelation_request_for_requestor_uid(gateway_url, revelation_requestor_uid)
+                list_revelation_requests = self._get_revelation_request_for_requestor_uid(gateway_url,
+                                                                                          revelation_requestor_uid)
                 decryption_requests_all_gateway.append(list_revelation_requests)
 
             except ExistenceError:  # TODO Add JSONRPCError or OSError ???
@@ -717,6 +719,7 @@ class CryptainerDecryptor(CryptainerBase):
                                              key != 'symkeys_decryption'}
 
             # Allow not to verify all decryption requests
+
             if decryption_request["request_status"] == "ACCEPTED":  # TODO create a variable accepted #
 
                 for symkey_decryption in decryption_request["symkeys_decryption"]:
@@ -731,7 +734,7 @@ class CryptainerDecryptor(CryptainerBase):
         return symkey_decryptions_succesful, errors
 
     def decrypt_payload(self, cryptainer: dict, verify_integrity_tags: bool = True,
-                        gateway_url_list: list = None,
+                        gateway_url_list: Optional[list] = None,
                         revelation_requestor_uid: uuid.UUID = None) -> tuple:
         """
         Loop through cryptainer layers, to decipher payload with the right algorithms.
@@ -744,9 +747,10 @@ class CryptainerDecryptor(CryptainerBase):
         predecrypted_symmetric_keys = None
         errors = []
 
-        if revelation_requestor_uid:
+        if revelation_requestor_uid and gateway_url_list:
             symkey_decryptions_succesful, remote_decryption_errors = self._get_symkey_decryptions_succesful_for_cryptainer(
                 cryptainer=cryptainer,
+                gateway_url_list=gateway_url_list,
                 revelation_requestor_uid=revelation_requestor_uid)
             errors.extend(remote_decryption_errors)
 

@@ -8,7 +8,6 @@ from datetime import timedelta
 from itertools import product
 from pathlib import Path
 from pprint import pprint
-from unittest import TestCase
 from unittest.mock import patch, Mock
 from uuid import UUID
 
@@ -592,51 +591,194 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
     with pytest.raises(ValueError, match="Unknown cryptainer format"):
         decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
-    # Cryptainer decryption with remote revelation requests
-    gateway_url_lists = ["http://127.0.0.1:8000/gateway"]
 
-    revelation_requestor_uid = generate_uuid0()
+def test_cryptainer_encryption_and_decryption_with_authenticator(tmp_path):
+    keychain_uid = generate_uuid0()
+    keychain_uid_trustee = generate_uuid0()
 
-    result_payload, error_report = decrypt_payload_from_cryptainer(
-        cryptainer=cryptainer, keystore_pool=keystore_pool, verify_integrity_tags=verify_integrity_tags,
-        gateway_url_list=gateway_url_lists, revelation_requestor_uid=revelation_requestor_uid
+    keystore_uid = generate_uuid0()
+
+    passphrase = "tata"
+
+    # Create fake keystore in foreign key
+    keystore_pool = InMemoryKeystorePool()
+    keystore_pool._register_fake_imported_storage_uids(storage_uids=[keystore_uid])
+
+
+    foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+    generate_keypair_for_storage(
+        key_algo="RSA_OAEP", keystore=foreign_keystore, keychain_uid=keychain_uid_trustee, passphrase=passphrase
     )
-    assert error_report == []
-    # pprint.pprint(result, width=120)
 
-    assert result_payload == payload
+    # Get Trustee id
+    shard_trustee = dict(trustee_type="authenticator", keystore_uid=keystore_uid, keystore_owner="owner")
+    shard_trustee_id = get_trustee_id(shard_trustee)
 
-    result_metadata = extract_metadata_from_cryptainer(cryptainer=cryptainer)
-    assert result_metadata == metadata
+    cryptoconf = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_CBC",
+                key_cipher_layers=[
+                    dict(key_cipher_algo="RSA_OAEP", keychain_uid=keychain_uid_trustee,
+                         key_cipher_trustee=shard_trustee)],
+                payload_signatures=[
+                    dict(
+                        payload_digest_algo="SHA256",
+                        payload_signature_algo="DSA_DSS",
+                        payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                    )
+                ],
+            )
+        ])
+
+    payload = b"sjzgzj"
+
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload,
+        cryptoconf=cryptoconf,
+        keychain_uid=keychain_uid,
+        keystore_pool=keystore_pool,
+        cryptainer_metadata=None,
+    )
+
+    assert isinstance(cryptainer["payload_ciphertext_struct"], dict)
+
+    decrypted, error_report = decrypt_payload_from_cryptainer(
+        cryptainer,
+        keystore_pool=keystore_pool,
+        passphrase_mapper={shard_trustee_id: [passphrase]}
+    )
+
+    assert decrypted == payload
+
+
+def test_cryptainer_encryption_and_decryption_with_authenticator_and_localkeyfactory(tmp_path):
+    keychain_uid = generate_uuid0()
+
+    keychain_uid_trustee = generate_uuid0()
+
+    local_passphrase = "b^yep&ts"
+
+    keystore_uid1 = keychain_uid_trustee  # FIXME why mix key and storage uids ?
+    passphrase1 = "tata"
+
+    keystore_uid2 = generate_uuid0()
+    passphrase2 = "2çès"
+
+    keystore_uid3 = generate_uuid0()
+    passphrase3 = "zaizoadsxsnd123"
+
+    all_passphrases = [local_passphrase, passphrase1, passphrase2, passphrase3]
+
+    keystore_pool = InMemoryKeystorePool()
+    keystore_pool._register_fake_imported_storage_uids(storage_uids=[keystore_uid1, keystore_uid2, keystore_uid3])
+
+    local_keystore = keystore_pool.get_local_keyfactory()
+    generate_keypair_for_storage(
+        key_algo="RSA_OAEP", keystore=local_keystore, keychain_uid=keychain_uid, passphrase=local_passphrase
+    )
+    keystore1 = keystore_pool.get_foreign_keystore(keystore_uid1)
+    generate_keypair_for_storage(
+        key_algo="RSA_OAEP", keystore=keystore1, keychain_uid=keychain_uid_trustee, passphrase=passphrase1
+    )
+    keystore2 = keystore_pool.get_foreign_keystore(keystore_uid2)
+    generate_keypair_for_storage(
+        key_algo="RSA_OAEP", keystore=keystore2, keychain_uid=keychain_uid, passphrase=passphrase2
+    )
+    keystore3 = keystore_pool.get_foreign_keystore(keystore_uid3)
+    generate_keypair_for_storage(
+        key_algo="RSA_OAEP", keystore=keystore3, keychain_uid=keychain_uid, passphrase=passphrase3
+    )
+
+    local_keyfactory_trustee_id = get_trustee_id(LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+
+    shard_trustee1 = dict(trustee_type="authenticator", keystore_uid=keystore_uid1)
+    shard_trustee1_id = get_trustee_id(shard_trustee1)
+
+    shard_trustee2 = dict(trustee_type="authenticator", keystore_uid=keystore_uid2)
+    shard_trustee2_id = get_trustee_id(shard_trustee2)
+
+    shard_trustee3 = dict(trustee_type="authenticator", keystore_uid=keystore_uid3)
+    shard_trustee3_id = get_trustee_id(shard_trustee3)
+
+    cryptoconf = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_CBC",
+                key_cipher_layers=[
+                    dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
+                    dict(
+                        key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                        key_shared_secret_threshold=3,
+                        key_shared_secret_shards=[
+                            dict(
+                                key_cipher_layers=[
+                                    dict(
+                                        key_cipher_algo="RSA_OAEP",
+                                        key_cipher_trustee=shard_trustee1,
+                                        keychain_uid=keychain_uid_trustee,
+                                    )
+                                ]
+                            ),
+                            dict(
+                                key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee2)]
+                            ),
+                            dict(
+                                key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee3)]
+                            ),
+                        ],
+                    ),
+                ],
+                payload_signatures=[
+                    dict(
+                        payload_digest_algo="SHA256",
+                        payload_signature_algo="DSA_DSS",
+                        payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                        # Uses separate keypair, no passphrase here
+                    )
+                ],
+            )
+        ]
+    )
+    payload = b"sijhgf"
+
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload,
+        cryptoconf=cryptoconf,
+        keychain_uid=keychain_uid,
+        keystore_pool=keystore_pool,
+        cryptainer_metadata=None,
+    )
 
 
 # faire un autre test pour le dechiffrement à distance avec cryptoconf
-def test_standard_cryptainer_encryption_and_decryption_with_authenticator(tmp_path):
-    # Create authenticators
+def test_cryptainer_encryption_and_decryption_with_one_authenticator_in_shard_secret(tmp_path):
+    # Generate keypair with passphrase
+    passphrase = "xzf"
+    keypair = generate_keypair(key_algo="RSA_OAEP", passphrase=passphrase)
+
     keystore_tree = {
         "keystore_type": "authenticator",
         "keystore_format": "keystore_1.0",
         "keystore_uid": generate_uuid0(),
         "keystore_owner": "keystore_owner",
         "keystore_secret": "keystore_secret",
-        "keystore_passphrase_hint": "keystore_passphrase_hint",
+        "keystore_passphrase_hint": "passphrase",
         "keypairs": [
             {
                 "keychain_uid": generate_uuid0(),
                 "key_algo": "RSA_OAEP",
-                "public_key": get_random_bytes(20),
-                "private_key": get_random_bytes(20),
+                "public_key": keypair["public_key"],
+                "private_key": keypair["private_key"],
             }
-        ],
-
+        ]
     }
 
-    # ou importer les foreign keystore
-    keystore_pool = FilesystemKeystorePool()
+    # Create a keystore(authenticator) then import into foreign_keystore from a keystore_tree
+    pool_path = tmp_path / "pool"
+    pool_path.mkdir()
+    keystore_pool = FilesystemKeystorePool(pool_path)
     keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree=keystore_tree)
-
-    keystore = keystore_pool.get_foreign_keystore(keystore_tree["keystore_uid"])
-    print(keystore)
 
     # creer un crypconf qui crypte avec authentifieur
     cryptoconf = dict(payload_cipher_layers=[
@@ -662,11 +804,13 @@ def test_standard_cryptainer_encryption_and_decryption_with_authenticator(tmp_pa
             payload_signatures=[])
     ])
 
+    check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
+
     # Encrypt data into cryptainer
     payload = _get_binary_or_empty_content()
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
-    keystore_pool = InMemoryKeystorePool()
     metadata = random.choice([None, dict(a=[123])])
+
     cryptainer = encrypt_payload_into_cryptainer(
         payload=payload,
         cryptoconf=cryptoconf,
@@ -680,11 +824,19 @@ def test_standard_cryptainer_encryption_and_decryption_with_authenticator(tmp_pa
         assert cryptainer["keychain_uid"] == keychain_uid
 
     verify_integrity_tags = random_bool()
+
+    shard_trustee = dict(trustee_type="authenticator", keystore_uid=keystore_tree["keystore_uid"],
+                         keystore_owner=keystore_tree["keystore_owner"])
+
+    shard_trustee_id = get_trustee_id(shard_trustee)
+    passphrase_mapper = {shard_trustee_id: [passphrase]}
+
+    # Decrypt data
     result_payload, error_report = decrypt_payload_from_cryptainer(
-        cryptainer=cryptainer, keystore_pool=keystore_pool, verify_integrity_tags=verify_integrity_tags
+        cryptainer=cryptainer, keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper,
+        verify_integrity_tags=verify_integrity_tags
     )
     assert error_report == []
-    # pprint.pprint(result, width=120)
 
     assert result_payload == payload
 
@@ -727,7 +879,6 @@ def _get_fake_revelation_request_for_requestor_uid(gateway_url, revelation_reque
     }]
 
     return list_revelation_requests
-
 
 
 @pytest.mark.parametrize(

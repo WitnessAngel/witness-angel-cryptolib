@@ -163,6 +163,64 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
     return trustee_dependencies
 
 
+def gather_decryptable_symkeys(cryptainers: Sequence) -> dict:
+    decryptable_symkeys_per_trustee = {}
+
+    def _add_decryptable_symkeys_for_trustee(key_cipher_trustee, shard_ciphertext, keychain_uid_encryption,
+                                             key_algo_encryption, cryptainer_uid, cryptainer_metadata):
+
+        trustee_id = get_trustee_id(trustee_conf=key_cipher_trustee)
+        symkey_decryption_request = {
+            "cryptainer_uid": cryptainer_uid,
+            "cryptainer_metadata": cryptainer_metadata,
+            "symkey_ciphertext": shard_ciphertext,
+            "keychain_uid": keychain_uid_encryption,
+            "key_algo": key_algo_encryption
+        }
+        _trustee_data, _decryptable_symkeys = decryptable_symkeys_per_trustee.setdefault(trustee_id,
+                                                                                         (key_cipher_trustee, []))
+        _decryptable_symkeys.append(symkey_decryption_request)
+
+    def _gather_decryptable_symkeys(key_cipher_layers: list, key_ciphertext, cryptainer_uid,
+                                    cryptainer_metadata):
+
+        # TODO test with cryptoconf where symkey is protected by 2 authenticators one of the other
+        last_key_cipher_layer = key_cipher_layers[-1]  # FIXME BIG PROBLEM - why only the last layer ????
+
+        if last_key_cipher_layer["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER:
+            key_shared_secret_shards = last_key_cipher_layer["key_shared_secret_shards"]
+            key_cipherdict = load_from_json_bytes(key_ciphertext)
+            shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
+
+            for shard_ciphertext, trustee in zip(shard_ciphertexts, key_shared_secret_shards):
+                _gather_decryptable_symkeys(trustee["key_cipher_layers"], shard_ciphertext, cryptainer_uid,
+                                            cryptainer_metadata)
+        else:
+
+            keychain_uid_encryption = last_key_cipher_layer.get("keychain_uid") or keychain_uid
+            key_algo_encryption = last_key_cipher_layer["key_cipher_algo"]
+            key_cipher_trustee = last_key_cipher_layer["key_cipher_trustee"]
+            shard_ciphertext = key_ciphertext
+
+            _add_decryptable_symkeys_for_trustee(key_cipher_trustee, shard_ciphertext, keychain_uid_encryption,
+                                                 key_algo_encryption,
+                                                 cryptainer_uid, cryptainer_metadata)
+
+    for cryptainer in cryptainers:
+        keychain_uid = cryptainer["keychain_uid"]
+        cryptainer_uid = cryptainer["cryptainer_uid"]
+        cryptainer_metadata = cryptainer["cryptainer_metadata"]
+
+        for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
+            key_ciphertext = payload_cipher_layer.get("key_ciphertext")
+
+            _gather_decryptable_symkeys(payload_cipher_layer["key_cipher_layers"], key_ciphertext,
+                                        cryptainer_uid,
+                                        cryptainer_metadata)
+
+    return decryptable_symkeys_per_trustee
+
+
 def request_decryption_authorizations(
         trustee_dependencies: dict, keystore_pool, request_message: str, passphrases: Optional[list] = None
 ) -> dict:
@@ -661,12 +719,13 @@ class CryptainerDecryptor(CryptainerBase):
         errors = []
 
         for symkey_decryption in symkey_decryptions_succesful:
-            keychain_uid = symkey_decryption["decryption_request"]["response_public_key"]
-            cipher_algo = symkey_decryption["decryption_request"]["response_key_algo"]
 
-            request_data = symkey_decryption["request_data"]
+            keychain_uid = symkey_decryption["revelation_request"]["revelation_response_keychain_uid"]
+            cipher_algo = symkey_decryption["revelation_request"]["revelation_response_key_algo"]
 
-            cipherdict = load_from_json_bytes(symkey_decryption["response_data"])
+            request_data = symkey_decryption["symkey_decryption_request_data"]
+
+            cipherdict = load_from_json_bytes(symkey_decryption["symkey_decryption_response_data"])
 
             (key_struct_bytes, local_decryption_errors) = self._decrypt_with_local_private_key(cipherdict=cipherdict,
                                                                                                keychain_uid=keychain_uid,
@@ -691,7 +750,7 @@ class CryptainerDecryptor(CryptainerBase):
             revelation_requestor_uid=revelation_requestor_uid)
         return list_revelation_requests
 
-    def _get_symkey_decryptions_succesful_for_cryptainer(self, cryptainer: dict, gateway_url_list: list,
+    def _get_symkey_decryptions_successful_for_cryptainer(self, cryptainer: dict, gateway_url_list: list,
                                                          revelation_requestor_uid: uuid.UUID) -> tuple:
 
         decryption_requests_all_gateway = []
@@ -714,19 +773,17 @@ class CryptainerDecryptor(CryptainerBase):
         symkey_decryptions_succesful = []
 
         for decryption_request in decryption_requests_all_gateway:
-
             decryption_request_per_symkey = {key: value for key, value in decryption_request.items() if
                                              key != 'symkeys_decryption'}
 
             # Allow not to verify all decryption requests
-
             if decryption_request["request_status"] == "ACCEPTED":  # TODO create a variable accepted #
 
                 for symkey_decryption in decryption_request["symkeys_decryption"]:
-                    if symkey_decryption["cryptainer_uid"] == cryptainer and symkey_decryption[
-                        "decryption_status"] == "ACCEPTED":
-                        symkey_decryption_accepted_for_cryptainer = symkey_decryption
-                        symkey_decryption_accepted_for_cryptainer["decryption_request"] = decryption_request_per_symkey
+                    if symkey_decryption["cryptainer_uid"] == cryptainer and symkey_decryption["decryption_status"] == "ACCEPTED":
+                        symkey_decryption_accepted_for_cryptainer = {key: value for key, value in symkey_decryption.items()}
+
+                        symkey_decryption_accepted_for_cryptainer["revelation_request"] = decryption_request_per_symkey
 
                         symkey_decryptions_succesful.append(symkey_decryption_accepted_for_cryptainer)
 
@@ -748,12 +805,11 @@ class CryptainerDecryptor(CryptainerBase):
         errors = []
 
         if revelation_requestor_uid and gateway_url_list:
-            symkey_decryptions_succesful, remote_decryption_errors = self._get_symkey_decryptions_succesful_for_cryptainer(
+            symkey_decryptions_succesful, remote_decryption_errors = self._get_symkey_decryptions_successful_for_cryptainer(
                 cryptainer=cryptainer,
                 gateway_url_list=gateway_url_list,
                 revelation_requestor_uid=revelation_requestor_uid)
             errors.extend(remote_decryption_errors)
-
             predecrypted_symmetric_keys, local_decryption_errors = self._extract_predecrypted_symkey_decryptions(
                 symkey_decryptions_succesful=symkey_decryptions_succesful)
             errors.extend(local_decryption_errors)

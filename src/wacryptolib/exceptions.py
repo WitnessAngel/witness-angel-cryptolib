@@ -80,11 +80,11 @@ class SchemaValidationError(ValidationError):
     pass  # When data doesn't respect json format, or an additional python-schema, or some additional security constraints
 
 
-class PermissionAuthenticatorError(FunctionalError):
+class AuthenticationError(FunctionalError):
     pass
 
-class AuthenticatorDoesNotExist(ExistenceError):
+class AuthenticatorDoesNotExist(KeystoreDoesNotExist):
     pass
 
-class AuthenticatorAlreadyExists(ExistenceError):
+class AuthenticatorAlreadyExists(KeystoreAlreadyExists):
     pass

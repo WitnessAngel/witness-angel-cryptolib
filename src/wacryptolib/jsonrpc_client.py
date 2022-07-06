@@ -38,7 +38,9 @@ def status_slugs_response_error_handler(exc):
 class JsonRpcProxy(ServerBase):
     """A connection to a HTTP JSON-RPC server, backed by the `requests` library.
 
-    See https://github.com/gciotta/jsonrpc-requests for usage examples.
+    Parameters can be passed by position, or as keyword arguments (but not both).
+
+    See https://pypi.org/project/jsonrpc-requests/ for usage examples.
 
     The differences between our `JsonRpcProxy` and upstream's `Server` class are:
 
@@ -82,7 +84,7 @@ class JsonRpcProxy(ServerBase):
 
         # NOPE WE DISABLE THIS AMBIGUOUS NORMALIZATION!
         # from the specs:
-        # "If resent, parameters for the rpc call MUST be provided as a Structured value.
+        # "If present, parameters for the rpc call MUST be provided as a Structured value.
         #  Either by-position through an Array or by-name through an Object."
         # if len(args) == 1 and isinstance(args[0], collections.Mapping):
         #    args = dict(args[0])

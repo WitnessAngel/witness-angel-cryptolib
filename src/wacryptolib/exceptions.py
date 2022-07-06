@@ -19,7 +19,15 @@ class KeyAlreadyExists(ExistenceError):
     pass
 
 
+class AuthenticatorDoesNotExist(ExistenceError):  # FIXME REPLACE BY KeystoreDoesNotExist!!
+    pass
+
+
 class KeystoreDoesNotExist(ExistenceError):
+    pass
+
+
+class AuthenticatorAlreadyExists(ExistenceError):  # FIXME replace by KeystoreAlreadyExists
     pass
 
 
@@ -29,6 +37,9 @@ class KeystoreAlreadyExists(ExistenceError):
 
 # ---
 
+
+class AuthenticationError(FunctionalError):
+    pass  # E.g. the "secret" provided with an API request doesn't match that stored
 
 class AuthorizationError(FunctionalError):
     pass
@@ -80,11 +91,8 @@ class SchemaValidationError(ValidationError):
     pass  # When data doesn't respect json format, or an additional python-schema, or some additional security constraints
 
 
-class AuthenticationError(FunctionalError):
+class PermissionAuthenticatorError(FunctionalError):  # FIXME WRONG NAMING - TO BE CHANGED EVERYWHERE AuthenticationError
     pass
 
-class AuthenticatorDoesNotExist(KeystoreDoesNotExist):
-    pass
 
-class AuthenticatorAlreadyExists(KeystoreAlreadyExists):
-    pass
+

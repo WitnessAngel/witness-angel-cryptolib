@@ -965,7 +965,6 @@ class CryptainerDecryptor(CryptainerBase):
                 errors.append(error)
                 # raise DecryptionError("%s valid shard(s) missing for reconstitution of symmetric key (errors: %r)"
                 # % (key_shared_secret_threshold - len(decrypted_shards), decryption_errors))
-
             logger.debug("Recombining shared-secret shards")
             key_bytes = recombine_secret_from_shards(shards=decrypted_shards)
 
@@ -996,8 +995,9 @@ class CryptainerDecryptor(CryptainerBase):
     def _get_predecrypted_symmetric_keys_or_none(key_bytes, predecrypted_symmetric_keys):
         predecrypted_symmetric_key = None
 
-        if predecrypted_symmetric_keys and key_bytes == predecrypted_symmetric_keys.keys():
-            predecrypted_symmetric_key = predecrypted_symmetric_keys["key_bytes"]
+        if predecrypted_symmetric_keys and predecrypted_symmetric_keys[key_bytes]:
+            predecrypted_symmetric_key = load_from_json_bytes(predecrypted_symmetric_keys[key_bytes])
+            predecrypted_symmetric_key = predecrypted_symmetric_key["key_bytes"]
 
         return predecrypted_symmetric_key
 

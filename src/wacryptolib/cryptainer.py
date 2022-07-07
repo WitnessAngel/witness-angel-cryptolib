@@ -674,7 +674,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         errors = []
         keystore = self._keystore_pool.get_local_keyfactory()
-        key_struct_bytes = None # Returns "None" when unable to decrypt with the answer key
+        key_struct_bytes = None  # Returns "None" when unable to decrypt with the answer key
         try:
             private_key_pem = keystore.get_private_key(keychain_uid=keychain_uid, key_algo=cipher_algo)
 
@@ -723,9 +723,8 @@ class CryptainerDecryptor(CryptainerBase):
                                                                                                cipher_algo=cipher_algo)
             errors.extend(local_decryption_errors)
 
-            predecrypted_symmetric_key = key_struct_bytes
-
-            predecrypted_symmetric_keys.setdefault(request_data, predecrypted_symmetric_key)
+            if key_struct_bytes:
+                predecrypted_symmetric_keys.setdefault(request_data, key_struct_bytes)
 
         return predecrypted_symmetric_keys, errors
 
@@ -888,6 +887,8 @@ class CryptainerDecryptor(CryptainerBase):
                 predecrypted_symmetric_keys=predecrypted_symmetric_keys
             )
             errors.extend(single_layer_decryption_errors)
+            if not key_bytes:
+                break
         return key_bytes, errors
 
     def _decrypt_key_through_single_layer(
@@ -947,9 +948,8 @@ class CryptainerDecryptor(CryptainerBase):
                     logger.error("Error when decrypting shard of %s: %r" % (trustee_conf, exc), exc_info=True)
 
                     error = self._build_error_report_message(error_type="Shard Decryption Error",
-                                                             error_message="Error when decrypting shard of %s: %r" % (
-                                                                 trustee_conf, exc),
-                                                             error_exception=Exception)
+                                                             error_message="Error when decrypting shard of %s" % trustee_conf,
+                                                             error_exception=str(exc))
                     errors.append(error)
 
                 if len(decrypted_shards) == key_shared_secret_threshold:
@@ -958,13 +958,13 @@ class CryptainerDecryptor(CryptainerBase):
 
             if len(decrypted_shards) < key_shared_secret_threshold:
                 error = self._build_error_report_message(error_type="Shard Decryption Error",
-                                                         error_message="%s valid shard(s) missing for reconstitution of symmetric key (errors: %r)" % (
-                                                             key_shared_secret_threshold - len(decrypted_shards),
-                                                             decryption_errors),
+                                                         error_message="%s valid shard(s) missing for reconstitution of symmetric key" % (
+                                                             key_shared_secret_threshold - len(decrypted_shards)),
                                                          error_exception="DecryptionError")
                 errors.append(error)
-                # raise DecryptionError("%s valid shard(s) missing for reconstitution of symmetric key (errors: %r)"
-                # % (key_shared_secret_threshold - len(decrypted_shards), decryption_errors))
+                key_bytes = b""
+                return key_bytes, errors
+
             logger.debug("Recombining shared-secret shards")
             key_bytes = recombine_secret_from_shards(shards=decrypted_shards)
 
@@ -995,7 +995,7 @@ class CryptainerDecryptor(CryptainerBase):
     def _get_predecrypted_symmetric_keys_or_none(key_bytes, predecrypted_symmetric_keys):
         predecrypted_symmetric_key = None
 
-        if predecrypted_symmetric_keys and predecrypted_symmetric_keys[key_bytes]:
+        if predecrypted_symmetric_keys and (key_bytes in predecrypted_symmetric_keys):
             predecrypted_symmetric_key = load_from_json_bytes(predecrypted_symmetric_keys[key_bytes])
             predecrypted_symmetric_key = predecrypted_symmetric_key["key_bytes"]
 

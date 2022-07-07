@@ -628,11 +628,11 @@ def _build_fake_symkey_decryption_sucessful_list(revelation_requests_info):
         response_key_algo = revelation_request_info["response_key_algo"]
         response_public_key = revelation_request_info["response_public_key"]
 
-        passphrases = revelation_request_info["passphrases"]
+        passphrase = revelation_request_info["passphrase"]
 
         symkey_decryption_response_data = _decrypt_cipherdict_with_trustee_then_encryt_with_response_key(
             foreign_keystore,
-            cipherdict, keychain_uid, cipher_algo, response_key_algo, response_public_key, passphrases)
+            cipherdict, keychain_uid, cipher_algo, response_key_algo, response_public_key, passphrase)
 
         symkey_decryption_succesful = {
             "target_public_authenticator_key": [{
@@ -682,10 +682,11 @@ def _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(key
 
     return keystore_pool, foreign_keystore, shard_trustee
 
+
 # Create a response keypair in localkeyfactory to encrypt the decrypted symkeys and for each crypatiner trustee create
 # the information needed to generate a successful decryption request
-def _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(revelation_requestor_uid,cryptainer,
-                                                                                       keystore_pool, passphrase,
+def _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(revelation_requestor_uid,
+                                                                                       cryptainer, keystore_pool,
                                                                                        list_shard_trustee_id):
     # Create response key pair in local key factory
     local_keystore = keystore_pool.get_local_keyfactory()
@@ -696,7 +697,7 @@ def _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_reques
     decryptable_symkeys_per_trustee = gather_decryptable_symkeys(cryptainers=[cryptainer])
 
     revelation_requests_info = []
-    for shard_trustee_id in list_shard_trustee_id:
+    for (shard_trustee_id, passphrase) in list_shard_trustee_id:
         trustee_data, symkey_revelation_requests = decryptable_symkeys_per_trustee[shard_trustee_id]
 
         keystore_uid = trustee_data["keystore_uid"]
@@ -725,7 +726,7 @@ def _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_reques
             "cryptainer_metadata": symkey_revelation_requests[0]["cryptainer_metadata"],
             "symkey_ciphertext": symkey_revelation_requests[0]["symkey_ciphertext"],
             "foreign_keystore": foreign_keystore,
-            "passphrases": [passphrase]
+            "passphrase": [passphrase]
         }
         revelation_requests_info.append(revelation_request_info)
 
@@ -738,14 +739,15 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     keystore_uid = generate_uuid0()
     passphrase = "tata"
 
-    # Create fake keystore and keypaire in foreign key
+    # Create fake keystore and keypair in foreign key
     keystore_pool, foreign_keystore, shard_trustee = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
         keystore_uid=keystore_uid, keychain_uid=keychain_uid_trustee, passphrase=passphrase)
 
     # Get shard trustee id
     list_shard_trustee_id = []
     shard_trustee_id = get_trustee_id(shard_trustee)
-    list_shard_trustee_id.append(shard_trustee_id)
+    trustee_info = (shard_trustee_id, passphrase)
+    list_shard_trustee_id.append(trustee_info)
 
     # Cryptoconf
     cryptoconf = dict(
@@ -794,7 +796,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     revelation_requestor_uid = generate_uuid0()
 
     revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
-        revelation_requestor_uid, cryptainer, keystore_pool, passphrase, list_shard_trustee_id)
+        revelation_requestor_uid, cryptainer, keystore_pool, list_shard_trustee_id)
 
     gateway_list = ["127.0.0.1:gateway/jsonrpc"]
 
@@ -867,14 +869,15 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     keystore_uid = generate_uuid0()
     passphrase = "xyz"
 
-    # Create fake keystore and keypaire in foreign key
+    # Create fake keystore and keypair in foreign key
     keystore_pool, foreign_keystore, shard_trustee = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
         keystore_uid=keystore_uid, keychain_uid=keychain_uid_trustee, passphrase=passphrase)
 
     # Get shard trustee id
     list_shard_trustee_id = []
     shard_trustee_id = get_trustee_id(shard_trustee)
-    list_shard_trustee_id.append(shard_trustee_id)
+    trustee_info = (shard_trustee_id, passphrase)
+    list_shard_trustee_id.append(trustee_info)
 
     # creer un crypconf qui crypte avec authentifieur
     cryptoconf = dict(payload_cipher_layers=[
@@ -922,7 +925,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     # Decrypt data with passphrase mapper
     result_payload, error_report = decrypt_payload_from_cryptainer(
         cryptainer=cryptainer, keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper,
-       verify_integrity_tags=verify_integrity_tags
+        verify_integrity_tags=verify_integrity_tags
     )
     assert error_report == []
     assert result_payload == payload
@@ -935,7 +938,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     # Create a response keypair in localkeyfactory to encrypt the decrypted symkeys and for each crypatiner trustee
     # create the information needed to generate a successful decryption request
     revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
-        revelation_requestor_uid, cryptainer, keystore_pool, passphrase, list_shard_trustee_id)
+        revelation_requestor_uid, cryptainer, keystore_pool, list_shard_trustee_id)
 
     gateway_list = ["127.0.0.1:gateway/jsonrpc"]
 
@@ -967,6 +970,181 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
         )
         assert result_payload1 == payload
         assert error_report1 == []
+
+
+def test_cryptainer_decryption_from_complex_crptoconf():
+    keychain_uid = generate_uuid0()
+    local_passphrase = "b^yep&ts"
+
+    # Trustee 1(with mockuup)
+    keystore_uid1 = generate_uuid0()
+    passphrase1 = "tata"
+
+    # Trustee 2(without mockup)
+    keystore_uid2 = generate_uuid0()
+    passphrase2 = "2çès"
+
+    # Trustee 3(with mockup)
+    keystore_uid3 = generate_uuid0()
+    passphrase3 = "zaizoadsxsnd123"
+
+    all_passphrases = [local_passphrase, passphrase1, passphrase2, passphrase3]
+
+    keystore_pool = InMemoryKeystorePool()
+    keystore_pool._register_fake_imported_storage_uids(storage_uids=[keystore_uid1, keystore_uid2, keystore_uid3])
+
+    local_keystore = keystore_pool.get_local_keyfactory()
+    generate_keypair_for_storage(
+        key_algo="RSA_OAEP", keystore=local_keystore, keychain_uid=keychain_uid, passphrase=local_passphrase
+    )
+    keystore1 = keystore_pool.get_foreign_keystore(keystore_uid1)
+    generate_keypair_for_storage(
+        key_algo="RSA_OAEP", keystore=keystore1, keychain_uid=keychain_uid, passphrase=passphrase1
+    )
+    keystore2 = keystore_pool.get_foreign_keystore(keystore_uid2)
+    generate_keypair_for_storage(
+        key_algo="RSA_OAEP", keystore=keystore2, keychain_uid=keychain_uid, passphrase=passphrase2
+    )
+    keystore3 = keystore_pool.get_foreign_keystore(keystore_uid3)
+    generate_keypair_for_storage(
+        key_algo="RSA_OAEP", keystore=keystore3, keychain_uid=keychain_uid, passphrase=passphrase3
+    )
+
+    local_keyfactory_trustee_id = get_trustee_id(LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+    list_shard_trustee_id = []
+
+    shard_trustee1 = dict(trustee_type="authenticator", keystore_uid=keystore_uid1)
+    shard_trustee1_id = get_trustee_id(shard_trustee1)
+    trustee_info1 = (shard_trustee1_id, passphrase1)
+    list_shard_trustee_id.append(trustee_info1)
+
+    shard_trustee2 = dict(trustee_type="authenticator", keystore_uid=keystore_uid2)
+    shard_trustee2_id = get_trustee_id(shard_trustee2)
+
+    shard_trustee3 = dict(trustee_type="authenticator", keystore_uid=keystore_uid3)
+    shard_trustee3_id = get_trustee_id(shard_trustee3)
+    trustee_info3 = (shard_trustee3_id, passphrase3)
+    list_shard_trustee_id.append(trustee_info3)
+
+    cryptoconf = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_CBC",
+                key_cipher_layers=[
+                    dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
+                    dict(
+                        key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                        key_shared_secret_threshold=3,
+                        key_shared_secret_shards=[
+                            dict(
+                                key_cipher_layers=[
+                                    dict(
+                                        key_cipher_algo="RSA_OAEP",
+                                        key_cipher_trustee=shard_trustee1,
+                                        keychain_uid=keychain_uid,
+                                    )
+                                ]
+                            ),
+                            dict(
+                                key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee2)]
+                            ),
+                            dict(
+                                key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee3)]
+                            ),
+                            dict(
+                                key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP",
+                                                        key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)]
+                            ),
+                        ],
+                    ),
+                ],
+                payload_signatures=[
+                    dict(
+                        payload_digest_algo="SHA256",
+                        payload_signature_algo="DSA_DSS",
+                        payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                        # Uses separate keypair, no passphrase here
+                    )
+                ],
+            )
+        ]
+    )
+    check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
+
+    payload = b"azertyuiop"
+
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload,
+        cryptoconf=cryptoconf,
+        keychain_uid=keychain_uid,
+        keystore_pool=keystore_pool,
+        cryptainer_metadata=None,
+    )
+
+    passphrase_mapper = {
+        local_keyfactory_trustee_id: [local_passphrase],
+        shard_trustee1_id: all_passphrases,
+        shard_trustee3_id: [passphrase3],
+    }
+
+    decrypted, error_report = decrypt_payload_from_cryptainer(
+        cryptainer,
+        keystore_pool=keystore_pool,
+        passphrase_mapper=passphrase_mapper,
+    )
+    assert decrypted == payload
+    assert error_report == [{"error_type": "Shard Decryption Error",
+                             "error_message": "Error when decrypting shard of {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP', 'key_cipher_trustee': " + str(shard_trustee2) + "}]}",
+                             "exception": "Invalid JSON string: JSONDecodeError('Expecting value: line 1 column 1 (char 0)')"}]
+
+
+    # assert error_report == []
+
+    # Decrypt with passphrase and mockup
+    revelation_requestor_uid = generate_uuid0()
+
+    # Create the information needed to generate a successful decryption request
+    revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
+        revelation_requestor_uid, cryptainer, keystore_pool, list_shard_trustee_id)
+
+    gateway_list = ["127.0.0.1:gateway/jsonrpc"]
+
+    # Remote revelation request with two trustee (1,3) and local trustee
+    with mock.patch(
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_symkey_decryptions_successful_for_cryptainer') as patched_function:
+        patched_function.return_value = _build_fake_symkey_decryption_sucessful_list(revelation_requests_info)
+        result_payload, error_report = decrypt_payload_from_cryptainer(
+            cryptainer=cryptainer, keystore_pool=keystore_pool,
+            passphrase_mapper={local_keyfactory_trustee_id: [local_passphrase]},
+            gateway_url_list=gateway_list, revelation_requestor_uid=revelation_requestor_uid
+        )
+        assert result_payload == payload
+        assert error_report == [{"error_type": "Shard Decryption Error",
+                                 "error_message": "Error when decrypting shard of {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP', 'key_cipher_trustee': " + str(
+                                     shard_trustee2) + "}]}",
+                                 "exception": "Invalid JSON string: JSONDecodeError('Expecting value: line 1 column 1 (char 0)')"}]
+
+    # Remote revelation request with two trustee (1,3) and without any passphrase(decrypted_shards below threshold)
+    with mock.patch(
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_symkey_decryptions_successful_for_cryptainer') as patched_function:
+        patched_function.return_value = _build_fake_symkey_decryption_sucessful_list(revelation_requests_info)
+        result_payload1, error_report1 = decrypt_payload_from_cryptainer(
+            cryptainer=cryptainer, keystore_pool=keystore_pool,
+            gateway_url_list=gateway_list, revelation_requestor_uid=revelation_requestor_uid
+        )
+        assert result_payload1 is None
+        assert error_report1 == [{"error_type": "Shard Decryption Error",
+                                 "error_message": "Error when decrypting shard of {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP', 'key_cipher_trustee': " + str(
+                                     shard_trustee2) + "}]}",
+                                 "exception": "Invalid JSON string: JSONDecodeError('Expecting value: line 1 column 1 (char 0)')"},
+                                {"error_type": "Shard Decryption Error",
+                                 "error_message": "Error when decrypting shard of {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP', 'key_cipher_trustee': " + str(
+                                     LOCAL_KEYFACTORY_TRUSTEE_MARKER) + "}]}",
+                                 "exception": "Invalid JSON string: JSONDecodeError('Expecting value: line 1 column 1 (char 0)')"},
+                                {"error_type": "Shard Decryption Error",
+                                 "error_message": "1 valid shard(s) missing for reconstitution of symmetric key",
+                                 "exception": "DecryptionError"},
+                                ]
 
 
 
@@ -1260,6 +1438,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         },
     )
     assert decrypted == payload
+    assert error_report == []
 
     # Passphrases of `None` key are always used
     decrypted, error_report = decrypt_payload_from_cryptainer(

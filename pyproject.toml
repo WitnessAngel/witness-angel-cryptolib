@@ -31,7 +31,7 @@ include = []
 exclude = []
 
 [tool.poetry.dependencies]
-python = ">=3.7, <3.11"
+python = ">=3.7, <4.0"
 
 # Cryptography & transports
 pycryptodome = "^3.9.9"

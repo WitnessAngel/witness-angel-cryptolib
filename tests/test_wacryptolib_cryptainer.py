@@ -1039,7 +1039,8 @@ def test_cryptainer_decryption_from_complex_crptoconf():
                         key_shared_secret_shards=[
                             dict(
                                 key_cipher_layers=[
-                                    dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee1, keychain_uid=keychain_uid),
+                                    dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee1,
+                                         keychain_uid=keychain_uid),
                                 ]
                             ),
                             dict(
@@ -1093,9 +1094,7 @@ def test_cryptainer_decryption_from_complex_crptoconf():
     assert error_report == [{"error_type": "Shard Decryption Error",
                              "error_message": "Error when decrypting shard of {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP', 'key_cipher_trustee': " + str(
                                  shard_trustee2) + "}]}",
-                             "exception": "Invalid JSON string: JSONDecodeError('Expecting value: line 1 column 1 (char 0)')"}]
-
-    # assert error_report == []
+                             "exception": "'NoneType' object has no attribute 'decode'"}]
 
     # Decrypt with passphrase and mockup
     revelation_requestor_uid = generate_uuid0()
@@ -1119,7 +1118,7 @@ def test_cryptainer_decryption_from_complex_crptoconf():
         assert error_report == [{"error_type": "Shard Decryption Error",
                                  "error_message": "Error when decrypting shard of {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP', 'key_cipher_trustee': " + str(
                                      shard_trustee2) + "}]}",
-                                 "exception": "Invalid JSON string: JSONDecodeError('Expecting value: line 1 column 1 (char 0)')"}]
+                                 "exception": "'NoneType' object has no attribute 'decode'"}]
 
     # Remote revelation request with two trustee (1,3) and without any passphrase(decrypted_shards below threshold)
     with mock.patch(
@@ -1131,17 +1130,17 @@ def test_cryptainer_decryption_from_complex_crptoconf():
         )
         assert result_payload is None
         assert error_report == [{"error_type": "Shard Decryption Error",
-                                  "error_message": "Error when decrypting shard of {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP', 'key_cipher_trustee': " + str(
-                                      shard_trustee2) + "}]}",
-                                  "exception": "Invalid JSON string: JSONDecodeError('Expecting value: line 1 column 1 (char 0)')"},
-                                 {"error_type": "Shard Decryption Error",
-                                  "error_message": "Error when decrypting shard of {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP', 'key_cipher_trustee': " + str(
-                                      LOCAL_KEYFACTORY_TRUSTEE_MARKER) + "}]}",
-                                  "exception": "Invalid JSON string: JSONDecodeError('Expecting value: line 1 column 1 (char 0)')"},
-                                 {"error_type": "Shard Decryption Error",
-                                  "error_message": "1 valid shard(s) missing for reconstitution of symmetric key",
-                                  "exception": "DecryptionError"},
-                                 ]
+                                 "error_message": "Error when decrypting shard of {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP', 'key_cipher_trustee': " + str(
+                                     shard_trustee2) + "}]}",
+                                 "exception": "'NoneType' object has no attribute 'decode'"},
+                                {"error_type": "Shard Decryption Error",
+                                 "error_message": "Error when decrypting shard of {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP', 'key_cipher_trustee': " + str(
+                                     LOCAL_KEYFACTORY_TRUSTEE_MARKER) + "}]}",
+                                 "exception": "'NoneType' object has no attribute 'decode'"},
+                                {"error_type": "Shard Decryption Error",
+                                 "error_message": "1 valid shard(s) missing for reconstitution of symmetric key",
+                                 "exception": "DecryptionError"},
+                                ]
 
 
 @pytest.mark.parametrize(
@@ -1215,7 +1214,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
 
     result_payload, error_report = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
     assert result_payload is None
-    #???
+    # ???
     assert error_report == [{'error_type': 'Shard Decryption Error',
                              'error_message': '1 valid shard(s) missing for reconstitution of symmetric key',
                              'exception': 'DecryptionError'}]
@@ -1262,31 +1261,45 @@ def test_decrypt_payload_from_cryptainer_signature_troubles():
     # pprint(cryptainer_corrupted)
     del cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_digest_value"]
 
-    result, error_report = decrypt_payload_from_cryptainer(cryptainer_corrupted,
-                                                           verify_integrity_tags=verify_integrity_tags)
+    result, error_report = decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
     assert result == b"1234abc"  # Missing the payload_digest_value is OK
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
-    # pprint(cryptainer_corrupted)
     cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_digest_value"] = b"000"
 
-    with pytest.raises(RuntimeError, match="Mismatch"):
-        decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
+    # RuntimeError, match="Mismatch"
+    result, error_report = decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
+    assert result == b"1234abc"
+    assert error_report == [{'error_type': 'Signature Error',
+                             'error_message': 'Mismatch between actual and expected payload digests during signature verification',
+                             'exception': 'RuntimeError'}]
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
     del cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_signature_struct"]
 
-    with pytest.raises(RuntimeError, match="Missing signature structure"):
-        decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
+    # RuntimeError, match="Missing signature structure"
+    result, error_report = decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
+
+    assert result == b"1234abc"
+    assert error_report == [{'error_type': 'Signature Error',
+                             'error_message': 'Missing signature structure',
+                             'exception': 'RuntimeError'}]
+
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
     cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_signature_struct"] = {
         "signature_timestamp_utc": 1645905017,
-        "signature_value": b"abc",
+        "signature_value": b"abcd",
     }
+    payload_signature_algo = cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_signature_algo"]
 
-    with pytest.raises(SignatureVerificationError, match="signature verification"):
-        decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
+    # SignatureVerificationError, match="signature verification"
+    result, error_report = decrypt_payload_from_cryptainer(cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags)
+
+    assert result == b"1234abc"
+    assert error_report == [{'error_type': 'Signature Error',
+                             'error_message': 'Failed '+str(payload_signature_algo)+' signature verification (Failed '+str(payload_signature_algo)+' signature verification (The signature is not authentic (length)))',
+                             'exception': 'SignatureVerificationError'}]
 
 
 def test_passphrase_mapping_during_decryption(tmp_path):
@@ -1391,8 +1404,13 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     # FIXME we must TEST that keychain_uid_trustee is necessary for decryption, for example by deleting it before a decrypt()
 
     # 2 valid .* missing for reconstitution
-    with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
-        decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+    #with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
+
+    decrypted, error_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+    assert decrypted is None
+    print(error_report)
+    gtx
+
 
     with pytest.raises(DecryptionError, match="2 valid .* missing for reconstitution"):
         decrypt_payload_from_cryptainer(

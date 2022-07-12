@@ -578,10 +578,10 @@ class CryptainerEncryptor(CryptainerBase):
         """
         trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
 
-        logger.debug("Generating asymmetric key of type %r", cipher_algo)
+        logger.debug("Generating asymmetric key %s %r", cipher_algo, keychain_uid)
         public_key_pem = trustee_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=cipher_algo)
 
-        logger.debug("Encrypting symmetric key struct with asymmetric key of type %r", cipher_algo)
+        logger.debug("Encrypting symmetric key struct with asymmetric key %s %s", cipher_algo, keychain_uid)
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=cipher_algo)
 
         key_struct = dict(key_bytes=key_bytes, cryptainer_metadata=cryptainer_metadata)  # SPECIAL FORMAT FOR CHECKUPS

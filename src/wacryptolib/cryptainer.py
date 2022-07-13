@@ -23,7 +23,7 @@ from wacryptolib.cipher import (
     SUPPORTED_CIPHER_ALGOS,
 )
 from wacryptolib.exceptions import DecryptionError, SchemaValidationError, KeyDoesNotExist, KeyLoadingError, \
-    ExistenceError, SignatureVerificationError, KeystoreDoesNotExist
+    ExistenceError, SignatureVerificationError, KeystoreDoesNotExist, DecryptionIntegrityError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, ASYMMETRIC_KEY_ALGOS_REGISTRY
 from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase
@@ -164,6 +164,10 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
 
 
 def gather_decryptable_symkeys(cryptainers: Sequence) -> dict:
+    """Analyse a cryptainer and returns the symkeys/shards (and their corresponding trustee) needed for decryption.
+
+    :return: dict with a tuple of the cipher key and the symkey/shard by trustee id.
+    """
     decryptable_symkeys_per_trustee = {}
 
     def _add_decryptable_symkeys_for_trustee(key_cipher_trustee, shard_ciphertext, keychain_uid_encryption,
@@ -670,6 +674,7 @@ class CryptainerDecryptor(CryptainerBase):
         return cryptainer["cryptainer_metadata"]
 
     def _decrypt_with_local_private_key(self, cipherdict: dict, keychain_uid: uuid.UUID, cipher_algo: str):
+        # TODO USE TrusteeApi() with keystore local then decrypt_with_private_key() function ???
         errors = []
         keystore = self._keystore_pool.get_local_keyfactory()
         key_struct_bytes = None  # Returns "None" when unable to decrypt with the answer key
@@ -729,7 +734,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         return predecrypted_symmetric_keys, errors
 
-    def _get_revelation_requests_by_requestor_uid(self, gateway_url: str, revelation_requestor_uid: uuid.UUID):
+    def _get_revelation_requests_list(self, gateway_url: str, revelation_requestor_uid: uuid.UUID):
 
         jsonrpc_url = gateway_url + "/jsonrpc/"
 
@@ -737,21 +742,21 @@ class CryptainerDecryptor(CryptainerBase):
             url=jsonrpc_url, response_error_handler=status_slugs_response_error_handler
         )
         # What to do when TransportError or OsError??? Intercept this???
-        list_revelation_requests = gateway_proxy.list_wadevice_decryption_requests(
+        revelation_requests_list = gateway_proxy.list_wadevice_decryption_requests(
             revelation_requestor_uid=revelation_requestor_uid)
 
-        return list_revelation_requests
+        return revelation_requests_list
 
-    def _get_successful_symkey_decryptions(self, cryptainer: dict, list_gateway_urls: list,
+    def _get_successful_symkey_decryptions(self, cryptainer: dict, gateway_urls_list: list,
                                            revelation_requestor_uid: uuid.UUID) -> tuple:
 
         requestor_revelation_requests = []
         errors = []
 
-        for gateway_url in list_gateway_urls:
-            list_revelation_requests = self._get_revelation_requests_by_requestor_uid(gateway_url,
+        for gateway_url in gateway_urls_list:
+            revelation_requests_list = self._get_revelation_requests_list(gateway_url,
                                                                                       revelation_requestor_uid)
-            requestor_revelation_requests.extend(list_revelation_requests)
+            requestor_revelation_requests.extend(revelation_requests_list)
         successful_symkey_decryptions = []
 
         # TODO continue if requestor_revelation_requests
@@ -763,10 +768,8 @@ class CryptainerDecryptor(CryptainerBase):
             if decryption_request["request_status"] == "ACCEPTED":  # TODO create a variable accepted #
 
                 for symkey_decryption in decryption_request["symkeys_decryption"]:
-                    if symkey_decryption["cryptainer_uid"] == cryptainer and symkey_decryption[
-                        "decryption_status"] == "ACCEPTED":
-                        symkey_decryption_accepted_for_cryptainer = {key: value for key, value in
-                                                                     symkey_decryption.items()}
+                    if symkey_decryption["cryptainer_uid"] == cryptainer and symkey_decryption["decryption_status"] == "ACCEPTED":
+                        symkey_decryption_accepted_for_cryptainer = {key: value for key, value in symkey_decryption.items()}
 
                         symkey_decryption_accepted_for_cryptainer["revelation_request"] = decryption_request_per_symkey
 
@@ -776,7 +779,7 @@ class CryptainerDecryptor(CryptainerBase):
         return successful_symkey_decryptions, errors
 
     def decrypt_payload(self, cryptainer: dict, verify_integrity_tags: bool = True,
-                        list_gateway_urls: Optional[list] = None,
+                        gateway_urls_list: Optional[list] = None,
                         revelation_requestor_uid: uuid.UUID = None) -> tuple:
         """
         Loop through cryptainer layers, to decipher payload with the right algorithms.
@@ -790,10 +793,9 @@ class CryptainerDecryptor(CryptainerBase):
         errors = []
         payload = None  # TODO rename to payload
 
-        if revelation_requestor_uid and list_gateway_urls:
+        if revelation_requestor_uid and gateway_urls_list:
             successful_symkey_decryptions, remote_decryption_errors = self._get_successful_symkey_decryptions(
-                cryptainer=cryptainer,
-                list_gateway_urls=list_gateway_urls,
+                cryptainer=cryptainer, gateway_urls_list=gateway_urls_list,
                 revelation_requestor_uid=revelation_requestor_uid)
             errors.extend(remote_decryption_errors)
 
@@ -848,16 +850,33 @@ class CryptainerDecryptor(CryptainerBase):
                     "payload_macs"
                 ]  # FIXME handle if it's not there, missing integrity tags due to unfinished container!!
                 payload_cipherdict = dict(ciphertext=payload_current, **payload_macs)
+                try:
 
-                payload_current = decrypt_bytestring(  # TODO Try except DecryptionError
-                    cipherdict=payload_cipherdict,
-                    key_dict=symkey,
-                    cipher_algo=payload_cipher_algo,
-                    verify_integrity_tags=verify_integrity_tags,
-                )
-                payload = payload_current  # Now decrypted
+                    payload_current = decrypt_bytestring(
+                        cipherdict=payload_cipherdict,
+                        key_dict=symkey,
+                        cipher_algo=payload_cipher_algo,
+                        verify_integrity_tags=verify_integrity_tags,
+                    )
+                    # Now decrypted
+
+                except DecryptionIntegrityError:
+                    error = self._build_error_report_message(error_type="Decryption Error",
+                                                             error_message="Failed %s decryption authentication (MAC check failed)" % payload_cipher_algo,
+                                                             error_exception="DecryptionIntegrityError")
+                    errors.append(error)
+                    payload_current = None
+
+                except DecryptionError:
+                    error = self._build_error_report_message(error_type="Decryption Error",
+                                                             error_message="Failed %s decryption" % payload_cipher_algo,
+                                                             error_exception="DecryptionError")
+                    errors.append(error)
+                    payload_current = None
             else:
                 payload_current = None
+
+            payload = payload_current
         return payload, errors
 
     def _decrypt_key_through_multiple_layers(  # TODO rename to symkey???
@@ -948,8 +967,8 @@ class CryptainerDecryptor(CryptainerBase):
 
             if len(decrypted_shards) < key_shared_secret_threshold:
                 error = self._build_error_report_message(error_type="Shard Decryption Error",
-                                                         error_message="%s valid shard(s) missing for reconstitution of symmetric key" % (
-                                                                 key_shared_secret_threshold - len(decrypted_shards)),
+                                                         error_message="%s valid shard(s) missing for reconstitution "
+                                                                       "of symmetric key" % (key_shared_secret_threshold - len(decrypted_shards)),
                                                          error_exception="DecryptionError")
                 errors.append(error)
                 key_bytes = None
@@ -1284,7 +1303,7 @@ def decrypt_payload_from_cryptainer(
         keystore_pool: Optional[KeystorePoolBase] = None,
         passphrase_mapper: Optional[dict] = None,
         verify_integrity_tags: bool = True,
-        list_gateway_urls: Optional[list] = None,
+        gateway_urls_list: Optional[list] = None,
         revelation_requestor_uid: uuid.UUID = None
 ) -> tuple:
     """Decrypt a cryptainer with the help of third-parties.
@@ -1299,7 +1318,7 @@ def decrypt_payload_from_cryptainer(
     cryptainer_decryptor = CryptainerDecryptor(keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
     data, error_report = cryptainer_decryptor.decrypt_payload(cryptainer=cryptainer,
                                                               verify_integrity_tags=verify_integrity_tags,
-                                                              list_gateway_urls=list_gateway_urls,
+                                                              gateway_urls_list=gateway_urls_list,
                                                               revelation_requestor_uid=revelation_requestor_uid)
     return data, error_report
 

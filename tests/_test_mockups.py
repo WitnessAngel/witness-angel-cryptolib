@@ -33,7 +33,7 @@ class FakeTestCryptainerStorage(CryptainerStorage):
         )
 
     def _decrypt_payload_from_cryptainer(self, cryptainer, **kwargs):
-        return cryptainer["payload_ciphertext_struct"]["ciphertext_value"]
+        return cryptainer["payload_ciphertext_struct"]["ciphertext_value"], []
 
 
 class WildcardUuid:

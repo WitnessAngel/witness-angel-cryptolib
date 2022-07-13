@@ -93,7 +93,7 @@ def test_tarfile_aggregator(tmp_path):
         tarfile_aggregator.finalize_tarfile()
         cryptainer_storage.wait_for_idle_state()
         assert cryptainer_storage.get_cryptainer_count() == 1
-        tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
+        tarfile_bytestring, error_report = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
         tar_file = TarfileRecordAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert tarfile_aggregator.get_record_count() == 0
         assert not tarfile_aggregator._current_start_time
@@ -129,7 +129,7 @@ def test_tarfile_aggregator(tmp_path):
         tarfile_aggregator.finalize_tarfile()
         cryptainer_storage.wait_for_idle_state()
         assert cryptainer_storage.get_cryptainer_count() == 2
-        tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
+        tarfile_bytestring, error_report = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
         tar_file = TarfileRecordAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert tarfile_aggregator.get_record_count() == 0
         assert not tarfile_aggregator._current_start_time
@@ -195,7 +195,7 @@ def test_tarfile_aggregator(tmp_path):
         tarfile_aggregator.finalize_tarfile()
         cryptainer_storage.wait_for_idle_state()
         assert cryptainer_storage.get_cryptainer_count() == 5
-        tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
+        tarfile_bytestring, error_report = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
         tar_file = TarfileRecordAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert len(tar_file.getmembers()) == 3
         assert len(tar_file.getnames()) == 3
@@ -268,7 +268,7 @@ def test_json_aggregator(tmp_path):
         tarfile_aggregator.finalize_tarfile()
         cryptainer_storage.wait_for_idle_state()
         assert cryptainer_storage.get_cryptainer_count() == 1
-        tarfile_bytestring = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
+        tarfile_bytestring, error_report = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name_or_idx=-1)
         tar_file = TarfileRecordAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
         assert tarfile_aggregator.get_record_count() == 0
 
@@ -336,9 +336,10 @@ def test_aggregators_thread_safety(tmp_path):
 
     cryptainer_names = cryptainer_storage.list_cryptainer_names(as_sorted_list=True)
 
-    tarfiles_bytes = [
-        cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name) for cryptainer_name in cryptainer_names
-    ]
+    tarfiles_bytes = []
+    for cryptainer_name in cryptainer_names:
+        tarfiles_byte, error_report = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name)
+        tarfiles_bytes.append(tarfiles_byte)
 
     tarfiles = [
         TarfileRecordAggregator.read_tarfile_from_bytestring(bytestring) for bytestring in tarfiles_bytes if bytestring

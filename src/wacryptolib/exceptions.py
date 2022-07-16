@@ -19,15 +19,7 @@ class KeyAlreadyExists(ExistenceError):
     pass
 
 
-class AuthenticatorDoesNotExist(ExistenceError):  # FIXME REPLACE BY KeystoreDoesNotExist!!
-    pass
-
-
-class KeystoreDoesNotExist(ExistenceError):
-    pass
-
-
-class AuthenticatorAlreadyExists(ExistenceError):  # FIXME replace by KeystoreAlreadyExists
+class KeystoreDoesNotExist(ExistenceError):  # FIXME REPLACE BY KeystoreDoesNotExist!!
     pass
 
 
@@ -41,8 +33,9 @@ class KeystoreAlreadyExists(ExistenceError):
 class AuthenticationError(FunctionalError):
     pass  # E.g. the "secret" provided with an API request doesn't match that stored
 
+
 class AuthorizationError(FunctionalError):
-    pass
+    pass  # E.g. no authorization has been pre-obtained before a trustee.decrypt_with_private_key()
 
 
 class OperationNotSupported(FunctionalError):
@@ -90,9 +83,6 @@ class ValidationError(FunctionalError):
 class SchemaValidationError(ValidationError):
     pass  # When data doesn't respect json format, or an additional python-schema, or some additional security constraints
 
-
-class PermissionAuthenticatorError(FunctionalError):  # FIXME WRONG NAMING - TO BE CHANGED EVERYWHERE AuthenticationError
-    pass
 
 
 

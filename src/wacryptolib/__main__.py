@@ -140,7 +140,13 @@ def decrypt(ctx, input_cryptainer, output_medium):
     cryptainer = load_from_json_bytes(input_cryptainer.read())
 
     keystore_pool = _get_keystore_pool(ctx)
-    medium_content = _do_decrypt(cryptainer=cryptainer, keystore_pool=keystore_pool)
+    medium_content, errors = _do_decrypt(cryptainer=cryptainer, keystore_pool=keystore_pool)
+
+    if errors:  # Fixme improve that
+        print("Errors occurred:", errors)
+
+    if not medium_content:
+        raise RuntimeError("Content could not be decrypted")
 
     with output_medium:
         output_medium.write(medium_content)

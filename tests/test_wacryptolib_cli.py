@@ -14,15 +14,15 @@ from wacryptolib.utilities import dump_to_json_file
 def test_cli_help_texts():
     runner = CliRunner()
 
-    result = runner.invoke(cli, ["-h"])
+    result = runner.invoke(cli, ["-h"], catch_exceptions=False)
     assert result.exit_code == 0
     assert "Usage:" in result.output
 
-    result = runner.invoke(cli, ["encrypt", "-h"])
+    result = runner.invoke(cli, ["encrypt", "-h"], catch_exceptions=False)
     assert result.exit_code == 0
     assert "into a secure cryptainer" in result.output
 
-    result = runner.invoke(cli, ["decrypt", "-h"])
+    result = runner.invoke(cli, ["decrypt", "-h"], catch_exceptions=False)
     assert result.exit_code == 0
     assert "original media file" in result.output
 
@@ -43,11 +43,11 @@ def test_cli_encryption_and_decryption(tmp_path):
             with open(data_file, "w") as output_file:
                 output_file.write(data_sample)
 
-            result = runner.invoke(cli, base_args + ["encrypt", "-i", "test_file.txt"])
+            result = runner.invoke(cli, base_args + ["encrypt", "-i", "test_file.txt"], catch_exceptions=False)
             assert result.exit_code == 0
             assert os.path.exists(data_file + ".crypt")
 
-            result = runner.invoke(cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "stuff.dat"])
+            result = runner.invoke(cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "stuff.dat"], catch_exceptions=False)
             assert result.exit_code == 0
             assert os.path.exists("stuff.dat")
 
@@ -58,15 +58,15 @@ def test_cli_encryption_and_decryption(tmp_path):
             os.remove(data_file)  # CLEANUP
             assert not os.path.exists(data_file)
 
-            result = runner.invoke(cli, base_args + ["decrypt", "-i", data_file + ".crypt"])
+            result = runner.invoke(cli, base_args + ["decrypt", "-i", data_file + ".crypt"], catch_exceptions=False)
             assert result.exit_code == 0
             assert os.path.exists(data_file)
 
-            result = runner.invoke(cli, base_args + ["decrypt", "-i", "stuff.dat"])
+            result = runner.invoke(cli, base_args + ["decrypt", "-i", "stuff.dat"], catch_exceptions=False)
             assert result.exit_code == 0
             assert os.path.exists("stuff.dat.medium")
 
-            result = runner.invoke(cli, base_args + ["decrypt", "-i", "stuff.dat", "-o", "stuffs.txt"])
+            result = runner.invoke(cli, base_args + ["decrypt", "-i", "stuff.dat", "-o", "stuffs.txt"], catch_exceptions=False)
             assert result.exit_code == 0
             assert os.path.exists("stuffs.txt")
 
@@ -77,7 +77,7 @@ def test_cli_encryption_and_decryption(tmp_path):
 
             empty_storage = tmp_path.joinpath("subdir_%s" % idx)
             empty_storage.mkdir()
-            result = runner.invoke(cli, ["-k", empty_storage, "decrypt", "-i", "stuff.dat", "-o", "stuffs.txt"])
+            result = runner.invoke(cli, ["-k", empty_storage, "decrypt", "-i", "stuff.dat", "-o", "stuffs.txt"], catch_exceptions=True)
             assert result.exit_code == 1  # Decryption failed because keypair was regenerated
 
             # CUSTOM cryptoconf !
@@ -86,7 +86,8 @@ def test_cli_encryption_and_decryption(tmp_path):
                 f.write(b"badcontent")
 
             result = runner.invoke(
-                cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file]
+                cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file],
+                catch_exceptions=True
             )
             assert result.exit_code == 1
             assert not os.path.exists("specialconf.crypt")
@@ -105,7 +106,8 @@ def test_cli_encryption_and_decryption(tmp_path):
             dump_to_json_file(cryptoconf_file, simple_cryptoconf_tree)
 
             result = runner.invoke(
-                cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file]
+                cli, base_args + ["encrypt", "-i", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file],
+                catch_exceptions=False
             )
             assert result.exit_code == 0
             assert os.path.exists("specialconf.crypt")
@@ -115,7 +117,8 @@ def test_cli_encryption_and_decryption(tmp_path):
                 assert "CHACHA20_POLY1305" in data
 
             result = runner.invoke(
-                cli, base_args + ["decrypt", "-i", "specialconf.crypt", "-o", "specialconf.crypt.decrypted"]
+                cli, base_args + ["decrypt", "-i", "specialconf.crypt", "-o", "specialconf.crypt.decrypted"],
+                catch_exceptions=False
             )
             assert result.exit_code == 0
             assert os.path.exists("specialconf.crypt.decrypted")

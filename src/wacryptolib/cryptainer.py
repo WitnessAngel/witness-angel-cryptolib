@@ -7,11 +7,13 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from pprint import pprint
 from typing import Optional, Union, Sequence, BinaryIO
 from urllib.parse import urlparse
 
 import jsonschema
 import schema as pythonschema
+from jsonrpc_requests import TransportError
 from jsonschema import validate as jsonschema_validate
 from schema import And, Or, Schema, Optional as OptionalKey
 
@@ -662,6 +664,15 @@ def _get_cryptainer_inline_ciphertext_value(cryptainer):
     return ciphertext_value
 
 
+class DecryptionErrorTypes:
+    KEY_NOT_FOUND_ERROR = "KEY_NOT_FOUND_ERROR"
+    TRUSTEE_NOT_FOUND_ERROR = "TRUSTEE_NOT_FOUND"
+    SIGNATURE_ERROR = "SIGNATURE_ERROR"
+    SHARD_DECRYPTION_AUTHORIZATION_ERROR = "SHARD_DECRYPTION_AUTHORIZATION_ERROR"
+    SHARED_SECRET_THRESHOLD_FAILURE = "SHARED_SECRET_THRESHOLD_FAILURE"
+    GATEWAY_UNREACHABLE_ERROR = "GATEWAY_UNREACHABLE_ERROR"
+
+
 class CryptainerDecryptor(CryptainerBase):
     """
     THIS CLASS IS PRIVATE API
@@ -684,18 +695,20 @@ class CryptainerDecryptor(CryptainerBase):
         except KeyDoesNotExist:
             error = self._build_error_report_message(error_type="Local Decryption Error",
                                                      error_message="Private key %s/%s not found" % (
-                                                     keychain_uid, cipher_algo),
+                                                         keychain_uid, cipher_algo),
                                                      error_exception="KeyDoesNotExist")
             errors.append(error)
             return key_struct_bytes, errors
 
         try:
             private_key = load_asymmetric_key_from_pem_bytestring(key_pem=private_key_pem, key_algo=cipher_algo)
+
         except KeyLoadingError as exc:
             error = self._build_error_report_message(error_type="Local Decryption Error",
                                                      error_message="Failed loading %s key from pem bytestring (%s)" % (
-                                                     cipher_algo, exc),
+                                                         cipher_algo, exc),
                                                      error_exception="KeyLoadingError")
+
             errors.append(error)
             return key_struct_bytes, errors
 
@@ -734,52 +747,74 @@ class CryptainerDecryptor(CryptainerBase):
 
         return predecrypted_symmetric_keys, errors
 
-    def _get_revelation_requests_list(self, gateway_url: str, revelation_requestor_uid: uuid.UUID):
+    def _get_single_gateway_revelation_request_list(self, gateway_url: str, revelation_requestor_uid: uuid.UUID):
 
         jsonrpc_url = gateway_url + "/jsonrpc/"
+        gateway_revelation_request_list = []
+        gateway_error = {}
 
         gateway_proxy = JsonRpcProxy(
             url=jsonrpc_url, response_error_handler=status_slugs_response_error_handler
         )
         # What to do when TransportError or OsError??? Intercept this???
-        revelation_requests_list = gateway_proxy.list_wadevice_decryption_requests(
-            revelation_requestor_uid=revelation_requestor_uid)
+        try:
+            gateway_revelation_request_list = gateway_proxy.list_wadevice_decryption_requests(
+                revelation_requestor_uid=revelation_requestor_uid)
+        except (TransportError, OSError) as exc:
+            gateway_error = self._build_error_report_message(error_type="Server Error",
+                                                             error_message="Unable to reach remote server %s" % gateway_url,
+                                                             error_exception=exc)
+        return gateway_revelation_request_list, gateway_error
 
-        return revelation_requests_list
+    def _get_multiple_gateway_revelation_request_list(self, gateway_url_list: list,
+                                                      revelation_requestor_uid: uuid.UUID):
+        gateway_errors = []
+        multiple_gateway_revelation_request_list = []
+        for gateway_url in gateway_url_list:
+            gateway_revelation_request_list, gateway_error = self._get_single_gateway_revelation_request_list(
+                gateway_url,
+                revelation_requestor_uid)
+            multiple_gateway_revelation_request_list.extend(gateway_revelation_request_list)
+            gateway_errors.append(gateway_error)
 
-    def _get_successful_symkey_decryptions(self, cryptainer: dict, gateway_urls_list: list,
+        return multiple_gateway_revelation_request_list, gateway_errors
+
+    def _get_successful_symkey_decryptions(self, cryptainer: dict, gateway_url_list: list,
                                            revelation_requestor_uid: uuid.UUID) -> tuple:
 
-        requestor_revelation_requests = []
         errors = []
+        multiple_gateway_revelation_request_list, gateway_errors = self._get_multiple_gateway_revelation_request_list(
+            gateway_url_list, revelation_requestor_uid)
+        errors.extend(gateway_errors)
 
-        for gateway_url in gateway_urls_list:
-            revelation_requests_list = self._get_revelation_requests_list(gateway_url,
-                                                                                      revelation_requestor_uid)
-            requestor_revelation_requests.extend(revelation_requests_list)
         successful_symkey_decryptions = []
 
-        # TODO continue if requestor_revelation_requests
-        for decryption_request in requestor_revelation_requests:
-            decryption_request_per_symkey = {key: value for key, value in decryption_request.items() if
-                                             key != 'symkeys_decryption'}
+        if multiple_gateway_revelation_request_list:
 
-            # Allow not to verify all decryption requests
-            if decryption_request["request_status"] == "ACCEPTED":  # TODO create a variable accepted #
+            for revelation_request in multiple_gateway_revelation_request_list:
 
-                for symkey_decryption in decryption_request["symkeys_decryption"]:
-                    if symkey_decryption["cryptainer_uid"] == cryptainer and symkey_decryption["decryption_status"] == "ACCEPTED":
-                        symkey_decryption_accepted_for_cryptainer = {key: value for key, value in symkey_decryption.items()}
+                revelation_request_per_symkey = {key: value for key, value in revelation_request.items() if
+                                                 key != 'symkey_decryption_requests'}
 
-                        symkey_decryption_accepted_for_cryptainer["revelation_request"] = decryption_request_per_symkey
+                # Allow not to verify all decryption requests
+                if revelation_request["revelation_request_status"] == "ACCEPTED":  # TODO create a variable accepted #
 
-                        successful_symkey_decryptions.append(symkey_decryption_accepted_for_cryptainer)
+                    for symkey_decryption in revelation_request["symkey_decryption_requests"]:
+
+                        if symkey_decryption["cryptainer_uid"] == cryptainer["cryptainer_uid"] and symkey_decryption["symkey_decryption_status"] == "DECRYPTED":
+                            symkey_decryption_accepted_for_cryptainer = {key: value for key, value in
+                                                                         symkey_decryption.items()}
+
+                            symkey_decryption_accepted_for_cryptainer[
+                                "revelation_request"] = revelation_request_per_symkey
+
+                            successful_symkey_decryptions.append(symkey_decryption_accepted_for_cryptainer)
 
         # FIXME add error for rejected request???
         return successful_symkey_decryptions, errors
 
     def decrypt_payload(self, cryptainer: dict, verify_integrity_tags: bool = True,
-                        gateway_urls_list: Optional[list] = None,
+                        gateway_url_list: Optional[list] = None,
                         revelation_requestor_uid: uuid.UUID = None) -> tuple:
         """
         Loop through cryptainer layers, to decipher payload with the right algorithms.
@@ -793,9 +828,9 @@ class CryptainerDecryptor(CryptainerBase):
         errors = []
         payload = None  # TODO rename to payload
 
-        if revelation_requestor_uid and gateway_urls_list:
+        if revelation_requestor_uid and gateway_url_list:
             successful_symkey_decryptions, remote_decryption_errors = self._get_successful_symkey_decryptions(
-                cryptainer=cryptainer, gateway_urls_list=gateway_urls_list,
+                cryptainer=cryptainer, gateway_url_list=gateway_url_list,
                 revelation_requestor_uid=revelation_requestor_uid)
             errors.extend(remote_decryption_errors)
 
@@ -1303,7 +1338,7 @@ def decrypt_payload_from_cryptainer(
         keystore_pool: Optional[KeystorePoolBase] = None,
         passphrase_mapper: Optional[dict] = None,
         verify_integrity_tags: bool = True,
-        gateway_urls_list: Optional[list] = None,
+        gateway_url_list: Optional[list] = None,
         revelation_requestor_uid: uuid.UUID = None
 ) -> tuple:
     """Decrypt a cryptainer with the help of third-parties.
@@ -1318,7 +1353,7 @@ def decrypt_payload_from_cryptainer(
     cryptainer_decryptor = CryptainerDecryptor(keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
     data, error_report = cryptainer_decryptor.decrypt_payload(cryptainer=cryptainer,
                                                               verify_integrity_tags=verify_integrity_tags,
-                                                              gateway_urls_list=gateway_urls_list,
+                                                              gateway_url_list=gateway_url_list,
                                                               revelation_requestor_uid=revelation_requestor_uid)
     return data, error_report
 

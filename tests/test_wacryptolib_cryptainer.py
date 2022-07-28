@@ -613,8 +613,8 @@ def _decrypt_cipherdict_with_trustee_then_encryt_with_response_key(foreign_keyst
     return response_data
 
 
-def _build_fake_symkey_decryption_sucessful_list(revelation_requests_info):
-    symkey_decryptions_succesful = []
+def _build_fake_gateway_revelation_request_list(revelation_requests_info):
+    revelation_requests_successful = []
 
     for revelation_request_info in revelation_requests_info:
         cipherdict = load_from_json_bytes(revelation_request_info["symkey_ciphertext"])
@@ -634,37 +634,37 @@ def _build_fake_symkey_decryption_sucessful_list(revelation_requests_info):
             foreign_keystore,
             cipherdict, keychain_uid, cipher_algo, response_key_algo, response_public_key, passphrase)
 
-        symkey_decryption_succesful = {
-            "target_public_authenticator_key": [{
-                "keychain_uid": keychain_uid,
-                "key_algo": cipher_algo,
-                "key_value": key_value
+        revelation_request_successful = {
+            "target_public_authenticator": [{
+                "keystore_owner": revelation_request_info["keystore_owner"],
+                "keystore_uid": revelation_request_info["keystore_uid"],
+                "public_keys": revelation_request_info["public_keys"]
             }],
-            "cryptainer_uid": revelation_request_info["cryptainer_uid"],
-            "cryptainer_metadata": revelation_request_info["cryptainer_metadata"],
-            "symkey_decryption_request_data": revelation_request_info["symkey_ciphertext"],
-            "symkey_decryption_response_data": symkey_decryption_response_data,
-            "symkey_decryption_status": "DECRYPTED",
-            "revelation_request": {
-                "target_public_authenticator": [{
-                    "keystore_owner": revelation_request_info["keystore_owner"],
-                    "keystore_uid": revelation_request_info["keystore_uid"],
-                    "public_keys": revelation_request_info["public_keys"]
+            "revelation_request_uid": generate_uuid0(),
+            "revelation_requestor_uid": revelation_request_info["revelation_requestor_uid"],
+            "revelation_request_description": "Description",
+            "revelation_response_public_key": revelation_request_info["response_public_key"],
+            "revelation_response_keychain_uid": revelation_request_info["response_keychain_uid"],
+            "revelation_response_key_algo": revelation_request_info["response_key_algo"],
+            "revelation_request_status": "ACCEPTED",
+            "symkey_decryption_requests": [{
+                "target_public_authenticator_key": [{
+                    "keychain_uid": keychain_uid,
+                    "key_algo": cipher_algo,
+                    "key_value": key_value
                 }],
-                "revelation_request_uid": generate_uuid0(),
-                "revelation_requestor_uid": revelation_request_info["revelation_requestor_uid"],
-                "revelation_request_description": "Description",
-                "revelation_response_public_key": revelation_request_info["response_public_key"],
-                "revelation_response_keychain_uid": revelation_request_info["response_keychain_uid"],
-                "revelation_response_key_algo": revelation_request_info["response_key_algo"],
-                "revelation_request_status": "ACCEPTED"
-            }
+                "cryptainer_uid": revelation_request_info["cryptainer_uid"],
+                "cryptainer_metadata": revelation_request_info["cryptainer_metadata"],
+                "symkey_decryption_request_data": revelation_request_info["symkey_ciphertext"],
+                "symkey_decryption_response_data": symkey_decryption_response_data,
+                "symkey_decryption_status": "DECRYPTED",
+            }]
         }
 
-        symkey_decryptions_succesful.append(symkey_decryption_succesful)
+        revelation_requests_successful.append(revelation_request_successful)
     errors = []
 
-    return symkey_decryptions_succesful, errors
+    return revelation_requests_successful, errors
 
 
 def _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(keystore_uid, keychain_uid, passphrase):
@@ -739,7 +739,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     keystore_uid = generate_uuid0()
     passphrase = "tata"
 
-    # Create fake keystore and keypair in foreign key
+    # Create fake keystore and keypair trustee in foreign key
     keystore_pool, foreign_keystore, shard_trustee = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
         keystore_uid=keystore_uid, keychain_uid=keychain_uid_trustee, passphrase=passphrase)
 
@@ -798,15 +798,15 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
         revelation_requestor_uid, cryptainer, keystore_pool, list_shard_trustee_id)
 
-    gateway_urls_list = ["127.0.0.1:gateway/jsonrpc"]
+    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
 
     # Remote revelation request return right symkey_revelation_response_data
     with mock.patch(
-            'wacryptolib.cryptainer.CryptainerDecryptor._get_successful_symkey_decryptions') as patched_function:
-        patched_function.return_value = _build_fake_symkey_decryption_sucessful_list(revelation_requests_info)
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer, keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper,
-            gateway_urls_list=gateway_urls_list, revelation_requestor_uid=revelation_requestor_uid
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload == payload
         assert error_report == []
@@ -815,52 +815,77 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     fake_revelation_request_info = copy.deepcopy(revelation_requests_info)
     wrong_response_keychain_uid = generate_uuid0()
     fake_revelation_request_info[0]["response_keychain_uid"] = wrong_response_keychain_uid
+
     with mock.patch(
-            'wacryptolib.cryptainer.CryptainerDecryptor._get_successful_symkey_decryptions') as patched_function:
-        patched_function.return_value = _build_fake_symkey_decryption_sucessful_list(fake_revelation_request_info)
-        result_payload1, error_report1 = decrypt_payload_from_cryptainer(
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        patched_function.return_value = _build_fake_gateway_revelation_request_list(fake_revelation_request_info)
+
+        result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer, keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper,
-            gateway_urls_list=gateway_urls_list, revelation_requestor_uid=revelation_requestor_uid
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload == payload  # Using asymmetric algorithm because can't decrypt the symkey_decryption_response_data with response key
-        assert error_report1 == [{'error_type': 'Local Decryption Error',
-                                  'error_message': 'Private key ' + str(
-                                      wrong_response_keychain_uid) + '/RSA_OAEP not found',
-                                  'exception': 'KeyDoesNotExist'}]
+
+        assert error_report == [{'error_type': 'Local Decryption Error',
+                                 'error_message': 'Private key ' + str(
+                                     wrong_response_keychain_uid) + '/RSA_OAEP not found',
+                                 'exception': 'KeyDoesNotExist'}]
 
     # Wrong symkey revelation response data
     with mock.patch(
-            'wacryptolib.cryptainer.CryptainerDecryptor._get_successful_symkey_decryptions') as patched_function:
-        symkey_decryptions_succesful, errors = _build_fake_symkey_decryption_sucessful_list(revelation_requests_info)
-        symkey_decryptions_succesful[0][
-            "symkey_decryption_response_data"] = b'{"ciphertext_chunks": [{"$binary": {"base64": "FImgSTpvmdIGPjml5YzI1qtOrN/I34DkG1PTNWqnqg==", "subType": "00"}}]}'  # Corrupted
-        patched_function.return_value = symkey_decryptions_succesful, errors
-        result_payload2, error_report2 = decrypt_payload_from_cryptainer(
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        gateway_revelation_request_list, errors = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+        # Corrupted
+        gateway_revelation_request_list[0]["symkey_decryption_requests"][0][
+            "symkey_decryption_response_data"] = b'{"ciphertext_chunks": [{"$binary": {"base64": "FImgSTpvmdIGPjml5YzI1qtOrN/I34DkG1PTNWqnqg==", "subType": "00"}}]}'
+
+        patched_function.return_value = gateway_revelation_request_list, errors
+        result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer, keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper,
-            gateway_urls_list=gateway_urls_list, revelation_requestor_uid=revelation_requestor_uid
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload == payload  # Using asymmetric algorithm because response_data corrupted
-        assert error_report2 == [{'error_type': 'local Decryption Error',
-                                  'error_message': 'Failed RSA_OAEP decryption (Failed RSA_OAEP decryption (Ciphertext with incorrect length.))',
-                                  'exception': 'DecryptionError'}]
+        assert error_report == [{'error_type': 'local Decryption Error',
+                                 'error_message': 'Failed RSA_OAEP decryption (Failed RSA_OAEP decryption (Ciphertext with incorrect length.))',
+                                 'exception': 'DecryptionError'}]
 
-    # Keystore pool empty( without trustee keypair in imported keystore and response key in local keystore
+    # keystore pool without trustee keypair
     keystore_pool1 = InMemoryKeystorePool()
     response_keychain_uid = revelation_requests_info[0]["response_keychain_uid"]
+    keystore_pool1._register_fake_imported_storage_uids(storage_uids=[keystore_uid])
+
     with mock.patch(
-            'wacryptolib.cryptainer.CryptainerDecryptor._get_successful_symkey_decryptions') as patched_function:
-        patched_function.return_value = _build_fake_symkey_decryption_sucessful_list(revelation_requests_info)
-        result_payload3, error_report3 = decrypt_payload_from_cryptainer(
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+        result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer, keystore_pool=keystore_pool1, passphrase_mapper=passphrase_mapper,
-            gateway_urls_list=gateway_urls_list, revelation_requestor_uid=revelation_requestor_uid
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
-        assert result_payload3 is None
-        assert error_report3 == [{'error_type': 'Local Decryption Error',
-                                  'error_message': 'Private key ' + str(response_keychain_uid) + '/RSA_OAEP not found',
-                                  'exception': 'KeyDoesNotExist'},
-                                 {'error_type': 'Trustee Decryption Error',
-                                  'error_message': 'Key storage ' + str(keystore_uid) + ' not found',
-                                  'exception': 'KeystoreDoesNotExist'}]
+        assert result_payload is None
+        assert error_report == [{'error_type': 'Local Decryption Error',
+                                 'error_message': 'Private key ' + str(response_keychain_uid) + '/RSA_OAEP not found',
+                                 'exception': 'KeyDoesNotExist'},
+                                {'error_type': 'Trustee Decryption Error',
+                                 'error_message': 'Private key ' + str(keychain_uid_trustee) + '/RSA_OAEP not found',
+                                 'exception': 'KeyDoesNotExist'}]
+
+    # Keystore pool empty( without trustee keystore in imported keystore and response key in local keystore)
+    keystore_pool2 = InMemoryKeystorePool()
+    response_keychain_uid = revelation_requests_info[0]["response_keychain_uid"]
+    with mock.patch(
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+        result_payload, error_report = decrypt_payload_from_cryptainer(
+            cryptainer=cryptainer, keystore_pool=keystore_pool2, passphrase_mapper=passphrase_mapper,
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
+        )
+        assert result_payload is None
+        assert error_report == [{'error_type': 'Local Decryption Error',
+                                 'error_message': 'Private key ' + str(response_keychain_uid) + '/RSA_OAEP not found',
+                                 'exception': 'KeyDoesNotExist'},
+                                {'error_type': 'Trustee Decryption Error',
+                                 'error_message': 'Key storage ' + str(keystore_uid) + ' not found',
+                                 'exception': 'KeystoreDoesNotExist'}]
 
 
 # Cryptoconf with 1 shared secret with threshold of 1 and only one trustee
@@ -940,15 +965,15 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
         revelation_requestor_uid, cryptainer, keystore_pool, list_shard_trustee_id)
 
-    gateway_urls_list = ["127.0.0.1:gateway/jsonrpc"]
+    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
 
     # Remote revelation request return right symkey_revelation_response_data
     with mock.patch(
-            'wacryptolib.cryptainer.CryptainerDecryptor._get_successful_symkey_decryptions') as patched_function:
-        patched_function.return_value = _build_fake_symkey_decryption_sucessful_list(revelation_requests_info)
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer, keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper,
-            gateway_urls_list=gateway_urls_list, revelation_requestor_uid=revelation_requestor_uid
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload == payload
         assert error_report == []
@@ -961,12 +986,12 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     generate_keypair_for_storage(key_algo="RSA_OAEP", keystore=local_keystore1, keychain_uid=response_keychain_uid)
 
     with mock.patch(
-            'wacryptolib.cryptainer.CryptainerDecryptor._get_successful_symkey_decryptions') as patched_function:
-        patched_function.return_value = _build_fake_symkey_decryption_sucessful_list(revelation_requests_info)
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
 
         result_payload1, error_report1 = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer, keystore_pool=keystore_pool1, passphrase_mapper=passphrase_mapper,
-            gateway_urls_list=gateway_urls_list, revelation_requestor_uid=revelation_requestor_uid
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload1 == payload
         assert error_report1 == []
@@ -1103,16 +1128,16 @@ def test_cryptainer_decryption_from_complex_crptoconf():
     revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
         revelation_requestor_uid, cryptainer, keystore_pool, list_shard_trustee_id)
 
-    gateway_urls_list = ["127.0.0.1:gateway/jsonrpc"]
+    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
 
     # Remote revelation request with two trustee (1,3) and local trustee
     with mock.patch(
-            'wacryptolib.cryptainer.CryptainerDecryptor._get_successful_symkey_decryptions') as patched_function:
-        patched_function.return_value = _build_fake_symkey_decryption_sucessful_list(revelation_requests_info)
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer, keystore_pool=keystore_pool,
             passphrase_mapper={local_keyfactory_trustee_id: [local_passphrase]},
-            gateway_urls_list=gateway_urls_list, revelation_requestor_uid=revelation_requestor_uid
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload == payload
         assert error_report == [{"error_type": "Shard Decryption Error",
@@ -1122,11 +1147,11 @@ def test_cryptainer_decryption_from_complex_crptoconf():
 
     # Remote revelation request with two trustee (1,3) and without any passphrase(decrypted_shards below threshold)
     with mock.patch(
-            'wacryptolib.cryptainer.CryptainerDecryptor._get_successful_symkey_decryptions') as patched_function:
-        patched_function.return_value = _build_fake_symkey_decryption_sucessful_list(revelation_requests_info)
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer, keystore_pool=keystore_pool,
-            gateway_urls_list=gateway_urls_list, revelation_requestor_uid=revelation_requestor_uid
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload is None
         assert error_report == [{"error_type": "Shard Decryption Error",
@@ -1141,6 +1166,94 @@ def test_cryptainer_decryption_from_complex_crptoconf():
                                  "error_message": "1 valid shard(s) missing for reconstitution of symmetric key",
                                  "exception": "DecryptionError"},
                                 ]
+
+
+def test_key_loading_local_decryption_and_payload_signature():
+    keychain_uid = generate_uuid0()
+
+    keystore_uid = generate_uuid0()
+    keychain_uid_trustee = keychain_uid
+    passphrase = "passphrase"
+
+    # Create fake keystore and keypair in foreign key
+    keystore_pool, foreign_keystore, shard_trustee = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
+        keystore_uid=keystore_uid, keychain_uid=keychain_uid_trustee, passphrase=passphrase)
+
+    # Get shard trustee id
+    list_shard_trustee_id = []
+    shard_trustee_id = get_trustee_id(shard_trustee)
+    trustee_info = (shard_trustee_id, passphrase)
+    list_shard_trustee_id.append(trustee_info)
+
+    cryptoconf = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_CBC",
+                key_cipher_layers=[
+                    dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee)],
+                payload_signatures=[
+                    dict(
+                        payload_digest_algo="SHA256",
+                        payload_signature_algo="DSA_DSS",
+                        payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                        keychain_uid=keychain_uid
+                    )
+                ],
+            )
+        ]
+    )
+
+    payload = b"azertyuiop"
+
+    local_keystore = keystore_pool.get_local_keyfactory()
+    generate_keypair_for_storage(
+        key_algo="RSA_OAEP", keystore=local_keystore, keychain_uid=keychain_uid
+    )
+
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload,
+        cryptoconf=cryptoconf,
+        keychain_uid=keychain_uid,
+        keystore_pool=keystore_pool,
+        cryptainer_metadata=None,
+    )
+    revelation_requestor_uid = generate_uuid0()
+    revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
+        revelation_requestor_uid, cryptainer, keystore_pool, list_shard_trustee_id)
+
+    revelation_requests_info[0]["response_keychain_uid"] = keychain_uid
+
+    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
+
+    # Corrupt the private key of the response revelation request
+    private_key_filename = local_keystore._get_filepath(keychain_uid, key_algo="RSA_OAEP", is_public=False)
+    private_key_filename.write_bytes(b"jhgfdsdfg")
+
+    with mock.patch(
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+        result_payload, error_report = decrypt_payload_from_cryptainer(
+            cryptainer=cryptainer, keystore_pool=keystore_pool, passphrase_mapper={shard_trustee_id: [passphrase]},
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
+        )
+        assert result_payload == payload
+        assert error_report == [{'error_type': 'Local Decryption Error',
+                                 'error_message': 'Failed loading RSA_OAEP key from pem bytestring (Failed loading RSA_OAEP key from pem bytestring without passphrase (RSA key format is not supported))',
+                                 'exception': 'KeyLoadingError'}]
+
+    # Corrupt the public key of the signature key
+    public_key_filename = local_keystore._get_filepath(keychain_uid, key_algo="RSA_OAEP", is_public=True)
+    public_key_filename.write_bytes(b"jhgfdsdfg")
+
+    with mock.patch(
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+        result_payload, error_report = decrypt_payload_from_cryptainer(
+            cryptainer=cryptainer, keystore_pool=keystore_pool, passphrase_mapper={shard_trustee_id: [passphrase]},
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
+        )
+        assert result_payload == payload
+        print((error_report))
 
 
 @pytest.mark.parametrize(
@@ -1246,7 +1359,8 @@ def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
     result, error_report = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=True)
     assert result is None
     assert error_report == [{'error_type': 'Decryption Error',
-                             'error_message': 'Failed '+str(payload_cipher_algo)+' decryption authentication (MAC check failed)',
+                             'error_message': 'Failed ' + str(
+                                 payload_cipher_algo) + ' decryption authentication (MAC check failed)',
                              'exception': 'DecryptionIntegrityError'}]
 
 
@@ -1478,7 +1592,8 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     assert decrypted is None
     assert len(error_report) == 2
     error = {'error_type': 'Trustee Decryption Error',
-             'error_message': 'Failed RSA_OAEP decryption (Could not decrypt private key '+str(keychain_uid)+' of type RSA_OAEP (passphrases provided: 0))',
+             'error_message': 'Failed RSA_OAEP decryption (Could not decrypt private key ' + str(
+                 keychain_uid) + ' of type RSA_OAEP (passphrases provided: 0))',
              'exception': 'DecryptionError'}
     match = _check_error_exist_with_expected_occurence(error_report, error, 1)
     assert match is True
@@ -1496,11 +1611,11 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     assert decrypted is None
     assert len(error_report) == 2
     error = {'error_type': 'Trustee Decryption Error',
-             'error_message': 'Failed RSA_OAEP decryption (Could not decrypt private key ' + str(keychain_uid) + ' of type RSA_OAEP (passphrases provided: 1))',
+             'error_message': 'Failed RSA_OAEP decryption (Could not decrypt private key ' + str(
+                 keychain_uid) + ' of type RSA_OAEP (passphrases provided: 1))',
              'exception': 'DecryptionError'}
     match = _check_error_exist_with_expected_occurence(error_report, error, 1)
     assert match is True
-
 
     decrypted, error_report = decrypt_payload_from_cryptainer(
         cryptainer,
@@ -1515,7 +1630,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     assert len(error_report) == 1
     error = {"error_type": "Shard Decryption Error",
              "error_message": "Error when decrypting shard of {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP', 'key_cipher_trustee': " + str(
-                                     shard_trustee2) + "}]}",
+                 shard_trustee2) + "}]}",
              "exception": "'NoneType' object has no attribute 'decode'"}
     match = _check_error_exist_with_expected_occurence(error_report, error, 1)
     assert match is True

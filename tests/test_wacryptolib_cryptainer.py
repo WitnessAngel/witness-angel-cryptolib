@@ -43,7 +43,8 @@ from wacryptolib.cryptainer import (
     CRYPTAINER_TEMP_SUFFIX,
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
     ReadonlyCryptainerStorage,
-    CryptainerEncryptionPipeline, CRYPTAINER_TRUSTEE_TYPES, gather_decryptable_symkeys,
+    CryptainerEncryptionPipeline, CRYPTAINER_TRUSTEE_TYPES, gather_decryptable_symkeys, DecryptionErrorTypes,
+    DecryprtionErrorCriticity, DecryptionErrorSubTypes,
 )
 from wacryptolib.exceptions import (
     DecryptionError,
@@ -733,6 +734,31 @@ def _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_reques
     return revelation_requests_info
 
 
+def check_error_entry(error_list, error_type, error_subtype, error_criticity, error_msg_match, exception_class=None):
+    count = 0
+    exist_once = False
+
+    for error_entry in error_list:
+        try:
+            assert error_entry["error_type"] == error_type
+
+            assert error_entry["error_subtype"] == error_subtype
+            print("ok")
+            assert error_entry["error_criticity"] == error_criticity
+
+            assert error_msg_match.lower() in error_entry["error_message"].lower()
+
+            if exception_class:
+                entry_exception_class = error_entry["error_exception"].__class__
+                assert entry_exception_class == exception_class
+            count += 1
+        except AssertionError:
+            pass
+    if count == 1:
+        exist_once = True
+    return exist_once
+
+
 # Cryptoconf with 1 payload_cipher_layer containing 1 key_cipher_layer managed by an authenticator
 def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simplecryptoconf():
     keychain_uid_trustee = generate_uuid0()
@@ -789,10 +815,22 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
         passphrase_mapper={shard_trustee_id: ["fakepassphrase"]}
     )
     assert decrypted is None
-    assert error_report == [{'error_type': 'Trustee Decryption Error',
-                             'error_message': 'Failed RSA_OAEP decryption (Could not decrypt private key ' + str(
-                                 keychain_uid_trustee) + ' of type RSA_OAEP (passphrases provided: 1))',
-                             'exception': "DecryptionError"}]
+    print(error_report)
+    assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                             error_subtype=DecryptionErrorSubTypes.TRUSTEE_DECRYPTION_ERROR.value,
+                             error_criticity=DecryprtionErrorCriticity.WARNING,
+                             error_msg_match="Could not decrypt private key",
+                             exception_class=DecryptionError,
+                             )
+    # DecryptionError is present whenever decryption fails (will not always be tested)
+    assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
+                             error_subtype=DecryptionErrorSubTypes.DECRYPTION_ERROR.value,
+                             error_criticity=DecryprtionErrorCriticity.ERROR,
+                             error_msg_match="Failed symmetric decryption",
+                             )
+
+    assert len(error_report) == 2
+
     revelation_requestor_uid = generate_uuid0()
 
     revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
@@ -1291,7 +1329,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
     payload_encryption_shamir = {}
     # Delete 1, 2 and too many share(s) from cipherdict key
     for payload_encryption in cryptainer["payload_cipher_layers"]:
-        for key_encryption in payload_encryption["key_cipher_layers"]:
+        for key_encryption in pcayload_encryption["key_cipher_layers"]:
             if key_encryption["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER:
                 payload_encryption_shamir = payload_encryption
 

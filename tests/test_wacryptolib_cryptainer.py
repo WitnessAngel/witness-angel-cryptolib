@@ -44,14 +44,14 @@ from wacryptolib.cryptainer import (
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
     ReadonlyCryptainerStorage,
     CryptainerEncryptionPipeline, CRYPTAINER_TRUSTEE_TYPES, gather_decryptable_symkeys, DecryptionErrorTypes,
-    DecryprtionErrorCriticity, DecryptionErrorSubTypes,
+    DecryprtionErrorCriticity,
 )
 from wacryptolib.exceptions import (
     DecryptionError,
     DecryptionIntegrityError,
     ValidationError,
     SchemaValidationError,
-    SignatureVerificationError, KeyDoesNotExist, KeystoreDoesNotExist,
+    SignatureVerificationError, KeyDoesNotExist, KeystoreDoesNotExist, KeyLoadingError,
 )
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring
@@ -734,18 +734,17 @@ def _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_reques
     return revelation_requests_info
 
 
-def check_error_entry(error_list, error_type, error_subtype, error_criticity, error_msg_match, exception_class=None, occurence=1):
+def _check_error_entry(error_list, error_type, error_criticity, error_msg_match, exception_class=None, occurence=1):
     count = 0
     exist_once = False
 
     for error_entry in error_list:
         try:
             assert error_entry["error_type"] == error_type
-            assert error_entry["error_subtype"] == error_subtype
             assert error_entry["error_criticity"] == error_criticity
             assert error_msg_match.lower() in error_entry["error_message"].lower()
 
-            if exception_class:
+            if exception_class is not None:
                 entry_exception_class = error_entry["error_exception"].__class__
                 assert entry_exception_class == exception_class
             count += 1
@@ -812,18 +811,16 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
         passphrase_mapper={shard_trustee_id: ["fakepassphrase"]}
     )
     assert decrypted is None
-    assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
-                             error_subtype=DecryptionErrorSubTypes.TRUSTEE_DECRYPTION_ERROR.value,
-                             error_criticity=DecryprtionErrorCriticity.WARNING,
-                             error_msg_match="Could not decrypt private key",
-                             exception_class=DecryptionError,
-                             )
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="Failed trustee decryption",
+                              exception_class=DecryptionError,
+                              )
     # DecryptionError is present whenever decryption fails (will not always be tested)
-    assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
-                             error_subtype=DecryptionErrorSubTypes.DECRYPTION_ERROR.value,
-                             error_criticity=DecryprtionErrorCriticity.ERROR,
-                             error_msg_match="Failed symmetric decryption",
-                             )
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.ERROR,
+                              error_msg_match="Failed symmetric decryption",
+                              )
 
     assert len(error_report) == 2
 
@@ -858,13 +855,12 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
             cryptainer=cryptainer, keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper,
             gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
-        assert result_payload == payload  # Using asymmetric algorithm because can't decrypt the symkey_decryption_response_data with response key
-        assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.REMOTE_DECRYPTION_ERROR,
-                                 error_subtype=DecryptionErrorSubTypes.KEY_NOT_FOUND_ERROR.value,
-                                 error_criticity=DecryprtionErrorCriticity.WARNING,
-                                 error_msg_match="Private key not found",
-                                 exception_class=KeyDoesNotExist,
-                                 )
+        assert result_payload == payload  # Using imported trustee because can't decrypt the symkey_decryption_response_data with response key
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.ERROR,
+                                  error_msg_match="Private key of revelation response not found",
+                                  exception_class=KeyDoesNotExist,
+                                  )
         assert len(error_report) == 1
 
     # Wrong symkey revelation response data
@@ -881,15 +877,14 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
             gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload == payload  # Using asymmetric algorithm because response_data corrupted
-        assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.REMOTE_DECRYPTION_ERROR,
-                                 error_subtype=DecryptionErrorSubTypes.DECRYPTION_ERROR.value,
-                                 error_criticity=DecryprtionErrorCriticity.WARNING,
-                                 error_msg_match="Failed decryption",
-                                 exception_class=DecryptionError,
-                                 )
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.ERROR,
+                                  error_msg_match="Failed decryption of remote symkey/shard",
+                                  exception_class=DecryptionError,
+                                  )
         assert len(error_report) == 1
 
-    # keystore pool without trustee keypair
+    # keystore pool without trustee and response keypair
     keystore_pool1 = InMemoryKeystorePool()
     response_keychain_uid = revelation_requests_info[0]["response_keychain_uid"]
     keystore_pool1._register_fake_imported_storage_uids(storage_uids=[keystore_uid])
@@ -902,23 +897,21 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
             gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload is None
-        assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.REMOTE_DECRYPTION_ERROR,
-                                 error_subtype=DecryptionErrorSubTypes.KEY_NOT_FOUND_ERROR.value,
-                                 error_criticity=DecryprtionErrorCriticity.WARNING,
-                                 error_msg_match="Private key not found",
-                                 exception_class=KeyDoesNotExist,
-                                 )
-        assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
-                                 error_subtype=DecryptionErrorSubTypes.KEY_NOT_FOUND_ERROR.value,
-                                 error_criticity=DecryprtionErrorCriticity.WARNING,
-                                 error_msg_match="Private key not found",
-                                 exception_class=KeyDoesNotExist,
-                                 )
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.WARNING,
+                                  error_msg_match="Trustee private key not found",
+                                  exception_class=KeyDoesNotExist,
+                                  )  # TRUSTEE KEYPAIR
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.ERROR,
+                                  error_msg_match="Private key of revelation response not found",
+                                  exception_class=KeyDoesNotExist,
+                                  )  # RESPONSE KEYPAIR
+
         assert len(error_report) == 3  # with Symmetric decryption error
 
     # Keystore pool empty( without trustee keystore in imported keystore and response key in local keystore)
     keystore_pool2 = InMemoryKeystorePool()
-    response_keychain_uid = revelation_requests_info[0]["response_keychain_uid"]
     with mock.patch(
             'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
         patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
@@ -927,18 +920,16 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
             gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload is None
-        assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.REMOTE_DECRYPTION_ERROR,
-                                 error_subtype=DecryptionErrorSubTypes.KEY_NOT_FOUND_ERROR.value,
-                                 error_criticity=DecryprtionErrorCriticity.WARNING,
-                                 error_msg_match="Private key not found",
-                                 exception_class=KeyDoesNotExist,
-                                 )
-        assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
-                                 error_subtype=DecryptionErrorSubTypes.KEYSTORE_NOT_FOUND_ERROR.value,
-                                 error_criticity=DecryprtionErrorCriticity.WARNING,
-                                 error_msg_match="Key storage not found",
-                                 exception_class=KeystoreDoesNotExist,
-                                 )
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.ERROR,
+                                  error_msg_match="Private key of revelation response not found",
+                                  exception_class=KeyDoesNotExist,
+                                  )  # RESPONSE KEYPAIR
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.WARNING,
+                                  error_msg_match="Trustee key storage not found",
+                                  exception_class=KeystoreDoesNotExist,
+                                  )  # TRUSTEE KEYSTORE
         assert len(error_report) == 3  # with Symmetric decryption error
 
 
@@ -948,7 +939,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     keystore_uid = generate_uuid0()
     passphrase = "xyz"
 
-    # Create fake keystore and keypair in foreign key
+    # Create fake trustee keystore and keypair in foreign key
     keystore_pool, foreign_keystore, shard_trustee = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
         keystore_uid=keystore_uid, keychain_uid=keychain_uid_trustee, passphrase=passphrase)
 
@@ -1025,12 +1016,14 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     with mock.patch(
             'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
         patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
-        result_payload, error_report = decrypt_payload_from_cryptainer(cryptainer=cryptainer, keystore_pool=keystore_pool,
-            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid)
+        result_payload, error_report = decrypt_payload_from_cryptainer(cryptainer=cryptainer,
+                                                                       keystore_pool=keystore_pool,
+                                                                       gateway_url_list=gateway_url_list,
+                                                                       revelation_requestor_uid=revelation_requestor_uid)
         assert result_payload == payload
         assert error_report == []
 
-    #  Trustee keypair does not exist in storage
+    # Trustee keypair does not exist in storage
     # Create new keystore pool with response keypair in localkeyfactory without trustee keystore
     keystore_pool1 = InMemoryKeystorePool()
     local_keystore1 = keystore_pool1.get_local_keyfactory()
@@ -1062,25 +1055,28 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
             passphrase_mapper=passphrase_mapper, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload is None
-        ###
-        assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.REMOTE_DECRYPTION_ERROR,
-                                 error_subtype=DecryptionErrorSubTypes.KEY_NOT_FOUND_ERROR.value,
-                                 error_criticity=DecryprtionErrorCriticity.WARNING,
-                                 error_msg_match="Private key not found",
-                                 exception_class=KeyDoesNotExist,
-                                 )
 
-        assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
-                                 error_subtype=DecryptionErrorSubTypes.MISSING_SHARD_DECRYPTION_ERROR.value,
-                                 error_criticity=DecryprtionErrorCriticity.WARNING,
-                                 error_msg_match="1 valid shard(s) missing for reconstitution of symmetric key",
-                                 )  # 1 SHARD MISSING
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.ERROR,
+                                  error_msg_match="Private key of revelation response not found",
+                                  exception_class=KeyDoesNotExist,
+                                  )  # RESPONSE KEYPAIR
 
-        assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
-                                 error_subtype=DecryptionErrorSubTypes.DECRYPTION_ERROR.value,
-                                 error_criticity=DecryprtionErrorCriticity.ERROR,
-                                 error_msg_match="Failed symmetric decryption",
-                                 )
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.WARNING,
+                                  error_msg_match="Error when decrypting shard",
+                                  exception_class=AttributeError,
+                                  )
+
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.WARNING,
+                                  error_msg_match="1 valid shard(s) missing for reconstitution of symmetric key",
+                                  )  # 1 SHARD MISSING
+
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.ERROR,
+                                  error_msg_match="Failed symmetric decryption",  # FAILED DECRYPTION
+                                  )
         assert len(error_report) == 4
 
 
@@ -1204,12 +1200,11 @@ def test_cryptainer_decryption_from_complex_crptoconf():
         passphrase_mapper=passphrase_mapper,
     )
     assert decrypted == payload
-    assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
-                             error_subtype=DecryptionErrorSubTypes.SHARD_DECRYPRION_ERROR.value,
-                             error_criticity=DecryprtionErrorCriticity.WARNING,
-                             error_msg_match="Error when decrypting shard",
-                             exception_class=AttributeError,
-                             )
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="Error when decrypting shard",
+                              exception_class=AttributeError,
+                              )
     assert len(error_report) == 1
 
     # Decrypt with passphrase and mockup
@@ -1231,7 +1226,7 @@ def test_cryptainer_decryption_from_complex_crptoconf():
             gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload == payload
-        assert error_report == [] # Trustee 1, 3 decrypted from server, trustee2 and localkey have passphrases
+        assert error_report == []  # Trustee 1, 3 decrypted from server, trustee2 and localkey have passphrases
 
     # Remote revelation request with two trustee (1,3) and without any passphrase(decrypted_shards below threshold)
     with mock.patch(
@@ -1242,36 +1237,35 @@ def test_cryptainer_decryption_from_complex_crptoconf():
             gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload is None
-        assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
-                                 error_subtype=DecryptionErrorSubTypes.SHARD_DECRYPRION_ERROR.value,
-                                 error_criticity=DecryprtionErrorCriticity.WARNING,
-                                 error_msg_match="Error when decrypting shard",
-                                 exception_class=AttributeError,
-                                 occurence=2
-                                 ) # 2 for Trustee2 and LOCAL_KEYFACTORY_TRUSTEE_MARKER
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.WARNING,
+                                  error_msg_match="Error when decrypting shard",
+                                  exception_class=AttributeError,
+                                  occurence=2
+                                  )  # 2 for Trustee2 and LOCAL_KEYFACTORY_TRUSTEE_MARKER
 
-        assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
-                                 error_subtype=DecryptionErrorSubTypes.MISSING_SHARD_DECRYPTION_ERROR.value,
-                                 error_criticity=DecryprtionErrorCriticity.WARNING,
-                                 error_msg_match="valid shard(s) missing for reconstitution of symmetric key",
-                                 )  # 1 SHARD MISSING
-        assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
-                                 error_subtype=DecryptionErrorSubTypes.DECRYPTION_ERROR.value,
-                                 error_criticity=DecryprtionErrorCriticity.ERROR,
-                                 error_msg_match="Failed symmetric decryption",
-                                 )
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.WARNING,
+                                  error_msg_match="1 valid shard(s) missing for reconstitution of symmetric key",
+                                  )  # 1 SHARD MISSING
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.ERROR,
+                                  error_msg_match="Failed symmetric decryption",
+                                  )
         assert len(error_report) == 4
 
 
-def test_key_loading_local_decryption_and_payload_signature():
-    #TODO NOT FINISH
+def test_key_loading_local_decryption_and_payload_signature(tmp_path): #TODO CHANGE THIS NAME
+    # TODO NOT FINISH
     keychain_uid = generate_uuid0()
 
     keystore_uid = generate_uuid0()
-    keychain_uid_trustee = keychain_uid
+    keychain_uid_trustee = generate_uuid0()
+
     passphrase = "passphrase"
 
     # Create fake keystore and keypair in foreign key
+
     keystore_pool, foreign_keystore, shard_trustee = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
         keystore_uid=keystore_uid, keychain_uid=keychain_uid_trustee, passphrase=passphrase)
 
@@ -1286,25 +1280,18 @@ def test_key_loading_local_decryption_and_payload_signature():
             dict(
                 payload_cipher_algo="AES_CBC",
                 key_cipher_layers=[
-                    dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee)],
+                    dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee, keychain_uid=keychain_uid_trustee)],
                 payload_signatures=[
                     dict(
                         payload_digest_algo="SHA256",
                         payload_signature_algo="DSA_DSS",
                         payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
-                        keychain_uid=keychain_uid
                     )
                 ],
             )
-        ]
-    )
+        ])
 
     payload = b"azertyuiop"
-
-    local_keystore = keystore_pool.get_local_keyfactory()
-    generate_keypair_for_storage(
-        key_algo="RSA_OAEP", keystore=local_keystore, keychain_uid=keychain_uid
-    )
 
     cryptainer = encrypt_payload_into_cryptainer(
         payload=payload,
@@ -1313,18 +1300,24 @@ def test_key_loading_local_decryption_and_payload_signature():
         keystore_pool=keystore_pool,
         cryptainer_metadata=None,
     )
+
+    # Generate revelation requests info
     revelation_requestor_uid = generate_uuid0()
     revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
         revelation_requestor_uid, cryptainer, keystore_pool, list_shard_trustee_id)
-
+    # Get and change response keychain_uid
     revelation_requests_info[0]["response_keychain_uid"] = keychain_uid
 
-    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
+    # Save this response key in Localkeyfactory
+    local_keystore = keystore_pool.get_local_keyfactory()
+    generate_keypair_for_storage(key_algo="RSA_OAEP", keystore=local_keystore, keychain_uid=keychain_uid, passphrase=passphrase)
 
     # Corrupt the private key of the response revelation request
-    private_key_filename = local_keystore._get_filepath(keychain_uid, key_algo="RSA_OAEP", is_public=False)
-    private_key_filename.write_bytes(b"jhgfdsdfg")
+    private_key_filename = "%s_RSA_OAEP_private_key.pem" % (keychain_uid)
+    private_key_filepath = tmp_path.joinpath(private_key_filename)
+    private_key_filepath.write_bytes(b"jhgfdsdfg")
 
+    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
     with mock.patch(
             'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
         patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
@@ -1333,23 +1326,14 @@ def test_key_loading_local_decryption_and_payload_signature():
             gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload == payload
-        assert error_report == [{'error_type': 'Local Decryption Error',
-                                 'error_message': 'Failed loading RSA_OAEP key from pem bytestring (Failed loading RSA_OAEP key from pem bytestring without passphrase (RSA key format is not supported))',
-                                 'exception': 'KeyLoadingError'}]
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.ERROR,
+                                  error_msg_match="Failed loading key of revelation response from pem bytestring",
+                                  exception_class=KeyLoadingError,
+                                  )  # RESPONSE KEY LOADING ERROR
+        assert len(error_report) == 1
 
-    # Corrupt the public key of the signature key
-    public_key_filename = local_keystore._get_filepath(keychain_uid, key_algo="RSA_OAEP", is_public=True)
-    public_key_filename.write_bytes(b"jhgfdsdfg")
-
-    with mock.patch(
-            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
-        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
-        result_payload, error_report = decrypt_payload_from_cryptainer(
-            cryptainer=cryptainer, keystore_pool=keystore_pool, passphrase_mapper={shard_trustee_id: [passphrase]},
-            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
-        )
-        assert result_payload == payload
-        print((error_report))
+    # TODO Corrupt the public key of the signature key
 
 
 @pytest.mark.parametrize(
@@ -1423,11 +1407,10 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
 
     result_payload, error_report = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
     assert result_payload is None
-    assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
-                             error_subtype=DecryptionErrorSubTypes.MISSING_SHARD_DECRYPTION_ERROR.value,
-                             error_criticity=DecryprtionErrorCriticity.WARNING,
-                             error_msg_match="1 valid shard(s) missing for reconstitution of symmetric key",
-                             )
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="1 valid shard(s) missing for reconstitution of symmetric key",
+                              )
 
     result_metadata = extract_metadata_from_cryptainer(cryptainer=cryptainer)
     assert result_metadata == metadata
@@ -1455,12 +1438,13 @@ def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
     # DecryptionIntegrityError
     result, error_report = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=True)
     assert result is None
-    assert check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
-                             error_subtype=DecryptionErrorSubTypes.DECRYPTION_INTEGRITY_ERROR.value,
-                             error_criticity=DecryprtionErrorCriticity.ERROR,
-                             error_msg_match="Failed decryption authentication",
-                             exception_class=DecryptionIntegrityError
-                             )
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.ERROR,
+                              error_msg_match="Failed decryption authentication",
+                              exception_class=DecryptionIntegrityError
+                              )
+    assert len(error_report) == 1
+
 
 def test_decrypt_payload_from_cryptainer_signature_troubles():
     verify_integrity_tags = random_bool()
@@ -1488,9 +1472,12 @@ def test_decrypt_payload_from_cryptainer_signature_troubles():
     result, error_report = decrypt_payload_from_cryptainer(cryptainer_corrupted,
                                                            verify_integrity_tags=verify_integrity_tags)
     assert result == b"1234abc"
-    assert error_report == [{'error_type': 'Signature Error',
-                             'error_message': 'Mismatch between actual and expected payload digests during signature verification',
-                             'exception': 'RuntimeError'}]
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SIGNATURE_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="Mismatch between actual and expected payload digests during signature verification",
+
+                              )
+    assert len(error_report) == 1
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
     del cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_signature_struct"]
@@ -1500,9 +1487,11 @@ def test_decrypt_payload_from_cryptainer_signature_troubles():
                                                            verify_integrity_tags=verify_integrity_tags)
 
     assert result == b"1234abc"
-    assert error_report == [{'error_type': 'Signature Error',
-                             'error_message': 'Missing signature structure',
-                             'exception': 'RuntimeError'}]
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SIGNATURE_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="Missing signature structure",
+                              )
+    assert len(error_report) == 1
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
     cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_signature_struct"] = {
@@ -1517,19 +1506,12 @@ def test_decrypt_payload_from_cryptainer_signature_troubles():
                                                            verify_integrity_tags=verify_integrity_tags)
 
     assert result == b"1234abc"
-    assert error_report == [{'error_type': 'Signature Error',
-                             'error_message': 'Failed ' + str(
-                                 payload_signature_algo) + ' signature verification (Failed ' + str(
-                                 payload_signature_algo) + ' signature verification (The signature is not authentic (length)))',
-                             'exception': 'SignatureVerificationError'}]
-
-
-def _check_error_exist_with_expected_occurence(error_report, error, expected_error_occurence):
-    match = True
-    received_error_occurence = error_report.count(error)
-    if received_error_occurence != expected_error_occurence:
-        match = False
-    return match
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SIGNATURE_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="Failed signature verification",
+                              exception_class=SignatureVerificationError
+                              )
+    assert len(error_report) == 1
 
 
 def test_passphrase_mapping_during_decryption(tmp_path):
@@ -1636,50 +1618,59 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     # DecryptionError, match="2 valid .* missing for reconstitution"
     decrypted, error_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
     assert decrypted is None
-    assert len(error_report) == 4
-    error = {'error_type': 'Shard Decryption Error',
-             'error_message': '2 valid shard(s) missing for reconstitution of symmetric key',
-             'exception': 'DecryptionError'}
-    match = _check_error_exist_with_expected_occurence(error_report, error, 1)
-    assert match is True
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="Error when decrypting shard",
+                              exception_class=AttributeError,
+                              occurence=3
+                              )
+
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="2 valid shard(s) missing for reconstitution of symmetric key",
+                              )
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.ERROR,
+                              error_msg_match="Failed symmetric decryption",  # FAILED DECRYPTION
+                              )
+    assert len(error_report) == 5
 
     # DecryptionError, match="2 valid .* missing for reconstitution"
     decrypted, error_report = decrypt_payload_from_cryptainer(
         cryptainer, keystore_pool=keystore_pool, passphrase_mapper={local_keyfactory_trustee_id: all_passphrases}
     )  # Doesn't help share trustees
     assert decrypted is None
-    assert len(error_report) == 4
-    error = {'error_type': 'Shard Decryption Error',
-             'error_message': '2 valid shard(s) missing for reconstitution of symmetric key',
-             'exception': 'DecryptionError'}
-    match = _check_error_exist_with_expected_occurence(error_report, error, 1)
-    assert match is True
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="2 valid shard(s) missing for reconstitution of symmetric key",
+                              )
+
+    assert len(error_report) == 5
 
     # DecryptionError, match="1 valid .* missing for reconstitution"
     decrypted, error_report = decrypt_payload_from_cryptainer(
         cryptainer, keystore_pool=keystore_pool, passphrase_mapper={shard_trustee1_id: all_passphrases}
     )  # Unblocks 1 share trustee
     assert decrypted is None
-    assert len(error_report) == 3
-    error = {'error_type': 'Shard Decryption Error',
-             'error_message': '1 valid shard(s) missing for reconstitution of symmetric key',
-             'exception': 'DecryptionError'}
-    match = _check_error_exist_with_expected_occurence(error_report, error, 1)
-    assert match is True
+
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="1 valid shard(s) missing for reconstitution of symmetric key",
+                              )
+    assert len(error_report) == 4
 
     # DecryptionError, match="1 valid .* missing for reconstitution"
     decrypted, error_report = decrypt_payload_from_cryptainer(
         cryptainer,
         keystore_pool=keystore_pool,
         passphrase_mapper={shard_trustee1_id: all_passphrases, shard_trustee2_id: [passphrase3]},
-    )  # No changes
+    )  # No changes(fake trustee2 passphrase)
     assert decrypted is None
-    assert len(error_report) == 3
-    error = {'error_type': 'Shard Decryption Error',
-             'error_message': '1 valid shard(s) missing for reconstitution of symmetric key',
-             'exception': 'DecryptionError'}
-    match = _check_error_exist_with_expected_occurence(error_report, error, 1)
-    assert match is True
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="1 valid shard(s) missing for reconstitution of symmetric key",
+                              )
+    assert len(error_report) == 4
 
     # DecryptionError, match="Could not decrypt private key"):
     decrypted, error_report = decrypt_payload_from_cryptainer(
@@ -1688,13 +1679,22 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         passphrase_mapper={shard_trustee1_id: all_passphrases, shard_trustee3_id: [passphrase3]},
     )
     assert decrypted is None
-    assert len(error_report) == 2
-    error = {'error_type': 'Trustee Decryption Error',
-             'error_message': 'Failed RSA_OAEP decryption (Could not decrypt private key ' + str(
-                 keychain_uid) + ' of type RSA_OAEP (passphrases provided: 0))',
-             'exception': 'DecryptionError'}
-    match = _check_error_exist_with_expected_occurence(error_report, error, 1)
-    assert match is True
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="Error when decrypting shard",
+                              exception_class=AttributeError
+                              )  # For Trustee 2
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="Failed trustee decryption",
+                              exception_class=DecryptionError,
+                              )  # For LocalKeyFactory
+
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.ERROR,
+                              error_msg_match="Failed symmetric decryption",  # FAILED SYMMETRIC DECRYPTION
+                              )
+    assert len(error_report) == 3
 
     # DecryptionError, match="Could not decrypt private key":
     decrypted, error_report = decrypt_payload_from_cryptainer(
@@ -1707,13 +1707,22 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         },
     )
     assert decrypted is None
-    assert len(error_report) == 2
-    error = {'error_type': 'Trustee Decryption Error',
-             'error_message': 'Failed RSA_OAEP decryption (Could not decrypt private key ' + str(
-                 keychain_uid) + ' of type RSA_OAEP (passphrases provided: 1))',
-             'exception': 'DecryptionError'}
-    match = _check_error_exist_with_expected_occurence(error_report, error, 1)
-    assert match is True
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="Error when decrypting shard",
+                              exception_class=AttributeError
+                              )  # For Trustee 2
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="Failed trustee decryption",
+                              exception_class=DecryptionError,
+                              )  # For LocalKeyFactory
+
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.ERROR,
+                              error_msg_match="Failed symmetric decryption",  # FAILED SYMMETRIC DECRYPTION
+                              )
+    assert len(error_report) == 3
 
     decrypted, error_report = decrypt_payload_from_cryptainer(
         cryptainer,
@@ -1725,13 +1734,12 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         },
     )
     assert decrypted == payload
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="Error when decrypting shard",
+                              exception_class=AttributeError
+                              )  # For Trustee 2
     assert len(error_report) == 1
-    error = {"error_type": "Shard Decryption Error",
-             "error_message": "Error when decrypting shard of {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP', 'key_cipher_trustee': " + str(
-                 shard_trustee2) + "}]}",
-             "exception": "'NoneType' object has no attribute 'decode'"}
-    match = _check_error_exist_with_expected_occurence(error_report, error, 1)
-    assert match is True
 
     # Passphrases of `None` key are always used
     decrypted, error_report = decrypt_payload_from_cryptainer(
@@ -1763,14 +1771,12 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     # DecryptionError
     decrypted, error_report = storage.decrypt_cryptainer_from_storage("beauty.txt.crypt")
-    decrypted, error_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
     assert decrypted is None
-    assert len(error_report) == 4
-    error = {'error_type': 'Shard Decryption Error',
-             'error_message': '2 valid shard(s) missing for reconstitution of symmetric key',
-             'exception': 'DecryptionError'}
-    match = _check_error_exist_with_expected_occurence(error_report, error, 1)
-    assert match is True
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.WARNING,
+                              error_msg_match="2 valid shard(s) missing for reconstitution of symmetric key",
+                              )
+    assert len(error_report) == 5
 
     verify_integrity_tags = random_bool()
     decrypted, error_report = storage.decrypt_cryptainer_from_storage(
@@ -2247,9 +2253,12 @@ def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
     result, error_report = storage.decrypt_cryptainer_from_storage(cryptainer_name, verify_integrity_tags=True)
 
     assert result is None
-    assert error_report == [{'error_type': 'Decryption Error',
-                             'error_message': 'Failed AES_EAX decryption authentication (MAC check failed)',
-                             'exception': 'DecryptionIntegrityError'}]
+    assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
+                              error_criticity=DecryprtionErrorCriticity.ERROR,
+                              error_msg_match="Failed decryption authentication",
+                              exception_class=DecryptionIntegrityError
+                              )
+    assert len(error_report) == 1
 
 
 def test_cryptainer_storage_check_cryptainer_sanity(tmp_path):

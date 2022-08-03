@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_authenticator_dir_for_authdevice(authdevice: dict):
-    return Path(authdevice["partition_mountpoint"]).joinpath(".authenticator")
+    return Path(authdevice["partition_mountpoint"]).joinpath("authenticator.keystore")
 
 
 def list_available_authdevices() -> list:

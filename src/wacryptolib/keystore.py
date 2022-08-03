@@ -9,6 +9,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from datetime import datetime
 from os.path import join
 from pathlib import Path
 from typing import AnyStr, Optional
@@ -49,6 +50,7 @@ _KEYSTORE_METADATA_SCHEMA = {
     "keystore_format": KEYSTORE_FORMAT,  # For forward compatibility
     "keystore_uid": UUID,
     "keystore_owner": And(str, non_empty),
+    OptionalKey("keystore_creation_datetime"): datetime,
     OptionalKey("keystore_secret"): str,
     OptionalKey("keystore_passphrase_hint"): And(str, non_empty),  # For authenticators
 }

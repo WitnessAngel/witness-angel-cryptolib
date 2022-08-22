@@ -38,7 +38,7 @@ def test_authenticator_basic_workflow(tmp_path):
             initialize_authenticator(acceptable_dir, keystore_owner="sdsdfsfxx", keystore_passphrase_hint="ze zsddqs")
 
         metadata = load_keystore_metadata(acceptable_dir)
-        assert len(metadata) == 6
+        assert len(metadata) == 7
         assert metadata["keystore_type"] == "authenticator"
         assert isinstance(metadata["keystore_uid"], UUID)
         assert metadata["keystore_owner"] == "myuserX%s" % idx

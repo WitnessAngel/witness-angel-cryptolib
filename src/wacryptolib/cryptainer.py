@@ -173,12 +173,12 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict: # TODO
     """
     decryptable_symkeys_per_trustee = {}
 
-    def _add_decryptable_symkeys_for_trustee( cryptainer_name, cryptainer_uid, cryptainer_metadata, key_cipher_trustee,
+    def _add_decryptable_symkeys_for_trustee(cryptainer_name, cryptainer_uid, cryptainer_metadata, key_cipher_trustee,
                                               shard_ciphertext, keychain_uid_for_encryption, key_algo_for_encryption):
 
         trustee_id = get_trustee_id(trustee_conf=key_cipher_trustee)
         symkey_decryption_request = {
-            "cryptainer_name": str(cryptainer_name), # No Pathlib object
+            "cryptainer_name": str(cryptainer_name),  # No Pathlib object
             "cryptainer_uid": cryptainer_uid,
             "cryptainer_metadata": cryptainer_metadata,
             "symkey_decryption_request_data": shard_ciphertext,
@@ -189,13 +189,15 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict: # TODO
                                                                                          (key_cipher_trustee, []))
         _decryptable_symkeys.append(symkey_decryption_request)
 
-    def _gather_decryptable_symkeys(cryptainer_name, cryptainer_uid ,cryptainer_metadata, key_cipher_layers: list, shard_ciphertexts ):
+    def _gather_decryptable_symkeys(cryptainer_name, cryptainer_uid ,cryptainer_metadata, key_cipher_layers: list, key_ciphertext_shards ):
 
         # TODO test with cryptoconf where symkey is protected by 2 authenticators one of the other
         last_key_cipher_layer = key_cipher_layers[-1]  # FIXME BIG PROBLEM - why only the last layer ????
 
         if last_key_cipher_layer["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER:
             key_shared_secret_shards = last_key_cipher_layer["key_shared_secret_shards"]
+            key_cipherdict = load_from_json_bytes(key_ciphertext_shards)
+            shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
 
             for shard_ciphertext, trustee in zip(shard_ciphertexts, key_shared_secret_shards):
                 _gather_decryptable_symkeys(cryptainer_name, cryptainer_uid, cryptainer_metadata,
@@ -205,7 +207,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict: # TODO
             keychain_uid_for_encryption = last_key_cipher_layer.get("keychain_uid") or keychain_uid
             key_algo_for_encryption = last_key_cipher_layer["key_cipher_algo"]
             key_cipher_trustee = last_key_cipher_layer["key_cipher_trustee"]
-            shard_ciphertext = shard_ciphertexts
+            shard_ciphertext = key_ciphertext_shards
 
             _add_decryptable_symkeys_for_trustee(cryptainer_name=cryptainer_name,
                                                  cryptainer_uid=cryptainer_uid,
@@ -222,13 +224,13 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict: # TODO
         cryptainer_metadata = cryptainer["cryptainer_metadata"]
 
         for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
-            key_ciphertext_shards = load_from_json_bytes(payload_cipher_layer.get("key_ciphertext"))
-            shard_ciphertexts = key_ciphertext_shards["shard_ciphertexts"]
+            key_ciphertext_shards = payload_cipher_layer.get("key_ciphertext")
+            # shard_ciphertexts = key_ciphertext_shards["ciphertext_chunks"]
 
             _gather_decryptable_symkeys(cryptainer_name=cryptainer_name, cryptainer_uid=cryptainer_uid,
                                         cryptainer_metadata=cryptainer_metadata,
                                         key_cipher_layers=payload_cipher_layer["key_cipher_layers"],
-                                        shard_ciphertexts=shard_ciphertexts)
+                                        key_ciphertext_shards=key_ciphertext_shards)
 
     return decryptable_symkeys_per_trustee
 
@@ -918,7 +920,7 @@ class CryptainerDecryptor(CryptainerBase):
                 except DecryptionError as exc:
                     error = self._build_error_report_message(error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
                                                              error_criticity=DecryprtionErrorCriticity.ERROR,
-                                                             error_message="Failed %s decryption" % payload_cipher_algo,
+                                                             error_message="Failed symmetric decryption (%s)" % payload_cipher_algo,
                                                              error_exception=exc)
                     errors.append(error)
                     payload_current = None

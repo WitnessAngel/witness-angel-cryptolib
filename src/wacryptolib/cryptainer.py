@@ -998,11 +998,11 @@ class CryptainerDecryptor(CryptainerBase):
                         cryptainer_metadata=cryptainer_metadata,
                         predecrypted_symmetric_keys=predecrypted_symmetric_keys
                     )  # Recursive structure
+                    errors.extend(multiple_layer_decryption_errors)
                     shard = load_from_json_bytes(
                         shard_bytes
                     )  # The tuple (idx, payload) of each shard thus becomes encryptable
                     decrypted_shards.append(shard)
-                    errors.extend(multiple_layer_decryption_errors)
 
                 # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
                 except Exception as exc:  # If actual trustee doesn't work, we can go to next one

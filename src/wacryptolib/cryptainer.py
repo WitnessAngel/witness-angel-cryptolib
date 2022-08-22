@@ -166,64 +166,69 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
     return trustee_dependencies
 
 
-def gather_decryptable_symkeys(cryptainers: Sequence) -> dict:
+def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict: # TODO Upadate this name
     """Analyse a cryptainer and returns the symkeys/shards (and their corresponding trustee) needed for decryption.
 
     :return: dict with a tuple of the cipher key and the symkey/shard by trustee id.
     """
     decryptable_symkeys_per_trustee = {}
 
-    def _add_decryptable_symkeys_for_trustee(key_cipher_trustee, shard_ciphertext, keychain_uid_encryption,
-                                             key_algo_encryption, cryptainer_uid, cryptainer_metadata):
+    def _add_decryptable_symkeys_for_trustee( cryptainer_name, cryptainer_uid, cryptainer_metadata, key_cipher_trustee,
+                                              shard_ciphertext, keychain_uid_for_encryption, key_algo_for_encryption):
 
         trustee_id = get_trustee_id(trustee_conf=key_cipher_trustee)
         symkey_decryption_request = {
+            "cryptainer_name": str(cryptainer_name), # No Pathlib object
             "cryptainer_uid": cryptainer_uid,
             "cryptainer_metadata": cryptainer_metadata,
-            "symkey_ciphertext": shard_ciphertext,
-            "keychain_uid": keychain_uid_encryption,
-            "key_algo": key_algo_encryption
+            "symkey_decryption_request_data": shard_ciphertext,
+            "keychain_uid": keychain_uid_for_encryption,
+            "key_algo": key_algo_for_encryption
         }
         _trustee_data, _decryptable_symkeys = decryptable_symkeys_per_trustee.setdefault(trustee_id,
                                                                                          (key_cipher_trustee, []))
         _decryptable_symkeys.append(symkey_decryption_request)
 
-    def _gather_decryptable_symkeys(key_cipher_layers: list, key_ciphertext, cryptainer_uid,
-                                    cryptainer_metadata):
+    def _gather_decryptable_symkeys(cryptainer_name, cryptainer_uid ,cryptainer_metadata, key_cipher_layers: list, shard_ciphertexts ):
 
         # TODO test with cryptoconf where symkey is protected by 2 authenticators one of the other
         last_key_cipher_layer = key_cipher_layers[-1]  # FIXME BIG PROBLEM - why only the last layer ????
 
         if last_key_cipher_layer["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER:
             key_shared_secret_shards = last_key_cipher_layer["key_shared_secret_shards"]
-            key_cipherdict = load_from_json_bytes(key_ciphertext)
-            shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
 
             for shard_ciphertext, trustee in zip(shard_ciphertexts, key_shared_secret_shards):
-                _gather_decryptable_symkeys(trustee["key_cipher_layers"], shard_ciphertext, cryptainer_uid,
-                                            cryptainer_metadata)
+                _gather_decryptable_symkeys(cryptainer_name, cryptainer_uid, cryptainer_metadata,
+                                            trustee["key_cipher_layers"], shard_ciphertext)
         else:
 
-            keychain_uid_encryption = last_key_cipher_layer.get("keychain_uid") or keychain_uid
-            key_algo_encryption = last_key_cipher_layer["key_cipher_algo"]
+            keychain_uid_for_encryption = last_key_cipher_layer.get("keychain_uid") or keychain_uid
+            key_algo_for_encryption = last_key_cipher_layer["key_cipher_algo"]
             key_cipher_trustee = last_key_cipher_layer["key_cipher_trustee"]
-            shard_ciphertext = key_ciphertext
+            shard_ciphertext = shard_ciphertexts
 
-            _add_decryptable_symkeys_for_trustee(key_cipher_trustee, shard_ciphertext, keychain_uid_encryption,
-                                                 key_algo_encryption,
-                                                 cryptainer_uid, cryptainer_metadata)
+            _add_decryptable_symkeys_for_trustee(cryptainer_name=cryptainer_name,
+                                                 cryptainer_uid=cryptainer_uid,
+                                                 cryptainer_metadata=cryptainer_metadata,
+                                                 key_cipher_trustee=key_cipher_trustee,
+                                                 shard_ciphertext=shard_ciphertext,
+                                                 keychain_uid_for_encryption=keychain_uid_for_encryption,
+                                                 key_algo_for_encryption=key_algo_for_encryption
+                                                 )
 
-    for cryptainer in cryptainers:
+    for (cryptainer_name, cryptainer) in cryptainers_with_names:
         keychain_uid = cryptainer["keychain_uid"]
         cryptainer_uid = cryptainer["cryptainer_uid"]
         cryptainer_metadata = cryptainer["cryptainer_metadata"]
 
         for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
-            key_ciphertext = payload_cipher_layer.get("key_ciphertext")
+            key_ciphertext_shards = load_from_json_bytes(payload_cipher_layer.get("key_ciphertext"))
+            shard_ciphertexts = key_ciphertext_shards["shard_ciphertexts"]
 
-            _gather_decryptable_symkeys(payload_cipher_layer["key_cipher_layers"], key_ciphertext,
-                                        cryptainer_uid,
-                                        cryptainer_metadata)
+            _gather_decryptable_symkeys(cryptainer_name=cryptainer_name, cryptainer_uid=cryptainer_uid,
+                                        cryptainer_metadata=cryptainer_metadata,
+                                        key_cipher_layers=payload_cipher_layer["key_cipher_layers"],
+                                        shard_ciphertexts=shard_ciphertexts)
 
     return decryptable_symkeys_per_trustee
 
@@ -1142,7 +1147,7 @@ class CryptainerDecryptor(CryptainerBase):
 
             except KeyDoesNotExist as exc:
                 error = self._build_error_report_message(error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
-                                                         error_message="Trustee private key not found(%s/%s)" % (
+                                                         error_message="Trustee private key not found (%s/%s)" % (
                                                          keychain_uid, cipher_algo),
                                                          error_exception=exc)
                 errors.append(error)

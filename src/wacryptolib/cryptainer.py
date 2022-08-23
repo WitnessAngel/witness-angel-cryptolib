@@ -6,9 +6,7 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from enum import Enum
 from pathlib import Path
-from pprint import pprint
 from typing import Optional, Union, Sequence, BinaryIO
 from urllib.parse import urlparse
 
@@ -716,7 +714,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         except KeyLoadingError as exc:
             error = self._build_error_report_message(error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
-                                                     error_message="Failed loading key of revelation response from pem bytestring (%s)" %
+                                                     error_message="Failed loading revelation response key of from pem bytestring (%s)" %
                                                                    cipher_algo,
                                                      error_criticity=DecryprtionErrorCriticity.ERROR,
                                                      error_exception=exc)
@@ -769,7 +767,6 @@ class CryptainerDecryptor(CryptainerBase):
         gateway_proxy = JsonRpcProxy(
             url=jsonrpc_url, response_error_handler=status_slugs_response_error_handler
         )
-        # What to do when TransportError or OsError??? Intercept this???
         try:
             gateway_revelation_request_list = gateway_proxy.list_wadevice_decryption_requests(
                 revelation_requestor_uid=revelation_requestor_uid)
@@ -823,7 +820,6 @@ class CryptainerDecryptor(CryptainerBase):
                             symkey_decryption_accepted_for_cryptainer["revelation_request"] = \
                                 revelation_request_per_symkey
                             successful_symkey_decryptions.append(symkey_decryption_accepted_for_cryptainer)
-
         # FIXME add error for rejected request???
         return successful_symkey_decryptions, errors
 
@@ -1194,8 +1190,8 @@ class CryptainerDecryptor(CryptainerBase):
                                                                  key_algo=payload_signature_algo)
         except KeyLoadingError as exc:
             error = self._build_error_report_message(error_type=DecryptionErrorTypes.SIGNATURE_ERROR,
-                                                     error_message="Failed loading signature key from pem bytestring(%s)" % payload_signature_algo,
-                                                     error_exception=None
+                                                     error_message="Failed loading signature key from pem bytestring (%s)" % payload_signature_algo,
+                                                     error_exception=exc
                                                     )
             signature_errors.append(error)
             return signature_errors

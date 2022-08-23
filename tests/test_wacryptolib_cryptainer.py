@@ -1235,6 +1235,47 @@ def test_cryptainer_decryption_from_complex_crptoconf(tmp_path):
 
     gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
 
+    # No remote decryption request for this container and requestor
+    with mock.patch(
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        patched_function.return_value = [], []
+        result_payload, error_report = decrypt_payload_from_cryptainer(
+            cryptainer=cryptainer, keystore_pool=keystore_pool,
+            passphrase_mapper={None: all_passphrases},
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
+        )
+        assert result_payload == payload
+        assert error_report == []  # All passphrases are provided
+
+    # Remote decryption request for this container and requestor is rejected
+    with mock.patch(
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        gateway_revelation_request_list, gateway_errors = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+        patched_function.return_value = gateway_revelation_request_list, gateway_errors
+        gateway_revelation_request_list[0]["revelation_request_status"] = "REJECTED"
+        result_payload, error_report = decrypt_payload_from_cryptainer(
+            cryptainer=cryptainer, keystore_pool=keystore_pool,
+            passphrase_mapper={None: all_passphrases},
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
+        )
+        assert result_payload == payload
+        assert error_report == []  # All passphrases are provided
+
+    # No remote decryption request exist for this container anf requestor
+    with mock.patch(
+            'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
+        gateway_revelation_request_list, gateway_errors = _build_fake_gateway_revelation_request_list(
+            revelation_requests_info)
+        patched_function.return_value = gateway_revelation_request_list, gateway_errors
+        gateway_revelation_request_list[0]["symkey_decryption_requests"][0]["cryptainer_uid"] = generate_uuid0()
+        result_payload, error_report = decrypt_payload_from_cryptainer(
+            cryptainer=cryptainer, keystore_pool=keystore_pool,
+            passphrase_mapper={None: all_passphrases},
+            gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
+        )
+        assert result_payload == payload
+        assert error_report == []  # All passphrases are provided
+
     # Remote revelation request with two trustee (1,3) and local trustee
     with mock.patch(
             'wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list') as patched_function:
@@ -1294,6 +1335,9 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path): #TODO CHA
     keystore_pool, foreign_keystore, shard_trustee = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
         keystore_uid=keystore_uid, keychain_uid=keychain_uid_trustee, passphrase=passphrase)
 
+    # Local Keyfactory
+    local_keystore = keystore_pool.get_local_keyfactory()
+
     # Get shard trustee id
     list_shard_trustee_id = []
     shard_trustee_id = get_trustee_id(shard_trustee)
@@ -1333,12 +1377,16 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path): #TODO CHA
     revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id)
 
-    # Get and change response keychain_uid
-    revelation_requests_info[0]["response_keychain_uid"] = keychain_uid
+    # Corrupt response privatekey
+    response_keychain_uid = revelation_requests_info[0]["response_keychain_uid"]
+    response_key = (response_keychain_uid, "RSA_OAEP")
+    response_keypair = local_keystore._cached_keypairs[response_key]
+    response_keypair['private_key'] = b"wrongresponseprivatekey"
 
-    # Save this response key in Localkeyfactory
-    local_keystore = keystore_pool.get_local_keyfactory()
-    generate_keypair_for_storage(key_algo="RSA_OAEP", keystore=local_keystore, keychain_uid=keychain_uid, passphrase=passphrase)
+    # Corrupt signature public key
+    response_key = (keychain_uid, "DSA_DSS")
+    response_keypair = local_keystore._cached_keypairs[response_key]
+    response_keypair['public_key'] = b"wrongsignaturepublickey"
 
     gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
     with mock.patch(
@@ -1349,14 +1397,19 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path): #TODO CHA
             gateway_url_list=gateway_url_list, revelation_requestor_uid=revelation_requestor_uid
         )
         assert result_payload == payload
+        assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SIGNATURE_ERROR,
+                                  error_criticity=DecryprtionErrorCriticity.WARNING,
+                                  error_msg_match="Failed loading signature key from pem bytestring",
+                                  exception_class=KeyLoadingError
+                                  )  # SIGNATURE KEY LOADING ERROR
         assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
                                   error_criticity=DecryprtionErrorCriticity.ERROR,
-                                  error_msg_match="Failed loading key of revelation response from pem bytestring",
+                                  error_msg_match="Failed loading revelation response key of from pem bytestring",
                                   exception_class=KeyLoadingError,
                                   )  # RESPONSE KEY LOADING ERROR
-        assert len(error_report) == 1
+        assert len(error_report) == 2
 
-    # TODO Corrupt the public key of the signature key
+
 
 
 @pytest.mark.parametrize(
@@ -2175,8 +2228,6 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
     storage.wait_for_idle_state()
 
     cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True)
-
-    print(cryptainer_names)
 
     if offload_payload_ciphertext:  # Offloaded cryptainers are smaller due to skipping of base64 encoding of ciphertext
         assert cryptainer_names == [

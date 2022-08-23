@@ -832,7 +832,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id)
 
-    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
+    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]   # FIXME what's this url ?
 
     # Remote revelation request return right symkey_revelation_response_data
     with mock.patch(
@@ -1233,7 +1233,7 @@ def test_cryptainer_decryption_from_complex_crptoconf(tmp_path):
     revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id)
 
-    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
+    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]   # FIXME what's this url ?
 
     # No remote decryption request for this container and requestor
     with mock.patch(
@@ -1374,7 +1374,7 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path): #TODO CHA
 
     # Generate revelation requests info
     revelation_requestor_uid = generate_uuid0()
-    revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(
+    revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(  # FIXME TYPO KEYAIR
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id)
 
     # Corrupt response privatekey

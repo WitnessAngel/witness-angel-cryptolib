@@ -94,6 +94,13 @@ def _get_keystore_metadata_file_path(keystore_dir: Path):
     """
     Return path of standard metadata file for key/cryptainer storage.
     """
+    return keystore_dir.joinpath("keystore_metadata.json")
+
+
+def _get_legacy_keystore_metadata_file_path(keystore_dir: Path):
+    """
+    Return path of standard metadata file for key/cryptainer storage.
+    """
     return keystore_dir.joinpath(".keystore.json")
 
 
@@ -104,11 +111,15 @@ def load_keystore_metadata(keystore_dir: Path) -> dict:  # FIXME rename to adver
 
     Raises SchemaValidationError if device appears initialized, but has corrupted metadata (or invalid json payload).
     """
+    legacy_metadata_file = _get_legacy_keystore_metadata_file_path(keystore_dir)
     metadata_file = _get_keystore_metadata_file_path(keystore_dir)
     try:
-        metadata = load_from_json_file(metadata_file)
-    except FileNotFoundError as exc:
-        raise KeystoreDoesNotExist("Keystore metadata file %s does not exist" % metadata_file) from exc
+        metadata = load_from_json_file(legacy_metadata_file)
+    except FileNotFoundError:
+        try:
+            metadata = load_from_json_file(metadata_file)
+        except FileNotFoundError as exc:
+            raise KeystoreDoesNotExist("Keystore metadata file %s does not exist" % metadata_file) from exc
     validate_keystore_metadata(metadata)
     return metadata
 

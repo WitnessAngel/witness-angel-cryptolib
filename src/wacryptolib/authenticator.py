@@ -4,7 +4,8 @@ from datetime import datetime
 from pathlib import Path
 
 from wacryptolib.exceptions import KeystoreAlreadyExists
-from wacryptolib.keystore import validate_keystore_metadata, _get_keystore_metadata_file_path, KEYSTORE_FORMAT
+from wacryptolib.keystore import validate_keystore_metadata, _get_keystore_metadata_file_path, KEYSTORE_FORMAT, \
+    _get_legacy_keystore_metadata_file_path
 from wacryptolib.utilities import dump_to_json_file, generate_uuid0
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,8 @@ def initialize_authenticator(authenticator_dir: Path, keystore_owner: str, keyst
 
 
 def _initialize_authenticator_metadata(authenticator_dir: Path, keystore_owner: str, keystore_passphrase_hint: str):
+    legacy_metadata_file = _get_legacy_keystore_metadata_file_path(authenticator_dir)
+    assert not legacy_metadata_file.exists(), legacy_metadata_file
     metadata_file = _get_keystore_metadata_file_path(authenticator_dir)
     assert not metadata_file.exists(), metadata_file
     metadata_file.parent.mkdir(parents=False, exist_ok=True)  # Only LAST directory might be created
@@ -70,5 +73,9 @@ def is_authenticator_initialized(authenticator_dir: Path):
 
     :return: (bool) True if and only if the authenticator is initialized.
     """
+    legacy_metadata_file = _get_legacy_keystore_metadata_file_path(authenticator_dir)
     metadata_file = _get_keystore_metadata_file_path(authenticator_dir)
-    return metadata_file.is_file()
+    is_initialized = False
+    if legacy_metadata_file.is_file() or metadata_file.is_file():
+        is_initialized = True
+    return is_initialized

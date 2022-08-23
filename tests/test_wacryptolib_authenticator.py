@@ -57,13 +57,19 @@ def test_authenticator_basic_workflow(tmp_path):
                 load_keystore_metadata(acceptable_dir)
 
 
-def test_authenticator_metadata_backward_compatibility(tmp_path):
+def test_authenticator_metadata_filename_backward_compatibility(tmp_path):
     acceptable_path = tmp_path / "subfolder"
     assert not is_authenticator_initialized(acceptable_path)
 
-    # initialize metadata in .keystore.json
+    # initialize metadata in legacy ".keystore.json" file
     legacy_metadata_file_path = _get_legacy_keystore_metadata_file_path(acceptable_path)
     legacy_metadata_file_path.parent.mkdir(parents=False, exist_ok=True)
+    assert not legacy_metadata_file_path.exists()
+
+    metadata_file_path = _get_keystore_metadata_file_path(acceptable_path)
+    assert not metadata_file_path.exists()
+
+    assert not is_authenticator_initialized(acceptable_path)
 
     legacy_metadata = {
         "keystore_type": "authenticator",
@@ -72,13 +78,16 @@ def test_authenticator_metadata_backward_compatibility(tmp_path):
         "keystore_owner": "keystore_owner",
         "keystore_passphrase_hint": "This is a hint",
         "keystore_secret": "keystore_secret",
-        "keystore_creation_datetime": datetime.now()
+        "keystore_creation_datetime": datetime.now(),
     }
+
     legacy_metadata_bytes = dump_to_json_bytes(legacy_metadata)
     legacy_metadata_file_path.write_bytes(legacy_metadata_bytes)
+    assert is_authenticator_initialized(acceptable_path)
 
     with pytest.raises(KeystoreAlreadyExists):
         initialize_authenticator(acceptable_path, keystore_owner="myuser", keystore_passphrase_hint="hïnt")
+    assert not metadata_file_path.exists()
 
     metadata = load_keystore_metadata(acceptable_path)
 

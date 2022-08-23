@@ -1,7 +1,7 @@
 import os
 import shutil
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from io import BytesIO
 from pathlib import Path
 
@@ -126,6 +126,26 @@ def test_serialization_utilities(tmp_path):
     )
     deserialized = load_from_json_file(tmp_filepath)
     assert deserialized == payload
+
+    # Special tests for DATES
+
+    utc_date = pytz.utc.localize(datetime(2022, 10, 10))
+    pst_date = utc_date.astimezone(pytz.timezone("America/Los_Angeles"))
+
+    payload1 = {"date": utc_date}
+    serialized_str1 = dump_to_json_str(payload1)
+    payload2 = {"date": pst_date}
+    serialized_str2 = dump_to_json_str(payload2)
+
+    assert serialized_str1 ==  r'{"date": {"$date": {"$numberLong": "1665360000000"}}}'
+    assert serialized_str1 == serialized_str2
+
+    deserialized = load_from_json_str(serialized_str1)
+    assert deserialized == payload1
+    assert deserialized == payload2
+
+    utcoffset = deserialized["date"].utcoffset()
+    assert utcoffset == timedelta(0)  # Date is returned as UTC in any case!
 
 
 def test_generate_uuid0():

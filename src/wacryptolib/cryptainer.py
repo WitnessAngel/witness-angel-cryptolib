@@ -760,21 +760,22 @@ class CryptainerDecryptor(CryptainerBase):
 
     def _get_single_gateway_revelation_request_list(self, gateway_url: str, revelation_requestor_uid: uuid.UUID):
 
-        jsonrpc_url = gateway_url + "/jsonrpc/"
+        #jsonrpc_url = gateway_url + "jsonrpc/"
         gateway_revelation_request_list = []
-        gateway_error = {}
+        gateway_error = []
 
         gateway_proxy = JsonRpcProxy(
-            url=jsonrpc_url, response_error_handler=status_slugs_response_error_handler
+            url=gateway_url, response_error_handler=status_slugs_response_error_handler
         )
         try:
-            gateway_revelation_request_list = gateway_proxy.list_wadevice_decryption_requests(
+            gateway_revelation_request_list = gateway_proxy.list_requestor_revelation_requests(
                 revelation_requestor_uid=revelation_requestor_uid)
         except (TransportError, OSError) as exc:
-            gateway_error = self._build_error_report_message(
+            error = self._build_error_report_message(
                 error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
                 error_message="Unable to reach remote server %s" % gateway_url,
                 error_exception=exc)
+            gateway_error.append(error)
         return gateway_revelation_request_list, gateway_error
 
     def _get_multiple_gateway_revelation_request_list(self, gateway_url_list: list,
@@ -786,7 +787,7 @@ class CryptainerDecryptor(CryptainerBase):
                 gateway_url,
                 revelation_requestor_uid)
             multiple_gateway_revelation_request_list.extend(gateway_revelation_request_list)
-            gateway_errors.append(gateway_error)
+            gateway_errors.extend(gateway_error)
 
         return multiple_gateway_revelation_request_list, gateway_errors
 
@@ -1596,7 +1597,8 @@ class ReadonlyCryptainerStorage:
         return cryptainer
 
     def decrypt_cryptainer_from_storage(
-            self, cryptainer_name_or_idx, passphrase_mapper: Optional[dict] = None, verify_integrity_tags: bool = True
+            self, cryptainer_name_or_idx, passphrase_mapper: Optional[dict] = None, verify_integrity_tags: bool = True,
+            gateway_url_list: Optional[list] = None, revelation_requestor_uid: uuid.UUID = None
     ) -> tuple:
         """
         Return the decrypted content of the cryptainer `cryptainer_name_or_idx` (which must be in `list_cryptainer_names()`,
@@ -1607,19 +1609,23 @@ class ReadonlyCryptainerStorage:
         cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_payload_ciphertext=True)
 
         result, error_report = self._decrypt_payload_from_cryptainer(
-            cryptainer, passphrase_mapper=passphrase_mapper, verify_integrity_tags=verify_integrity_tags
+            cryptainer, passphrase_mapper=passphrase_mapper, verify_integrity_tags=verify_integrity_tags, gateway_url_list=gateway_url_list,
+            revelation_requestor_uid=revelation_requestor_uid
         )
         logger.info("Cryptainer %s successfully decrypted", cryptainer_name_or_idx)
         return result, error_report
 
     def _decrypt_payload_from_cryptainer(
-            self, cryptainer: dict, passphrase_mapper: Optional[dict], verify_integrity_tags: bool
+            self, cryptainer: dict, passphrase_mapper: Optional[dict], verify_integrity_tags: bool, gateway_url_list: Optional[list] = None,
+            revelation_requestor_uid: uuid.UUID = None
     ) -> tuple:
         return decrypt_payload_from_cryptainer(
             cryptainer,
             keystore_pool=self._keystore_pool,
             passphrase_mapper=passphrase_mapper,
             verify_integrity_tags=verify_integrity_tags,
+            gateway_url_list=gateway_url_list,
+            revelation_requestor_uid=revelation_requestor_uid
         )  # Will fail if authorizations are not OK
 
     def check_cryptainer_sanity(self, cryptainer_name_or_idx):

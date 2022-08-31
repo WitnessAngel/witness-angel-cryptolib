@@ -978,7 +978,6 @@ class CryptainerDecryptor(CryptainerBase):
         if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
 
             decrypted_shards = []
-            decryption_errors = []
             key_shared_secret_shards = cipher_layer["key_shared_secret_shards"]
             key_shared_secret_threshold = cipher_layer["key_shared_secret_threshold"]
 
@@ -989,29 +988,24 @@ class CryptainerDecryptor(CryptainerBase):
             # If some shards are missing, we won't detect it here because zip() stops at shortest list
             for shard_ciphertext, trustee_conf in zip(shard_ciphertexts, key_shared_secret_shards):
 
-                try:
-                    shard_bytes, multiple_layer_decryption_errors = self._decrypt_key_through_multiple_layers(
-                        keychain_uid=keychain_uid,
-                        key_ciphertext=shard_ciphertext,
-                        cipher_layers=trustee_conf["key_cipher_layers"],
-                        cryptainer_metadata=cryptainer_metadata,
-                        predecrypted_symmetric_keys=predecrypted_symmetric_keys
-                    )  # Recursive structure
-                    errors.extend(multiple_layer_decryption_errors)
-                    shard = load_from_json_bytes(
-                        shard_bytes
-                    )  # The tuple (idx, payload) of each shard thus becomes encryptable
+                shard_bytes, multiple_layer_decryption_errors = self._decrypt_key_through_multiple_layers(
+                    keychain_uid=keychain_uid,
+                    key_ciphertext=shard_ciphertext,
+                    cipher_layers=trustee_conf["key_cipher_layers"],
+                    cryptainer_metadata=cryptainer_metadata,
+                    predecrypted_symmetric_keys=predecrypted_symmetric_keys
+                )  # Recursive structure
+                errors.extend(multiple_layer_decryption_errors)
+                if shard_bytes is not None:
+                    shard = load_from_json_bytes(shard_bytes)  # The tuple (idx, payload) of each shard thus becomes encryptable
                     decrypted_shards.append(shard)
-
-                # FIXME use custom exceptions here, when all are properly translated (including ValueError...)
-                except Exception as exc:  # If actual trustee doesn't work, we can go to next one
-                    decryption_errors.append(exc)
-                    logger.error("Error when decrypting shard of %s: %r" % (trustee_conf, exc), exc_info=True)
+                else:
+                    logger.error("Error when decrypting shard of %s" % (trustee_conf), exc_info=True)
 
                     error = self._build_error_report_message(
                         error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
                         error_message="Error when decrypting shard of %s" % trustee_conf,
-                        error_exception=exc)
+                        error_exception=None)
                     errors.append(error)
 
                 if len(decrypted_shards) == key_shared_secret_threshold:

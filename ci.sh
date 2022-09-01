@@ -34,7 +34,7 @@ run_ci () {
   # Checking if all the dependencies are secure and do not have any
   # known vulnerabilities:
   echo ">> Running safety check"
-  safety check --bare --full-report
+  safety check --full-report
 
   # Checking `pyproject.toml` file contents and dependencies status:
   echo ">> Running poetry & pip checks"

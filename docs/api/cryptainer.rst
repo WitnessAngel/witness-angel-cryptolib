@@ -26,7 +26,7 @@ Validation utilities
 
 .. autofunction:: wacryptolib.cryptainer.check_cryptainer_sanity
 
-.. autofunction:: wacryptolib.cryptainer.check_conf_sanity
+.. autofunction:: wacryptolib.cryptainer.check_cryptoconf_sanity
 
 
 Filesystem operations

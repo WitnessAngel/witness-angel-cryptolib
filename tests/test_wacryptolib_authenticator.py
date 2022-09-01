@@ -11,7 +11,7 @@ from wacryptolib.keystore import (
     _get_legacy_keystore_metadata_file_path,
     KEYSTORE_FORMAT,
 )
-from wacryptolib.utilities import generate_uuid0, dump_to_json_bytes
+from wacryptolib.utilities import generate_uuid0, dump_to_json_bytes, get_utc_now_date
 
 
 def test_authenticator_basic_workflow(tmp_path):
@@ -82,7 +82,7 @@ def test_authenticator_metadata_filename_backward_compatibility(tmp_path):
         "keystore_owner": "keystore_owner",
         "keystore_passphrase_hint": "This is a hint",
         "keystore_secret": "keystore_secret",
-        "keystore_creation_datetime": datetime.now(),
+        "keystore_creation_datetime": get_utc_now_date(),
     }
 
     legacy_metadata_bytes = dump_to_json_bytes(legacy_metadata)

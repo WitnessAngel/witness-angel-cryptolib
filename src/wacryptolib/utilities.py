@@ -22,8 +22,10 @@ logger = logging.getLogger(__name__)
 UTF8_ENCODING = "utf8"
 
 WACRYPTOLIB_JSON_OPTIONS = JSONOptions(
-    json_mode=JSONMode.CANONICAL, uuid_representation=UuidRepresentation.STANDARD  # Preserve all type information
-)  # Same as PythonLegacy
+    json_mode=JSONMode.CANONICAL,  # Preserve all type information
+    uuid_representation=UuidRepresentation.STANDARD, # Same as PythonLegacy
+    tz_aware=True,  # All our serialized dates are UTC, not NAIVE
+)
 
 
 ### Private utilities ###
@@ -34,9 +36,13 @@ def get_utc_now_date():
     return datetime.now(tz=timezone.utc)
 
 
+def is_datetime_tz_aware(dt):
+    return dt.utcoffset() is not None
+
+
 def check_datetime_is_tz_aware(dt):
     """Raise if datetime is naive regarding timezones."""
-    is_aware = dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
+    is_aware = is_datetime_tz_aware(dt)
     if not is_aware:
         raise ValueError("Naive datetime was encountered: %s" % dt)
 

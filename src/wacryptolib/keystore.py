@@ -33,7 +33,7 @@ from wacryptolib.utilities import (
     load_from_json_file,
     PeriodicTaskHandler,
     generate_uuid0,
-    dump_to_json_file,
+    dump_to_json_file, is_datetime_tz_aware,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ _KEYSTORE_METADATA_SCHEMA = {
     "keystore_format": KEYSTORE_FORMAT,  # For forward compatibility
     "keystore_uid": UUID,
     "keystore_owner": And(str, non_empty),
-    OptionalKey("keystore_creation_datetime"): datetime,
+    OptionalKey("keystore_creation_datetime"): And(datetime, is_datetime_tz_aware),
     OptionalKey("keystore_secret"): str,
     OptionalKey("keystore_passphrase_hint"): And(str, non_empty),  # For authenticators
 }

@@ -734,7 +734,7 @@ def _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_reques
     return revelation_requests_info
 
 
-def _check_error_entry(error_list, error_type, error_criticity, error_msg_match, exception_class=None, occurence=1):
+def _check_error_entry(error_list, error_type, error_criticity, error_msg_match, exception_class=None, occurence_count=1):
     count = 0
     exist_once = False
 
@@ -745,12 +745,15 @@ def _check_error_entry(error_list, error_type, error_criticity, error_msg_match,
             assert error_msg_match.lower() in error_entry["error_message"].lower()
 
             if exception_class is not None:
-                entry_exception_class = error_entry["error_exception"].__class__
+                entry_exception_class = error_entry["error_exception"].__class__  # EXACT match, not "issubclass"!
                 assert entry_exception_class == exception_class
+            else:
+                assert error_entry["error_exception"] is None
+
             count += 1
         except AssertionError:
             pass
-    if count == occurence:
+    if count == occurence_count:
         exist_once = True
     return exist_once
 
@@ -1299,12 +1302,12 @@ def test_cryptainer_decryption_from_complex_crptoconf(tmp_path):
                                   error_criticity=DecryprtionErrorCriticity.WARNING,
                                   error_msg_match="Failed trustee decryption",
                                   exception_class=DecryptionError,
-                                  occurence=2
+                                  occurence_count=2
                                   )  # 2 for Trustee2 and LOCAL_KEYFACTORY_TRUSTEE_MARKER
         assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
                                   error_criticity=DecryprtionErrorCriticity.WARNING,
                                   error_msg_match="Error when decrypting shard",
-                                  occurence=2
+                                  occurence_count=2
                                   )  # 2 for Trustee2 and LOCAL_KEYFACTORY_TRUSTEE_MARKER
 
         assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
@@ -1696,12 +1699,12 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                               error_criticity=DecryprtionErrorCriticity.WARNING,
                               error_msg_match="Failed trustee decryption",
                               exception_class=DecryptionError,
-                              occurence=3
+                              occurence_count=3
                               )  # Missing passphrase for 3 Trustee
     assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
                               error_criticity=DecryprtionErrorCriticity.WARNING,
                               error_msg_match="Error when decrypting shard",
-                              occurence=3
+                              occurence_count=3
                               )
 
     assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
@@ -1762,7 +1765,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                               error_criticity=DecryprtionErrorCriticity.WARNING,
                               error_msg_match="Failed trustee decryption",
                               exception_class=DecryptionError,
-                              occurence=2)  # Trustee 2 and Local keyfactory missing passphrase
+                              occurence_count=2)  # Trustee 2 and Local keyfactory missing passphrases
 
     assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
                               error_criticity=DecryprtionErrorCriticity.WARNING,
@@ -1794,7 +1797,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                               error_criticity=DecryprtionErrorCriticity.WARNING,
                               error_msg_match="Failed trustee decryption",
                               exception_class=DecryptionError,
-                              occurence=2
+                              occurence_count=2
                               )  # For LocalKeyFactory and Trustee 2
 
     assert _check_error_entry(error_list=error_report, error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,

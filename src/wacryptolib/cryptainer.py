@@ -760,7 +760,6 @@ class CryptainerDecryptor(CryptainerBase):
 
     def _get_single_gateway_revelation_request_list(self, gateway_url: str, revelation_requestor_uid: uuid.UUID):
 
-        #jsonrpc_url = gateway_url + "jsonrpc/"
         gateway_revelation_request_list = []
         gateway_error = []
 

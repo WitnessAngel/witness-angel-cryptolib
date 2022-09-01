@@ -4,8 +4,12 @@ from datetime import datetime
 from pathlib import Path
 
 from wacryptolib.exceptions import KeystoreAlreadyExists
-from wacryptolib.keystore import validate_keystore_metadata, _get_keystore_metadata_file_path, KEYSTORE_FORMAT, \
-    _get_legacy_keystore_metadata_file_path
+from wacryptolib.keystore import (
+    validate_keystore_metadata,
+    _get_keystore_metadata_file_path,
+    KEYSTORE_FORMAT,
+    _get_legacy_keystore_metadata_file_path,
+)
 from wacryptolib.utilities import dump_to_json_file, generate_uuid0
 
 logger = logging.getLogger(__name__)
@@ -53,7 +57,7 @@ def _initialize_authenticator_metadata(authenticator_dir: Path, keystore_owner: 
         "keystore_owner": keystore_owner,
         "keystore_passphrase_hint": keystore_passphrase_hint,
         "keystore_secret": secrets.token_urlsafe(64),
-        "keystore_creation_datetime": datetime.now()
+        "keystore_creation_datetime": datetime.now(),
     }
     validate_keystore_metadata(metadata)  # Ensure no weird metadata is added!
     dump_to_json_file(metadata_file, metadata)

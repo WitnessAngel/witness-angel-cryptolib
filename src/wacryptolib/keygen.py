@@ -31,15 +31,21 @@ def generate_symkey(cipher_algo: str) -> dict:
 
 
 def _generate_aes_cbc_key_dict():
-    return dict(key=_crypto_backend.get_random_bytes(32), iv=_crypto_backend.get_random_bytes(_crypto_backend.AES_BLOCK_SIZE))
+    return dict(
+        key=_crypto_backend.get_random_bytes(32), iv=_crypto_backend.get_random_bytes(_crypto_backend.AES_BLOCK_SIZE)
+    )
 
 
 def _generate_aes_eax_key_dict():
-    return dict(key=_crypto_backend.get_random_bytes(32), nonce=_crypto_backend.get_random_bytes(16))  # Recommended length, could be bigger
+    return dict(
+        key=_crypto_backend.get_random_bytes(32), nonce=_crypto_backend.get_random_bytes(16)
+    )  # Recommended length, could be bigger
 
 
 def _generate_chacha20_poly1305_key_dict():
-    return dict(key=_crypto_backend.get_random_bytes(32), nonce=_crypto_backend.get_random_bytes(12))  # We could switch to 24 for XChaCha20
+    return dict(
+        key=_crypto_backend.get_random_bytes(32), nonce=_crypto_backend.get_random_bytes(12)
+    )  # We could switch to 24 for XChaCha20
 
 
 def generate_keypair(

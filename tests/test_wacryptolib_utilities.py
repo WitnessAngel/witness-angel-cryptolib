@@ -137,7 +137,7 @@ def test_serialization_utilities(tmp_path):
     payload2 = {"date": pst_date}
     serialized_str2 = dump_to_json_str(payload2)
 
-    assert serialized_str1 ==  r'{"date": {"$date": {"$numberLong": "1665360000000"}}}'
+    assert serialized_str1 == r'{"date": {"$date": {"$numberLong": "1665360000000"}}}'
     assert serialized_str1 == serialized_str2
 
     deserialized = load_from_json_str(serialized_str1)

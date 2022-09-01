@@ -35,7 +35,9 @@ class TrusteeApi:
         """Create a keypair if it doesn't exist."""
 
         try:
-            self._keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)  ### FIXME ULTRA BUGGY, we need PRIVATE KEY too!!!!
+            self._keystore.get_public_key(
+                keychain_uid=keychain_uid, key_algo=key_algo
+            )  ### FIXME ULTRA BUGGY, we need PRIVATE KEY too!!!!
         except KeyDoesNotExist:
             pass
         else:
@@ -97,7 +99,8 @@ class TrusteeApi:
             except KeyLoadingError:
                 pass
         raise DecryptionError(
-            "Could not decrypt private key %s of type %s (passphrases provided: %d)" % (keychain_uid, key_algo, len(passphrases))
+            "Could not decrypt private key %s of type %s (passphrases provided: %d)"
+            % (keychain_uid, key_algo, len(passphrases))
         )
 
     def request_decryption_authorization(
@@ -153,7 +156,10 @@ class TrusteeApi:
 
             try:
                 res = self._decrypt_private_key_pem_with_passphrases(
-                    private_key_pem=private_key_pem, keychain_uid=keychain_uid, key_algo=key_algo, passphrases=passphrases
+                    private_key_pem=private_key_pem,
+                    keychain_uid=keychain_uid,
+                    key_algo=key_algo,
+                    passphrases=passphrases,
                 )
                 assert res, repr(res)
             except DecryptionError:

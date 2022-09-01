@@ -269,10 +269,9 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
         "keystore_secret": ANY,
         "keystore_type": "authenticator",
         "keystore_uid": ANY,
-        "keystore_creation_datetime": ANY
+        "keystore_creation_datetime": ANY,
     }
     assert isinstance(keystore_tree["keystore_creation_datetime"], datetime)
-
 
     keystore_tree = remote_keystore.export_to_keystore_tree(include_private_keys=False)
     assert keystore_tree == {
@@ -283,7 +282,7 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
         "keystore_secret": ANY,
         "keystore_type": "authenticator",
         "keystore_uid": ANY,
-        "keystore_creation_datetime": ANY
+        "keystore_creation_datetime": ANY,
     }
     assert isinstance(keystore_tree["keystore_creation_datetime"], datetime)
 

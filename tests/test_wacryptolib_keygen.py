@@ -3,8 +3,14 @@ import unicodedata
 import pytest
 
 import wacryptolib
-from wacryptolib._crypto_backend import rsa_key_class_fetcher, dsa_key_class_fetcher, ecc_key_class_fetcher, import_ecc_key_from_pem, \
-    import_dsa_key_from_pem, import_rsa_key_from_pem
+from wacryptolib._crypto_backend import (
+    rsa_key_class_fetcher,
+    dsa_key_class_fetcher,
+    ecc_key_class_fetcher,
+    import_ecc_key_from_pem,
+    import_dsa_key_from_pem,
+    import_rsa_key_from_pem,
+)
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
 from wacryptolib.exceptions import KeyLoadingError
 from wacryptolib.keygen import (

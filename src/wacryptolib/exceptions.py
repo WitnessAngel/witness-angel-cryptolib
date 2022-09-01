@@ -82,7 +82,3 @@ class ValidationError(FunctionalError):
 
 class SchemaValidationError(ValidationError):
     pass  # When data doesn't respect json format, or an additional python-schema, or some additional security constraints
-
-
-
-

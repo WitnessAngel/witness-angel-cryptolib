@@ -124,11 +124,14 @@ def _list_available_authdevices_linux():
 
 def _list_available_authdevices_darwin():
     import subprocess, plistlib, shutil
+
     system_profiler_location = shutil.which("system_profiler")
     if not system_profiler_location:
-        logger.warning("Can't list USB devices due to 'system_profiler' executable not found, this is only normal on iphone-simulator")
+        logger.warning(
+            "Can't list USB devices due to 'system_profiler' executable not found, this is only normal on iphone-simulator"
+        )
         return []
-    usb_plist = subprocess.check_output([system_profiler_location, '-xml', 'SPUSBDataType'], shell=False)
+    usb_plist = subprocess.check_output([system_profiler_location, "-xml", "SPUSBDataType"], shell=False)
     device_list = plistlib.loads(usb_plist)
     return _find_authdevices_in_macosx_system_profiler_data(device_list)
 
@@ -147,11 +150,11 @@ def _find_authdevices_in_macosx_system_profiler_data(device_list):
                 continue  # We're at a USB HUB or something like that
 
             if _is_plist_property_true(device.get("Built-in_Device", "")):
-                #print("find_authdevices CODE 1", device)
+                # print("find_authdevices CODE 1", device)
                 continue
 
             if not device.get("Media"):
-                #print("find_authdevices CODE 2", device)
+                # print("find_authdevices CODE 2", device)
                 continue
 
             media_list = device["Media"]
@@ -160,11 +163,11 @@ def _find_authdevices_in_macosx_system_profiler_data(device_list):
             for media in media_list:
 
                 if not _is_plist_property_true(media.get("removable_media", "")):
-                    #print("find_authdevices CODE 3", media)
+                    # print("find_authdevices CODE 3", media)
                     continue
 
                 if not media.get("volumes"):
-                    #print("find_authdevices CODE 4", media)
+                    # print("find_authdevices CODE 4", media)
                     continue
 
                 volumes = media["volumes"]
@@ -172,11 +175,11 @@ def _find_authdevices_in_macosx_system_profiler_data(device_list):
 
                 for volume in volumes:
                     if not _is_plist_property_true(volume["writable"]):
-                        #print("find_authdevices CODE 5", volume)
+                        # print("find_authdevices CODE 5", volume)
                         continue
 
                     if not volume.get("mount_point"):
-                        #print("find_authdevices CODE 6", volume)
+                        # print("find_authdevices CODE 6", volume)
                         continue
 
                     authdevice = {}

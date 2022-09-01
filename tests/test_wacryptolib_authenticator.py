@@ -5,8 +5,12 @@ import pytest
 
 from wacryptolib.authenticator import initialize_authenticator, is_authenticator_initialized
 from wacryptolib.exceptions import ValidationError, KeystoreAlreadyExists, KeystoreDoesNotExist
-from wacryptolib.keystore import load_keystore_metadata, _get_keystore_metadata_file_path, \
-    _get_legacy_keystore_metadata_file_path, KEYSTORE_FORMAT
+from wacryptolib.keystore import (
+    load_keystore_metadata,
+    _get_keystore_metadata_file_path,
+    _get_legacy_keystore_metadata_file_path,
+    KEYSTORE_FORMAT,
+)
 from wacryptolib.utilities import generate_uuid0, dump_to_json_bytes
 
 

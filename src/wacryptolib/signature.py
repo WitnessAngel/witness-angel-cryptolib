@@ -17,7 +17,10 @@ def _get_signature_conf(signature_algo, key):
         raise ValueError("Unknown signature algorithm '%s'" % signature_algo)
     compatible_key_class = signature_conf["compatible_key_class_fetcher"]()
     if not isinstance(key, compatible_key_class):
-        raise ValueError("Incompatible key type %s for signature algorithm %s (should be %s)" % (type(key), signature_algo, compatible_key_class))
+        raise ValueError(
+            "Incompatible key type %s for signature algorithm %s (should be %s)"
+            % (type(key), signature_algo, compatible_key_class)
+        )
     return signature_conf
 
 
@@ -92,9 +95,21 @@ def _compute_timestamped_hash(message: bytes, timestamp_utc: int) -> object:
 
 
 SIGNATURE_ALGOS_REGISTRY = dict(
-    RSA_PSS={"signature_function": _crypto_backend.sign_with_pss, "verification_function": _crypto_backend.verify_with_pss, "compatible_key_class_fetcher": _crypto_backend.rsa_key_class_fetcher},
-    DSA_DSS={"signature_function": _crypto_backend.sign_with_dss, "verification_function": _crypto_backend.verify_with_dss, "compatible_key_class_fetcher": _crypto_backend.dsa_key_class_fetcher},
-    ECC_DSS={"signature_function": _crypto_backend.sign_with_dss, "verification_function": _crypto_backend.verify_with_dss, "compatible_key_class_fetcher": _crypto_backend.ecc_key_class_fetcher},
+    RSA_PSS={
+        "signature_function": _crypto_backend.sign_with_pss,
+        "verification_function": _crypto_backend.verify_with_pss,
+        "compatible_key_class_fetcher": _crypto_backend.rsa_key_class_fetcher,
+    },
+    DSA_DSS={
+        "signature_function": _crypto_backend.sign_with_dss,
+        "verification_function": _crypto_backend.verify_with_dss,
+        "compatible_key_class_fetcher": _crypto_backend.dsa_key_class_fetcher,
+    },
+    ECC_DSS={
+        "signature_function": _crypto_backend.sign_with_dss,
+        "verification_function": _crypto_backend.verify_with_dss,
+        "compatible_key_class_fetcher": _crypto_backend.ecc_key_class_fetcher,
+    },
 )
 
 #: These values can be used as 'payload_signature_algo' parameters.

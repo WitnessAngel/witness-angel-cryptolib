@@ -133,8 +133,13 @@ def _decrypt_via_aes_eax(cipherdict: dict, key_dict: dict, verify_integrity_tags
     key = key_dict["key"]
     nonce = key_dict["nonce"]
     _check_symmetric_key_length_bytes(len(key))
-    plaintext = _crypto_backend.decrypt_via_aes_eax(cipherdict["ciphertext"], tag=cipherdict["tag"], key=key, nonce=nonce,
-                                    verify_integrity_tags=verify_integrity_tags)
+    plaintext = _crypto_backend.decrypt_via_aes_eax(
+        cipherdict["ciphertext"],
+        tag=cipherdict["tag"],
+        key=key,
+        nonce=nonce,
+        verify_integrity_tags=verify_integrity_tags,
+    )
     return plaintext
 
 
@@ -167,7 +172,13 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify_inte
     key = key_dict["key"]
     nonce = key_dict["nonce"]
     _check_symmetric_key_length_bytes(len(key))
-    plaintext = _crypto_backend.decrypt_via_chacha20_poly1305(cipherdict["ciphertext"], tag=cipherdict["tag"], key=key, nonce=nonce, verify_integrity_tags=verify_integrity_tags)
+    plaintext = _crypto_backend.decrypt_via_chacha20_poly1305(
+        cipherdict["ciphertext"],
+        tag=cipherdict["tag"],
+        key=key,
+        nonce=nonce,
+        verify_integrity_tags=verify_integrity_tags,
+    )
 
     return plaintext
 

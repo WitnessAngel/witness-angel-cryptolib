@@ -164,7 +164,9 @@ def test_valid_payload_encryption_pipeline(cipher_algo_list):
         payload_cipher_layers_extract = {
             "cipher_algo": cipher_algo,
             "symkey": generate_symkey(cipher_algo),
-            "payload_digest_algos": random.choices(SUPPORTED_HASH_ALGOS, k=random.randint(1, len(SUPPORTED_HASH_ALGOS))),
+            "payload_digest_algos": random.choices(
+                SUPPORTED_HASH_ALGOS, k=random.randint(1, len(SUPPORTED_HASH_ALGOS))
+            ),
         }
         payload_cipher_layer_extracts.append(payload_cipher_layers_extract)
     print(payload_cipher_layer_extracts)

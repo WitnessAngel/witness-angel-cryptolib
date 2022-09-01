@@ -3,6 +3,30 @@ Development
 =============
 
 
+Version 0.9
+==================
+* Rename from "digest_list" to "ciphertext_chunks" the internal structure of RSA-OAEP ciphertext (but keep retrocompatibility)
+* Implement support for USB device discovery on Apple platform
+* Make get_trustee_id() a public API
+* Add keystore_owner an optional field to "authenticator" trustee
+* Rename ambiguous FilesystemKeystorePool get_foreign_keystore_metadata() to get_all_foreign_keystore_metadata()
+* Rename check_conf_sanity() to check_cryptoconf_sanity()
+* Add FilesystemKeystorePool.get_keystore_metadata() method
+* Remove all junk files from published package, it must contain only wacryptolib, not tests/docs/changelog files else they pollute site-packages/
+* Move crypto implementation to _crypto_backend/pycryptodome.py
+* Add fallback crypto utilities for iOS where dlopen() is forbidden (so pycryptodome doesn't work)
+* Change implementation of _compute_timestamped_hash() (will break existing signatures)
+* Add gather_decryptable_symkeys() utility to cryptainer
+* Rename PermissionAuthenticatorError to AuthenticationError
+* Relax python versions supported in pyproject.toml
+* Add MIT License
+* Add keystore_creation_datetime field to authenticator metadata
+* Change the name of the authenticator storage folder from ".authenticator" to "authenticator.keystore" with retrocompatibility
+* Rename keystore metadata file from ".keystore.json" to "keystore_metadata.json" with retrocompatibility
+* Refactor CryptainerDecryptor class to report errors as a list instead of raising exceptions
+* Integrate support for remote decryption authorizations in CryptainerDecryptor
+
+
 Version 0.8
 ==================
 

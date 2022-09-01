@@ -1,6 +1,5 @@
 from datetime import datetime
 from pathlib import Path
-from pprint import pprint
 
 from wacryptolib.authdevice import list_available_authdevices, _find_authdevices_in_macosx_system_profiler_data
 

@@ -28,7 +28,6 @@ from wacryptolib.exceptions import (
     SchemaValidationError,
     KeyDoesNotExist,
     KeyLoadingError,
-    ExistenceError,
     SignatureVerificationError,
     KeystoreDoesNotExist,
     DecryptionIntegrityError,

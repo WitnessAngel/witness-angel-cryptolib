@@ -1,7 +1,5 @@
-import importlib
 import logging
 from typing import BinaryIO
-
 
 from wacryptolib import _crypto_backend
 from wacryptolib import utilities

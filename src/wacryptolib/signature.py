@@ -2,9 +2,7 @@ import logging
 from datetime import datetime
 
 from wacryptolib import _crypto_backend
-
 from wacryptolib.exceptions import SignatureCreationError, SignatureVerificationError
-
 
 logger = logging.getLogger(__name__)
 

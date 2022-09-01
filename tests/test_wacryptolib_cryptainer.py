@@ -9,7 +9,7 @@ from itertools import product
 from pathlib import Path
 from pprint import pprint
 from unittest import mock
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 from uuid import UUID
 
 import pytest
@@ -44,7 +44,6 @@ from wacryptolib.cryptainer import (
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
     ReadonlyCryptainerStorage,
     CryptainerEncryptionPipeline,
-    CRYPTAINER_TRUSTEE_TYPES,
     gather_decryptable_symkeys,
     DecryptionErrorTypes,
     DecryprtionErrorCriticity,

@@ -25,6 +25,7 @@ Version 0.9
 * Rename keystore metadata file from ".keystore.json" to "keystore_metadata.json" with retrocompatibility
 * Refactor CryptainerDecryptor class to report errors as a list instead of raising exceptions
 * Integrate support for remote decryption authorizations in CryptainerDecryptor
+* Adjust the exceptions raised e.g. during PEM key loading
 
 
 Version 0.8

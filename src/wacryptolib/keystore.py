@@ -734,7 +734,7 @@ class FilesystemKeystorePool(
         paths = foreign_keystores_dir.glob("%s*" % self.FOREIGN_KEYSTORE_PREFIX)  # This excludes TEMP folders
         return sorted([uuid.UUID(d.name.replace(self.FOREIGN_KEYSTORE_PREFIX, "")) for d in paths])
 
-    def get_keystore_metadata(self, keystore_uid):
+    def get_keystore_metadata(self, keystore_uid):  # FIXME rename to get_foreign_keystore_metadata() ??
         """Return a metadata dict for the keystore `keystore_uid`."""
         keystore_dir = self._get_foreign_keystore_dir(keystore_uid=keystore_uid)
         metadata = load_keystore_metadata(keystore_dir)

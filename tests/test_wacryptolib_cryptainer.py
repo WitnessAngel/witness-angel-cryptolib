@@ -748,6 +748,9 @@ def _check_error_entry(
 ):
     real_occurrence_count = 0
 
+    print("ERROR LIST:")
+    pprint(error_list)
+
     for error_entry in error_list:
         try:
             assert error_entry["error_type"] == error_type
@@ -828,8 +831,8 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
         error_list=error_report,
         error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryprtionErrorCriticity.WARNING,
-        error_msg_match="Failed trustee decryption",
-        exception_class=DecryptionError,
+        error_msg_match="Could not load private key",
+        exception_class=KeyLoadingError,
     )
     # DecryptionError is present whenever decryption fails (will not always be tested)
     _check_error_entry(
@@ -1174,7 +1177,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
         assert len(error_report) == 5
 
 
-def test_cryptainer_decryption_from_complex_crptoconf(tmp_path):
+def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
     keychain_uid = generate_uuid0()
     local_passphrase = "b^yep&ts"
 
@@ -1299,8 +1302,8 @@ def test_cryptainer_decryption_from_complex_crptoconf(tmp_path):
         error_list=error_report,
         error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryprtionErrorCriticity.WARNING,
-        error_msg_match="Failed trustee decryption",
-        exception_class=DecryptionError,
+        error_msg_match="Could not load private key",
+        exception_class=KeyLoadingError,
     )
     _check_error_entry(
         error_list=error_report,
@@ -1407,8 +1410,8 @@ def test_cryptainer_decryption_from_complex_crptoconf(tmp_path):
             error_list=error_report,
             error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
             error_criticity=DecryprtionErrorCriticity.WARNING,
-            error_msg_match="Failed trustee decryption",
-            exception_class=DecryptionError,
+            error_msg_match="Could not load private key",
+            exception_class=KeyLoadingError,
             occurrence_count=2,
         )  # 2 for Trustee2 and LOCAL_KEYFACTORY_TRUSTEE_MARKER
         _check_error_entry(
@@ -1840,8 +1843,8 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         error_list=error_report,
         error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryprtionErrorCriticity.WARNING,
-        error_msg_match="Failed trustee decryption",
-        exception_class=DecryptionError,
+        error_msg_match="Could not load private key",
+        exception_class=KeyLoadingError,
         occurrence_count=3,
     )  # Missing passphrase for 3 Trustee
     _check_error_entry(
@@ -1920,8 +1923,8 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         error_list=error_report,
         error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryprtionErrorCriticity.WARNING,
-        error_msg_match="Failed trustee decryption",
-        exception_class=DecryptionError,
+        error_msg_match="Could not load private key",
+        exception_class=KeyLoadingError,
         occurrence_count=2,
     )  # Trustee 2 and Local keyfactory missing passphrases
 
@@ -1961,8 +1964,8 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         error_list=error_report,
         error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryprtionErrorCriticity.WARNING,
-        error_msg_match="Failed trustee decryption",
-        exception_class=DecryptionError,
+        error_msg_match="Could not load private key",
+        exception_class=KeyLoadingError,
         occurrence_count=2,
     )  # For LocalKeyFactory and Trustee 2
 
@@ -1988,8 +1991,8 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         error_list=error_report,
         error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryprtionErrorCriticity.WARNING,
-        error_msg_match="Failed trustee decryption",
-        exception_class=DecryptionError,
+        error_msg_match="Could not load private key",
+        exception_class=KeyLoadingError,
     )
     _check_error_entry(
         error_list=error_report,

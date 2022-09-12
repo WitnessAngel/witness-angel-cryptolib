@@ -98,7 +98,7 @@ class TrusteeApi:
                 return key_obj
             except KeyLoadingError:
                 pass
-        raise DecryptionError(
+        raise KeyLoadingError(
             "Could not decrypt private key %s of type %s (passphrases provided: %d)"
             % (keychain_uid, key_algo, len(passphrases))
         )
@@ -162,7 +162,7 @@ class TrusteeApi:
                     passphrases=passphrases,
                 )
                 assert res, repr(res)
-            except DecryptionError:
+            except KeyLoadingError:
                 missing_passphrase.append(keypair_identifier)
                 continue
 

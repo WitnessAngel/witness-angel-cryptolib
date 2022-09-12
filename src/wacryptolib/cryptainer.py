@@ -1163,7 +1163,7 @@ class CryptainerDecryptor(CryptainerBase):
         :return: decypted payload as bytes
         """
         errors = []
-        key_bytes = None  # TODO Change with None
+        key_bytes = None
 
         trustee_id = get_trustee_id(trustee)
         passphrases = self._passphrase_mapper.get(trustee_id) or []
@@ -1204,6 +1204,14 @@ class CryptainerDecryptor(CryptainerBase):
                 error = self._build_error_report_message(
                     error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
                     error_message="Trustee private key not found (%s/%s)" % (keychain_uid, cipher_algo),
+                    error_exception=exc,
+                )
+                errors.append(error)
+
+            except KeyLoadingError as exc:
+                error = self._build_error_report_message(
+                    error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+                    error_message="Could not load private key (%s/%s)" % (keychain_uid, cipher_algo),
                     error_exception=exc,
                 )
                 errors.append(error)

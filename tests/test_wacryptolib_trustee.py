@@ -11,7 +11,7 @@ from wacryptolib.exceptions import (
     SignatureVerificationError,
     DecryptionError,
     ValidationError,
-    AuthorizationError,
+    AuthorizationError, KeyLoadingError,
 )
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import (
@@ -175,12 +175,12 @@ def test_trustee_api_workflow():
     )
     cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key_dict=dict(key=public_key_rsa_oaep2))
 
-    with pytest.raises(DecryptionError, match="not decrypt"):
+    with pytest.raises(KeyLoadingError, match="Could not decrypt private key"):
         trustee_api.decrypt_with_private_key(
             keychain_uid=keychain_uid_passphrased, cipher_algo="RSA_OAEP", cipherdict=cipherdict
         )
 
-    with pytest.raises(DecryptionError, match="not decrypt"):
+    with pytest.raises(KeyLoadingError, match="Could not decrypt private key"):
         trustee_api.decrypt_with_private_key(
             keychain_uid=keychain_uid_passphrased,
             cipher_algo="RSA_OAEP",

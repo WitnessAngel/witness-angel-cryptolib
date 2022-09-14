@@ -750,7 +750,7 @@ class FilesystemKeystorePool(
 
         return metadata_mapper
 
-    def import_foreign_keystore_from_filesystem(self, keystore_dir: Path):
+    def import_foreign_keystore_from_filesystem(self, keystore_dir: Path):  # FIXME delete ?
         """
         Create a local import of a remote key storage folder (which must have a proper metadata file).
 

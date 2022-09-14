@@ -26,6 +26,8 @@ Version 0.9
 * Refactor CryptainerDecryptor class to report errors as a list instead of raising exceptions
 * Integrate support for remote decryption authorizations in CryptainerDecryptor
 * Adjust the exceptions raised e.g. during PEM key loading
+* Remove unsafe import_foreign_keystore_from_filesystem(), replaced by import from keystore tree
+* Update keystore import/export methods so that they include new fields like "keystore_creation_datetime"
 
 
 Version 0.8

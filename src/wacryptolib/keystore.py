@@ -750,23 +750,6 @@ class FilesystemKeystorePool(
 
         return metadata_mapper
 
-    def import_foreign_keystore_from_filesystem(self, keystore_dir: Path):  # FIXME delete ?
-        """
-        Create a local import of a remote key storage folder (which must have a proper metadata file).
-
-        Raises KeystoreAlreadyExists if this key storage was already imported.
-        """
-        assert keystore_dir.exists(), keystore_dir
-
-        metadata = load_keystore_metadata(keystore_dir)
-        keystore_uid = metadata["keystore_uid"]
-
-        self.ensure_foreign_keystore_does_not_exist(keystore_uid)
-
-        foreign_keystore_dir = self._get_foreign_keystore_dir(keystore_uid=keystore_uid)
-        safe_copy_directory(keystore_dir, foreign_keystore_dir)  # Must not fail, due to previous checks
-        assert foreign_keystore_dir.exists()
-
     def export_foreign_keystore_to_keystore_tree(self, keystore_uid, include_private_keys=True):
         """
         Exports data tree from the keystore targeted by keystore_uid.

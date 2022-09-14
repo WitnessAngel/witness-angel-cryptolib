@@ -56,8 +56,8 @@ def _initialize_authenticator_metadata(authenticator_dir: Path, keystore_owner: 
         "keystore_uid": generate_uuid0(),
         "keystore_owner": keystore_owner,
         "keystore_passphrase_hint": keystore_passphrase_hint,
-        "keystore_secret": secrets.token_urlsafe(64),
-        "keystore_creation_datetime": get_utc_now_date(),
+        "keystore_secret": secrets.token_urlsafe(64),  # Recent field
+        "keystore_creation_datetime": get_utc_now_date(),  # Recent field
     }
     validate_keystore_metadata(metadata)  # Ensure no weird metadata is added!
     dump_to_json_file(metadata_file, metadata)

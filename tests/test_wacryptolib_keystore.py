@@ -2,7 +2,7 @@ import random
 import secrets
 import shutil
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import ANY
 from uuid import UUID
@@ -30,14 +30,14 @@ from wacryptolib.keystore import (
     ReadonlyFilesystemKeystore,
     load_keystore_metadata,
     KEYSTORE_FORMAT,
-    InMemoryKeystorePool,
+    InMemoryKeystorePool, _get_keystore_metadata_file_path,
 )
 from wacryptolib.scaffolding import (
     check_keystore_free_keys_concurrency,
     check_keystore_basic_get_set_api,
     check_keystore_free_keys_api,
 )
-from wacryptolib.utilities import generate_uuid0
+from wacryptolib.utilities import generate_uuid0, get_utc_now_date, dump_to_json_file
 
 
 def test_keystore_basic_get_set_api(tmp_path):
@@ -248,7 +248,15 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
 
     remote_keystore_dir = authdevice["authenticator_dir"]
 
-    initialize_authenticator(remote_keystore_dir, keystore_owner="Jean-Jâcques", keystore_passphrase_hint="my-hint")
+    metadata = initialize_authenticator(remote_keystore_dir, keystore_owner="Jean-Jâcques", keystore_passphrase_hint="my-hint")
+
+    extra_fields_schema = {"keystore_creation_datetime": ANY}
+    use_legacy_format = random_bool()
+    if use_legacy_format:
+        del metadata["keystore_creation_datetime"]
+        metadata_file = _get_keystore_metadata_file_path(authdevice["authenticator_dir"])
+        dump_to_json_file(metadata_file, metadata)
+        extra_fields_schema = {}
 
     remote_keystore = FilesystemKeystore(remote_keystore_dir)
 
@@ -268,9 +276,10 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
         "keystore_secret": ANY,
         "keystore_type": "authenticator",
         "keystore_uid": ANY,
-        "keystore_creation_datetime": ANY,
+        **extra_fields_schema
     }
-    assert isinstance(keystore_tree["keystore_creation_datetime"], datetime)
+    if "keystore_creation_datetime" in extra_fields_schema:
+        assert isinstance(keystore_tree["keystore_creation_datetime"], datetime)
 
     keystore_tree = remote_keystore.export_to_keystore_tree(include_private_keys=False)
     assert keystore_tree == {
@@ -281,9 +290,10 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
         "keystore_secret": ANY,
         "keystore_type": "authenticator",
         "keystore_uid": ANY,
-        "keystore_creation_datetime": ANY,
+        **extra_fields_schema
     }
-    assert isinstance(keystore_tree["keystore_creation_datetime"], datetime)
+    if "keystore_creation_datetime" in extra_fields_schema:
+        assert isinstance(keystore_tree["keystore_creation_datetime"], datetime)
 
     with pytest.raises(SchemaValidationError):
         # FIXME - set_keypair() should actually validate data too
@@ -321,13 +331,28 @@ def test_keystore_import_from_keystore_tree(tmp_path: Path):
     ]
 
     keystore_tree = {
+        # These are MANDATORY FIELDS
         "keystore_type": "authenticator",
         "keystore_format": KEYSTORE_FORMAT,
         "keystore_owner": "Jacques",
         "keystore_uid": keystore_uid,
-        "keystore_secret": keystore_secret,
         "keypairs": keypairs1,
     }
+
+    use_keystore_secret = random_bool()
+    if use_keystore_secret:
+        keystore_tree["keystore_secret"] = keystore_secret
+
+    use_keystore_creation_datetime = random_bool()
+    if use_keystore_creation_datetime:
+        keystore_tree["keystore_creation_datetime"] = get_utc_now_date()
+
+    use_keystore_passphrase_hint = random_bool()
+    if use_keystore_passphrase_hint:
+        keystore_tree["keystore_passphrase_hint"] = secrets.token_urlsafe(20)
+
+    keystore_tree_metadata = keystore_tree.copy()
+    del keystore_tree_metadata["keypairs"]
 
     # Initial import
 
@@ -335,8 +360,22 @@ def test_keystore_import_from_keystore_tree(tmp_path: Path):
     assert not updated
 
     metadata = load_keystore_metadata(authdevice_path)
-    assert metadata["keystore_uid"] == keystore_uid
-    assert metadata["keystore_owner"] == "Jacques"
+
+    def _check_loaded_metadata_coherence(loaded_metadata):
+        # Quick checks
+        assert loaded_metadata["keystore_uid"] == keystore_uid
+        assert loaded_metadata["keystore_owner"] == "Jacques"
+
+        assert len(loaded_metadata) == len(keystore_tree_metadata)
+
+        for (key, value) in keystore_tree_metadata.items():
+            if key == "keystore_creation_datetime":
+                # Special case: precision trouble because Bson only goes down to milliseconds
+                assert (value - loaded_metadata[key]) <= timedelta(milliseconds=1)
+            else:
+                assert loaded_metadata[key] == value
+
+    _check_loaded_metadata_coherence(metadata)
 
     assert filesystem_keystore.list_keypair_identifiers() == [
         dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=False)
@@ -349,13 +388,14 @@ def test_keystore_import_from_keystore_tree(tmp_path: Path):
 
     for i in range(2):  # IDEMPOTENT
 
+        keystore_tree["keystore_owner"] += "_corrupted"  # Corrupted, but not taken into account on update!
+
         keystore_tree["keypairs"] = keypairs2
         updated = filesystem_keystore.import_from_keystore_tree(keystore_tree)
         assert updated
 
         metadata = load_keystore_metadata(authdevice_path)
-        assert metadata["keystore_uid"] == keystore_uid
-        assert metadata["keystore_owner"] == "Jacques"
+        _check_loaded_metadata_coherence(metadata)
 
         expected_keypair_identifiers = [
             dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=True),
@@ -371,7 +411,19 @@ def test_keystore_import_from_keystore_tree(tmp_path: Path):
     with pytest.raises(ValidationError, match="Mismatch"):
         filesystem_keystore.import_from_keystore_tree(keystore_tree)
 
-    # Corrupt the keystore_tree
+    # Corrupt the keystore_tree with extra key
+    keystore_tree["keystore_stuff"] = 33
+    with pytest.raises(SchemaValidationError):
+        filesystem_keystore.import_from_keystore_tree(keystore_tree)
+    del keystore_tree["keystore_stuff"]
+
+    # Corrupt the keystore_tree with bad content
+    keystore_tree["keystore_owner"] = 2242
+    with pytest.raises(SchemaValidationError):
+        filesystem_keystore.import_from_keystore_tree(keystore_tree)
+    keystore_tree["keystore_owner"] = "Jacques"
+
+    # Corrupt the keystore_tree with missing key
     del keystore_tree["keystore_owner"]
     with pytest.raises(SchemaValidationError):
         filesystem_keystore.import_from_keystore_tree(keystore_tree)

@@ -586,21 +586,17 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
 
         keystore_tree = metadata.copy()
         keystore_tree["keypairs"] = keypairs
-        validate_keystore_tree(keystore_tree)  # Safety
+        validate_keystore_tree(keystore_tree)  # Extra safety
         return keystore_tree
 
     def _initialize_metadata_from_keystore_tree(self, keystore_tree: dict):
         metadata_file = _get_keystore_metadata_file_path(self._keys_dir)
         metadata_file.parent.mkdir(parents=True, exist_ok=True)  # FIXME Create a temporary folder for ATOMIC copy
 
-        metadata = {
-            "keystore_type": "authenticator",
-            "keystore_format": KEYSTORE_FORMAT,
-            "keystore_uid": keystore_tree["keystore_uid"],
-            "keystore_owner": keystore_tree["keystore_owner"],
-            "keystore_secret": secrets.token_urlsafe(64),
-        }
-        validate_keystore_metadata(metadata)  # Safety
+        metadata = keystore_tree.copy()
+        del metadata["keypairs"]  # All other fields should be metadata
+
+        validate_keystore_metadata(metadata)  # Extra safety
         dump_to_json_file(metadata_file, metadata)
         return metadata
 
@@ -608,7 +604,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         """
         Import keystore metadata and keys (public and, if included, private) fom a data tree.
 
-        If keystore already exists, it is completed with new keys.
+        If keystore already exists, it is completed with new keys, but metadata are untouched.
 
         Returns True if and only if keystore was updated instead of created.
         """

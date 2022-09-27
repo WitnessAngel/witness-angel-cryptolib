@@ -473,6 +473,10 @@ def test_get_trustee_id():
         get_trustee_id({"trustee_type": "jsonrpc_api", "jsonrpc_url": "https://my.api.com/jsonrpc/"})
         == "jsonrpc_api@https://my.api.com/jsonrpc/"
     )
+    with pytest.raises(ValueError):
+        get_trustee_id({"trustee_type": "whatever"})
+    with pytest.raises(ValueError):
+        get_trustee_id({"aaa": "bbb"})
 
 
 @pytest.mark.parametrize(
@@ -812,7 +816,7 @@ def _check_error_entry(
     assert real_occurrence_count == occurrence_count
 
 
-def test_cryptainer_decryption_with_nested_symmetric_algo_failure(tmp_path):
+def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
     keychain_uid = generate_uuid0()
 
     cryptoconf = dict(
@@ -838,20 +842,21 @@ def test_cryptainer_decryption_with_nested_symmetric_algo_failure(tmp_path):
 
     check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
 
-    # Ecrypt payload into cryptainer
+    # Encrypt payload into cryptainer
     payload = b"sdfsfsdfsdf"
 
-    cryptainer = encrypt_payload_into_cryptainer(
+    cryptainer_original = encrypt_payload_into_cryptainer(
         payload=payload,
         cryptoconf=cryptoconf,
         keychain_uid=keychain_uid,
         cryptainer_metadata=None,
     )
-    pprint(cryptainer)
+    pprint(cryptainer_original)
 
-    # Decrypt cryptainer with passphrase
+    cryptainer = copy.deepcopy(cryptainer_original)
+
     decrypted, error_report = decrypt_payload_from_cryptainer(cryptainer)
-    assert decrypted == payload
+    assert decrypted == payload  # SUCCESS
 
     # Corrupt the integrity tag of the ciphertext
     key_ciphertext_bytes = cryptainer["payload_cipher_layers"][0]["key_ciphertext"]
@@ -866,9 +871,30 @@ def test_cryptainer_decryption_with_nested_symmetric_algo_failure(tmp_path):
         error_list=error_report,
         error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryprtionErrorCriticity.ERROR,
-        error_msg_match="decrypting key with symmetric AES_EAX",
+        error_msg_match="decrypting key with symmetric algorithm AES_EAX",
         exception_class=DecryptionIntegrityError,
     )
+    assert len(error_report) == 2
+
+    # ---
+
+    cryptainer = copy.deepcopy(cryptainer_original)
+    key_ciphertext_bytes = cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_ciphertext"]
+    key_ciphertext_dict = load_from_json_bytes(key_ciphertext_bytes)
+    key_ciphertext_dict["ciphertext_chunks"][0] += b"xxx"
+    cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_dict)
+
+    decrypted, error_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert not decrypted
+
+    _check_error_entry(
+        error_list=error_report,
+        error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+        error_criticity=DecryprtionErrorCriticity.ERROR,
+        error_msg_match="decrypting key with asymmetric algorithm",
+        exception_class=DecryptionError,
+    )
+    assert len(error_report) == 2
 
 
 # Cryptoconf with 1 payload_cipher_layer containing 1 key_cipher_layer managed by an authenticator
@@ -1048,7 +1074,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
             error_list=error_report,
             error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
             error_criticity=DecryprtionErrorCriticity.WARNING,
-            error_msg_match="Trustee private key not found",
+            error_msg_match="Private key not found",
             exception_class=KeyDoesNotExist,
         )  # TRUSTEE KEYPAIR
         _check_error_entry(

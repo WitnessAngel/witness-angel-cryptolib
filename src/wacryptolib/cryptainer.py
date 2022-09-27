@@ -1011,7 +1011,7 @@ class CryptainerDecryptor(CryptainerBase):
                 error = self._build_error_report_message(
                     error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
                     error_criticity=DecryprtionErrorCriticity.ERROR,
-                    error_message="Failed symmetric decryption (%s)" % payload_cipher_algo,
+                    error_message="Failed symmetric decryption (%s)" % payload_cipher_algo,  # FIXME change this message!!
                     error_exception=None,
                 )
                 errors.append(error)
@@ -1138,18 +1138,20 @@ class CryptainerDecryptor(CryptainerBase):
             )  # Recursive structure
             errors.extend(multiple_layer_decryption_errors)
 
-            sub_symkey_dict = load_from_json_bytes(sub_symkey_bytes)
-            try:
-                key_bytes = decrypt_bytestring(key_cipherdict, cipher_algo=key_cipher_algo, key_dict=sub_symkey_dict)
-            except DecryptionError as exc:
-                error = self._build_error_report_message(
-                    error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
-                    error_message="Error decrypting key with symmetric %s algorithm" % key_cipher_algo,
-                    error_criticity=DecryprtionErrorCriticity.ERROR,
-                    error_exception=exc,
-                )
-                errors.append(error)
-                key_bytes = None  # Important
+            key_bytes = None  # Important
+
+            if sub_symkey_bytes:
+                sub_symkey_dict = load_from_json_bytes(sub_symkey_bytes)
+                try:
+                    key_bytes = decrypt_bytestring(key_cipherdict, cipher_algo=key_cipher_algo, key_dict=sub_symkey_dict)
+                except DecryptionError as exc:
+                    error = self._build_error_report_message(
+                        error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
+                        error_message="Error decrypting key with symmetric algorithm %s algorithm" % key_cipher_algo,
+                        error_criticity=DecryprtionErrorCriticity.ERROR,
+                        error_exception=exc,
+                    )
+                    errors.append(error)
 
         else:  # Using asymmetric algorithm
 
@@ -1273,7 +1275,7 @@ class CryptainerDecryptor(CryptainerBase):
             except KeyDoesNotExist as exc:
                 error = self._build_error_report_message(
                     error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
-                    error_message="Trustee private key not found (%s/%s)" % (keychain_uid, cipher_algo),
+                    error_message="Private key not found (%s/%s)" % (keychain_uid, cipher_algo),
                     error_exception=exc,
                 )
                 errors.append(error)
@@ -1289,7 +1291,8 @@ class CryptainerDecryptor(CryptainerBase):
             except DecryptionError as exc:
                 error = self._build_error_report_message(
                     error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
-                    error_message="Failed trustee decryption of type %s (%s)" % (cipher_algo, exc),
+                    error_message="Failed decrypting key with asymmetric algorithm %s (%s)" % (cipher_algo, exc),
+                    error_criticity=DecryprtionErrorCriticity.ERROR,
                     error_exception=exc,
                 )
                 errors.append(error)

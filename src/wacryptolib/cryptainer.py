@@ -102,7 +102,7 @@ class CRYPTAINER_STATES:
 
 def get_trustee_id(trustee_conf: dict) -> str:
     """Build opaque identifier unique for a given trustee."""
-    trustee_type = trustee_conf["trustee_type"]
+    trustee_type = trustee_conf.get("trustee_type", None)
 
     if trustee_type == CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE:
         trustee_specifier = None  # Nothing to add for local keyfactory

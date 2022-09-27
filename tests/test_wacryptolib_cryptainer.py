@@ -1148,9 +1148,14 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
                             dict(
                                 key_cipher_layers=[
                                     dict(
-                                        key_cipher_algo="RSA_OAEP",
-                                        keychain_uid=keychain_uid_trustee,
-                                        key_cipher_trustee=shard_trustee,
+                                        key_cipher_algo="CHACHA20_POLY1305",  # Nested symmetric cipher
+                                        key_cipher_layers=[
+                                            dict(
+                                                key_cipher_algo="RSA_OAEP",
+                                                keychain_uid=keychain_uid_trustee,
+                                                key_cipher_trustee=shard_trustee,
+                                            )
+                                        ]
                                     )
                                 ]
                             )

@@ -724,6 +724,13 @@ def _build_fake_gateway_revelation_request_list(revelation_requests_info):
     return revelation_requests_successful, errors
 
 
+def _patched_gateway_revelation_request_list(return_value=None):
+    return mock.patch(
+            "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list",
+            return_value=return_value
+        )
+
+
 def _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(keystore_uid, keychain_uid, passphrase):
     # Create fake keystore in foreign key
     keystore_pool = InMemoryKeystorePool()
@@ -982,10 +989,8 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]  # FIXME what's this url ?
 
     # Remote revelation request return right symkey_revelation_response_data
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    with _patched_gateway_revelation_request_list(
+            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1001,10 +1006,8 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     wrong_response_keychain_uid = generate_uuid0()
     fake_revelation_request_info[0]["response_keychain_uid"] = wrong_response_keychain_uid
 
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        patched_function.return_value = _build_fake_gateway_revelation_request_list(fake_revelation_request_info)
+    with _patched_gateway_revelation_request_list(
+            return_value = _build_fake_gateway_revelation_request_list(fake_revelation_request_info)):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1026,16 +1029,15 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
         assert len(error_report) == 1
 
     # Wrong symkey revelation response data
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        gateway_revelation_request_list, errors = _build_fake_gateway_revelation_request_list(revelation_requests_info)
-        # Corrupted symkey
-        gateway_revelation_request_list[0]["symkey_decryption_requests"][0][
+    gateway_revelation_request_list, errors = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    # Corrupted symkey
+    gateway_revelation_request_list[0]["symkey_decryption_requests"][0][
             "symkey_decryption_response_data"
         ] = b'{"ciphertext_chunks": [{"$binary": {"base64": "FImgSTpvmdIGPjml5YzI1qtOrN/I34DkG1PTNWqnqg==", "subType": "00"}}]}'
 
-        patched_function.return_value = gateway_revelation_request_list, errors
+    with _patched_gateway_revelation_request_list(
+            return_value = (gateway_revelation_request_list, errors)):
+
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1058,10 +1060,8 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     response_keychain_uid = revelation_requests_info[0]["response_keychain_uid"]
     keystore_pool1._register_fake_imported_storage_uids(storage_uids=[keystore_uid])
 
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    with _patched_gateway_revelation_request_list(
+            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool1,
@@ -1089,10 +1089,8 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
 
     # Keystore pool empty( without trustee keystore in imported keystore and response key in local keystore)
     keystore_pool2 = InMemoryKeystorePool()
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    with _patched_gateway_revelation_request_list(
+            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool2,
@@ -1216,10 +1214,8 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
 
     # Remote revelation request return right symkey_revelation_response_data
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    with _patched_gateway_revelation_request_list(
+            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1236,10 +1232,8 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     response_keychain_uid = revelation_requests_info[0]["response_keychain_uid"]
     generate_keypair_for_storage(key_algo="RSA_OAEP", keystore=local_keystore1, keychain_uid=response_keychain_uid)
 
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    with _patched_gateway_revelation_request_list(
+            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1252,15 +1246,13 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
         assert error_report == []  # Using remote_revelation_request so no trustee needed
 
     # Trustee and response keypair does not exist in storage
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        gateway_revelation_request_list, errors = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    gateway_revelation_request_list, errors = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    # Corrupted response keychain uid
+    gateway_revelation_request_list[0]["revelation_response_keychain_uid"] = generate_uuid0()
 
-        # Corrupted response keychain uid
-        gateway_revelation_request_list[0]["revelation_response_keychain_uid"] = generate_uuid0()
+    with _patched_gateway_revelation_request_list(
+            return_value = (gateway_revelation_request_list, errors)):
 
-        patched_function.return_value = gateway_revelation_request_list, errors
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool1,
@@ -1459,10 +1451,8 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
     gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]  # FIXME what's this url ?
 
     # No remote decryption request for this container and requestor
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        patched_function.return_value = [], []
+    with _patched_gateway_revelation_request_list(
+            return_value = ([], [])):
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1474,14 +1464,14 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         assert error_report == []  # All passphrases are provided
 
     # Remote decryption request for this container and requestor is rejected
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        gateway_revelation_request_list, gateway_errors = _build_fake_gateway_revelation_request_list(
-            revelation_requests_info
-        )
-        patched_function.return_value = gateway_revelation_request_list, gateway_errors
-        gateway_revelation_request_list[0]["revelation_request_status"] = "REJECTED"
+    gateway_revelation_request_list, gateway_errors = _build_fake_gateway_revelation_request_list(
+                 revelation_requests_info
+             )
+    gateway_revelation_request_list[0]["revelation_request_status"] = "REJECTED"
+
+    with _patched_gateway_revelation_request_list(
+            return_value = (gateway_revelation_request_list, gateway_errors)):
+
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1493,14 +1483,14 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         assert error_report == []  # All passphrases are provided
 
     # No remote decryption request exist for this container anf requestor
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        gateway_revelation_request_list, gateway_errors = _build_fake_gateway_revelation_request_list(
-            revelation_requests_info
-        )
-        patched_function.return_value = gateway_revelation_request_list, gateway_errors
-        gateway_revelation_request_list[0]["symkey_decryption_requests"][0]["cryptainer_uid"] = generate_uuid0()
+    gateway_revelation_request_list, gateway_errors = _build_fake_gateway_revelation_request_list(
+        revelation_requests_info
+    )
+    gateway_revelation_request_list[0]["symkey_decryption_requests"][0]["cryptainer_uid"] = generate_uuid0()
+
+    with _patched_gateway_revelation_request_list(
+            return_value = (gateway_revelation_request_list, gateway_errors)):
+
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1512,10 +1502,9 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         assert error_report == []  # All passphrases are provided
 
     # Remote revelation request with two trustee (1,3) and local trustee
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    with _patched_gateway_revelation_request_list(
+            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
+
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1527,10 +1516,9 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         assert error_report == []  # Trustee 1, 3 decrypted from server, trustee2 and localkey have passphrases
 
     # Remote revelation request with two trustee (1,3) and without any passphrase(decrypted_shards below threshold)
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    with _patched_gateway_revelation_request_list(
+        return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
+
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1643,10 +1631,9 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
     response_keypair["public_key"] = b"wrongsignaturepublickey"
 
     gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
-    with mock.patch(
-        "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list"
-    ) as patched_function:
-        patched_function.return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    with _patched_gateway_revelation_request_list(
+            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
+
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,

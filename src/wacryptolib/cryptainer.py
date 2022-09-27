@@ -1550,7 +1550,7 @@ def extract_metadata_from_cryptainer(cryptainer: dict) -> Optional[dict]:
     return cryptainer_metadata
 
 
-def get_cryptoconf_summary(conf_or_cryptainer):
+def get_cryptoconf_summary(cryptoconf_or_cryptainer):
     """
     Returns a string summary of the layers of encryption/signature of a cryptainer or a configuration tree.
     """
@@ -1591,7 +1591,7 @@ def get_cryptoconf_summary(conf_or_cryptainer):
             trustee_id = _get_trustee_displayable_identifier(key_cipher_trustee)
             text_lines.append(current_level * indent + "%s via trustee '%s'" % (key_cipher_layer["key_cipher_algo"], trustee_id))
 
-    for idx, payload_cipher_layer in enumerate(conf_or_cryptainer["payload_cipher_layers"], start=1):
+    for idx, payload_cipher_layer in enumerate(cryptoconf_or_cryptainer["payload_cipher_layers"], start=1):
         text_lines.append("Data encryption layer %d: %s" % (idx, payload_cipher_layer["payload_cipher_algo"]))
         text_lines.append(indent + "Key encryption layers:")
         for key_cipher_layer in payload_cipher_layer["key_cipher_layers"]:

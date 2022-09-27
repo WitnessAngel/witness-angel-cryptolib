@@ -6,7 +6,7 @@ import sys
 from click.testing import CliRunner
 
 import wacryptolib
-from wacryptolib.__main__ import cli
+from wacryptolib.__main__ import wacryptolib_cli as cli
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER
 from wacryptolib.utilities import dump_to_json_file
 
@@ -27,7 +27,7 @@ def test_cli_help_texts():
     assert "original media file" in result.output
 
 
-def test_cli_encryption_and_decryption(tmp_path):
+def test_cli_encryption_decryption_and_summary(tmp_path):
     runner = CliRunner()
 
     data_file = "test_file.txt"
@@ -93,6 +93,13 @@ def test_cli_encryption_and_decryption(tmp_path):
 
             result = runner.invoke(
                 cli,
+                base_args + ["summarize", "-i", cryptoconf_file],  # Wrong JSON content
+                catch_exceptions=True,
+            )
+            assert result.exit_code == 1
+
+            result = runner.invoke(
+                cli,
                 base_args + ["encrypt", "-i", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file],
                 catch_exceptions=True,
             )
@@ -114,6 +121,15 @@ def test_cli_encryption_and_decryption(tmp_path):
 
             result = runner.invoke(
                 cli,
+                base_args + ["summarize", "-i", cryptoconf_file],
+                catch_exceptions=False,
+            )
+            assert result.exit_code == 0
+            assert b"CHACHA20_POLY1305" in result.stdout_bytes
+            assert b"RSA_OAEP" in result.stdout_bytes
+
+            result = runner.invoke(
+                cli,
                 base_args + ["encrypt", "-i", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file],
                 catch_exceptions=False,
             )
@@ -123,6 +139,15 @@ def test_cli_encryption_and_decryption(tmp_path):
             with open("specialconf.crypt", "r") as input_file:
                 data = input_file.read()
                 assert "CHACHA20_POLY1305" in data
+
+            result = runner.invoke(
+                cli,
+                base_args + ["summarize", "-i", "specialconf.crypt"],  # Works on CRYPTAINERS too
+                catch_exceptions=False,
+            )
+            assert result.exit_code == 0
+            assert b"CHACHA20_POLY1305" in result.stdout_bytes
+            assert b"RSA_OAEP" in result.stdout_bytes
 
             result = runner.invoke(
                 cli,

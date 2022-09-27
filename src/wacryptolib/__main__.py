@@ -11,7 +11,7 @@ from wacryptolib.cryptainer import (
     DECRYPTED_FILE_SUFFIX,
     SHARED_SECRET_ALGO_MARKER,
     check_cryptoconf_sanity,
-    check_cryptainer_sanity,
+    check_cryptainer_sanity, get_cryptoconf_summary,
 )
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
@@ -75,7 +75,7 @@ EXAMPLE_CRYPTOCONF = dict(
     ),
 )
 @click.pass_context
-def cli(ctx, keystore_pool) -> object:
+def wacryptolib_cli(ctx, keystore_pool) -> object:
     ctx.ensure_object(dict)
     ctx.obj["keystore_pool"] = keystore_pool
 
@@ -96,7 +96,7 @@ def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):
     return cryptainer
 
 
-@cli.command()
+@wacryptolib_cli.command()
 @click.option("-i", "--input-medium", type=click.File("rb"), required=True)
 @click.option("-o", "--output-cryptainer", type=click.File("wb"))
 @click.option("-c", "--cryptoconf", default=None, help="Json crypotoconf file", type=click.File("rb"))
@@ -105,7 +105,8 @@ def encrypt(ctx, input_medium, output_cryptainer, cryptoconf):
     """Turn a media file into a secure cryptainer."""
     if not output_cryptainer:
         output_cryptainer = LazyFile(input_medium.name + CRYPTAINER_SUFFIX, "wb")
-    click.echo("In encrypt: %s" % str(locals()))
+
+    #click.echo("In encrypt: %s" % str(locals()))
 
     keystore_pool = _get_keystore_pool(ctx)
     cryptainer = _do_encrypt(payload=input_medium.read(), cryptoconf_fileobj=cryptoconf, keystore_pool=keystore_pool)
@@ -120,11 +121,11 @@ def encrypt(ctx, input_medium, output_cryptainer, cryptoconf):
 
 def _do_decrypt(cryptainer, keystore_pool):
     check_cryptainer_sanity(cryptainer)
-    payload = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
-    return payload
+    result = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+    return result
 
 
-@cli.command()
+@wacryptolib_cli.command()
 @click.option("-i", "--input-cryptainer", type=click.File("rb"), required=True)
 @click.option("-o", "--output-medium", type=click.File("wb"))
 @click.pass_context
@@ -137,7 +138,7 @@ def decrypt(ctx, input_cryptainer, output_medium):
             output_medium_name = input_cryptainer.name + DECRYPTED_FILE_SUFFIX
         output_medium = LazyFile(output_medium_name, "wb")
 
-    click.echo("In decrypt: %s" % str(locals()))
+    #click.echo("In decrypt: %s" % str(locals()))
 
     cryptainer = load_from_json_bytes(input_cryptainer.read())
 
@@ -145,7 +146,7 @@ def decrypt(ctx, input_cryptainer, output_medium):
     medium_content, errors = _do_decrypt(cryptainer=cryptainer, keystore_pool=keystore_pool)
 
     if errors:  # Fixme improve that
-        print("Errors occurred:", errors)
+        print("Errors occured:", errors)
 
     if not medium_content:
         raise RuntimeError("Content could not be decrypted")
@@ -156,6 +157,20 @@ def decrypt(ctx, input_cryptainer, output_medium):
     click.echo("Decryption finished to file '%s'" % output_medium.name)
 
 
+@wacryptolib_cli.command()
+@click.option("-i", "--input-file", type=click.File("rb"), required=True)
+@click.pass_context
+def summarize(ctx, input_file):
+    """Display a summary of a cryptoconf (or cryptainer) structure."""
+
+    #click.echo("In display_cryptoconf_summary: %s" % str(locals()))
+
+    cryptoconf = load_from_json_bytes(input_file.read())
+
+    text_summary = get_cryptoconf_summary(cryptoconf)
+    print(text_summary)
+
+
 if __name__ == "__main__":
     fake_prog_name = "python -m wacryptolib"  # Else __init__.py is used in help text...
-    cli(prog_name=fake_prog_name)
+    wacryptolib_cli(prog_name=fake_prog_name)

@@ -230,5 +230,5 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
 #: These values can be used as 'key_algo' for asymmetric key generation.
 SUPPORTED_ASYMMETRIC_KEY_ALGOS = sorted(ASYMMETRIC_KEY_ALGOS_REGISTRY.keys())
 
-#: These values can be used as 'cipher_algo' for symmetric key generation.
+#: These values can be used as 'key_algo' for symmetric key generation.
 SUPPORTED_SYMMETRIC_KEY_ALGOS = sorted(SYMMETRIC_KEY_ALGOS_REGISTRY.keys())

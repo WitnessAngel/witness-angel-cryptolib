@@ -21,7 +21,7 @@ from wacryptolib.cipher import (
     decrypt_bytestring,
     PayloadEncryptionPipeline,
     STREAMABLE_CIPHER_ALGOS,
-    SUPPORTED_CIPHER_ALGOS, CIPHER_ALGOS_REGISTRY,
+    SUPPORTED_CIPHER_ALGOS,
 )
 from wacryptolib.exceptions import (
     DecryptionError,
@@ -34,7 +34,7 @@ from wacryptolib.exceptions import (
 )
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, ASYMMETRIC_KEY_ALGOS_REGISTRY, \
-    SYMMETRIC_KEY_ALGOS_REGISTRY
+    SYMMETRIC_KEY_ALGOS_REGISTRY, SUPPORTED_SYMMETRIC_KEY_ALGOS, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase
 from wacryptolib.shared_secret import split_secret_into_shards, recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
@@ -138,9 +138,11 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
             key_algo_encryption = key_cipher_layer["key_cipher_algo"]
 
             if key_algo_encryption == SHARED_SECRET_ALGO_MARKER:
-                trustees = key_cipher_layer["key_shared_secret_shards"]
-                for trustee in trustees:
-                    _grab_key_cipher_layers_dependencies(trustee["key_cipher_layers"])  # Recursive call
+                shard_confs = key_cipher_layer["key_shared_secret_shards"]
+                for shard_conf in shard_confs:
+                    _grab_key_cipher_layers_dependencies(shard_conf["key_cipher_layers"])  # Recursive call
+            elif key_algo_encryption in SUPPORTED_SYMMETRIC_KEY_ALGOS:
+                _grab_key_cipher_layers_dependencies(key_cipher_layer["key_cipher_layers"])  # Recursive call
             else:
                 keychain_uid_for_encryption = key_cipher_layer.get("keychain_uid") or keychain_uid
                 trustee_conf = key_cipher_layer["key_cipher_trustee"]
@@ -172,7 +174,7 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
     return trustee_dependencies
 
 
-def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TODO Upadate this name
+def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TODO Update this name
     """Analyse a cryptainer and returns the symkeys/shards (and their corresponding trustee) needed for decryption.
 
     :return: dict with a tuple of the cipher key and the symkey/shard by trustee id.
@@ -184,7 +186,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
         cryptainer_uid,
         cryptainer_metadata,
         key_cipher_trustee,
-        shard_ciphertext,
+        key_ciphertext_bytes,
         keychain_uid_for_encryption,
         key_algo_for_encryption,
     ):
@@ -194,7 +196,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
             "cryptainer_name": str(cryptainer_name),  # No Pathlib object
             "cryptainer_uid": cryptainer_uid,
             "cryptainer_metadata": cryptainer_metadata,
-            "symkey_decryption_request_data": shard_ciphertext,
+            "symkey_decryption_request_data": key_ciphertext_bytes,
             "keychain_uid": keychain_uid_for_encryption,
             "key_algo": key_algo_for_encryption,
         }
@@ -204,34 +206,42 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
         _decryptable_symkeys.append(symkey_decryption_request)
 
     def _gather_decryptable_symkeys(
-        cryptainer_name, cryptainer_uid, cryptainer_metadata, key_cipher_layers: list, key_ciphertext_shards
+        cryptainer_name, cryptainer_uid, cryptainer_metadata, key_cipher_layers: list, key_ciphertext_bytes
     ):
 
         # TODO test with cryptoconf where symkey is protected by 2 authenticators one of the other
         last_key_cipher_layer = key_cipher_layers[-1]  # FIXME BIG PROBLEM - why only the last layer ????
+        last_key_cipher_algo = last_key_cipher_layer["key_cipher_algo"]
 
-        if last_key_cipher_layer["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER:
+        if last_key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
             key_shared_secret_shards = last_key_cipher_layer["key_shared_secret_shards"]
-            key_cipherdict = load_from_json_bytes(key_ciphertext_shards)
+            key_cipherdict = load_from_json_bytes(key_ciphertext_bytes)
             shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
 
-            for shard_ciphertext, trustee in zip(shard_ciphertexts, key_shared_secret_shards):
+            for shard_ciphertext, shard_conf in zip(shard_ciphertexts, key_shared_secret_shards):
                 _gather_decryptable_symkeys(
-                    cryptainer_name, cryptainer_uid, cryptainer_metadata, trustee["key_cipher_layers"], shard_ciphertext
+                    cryptainer_name, cryptainer_uid, cryptainer_metadata, shard_conf["key_cipher_layers"], shard_ciphertext
                 )
+
+        elif last_key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
+            subkey_ciphertext_bytes = last_key_cipher_layer["key_ciphertext"]
+            _gather_decryptable_symkeys(
+                cryptainer_name, cryptainer_uid, cryptainer_metadata, last_key_cipher_layer["key_cipher_layers"], subkey_ciphertext_bytes
+            )
+
         else:
+            assert last_key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS, last_key_cipher_algo
 
             keychain_uid_for_encryption = last_key_cipher_layer.get("keychain_uid") or keychain_uid
             key_algo_for_encryption = last_key_cipher_layer["key_cipher_algo"]
             key_cipher_trustee = last_key_cipher_layer["key_cipher_trustee"]
-            shard_ciphertext = key_ciphertext_shards
 
             _add_decryptable_symkeys_for_trustee(
                 cryptainer_name=cryptainer_name,
                 cryptainer_uid=cryptainer_uid,
                 cryptainer_metadata=cryptainer_metadata,
                 key_cipher_trustee=key_cipher_trustee,
-                shard_ciphertext=shard_ciphertext,
+                key_ciphertext_bytes=key_ciphertext_bytes,
                 keychain_uid_for_encryption=keychain_uid_for_encryption,
                 key_algo_for_encryption=key_algo_for_encryption,
             )
@@ -242,15 +252,14 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
         cryptainer_metadata = cryptainer["cryptainer_metadata"]
 
         for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
-            key_ciphertext_shards = payload_cipher_layer.get("key_ciphertext")
-            # shard_ciphertexts = key_ciphertext_shards["ciphertext_chunks"]
+            key_ciphertext_bytes = payload_cipher_layer.get("key_ciphertext")
 
             _gather_decryptable_symkeys(
                 cryptainer_name=cryptainer_name,
                 cryptainer_uid=cryptainer_uid,
                 cryptainer_metadata=cryptainer_metadata,
                 key_cipher_layers=payload_cipher_layer["key_cipher_layers"],
-                key_ciphertext_shards=key_ciphertext_shards,
+                key_ciphertext_bytes=key_ciphertext_bytes,
             )
 
     return decryptable_symkeys_per_trustee
@@ -481,6 +490,7 @@ class CryptainerEncryptor(CryptainerBase):
                 key_cipher_layers=key_cipher_layers,
                 cryptainer_metadata=cryptainer_metadata,
             )
+            assert isinstance(key_ciphertext, bytes), key_ciphertext
             payload_cipher_layer["key_ciphertext"] = key_ciphertext
 
             payload_cipher_layer_extract = dict(
@@ -510,17 +520,17 @@ class CryptainerEncryptor(CryptainerBase):
         if not key_cipher_layers:
             raise SchemaValidationError("Empty key_cipher_layers list is forbidden in cryptoconf")
 
-        key_ciphertext = key_bytes
+        key_ciphertext_bytes = key_bytes
         for key_cipher_layer in key_cipher_layers:
             key_ciphertext_dict = self._encrypt_key_through_single_layer(
                 keychain_uid=keychain_uid,
-                key_bytes=key_ciphertext,
+                key_bytes=key_ciphertext_bytes,
                 key_cipher_layer=key_cipher_layer,
                 cryptainer_metadata=cryptainer_metadata,
             )
-            key_ciphertext = dump_to_json_bytes(key_ciphertext_dict)  # Thus its remains as bytes all along
+            key_ciphertext_bytes = dump_to_json_bytes(key_ciphertext_dict)  # Thus its remains as bytes all along
 
-        return key_ciphertext
+        return key_ciphertext_bytes
 
     def _encrypt_key_through_single_layer(
         self, keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layer: dict, cryptainer_metadata: Optional[dict]
@@ -572,32 +582,34 @@ class CryptainerEncryptor(CryptainerBase):
                     key_cipher_layers=trustee_conf["key_cipher_layers"],
                     cryptainer_metadata=cryptainer_metadata,
                 )  # Recursive structure
+                assert isinstance(shard_ciphertext, bytes), shard_ciphertext
                 shard_ciphertexts.append(shard_ciphertext)
 
             key_cipherdict = {"shard_ciphertexts": shard_ciphertexts}  # A dict is more future-proof than list
 
-        elif key_cipher_algo in SYMMETRIC_KEY_ALGOS_REGISTRY:
-            assert key_cipher_algo in CIPHER_ALGOS_REGISTRY, key_cipher_algo  # Not a SIGNATURE algo
+        elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
+            assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
 
             logger.debug("Generating symmetric subkey of type %r for key encryption", key_cipher_algo)
             sub_symkey = generate_symkey(cipher_algo=key_cipher_algo)
             sub_symkey_bytes = dump_to_json_bytes(sub_symkey)
 
-            sub_symkey_ciphertext = self._encrypt_key_through_multiple_layers(
+            sub_symkey_ciphertext_bytes = self._encrypt_key_through_multiple_layers(
                 keychain_uid=keychain_uid,
                 key_bytes=sub_symkey_bytes,
                 key_cipher_layers=key_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
             )  # Recursive structure
+            assert isinstance(sub_symkey_ciphertext_bytes, bytes), sub_symkey_ciphertext_bytes
 
-            key_cipher_layer["key_ciphertext"] = sub_symkey_ciphertext
+            key_cipher_layer["key_ciphertext"] = sub_symkey_ciphertext_bytes
 
             key_cipherdict = encrypt_bytestring(key_bytes, cipher_algo=key_cipher_algo, key_dict=sub_symkey)
             # We do not need to separate ciphertext from integrity/authentication data here, since key encryption is atomic
 
         else:  # Using asymmetric algorithm
-            assert key_cipher_algo in ASYMMETRIC_KEY_ALGOS_REGISTRY
-            assert key_cipher_algo in CIPHER_ALGOS_REGISTRY, key_cipher_algo  # Not a SIGNATURE algo
+            assert key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS
+            assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
 
             keychain_uid_for_encryption = key_cipher_layer.get("keychain_uid") or keychain_uid
             key_cipherdict = self._encrypt_key_with_asymmetric_cipher(
@@ -945,7 +957,7 @@ class CryptainerDecryptor(CryptainerBase):
             key_bytes, multiple_layer_decryption_errors = self._decrypt_key_through_multiple_layers(
                 keychain_uid=keychain_uid,
                 key_ciphertext=key_ciphertext,
-                cipher_layers=payload_cipher_layer["key_cipher_layers"],
+                key_cipher_layers=payload_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
                 predecrypted_symmetric_keys=predecrypted_symmetric_keys,
             )
@@ -1004,19 +1016,19 @@ class CryptainerDecryptor(CryptainerBase):
         self,
         keychain_uid: uuid.UUID,
         key_ciphertext: bytes,
-        cipher_layers: list,
+        key_cipher_layers: list,
         cryptainer_metadata: Optional[dict],
         predecrypted_symmetric_keys: Optional[dict] = None,
     ) -> tuple:
         key_bytes = key_ciphertext
         errors = []
 
-        for key_cipher_layer in reversed(cipher_layers):  # Non-emptiness of this will be checked by validator
+        for key_cipher_layer in reversed(key_cipher_layers):  # Non-emptiness of this will be checked by validator
             # key_cipherdict = load_from_json_bytes(key_bytes)  # We remain as bytes all along
             key_bytes, single_layer_decryption_errors = self._decrypt_key_through_single_layer(  # TODO Change this
                 keychain_uid=keychain_uid,
                 key_bytes=key_bytes,
-                cipher_layer=key_cipher_layer,
+                key_cipher_layer=key_cipher_layer,
                 cryptainer_metadata=cryptainer_metadata,
                 predecrypted_symmetric_keys=predecrypted_symmetric_keys,
             )
@@ -1028,8 +1040,8 @@ class CryptainerDecryptor(CryptainerBase):
     def _decrypt_key_through_single_layer(
         self,
         keychain_uid: uuid.UUID,
-        key_bytes: bytes,
-        cipher_layer: dict,
+        key_bytes: bytes,  # FIXME rename to key_ciphertext
+        key_cipher_layer: dict,
         cryptainer_metadata: Optional[dict],
         predecrypted_symmetric_keys: Optional[dict] = None,
     ) -> tuple:
@@ -1050,17 +1062,17 @@ class CryptainerDecryptor(CryptainerBase):
         key_cipherdict = load_from_json_bytes(key_bytes)
         assert isinstance(key_cipherdict, dict), key_cipherdict
 
-        key_cipher_algo = cipher_layer["key_cipher_algo"]
+        key_cipher_algo = key_cipher_layer["key_cipher_algo"]
 
         if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
 
             decrypted_shards = []
-            key_shared_secret_shards = cipher_layer["key_shared_secret_shards"]
-            key_shared_secret_threshold = cipher_layer["key_shared_secret_threshold"]
+            key_shared_secret_shards = key_cipher_layer["key_shared_secret_shards"]
+            key_shared_secret_threshold = key_cipher_layer["key_shared_secret_threshold"]
 
             shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
 
-            logger.debug("Deciphering each shard")
+            logger.debug("Deciphering each shard of shared secret")
 
             # If some shards are missing, we won't detect it here because zip() stops at shortest list
             for shard_ciphertext, trustee_conf in zip(shard_ciphertexts, key_shared_secret_shards):
@@ -1068,7 +1080,7 @@ class CryptainerDecryptor(CryptainerBase):
                 shard_bytes, multiple_layer_decryption_errors = self._decrypt_key_through_multiple_layers(
                     keychain_uid=keychain_uid,
                     key_ciphertext=shard_ciphertext,
-                    cipher_layers=trustee_conf["key_cipher_layers"],
+                    key_cipher_layers=trustee_conf["key_cipher_layers"],
                     cryptainer_metadata=cryptainer_metadata,
                     predecrypted_symmetric_keys=predecrypted_symmetric_keys,
                 )  # Recursive structure
@@ -1106,12 +1118,38 @@ class CryptainerDecryptor(CryptainerBase):
             logger.debug("Recombining shared-secret shards")
             key_bytes = recombine_secret_from_shards(shards=decrypted_shards)
 
-            return key_bytes, errors
+        elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
+            assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
+
+            sub_symkey_ciphertext_bytes = key_cipher_layer["key_ciphertext"]
+
+            sub_symkey_bytes, multiple_layer_decryption_errors = self._decrypt_key_through_multiple_layers(
+                keychain_uid=keychain_uid,
+                key_ciphertext=sub_symkey_ciphertext_bytes,  # FIXME rename key_ciphertext here
+                key_cipher_layers=key_cipher_layer["key_cipher_layers"],
+                cryptainer_metadata=cryptainer_metadata,
+                predecrypted_symmetric_keys=predecrypted_symmetric_keys,
+            )  # Recursive structure
+            errors.extend(multiple_layer_decryption_errors)
+
+            sub_symkey_dict = load_from_json_bytes(sub_symkey_bytes)
+            try:
+                key_bytes = decrypt_bytestring(key_cipherdict, cipher_algo=key_cipher_algo, key_dict=sub_symkey_dict)
+            except DecryptionError as exc:
+                error = self._build_error_report_message(
+                    error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
+                    error_message="Error while decrypting key using %s algorithm" % key_cipher_algo,
+                    error_exception=exc,
+                )
+                errors.append(error)
 
         else:  # Using asymmetric algorithm
 
-            keychain_uid_for_encryption = cipher_layer.get("keychain_uid") or keychain_uid
-            trustee = cipher_layer["key_cipher_trustee"]
+            assert key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS
+            assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
+
+            keychain_uid_for_encryption = key_cipher_layer.get("keychain_uid") or keychain_uid
+            trustee = key_cipher_layer["key_cipher_trustee"]
 
             predecrypted_symmetric_key = self._get_predecrypted_symmetric_keys_or_none(
                 key_bytes, predecrypted_symmetric_keys
@@ -1128,7 +1166,7 @@ class CryptainerDecryptor(CryptainerBase):
                 )
                 errors.extend(asymetric_decryption_errors)
 
-            return key_bytes, errors
+        return key_bytes, errors
 
     @staticmethod
     def _get_predecrypted_symmetric_keys_or_none(key_bytes, predecrypted_symmetric_keys):
@@ -2037,7 +2075,7 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
         }
 
     ASYMMETRIC_CIPHER_ALGO_BLOCK = {
-        "key_cipher_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
+        "key_cipher_algo": Or(*SUPPORTED_ASYMMETRIC_KEY_ALGOS),
         "key_cipher_trustee": trustee_schemas,
         OptionalKey("keychain_uid"): micro_schemas.schema_uid,
     }

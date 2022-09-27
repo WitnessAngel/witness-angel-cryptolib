@@ -79,6 +79,7 @@ from wacryptolib.utilities import load_from_json_file
 
 ENFORCED_UID1 = UUID("0e8e861e-f0f7-e54b-18ea-34798d5daaaa")
 ENFORCED_UID2 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeebbbb")
+ENFORCED_UID3 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeecccc")
 
 VOID_CRYPTOCONF_REGARDING_PAYLOAD_CIPHER_LAYERS = dict(payload_cipher_layers=[])  # Forbidden
 
@@ -163,6 +164,21 @@ COMPLEX_CRYPTOCONF = dict(
                     key_cipher_algo="RSA_OAEP",
                     key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
                     keychain_uid=ENFORCED_UID1,
+                ),
+                dict(
+                    key_cipher_algo="AES_EAX",
+                    key_cipher_layers=[
+                        dict(
+                            key_cipher_algo="RSA_OAEP",
+                            key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                            keychain_uid=ENFORCED_UID3,
+                        ),
+                        dict(
+                            key_cipher_algo="RSA_OAEP",
+                            key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                            # Default keychain_uid
+                        ),
+                    ]
                 )
             ],
             payload_signatures=[
@@ -201,8 +217,9 @@ COMPLEX_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
         "local_keyfactory": (
             {"trustee_type": "local_keyfactory"},
             [
-                {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
+                {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},  # Trustee used as several places
                 {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID1},
+                {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID3},
             ],
         )
     },

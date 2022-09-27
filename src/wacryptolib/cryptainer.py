@@ -21,7 +21,7 @@ from wacryptolib.cipher import (
     decrypt_bytestring,
     PayloadEncryptionPipeline,
     STREAMABLE_CIPHER_ALGOS,
-    SUPPORTED_CIPHER_ALGOS,
+    SUPPORTED_CIPHER_ALGOS, CIPHER_ALGOS_REGISTRY,
 )
 from wacryptolib.exceptions import (
     DecryptionError,
@@ -33,7 +33,8 @@ from wacryptolib.exceptions import (
     DecryptionIntegrityError,
 )
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
-from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, ASYMMETRIC_KEY_ALGOS_REGISTRY
+from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, ASYMMETRIC_KEY_ALGOS_REGISTRY, \
+    SYMMETRIC_KEY_ALGOS_REGISTRY
 from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase
 from wacryptolib.shared_secret import split_secret_into_shards, recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
@@ -141,12 +142,12 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
                 for trustee in trustees:
                     _grab_key_cipher_layers_dependencies(trustee["key_cipher_layers"])  # Recursive call
             else:
-                keychain_uid_encryption = key_cipher_layer.get("keychain_uid") or keychain_uid
+                keychain_uid_for_encryption = key_cipher_layer.get("keychain_uid") or keychain_uid
                 trustee_conf = key_cipher_layer["key_cipher_trustee"]
                 _add_keypair_identifiers_for_trustee(
                     mapper=cipher_dependencies,
                     trustee_conf=trustee_conf,
-                    keychain_uid=keychain_uid_encryption,
+                    keychain_uid=keychain_uid_for_encryption,
                     key_algo=key_algo_encryption,
                 )
 
@@ -155,13 +156,13 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
         for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
             for signature_conf in payload_cipher_layer["payload_signatures"]:
                 key_algo_signature = signature_conf["payload_signature_algo"]
-                keychain_uid_signature = signature_conf.get("keychain_uid") or keychain_uid
+                keychain_uid_for_signature = signature_conf.get("keychain_uid") or keychain_uid
                 trustee_conf = signature_conf["payload_signature_trustee"]
 
                 _add_keypair_identifiers_for_trustee(
                     mapper=signature_dependencies,
                     trustee_conf=trustee_conf,
-                    keychain_uid=keychain_uid_signature,
+                    keychain_uid=keychain_uid_for_signature,
                     key_algo=key_algo_signature,
                 )
 
@@ -416,7 +417,7 @@ class CryptainerEncryptor(CryptainerBase):
             )
             assert isinstance(
                 payload_cipherdict, dict
-            ), payload_cipherdict  # Might contain integrity/authentication payload
+            ), payload_cipherdict  # Might contain integrity/authentication data too
 
             payload_ciphertext = payload_cipherdict.pop("ciphertext")  # Mandatory field
             assert isinstance(
@@ -429,7 +430,8 @@ class CryptainerEncryptor(CryptainerBase):
             }
 
             payload_integrity_tags.append(
-                dict(payload_macs=payload_cipherdict, payload_digests=payload_digests)  # Only remains tags, macs etc.
+                dict(payload_macs=payload_cipherdict,  # Only remains tags, macs etc.
+                     payload_digests=payload_digests)
             )
 
             payload_current = payload_ciphertext
@@ -468,7 +470,7 @@ class CryptainerEncryptor(CryptainerBase):
 
             payload_cipher_layer["payload_macs"] = None  # Will be filled later with MAC tags etc.
 
-            logger.debug("Generating symmetric key of type %r", payload_cipher_algo)
+            logger.debug("Generating symmetric key of type %r for payload encryption", payload_cipher_algo)
             symkey = generate_symkey(cipher_algo=payload_cipher_algo)
             key_bytes = dump_to_json_bytes(symkey)
             key_cipher_layers = payload_cipher_layer["key_cipher_layers"]
@@ -572,22 +574,44 @@ class CryptainerEncryptor(CryptainerBase):
                 )  # Recursive structure
                 shard_ciphertexts.append(shard_ciphertext)
 
-            key_cipherdict = {"shard_ciphertexts": shard_ciphertexts}  # A dict is more future-proof
+            key_cipherdict = {"shard_ciphertexts": shard_ciphertexts}  # A dict is more future-proof than list
+
+        elif key_cipher_algo in SYMMETRIC_KEY_ALGOS_REGISTRY:
+            assert key_cipher_algo in CIPHER_ALGOS_REGISTRY, key_cipher_algo  # Not a SIGNATURE algo
+
+            logger.debug("Generating symmetric subkey of type %r for key encryption", key_cipher_algo)
+            sub_symkey = generate_symkey(cipher_algo=key_cipher_algo)
+            sub_symkey_bytes = dump_to_json_bytes(sub_symkey)
+
+            sub_symkey_ciphertext = self._encrypt_key_through_multiple_layers(
+                keychain_uid=keychain_uid,
+                key_bytes=sub_symkey_bytes,
+                key_cipher_layers=key_cipher_layer["key_cipher_layers"],
+                cryptainer_metadata=cryptainer_metadata,
+            )  # Recursive structure
+
+            key_cipher_layer["key_ciphertext"] = sub_symkey_ciphertext
+
+            key_cipherdict = encrypt_bytestring(key_bytes, cipher_algo=key_cipher_algo, key_dict=sub_symkey)
+            # We do not need to separate ciphertext from integrity/authentication data here, since key encryption is atomic
 
         else:  # Using asymmetric algorithm
+            assert key_cipher_algo in ASYMMETRIC_KEY_ALGOS_REGISTRY
+            assert key_cipher_algo in CIPHER_ALGOS_REGISTRY, key_cipher_algo  # Not a SIGNATURE algo
 
-            keychain_uid_encryption = key_cipher_layer.get("keychain_uid") or keychain_uid
-            key_cipherdict = self._encrypt_with_asymmetric_cipher(
+            keychain_uid_for_encryption = key_cipher_layer.get("keychain_uid") or keychain_uid
+            key_cipherdict = self._encrypt_key_with_asymmetric_cipher(
                 cipher_algo=key_cipher_algo,
-                keychain_uid=keychain_uid_encryption,
+                keychain_uid=keychain_uid_for_encryption,
                 key_bytes=key_bytes,
                 trustee=key_cipher_layer["key_cipher_trustee"],
                 cryptainer_metadata=cryptainer_metadata,
             )
 
+        assert isinstance(key_cipherdict, dict), key_cipherdict
         return key_cipherdict
 
-    def _encrypt_with_asymmetric_cipher(
+    def _encrypt_key_with_asymmetric_cipher(
         self,
         cipher_algo: str,
         keychain_uid: uuid.UUID,
@@ -603,7 +627,7 @@ class CryptainerEncryptor(CryptainerBase):
         :param key_bytes: symmetric key as bytes to encrypt
         :param trustee: trustee used for encryption (findable in configuration tree)
 
-        :return: dictionary which contains every payload needed to decrypt the ciphered payload
+        :return: dictionary which contains every payload needed to decrypt the ciphered key
         """
         trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
 
@@ -615,10 +639,10 @@ class CryptainerEncryptor(CryptainerBase):
 
         key_struct = dict(key_bytes=key_bytes, cryptainer_metadata=cryptainer_metadata)  # SPECIAL FORMAT FOR CHECKUPS
         key_struct_bytes = dump_to_json_bytes(key_struct)
-        cipherdict = encrypt_bytestring(
+        key_cipherdict = encrypt_bytestring(
             plaintext=key_struct_bytes, cipher_algo=cipher_algo, key_dict=dict(key=public_key)
         )
-        return cipherdict
+        return key_cipherdict
 
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: list):
         keychain_uid = cryptainer["keychain_uid"]
@@ -671,11 +695,11 @@ class CryptainerEncryptor(CryptainerBase):
             trustee=cryptoconf["payload_signature_trustee"], keystore_pool=self._keystore_pool
         )
 
-        keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
+        keychain_uid_for_signature = cryptoconf.get("keychain_uid") or keychain_uid
 
         logger.debug("Signing hash of encrypted payload with algo %r", payload_signature_algo)
         payload_signature_struct = trustee_proxy.get_message_signature(
-            keychain_uid=keychain_uid_signature, message=payload_digest, signature_algo=payload_signature_algo
+            keychain_uid=keychain_uid_for_signature, message=payload_digest, signature_algo=payload_signature_algo
         )
         return payload_signature_struct
 
@@ -1086,7 +1110,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         else:  # Using asymmetric algorithm
 
-            keychain_uid_encryption = cipher_layer.get("keychain_uid") or keychain_uid
+            keychain_uid_for_encryption = cipher_layer.get("keychain_uid") or keychain_uid
             trustee = cipher_layer["key_cipher_trustee"]
 
             predecrypted_symmetric_key = self._get_predecrypted_symmetric_keys_or_none(
@@ -1097,7 +1121,7 @@ class CryptainerDecryptor(CryptainerBase):
             else:
                 key_bytes, asymetric_decryption_errors = self._decrypt_with_asymmetric_cipher(
                     cipher_algo=key_cipher_algo,
-                    keychain_uid=keychain_uid_encryption,
+                    keychain_uid=keychain_uid_for_encryption,
                     cipherdict=key_cipherdict,
                     trustee=trustee,
                     cryptainer_metadata=cryptainer_metadata,
@@ -1237,13 +1261,13 @@ class CryptainerDecryptor(CryptainerBase):
         signature_errors = []
         payload_digest_algo = cryptoconf["payload_digest_algo"]
         payload_signature_algo = cryptoconf["payload_signature_algo"]
-        keychain_uid_signature = cryptoconf.get("keychain_uid") or keychain_uid
+        keychain_uid_for_signature = cryptoconf.get("keychain_uid") or keychain_uid
         trustee_proxy = get_trustee_proxy(
             trustee=cryptoconf["payload_signature_trustee"], keystore_pool=self._keystore_pool
         )
         try:
             public_key_pem = trustee_proxy.fetch_public_key(
-                keychain_uid=keychain_uid_signature, key_algo=payload_signature_algo, must_exist=True
+                keychain_uid=keychain_uid_for_signature, key_algo=payload_signature_algo, must_exist=True
             )
         except KeyDoesNotExist as exc:
             error = self._build_error_report_message(
@@ -1456,7 +1480,7 @@ def decrypt_payload_from_cryptainer(
     :param passphrase_mapper: optional dict mapping trustee IDs to their lists of passphrases
     :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
-    :return: raw bytestring
+    :return: raw bytestring  #FIXME
     """
     cryptainer_decryptor = CryptainerDecryptor(keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
     data, error_report = cryptainer_decryptor.decrypt_payload(
@@ -2012,7 +2036,7 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
             },
         }
 
-    CIPHER_ALGO_BLOCK = {
+    ASYMMETRIC_CIPHER_ALGO_BLOCK = {
         "key_cipher_algo": Or(*ASYMMETRIC_KEY_ALGOS_REGISTRY.keys()),
         "key_cipher_trustee": trustee_schemas,
         OptionalKey("keychain_uid"): micro_schemas.schema_uid,
@@ -2023,7 +2047,7 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
     SHARED_SECRET_CRYPTAINER_PIECE = Schema(
         {
             "key_cipher_algo": SHARED_SECRET_ALGO_MARKER,
-            "key_shared_secret_shards": [{"key_cipher_layers": [CIPHER_ALGO_BLOCK]}],
+            "key_shared_secret_shards": [{"key_cipher_layers": [ASYMMETRIC_CIPHER_ALGO_BLOCK]}],
             "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schemas.schema_int),
         },
         name="recursive_shared_secret",
@@ -2042,7 +2066,7 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
                     "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
                     "payload_signatures": [payload_signature],
                     **extra_payload_cipher_layer,
-                    "key_cipher_layers": [CIPHER_ALGO_BLOCK, SHARED_SECRET_CRYPTAINER_PIECE],
+                    "key_cipher_layers": [ASYMMETRIC_CIPHER_ALGO_BLOCK, SHARED_SECRET_CRYPTAINER_PIECE],
                 }
             ],
             OptionalKey("keychain_uid"): micro_schemas.schema_uid,

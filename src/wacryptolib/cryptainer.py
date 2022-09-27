@@ -828,7 +828,7 @@ class CryptainerDecryptor(CryptainerBase):
     def _get_single_gateway_revelation_request_list(self, gateway_url: str, revelation_requestor_uid: uuid.UUID):
 
         gateway_revelation_request_list = []
-        gateway_error = []
+        gateway_errors = []
 
         gateway_proxy = JsonRpcProxy(url=gateway_url, response_error_handler=status_slugs_response_error_handler)
         try:
@@ -841,8 +841,9 @@ class CryptainerDecryptor(CryptainerBase):
                 error_message="Unable to reach remote server %s" % gateway_url,
                 error_exception=exc,
             )
-            gateway_error.append(error)
-        return gateway_revelation_request_list, gateway_error
+            gateway_errors.append(error)
+
+        return gateway_revelation_request_list, gateway_errors
 
     def _get_multiple_gateway_revelation_request_list(
         self, gateway_url_list: list, revelation_requestor_uid: uuid.UUID

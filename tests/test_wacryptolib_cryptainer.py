@@ -719,14 +719,14 @@ def _build_fake_gateway_revelation_request_list(revelation_requests_info):
         }
 
         revelation_requests_successful.append(revelation_request_successful)
-    errors = []
 
-    return revelation_requests_successful, errors
+    return revelation_requests_successful
 
 
 def _patched_gateway_revelation_request_list(return_value=None):
     return mock.patch(
-            "wacryptolib.cryptainer.CryptainerDecryptor._get_multiple_gateway_revelation_request_list",
+            "wacryptolib.jsonrpc_client.JsonRpcProxy.list_requestor_revelation_requests",
+            create=True,
             return_value=return_value
         )
 
@@ -1029,14 +1029,14 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
         assert len(error_report) == 1
 
     # Wrong symkey revelation response data
-    gateway_revelation_request_list, errors = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(revelation_requests_info)
     # Corrupted symkey
     gateway_revelation_request_list[0]["symkey_decryption_requests"][0][
             "symkey_decryption_response_data"
         ] = b'{"ciphertext_chunks": [{"$binary": {"base64": "FImgSTpvmdIGPjml5YzI1qtOrN/I34DkG1PTNWqnqg==", "subType": "00"}}]}'
 
     with _patched_gateway_revelation_request_list(
-            return_value = (gateway_revelation_request_list, errors)):
+            return_value = gateway_revelation_request_list):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1246,12 +1246,12 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
         assert error_report == []  # Using remote_revelation_request so no trustee needed
 
     # Trustee and response keypair does not exist in storage
-    gateway_revelation_request_list, errors = _build_fake_gateway_revelation_request_list(revelation_requests_info)
+    gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(revelation_requests_info)
     # Corrupted response keychain uid
     gateway_revelation_request_list[0]["revelation_response_keychain_uid"] = generate_uuid0()
 
     with _patched_gateway_revelation_request_list(
-            return_value = (gateway_revelation_request_list, errors)):
+            return_value = gateway_revelation_request_list):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1464,13 +1464,13 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         assert error_report == []  # All passphrases are provided
 
     # Remote decryption request for this container and requestor is rejected
-    gateway_revelation_request_list, gateway_errors = _build_fake_gateway_revelation_request_list(
+    gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(
                  revelation_requests_info
              )
     gateway_revelation_request_list[0]["revelation_request_status"] = "REJECTED"
 
     with _patched_gateway_revelation_request_list(
-            return_value = (gateway_revelation_request_list, gateway_errors)):
+            return_value = gateway_revelation_request_list):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1483,13 +1483,13 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         assert error_report == []  # All passphrases are provided
 
     # No remote decryption request exist for this container anf requestor
-    gateway_revelation_request_list, gateway_errors = _build_fake_gateway_revelation_request_list(
+    gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(
         revelation_requests_info
     )
     gateway_revelation_request_list[0]["symkey_decryption_requests"][0]["cryptainer_uid"] = generate_uuid0()
 
     with _patched_gateway_revelation_request_list(
-            return_value = (gateway_revelation_request_list, gateway_errors)):
+            return_value = gateway_revelation_request_list):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1517,7 +1517,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
 
     # Remote revelation request with two trustee (1,3) and without any passphrase(decrypted_shards below threshold)
     with _patched_gateway_revelation_request_list(
-        return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
+            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,

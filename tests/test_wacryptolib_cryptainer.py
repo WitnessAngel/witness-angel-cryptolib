@@ -13,6 +13,7 @@ from unittest.mock import patch
 from uuid import UUID
 
 import pytest
+from jsonrpc_requests import TransportError
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool
 from wacryptolib._crypto_backend import get_random_bytes
@@ -986,7 +987,24 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
     )
 
-    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]  # FIXME what's this url ?
+    gateway_url_list = ["http://127.0.0.1:9898/jsonrpc"]  # FIXME what's this url ? CHANGE THEM ALL
+
+    # Network warning when no JSONRPC mockup s provided
+    result_payload, error_report = decrypt_payload_from_cryptainer(
+        cryptainer=cryptainer,
+        keystore_pool=keystore_pool,
+        passphrase_mapper=passphrase_mapper,
+        gateway_url_list=gateway_url_list,
+        revelation_requestor_uid=revelation_requestor_uid,
+    )
+    assert result_payload == payload
+    _check_error_entry(
+        error_list=error_report,
+        error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
+        error_criticity=DecryprtionErrorCriticity.WARNING,
+        error_msg_match="reach remote server",
+        exception_class=TransportError)
+    assert len(error_report) == 1
 
     # Remote revelation request return right symkey_revelation_response_data
     with _patched_gateway_revelation_request_list(
@@ -1211,7 +1229,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
     )
 
-    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
+    gateway_url_list = ["http://127.0.0.1:9898/jsonrpc"]
 
     # Remote revelation request return right symkey_revelation_response_data
     with _patched_gateway_revelation_request_list(
@@ -1448,11 +1466,11 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
     )
 
-    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]  # FIXME what's this url ?
+    gateway_url_list = ["http://127.0.0.1:9898/jsonrpc"]  # FIXME what's this url ?
 
     # No remote decryption request for this container and requestor
     with _patched_gateway_revelation_request_list(
-            return_value = ([], [])):
+            return_value = []):
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1482,7 +1500,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         assert result_payload == payload
         assert error_report == []  # All passphrases are provided
 
-    # No remote decryption request exist for this container anf requestor
+    # No remote decryption request exists for this container and requestor
     gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(
         revelation_requests_info
     )
@@ -1630,7 +1648,7 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
     response_keypair = local_keystore._cached_keypairs[response_key]
     response_keypair["public_key"] = b"wrongsignaturepublickey"
 
-    gateway_url_list = ["127.0.0.1:gateway/jsonrpc"]
+    gateway_url_list = ["http://127.0.0.1:9898/jsonrpc"]
     with _patched_gateway_revelation_request_list(
             return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
 

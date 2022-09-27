@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import jsonschema
 import schema as pythonschema
-from jsonrpc_requests import TransportError
+from jsonrpc_requests import TransportError, JSONRPCError
 from jsonschema import validate as jsonschema_validate
 from schema import And, Or, Schema, Optional as OptionalKey
 
@@ -835,7 +835,7 @@ class CryptainerDecryptor(CryptainerBase):
             gateway_revelation_request_list = gateway_proxy.list_requestor_revelation_requests(
                 revelation_requestor_uid=revelation_requestor_uid
             )
-        except (TransportError, OSError) as exc:
+        except (JSONRPCError, OSError) as exc:
             error = self._build_error_report_message(
                 error_type=DecryptionErrorTypes.ASYMMETRIC_DECRYPTION_ERROR,
                 error_message="Unable to reach remote server %s" % gateway_url,

@@ -731,9 +731,9 @@ def _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(key
     )
 
     # Get Trustee id
-    shard_trustee = dict(trustee_type="authenticator", keystore_uid=keystore_uid, keystore_owner="owner")
+    key_cipher_trustee = dict(trustee_type="authenticator", keystore_uid=keystore_uid, keystore_owner="owner")
 
-    return keystore_pool, foreign_keystore, shard_trustee
+    return keystore_pool, foreign_keystore, key_cipher_trustee
 
 
 # Create a response keypair in localkeyfactory to encrypt the decrypted symkeys and for each crypatiner trustee create
@@ -812,6 +812,65 @@ def _check_error_entry(
     assert real_occurrence_count == occurrence_count
 
 
+def test_cryptainer_decryption_with_nested_symmetric_algo_failure(tmp_path):
+    keychain_uid = generate_uuid0()
+
+    cryptoconf = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_CBC",
+                key_cipher_layers=[
+                    dict(
+                        key_cipher_algo="AES_EAX",
+                        key_cipher_layers=[
+                            dict(
+                                key_cipher_algo="RSA_OAEP",
+                                keychain_uid=keychain_uid,
+                                key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER
+                            )
+                        ],
+                    )
+                ],
+                payload_signatures=[],
+            )
+        ]
+    )
+
+    check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
+
+    # Ecrypt payload into cryptainer
+    payload = b"sdfsfsdfsdf"
+
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload,
+        cryptoconf=cryptoconf,
+        keychain_uid=keychain_uid,
+        cryptainer_metadata=None,
+    )
+    pprint(cryptainer)
+
+    # Decrypt cryptainer with passphrase
+    decrypted, error_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert decrypted == payload
+
+    # Corrupt the integrity tag of the ciphertext
+    key_ciphertext_bytes = cryptainer["payload_cipher_layers"][0]["key_ciphertext"]
+    key_ciphertext_dict = load_from_json_bytes(key_ciphertext_bytes)
+    key_ciphertext_dict["tag"] += b"xxx"
+    cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_dict)
+
+    decrypted, error_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert not decrypted
+
+    _check_error_entry(
+        error_list=error_report,
+        error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
+        error_criticity=DecryprtionErrorCriticity.ERROR,
+        error_msg_match="decrypting key with symmetric AES_EAX",
+        exception_class=DecryptionIntegrityError,
+    )
+
+
 # Cryptoconf with 1 payload_cipher_layer containing 1 key_cipher_layer managed by an authenticator
 def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simplecryptoconf(tmp_path):
     keychain_uid_trustee = generate_uuid0()
@@ -819,13 +878,13 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     passphrase = "tata"
 
     # Create fake keystore and keypair trustee in foreign key
-    keystore_pool, foreign_keystore, shard_trustee = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
+    keystore_pool, foreign_keystore, key_cipher_trustee = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
         keystore_uid=keystore_uid, keychain_uid=keychain_uid_trustee, passphrase=passphrase
     )
 
     # Get shard trustee id
     list_shard_trustee_id = []
-    shard_trustee_id = get_trustee_id(shard_trustee)
+    shard_trustee_id = get_trustee_id(key_cipher_trustee)
     trustee_info = (shard_trustee_id, passphrase)
     list_shard_trustee_id.append(trustee_info)
 
@@ -836,7 +895,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
                 payload_cipher_algo="AES_CBC",
                 key_cipher_layers=[
                     dict(
-                        key_cipher_algo="RSA_OAEP", keychain_uid=keychain_uid_trustee, key_cipher_trustee=shard_trustee
+                        key_cipher_algo="RSA_OAEP", keychain_uid=keychain_uid_trustee, key_cipher_trustee=key_cipher_trustee
                     )
                 ],
                 payload_signatures=[],
@@ -1669,7 +1728,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
         decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
 
-def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
+def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify_failures():
     payload_cipher_algo = random.choice(AUTHENTICATED_CIPHER_ALGOS)
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
     cryptoconf["payload_cipher_layers"][0]["payload_cipher_algo"] = payload_cipher_algo
@@ -1697,7 +1756,7 @@ def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify():
     assert len(error_report) == 1
 
 
-def test_decrypt_payload_from_cryptainer_signature_troubles():
+def test_decrypt_payload_from_cryptainer_with_signature_troubles():
     verify_integrity_tags = random_bool()
 
     cryptainer_original = encrypt_payload_into_cryptainer(
@@ -2559,7 +2618,7 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
     assert len(cryptainer_complex["payload_cipher_layers"]) == 3
 
 
-def test_cryptainer_storage_decryption_authenticated_algo_verify(tmp_path):
+def test_cryptainer_storage_decryption_with_authenticated_algo_and_verify_failure(tmp_path):
     # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
     storage, cryptainer_name = _intialize_real_cryptainer_with_single_file(tmp_path, allow_readonly_storage=True)
 

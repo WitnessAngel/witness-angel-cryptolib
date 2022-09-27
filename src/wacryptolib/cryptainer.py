@@ -739,7 +739,7 @@ class DecryptionErrorTypes:
     ASYMMETRIC_DECRYPTION_ERROR = "ASYMMETRIC_DECRYPTION_ERROR"
 
 
-class DecryprtionErrorCriticity:
+class DecryprtionErrorCriticity:  #FIXME rename
     WARNING = "WARNING"
     ERROR = "ERROR"
 
@@ -1144,10 +1144,12 @@ class CryptainerDecryptor(CryptainerBase):
             except DecryptionError as exc:
                 error = self._build_error_report_message(
                     error_type=DecryptionErrorTypes.SYMMETRIC_DECRYPTION_ERROR,
-                    error_message="Error while decrypting key using %s algorithm" % key_cipher_algo,
+                    error_message="Error decrypting key with symmetric %s algorithm" % key_cipher_algo,
+                    error_criticity=DecryprtionErrorCriticity.ERROR,
                     error_exception=exc,
                 )
                 errors.append(error)
+                key_bytes = None  # Important
 
         else:  # Using asymmetric algorithm
 

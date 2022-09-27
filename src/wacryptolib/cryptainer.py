@@ -108,9 +108,10 @@ def get_trustee_id(trustee_conf: dict) -> str:
         trustee_specifier = None  # Nothing to add for local keyfactory
     elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
         trustee_specifier = str(trustee_conf["keystore_uid"])  # Ignore optional keystore_owner
-    else:
-        assert trustee_type == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE
+    elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE:
         trustee_specifier = trustee_conf["jsonrpc_url"]
+    else:
+        raise ValueError("Unrecognized key trustee %s" % str(trustee_conf))
 
     trustee_id = (trustee_type + "@" + trustee_specifier) if trustee_specifier else trustee_type
     return trustee_id
@@ -135,22 +136,23 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
 
     def _grab_key_cipher_layers_dependencies(key_cipher_layers):
         for key_cipher_layer in key_cipher_layers:
-            key_algo_encryption = key_cipher_layer["key_cipher_algo"]
+            key_cipher_algo = key_cipher_layer["key_cipher_algo"]
 
-            if key_algo_encryption == SHARED_SECRET_ALGO_MARKER:
+            if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
                 shard_confs = key_cipher_layer["key_shared_secret_shards"]
                 for shard_conf in shard_confs:
                     _grab_key_cipher_layers_dependencies(shard_conf["key_cipher_layers"])  # Recursive call
-            elif key_algo_encryption in SUPPORTED_SYMMETRIC_KEY_ALGOS:
+            elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
                 _grab_key_cipher_layers_dependencies(key_cipher_layer["key_cipher_layers"])  # Recursive call
             else:
+                assert key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS, key_cipher_algo
                 keychain_uid_for_encryption = key_cipher_layer.get("keychain_uid") or keychain_uid
                 trustee_conf = key_cipher_layer["key_cipher_trustee"]
                 _add_keypair_identifiers_for_trustee(
                     mapper=cipher_dependencies,
                     trustee_conf=trustee_conf,
                     keychain_uid=keychain_uid_for_encryption,
-                    key_algo=key_algo_encryption,
+                    key_algo=key_cipher_algo,
                 )
 
     for cryptainer in cryptainers:
@@ -623,6 +625,13 @@ class CryptainerEncryptor(CryptainerBase):
         assert isinstance(key_cipherdict, dict), key_cipherdict
         return key_cipherdict
 
+    def _fetch_asymmetric_key_pem_from_trustee(self, trustee, key_algo, keychain_uid):
+        """Method meant to be easily replaced by a mockup in tests"""
+        trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
+        logger.debug("Fetching asymmetric key %s %r", key_algo, keychain_uid)
+        public_key_pem = trustee_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
+        return public_key_pem
+
     def _encrypt_key_with_asymmetric_cipher(
         self,
         cipher_algo: str,
@@ -641,10 +650,7 @@ class CryptainerEncryptor(CryptainerBase):
 
         :return: dictionary which contains every payload needed to decrypt the ciphered key
         """
-        trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
-
-        logger.debug("Generating asymmetric key %s %r", cipher_algo, keychain_uid)
-        public_key_pem = trustee_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=cipher_algo)
+        public_key_pem = self._fetch_asymmetric_key_pem_from_trustee(trustee=trustee, key_algo=cipher_algo, keychain_uid=keychain_uid)
 
         logger.debug("Encrypting symmetric key struct with asymmetric key %s %s", cipher_algo, keychain_uid)
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=cipher_algo)
@@ -1548,33 +1554,57 @@ def get_cryptoconf_summary(conf_or_cryptainer):
     """
     Returns a string summary of the layers of encryption/signature of a cryptainer or a configuration tree.
     """
+    indent = "  "
 
-    def _get_trustee_displayable_identifier(_trustee):
-        if _trustee == LOCAL_KEYFACTORY_TRUSTEE_MARKER:
-            _trustee = "local device"
-        elif "jsonrpc_url" in _trustee:
-            _trustee = urlparse(_trustee["jsonrpc_url"]).netloc
+    text_lines = []
+
+    def _get_trustee_displayable_identifier(_trustee_conf):
+        trustee_type = _trustee_conf.get("trustee_type", None)
+        if trustee_type == CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE:
+            trustee_display = "local device"
+        elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
+            trustee_display = "authenticator %s" % _trustee_conf["keystore_uid"]
+        elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE:
+            trustee_display = "server %s" % urlparse(_trustee_conf["jsonrpc_url"]).netloc
         else:
-            raise ValueError("Unrecognized key trustee %s" % _trustee)
-        return _trustee
+            raise ValueError("Unrecognized key trustee %s for display" % str(_trustee_conf))
+        return trustee_display
 
-    lines = []
-    for idx, payload_cipher_layer in enumerate(conf_or_cryptainer["payload_cipher_layers"], start=1):
-        lines.append("Data encryption layer %d: %s" % (idx, payload_cipher_layer["payload_cipher_algo"]))
-        lines.append("  Key encryption layers:")
-        for idx2, key_cipher_layer in enumerate(payload_cipher_layer["key_cipher_layers"], start=1):
+    def _get_key_encryption_layer_description(key_cipher_layer, current_level):
+        key_cipher_algo = key_cipher_layer["key_cipher_algo"]
+
+        if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
+            text_lines.append(current_level*indent + "Shared secret with threshold %d:" % key_cipher_layer["key_shared_secret_threshold"])
+            shard_confs = key_cipher_layer["key_shared_secret_shards"]
+            for shard_idx, shard_conf in enumerate(shard_confs, start=1):
+                text_lines.append((current_level+1)*indent + "Shard %d:" % shard_idx)
+                for key_cipher_layer2 in shard_conf["key_cipher_layers"]:
+                    _get_key_encryption_layer_description(key_cipher_layer2, current_level+2)  # Recursive call
+        elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
+            text_lines.append(current_level*indent + "%s with subkey encryption layers:" % (
+                key_cipher_layer["key_cipher_algo"]))
+            for key_cipher_layer2 in key_cipher_layer["key_cipher_layers"]:
+                _get_key_encryption_layer_description(key_cipher_layer2, current_level+1)  # Recursive call
+        else:
+            assert key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS
             key_cipher_trustee = key_cipher_layer["key_cipher_trustee"]
             trustee_id = _get_trustee_displayable_identifier(key_cipher_trustee)
-            lines.append("    %s (by %s)" % (key_cipher_layer["key_cipher_algo"], trustee_id))
-        lines.append("  Signatures:")
-        for idx3, payload_signature in enumerate(payload_cipher_layer["payload_signatures"], start=1):
+            text_lines.append(current_level * indent + "%s via trustee '%s'" % (key_cipher_layer["key_cipher_algo"], trustee_id))
+
+    for idx, payload_cipher_layer in enumerate(conf_or_cryptainer["payload_cipher_layers"], start=1):
+        text_lines.append("Data encryption layer %d: %s" % (idx, payload_cipher_layer["payload_cipher_algo"]))
+        text_lines.append(indent + "Key encryption layers:")
+        for key_cipher_layer in payload_cipher_layer["key_cipher_layers"]:
+            _get_key_encryption_layer_description(key_cipher_layer, current_level=2)
+        text_lines.append(indent +  "Signatures:" + ("" if payload_cipher_layer["payload_signatures"] else " None"))
+        for payload_signature in payload_cipher_layer["payload_signatures"]:
             payload_signature_trustee = payload_signature["payload_signature_trustee"]
             trustee_id = _get_trustee_displayable_identifier(payload_signature_trustee)
-            lines.append(
-                "    %s/%s (by %s)"
+            text_lines.append(
+                2*indent + "%s/%s via trustee '%s'"
                 % (payload_signature["payload_digest_algo"], payload_signature["payload_signature_algo"], trustee_id)
             )
-    result = "\n".join(lines) + "\n"
+    result = "\n".join(text_lines) + "\n"
     return result
 
 
@@ -2026,6 +2056,7 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
 
     extra_cryptainer = {}
     extra_payload_cipher_layer = {}
+    extra_asymmetric_cipher_algo_block = {}
     extra_payload_signature = {}
 
     trustee_schemas = Or(
@@ -2066,6 +2097,10 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
             "payload_macs": {OptionalKey("tag"): micro_schemas.schema_binary},  # For now only "tag" is used
         }
 
+        extra_asymmetric_cipher_algo_block = {
+            "key_ciphertext": micro_schemas.schema_binary,
+        }
+
         extra_payload_signature = {
             OptionalKey("payload_digest_value"): micro_schemas.schema_binary,
             OptionalKey("payload_signature_struct"): {
@@ -2080,23 +2115,32 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
         OptionalKey("keychain_uid"): micro_schemas.schema_uid,
     }
 
-    RECURSIVE_SHARED_SECRET = []
+    ALL_BLOCK_KINDS_LIST = [ASYMMETRIC_CIPHER_ALGO_BLOCK]  # Built for recursive schema
+
+    SYMMETRIC_CIPHER_ALGO_BLOCK = Schema({
+        "key_cipher_algo": Or(*SUPPORTED_SYMMETRIC_KEY_ALGOS),
+        "key_cipher_layers": ALL_BLOCK_KINDS_LIST,
+        **extra_asymmetric_cipher_algo_block,
+        },
+        name="recursive_symmetric_cipher",
+        as_reference=True,
+    )
+    ALL_BLOCK_KINDS_LIST.append(SYMMETRIC_CIPHER_ALGO_BLOCK)
 
     SHARED_SECRET_CRYPTAINER_PIECE = Schema(
         {
             "key_cipher_algo": SHARED_SECRET_ALGO_MARKER,
-            "key_shared_secret_shards": [{"key_cipher_layers": [ASYMMETRIC_CIPHER_ALGO_BLOCK]}],
+            "key_shared_secret_shards": [{"key_cipher_layers": ALL_BLOCK_KINDS_LIST}],
             "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schemas.schema_int),
         },
         name="recursive_shared_secret",
         as_reference=True,
     )
-
-    RECURSIVE_SHARED_SECRET.append(SHARED_SECRET_CRYPTAINER_PIECE)
+    ALL_BLOCK_KINDS_LIST.append(SHARED_SECRET_CRYPTAINER_PIECE)
 
     payload_signature.update(extra_payload_signature)
 
-    SCHEMA_CRYPTAINERS = Schema(
+    CRYPTAINER_SCHEMA = Schema(
         {
             **extra_cryptainer,
             "payload_cipher_layers": [
@@ -2104,14 +2148,14 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
                     "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
                     "payload_signatures": [payload_signature],
                     **extra_payload_cipher_layer,
-                    "key_cipher_layers": [ASYMMETRIC_CIPHER_ALGO_BLOCK, SHARED_SECRET_CRYPTAINER_PIECE],
+                    "key_cipher_layers": [SHARED_SECRET_CRYPTAINER_PIECE, SYMMETRIC_CIPHER_ALGO_BLOCK, ASYMMETRIC_CIPHER_ALGO_BLOCK],
                 }
             ],
             OptionalKey("keychain_uid"): micro_schemas.schema_uid,
         }
     )
 
-    return SCHEMA_CRYPTAINERS
+    return CRYPTAINER_SCHEMA
 
 
 CONF_SCHEMA_PYTHON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=False, extended_json_format=False)

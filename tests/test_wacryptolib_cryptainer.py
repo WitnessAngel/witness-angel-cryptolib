@@ -342,7 +342,31 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                         ),
                         dict(
                             key_cipher_layers=[
-                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                                dict(
+                                    key_cipher_algo="AES_CBC",
+                                    key_cipher_layers=[
+                                        dict(
+                                            key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                                            key_shared_secret_threshold=1,
+                                            key_shared_secret_shards=[
+                                                dict(
+                                                    key_cipher_layers=[
+                                                        dict(
+                                                            key_cipher_algo="RSA_OAEP",
+                                                            key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                                                            keychain_uid=ENFORCED_UID3,
+                                                        ),
+                                                    ]
+                                                )
+                                            ],
+                                        ),
+                                        dict(
+                                            key_cipher_algo="RSA_OAEP",
+                                            key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                                            # Default keychain_uid
+                                        ),
+                                    ]
+                                )
                             ]
                         ),
                         dict(
@@ -387,6 +411,7 @@ def COMPLEX_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
                 {"trustee_type": "local_keyfactory"},
                 [
                     {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
+                    {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID3},
                     {"key_algo": "RSA_OAEP", "keychain_uid": ENFORCED_UID2},
                 ],
             )
@@ -2605,9 +2630,9 @@ def test_get_cryptoconf_summary():
         """\
         Data encryption layer 1: AES_CBC
           Key encryption layers:
-            RSA_OAEP (by local device)
+            RSA_OAEP via trustee 'local device'
           Signatures:
-            SHA256/DSA_DSS (by local device)
+            SHA256/DSA_DSS via trustee 'local device'
             """
     )  # Ending by newline!
 
@@ -2619,35 +2644,53 @@ def test_get_cryptoconf_summary():
 
     # Simulate a cryptoconf with remote trustee webservices
 
-    CONF_WITH_TRUSTEE = copy.deepcopy(COMPLEX_CRYPTOCONF)
+    CONF_WITH_TRUSTEE = copy.deepcopy(COMPLEX_SHAMIR_CRYPTOCONF)
     CONF_WITH_TRUSTEE["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_cipher_trustee"] = dict(
         trustee_type="jsonrpc_api", jsonrpc_url="http://www.mydomain.com/json"
     )
+    CONF_WITH_TRUSTEE["payload_cipher_layers"][1]["key_cipher_layers"][0]["key_cipher_trustee"] = dict(
+        trustee_type="authenticator", keystore_uid="320b35bb-e735-4f6a-a4b2-ada124e30190"
+    )
 
     summary = get_cryptoconf_summary(CONF_WITH_TRUSTEE)
+    print("SUMMARY OBTAINED\n" + summary)
     assert summary == textwrap.dedent(
         """\
         Data encryption layer 1: AES_EAX
           Key encryption layers:
-            RSA_OAEP (by www.mydomain.com)
-          Signatures:
+            RSA_OAEP via trustee 'server www.mydomain.com'
+          Signatures: None
         Data encryption layer 2: AES_CBC
           Key encryption layers:
-            RSA_OAEP (by local device)
+            RSA_OAEP via trustee 'authenticator 320b35bb-e735-4f6a-a4b2-ada124e30190'
           Signatures:
-            SHA3_512/DSA_DSS (by local device)
+            SHA3_512/DSA_DSS via trustee 'local device'
         Data encryption layer 3: CHACHA20_POLY1305
           Key encryption layers:
-            RSA_OAEP (by local device)
-            RSA_OAEP (by local device)
+            Shared secret with threshold 2:
+              Shard 1:
+                RSA_OAEP via trustee 'local device'
+                RSA_OAEP via trustee 'local device'
+              Shard 2:
+                AES_CBC with subkey encryption layers:
+                  Shared secret with threshold 1:
+                    Shard 1:
+                      RSA_OAEP via trustee 'local device'
+                  RSA_OAEP via trustee 'local device'
+              Shard 3:
+                RSA_OAEP via trustee 'local device'
+              Shard 4:
+                RSA_OAEP via trustee 'local device'
           Signatures:
-            SHA3_256/RSA_PSS (by local device)
-            SHA512/ECC_DSS (by local device)
+            SHA3_256/RSA_PSS via trustee 'local device'
+            SHA512/ECC_DSS via trustee 'local device'
             """
-    )  # Ending by newline!
+    )  # Ending with newline!
 
-    _public_key = generate_keypair(key_algo="RSA_OAEP")["public_key"]
-    with patch.object(JsonRpcProxy, "fetch_public_key", return_value=_public_key, create=True) as mock_method:
+
+    _public_key = generate_keypair(key_algo="RSA_OAEP", serialize=True)["public_key"]
+    # We mockup the call to remote trustees
+    with patch.object(CryptainerEncryptor, "_fetch_asymmetric_key_pem_from_trustee", return_value=_public_key, create=True) as mock_method:
         cryptainer = encrypt_payload_into_cryptainer(
             payload=payload, cryptoconf=CONF_WITH_TRUSTEE, keychain_uid=None, cryptainer_metadata=None
         )

@@ -61,7 +61,7 @@ Encrypted containers
 
 The word **cryptainer** refers to encrypted containers built with this library.
 
-The structure of these cryptainers is driven
+The structure of these cryptainers is driven  # FIXME complete that
 
 More information in the :doc:`cryptainer format <cryptainer_format>` document.
 

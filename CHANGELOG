@@ -3,6 +3,12 @@ Development
 =============
 
 
+Version 0.10
+==================
+* Allow symmetric algos in key encryption layers, thus making cryptainers deeply recursive
+* Add a "summarize" CLI command, to display the structure of cryptoconfs and cryptainers
+
+
 Version 0.9
 ==================
 * Rename from "digest_list" to "ciphertext_chunks" the internal structure of RSA-OAEP ciphertext (but keep retrocompatibility)

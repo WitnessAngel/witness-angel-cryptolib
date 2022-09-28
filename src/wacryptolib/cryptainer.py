@@ -590,14 +590,14 @@ class CryptainerEncryptor(CryptainerBase):
 
             shard_ciphertexts = []
 
-            for shard, trustee_conf in zip(shards, key_shared_secret_shards):
+            for shard, key_shared_secret_shard_conf in zip(shards, key_shared_secret_shards):
                 shard_bytes = dump_to_json_bytes(
                     shard
                 )  # The tuple (idx, payload) of each shard thus becomes encryptable
                 shard_ciphertext = self._encrypt_key_through_multiple_layers(
                     keychain_uid=keychain_uid,
                     key_bytes=shard_bytes,
-                    key_cipher_layers=trustee_conf["key_cipher_layers"],
+                    key_cipher_layers=key_shared_secret_shard_conf["key_cipher_layers"],
                     cryptainer_metadata=cryptainer_metadata,
                 )  # Recursive structure
                 assert isinstance(shard_ciphertext, bytes), shard_ciphertext
@@ -1107,12 +1107,12 @@ class CryptainerDecryptor(CryptainerBase):
             logger.debug("Deciphering each shard of shared secret")
 
             # If some shards are missing, we won't detect it here because zip() stops at shortest list
-            for shard_ciphertext, trustee_conf in zip(shard_ciphertexts, key_shared_secret_shards):
+            for shard_ciphertext, key_shared_secret_shard_conf in zip(shard_ciphertexts, key_shared_secret_shards):
 
                 shard_bytes, multiple_layer_decryption_errors = self._decrypt_key_through_multiple_layers(
                     keychain_uid=keychain_uid,
                     key_ciphertext=shard_ciphertext,
-                    key_cipher_layers=trustee_conf["key_cipher_layers"],
+                    key_cipher_layers=key_shared_secret_shard_conf["key_cipher_layers"],
                     cryptainer_metadata=cryptainer_metadata,
                     predecrypted_symmetric_keys=predecrypted_symmetric_keys,
                 )  # Recursive structure
@@ -1123,11 +1123,11 @@ class CryptainerDecryptor(CryptainerBase):
                     )  # The tuple (idx, payload) of each shard thus becomes encryptable
                     decrypted_shards.append(shard)
                 else:
-                    logger.error("Error when decrypting shard of %s" % (trustee_conf), exc_info=True)
+                    logger.error("Error when decrypting shard %s" % str(key_shared_secret_shard_conf), exc_info=True)
 
                     error = self._build_error_report_message(
                         error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                        error_message="Error when decrypting shard of %s" % trustee_conf,
+                        error_message="Error when decrypting shard %s" % str(key_shared_secret_shard_conf),
                         error_exception=None,
                     )
                     errors.append(error)

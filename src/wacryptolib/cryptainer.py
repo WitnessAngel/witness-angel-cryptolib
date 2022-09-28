@@ -771,7 +771,7 @@ class CryptainerDecryptor(CryptainerBase):
         return cryptainer["cryptainer_metadata"]
 
     def _decrypt_with_local_private_key(self, cipherdict: dict, keychain_uid: uuid.UUID, cipher_algo: str):
-        # TODO USE TrusteeApi() with keystore local then decrypt_with_private_key() function ???
+        # TODO USE TrusteeApi() with local keystore then decrypt_with_private_key() function, instead ???
         errors = []
         keystore = self._keystore_pool.get_local_keyfactory()
         key_struct_bytes = None  # Returns "None" when unable to decrypt with the answer key
@@ -909,7 +909,9 @@ class CryptainerDecryptor(CryptainerBase):
                                 "revelation_request"
                             ] = revelation_request_per_symkey
                             successful_symkey_decryptions.append(symkey_decryption_accepted_for_cryptainer)
-        # FIXME add error for rejected request???
+
+        # FIXME add info/warning for rejected requests???
+
         return successful_symkey_decryptions, errors
 
     def decrypt_payload(
@@ -927,7 +929,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         :return: deciphered plaintext
         """
-        predecrypted_symmetric_keys = None
+        predecrypted_symmetric_keys = None   #FIXME rename to xxx_mapper instead?
         errors = []
         payload = None
 
@@ -989,7 +991,7 @@ class CryptainerDecryptor(CryptainerBase):
 
                 payload_macs = payload_cipher_layer[
                     "payload_macs"
-                ]  # FIXME handle if it's not there, missing integrity tags due to unfinished container!!
+                ]  # FIXME handle and test if it's None: missing integrity tags due to unfinished container!!
                 payload_cipherdict = dict(ciphertext=payload_current, **payload_macs)
                 try:
 
@@ -1026,14 +1028,14 @@ class CryptainerDecryptor(CryptainerBase):
                     error_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
                     error_criticity=DecryptionErrorCriticity.ERROR,
                     error_message="Failed symmetric decryption (%s)"
-                    % payload_cipher_algo,  # FIXME change this message!!
+                    % payload_cipher_algo,  # FIXME change this message to "aborted"? Or just skip this step?
                     error_exception=None,
                 )
                 errors.append(error)
             payload = payload_current
         return payload, errors
 
-    def _decrypt_key_through_multiple_layers(  # TODO rename to symkey???
+    def _decrypt_key_through_multiple_layers(
         self,
         keychain_uid: uuid.UUID,
         key_ciphertext: bytes,
@@ -1041,27 +1043,31 @@ class CryptainerDecryptor(CryptainerBase):
         cryptainer_metadata: Optional[dict],
         predecrypted_symmetric_keys: Optional[dict] = None,
     ) -> tuple:
-        key_bytes = key_ciphertext
+        assert len(key_cipher_layers), key_cipher_layers  # Extra safety
+
+        key_bytes = None
         errors = []
 
-        for key_cipher_layer in reversed(key_cipher_layers):  # Non-emptiness of this will be checked by validator
-            # key_cipherdict = load_from_json_bytes(key_bytes)  # We remain as bytes all along
-            key_bytes, single_layer_decryption_errors = self._decrypt_key_through_single_layer(  # TODO Change this
+        for key_cipher_layer in reversed(key_cipher_layers):
+            key_ciphertext, single_layer_decryption_errors = self._decrypt_key_through_single_layer(
                 keychain_uid=keychain_uid,
-                key_bytes=key_bytes,
+                key_ciphertext=key_ciphertext,
                 key_cipher_layer=key_cipher_layer,
                 cryptainer_metadata=cryptainer_metadata,
                 predecrypted_symmetric_keys=predecrypted_symmetric_keys,
             )
             errors.extend(single_layer_decryption_errors)
-            if not key_bytes:
-                break  # It would too complicated to analyse other cipher_layers without valid key_bytes
+            if not key_ciphertext:
+                break  # It would too complicated to analyse other cipher_layers without valid key_ciphertext
+        else:
+            key_bytes = key_ciphertext  # Fully decrypted version
+
         return key_bytes, errors
 
     def _decrypt_key_through_single_layer(
         self,
         keychain_uid: uuid.UUID,
-        key_bytes: bytes,  # FIXME rename to key_ciphertext
+        key_ciphertext: bytes,
         key_cipher_layer: dict,
         cryptainer_metadata: Optional[dict],
         predecrypted_symmetric_keys: Optional[dict] = None,
@@ -1071,16 +1077,17 @@ class CryptainerDecryptor(CryptainerBase):
         by a asymmetric algorithm.
 
         :param keychain_uid: uuid for the set of encryption keys used
-        :param key_cipherdict: dictionary with input data needed to decrypt symmetric key
-        :param cipher_layer: part of the cryptainer related to this key encryption layer
+        :param key_ciphertext: encrypted symmetric key
+        :param key_cipher_layer: part of the cryptainer related to this key encryption layer
 
         :return: deciphered symmetric key
         """
         errors = []
+        key_bytes = None
 
-        assert isinstance(key_bytes, bytes), key_bytes
+        assert isinstance(key_ciphertext, bytes), key_ciphertext
 
-        key_cipherdict = load_from_json_bytes(key_bytes)
+        key_cipherdict = load_from_json_bytes(key_ciphertext)
         assert isinstance(key_cipherdict, dict), key_cipherdict
 
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
@@ -1133,27 +1140,23 @@ class CryptainerDecryptor(CryptainerBase):
                     error_exception=None,
                 )
                 errors.append(error)
-                key_bytes = None
-                return key_bytes, errors
-
-            logger.debug("Recombining shared-secret shards")
-            key_bytes = recombine_secret_from_shards(shards=decrypted_shards)
+            else:
+                logger.debug("Recombining shared-secret shards")
+                key_bytes = recombine_secret_from_shards(shards=decrypted_shards)
 
         elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
             assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
 
-            sub_symkey_ciphertext_bytes = key_cipher_layer["key_ciphertext"]
+            sub_symkey_ciphertext = key_cipher_layer["key_ciphertext"]
 
             sub_symkey_bytes, multiple_layer_decryption_errors = self._decrypt_key_through_multiple_layers(
                 keychain_uid=keychain_uid,
-                key_ciphertext=sub_symkey_ciphertext_bytes,  # FIXME rename key_ciphertext here
+                key_ciphertext=sub_symkey_ciphertext,
                 key_cipher_layers=key_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
                 predecrypted_symmetric_keys=predecrypted_symmetric_keys,
             )  # Recursive structure
             errors.extend(multiple_layer_decryption_errors)
-
-            key_bytes = None  # Important
 
             if sub_symkey_bytes:
                 sub_symkey_dict = load_from_json_bytes(sub_symkey_bytes)
@@ -1179,10 +1182,10 @@ class CryptainerDecryptor(CryptainerBase):
             trustee = key_cipher_layer["key_cipher_trustee"]
 
             predecrypted_symmetric_key = self._get_predecrypted_symmetric_keys_or_none(
-                key_bytes, predecrypted_symmetric_keys
+                key_ciphertext, predecrypted_symmetric_keys
             )
             if predecrypted_symmetric_key:
-                key_bytes = predecrypted_symmetric_key  # TODO Rename key_bytes to encrypted_key_bytes
+                key_bytes = predecrypted_symmetric_key
             else:
                 key_bytes, asymetric_decryption_errors = self._decrypt_with_asymmetric_cipher(
                     cipher_algo=key_cipher_algo,
@@ -1444,7 +1447,7 @@ class CryptainerEncryptionPipeline:
         )  # ALREADY offloaded
         if not is_temporary:  # Cleanup temporary cryptainer
             try:
-                self._cryptainer_filepath_temp.unlink()  # TODO use missing_ok=True later
+                self._cryptainer_filepath_temp.unlink()  # TODO use missing_ok=True later with python3.8
             except FileNotFoundError:
                 pass
 
@@ -1470,7 +1473,7 @@ class CryptainerEncryptionPipeline:
             self._output_data_stream.close()
 
 
-def is_cryptainer_cryptoconf_streamable(cryptoconf):  # FIXME rename and add to docs and add separate tests
+def is_cryptainer_cryptoconf_streamable(cryptoconf):  # FIXME rename and add to docs?
     for payload_cipher_layer in cryptoconf["payload_cipher_layers"]:
         if payload_cipher_layer["payload_cipher_algo"] not in STREAMABLE_CIPHER_ALGOS:
             return False
@@ -1549,7 +1552,7 @@ def decrypt_payload_from_cryptainer(
     :param passphrase_mapper: optional dict mapping trustee IDs to their lists of passphrases
     :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
-    :return: raw bytestring  #FIXME
+    :return: tuple (data, error_report)
     """
     cryptainer_decryptor = CryptainerDecryptor(keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
     data, error_report = cryptainer_decryptor.decrypt_payload(
@@ -1699,9 +1702,6 @@ def get_cryptainer_size_on_filesystem(cryptainer_filepath):
         # We don't care about OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER here, we go the quick way
         size += offloaded_file_path.stat().st_size
     return size
-
-
-# FIXME add ReadonlyCryptainerStorage here!!
 
 
 class ReadonlyCryptainerStorage:
@@ -1898,7 +1898,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         logger.info("Deleting cryptainer %s" % cryptainer_name)
         self._delete_cryptainer(cryptainer_name=cryptainer_name)
 
-    def _purge_exceeding_cryptainers(self):  # TODO LOG WHEN PURGING
+    def _purge_exceeding_cryptainers(self):  # TODO ADD LOGGING WHEN PURGING
         """Purge cryptainers first by date, then total quota, then count, depending on instance settings"""
 
         if self._max_cryptainer_age is not None:  # FIRST these, since their deletion is unconditional
@@ -2105,7 +2105,7 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
     payload_signature = {
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
         "payload_signature_algo": Or(*SUPPORTED_SIGNATURE_ALGOS),
-        "payload_signature_trustee": trustee_schemas,  # FIXME test various trustee cases in unit-tests!!
+        "payload_signature_trustee": trustee_schemas,
         OptionalKey("keychain_uid"): micro_schemas.schema_uid,
     }
 

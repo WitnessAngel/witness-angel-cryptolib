@@ -7,8 +7,8 @@ The interpreter for `python3.7` or later must be installed (see `pyproject.toml`
 Instead of pip, we use `poetry <https://github.com/sdispater/poetry>`_ to manage dependencies.
 
 
-Quick setup
------------
+Automatic setup
+----------------
 
 Launch `python wacryptolib_installer.py` in repository root, from inside a python virtual environment.
 
@@ -36,6 +36,6 @@ Use the `Black <https://black.readthedocs.io/en/stable/>`_ formatter to format t
 
     black -l 120 src/ tests/
 
-A simple command-line interface is available to play with simple (unsafe) cryptainers (ensure that "src/" is in your PYTHONPATH first)::
+A limited command-line interface is available to play with simple cryptainers (ensure that "src/" is in your PYTHONPATH first)::
 
     python -m wacryptolib -h

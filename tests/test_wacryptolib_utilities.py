@@ -22,7 +22,6 @@ from wacryptolib.utilities import (
     generate_uuid0,
     SUPPORTED_HASH_ALGOS,
     hash_message,
-    safe_copy_directory,
     get_utc_now_date,
     get_memory_rss_bytes,
     delete_filesystem_node_for_stream,
@@ -168,47 +167,6 @@ def test_generate_uuid0():
 
     uuid_test = generate_uuid0(0)
     assert uuid_test.unix_ts != 0  # Can't generate UUIDs with timestamp=0
-
-
-def test_safe_copy_directory(tmp_path: Path):
-
-    src = tmp_path / "src"
-    src.mkdir()
-
-    existing = tmp_path / "dst"
-    existing.mkdir()
-
-    for i in range(10):
-        (src / str(i)).touch()
-
-    with pytest.raises(FileExistsError):
-        safe_copy_directory(src, existing)  # Target dir must not exists
-
-    safe_copy_directory(src, tmp_path / "__target")
-    (tmp_path / "__target" / "whatever").touch()
-
-    safe_copy_directory(src, tmp_path / "target")
-    assert not (tmp_path / "__target").exists()
-    assert not (tmp_path / "target" / "whatever").touch()  # Temp dir well deleted BEFORE copy operation
-
-    counter = 0
-
-    def broken_copy(*args, **kwargs):
-        nonlocal counter
-        if counter < 2:
-            counter += 1
-            return shutil.copy2(*args, **kwargs)
-        raise RuntimeError("Dummy breakage of copy operation")
-
-    with pytest.raises(RuntimeError):
-        safe_copy_directory(src, tmp_path / "other_target", copy_function=broken_copy)
-    assert not (tmp_path / "__other_target").exists()
-    assert not (tmp_path / "other_target").exists()  # Good cleanup
-
-    safe_copy_directory(src, tmp_path / "other_target")
-    assert not (tmp_path / "__other_target").exists()
-    assert (tmp_path / "other_target").exists()
-    assert set(i.name for i in (tmp_path / "other_target").iterdir()) == set(str(i) for i in range(10))
 
 
 def test_get_memory_rss_bytes():

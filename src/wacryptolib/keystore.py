@@ -29,7 +29,6 @@ from wacryptolib.exceptions import (
 from wacryptolib.keygen import generate_keypair, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.utilities import (
     synchronized,
-    safe_copy_directory,
     load_from_json_file,
     PeriodicTaskHandler,
     generate_uuid0,

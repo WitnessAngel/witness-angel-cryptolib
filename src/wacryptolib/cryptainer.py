@@ -890,9 +890,7 @@ class CryptainerDecryptor(CryptainerBase):
                             symkey_decryption["cryptainer_uid"] == cryptainer["cryptainer_uid"]
                             and symkey_decryption["symkey_decryption_status"] == "DECRYPTED"
                         ):
-                            symkey_decryption_accepted_for_cryptainer = {
-                                key: value for key, value in symkey_decryption.items()
-                            }
+                            symkey_decryption_accepted_for_cryptainer = dict(symkey_decryption.items())
                             symkey_decryption_accepted_for_cryptainer[
                                 "revelation_request"
                             ] = revelation_request_per_symkey

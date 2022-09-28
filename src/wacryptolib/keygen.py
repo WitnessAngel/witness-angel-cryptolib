@@ -97,7 +97,7 @@ def _do_generate_keypair(key_algo, serialize, key_length_bits, curve, passphrase
     return keypair
 
 
-# FIXME add debugging parameter keychain_uid!
+# TODO add debugging parameter keychain_uid!
 def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_algo: str, passphrase: Optional[AnyStr] = None):
     """Load a key (public or private) from a PEM-formatted bytestring.
 

@@ -39,7 +39,7 @@ from wacryptolib.keygen import (
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
     SUPPORTED_ASYMMETRIC_KEY_ALGOS,
 )
-from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase
+from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase, ReadonlyFilesystemKeystore, FilesystemKeystore
 from wacryptolib.shared_secret import split_secret_into_shards, recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
 from wacryptolib.trustee import TrusteeApi, ReadonlyTrusteeApi
@@ -312,8 +312,9 @@ def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):
         return TrusteeApi(keystore_pool.get_local_keyfactory())
     elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
         keystore_uid = trustee["keystore_uid"]  # ID of authenticator is identical to that of its keystore
-        keystore = keystore_pool.get_foreign_keystore(keystore_uid)
-        return ReadonlyTrusteeApi(keystore)
+        readonly_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+        assert not isinstance(readonly_keystore, FilesystemKeystore), readonly_keystore  # NOT writable for safety
+        return ReadonlyTrusteeApi(readonly_keystore)
     elif trustee_type == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE:
         return JsonRpcProxy(url=trustee["jsonrpc_url"], response_error_handler=status_slugs_response_error_handler)
     raise ValueError("Unrecognized trustee identifiers: %s" % str(trustee))

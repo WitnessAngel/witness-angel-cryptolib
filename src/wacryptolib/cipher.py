@@ -369,7 +369,7 @@ class PayloadEncryptionPipeline:
             if encryption_class is None:
                 raise OperationNotSupported(
                     "Node class %s is not implemented" % payload_cipher_algo
-                )  # FIXME use custom exception class
+                )
 
             self._cipher_streams.append(encryption_class(key_dict=symkey, payload_digest_algo=payload_digest_algos))
 

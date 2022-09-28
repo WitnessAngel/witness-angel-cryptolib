@@ -54,7 +54,7 @@ _KEYSTORE_METADATA_SCHEMA = {
     OptionalKey("keystore_passphrase_hint"): And(str, non_empty),  # For authenticators
 }
 
-# FIXME add dedicated KEYSTORE_METADATA_SCHEMA for AUTHENTICATORS
+# TODO add dedicated KEYSTORE_METADATA_SCHEMA for AUTHENTICATORS, and for FOREIGN KEYSTORES (without passphrae hint)?
 
 KEYSTORE_METADATA_SCHEMA = Schema({**_KEYSTORE_METADATA_SCHEMA})
 
@@ -400,7 +400,6 @@ class InMemoryKeystore(KeystoreReadWriteBase):
             )
 
 
-# FIXME use ReadonlyFilesystemKeystore for IMPORTED keystores!!
 class ReadonlyFilesystemKeystore(KeystoreReadBase):
     """
     Read-only filesystem-based key storage.
@@ -483,6 +482,42 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
 
         return key_information_list
 
+    def get_keystore_metadata(self):
+        """Return a metadata dict for the filesystem keystore, or raise KeystoreMetadataDoesNotExist."""
+        metadata = load_keystore_metadata(self._keys_dir)
+        return metadata
+
+    def export_to_keystore_tree(self, include_private_keys=True):
+        """
+        Export keystore metadata and keys (public and, if include_private_keys is true, private)
+        to a data tree.
+        """
+
+        assert self._keys_dir.exists(), self._keys_dir
+        metadata = self.get_keystore_metadata()
+        keypair_identifiers = self.list_keypair_identifiers()
+        keypairs = []
+
+        for keypair_identifier in keypair_identifiers:
+            keypair = dict(
+                keychain_uid=keypair_identifier["keychain_uid"],
+                key_algo=keypair_identifier["key_algo"],
+                public_key=self.get_public_key(
+                    keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"]
+                ),
+                private_key=None,
+            )
+            if include_private_keys:
+                keypair["private_key"] = self.get_private_key(
+                    keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"]
+                )
+            keypairs.append(keypair)
+
+        keystore_tree = metadata.copy()
+        keystore_tree["keypairs"] = keypairs
+        validate_keystore_tree(keystore_tree)  # Extra safety
+        return keystore_tree
+
 
 class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
     """
@@ -560,7 +595,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
 
     def _initialize_metadata_from_keystore_tree(self, keystore_tree: dict):
         metadata_file = _get_keystore_metadata_file_path(self._keys_dir)
-        metadata_file.parent.mkdir(parents=True, exist_ok=True)  # FIXME Create a temporary folder for ATOMIC copy
+        metadata_file.parent.mkdir(parents=True, exist_ok=True)
 
         metadata = keystore_tree.copy()
         del metadata["keypairs"]  # All other fields should be metadata
@@ -578,6 +613,8 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         Returns True if and only if keystore was updated instead of created.
         """
         validate_keystore_tree(keystore_tree)
+
+        # FIXME make this atomic, using temp directory and revived safe_copy_xxx() utility?
 
         try:
             metadata = self.get_keystore_metadata()
@@ -609,42 +646,6 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
 
         return keystore_updated
 
-    def export_to_keystore_tree(self, include_private_keys=True):  # TODO add include_private_keys=bool
-        """
-        Export keystore metadata and keys (public and, if include_private_keys is true, private)
-        to a data tree.
-        """
-
-        assert self._keys_dir.exists(), self._keys_dir
-        metadata = self.get_keystore_metadata()
-        keypair_identifiers = self.list_keypair_identifiers()
-        keypairs = []
-
-        for keypair_identifier in keypair_identifiers:
-            keypair = dict(
-                keychain_uid=keypair_identifier["keychain_uid"],
-                key_algo=keypair_identifier["key_algo"],
-                public_key=self.get_public_key(
-                    keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"]
-                ),
-                private_key=None,
-            )
-            if include_private_keys:
-                keypair["private_key"] = self.get_private_key(
-                    keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"]
-                )
-            keypairs.append(keypair)
-
-        keystore_tree = metadata.copy()
-        keystore_tree["keypairs"] = keypairs
-        validate_keystore_tree(keystore_tree)  # Extra safety
-        return keystore_tree
-
-    def get_keystore_metadata(self):
-        """Return a metadata dict for the filesystem keystore, or raise KeystoreMetadataDoesNotExist."""
-        metadata = load_keystore_metadata(self._keys_dir)
-        return metadata
-
 
 class KeystorePoolBase:
     pass
@@ -671,7 +672,8 @@ class InMemoryKeystorePool(KeystorePoolBase):
     def get_local_keyfactory(self):
         return self._local_keystore
 
-    def get_foreign_keystore(self, keystore_uid):
+    def get_foreign_keystore(self, keystore_uid, writable=None):
+        assert writable is None, writable  # No read/write specialization for InMemoryKeystorePool
         foreign_keystore = self._foreign_keystores.get(keystore_uid)
         if not foreign_keystore:
             raise KeystoreDoesNotExist("Key storage %s not found" % keystore_uid)
@@ -689,7 +691,7 @@ class InMemoryKeystorePool(KeystorePoolBase):
 
 class FilesystemKeystorePool(
     KeystorePoolBase
-):  # FIXME rename methods to better represent authdevices, remote authenticators etc. ??
+):
     """This class handles a set of locally stored key storages.
 
     The local storage represents the current device/owner, and is expected to be used by read-write trustees,
@@ -723,12 +725,13 @@ class FilesystemKeystorePool(
         if not foreign_keystore_dir.exists():
             foreign_keystore_dir.mkdir(parents=True, exist_ok=True)
 
-    def get_foreign_keystore(self, keystore_uid):
+    def get_foreign_keystore(self, keystore_uid, writable=False):
         """The selected storage MUST exist, else a KeystoreDoesNotExist is raised."""
         foreign_keystore_dir = self._get_foreign_keystore_dir(keystore_uid=keystore_uid)
         if not foreign_keystore_dir.exists():
             raise KeystoreDoesNotExist("Key storage %s not found" % keystore_uid)
-        return FilesystemKeystore(foreign_keystore_dir)
+        klass = FilesystemKeystore if writable else ReadonlyFilesystemKeystore
+        return klass(foreign_keystore_dir)
 
     def list_foreign_keystore_uids(self) -> list:
         """Return a sorted list of UUIDs of key storages, corresponding
@@ -769,7 +772,7 @@ class FilesystemKeystorePool(
         Imports/updates data tree into the keystore targeted by keystore_uid.
         """
         self._ensure_foreign_keystore_dir_exists(keystore_tree["keystore_uid"])
-        foreign_keystore = self.get_foreign_keystore(keystore_tree["keystore_uid"])
+        foreign_keystore = self.get_foreign_keystore(keystore_tree["keystore_uid"], writable=True)
         return foreign_keystore.import_from_keystore_tree(keystore_tree)
 
 
@@ -839,7 +842,7 @@ def get_free_keypair_generator_worker(
     :return: periodic task handler
     """
 
-    def free_keypair_generator_task():  # FIXME add a @safe_catch_unhandled_exception - like mechanism
+    def free_keypair_generator_task():  # FIXME add a @safe_catch_unhandled_exception-like mechanism
         has_generated = generate_free_keypair_for_least_provisioned_key_algo(
             keystore=keystore, max_free_keys_per_algo=max_free_keys_per_algo, **extra_generation_kwargs
         )

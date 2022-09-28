@@ -229,7 +229,13 @@ def test_filesystem_keystore_pool_basics(tmp_path: Path):
         pool.get_foreign_keystore(generate_uuid0())
 
     foreign_keystore = pool.get_foreign_keystore(foreign_keystore_uid)
-    assert isinstance(foreign_keystore, FilesystemKeystore)
+    assert isinstance(foreign_keystore, ReadonlyFilesystemKeystore)
+    assert not isinstance(foreign_keystore, FilesystemKeystore)  # NOT writable
+
+    foreign_keystore = pool.get_foreign_keystore(foreign_keystore_uid, writable=True)
+    assert isinstance(foreign_keystore, ReadonlyFilesystemKeystore)
+    assert isinstance(foreign_keystore, FilesystemKeystore)  # Writable
+
     assert not foreign_keystore.list_keypair_identifiers()
 
     foreign_keystore.set_keypair(
@@ -243,7 +249,8 @@ def test_filesystem_keystore_pool_basics(tmp_path: Path):
     assert len(foreign_keystore.list_keypair_identifiers()) == 1
 
     foreign_keystore2 = pool.get_foreign_keystore(foreign_keystore_uid2)
-    assert isinstance(foreign_keystore2, FilesystemKeystore)
+    assert isinstance(foreign_keystore2, ReadonlyFilesystemKeystore)
+    assert not isinstance(foreign_keystore2, FilesystemKeystore)
     assert not foreign_keystore2.list_keypair_identifiers()
 
 

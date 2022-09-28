@@ -18,7 +18,7 @@ def initialize_authenticator(authenticator_dir: Path, keystore_owner: str, keyst
     """
     BEWARE - PRIVATE API FOR NOW
 
-    Initialize a specific folder, by creating an internal structure with keys and their metadata.
+    Initialize a specific folder by creating a metadata file in it.
 
     The folder must not be already initialized.
     It may not exist yet, but its parents must exist.
@@ -39,8 +39,6 @@ def initialize_authenticator(authenticator_dir: Path, keystore_owner: str, keyst
         keystore_passphrase_hint=keystore_passphrase_hint,
     )
     return metadata
-
-    # FIXME - do HERE the creation of digital keypairs!!!
 
 
 def _initialize_authenticator_metadata(authenticator_dir: Path, keystore_owner: str, keystore_passphrase_hint: str):
@@ -63,18 +61,17 @@ def _initialize_authenticator_metadata(authenticator_dir: Path, keystore_owner: 
     return metadata
 
 
-# TODO go farther, and add flags to report errors if JSON or RSA keys are missing/corrupted?
 def is_authenticator_initialized(authenticator_dir: Path):
     """
     BEWARE - PRIVATE API FOR NOW
 
-    Check if an authenticator folder seems initialized.
+    Check if an authenticator folder SEEMS initialized.
 
-    Doesn't actually load the authenticator metadata.
+    Doesn't actually load the authenticator metadata file.
 
     :param authenticator_dir: (Path) folder where the metadata file is expected.
 
-    :return: (bool) True if and only if the authenticator is initialized.
+    :return: (bool) True if and only if the authenticator seems initialized.
     """
     legacy_metadata_file = _get_legacy_keystore_metadata_file_path(authenticator_dir)
     metadata_file = _get_keystore_metadata_file_path(authenticator_dir)

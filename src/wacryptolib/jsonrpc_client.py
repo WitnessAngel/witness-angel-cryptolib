@@ -10,8 +10,6 @@ from wacryptolib.utilities import dump_to_json_str, load_from_json_str
 logger = logging.getLogger(__name__)
 
 
-# FIXME create helper tools to simplify this!
-
 _exception_classes = StatusSlugsMapper.gather_exception_subclasses(builtins, parent_classes=[Exception])
 _exception_classes += StatusSlugsMapper.gather_exception_subclasses(
     wacryptolib_exceptions, parent_classes=[wacryptolib_exceptions.FunctionalError]

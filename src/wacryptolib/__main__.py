@@ -146,7 +146,7 @@ def decrypt(ctx, input_cryptainer, output_medium):
     keystore_pool = _get_keystore_pool(ctx)
     medium_content, errors = _do_decrypt(cryptainer=cryptainer, keystore_pool=keystore_pool)
 
-    if errors:  # Fixme improve that
+    if errors:  # Fixme improve that display
         print("Errors occured:", errors)
 
     if not medium_content:

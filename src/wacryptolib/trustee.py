@@ -36,7 +36,7 @@ class TrusteeApi:
         try:
             self._keystore.get_public_key(
                 keychain_uid=keychain_uid, key_algo=key_algo
-            )  ### FIXME ULTRA BUGGY, we need PRIVATE KEY too!!!!
+            )  # FIXME BUGGY, we might need PRIVATE KEY too, analyse this!
         except KeyDoesNotExist:
             pass
         else:
@@ -181,7 +181,7 @@ class TrusteeApi:
             response_message="Decryption request denied" if has_errors else "Decryption request accepted",
             has_errors=has_errors,
             keypair_statuses=keypair_statuses,
-        )  # TODO localize (i18n) string field!
+        )  # TODO localize (i18n) string field someday!
 
     def decrypt_with_private_key(
         self,

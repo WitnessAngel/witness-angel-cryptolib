@@ -649,12 +649,14 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
 
 
 class KeystorePoolBase:
+    pass
     # FIXME fill base class with Python function signatures!! Like in KeystoreBase!
 
-    def ensure_foreign_keystore_does_not_exist(self, keystore_uid):
-        """Raises KeystoreAlreadyExists if imported keystore already exists."""
-        if keystore_uid in self.list_foreign_keystore_uids():
-            raise KeystoreAlreadyExists("Key storage with UUID %s was already imported locally" % keystore_uid)
+    # Unused for now:
+    #def ensure_foreign_keystore_does_not_exist(self, keystore_uid):
+    #    """Raises KeystoreAlreadyExists if imported keystore already exists."""
+    #    if keystore_uid in self.list_foreign_keystore_uids():
+    #        raise KeystoreAlreadyExists("Key storage with UUID %s was already imported locally" % keystore_uid)
 
 
 class InMemoryKeystorePool(KeystorePoolBase):

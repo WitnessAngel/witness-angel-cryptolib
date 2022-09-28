@@ -211,8 +211,8 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
         cryptainer_name, cryptainer_uid, cryptainer_metadata, key_cipher_layers: list, key_ciphertext_bytes
     ):
 
-        # TODO test with cryptoconf where symkey is protected by 2 authenticators one of the other
-        last_key_cipher_layer = key_cipher_layers[-1]  # FIXME BIG PROBLEM - why only the last layer ????
+        # Only the LAST layer of symkey ciphering allows for a remote symkey decryption request
+        last_key_cipher_layer = key_cipher_layers[-1]
         last_key_cipher_algo = last_key_cipher_layer["key_cipher_algo"]
 
         if last_key_cipher_algo == SHARED_SECRET_ALGO_MARKER:

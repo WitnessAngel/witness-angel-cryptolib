@@ -149,7 +149,7 @@ def split_as_chunks(
     assert chunk_size > 0, chunk_size
 
     if must_pad:
-        bytestring = _crypto_backend.pad(bytestring, block_size=chunk_size)
+        bytestring = _crypto_backend.pad_bytes(bytestring, block_size=chunk_size)
     if len(bytestring) % chunk_size and not accept_incomplete_chunk:
         raise ValueError("If no padding occurs, bytestring must have a size multiple of chunk_size")
 
@@ -173,7 +173,7 @@ def recombine_chunks(chunks: Sequence[bytes], *, chunk_size: int, must_unpad: bo
         :return: initial bytestring"""
     bytestring = b"".join(chunks)
     if must_unpad:
-        bytestring = _crypto_backend.unpad(bytestring, block_size=chunk_size)
+        bytestring = _crypto_backend.unpad_bytes(bytestring, block_size=chunk_size)
     return bytestring
 
 

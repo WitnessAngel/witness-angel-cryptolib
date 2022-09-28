@@ -20,13 +20,13 @@ def get_random_bytes(nbytes):
     return Crypto.Random.get_random_bytes(nbytes)
 
 
-def pad(*args, **kwargs):
+def pad_bytes(*args, **kwargs):
     from Crypto.Util.Padding import pad
 
     return pad(*args, **kwargs)
 
 
-def unpad(*args, **kwargs):
+def unpad_bytes(*args, **kwargs):
     from Crypto.Util.Padding import unpad
 
     return unpad(*args, **kwargs)
@@ -43,20 +43,16 @@ def build_aes_cbc_cipher(key, iv):
 
 
 def encrypt_via_aes_cbc(plaintext, key, iv):
-    from Crypto.Util.Padding import pad
-
     cipher = build_aes_cbc_cipher(key=key, iv=iv)
-    plaintext_padded = pad(plaintext, block_size=AES_BLOCK_SIZE)
+    plaintext_padded = pad_bytes(plaintext, block_size=AES_BLOCK_SIZE)
     ciphertext = cipher.encrypt(plaintext_padded)
     return ciphertext
 
 
 def decrypt_via_aes_cbc(ciphertext, key, iv):
-    from Crypto.Util.Padding import unpad
-
     cipher = build_aes_cbc_cipher(key=key, iv=iv)
     plaintext_padded = cipher.decrypt(ciphertext)
-    plaintext = unpad(plaintext_padded, block_size=AES_BLOCK_SIZE)
+    plaintext = unpad_bytes(plaintext_padded, block_size=AES_BLOCK_SIZE)
     return plaintext
 
 

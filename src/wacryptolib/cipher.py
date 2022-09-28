@@ -283,7 +283,7 @@ class EncryptionNodeBase:
         ciphertext = b""
 
         if self.BLOCK_SIZE != 1:
-            padded_remainder = _crypto_backend.pad(self._remainder, block_size=self.BLOCK_SIZE)
+            padded_remainder = _crypto_backend.pad_bytes(self._remainder, block_size=self.BLOCK_SIZE)
             ciphertext = self._encrypt_aligned_payload(padded_remainder)
             self._remainder = b""
 

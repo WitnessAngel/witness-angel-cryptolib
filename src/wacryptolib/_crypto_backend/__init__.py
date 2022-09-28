@@ -155,6 +155,6 @@ from .pycryptodome import (
     dsa_key_class_fetcher,
     ecc_key_class_fetcher,
 )
-from .pycryptodome import get_random_bytes, pad, unpad, get_hasher_instance
+from .pycryptodome import get_random_bytes, pad_bytes, unpad_bytes, get_hasher_instance
 from .pycryptodome import shamir_split, shamir_combine
 from .pycryptodome import sign_with_pss, verify_with_pss, sign_with_dss, verify_with_dss

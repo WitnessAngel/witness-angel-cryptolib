@@ -7,7 +7,8 @@ Version 0.10
 ==================
 * Allow symmetric algos in key encryption layers, thus making cryptainers deeply recursive
 * Add a "summarize" CLI command, to display the structure of cryptoconfs and cryptainers
-
+* Normalize keystore.get_keystore_metadata(), pool.get_foreign_keystore_metadata(keystore_uid) and pool.get_all_foreign_keystore_metadata() utilities, and add KeystoreMetadataDoesNotExist exception subtype
+* Rename pad()/unpad() crypto utilities to pad_bytes()/unpad_bytes()
 
 Version 0.9
 ==================

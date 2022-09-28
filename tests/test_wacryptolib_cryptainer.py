@@ -867,10 +867,10 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
     assert decrypted == payload  # SUCCESS
 
     # Corrupt the integrity tag of the ciphertext
-    key_ciphertext_bytes = cryptainer["payload_cipher_layers"][0]["key_ciphertext"]
-    key_ciphertext_dict = load_from_json_bytes(key_ciphertext_bytes)
-    key_ciphertext_dict["tag"] += b"xxx"
-    cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_dict)
+    key_ciphertext = cryptainer["payload_cipher_layers"][0]["key_ciphertext"]
+    key_cipherdict = load_from_json_bytes(key_ciphertext)
+    key_cipherdict["tag"] += b"xxx"
+    cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes(key_cipherdict)
 
     decrypted, error_report = decrypt_payload_from_cryptainer(cryptainer)
     assert not decrypted
@@ -887,11 +887,11 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
     # ---
 
     cryptainer = copy.deepcopy(cryptainer_original)
-    key_ciphertext_bytes = cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_ciphertext"]
-    key_ciphertext_dict = load_from_json_bytes(key_ciphertext_bytes)
-    key_ciphertext_dict["ciphertext_chunks"][0] += b"xxx"
+    key_ciphertext = cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_ciphertext"]
+    key_cipherdict = load_from_json_bytes(key_ciphertext)
+    key_cipherdict["ciphertext_chunks"][0] += b"xxx"
     cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes(
-        key_ciphertext_dict
+        key_cipherdict
     )
 
     decrypted, error_report = decrypt_payload_from_cryptainer(cryptainer)

@@ -192,17 +192,18 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
         cryptainer_uid,
         cryptainer_metadata,
         key_cipher_trustee,
-        key_ciphertext_bytes,
+        key_ciphertext,
         keychain_uid_for_encryption,
         key_algo_for_encryption,
     ):
+        assert isinstance(key_ciphertext, bytes), key_ciphertext
 
         trustee_id = get_trustee_id(trustee_conf=key_cipher_trustee)
         symkey_decryption_request = {
             "cryptainer_name": str(cryptainer_name),  # No Pathlib object
             "cryptainer_uid": cryptainer_uid,
             "cryptainer_metadata": cryptainer_metadata,
-            "symkey_decryption_request_data": key_ciphertext_bytes,
+            "symkey_decryption_request_data": key_ciphertext,
             "keychain_uid": keychain_uid_for_encryption,
             "key_algo": key_algo_for_encryption,
         }
@@ -212,8 +213,9 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
         _decryptable_symkeys.append(symkey_decryption_request)
 
     def _gather_decryptable_symkeys(
-        cryptainer_name, cryptainer_uid, cryptainer_metadata, key_cipher_layers: list, key_ciphertext_bytes
+        cryptainer_name, cryptainer_uid, cryptainer_metadata, key_cipher_layers: list, key_ciphertext
     ):
+        assert isinstance(key_ciphertext, bytes), key_ciphertext
 
         # Only the LAST layer of symkey ciphering allows for a remote symkey decryption request
         last_key_cipher_layer = key_cipher_layers[-1]
@@ -221,7 +223,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
 
         if last_key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
             key_shared_secret_shards = last_key_cipher_layer["key_shared_secret_shards"]
-            key_cipherdict = load_from_json_bytes(key_ciphertext_bytes)
+            key_cipherdict = load_from_json_bytes(key_ciphertext)
             shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
 
             for shard_ciphertext, shard_conf in zip(shard_ciphertexts, key_shared_secret_shards):
@@ -234,13 +236,13 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
                 )
 
         elif last_key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
-            subkey_ciphertext_bytes = last_key_cipher_layer["key_ciphertext"]
+            subkey_ciphertext = last_key_cipher_layer["key_ciphertext"]
             _gather_decryptable_symkeys(
                 cryptainer_name,
                 cryptainer_uid,
                 cryptainer_metadata,
                 last_key_cipher_layer["key_cipher_layers"],
-                subkey_ciphertext_bytes,
+                subkey_ciphertext,
             )
 
         else:
@@ -255,7 +257,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
                 cryptainer_uid=cryptainer_uid,
                 cryptainer_metadata=cryptainer_metadata,
                 key_cipher_trustee=key_cipher_trustee,
-                key_ciphertext_bytes=key_ciphertext_bytes,
+                key_ciphertext=key_ciphertext,
                 keychain_uid_for_encryption=keychain_uid_for_encryption,
                 key_algo_for_encryption=key_algo_for_encryption,
             )
@@ -266,14 +268,14 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
         cryptainer_metadata = cryptainer["cryptainer_metadata"]
 
         for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
-            key_ciphertext_bytes = payload_cipher_layer.get("key_ciphertext")
+            key_ciphertext = payload_cipher_layer.get("key_ciphertext")
 
             _gather_decryptable_symkeys(
                 cryptainer_name=cryptainer_name,
                 cryptainer_uid=cryptainer_uid,
                 cryptainer_metadata=cryptainer_metadata,
                 key_cipher_layers=payload_cipher_layer["key_cipher_layers"],
-                key_ciphertext_bytes=key_ciphertext_bytes,
+                key_ciphertext=key_ciphertext,
             )
 
     return decryptable_symkeys_per_trustee
@@ -529,22 +531,24 @@ class CryptainerEncryptor(CryptainerBase):
     def _encrypt_key_through_multiple_layers(
         self, keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layers: list, cryptainer_metadata: Optional[dict]
     ) -> bytes:
-        # HERE KEY IS REAL KEY OR SHARE !!!
+        # HERE KEY IS A REAL KEY OR A SHARD !!!
+        key_bytes_initial = key_bytes
 
         if not key_cipher_layers:
             raise SchemaValidationError("Empty key_cipher_layers list is forbidden in cryptoconf")
 
-        key_ciphertext_bytes = key_bytes
         for key_cipher_layer in key_cipher_layers:
-            key_ciphertext_dict = self._encrypt_key_through_single_layer(
+            key_cipherdict = self._encrypt_key_through_single_layer(
                 keychain_uid=keychain_uid,
-                key_bytes=key_ciphertext_bytes,
+                key_bytes=key_bytes,
                 key_cipher_layer=key_cipher_layer,
                 cryptainer_metadata=cryptainer_metadata,
             )
-            key_ciphertext_bytes = dump_to_json_bytes(key_ciphertext_dict)  # Thus its remains as bytes all along
+            key_bytes = dump_to_json_bytes(key_cipherdict)  # Thus its remains as bytes all along
 
-        return key_ciphertext_bytes
+        assert key_bytes != key_bytes_initial  # safety
+        key_ciphertext = key_bytes
+        return key_ciphertext
 
     def _encrypt_key_through_single_layer(
         self, keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layer: dict, cryptainer_metadata: Optional[dict]
@@ -608,15 +612,15 @@ class CryptainerEncryptor(CryptainerBase):
             sub_symkey = generate_symkey(cipher_algo=key_cipher_algo)
             sub_symkey_bytes = dump_to_json_bytes(sub_symkey)
 
-            sub_symkey_ciphertext_bytes = self._encrypt_key_through_multiple_layers(
+            sub_symkey_ciphertext = self._encrypt_key_through_multiple_layers(
                 keychain_uid=keychain_uid,
                 key_bytes=sub_symkey_bytes,
                 key_cipher_layers=key_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
             )  # Recursive structure
-            assert isinstance(sub_symkey_ciphertext_bytes, bytes), sub_symkey_ciphertext_bytes
+            assert isinstance(sub_symkey_ciphertext, bytes), sub_symkey_ciphertext
 
-            key_cipher_layer["key_ciphertext"] = sub_symkey_ciphertext_bytes
+            key_cipher_layer["key_ciphertext"] = sub_symkey_ciphertext
 
             key_cipherdict = encrypt_bytestring(key_bytes, cipher_algo=key_cipher_algo, key_dict=sub_symkey)
             # We do not need to separate ciphertext from integrity/authentication data here, since key encryption is atomic

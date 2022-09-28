@@ -14,7 +14,7 @@ Each of these actors is commonly designated as a **trustee** in the code. A trus
 
 A witness angel device is itself a **local keyfactory trustee**, it can encrypt and sign data using its own digital keys.
 
-But real protection is provided by trustees called **keyguardians**, which are trusted third parties. Access to these remote trustees is generally done via Internet, even if other channels (e.g. usb devices temporarily plugged in) can be used too.
+But real protection is provided by trustees called **key guardians**, which are trusted third parties. Access to these remote trustees is generally done via Internet, even if other channels (e.g. usb devices temporarily plugged in) can be used too.
 
 
 Digital keys
@@ -51,7 +51,7 @@ The **local-factory keystore**, which backs the local-factory trustee, can gener
 
 An **authenticator** is a subtype of keystore used to provide a digital identity keychain to a trusted third party. It is typically a set of keypairs, all protected by the same passphrase, with some additional authentication fields in the metadata file. An **authdevice**, or authentication device, is a physical device on which an authenticator can be stored. For, we use a simple folder at the root of an usb storage.
 
-Authenticators can publish their public keys, and public metadata, to a **gateway** - a simple online registry - so that other people may easily rely on them as keyguardian.
+Authenticators can publish their public keys, and public metadata, to a **gateway** - a simple online registry - so that other people may easily rely on them as key guardians.
 
 When keystores are **imported** from an authdevice or a web gateway, the imported copies naturally only contain a part (public, or at least without confidential information) of the initial authenticator.
 
@@ -63,6 +63,6 @@ The word **cryptainer** refers to encrypted containers built with this library.
 
 The structure of these cryptainers is driven  # FIXME complete that
 
-More information in the :doc:`cryptainer format <cryptainer_format>` document.
+More information in the :doc:`cryptainer format <cryptainer_explanations>` document.
 
 

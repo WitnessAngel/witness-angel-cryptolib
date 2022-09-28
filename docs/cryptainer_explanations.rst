@@ -1,5 +1,5 @@
 
-Understanding cryptainers
+Discover cryptainers
 ============================
 
 Overview
@@ -44,14 +44,13 @@ Here is an example of medium-complexity cryptoconf::
    |ciphertext 2|
    +------------+
 
-Explanation :
+In this custom cryptosystem:
 
-- In this custom cryptosystem, the sensitive payload is first encrypted by AES-EAX, then by AES-CBC.
+- the sensitive payload is first encrypted by AES-EAX, then by AES-CBC.
 - The randomly-generated symmetric keys used for these symmetric encryptions are then protected in different ways.
 - The first one is encrypted with the public key of the key guardian server "witnessangel.com".
 - The second one is split into 3 "shards", each protected by the public key of a different member of the family Doe.
 - Two timestamped signatures are stapled to the cryptainer, both applied on the intermediate ciphertext (so they will only be verifiable- after the outer AES-CBC layer has been decrypted)
-
 
 
 Encrypting data into a cryptainer

@@ -14,7 +14,7 @@ Witness Angel Cryptolib
 Summary
 ----------------
 
-The WACryptolib is a toolkit aimed at handling secure configuration-driven containers, called *cryptainers*.
+The Witness Angel Cryptolib is a toolkit aimed at handling secure configuration-driven containers, called *cryptainers*.
 
 By leveraging a flexible JSON-based format called *cryptoconf*, users can define their own hybrid cryptosystem, recursively combining symmetric cihers, asymmetric ciphers, shared secrets, and data signatures.
 

@@ -22,30 +22,33 @@ def _get_signature_conf(signature_algo, key):
     return signature_conf
 
 
-# FIXME rename "key" to "private_key", here? Or no need?
-def sign_message(message: bytes, *, signature_algo: str, key: object) -> dict:
+def sign_message(message: bytes, *, signature_algo: str, private_key: object) -> dict:
     """
     Return a timestamped signature of the chosen type for the given payload,
     with the provided key (which must be of a compatible type).
 
     Signature is actually performed on a SHA512 DIGEST of the message.
 
+    :param message: the bytestring to sign
+    :param signature_algo: the name of the signing algorithm
+    :param private_key: the cryptographic key used to create the signature
+
     :return: dictionary with signature data"""
 
-    signature_conf = _get_signature_conf(signature_algo=signature_algo, key=key)
+    signature_conf = _get_signature_conf(signature_algo=signature_algo, key=private_key)
     signature_function = signature_conf["signature_function"]
     timestamp_utc = _get_utc_timestamp()
 
     try:
         hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=timestamp_utc)
-        signature = signature_function(message=hash_payload, private_key=key)
+        signature = signature_function(message=hash_payload, private_key=private_key)
     except ValueError as exc:
         raise SignatureCreationError("Failed %s signature creation (%s)" % (signature_algo, exc)) from exc
     return {"signature_timestamp_utc": timestamp_utc, "signature_value": signature}
 
 
 # FIXME rename "key" to "public_key", here? Or no need?
-def verify_message_signature(*, message: bytes, signature_algo: str, signature: dict, key: object):
+def verify_message_signature(*, message: bytes, signature_algo: str, signature: dict, public_key: object):
     """Verify the authenticity of a signature.
 
     Raises if signature is invalid.
@@ -53,15 +56,15 @@ def verify_message_signature(*, message: bytes, signature_algo: str, signature: 
     :param message: the bytestring which was signed
     :param signature_algo: the name of the signing algorithm
     :param signature: structure describing the signature
-    :param key: the cryptographic key used to verify the signature
+    :param public_key: the cryptographic key used to verify the signature
     """
 
-    signature_conf = _get_signature_conf(signature_algo=signature_algo, key=key)
+    signature_conf = _get_signature_conf(signature_algo=signature_algo, key=public_key)
     verification_function = signature_conf["verification_function"]
 
     try:
         hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=signature["signature_timestamp_utc"])
-        verification_function(message=hash_payload, signature=signature["signature_value"], public_key=key)
+        verification_function(message=hash_payload, signature=signature["signature_value"], public_key=public_key)
     except ValueError as exc:
         raise SignatureVerificationError("Failed %s signature verification (%s)" % (signature_algo, exc)) from exc
 

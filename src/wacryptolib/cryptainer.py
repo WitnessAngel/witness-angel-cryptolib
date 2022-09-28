@@ -1382,7 +1382,7 @@ class CryptainerDecryptor(CryptainerBase):
                     message=payload_digest,
                     signature_algo=payload_signature_algo,
                     signature=payload_signature_struct,
-                    key=public_key,
+                    public_key=public_key,
                 )  # Raises if troubles
 
             except SignatureVerificationError as exc:

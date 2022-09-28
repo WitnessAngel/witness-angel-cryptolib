@@ -76,7 +76,7 @@ class TrusteeApi:
 
         private_key = load_asymmetric_key_from_pem_bytestring(key_pem=private_key_pem, key_algo=signature_algo)
 
-        signature_dict = sign_message(message=message, signature_algo=signature_algo, key=private_key)
+        signature_dict = sign_message(message=message, signature_algo=signature_algo, private_key=private_key)
         return signature_dict
 
     def _check_keypair_authorization(self, *, keychain_uid: uuid.UUID, key_algo: str):

@@ -37,7 +37,7 @@ Serialization
 
 
 Miscellaneous
-----------------------
++++++++++++++++++++++++++
 
 .. autofunction:: wacryptolib.utilities.generate_uuid0
 
@@ -48,8 +48,6 @@ Miscellaneous
 .. autofunction:: wacryptolib.utilities.split_as_chunks
 
 .. autofunction:: wacryptolib.utilities.recombine_chunks
-
-.. autofunction:: wacryptolib.utilities.safe_copy_directory
 
 
 

@@ -6,7 +6,7 @@ encryption/signing keys of the trustee system.
 
 
 Cryptainer object processing
-----------------------------------
+++++++++++++++++++++++++++++++
 
 .. autofunction:: wacryptolib.cryptainer.encrypt_payload_into_cryptainer
 
@@ -22,7 +22,7 @@ Cryptainer object processing
 
 
 Validation utilities
----------------------------
++++++++++++++++++++++++++
 
 .. autofunction:: wacryptolib.cryptainer.check_cryptainer_sanity
 
@@ -30,7 +30,7 @@ Validation utilities
 
 
 Filesystem operations
------------------------------
++++++++++++++++++++++++++
 
 .. autofunction:: wacryptolib.cryptainer.dump_cryptainer_to_filesystem
 
@@ -42,7 +42,7 @@ Filesystem operations
 
 
 Cryptainer storage system
----------------------------------
+++++++++++++++++++++++++++++
 
 .. autoclass:: wacryptolib.cryptainer.ReadonlyCryptainerStorage
 
@@ -50,7 +50,7 @@ Cryptainer storage system
 
 
 Trustee operations
---------------------------
++++++++++++++++++++++++++
 
 .. autofunction:: wacryptolib.cryptainer.get_trustee_proxy
 

@@ -2765,9 +2765,13 @@ def test_get_cryptoconf_summary():
     CONF_WITH_TRUSTEE["payload_cipher_layers"][1]["key_cipher_layers"][0]["key_cipher_trustee"] = dict(
         trustee_type="authenticator", keystore_uid="320b35bb-e735-4f6a-a4b2-ada124e30190"
     )
+    print("'-----------------------")
+    pprint(CONF_WITH_TRUSTEE)
+    print("'-----------------------")
 
     summary = get_cryptoconf_summary(CONF_WITH_TRUSTEE)
     print("SUMMARY OBTAINED\n" + summary)
+    aaaaaaaaaaaaaaaaaaaaaa
     assert summary == textwrap.dedent(
         """\
         Data encryption layer 1: AES_EAX

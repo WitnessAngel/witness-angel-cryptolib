@@ -5,13 +5,13 @@ This module provides base classes to create sensors (gps, gyroscope, audio, vide
 
 
 Aggregation of records into binary archives
------------------------------------------------
+++++++++++++++++++++++++++++++++++++++++++++++++++
 
 .. autoclass:: wacryptolib.sensor.TarfileRecordAggregator
 
 
 Base classes for poller/pusher sensors
----------------------------------------------
+++++++++++++++++++++++++++++++++++++++++++++++++++
 
 .. autoclass:: wacryptolib.sensor.JsonDataAggregator
 
@@ -19,6 +19,6 @@ Base classes for poller/pusher sensors
 
 
 Management of multiple sensors simultaneously
-------------------------------------------------
+++++++++++++++++++++++++++++++++++++++++++++++++++
 
 .. autoclass:: wacryptolib.sensor.SensorManager

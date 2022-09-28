@@ -5,7 +5,7 @@ This module provides classes for the storage of asymmetric key pairs.
 
 
 Keystore
------------------------
++++++++++++++++++++++++++
 
 Each of these key storages theoretically belongs to a single user.
 
@@ -19,7 +19,7 @@ Each of these key storages theoretically belongs to a single user.
 
 
 Keystore pools
------------------------
++++++++++++++++++++++++++
 
 These combine local and imported key storages under a single interface.
 

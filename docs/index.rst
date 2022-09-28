@@ -12,7 +12,8 @@ This is the core cryptographic and utility library of the WitnessAngel project.
    getting_started
    concepts
    algorithms_overview
-   cryptainer_format
+   cryptainer_explanations
+   cryptoconf_examples
    api
 
 

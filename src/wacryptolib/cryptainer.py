@@ -918,7 +918,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         return successful_symkey_decryptions, errors
 
-    def decrypt_payload(
+    def decrypt_payload(  # FIXME test the cases with gateway_url_list or revelation_requestor_uid empty
         self,
         cryptainer: dict,
         verify_integrity_tags: bool = True,

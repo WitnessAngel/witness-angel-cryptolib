@@ -29,7 +29,7 @@ A **keypair** is a dict containing both "public" and "private" keys, for use in 
 
 
 Data naming and integrity
--------------------------------
+++++++++++++++++++++++++++++
 
 We use **payload** to designate the actual content of recorded data (audio, video, gps...), at various stages of its encryption process. We use **cleartext** and **ciphertext** to differentiate data before and after its encryption, although, since we're in a multi-layered encryption scheme, the ciphertext of an encryption layer becomes the cleartext for the next one.
 
@@ -43,7 +43,7 @@ Only when dealing with bytestrings that could be anything (serialized key, seria
 
 
 Key repositories
------------------
++++++++++++++++++++++++++
 
 A **keystore** is a generic storage for keypairs: typically a set of public/private PEM files in a directory, with a JSON metadata file describing this repository (type, owner, unique id...). Keys can be "frozen" or on the contrary generated on demand, private keys can be present or not, they can be protected by passphrases or not, depending on the subtype of the keystore.
 

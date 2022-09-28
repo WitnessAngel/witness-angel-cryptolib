@@ -1,6 +1,5 @@
 import logging
 import secrets
-from datetime import datetime
 from pathlib import Path
 
 from wacryptolib.exceptions import KeystoreAlreadyExists

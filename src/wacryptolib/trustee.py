@@ -6,7 +6,6 @@ from wacryptolib.cipher import decrypt_bytestring
 from wacryptolib.exceptions import (
     KeyDoesNotExist,
     AuthorizationError,
-    DecryptionError,
     KeyLoadingError,
     ValidationError,
 )

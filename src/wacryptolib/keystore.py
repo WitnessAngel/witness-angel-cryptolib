@@ -3,7 +3,6 @@ import logging
 import os
 import random
 import re
-import secrets
 import threading
 import time
 import uuid
@@ -22,7 +21,6 @@ from wacryptolib.exceptions import (
     KeyAlreadyExists,
     KeyDoesNotExist,
     KeystoreDoesNotExist,
-    KeystoreAlreadyExists,
     SchemaValidationError,
     ValidationError, KeystoreMetadataDoesNotExist,
 )

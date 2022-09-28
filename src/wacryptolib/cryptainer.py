@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import jsonschema
 import schema as pythonschema
-from jsonrpc_requests import TransportError, JSONRPCError
+from jsonrpc_requests import JSONRPCError
 from jsonschema import validate as jsonschema_validate
 from schema import And, Or, Schema, Optional as OptionalKey
 
@@ -33,8 +33,8 @@ from wacryptolib.exceptions import (
     DecryptionIntegrityError,
 )
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
-from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, ASYMMETRIC_KEY_ALGOS_REGISTRY, \
-    SYMMETRIC_KEY_ALGOS_REGISTRY, SUPPORTED_SYMMETRIC_KEY_ALGOS, SUPPORTED_ASYMMETRIC_KEY_ALGOS
+from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, SUPPORTED_SYMMETRIC_KEY_ALGOS, \
+    SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase
 from wacryptolib.shared_secret import split_secret_into_shards, recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS

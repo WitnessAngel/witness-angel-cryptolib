@@ -1,6 +1,5 @@
 import random
 import secrets
-import shutil
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -13,7 +12,6 @@ from _test_mockups import get_fake_authdevice, random_bool
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.exceptions import (
     KeystoreDoesNotExist,
-    KeystoreAlreadyExists,
     SchemaValidationError,
     ValidationError,
     KeyDoesNotExist, KeystoreMetadataDoesNotExist,
@@ -28,7 +26,6 @@ from wacryptolib.keystore import (
     get_free_keypair_generator_worker,
     generate_keypair_for_storage,
     ReadonlyFilesystemKeystore,
-    load_keystore_metadata,
     KEYSTORE_FORMAT,
     InMemoryKeystorePool, _get_keystore_metadata_file_path,
 )

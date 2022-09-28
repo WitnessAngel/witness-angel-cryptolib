@@ -257,9 +257,9 @@ class EncryptionNodeBase:
         return ciphertext
 
     def encrypt(self, plaintext) -> bytes:
-        """ Encrypt a bytestring and Hash a result (ciphertext) with the selected hash algorithm.
+        """Encrypt a bytestring and Hash a result (ciphertext) with the selected hash algorithm.
 
-            return : a ciphertext
+        return : a ciphertext
         """
         assert not self._is_finished
         if self.BLOCK_SIZE != 1:
@@ -271,11 +271,11 @@ class EncryptionNodeBase:
         return ciphertext
 
     def finalize(self) -> bytes:
-        """ Finalize by the encryption the remainder?????????
+        """Finalize by the encryption the remainder?????????
 
-            : block_size : The output length is guaranteed to be a multiple of block_size
+        : block_size : The output length is guaranteed to be a multiple of block_size
 
-            : return : a ciphertext
+        : return : a ciphertext
         """
         assert not self._is_finished
         self._is_finished = True

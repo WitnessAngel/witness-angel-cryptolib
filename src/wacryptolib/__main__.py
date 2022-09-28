@@ -11,7 +11,8 @@ from wacryptolib.cryptainer import (
     DECRYPTED_FILE_SUFFIX,
     SHARED_SECRET_ALGO_MARKER,
     check_cryptoconf_sanity,
-    check_cryptainer_sanity, get_cryptoconf_summary,
+    check_cryptainer_sanity,
+    get_cryptoconf_summary,
 )
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
@@ -106,7 +107,7 @@ def encrypt(ctx, input_medium, output_cryptainer, cryptoconf):
     if not output_cryptainer:
         output_cryptainer = LazyFile(input_medium.name + CRYPTAINER_SUFFIX, "wb")
 
-    #click.echo("In encrypt: %s" % str(locals()))
+    # click.echo("In encrypt: %s" % str(locals()))
 
     keystore_pool = _get_keystore_pool(ctx)
     cryptainer = _do_encrypt(payload=input_medium.read(), cryptoconf_fileobj=cryptoconf, keystore_pool=keystore_pool)
@@ -138,7 +139,7 @@ def decrypt(ctx, input_cryptainer, output_medium):
             output_medium_name = input_cryptainer.name + DECRYPTED_FILE_SUFFIX
         output_medium = LazyFile(output_medium_name, "wb")
 
-    #click.echo("In decrypt: %s" % str(locals()))
+    # click.echo("In decrypt: %s" % str(locals()))
 
     cryptainer = load_from_json_bytes(input_cryptainer.read())
 
@@ -163,7 +164,7 @@ def decrypt(ctx, input_cryptainer, output_medium):
 def summarize(ctx, input_file):
     """Display a summary of a cryptoconf (or cryptainer) structure."""
 
-    #click.echo("In display_cryptoconf_summary: %s" % str(locals()))
+    # click.echo("In display_cryptoconf_summary: %s" % str(locals()))
 
     cryptoconf = load_from_json_bytes(input_file.read())
 

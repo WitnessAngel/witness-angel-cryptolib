@@ -33,8 +33,12 @@ from wacryptolib.exceptions import (
     DecryptionIntegrityError,
 )
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
-from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring, SUPPORTED_SYMMETRIC_KEY_ALGOS, \
-    SUPPORTED_ASYMMETRIC_KEY_ALGOS
+from wacryptolib.keygen import (
+    generate_symkey,
+    load_asymmetric_key_from_pem_bytestring,
+    SUPPORTED_SYMMETRIC_KEY_ALGOS,
+    SUPPORTED_ASYMMETRIC_KEY_ALGOS,
+)
 from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase
 from wacryptolib.shared_secret import split_secret_into_shards, recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
@@ -61,8 +65,8 @@ CRYPTAINER_FORMAT = "cryptainer_1.0"
 CRYPTAINER_SUFFIX = ".crypt"
 CRYPTAINER_DATETIME_FORMAT = "%Y%m%d_%H%M%S"  # For use in cryptainer names and their records
 CRYPTAINER_DATETIME_LENGTH = (
-    15
-)  # Important to lookup prefix of filename before matching it with CRYPTAINER_DATETIME_FORMAT
+    15  # Important to lookup prefix of filename before matching it with CRYPTAINER_DATETIME_FORMAT
+)
 CRYPTAINER_TEMP_SUFFIX = "~"  # To name temporary, unfinalized, cryptainers
 
 
@@ -76,7 +80,7 @@ OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER = dict(ciphertext_location=PAYLOAD_CIPHERTEX
 
 OFFLOADED_PAYLOAD_FILENAME_SUFFIX = ".payload"  # Added to CRYPTAINER_SUFFIX
 
-DATA_CHUNK_SIZE = 1024 ** 2  # E.g. when streaming a big payload through encryptors
+DATA_CHUNK_SIZE = 1024**2  # E.g. when streaming a big payload through encryptors
 
 DECRYPTED_FILE_SUFFIX = ".medium"  # To construct decrypted filename when no output filename is provided
 
@@ -222,13 +226,21 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
 
             for shard_ciphertext, shard_conf in zip(shard_ciphertexts, key_shared_secret_shards):
                 _gather_decryptable_symkeys(
-                    cryptainer_name, cryptainer_uid, cryptainer_metadata, shard_conf["key_cipher_layers"], shard_ciphertext
+                    cryptainer_name,
+                    cryptainer_uid,
+                    cryptainer_metadata,
+                    shard_conf["key_cipher_layers"],
+                    shard_ciphertext,
                 )
 
         elif last_key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
             subkey_ciphertext_bytes = last_key_cipher_layer["key_ciphertext"]
             _gather_decryptable_symkeys(
-                cryptainer_name, cryptainer_uid, cryptainer_metadata, last_key_cipher_layer["key_cipher_layers"], subkey_ciphertext_bytes
+                cryptainer_name,
+                cryptainer_uid,
+                cryptainer_metadata,
+                last_key_cipher_layer["key_cipher_layers"],
+                subkey_ciphertext_bytes,
             )
 
         else:
@@ -441,8 +453,7 @@ class CryptainerEncryptor(CryptainerBase):
             }
 
             payload_integrity_tags.append(
-                dict(payload_macs=payload_cipherdict,  # Only remains tags, macs etc.
-                     payload_digests=payload_digests)
+                dict(payload_macs=payload_cipherdict, payload_digests=payload_digests)  # Only remains tags, macs etc.
             )
 
             payload_current = payload_ciphertext
@@ -650,7 +661,9 @@ class CryptainerEncryptor(CryptainerBase):
 
         :return: dictionary which contains every payload needed to decrypt the ciphered key
         """
-        public_key_pem = self._fetch_asymmetric_key_pem_from_trustee(trustee=trustee, key_algo=cipher_algo, keychain_uid=keychain_uid)
+        public_key_pem = self._fetch_asymmetric_key_pem_from_trustee(
+            trustee=trustee, key_algo=cipher_algo, keychain_uid=keychain_uid
+        )
 
         logger.debug("Encrypting symmetric key struct with asymmetric key %s %s", cipher_algo, keychain_uid)
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=cipher_algo)
@@ -1011,7 +1024,8 @@ class CryptainerDecryptor(CryptainerBase):
                 error = self._build_error_report_message(
                     error_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
                     error_criticity=DecryptionErrorCriticity.ERROR,
-                    error_message="Failed symmetric decryption (%s)" % payload_cipher_algo,  # FIXME change this message!!
+                    error_message="Failed symmetric decryption (%s)"
+                    % payload_cipher_algo,  # FIXME change this message!!
                     error_exception=None,
                 )
                 errors.append(error)
@@ -1143,7 +1157,9 @@ class CryptainerDecryptor(CryptainerBase):
             if sub_symkey_bytes:
                 sub_symkey_dict = load_from_json_bytes(sub_symkey_bytes)
                 try:
-                    key_bytes = decrypt_bytestring(key_cipherdict, cipher_algo=key_cipher_algo, key_dict=sub_symkey_dict)
+                    key_bytes = decrypt_bytestring(
+                        key_cipherdict, cipher_algo=key_cipher_algo, key_dict=sub_symkey_dict
+                    )
                 except DecryptionError as exc:
                     error = self._build_error_report_message(
                         error_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
@@ -1406,7 +1422,10 @@ class CryptainerEncryptionPipeline:
         self._output_data_stream = open(offloaded_file_path, mode="wb")
 
         self._cryptainer_decryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
-        self._wip_cryptainer, self._encryption_pipeline = self._cryptainer_decryptor.build_cryptainer_and_encryption_pipeline(
+        (
+            self._wip_cryptainer,
+            self._encryption_pipeline,
+        ) = self._cryptainer_decryptor.build_cryptainer_and_encryption_pipeline(
             output_stream=self._output_data_stream,
             cryptoconf=cryptoconf,
             keychain_uid=keychain_uid,
@@ -1579,34 +1598,41 @@ def get_cryptoconf_summary(cryptoconf_or_cryptainer):
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
 
         if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
-            text_lines.append(current_level*indent + "Shared secret with threshold %d:" % key_cipher_layer["key_shared_secret_threshold"])
+            text_lines.append(
+                current_level * indent
+                + "Shared secret with threshold %d:" % key_cipher_layer["key_shared_secret_threshold"]
+            )
             shard_confs = key_cipher_layer["key_shared_secret_shards"]
             for shard_idx, shard_conf in enumerate(shard_confs, start=1):
-                text_lines.append((current_level+1)*indent + "Shard %d:" % shard_idx)
+                text_lines.append((current_level + 1) * indent + "Shard %d:" % shard_idx)
                 for key_cipher_layer2 in shard_conf["key_cipher_layers"]:
-                    _get_key_encryption_layer_description(key_cipher_layer2, current_level+2)  # Recursive call
+                    _get_key_encryption_layer_description(key_cipher_layer2, current_level + 2)  # Recursive call
         elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
-            text_lines.append(current_level*indent + "%s with subkey encryption layers:" % (
-                key_cipher_layer["key_cipher_algo"]))
+            text_lines.append(
+                current_level * indent + "%s with subkey encryption layers:" % (key_cipher_layer["key_cipher_algo"])
+            )
             for key_cipher_layer2 in key_cipher_layer["key_cipher_layers"]:
-                _get_key_encryption_layer_description(key_cipher_layer2, current_level+1)  # Recursive call
+                _get_key_encryption_layer_description(key_cipher_layer2, current_level + 1)  # Recursive call
         else:
             assert key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS
             key_cipher_trustee = key_cipher_layer["key_cipher_trustee"]
             trustee_id = _get_trustee_displayable_identifier(key_cipher_trustee)
-            text_lines.append(current_level * indent + "%s via trustee '%s'" % (key_cipher_layer["key_cipher_algo"], trustee_id))
+            text_lines.append(
+                current_level * indent + "%s via trustee '%s'" % (key_cipher_layer["key_cipher_algo"], trustee_id)
+            )
 
     for idx, payload_cipher_layer in enumerate(cryptoconf_or_cryptainer["payload_cipher_layers"], start=1):
         text_lines.append("Data encryption layer %d: %s" % (idx, payload_cipher_layer["payload_cipher_algo"]))
         text_lines.append(indent + "Key encryption layers:")
         for key_cipher_layer in payload_cipher_layer["key_cipher_layers"]:
             _get_key_encryption_layer_description(key_cipher_layer, current_level=2)
-        text_lines.append(indent +  "Signatures:" + ("" if payload_cipher_layer["payload_signatures"] else " None"))
+        text_lines.append(indent + "Signatures:" + ("" if payload_cipher_layer["payload_signatures"] else " None"))
         for payload_signature in payload_cipher_layer["payload_signatures"]:
             payload_signature_trustee = payload_signature["payload_signature_trustee"]
             trustee_id = _get_trustee_displayable_identifier(payload_signature_trustee)
             text_lines.append(
-                2*indent + "%s/%s via trustee '%s'"
+                2 * indent
+                + "%s/%s via trustee '%s'"
                 % (payload_signature["payload_digest_algo"], payload_signature["payload_signature_algo"], trustee_id)
             )
     result = "\n".join(text_lines) + "\n"
@@ -2122,10 +2148,11 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
 
     ALL_BLOCK_KINDS_LIST = [ASYMMETRIC_CIPHER_ALGO_BLOCK]  # Built for recursive schema
 
-    SYMMETRIC_CIPHER_ALGO_BLOCK = Schema({
-        "key_cipher_algo": Or(*SUPPORTED_SYMMETRIC_KEY_ALGOS),
-        "key_cipher_layers": ALL_BLOCK_KINDS_LIST,
-        **extra_asymmetric_cipher_algo_block,
+    SYMMETRIC_CIPHER_ALGO_BLOCK = Schema(
+        {
+            "key_cipher_algo": Or(*SUPPORTED_SYMMETRIC_KEY_ALGOS),
+            "key_cipher_layers": ALL_BLOCK_KINDS_LIST,
+            **extra_asymmetric_cipher_algo_block,
         },
         name="recursive_symmetric_cipher",
         as_reference=True,
@@ -2153,7 +2180,11 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
                     "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
                     "payload_signatures": [payload_signature],
                     **extra_payload_cipher_layer,
-                    "key_cipher_layers": [SHARED_SECRET_CRYPTAINER_PIECE, SYMMETRIC_CIPHER_ALGO_BLOCK, ASYMMETRIC_CIPHER_ALGO_BLOCK],
+                    "key_cipher_layers": [
+                        SHARED_SECRET_CRYPTAINER_PIECE,
+                        SYMMETRIC_CIPHER_ALGO_BLOCK,
+                        ASYMMETRIC_CIPHER_ALGO_BLOCK,
+                    ],
                 }
             ],
             OptionalKey("keychain_uid"): micro_schemas.schema_uid,

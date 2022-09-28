@@ -27,7 +27,7 @@ def test_jsonrpc_extended_json_calls():
         return (
             200,
             {},
-            u'{"jsonrpc": "2.0", "result": {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "04"}}, "id": 1}',
+            '{"jsonrpc": "2.0", "result": {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "04"}}, "id": 1}',
         )
 
     responses.add_callback(responses.POST, "http://mock/xmlrpc", content_type="application/json", callback=callback1)
@@ -42,7 +42,7 @@ def test_jsonrpc_extended_json_calls():
             "y": {"$binary": {"base64": "eHl6", "subType": "00"}},
             "z": {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "04"}},
         }
-        return (200, {}, u'{"jsonrpc": "2.0", "result": {"$binary": {"base64": "eHl6", "subType": "00"}}, "id": 1}')
+        return (200, {}, '{"jsonrpc": "2.0", "result": {"$binary": {"base64": "eHl6", "subType": "00"}}, "id": 1}')
 
     responses.add_callback(responses.POST, "http://mock/xmlrpc", content_type="application/json", callback=callback2)
     assert server.foobar(x=42, y=b"xyz", z=uid) == b"xyz"
@@ -52,7 +52,7 @@ def test_jsonrpc_extended_json_calls():
     def callback3(request):
         request_message = json.loads(request.body)
         assert request_message["params"] == [{"foo": "bar"}]  # remains a LIST of 1 positional parameter!
-        return 200, {}, u'{"jsonrpc": "2.0", "result": null}'
+        return 200, {}, '{"jsonrpc": "2.0", "result": null}'
 
     responses.add_callback(responses.POST, "http://mock/xmlrpc", content_type="application/json", callback=callback3)
     assert server.foobar({"foo": "bar"}) is None
@@ -62,7 +62,7 @@ def test_jsonrpc_extended_json_calls():
         server.foobar(33, a=22)
 
     def callback_protocol_error(request):
-        return (200, {}, u'{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}')
+        return (200, {}, '{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}')
 
     # Test exception handling
 

@@ -11,13 +11,13 @@ SHAMIR_CHUNK_LENGTH = 16
 
 def split_secret_into_shards(secret: bytes, *, shard_count: int, threshold_count: int) -> list:
     """Generate a Shamir shared secret of `shard_count` subkeys, with `threshold_count`
-        of them required to recompute the initial `bytestring`.
+    of them required to recompute the initial `bytestring`.
 
-        :param secret: bytestring to separate as shards, whatever its length
-        :param shard_count: the number of shards to be created for the secret
-        :param threshold_count: the minimal number of shards needed to recombine the key
+    :param secret: bytestring to separate as shards, whatever its length
+    :param shard_count: the number of shards to be created for the secret
+    :param threshold_count: the minimal number of shards needed to recombine the key
 
-        :return: list of full bytestring shards"""
+    :return: list of full bytestring shards"""
 
     if not shard_count:
         raise ValueError("shards count must be strictly positive")
@@ -84,11 +84,11 @@ def recombine_secret_from_shards(shards: Sequence) -> bytes:
 def _split_128b_bytestring_into_shards(secret: bytes, shard_count: int, threshold_count: int) -> list:
     """Split a bytestring of exactly 128 bits into shards.
 
-        :param secret: bytestring to split
-        :param shard_count: number of shards to create
-        :param threshold_count: number of shards needed to reconstitute the secret
+    :param secret: bytestring to split
+    :param shard_count: number of shards to create
+    :param threshold_count: number of shards needed to reconstitute the secret
 
-        :return: list of tuples (index, shard)"""
+    :return: list of tuples (index, shard)"""
 
     assert len(secret) == 16
     shards = _crypto_backend.shamir_split(k=threshold_count, n=shard_count, secret=secret)
@@ -99,9 +99,9 @@ def _split_128b_bytestring_into_shards(secret: bytes, shard_count: int, threshol
 def _recombine_128b_shards_into_bytestring(shards: Sequence[tuple]) -> bytes:
     """Recombine shards of exactly 128 bits into a bytestring.
 
-        :param shards: list of (index, shard) tuples
+    :param shards: list of (index, shard) tuples
 
-        :return: list of tuples (index, shard)"""
+    :return: list of tuples (index, shard)"""
 
     secret = _crypto_backend.shamir_combine(shards)
     return secret

@@ -22,7 +22,8 @@ from wacryptolib.exceptions import (
     KeyDoesNotExist,
     KeystoreDoesNotExist,
     SchemaValidationError,
-    ValidationError, KeystoreMetadataDoesNotExist,
+    ValidationError,
+    KeystoreMetadataDoesNotExist,
 )
 from wacryptolib.keygen import generate_keypair, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.utilities import (
@@ -30,7 +31,8 @@ from wacryptolib.utilities import (
     load_from_json_file,
     PeriodicTaskHandler,
     generate_uuid0,
-    dump_to_json_file, is_datetime_tz_aware,
+    dump_to_json_file,
+    is_datetime_tz_aware,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,7 +81,7 @@ def validate_keystore_metadata(keystore_metadata):
 
 
 def validate_keystore_tree(
-    authenticator
+    authenticator,
 ):  # FIXME setup utility validate_with_python_schema() to handle exceptions always
     try:
         KEYSTORE_TREE_SCHEMA.validate(authenticator)
@@ -490,7 +492,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
     To prevent corruption, caller should only persist UUIDs when the key storage operation is successfully finished.
     """
 
-    _randint_args = (10 ** 10, 10 ** 11 - 1)
+    _randint_args = (10**10, 10**11 - 1)
 
     def __init__(self, keys_dir: Path):
         super().__init__(keys_dir=keys_dir)
@@ -555,7 +557,6 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         # First move the PRIVATE key, so that it's not shown anymore as "free"
         free_private_key.replace(target_private_key_filename)
         free_public_key.replace(target_public_key_filename)
-
 
     def _initialize_metadata_from_keystore_tree(self, keystore_tree: dict):
         metadata_file = _get_keystore_metadata_file_path(self._keys_dir)
@@ -650,7 +651,7 @@ class KeystorePoolBase:
     # FIXME fill base class with Python function signatures!! Like in KeystoreBase!
 
     # Unused for now:
-    #def ensure_foreign_keystore_does_not_exist(self, keystore_uid):
+    # def ensure_foreign_keystore_does_not_exist(self, keystore_uid):
     #    """Raises KeystoreAlreadyExists if imported keystore already exists."""
     #    if keystore_uid in self.list_foreign_keystore_uids():
     #        raise KeystoreAlreadyExists("Key storage with UUID %s was already imported locally" % keystore_uid)

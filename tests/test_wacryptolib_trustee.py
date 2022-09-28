@@ -11,7 +11,8 @@ from wacryptolib.exceptions import (
     SignatureVerificationError,
     DecryptionError,
     ValidationError,
-    AuthorizationError, KeyLoadingError,
+    AuthorizationError,
+    KeyLoadingError,
 )
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import (

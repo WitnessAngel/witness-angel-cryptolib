@@ -14,7 +14,8 @@ from wacryptolib.exceptions import (
     KeystoreDoesNotExist,
     SchemaValidationError,
     ValidationError,
-    KeyDoesNotExist, KeystoreMetadataDoesNotExist,
+    KeyDoesNotExist,
+    KeystoreMetadataDoesNotExist,
 )
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import (
@@ -27,7 +28,8 @@ from wacryptolib.keystore import (
     generate_keypair_for_storage,
     ReadonlyFilesystemKeystore,
     KEYSTORE_FORMAT,
-    InMemoryKeystorePool, _get_keystore_metadata_file_path,
+    InMemoryKeystorePool,
+    _get_keystore_metadata_file_path,
 )
 from wacryptolib.scaffolding import (
     check_keystore_free_keys_concurrency,
@@ -252,7 +254,9 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
 
     remote_keystore_dir = authdevice["authenticator_dir"]
 
-    metadata = initialize_authenticator(remote_keystore_dir, keystore_owner="Jean-Jâcques", keystore_passphrase_hint="my-hint")
+    metadata = initialize_authenticator(
+        remote_keystore_dir, keystore_owner="Jean-Jâcques", keystore_passphrase_hint="my-hint"
+    )
 
     extra_fields_schema = {"keystore_creation_datetime": ANY}
     use_legacy_format = random_bool()
@@ -280,7 +284,7 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
         "keystore_secret": ANY,
         "keystore_type": "authenticator",
         "keystore_uid": ANY,
-        **extra_fields_schema
+        **extra_fields_schema,
     }
     if "keystore_creation_datetime" in extra_fields_schema:
         assert isinstance(keystore_tree["keystore_creation_datetime"], datetime)
@@ -294,7 +298,7 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
         "keystore_secret": ANY,
         "keystore_type": "authenticator",
         "keystore_uid": ANY,
-        **extra_fields_schema
+        **extra_fields_schema,
     }
     if "keystore_creation_datetime" in extra_fields_schema:
         assert isinstance(keystore_tree["keystore_creation_datetime"], datetime)

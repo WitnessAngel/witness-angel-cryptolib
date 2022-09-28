@@ -21,7 +21,7 @@ UTF8_ENCODING = "utf8"
 
 WACRYPTOLIB_JSON_OPTIONS = JSONOptions(
     json_mode=JSONMode.CANONICAL,  # Preserve all type information
-    uuid_representation=UuidRepresentation.STANDARD, # Same as PythonLegacy
+    uuid_representation=UuidRepresentation.STANDARD,  # Same as PythonLegacy
     tz_aware=True,  # All our serialized dates are UTC, not NAIVE
 )
 
@@ -116,12 +116,12 @@ def split_as_chunks(
 ) -> List[bytes]:
     """Split a `bytestring` into chunks (or blocks)
 
-        :param bytestring: element to be split into chunks
-        :param chunk_size: size of a chunk in bytes
-        :param must_pad: whether the bytestring must be padded first or not
-        :param accept_incomplete_chunk: do not raise error if a chunk with a length != chunk_size is obtained
+    :param bytestring: element to be split into chunks
+    :param chunk_size: size of a chunk in bytes
+    :param must_pad: whether the bytestring must be padded first or not
+    :param accept_incomplete_chunk: do not raise error if a chunk with a length != chunk_size is obtained
 
-        :return: list of bytes chunks"""
+    :return: list of bytes chunks"""
 
     assert chunk_size > 0, chunk_size
 
@@ -143,11 +143,11 @@ def split_as_chunks(
 def recombine_chunks(chunks: Sequence[bytes], *, chunk_size: int, must_unpad: bool) -> bytes:
     """Recombine chunks which were previously separated.
 
-        :param chunks: sequence of bytestring parts
-        :param chunk_size: size of a chunk in bytes (only used for error checking, when unpadding occurs)
-        :param must_unpad: whether the bytestring must be unpadded after recombining, or not
+    :param chunks: sequence of bytestring parts
+    :param chunk_size: size of a chunk in bytes (only used for error checking, when unpadding occurs)
+    :param must_unpad: whether the bytestring must be unpadded after recombining, or not
 
-        :return: initial bytestring"""
+    :return: initial bytestring"""
     bytestring = b"".join(chunks)
     if must_unpad:
         bytestring = _crypto_backend.unpad_bytes(bytestring, block_size=chunk_size)
@@ -307,7 +307,7 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
 
     def _offloaded_run_task(self):
         """Method which will be run periodically by background thread,
-           and which by default simply calls task_func() and returns the result.
+        and which by default simply calls task_func() and returns the result.
         """
         return self._task_func()
 

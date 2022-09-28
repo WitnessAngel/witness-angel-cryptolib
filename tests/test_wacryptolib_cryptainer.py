@@ -179,8 +179,8 @@ COMPLEX_CRYPTOCONF = dict(
                             key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
                             # Default keychain_uid
                         ),
-                    ]
-                )
+                    ],
+                ),
             ],
             payload_signatures=[
                 dict(
@@ -366,7 +366,7 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                                             key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
                                             # Default keychain_uid
                                         ),
-                                    ]
+                                    ],
                                 )
                             ]
                         ),
@@ -726,10 +726,10 @@ def _build_fake_gateway_revelation_request_list(revelation_requests_info):
 
 def _patched_gateway_revelation_request_list(return_value=None):
     return mock.patch(
-            "wacryptolib.jsonrpc_client.JsonRpcProxy.list_requestor_revelation_requests",
-            create=True,
-            return_value=return_value
-        )
+        "wacryptolib.jsonrpc_client.JsonRpcProxy.list_requestor_revelation_requests",
+        create=True,
+        return_value=return_value,
+    )
 
 
 def _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(keystore_uid, keychain_uid, passphrase):
@@ -838,7 +838,7 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
                             dict(
                                 key_cipher_algo="RSA_OAEP",
                                 keychain_uid=keychain_uid,
-                                key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER
+                                key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
                             )
                         ],
                     )
@@ -890,7 +890,9 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
     key_ciphertext_bytes = cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_ciphertext"]
     key_ciphertext_dict = load_from_json_bytes(key_ciphertext_bytes)
     key_ciphertext_dict["ciphertext_chunks"][0] += b"xxx"
-    cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes(key_ciphertext_dict)
+    cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes(
+        key_ciphertext_dict
+    )
 
     decrypted, error_report = decrypt_payload_from_cryptainer(cryptainer)
     assert not decrypted
@@ -912,7 +914,11 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     passphrase = "tata"
 
     # Create fake keystore and keypair trustee in foreign key
-    keystore_pool, foreign_keystore, key_cipher_trustee = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
+    (
+        keystore_pool,
+        foreign_keystore,
+        key_cipher_trustee,
+    ) = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
         keystore_uid=keystore_uid, keychain_uid=keychain_uid_trustee, passphrase=passphrase
     )
 
@@ -929,7 +935,9 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
                 payload_cipher_algo="AES_CBC",
                 key_cipher_layers=[
                     dict(
-                        key_cipher_algo="RSA_OAEP", keychain_uid=keychain_uid_trustee, key_cipher_trustee=key_cipher_trustee
+                        key_cipher_algo="RSA_OAEP",
+                        keychain_uid=keychain_uid_trustee,
+                        key_cipher_trustee=key_cipher_trustee,
                     )
                 ],
                 payload_signatures=[],
@@ -1003,12 +1011,14 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
         error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryptionErrorCriticity.WARNING,
         error_msg_match="reach remote server",
-        exception_class=TransportError)
+        exception_class=TransportError,
+    )
     assert len(error_report) == 1
 
     # Remote revelation request return right symkey_revelation_response_data
     with _patched_gateway_revelation_request_list(
-            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
+        return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
+    ):
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1025,7 +1035,8 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     fake_revelation_request_info[0]["response_keychain_uid"] = wrong_response_keychain_uid
 
     with _patched_gateway_revelation_request_list(
-            return_value = _build_fake_gateway_revelation_request_list(fake_revelation_request_info)):
+        return_value=_build_fake_gateway_revelation_request_list(fake_revelation_request_info)
+    ):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1050,11 +1061,10 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(revelation_requests_info)
     # Corrupted symkey
     gateway_revelation_request_list[0]["symkey_decryption_requests"][0][
-            "symkey_decryption_response_data"
-        ] = b'{"ciphertext_chunks": [{"$binary": {"base64": "FImgSTpvmdIGPjml5YzI1qtOrN/I34DkG1PTNWqnqg==", "subType": "00"}}]}'
+        "symkey_decryption_response_data"
+    ] = b'{"ciphertext_chunks": [{"$binary": {"base64": "FImgSTpvmdIGPjml5YzI1qtOrN/I34DkG1PTNWqnqg==", "subType": "00"}}]}'
 
-    with _patched_gateway_revelation_request_list(
-            return_value = gateway_revelation_request_list):
+    with _patched_gateway_revelation_request_list(return_value=gateway_revelation_request_list):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1079,7 +1089,8 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     keystore_pool1._register_fake_imported_storage_uids(storage_uids=[keystore_uid])
 
     with _patched_gateway_revelation_request_list(
-            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
+        return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
+    ):
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool1,
@@ -1108,7 +1119,8 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     # Keystore pool empty( without trustee keystore in imported keystore and response key in local keystore)
     keystore_pool2 = InMemoryKeystorePool()
     with _patched_gateway_revelation_request_list(
-            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
+        return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
+    ):
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool2,
@@ -1141,7 +1153,11 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     passphrase = "xyz"
 
     # Create fake trustee keystore and keypair in foreign key
-    keystore_pool, foreign_keystore, shard_trustee = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
+    (
+        keystore_pool,
+        foreign_keystore,
+        shard_trustee,
+    ) = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
         keystore_uid=keystore_uid, keychain_uid=keychain_uid_trustee, passphrase=passphrase
     )
 
@@ -1171,7 +1187,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
                                                 keychain_uid=keychain_uid_trustee,
                                                 key_cipher_trustee=shard_trustee,
                                             )
-                                        ]
+                                        ],
                                     )
                                 ]
                             )
@@ -1233,7 +1249,8 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
 
     # Remote revelation request return right symkey_revelation_response_data
     with _patched_gateway_revelation_request_list(
-            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
+        return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
+    ):
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1251,7 +1268,8 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     generate_keypair_for_storage(key_algo="RSA_OAEP", keystore=local_keystore1, keychain_uid=response_keychain_uid)
 
     with _patched_gateway_revelation_request_list(
-            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
+        return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
+    ):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1268,8 +1286,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     # Corrupted response keychain uid
     gateway_revelation_request_list[0]["revelation_response_keychain_uid"] = generate_uuid0()
 
-    with _patched_gateway_revelation_request_list(
-            return_value = gateway_revelation_request_list):
+    with _patched_gateway_revelation_request_list(return_value=gateway_revelation_request_list):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1469,8 +1486,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
     gateway_url_list = ["http://127.0.0.1:9898/jsonrpc"]  # FIXME what's this url ?
 
     # No remote decryption request for this container and requestor
-    with _patched_gateway_revelation_request_list(
-            return_value = []):
+    with _patched_gateway_revelation_request_list(return_value=[]):
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1482,13 +1498,10 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         assert error_report == []  # All passphrases are provided
 
     # Remote decryption request for this container and requestor is rejected
-    gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(
-                 revelation_requests_info
-             )
+    gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(revelation_requests_info)
     gateway_revelation_request_list[0]["revelation_request_status"] = "REJECTED"
 
-    with _patched_gateway_revelation_request_list(
-            return_value = gateway_revelation_request_list):
+    with _patched_gateway_revelation_request_list(return_value=gateway_revelation_request_list):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1501,13 +1514,10 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         assert error_report == []  # All passphrases are provided
 
     # No remote decryption request exists for this container and requestor
-    gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(
-        revelation_requests_info
-    )
+    gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(revelation_requests_info)
     gateway_revelation_request_list[0]["symkey_decryption_requests"][0]["cryptainer_uid"] = generate_uuid0()
 
-    with _patched_gateway_revelation_request_list(
-            return_value = gateway_revelation_request_list):
+    with _patched_gateway_revelation_request_list(return_value=gateway_revelation_request_list):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1521,7 +1531,8 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
 
     # Remote revelation request with two trustee (1,3) and local trustee
     with _patched_gateway_revelation_request_list(
-            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
+        return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
+    ):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1535,7 +1546,8 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
 
     # Remote revelation request with two trustee (1,3) and without any passphrase(decrypted_shards below threshold)
     with _patched_gateway_revelation_request_list(
-            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
+        return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
+    ):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -1586,7 +1598,11 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
 
     # Create fake keystore and keypair in foreign key
 
-    keystore_pool, foreign_keystore, shard_trustee = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
+    (
+        keystore_pool,
+        foreign_keystore,
+        shard_trustee,
+    ) = _create_keystore_and_keypair_protected_by_passphrase_in_foreign_keystore(
         keystore_uid=keystore_uid, keychain_uid=keychain_uid_trustee, passphrase=passphrase
     )
 
@@ -1633,8 +1649,10 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
 
     # Generate revelation requests info
     revelation_requestor_uid = generate_uuid0()
-    revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(  # FIXME TYPO KEYAIR
-        revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
+    revelation_requests_info = (
+        _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(  # FIXME TYPO KEYAIR
+            revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
+        )
     )
 
     # Corrupt response privatekey
@@ -1650,7 +1668,8 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
 
     gateway_url_list = ["http://127.0.0.1:9898/jsonrpc"]
     with _patched_gateway_revelation_request_list(
-            return_value = _build_fake_gateway_revelation_request_list(revelation_requests_info)):
+        return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
+    ):
 
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
@@ -2782,10 +2801,11 @@ def test_get_cryptoconf_summary():
             """
     )  # Ending with newline!
 
-
     _public_key = generate_keypair(key_algo="RSA_OAEP", serialize=True)["public_key"]
     # We mockup the call to remote trustees
-    with patch.object(CryptainerEncryptor, "_fetch_asymmetric_key_pem_from_trustee", return_value=_public_key, create=True) as mock_method:
+    with patch.object(
+        CryptainerEncryptor, "_fetch_asymmetric_key_pem_from_trustee", return_value=_public_key, create=True
+    ) as mock_method:
         cryptainer = encrypt_payload_into_cryptainer(
             payload=payload, cryptoconf=CONF_WITH_TRUSTEE, keychain_uid=None, cryptainer_metadata=None
         )

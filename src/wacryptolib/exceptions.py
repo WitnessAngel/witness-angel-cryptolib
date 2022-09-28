@@ -19,12 +19,17 @@ class KeyAlreadyExists(ExistenceError):
     pass
 
 
-class KeystoreDoesNotExist(ExistenceError):  # FIXME REPLACE BY KeystoreDoesNotExist!!
+class KeystoreDoesNotExist(ExistenceError):
     pass
 
 
 class KeystoreAlreadyExists(ExistenceError):
     pass
+
+
+class KeystoreMetadataDoesNotExist(KeystoreDoesNotExist):
+    pass
+    # No KeystoreMetadataAlreadyExists needed for now
 
 
 # ---

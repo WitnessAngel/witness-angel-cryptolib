@@ -16,7 +16,7 @@ from wacryptolib.exceptions import (
     KeystoreAlreadyExists,
     SchemaValidationError,
     ValidationError,
-    KeyDoesNotExist,
+    KeyDoesNotExist, KeystoreMetadataDoesNotExist,
 )
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import (
@@ -195,6 +195,8 @@ def test_filesystem_keystore_pool_basics(tmp_path: Path):
 
     pool = FilesystemKeystorePool(tmp_path)
 
+    assert pool.get_all_foreign_keystore_metadata() == {}
+
     local_keystore = pool.get_local_keyfactory()
     assert isinstance(local_keystore, FilesystemKeystore)
     assert not local_keystore.list_keypair_identifiers()
@@ -218,6 +220,11 @@ def test_filesystem_keystore_pool_basics(tmp_path: Path):
     mirror_path2.mkdir(parents=True, exist_ok=False)
 
     assert pool.list_foreign_keystore_uids() == sorted([foreign_keystore_uid, foreign_keystore_uid2])
+
+    with pytest.raises(KeystoreMetadataDoesNotExist):
+        pool.get_all_foreign_keystore_metadata()
+    with pytest.raises(KeystoreMetadataDoesNotExist):  # Error raised immediately
+        pool.get_foreign_keystore_metadata(foreign_keystore_uid)
 
     with pytest.raises(KeystoreDoesNotExist, match="not found"):
         pool.get_foreign_keystore(generate_uuid0())
@@ -359,7 +366,7 @@ def test_keystore_import_from_keystore_tree(tmp_path: Path):
     updated = filesystem_keystore.import_from_keystore_tree(keystore_tree)
     assert not updated
 
-    metadata = load_keystore_metadata(authdevice_path)
+    metadata = filesystem_keystore.get_keystore_metadata()
 
     def _check_loaded_metadata_coherence(loaded_metadata):
         # Quick checks
@@ -394,7 +401,7 @@ def test_keystore_import_from_keystore_tree(tmp_path: Path):
         updated = filesystem_keystore.import_from_keystore_tree(keystore_tree)
         assert updated
 
-        metadata = load_keystore_metadata(authdevice_path)
+        metadata = filesystem_keystore.get_keystore_metadata()
         _check_loaded_metadata_coherence(metadata)
 
         expected_keypair_identifiers = [
@@ -452,9 +459,11 @@ def test_keystorepool_export_and_import_foreign_keystore_to_keystore_tree(tmp_pa
         updated = keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree)
         assert updated == bool(idx)  # Second import is an update
 
-        foreign_keystore_dir = keystore_pool._get_foreign_keystore_dir(keystore_uid)
-        metadata = load_keystore_metadata(foreign_keystore_dir)
-        # print(metadata)
+        metadata = keystore_pool.get_foreign_keystore_metadata(keystore_uid)
+
+        # We test this utility along the way
+        all_metadata = keystore_pool.get_all_foreign_keystore_metadata()
+        assert all_metadata == {metadata["keystore_uid"]: metadata}  # Only a single entry here
 
         keystore_tree = keystore_pool.export_foreign_keystore_to_keystore_tree(
             metadata["keystore_uid"], include_private_keys=True

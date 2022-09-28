@@ -24,7 +24,7 @@ from wacryptolib.exceptions import (
     KeystoreDoesNotExist,
     KeystoreAlreadyExists,
     SchemaValidationError,
-    ValidationError,
+    ValidationError, KeystoreMetadataDoesNotExist,
 )
 from wacryptolib.keygen import generate_keypair, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.utilities import (
@@ -104,12 +104,13 @@ def _get_legacy_keystore_metadata_file_path(keystore_dir: Path):
     return keystore_dir.joinpath(".keystore.json")
 
 
-def load_keystore_metadata(keystore_dir: Path) -> dict:  # FIXME rename to advertise that it VALiDATES data too?
+def load_keystore_metadata(keystore_dir: Path) -> dict:
     """
-    Return the authenticator metadata stored in the given folder, after checking that it contains at least mandatory
-    (keystore_owner and keystore_uid) fields.
+    Return the authenticator metadata dict stored in the given folder, after validating its format.
 
-    Raises SchemaValidationError if device appears initialized, but has corrupted metadata (or invalid json payload).
+    Raises KeystoreMetadataDoesNotExist if no metadata file is present.
+
+    Raises SchemaValidationError if keystore appears initialized, but has corrupted metadata.
     """
 
     metadata_file = _get_keystore_metadata_file_path(keystore_dir)
@@ -121,7 +122,7 @@ def load_keystore_metadata(keystore_dir: Path) -> dict:  # FIXME rename to adver
         try:
             metadata = load_from_json_file(legacy_metadata_file)
         except FileNotFoundError as exc:
-            raise KeystoreDoesNotExist("Keystore metadata file %s does not exist" % metadata_file) from exc
+            raise KeystoreMetadataDoesNotExist("Keystore metadata file %s does not exist" % metadata_file) from exc
     validate_keystore_metadata(metadata)
     return metadata
 
@@ -558,36 +559,6 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         free_private_key.replace(target_private_key_filename)
         free_public_key.replace(target_public_key_filename)
 
-    def export_to_keystore_tree(self, include_private_keys=True):  # TODO add include_private_keys=bool
-        """
-        Export keystore metadata and keys (public and, if include_private_keys is true, private)
-        to a data tree.
-        """
-
-        assert self._keys_dir.exists(), self._keys_dir
-        metadata = load_keystore_metadata(self._keys_dir)
-        keypair_identifiers = self.list_keypair_identifiers()
-        keypairs = []
-
-        for keypair_identifier in keypair_identifiers:
-            keypair = dict(
-                keychain_uid=keypair_identifier["keychain_uid"],
-                key_algo=keypair_identifier["key_algo"],
-                public_key=self.get_public_key(
-                    keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"]
-                ),
-                private_key=None,
-            )
-            if include_private_keys:
-                keypair["private_key"] = self.get_private_key(
-                    keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"]
-                )
-            keypairs.append(keypair)
-
-        keystore_tree = metadata.copy()
-        keystore_tree["keypairs"] = keypairs
-        validate_keystore_tree(keystore_tree)  # Extra safety
-        return keystore_tree
 
     def _initialize_metadata_from_keystore_tree(self, keystore_tree: dict):
         metadata_file = _get_keystore_metadata_file_path(self._keys_dir)
@@ -611,11 +582,11 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         validate_keystore_tree(keystore_tree)
 
         try:
-            metadata = load_keystore_metadata(self._keys_dir)
+            metadata = self.get_keystore_metadata()
             if keystore_tree["keystore_uid"] != metadata["keystore_uid"]:
                 raise ValidationError("Mismatch between existing and incoming keystore UIDs")
             keystore_updated = True
-        except KeystoreDoesNotExist:
+        except KeystoreMetadataDoesNotExist:
             self._initialize_metadata_from_keystore_tree(keystore_tree)
             keystore_updated = False
 
@@ -639,6 +610,42 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
                     pass  # We ASSUME that it's the same key content
 
         return keystore_updated
+
+    def export_to_keystore_tree(self, include_private_keys=True):  # TODO add include_private_keys=bool
+        """
+        Export keystore metadata and keys (public and, if include_private_keys is true, private)
+        to a data tree.
+        """
+
+        assert self._keys_dir.exists(), self._keys_dir
+        metadata = self.get_keystore_metadata()
+        keypair_identifiers = self.list_keypair_identifiers()
+        keypairs = []
+
+        for keypair_identifier in keypair_identifiers:
+            keypair = dict(
+                keychain_uid=keypair_identifier["keychain_uid"],
+                key_algo=keypair_identifier["key_algo"],
+                public_key=self.get_public_key(
+                    keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"]
+                ),
+                private_key=None,
+            )
+            if include_private_keys:
+                keypair["private_key"] = self.get_private_key(
+                    keychain_uid=keypair_identifier["keychain_uid"], key_algo=keypair_identifier["key_algo"]
+                )
+            keypairs.append(keypair)
+
+        keystore_tree = metadata.copy()
+        keystore_tree["keypairs"] = keypairs
+        validate_keystore_tree(keystore_tree)  # Extra safety
+        return keystore_tree
+
+    def get_keystore_metadata(self):
+        """Return a metadata dict for the filesystem keystore, or raise KeystoreMetadataDoesNotExist."""
+        metadata = load_keystore_metadata(self._keys_dir)
+        return metadata
 
 
 class KeystorePoolBase:
@@ -730,11 +737,10 @@ class FilesystemKeystorePool(
         paths = foreign_keystores_dir.glob("%s*" % self.FOREIGN_KEYSTORE_PREFIX)  # This excludes TEMP folders
         return sorted([uuid.UUID(d.name.replace(self.FOREIGN_KEYSTORE_PREFIX, "")) for d in paths])
 
-    def get_keystore_metadata(self, keystore_uid):  # FIXME rename to get_foreign_keystore_metadata() ??
+    def get_foreign_keystore_metadata(self, keystore_uid):
         """Return a metadata dict for the keystore `keystore_uid`."""
-        keystore_dir = self._get_foreign_keystore_dir(keystore_uid=keystore_uid)
-        metadata = load_keystore_metadata(keystore_dir)
-        return metadata
+        keystore = self.get_foreign_keystore(keystore_uid=keystore_uid)
+        return keystore.get_keystore_metadata()
 
     def get_all_foreign_keystore_metadata(self) -> dict:
         """Return a dict mapping key storage UUIDs to the dicts of their metadata.
@@ -745,7 +751,7 @@ class FilesystemKeystorePool(
 
         metadata_mapper = {}
         for keystore_uid in keystore_uids:
-            metadata = self.get_keystore_metadata(keystore_uid)
+            metadata = self.get_foreign_keystore_metadata(keystore_uid)
             metadata_mapper[keystore_uid] = metadata
 
         return metadata_mapper

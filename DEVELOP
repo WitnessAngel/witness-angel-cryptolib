@@ -1,10 +1,10 @@
 
-
+*For misc development commands, see docs/ folder*
 
 Release process
 ======================
 
-We don't need Twine, since Poetry already has publish commands.
+We don't need Twine, since Poetry already has publishing commands.
 
 
 Initial setup

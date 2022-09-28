@@ -28,6 +28,8 @@ Handy commands
 
 Use `pytest` to launch unit-tests (default pytest arguments are in `setup.cfg`). Use `poetry run pytest` instead, if poetry created its own virtualenv.
 
+Add `--cov=wacryptolib` argument to pytest command to generate coverage reports.
+
 Use `bash ci.sh` to do a full checkup before committing or pushing your changes.
 
 Use the `Black <https://black.readthedocs.io/en/stable/>`_ formatter to format the python code::

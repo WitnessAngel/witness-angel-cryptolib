@@ -1,12 +1,12 @@
 
-Concepts
-=============
+Cryptolib concepts
+=======================
 
 *To avoid too long variable name, and to disambiguate words like "key" which have too many different meanings (symmetric key, asymmetric key, usb key, index key...), this library introduces its own set of terms, in addition to those already widely used in cryptography (cipher, signature, hash...).*
 
 
 Different digital keys
-------------------------
++++++++++++++++++++++++++++++
 
 Lots of different "keys" and related concepts are used cryptolib code, so we use more precise terms when relevant.
 
@@ -51,7 +51,7 @@ Only when dealing with bytestrings that could be anything (serialized key, seria
 
 
 Trusted parties
-------------------
++++++++++++++++++++++
 
 The data encrypted inside a cryptainer relies on multiple actors to protect itself from unwanted access.
 
@@ -59,11 +59,11 @@ Each of these actors is commonly designated as a **trustee** in the code. A trus
 
 A recorder device has a **local-keyfactory trustee**, backed by the local-keyfactory keystore, which can encrypt and sign data using its own generated-on-demand digital keys.
 
-But real protection is provided by trustees also called **key guardians**, which are trusted third parties. Access to these remote trustees is generally done via Internet, even if other channels (e.g. usb devices temporarily plugged in) can be used too. For now, these remote trustees can be **server trustees** (e.g. database-backend keystore administrated by an association), or **authenticator trustees** (e.g. an individual having an authenticator keystore on his smartphone).
+But real protection is provided by trustees also called **key guardians**, which are *trusted third parties*. Access to these remote trustees is generally done via Internet, even if other channels (e.g. usb devices temporarily plugged in) can be used too. For now, these remote trustees can be **server trustees** (e.g. a database-backed keystore administrated by an association), or **authenticator trustees** (e.g. an individual having an authenticator keystore on his smartphone).
 
 
 Cryptainers and cryptoconfs
-------------------------------
+++++++++++++++++++++++++++++++++++++++++++
 
 For more information on these concepts, see the :doc:`dedicated page <cryptainer_explanations>` above.
 

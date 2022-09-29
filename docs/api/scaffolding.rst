@@ -2,7 +2,7 @@ Scaffolding for tests
 ========================
 
 This module provides utilities so that other projects can easily test their own implementations of
-witness-angel related classes.
+cryptolib-related classes.
 
 This is a provisional API, which may change without deprecation period, and which requires dependencies
 like `pytest`.

@@ -35,6 +35,8 @@ Signature algorithms
 
 Signature is used to guarantee integrity and non-repudiation. Digital signatures are based on public key cryptography: the party that signs a message holds the private key, the one that verifies the signature holds the public key.
 
+The cryptolib actually signs a hash of the data concatenated with a timestamp.
+
 - PSS (Probabilistic Signature Scheme) : The algorithm used to sign a plaintext is almost the same as the one used to cipher a plaintext in RSA; except that the private key is used to sign, and the public key to check if the signature is authentic.
 
 - DSS (Digital Signature Standard): This algorithm works in the framework of DSA public-key cryptosystems and is based on the algebraic properties of modular exponentiation, together with the discrete logarithm problem, which is considered to be computationally intractable. The algorithm uses a key pair consisting of a public key and a private key. The private key is used to generate a digital signature for a message, and such a signature can be verified by using the signer's corresponding public key. The digital signature provides message authentication (the receiver can verify the origin of the message), integrity (the receiver can verify that the message has not been modified since it was signed) and non-repudiation (the sender cannot falsely claim that they have not signed the message). Also works with ECC keys, based on elliptic curves.

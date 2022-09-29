@@ -2,7 +2,7 @@ Cryptainer
 ==========
 
 This module provides utilities to write and read encrypted cryptainers, which themselves use
-encryption/signing keys of the trustee system.
+encryption/signing keys from trustees.
 
 
 Cryptainer object processing

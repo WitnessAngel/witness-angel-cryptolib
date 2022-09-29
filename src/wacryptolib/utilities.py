@@ -169,7 +169,7 @@ def load_from_json_str(data, **extra_options):
     Load a data tree from a json representation as string.
     Supports advanced types like bytes, uuids, dates...
 
-    Raises permissions.ValidationError on loading error
+    Raises exceptions.ValidationError on loading error.
     """
     assert isinstance(data, str), data
     try:

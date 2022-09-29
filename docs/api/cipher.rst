@@ -5,7 +5,7 @@ This module allows to encrypt bytestring data, then decrypt it.
 
 
 Public API
---------------
++++++++++++++++++++++
 
 .. autodata:: wacryptolib.cipher.SUPPORTED_CIPHER_ALGOS
 
@@ -21,13 +21,13 @@ Public API
 
 
 Private API
----------------
++++++++++++++++++++++
 
 The objects below are only documented for the details they give on specific arguments.
 
 
 AES with CBC mode
-~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------
 
 .. autoclass:: wacryptolib.cipher.AesCbcEncryptionNode
 
@@ -37,7 +37,7 @@ AES with CBC mode
 
 
 AES with EAX mode
-~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------
 
 .. autoclass:: wacryptolib.cipher.AesEaxEncryptionNode
 
@@ -47,7 +47,7 @@ AES with EAX mode
 
 
 ChaCha20_Poly1305
-~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------
 
 .. autoclass:: wacryptolib.cipher.Chacha20Poly1305EncryptionNode
 
@@ -57,7 +57,7 @@ ChaCha20_Poly1305
 
 
 RSA - PKCS#1 OAEP
-~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------
 
 .. autofunction:: wacryptolib.cipher._encrypt_via_rsa_oaep
 

@@ -5,7 +5,7 @@ This module exposes different functions which can be useful when dealing with cr
 
 
 Task handling
-----------------
++++++++++++++++++++++
 
 .. autofunction:: wacryptolib.utilities.TaskRunnerStateMachineBase
 
@@ -13,7 +13,7 @@ Task handling
 
 
 Hashing
------------
++++++++++++++++++++++
 
 .. autodata:: wacryptolib.utilities.SUPPORTED_HASH_ALGOS
 
@@ -21,7 +21,7 @@ Hashing
 
 
 Serialization
-------------------
++++++++++++++++++++++
 
 .. autofunction:: wacryptolib.utilities.dump_to_json_str
 
@@ -40,10 +40,6 @@ Miscellaneous
 +++++++++++++++++++++++++
 
 .. autofunction:: wacryptolib.utilities.generate_uuid0
-
-.. autofunction:: wacryptolib.utilities.split_as_formatted_data
-
-.. autofunction:: wacryptolib.utilities.consume_bytes_as_chunks
 
 .. autofunction:: wacryptolib.utilities.split_as_chunks
 

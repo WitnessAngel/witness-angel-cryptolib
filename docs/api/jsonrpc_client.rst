@@ -1,7 +1,7 @@
 Json-rpc client
 =================
 
-This module provides a client for json-rpc trustee webservices.
+This module provides a client for json-rpc webservices.
 
 .. autoclass:: wacryptolib.jsonrpc_client.JsonRpcProxy
     :no-members:

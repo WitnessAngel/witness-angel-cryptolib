@@ -229,4 +229,4 @@ class ReadonlyTrusteeApi(TrusteeApi):
             self._keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
         except KeyDoesNotExist:
             # Just tweak the error message here
-            raise KeyDoesNotExist("Keypair %s/%s not found in trustee api" % (keychain_uid, key_algo))
+            raise KeyDoesNotExist("Keypair %s/%s not found in readonly trustee api" % (keychain_uid, key_algo))

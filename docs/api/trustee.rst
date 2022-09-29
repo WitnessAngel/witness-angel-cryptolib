@@ -1,7 +1,7 @@
 Trustee
 =============
 
-This module provides base classes and utilities for trustee local/web services.
+This module provides base classes and utilities for trustee actors.
 
 
 API for trustee services

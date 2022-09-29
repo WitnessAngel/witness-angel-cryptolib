@@ -1,23 +1,18 @@
 
-Welcome to WACryptolib documentation!
-=========================================
-
-This is the core cryptographic and utility library of the WitnessAngel project.
+Welcome to the WACryptolib documentation!
+==========================================
 
 
 .. toctree::
    :maxdepth: 2
 
-   Readme<readme>
-   getting_started
-
-
+   Presentation<readme>
    cryptainer_explanations
    cryptoconf_examples
    concepts
    selected_protocols
-
    api
+   development.rst
 
 
 Indices and tables

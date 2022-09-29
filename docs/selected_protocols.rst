@@ -7,18 +7,18 @@ Selected algorithms, protocols and formats
 Symmetric ciphers
 +++++++++++++++++++++++++
 
-- AES with CBC (cipher block chaining) mode. This mode applies a XOR operation between each block of plaintext and the previous ciphertext block, before encrypting it. As a result, the entire validity of all preceding blocks is contained in the immediately previous ciphertext block. It uses an initialization vector (IV) of a certain length. The ciphertext is not authenticated, so its modification wouldn't be immediately visible when decrypting.
+- AES with CBC (cipher block chaining) mode. This mode applies a XOR operation between each block of plaintext and the previous ciphertext block, before encrypting it. As a result, the entire validity of all preceding blocks is contained in the immediately previous ciphertext block. This cipher uses an initialization vector (IV) of a certain length. The ciphertext is not authenticated, so its modification wouldn't be immediately visible when decrypting.
 
 - AES with EAX (encrypt-then-authenticate-then-translate) mode : it is an Authenticated Encryption with Associated Data (AEAD) algorithm designed to simultaneously provide both authentication and privacy of the message.
-  The reference implementation uses AES in CTR mode for encryption combined with AES OMAC for authentication.
+  The reference implementation uses AES in CTR mode for encryption, combined with AES OMAC for authentication.
   EAX is a two-pass scheme, which means that encryption and authentication are done in separate operations.
   This algorithm has several desirable attributes, notably:
 
     - provable security (dependent on the security of the underlying primitive cipher);
     - message expansion is minimal, being limited to the overhead of the tag length;
-    - using CTR mode means the cipher need to be implemented only for encryption, in simplifying implementation of some ciphers (especially desirable attribute for hardware implementation);
-    - the algorithm is "on-line", that means that can process a stream of data, using constant memory, without knowing total data length in advance;
-    - the algorithm can process static Associated Data (AD), useful for encryption/decryption of communication session parameters (where session parameters may represent the Associated Data).
+    - using CTR mode means the cipher needs to be implemented only for encryption, simplifying implementation;
+    - the algorithm is "on-line", that means that it can process a stream of data, using constant memory, without knowing total data length in advance;
+    - the algorithm can process static Associated Data (AD), like session parameters in a communication;
 
 - ChaCha20 with Poly1305: while this algorithm is mainly used for encryption, its core is a pseudo-random number generator. The cipher text is obtained by XOR'ing the plain text with a pseudo-random stream. Provided you never use the same nonce with the same key twice, you can treat that stream as a one time pad. This makes it very simple: unlike block ciphers, you don't have to worry about padding, and decryption is the same XOR operation as encryption. The Poly1305 authenticator prevents the insertion of fake messages into the stream.
 
@@ -35,7 +35,7 @@ Signature algorithms
 
 Signature is used to guarantee integrity and non-repudiation. Digital signatures are based on public key cryptography: the party that signs a message holds the private key, the one that verifies the signature holds the public key.
 
-The cryptolib actually signs a hash of the data concatenated with a timestamp.
+The cryptolib actually signs a hash of the message data concatenated with a timestamp.
 
 - PSS (Probabilistic Signature Scheme) : The algorithm used to sign a plaintext is almost the same as the one used to cipher a plaintext in RSA; except that the private key is used to sign, and the public key to check if the signature is authentic.
 

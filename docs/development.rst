@@ -69,7 +69,7 @@ Then test this preview package in some project using the wacryptolib::
 
     $ python -m pip install -U --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ wacryptolib
 
-When all is verified on testpypi (Readme, files uploaded etc.), release the package to the real pypi::
+When all is verified on testpypi (Readme, files uploaded, etc.), release the package to the real pypi::
 
     $ poetry publish
 

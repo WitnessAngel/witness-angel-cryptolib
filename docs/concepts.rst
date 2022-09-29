@@ -17,9 +17,9 @@ A **keypair** is a dict containing both "public" and "private" keys, for use in 
 
 A **symkey** is a dict containing all parameters required to configure a symmetric encryption/decryption cipher. Typically, it means a binary "secret key", and additional fields like "initialization vector" or "nonce", depending on the symmetric key-algo concerned. These symkeys are meant to be randomly generated, immediately protected by asymmetric ciphers, and stored along the encrypted data - as usual in a hybrid cryptosystem. Symkeys are anonymous.
 
-When a bytestring (typically a serialized symkey) is split via a "Shamir shared secret" scheme, we refer to the different parts as **shards** (and not "shares", the other possibel name). However, symkeys and their shards are often both called "symkeys" in the code, when the difference doesn't matter (e.g. when issuing decryption authorization requests).
+When a bytestring (typically a serialized symkey) is split via a "Shamir shared secret" scheme, we refer to the different parts as **shards** (and not "shares", the other possible name). However, symkeys and their shards are often all called "symkeys" in the code, when the difference doesn't matter (e.g. when issuing decryption authorization requests).
 
-Note that inside configurations and containers, we mostly use the terme **key**, since the context should make it clear what exactly is at stake (mostly symmetric keys or their shards being encrypted via miscellaneous algorithms)
+Note that inside configurations and containers, we mostly use the term **key**, since the context should make it clear what exactly is at stake (mostly symmetric keys or their shards being encrypted via miscellaneous algorithms)
 
 
 Keypair repositories

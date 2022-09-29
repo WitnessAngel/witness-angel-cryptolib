@@ -1612,7 +1612,7 @@ def get_cryptoconf_summary(cryptoconf_or_cryptainer):
             )
             shard_confs = key_cipher_layer["key_shared_secret_shards"]
             for shard_idx, shard_conf in enumerate(shard_confs, start=1):
-                text_lines.append((current_level + 1) * indent + "Shard %d:" % shard_idx)
+                text_lines.append((current_level + 1) * indent + "Shard %d encryption layers:" % shard_idx)
                 for key_cipher_layer2 in shard_conf["key_cipher_layers"]:
                     _get_key_encryption_layer_description(key_cipher_layer2, current_level + 2)  # Recursive call
         elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:

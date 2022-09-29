@@ -672,7 +672,7 @@ class InMemoryKeystorePool(KeystorePoolBase):
     def get_local_keyfactory(self):
         return self._local_keystore
 
-    def get_foreign_keystore(self, keystore_uid, writable=None):
+    def get_foreign_keystore(self, keystore_uid: UUID, writable: Optional[bool]=None):
         assert writable is None, writable  # No read/write specialization for InMemoryKeystorePool
         foreign_keystore = self._foreign_keystores.get(keystore_uid)
         if not foreign_keystore:
@@ -714,18 +714,18 @@ class FilesystemKeystorePool(
         # TODO initialize metadata for local keystore ??
         return FilesystemKeystore(local_keystore_dir)
 
-    def _get_foreign_keystore_dir(self, keystore_uid):
+    def _get_foreign_keystore_dir(self, keystore_uid: UUID):
         foreign_keystore_dir = self._root_dir.joinpath(
             self.FOREIGN_KEYSTORES_DIRNAME, "%s%s" % (self.FOREIGN_KEYSTORE_PREFIX, keystore_uid)
         )
         return foreign_keystore_dir
 
-    def _ensure_foreign_keystore_dir_exists(self, keystore_uid):  # Not always INITIALIZED
+    def _ensure_foreign_keystore_dir_exists(self, keystore_uid: UUID):  # Not always INITIALIZED
         foreign_keystore_dir = self._get_foreign_keystore_dir(keystore_uid=keystore_uid)
         if not foreign_keystore_dir.exists():
             foreign_keystore_dir.mkdir(parents=True, exist_ok=True)
 
-    def get_foreign_keystore(self, keystore_uid, writable=False):
+    def get_foreign_keystore(self, keystore_uid: UUID, writable: bool=False):
         """The selected storage MUST exist, else a KeystoreDoesNotExist is raised."""
         foreign_keystore_dir = self._get_foreign_keystore_dir(keystore_uid=keystore_uid)
         if not foreign_keystore_dir.exists():
@@ -740,7 +740,7 @@ class FilesystemKeystorePool(
         paths = foreign_keystores_dir.glob("%s*" % self.FOREIGN_KEYSTORE_PREFIX)  # This excludes TEMP folders
         return sorted([uuid.UUID(d.name.replace(self.FOREIGN_KEYSTORE_PREFIX, "")) for d in paths])
 
-    def get_foreign_keystore_metadata(self, keystore_uid):
+    def get_foreign_keystore_metadata(self, keystore_uid: UUID):
         """Return a metadata dict for the keystore `keystore_uid`."""
         keystore = self.get_foreign_keystore(keystore_uid=keystore_uid)
         return keystore.get_keystore_metadata()
@@ -754,12 +754,13 @@ class FilesystemKeystorePool(
 
         metadata_mapper = {}
         for keystore_uid in keystore_uids:
+            assert isinstance(keystore_uid, UUID), keystore_uid
             metadata = self.get_foreign_keystore_metadata(keystore_uid)
             metadata_mapper[keystore_uid] = metadata
 
         return metadata_mapper
 
-    def export_foreign_keystore_to_keystore_tree(self, keystore_uid, include_private_keys=True):
+    def export_foreign_keystore_to_keystore_tree(self, keystore_uid: UUID, include_private_keys: bool=True):
         """
         Exports data tree from the keystore targeted by keystore_uid.
         """
@@ -767,7 +768,7 @@ class FilesystemKeystorePool(
         keystore_tree = foreign_keystore.export_to_keystore_tree(include_private_keys)
         return keystore_tree
 
-    def import_foreign_keystore_from_keystore_tree(self, keystore_tree) -> bool:
+    def import_foreign_keystore_from_keystore_tree(self, keystore_tree: dict) -> bool:
         """
         Imports/updates data tree into the keystore targeted by keystore_uid.
         """

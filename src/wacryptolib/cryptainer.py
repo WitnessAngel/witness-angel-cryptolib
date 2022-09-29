@@ -1207,7 +1207,7 @@ class CryptainerDecryptor(CryptainerBase):
         return key_bytes, errors
 
     @staticmethod
-    def _get_predecrypted_symkey_or_none(key_ciphertext, predecrypted_symkey_mapper: list) -> bytes:
+    def _get_predecrypted_symkey_or_none(key_ciphertext, predecrypted_symkey_mapper: Optional[dict]) -> Optional[bytes]:
         predecrypted_symkey = None
 
         if predecrypted_symkey_mapper and (key_ciphertext in predecrypted_symkey_mapper):

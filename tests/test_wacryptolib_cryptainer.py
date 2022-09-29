@@ -995,14 +995,14 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
     )
 
-    gateway_url_list = ["http://127.0.0.1:9898/jsonrpc"]  # FIXME what's this url ? CHANGE THEM ALL
+    gateway_urls = ["http://127.0.0.1:9898/jsonrpc"]  # FIXME what's this url ? CHANGE THEM ALL
 
     # Network warning when no JSONRPC mockup s provided
     result_payload, error_report = decrypt_payload_from_cryptainer(
         cryptainer=cryptainer,
         keystore_pool=keystore_pool,
         passphrase_mapper=passphrase_mapper,
-        gateway_url_list=gateway_url_list,
+        gateway_urls=gateway_urls,
         revelation_requestor_uid=revelation_requestor_uid,
     )
     assert result_payload == payload
@@ -1023,7 +1023,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper=passphrase_mapper,
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
@@ -1042,7 +1042,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper=passphrase_mapper,
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert (
@@ -1070,7 +1070,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper=passphrase_mapper,
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload  # Using asymmetric algorithm because response_data corrupted
@@ -1095,7 +1095,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
             cryptainer=cryptainer,
             keystore_pool=keystore_pool1,
             passphrase_mapper=passphrase_mapper,
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload is None
@@ -1125,7 +1125,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
             cryptainer=cryptainer,
             keystore_pool=keystore_pool2,
             passphrase_mapper=passphrase_mapper,
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload is None
@@ -1245,7 +1245,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
     )
 
-    gateway_url_list = ["http://127.0.0.1:9898/jsonrpc"]
+    gateway_urls = ["http://127.0.0.1:9898/jsonrpc"]
 
     # Remote revelation request return right symkey_revelation_response_data
     with _patched_gateway_revelation_request_list(
@@ -1254,7 +1254,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
@@ -1275,7 +1275,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
             cryptainer=cryptainer,
             keystore_pool=keystore_pool1,
             passphrase_mapper=passphrase_mapper,
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
@@ -1291,7 +1291,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool1,
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             passphrase_mapper=passphrase_mapper,
             revelation_requestor_uid=revelation_requestor_uid,
         )
@@ -1483,7 +1483,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
     )
 
-    gateway_url_list = ["http://127.0.0.1:9898/jsonrpc"]  # FIXME what's this url ?
+    gateway_urls = ["http://127.0.0.1:9898/jsonrpc"]  # FIXME what's this url ?
 
     # No remote decryption request for this container and requestor
     with _patched_gateway_revelation_request_list(return_value=[]):
@@ -1491,7 +1491,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper={None: all_passphrases},
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
@@ -1507,7 +1507,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper={None: all_passphrases},
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
@@ -1523,7 +1523,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper={None: all_passphrases},
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
@@ -1538,7 +1538,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper={local_keyfactory_trustee_id: [local_passphrase], shard_trustee2_id: [passphrase2]},
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
@@ -1552,7 +1552,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload is None
@@ -1666,7 +1666,7 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
     response_keypair = local_keystore._cached_keypairs[response_key]
     response_keypair["public_key"] = b"wrongsignaturepublickey"
 
-    gateway_url_list = ["http://127.0.0.1:9898/jsonrpc"]
+    gateway_urls = ["http://127.0.0.1:9898/jsonrpc"]
     with _patched_gateway_revelation_request_list(
         return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
     ):
@@ -1675,7 +1675,7 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
             passphrase_mapper={shard_trustee_id: [passphrase]},
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload

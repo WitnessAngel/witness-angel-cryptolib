@@ -845,6 +845,7 @@ class CryptainerDecryptor(CryptainerBase):
         return predecrypted_symmetric_keys, errors
 
     def _get_single_gateway_revelation_request_list(self, gateway_url: str, revelation_requestor_uid: uuid.UUID):
+        assert gateway_url and revelation_requestor_uid  # By construction
 
         gateway_revelation_request_list = []
         gateway_errors = []
@@ -865,11 +866,12 @@ class CryptainerDecryptor(CryptainerBase):
         return gateway_revelation_request_list, gateway_errors
 
     def _get_multiple_gateway_revelation_request_list(
-        self, gateway_url_list: list, revelation_requestor_uid: uuid.UUID
+        self, gateway_urls: list, revelation_requestor_uid: uuid.UUID
     ):
+        assert gateway_urls and revelation_requestor_uid  # By construction
         gateway_errors = []
         multiple_gateway_revelation_request_list = []
-        for gateway_url in gateway_url_list:
+        for gateway_url in gateway_urls:
             gateway_revelation_request_list, gateway_error = self._get_single_gateway_revelation_request_list(
                 gateway_url, revelation_requestor_uid
             )
@@ -879,7 +881,7 @@ class CryptainerDecryptor(CryptainerBase):
         return multiple_gateway_revelation_request_list, gateway_errors
 
     def _get_successful_symkey_decryptions(
-        self, cryptainer: dict, gateway_url_list: list, revelation_requestor_uid: uuid.UUID
+        self, cryptainer: dict, gateway_urls: list, revelation_requestor_uid: uuid.UUID
     ) -> tuple:
 
         ACCEPTED = "ACCEPTED"
@@ -887,7 +889,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         errors = []
         multiple_gateway_revelation_request_list, gateway_errors = self._get_multiple_gateway_revelation_request_list(
-            gateway_url_list, revelation_requestor_uid
+            gateway_urls, revelation_requestor_uid
         )
         errors.extend(gateway_errors)
 
@@ -918,12 +920,12 @@ class CryptainerDecryptor(CryptainerBase):
 
         return successful_symkey_decryptions, errors
 
-    def decrypt_payload(  # FIXME test the cases with gateway_url_list or revelation_requestor_uid empty
+    def decrypt_payload(  # FIXME test the cases with gateway_urls or revelation_requestor_uid empty
         self,
         cryptainer: dict,
         verify_integrity_tags: bool = True,
-        gateway_url_list: Optional[list] = None,
-        revelation_requestor_uid: uuid.UUID = None,
+        gateway_urls: Optional[list] = None,
+        revelation_requestor_uid: Optional[uuid.UUID] = None,
     ) -> tuple:
         """
         Loop through cryptainer layers, to decipher payload with the right algorithms.
@@ -937,10 +939,10 @@ class CryptainerDecryptor(CryptainerBase):
         errors = []
         payload = None
 
-        if revelation_requestor_uid and gateway_url_list:
+        if revelation_requestor_uid and gateway_urls:
             successful_symkey_decryptions, remote_decryption_errors = self._get_successful_symkey_decryptions(
                 cryptainer=cryptainer,
-                gateway_url_list=gateway_url_list,
+                gateway_urls=gateway_urls,
                 revelation_requestor_uid=revelation_requestor_uid,
             )
             errors.extend(remote_decryption_errors)
@@ -1546,8 +1548,8 @@ def decrypt_payload_from_cryptainer(
     keystore_pool: Optional[KeystorePoolBase] = None,
     passphrase_mapper: Optional[dict] = None,
     verify_integrity_tags: bool = True,
-    gateway_url_list: Optional[list] = None,
-    revelation_requestor_uid: uuid.UUID = None
+    gateway_urls: Optional[list] = None,
+    revelation_requestor_uid: Optional[uuid.UUID] = None,
 ) -> tuple:
     """Decrypt a cryptainer with the help of third-parties.
 
@@ -1562,7 +1564,7 @@ def decrypt_payload_from_cryptainer(
     data, error_report = cryptainer_decryptor.decrypt_payload(
         cryptainer=cryptainer,
         verify_integrity_tags=verify_integrity_tags,
-        gateway_url_list=gateway_url_list,
+        gateway_urls=gateway_urls,
         revelation_requestor_uid=revelation_requestor_uid,
     )
     return data, error_report
@@ -1805,8 +1807,8 @@ class ReadonlyCryptainerStorage:
         cryptainer_name_or_idx,
         passphrase_mapper: Optional[dict] = None,
         verify_integrity_tags: bool = True,
-        gateway_url_list: Optional[list] = None,
-        revelation_requestor_uid: uuid.UUID = None,
+        gateway_urls: Optional[list] = None,
+        revelation_requestor_uid: Optional[uuid.UUID] = None,
     ) -> tuple:
         """
         Return the decrypted content of the cryptainer `cryptainer_name_or_idx` (which must be in `list_cryptainer_names()`,
@@ -1820,7 +1822,7 @@ class ReadonlyCryptainerStorage:
             cryptainer,
             passphrase_mapper=passphrase_mapper,
             verify_integrity_tags=verify_integrity_tags,
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )
         logger.info("Cryptainer %s successfully decrypted", cryptainer_name_or_idx)
@@ -1831,15 +1833,15 @@ class ReadonlyCryptainerStorage:
         cryptainer: dict,
         passphrase_mapper: Optional[dict],
         verify_integrity_tags: bool,
-        gateway_url_list: Optional[list] = None,
-        revelation_requestor_uid: uuid.UUID = None,
+        gateway_urls: Optional[list] = None,
+        revelation_requestor_uid: Optional[uuid.UUID] = None,
     ) -> tuple:
         return decrypt_payload_from_cryptainer(
             cryptainer,
             keystore_pool=self._keystore_pool,
             passphrase_mapper=passphrase_mapper,
             verify_integrity_tags=verify_integrity_tags,
-            gateway_url_list=gateway_url_list,
+            gateway_urls=gateway_urls,
             revelation_requestor_uid=revelation_requestor_uid,
         )  # Will fail if authorizations are not OK
 

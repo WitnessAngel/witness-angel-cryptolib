@@ -673,6 +673,7 @@ class CryptainerEncryptor(CryptainerBase):
         logger.debug("Encrypting symmetric key struct with asymmetric key %s %s", cipher_algo, keychain_uid)
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=cipher_algo)
 
+        #FIXME provide utilities to wrap/unwrap this struct?
         key_struct = dict(key_bytes=key_bytes, cryptainer_metadata=cryptainer_metadata)  # SPECIAL FORMAT FOR CHECKUPS
         key_struct_bytes = dump_to_json_bytes(key_struct)
         key_cipherdict = encrypt_bytestring(
@@ -821,9 +822,9 @@ class CryptainerDecryptor(CryptainerBase):
 
         return key_struct_bytes, errors
 
-    def _extract_predecrypted_symkey_decryptions(self, successful_symkey_decryptions):
+    def _fetch_predecrypted_symkeys(self, successful_symkey_decryptions):
 
-        predecrypted_symmetric_keys = {}
+        predecrypted_symkey_mapper = {}
         errors = []
 
         for symkey_decryption in successful_symkey_decryptions:
@@ -834,15 +835,16 @@ class CryptainerDecryptor(CryptainerBase):
 
             cipherdict = load_from_json_bytes(symkey_decryption["symkey_decryption_response_data"])
 
+            # FIXME immediately deserialize "key_struct_bytes" here and handle errors ? Or somewhere else ?
             (key_struct_bytes, local_decryption_errors) = self._decrypt_with_local_private_key(
                 cipherdict=cipherdict, keychain_uid=keychain_uid, cipher_algo=cipher_algo
             )
             errors.extend(local_decryption_errors)
 
             if key_struct_bytes:
-                predecrypted_symmetric_keys.setdefault(request_data, key_struct_bytes)
+                predecrypted_symkey_mapper.setdefault(request_data, key_struct_bytes)
 
-        return predecrypted_symmetric_keys, errors
+        return predecrypted_symkey_mapper, errors
 
     def _get_single_gateway_revelation_request_list(self, gateway_url: str, revelation_requestor_uid: uuid.UUID):
         assert gateway_url and revelation_requestor_uid  # By construction
@@ -935,7 +937,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         :return: deciphered plaintext
         """
-        predecrypted_symmetric_keys = None   #FIXME rename to xxx_mapper instead?
+        predecrypted_symkey_mapper = None
         errors = []
         payload = None
 
@@ -947,7 +949,7 @@ class CryptainerDecryptor(CryptainerBase):
             )
             errors.extend(remote_decryption_errors)
 
-            predecrypted_symmetric_keys, local_decryption_errors = self._extract_predecrypted_symkey_decryptions(
+            predecrypted_symkey_mapper, local_decryption_errors = self._fetch_predecrypted_symkeys(
                 successful_symkey_decryptions=successful_symkey_decryptions
             )
 
@@ -987,7 +989,7 @@ class CryptainerDecryptor(CryptainerBase):
                 key_ciphertext=key_ciphertext,
                 key_cipher_layers=payload_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
-                predecrypted_symmetric_keys=predecrypted_symmetric_keys,
+                predecrypted_symkey_mapper=predecrypted_symkey_mapper,
             )
             errors.extend(multiple_layer_decryption_errors)
 
@@ -1047,7 +1049,7 @@ class CryptainerDecryptor(CryptainerBase):
         key_ciphertext: bytes,
         key_cipher_layers: list,
         cryptainer_metadata: Optional[dict],
-        predecrypted_symmetric_keys: Optional[dict] = None,
+        predecrypted_symkey_mapper: Optional[dict] = None,
     ) -> tuple:
         assert len(key_cipher_layers), key_cipher_layers  # Extra safety
 
@@ -1060,7 +1062,7 @@ class CryptainerDecryptor(CryptainerBase):
                 key_ciphertext=key_ciphertext,
                 key_cipher_layer=key_cipher_layer,
                 cryptainer_metadata=cryptainer_metadata,
-                predecrypted_symmetric_keys=predecrypted_symmetric_keys,
+                predecrypted_symkey_mapper=predecrypted_symkey_mapper,
             )
             errors.extend(single_layer_decryption_errors)
             if not key_ciphertext:
@@ -1076,7 +1078,7 @@ class CryptainerDecryptor(CryptainerBase):
         key_ciphertext: bytes,
         key_cipher_layer: dict,
         cryptainer_metadata: Optional[dict],
-        predecrypted_symmetric_keys: Optional[dict] = None,
+        predecrypted_symkey_mapper: Optional[dict] = None,
     ) -> tuple:
         """
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
@@ -1116,7 +1118,7 @@ class CryptainerDecryptor(CryptainerBase):
                     key_ciphertext=shard_ciphertext,
                     key_cipher_layers=key_shared_secret_shard_conf["key_cipher_layers"],
                     cryptainer_metadata=cryptainer_metadata,
-                    predecrypted_symmetric_keys=predecrypted_symmetric_keys,
+                    predecrypted_symkey_mapper=predecrypted_symkey_mapper,
                 )  # Recursive structure
                 errors.extend(multiple_layer_decryption_errors)
                 if shard_bytes is not None:
@@ -1160,7 +1162,7 @@ class CryptainerDecryptor(CryptainerBase):
                 key_ciphertext=sub_symkey_ciphertext,
                 key_cipher_layers=key_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
-                predecrypted_symmetric_keys=predecrypted_symmetric_keys,
+                predecrypted_symkey_mapper=predecrypted_symkey_mapper,
             )  # Recursive structure
             errors.extend(multiple_layer_decryption_errors)
 
@@ -1187,8 +1189,8 @@ class CryptainerDecryptor(CryptainerBase):
             keychain_uid = key_cipher_layer.get("keychain_uid") or default_keychain_uid
             trustee = key_cipher_layer["key_cipher_trustee"]
 
-            predecrypted_symmetric_key = self._get_predecrypted_symmetric_keys_or_none(
-                key_ciphertext, predecrypted_symmetric_keys
+            predecrypted_symmetric_key = self._get_predecrypted_symkey_or_none(
+                key_ciphertext, predecrypted_symkey_mapper=predecrypted_symkey_mapper
             )
             if predecrypted_symmetric_key:
                 key_bytes = predecrypted_symmetric_key
@@ -1205,14 +1207,14 @@ class CryptainerDecryptor(CryptainerBase):
         return key_bytes, errors
 
     @staticmethod
-    def _get_predecrypted_symmetric_keys_or_none(key_bytes, predecrypted_symmetric_keys):
-        predecrypted_symmetric_key = None
+    def _get_predecrypted_symkey_or_none(key_ciphertext, predecrypted_symkey_mapper: list) -> bytes:
+        predecrypted_symkey = None
 
-        if predecrypted_symmetric_keys and (key_bytes in predecrypted_symmetric_keys):
-            predecrypted_symmetric_key = load_from_json_bytes(predecrypted_symmetric_keys[key_bytes])
-            predecrypted_symmetric_key = predecrypted_symmetric_key["key_bytes"]
+        if predecrypted_symkey_mapper and (key_ciphertext in predecrypted_symkey_mapper):
+            predecrypted_symkey_struct = load_from_json_bytes(predecrypted_symkey_mapper[key_ciphertext])
+            predecrypted_symkey = predecrypted_symkey_struct["key_bytes"]
 
-        return predecrypted_symmetric_key
+        return predecrypted_symkey
 
     @staticmethod
     def _build_error_report_message(

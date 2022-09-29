@@ -2771,7 +2771,7 @@ def test_get_cryptoconf_summary():
 
     summary = get_cryptoconf_summary(CONF_WITH_TRUSTEE)
     print("SUMMARY OBTAINED\n" + summary)
-    aaaaaaaaaaaaaaaaaaaaaa
+
     assert summary == textwrap.dedent(
         """\
         Data encryption layer 1: AES_EAX
@@ -2786,18 +2786,18 @@ def test_get_cryptoconf_summary():
         Data encryption layer 3: CHACHA20_POLY1305
           Key encryption layers:
             Shared secret with threshold 2:
-              Shard 1:
+              Shard 1 encryption layers:
                 RSA_OAEP via trustee 'local device'
                 RSA_OAEP via trustee 'local device'
-              Shard 2:
+              Shard 2 encryption layers:
                 AES_CBC with subkey encryption layers:
                   Shared secret with threshold 1:
-                    Shard 1:
+                    Shard 1 encryption layers:
                       RSA_OAEP via trustee 'local device'
                   RSA_OAEP via trustee 'local device'
-              Shard 3:
+              Shard 3 encryption layers:
                 RSA_OAEP via trustee 'local device'
-              Shard 4:
+              Shard 4 encryption layers:
                 RSA_OAEP via trustee 'local device'
           Signatures:
             SHA3_256/RSA_PSS via trustee 'local device'

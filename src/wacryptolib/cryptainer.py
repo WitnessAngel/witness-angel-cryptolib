@@ -248,7 +248,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
         else:
             assert last_key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS, last_key_cipher_algo
 
-            keychain_uid_for_encryption = last_key_cipher_layer.get("keychain_uid") or keychain_uid
+            keychain_uid_for_encryption = last_key_cipher_layer.get("keychain_uid") or default_keychain_uid
             key_algo_for_encryption = last_key_cipher_layer["key_cipher_algo"]
             key_cipher_trustee = last_key_cipher_layer["key_cipher_trustee"]
 
@@ -263,7 +263,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
             )
 
     for (cryptainer_name, cryptainer) in cryptainers_with_names:
-        keychain_uid = cryptainer["keychain_uid"]
+        default_keychain_uid = cryptainer["keychain_uid"]
         cryptainer_uid = cryptainer["cryptainer_uid"]
         cryptainer_metadata = cryptainer["cryptainer_metadata"]
 
@@ -363,14 +363,14 @@ class CryptainerEncryptor(CryptainerBase):
 
         :param cryptoconf: configuration tree
         :param output_stream: open file where the stream encryptor should write to
-        :param keychain_uid: uuid for the set of encryption keys used
+        :param keychain_uid: default uuid for the set of encryption keys used
         :param cryptainer_metadata: additional informations to store unencrypted in cryptainer
 
         :return: cryptainer with all the information needed to attempt payload decryption
         """
 
         cryptainer, payload_cipher_layer_extracts = self._generate_cryptainer_base_and_secrets(
-            cryptoconf=cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=cryptainer_metadata
+            cryptoconf=cryptoconf, default_keychain_uid=keychain_uid, cryptainer_metadata=cryptainer_metadata
         )
 
         encryption_pipeline = PayloadEncryptionPipeline(
@@ -389,7 +389,7 @@ class CryptainerEncryptor(CryptainerBase):
 
         :param payload: initial plaintext, or file pointer (file immediately deleted then)
         :param cryptoconf: configuration tree
-        :param keychain_uid: uuid for the set of encryption keys used
+        :param keychain_uid: default uuid for the set of encryption keys used
         :param cryptainer_metadata: additional data to store unencrypted in cryptainer
 
         :return: cryptainer with all the information needed to attempt data decryption
@@ -398,7 +398,7 @@ class CryptainerEncryptor(CryptainerBase):
         payload = self._load_payload_bytes_and_cleanup(payload)  # Ensure we get the whole payload buffer
 
         cryptainer, payload_cipher_layer_extracts = self._generate_cryptainer_base_and_secrets(
-            cryptoconf=cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=cryptainer_metadata
+            cryptoconf=cryptoconf, default_keychain_uid=keychain_uid, cryptainer_metadata=cryptainer_metadata
         )
 
         payload_ciphertext, payload_integrity_tags = self._encrypt_and_hash_payload(
@@ -464,14 +464,14 @@ class CryptainerEncryptor(CryptainerBase):
         return payload_current, payload_integrity_tags
 
     def _generate_cryptainer_base_and_secrets(
-        self, cryptoconf: dict, keychain_uid=None, cryptainer_metadata=None
+        self, cryptoconf: dict, default_keychain_uid=None, cryptainer_metadata=None
     ) -> tuple:
         """
         Build a payload-less and signature-less cryptainer, preconfigured with a set of symmetric keys
         under their final form (encrypted by trustees). A separate extract, with symmetric keys as well as algo names, is returned so that actual payload encryption and signature can be performed separately.
 
         :param cryptoconf: configuration tree
-        :param keychain_uid: uuid for the set of encryption keys used
+        :param default_keychain_uid: default uuid for the set of encryption keys used
         :param cryptainer_metadata: additional payload to store unencrypted in cryptainer, and also inside encrypted keys/shards
 
         :return: a (cryptainer: dict, secrets: list) tuple, where each secret has keys cipher_algo, symmetric_key and payload_digest_algos.
@@ -480,7 +480,7 @@ class CryptainerEncryptor(CryptainerBase):
         assert cryptainer_metadata is None or isinstance(cryptainer_metadata, dict), cryptainer_metadata
         cryptainer_format = CRYPTAINER_FORMAT
         cryptainer_uid = generate_uuid0()  # ALWAYS UNIQUE!
-        keychain_uid = keychain_uid or generate_uuid0()  # Might be shared by lots of cryptainers
+        default_keychain_uid = default_keychain_uid or generate_uuid0()  # Might be shared by lots of cryptainers
 
         assert isinstance(cryptoconf, dict), cryptoconf
         cryptainer = copy.deepcopy(cryptoconf)  # So that we can manipulate it as new cryptainer
@@ -501,7 +501,7 @@ class CryptainerEncryptor(CryptainerBase):
             key_cipher_layers = payload_cipher_layer["key_cipher_layers"]
 
             key_ciphertext = self._encrypt_key_through_multiple_layers(
-                keychain_uid=keychain_uid,
+                default_keychain_uid=default_keychain_uid,
                 key_bytes=key_bytes,
                 key_cipher_layers=key_cipher_layers,
                 cryptainer_metadata=cryptainer_metadata,
@@ -522,14 +522,14 @@ class CryptainerEncryptor(CryptainerBase):
             cryptainer_state=CRYPTAINER_STATES.STARTED,
             cryptainer_format=cryptainer_format,
             cryptainer_uid=cryptainer_uid,
-            keychain_uid=keychain_uid,
+            keychain_uid=default_keychain_uid,
             payload_ciphertext_struct=None,  # Must be filled asap, by OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER if needed!
             cryptainer_metadata=cryptainer_metadata,
         )
         return cryptainer, payload_cipher_layer_extracts
 
     def _encrypt_key_through_multiple_layers(
-        self, keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layers: list, cryptainer_metadata: Optional[dict]
+        self, default_keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layers: list, cryptainer_metadata: Optional[dict]
     ) -> bytes:
         # HERE KEY IS A REAL KEY OR A SHARD !!!
         key_bytes_initial = key_bytes
@@ -539,7 +539,7 @@ class CryptainerEncryptor(CryptainerBase):
 
         for key_cipher_layer in key_cipher_layers:
             key_cipherdict = self._encrypt_key_through_single_layer(
-                keychain_uid=keychain_uid,
+                default_keychain_uid=default_keychain_uid,
                 key_bytes=key_bytes,
                 key_cipher_layer=key_cipher_layer,
                 cryptainer_metadata=cryptainer_metadata,
@@ -551,7 +551,7 @@ class CryptainerEncryptor(CryptainerBase):
         return key_ciphertext
 
     def _encrypt_key_through_single_layer(
-        self, keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layer: dict, cryptainer_metadata: Optional[dict]
+        self, default_keychain_uid: uuid.UUID, key_bytes: bytes, key_cipher_layer: dict, cryptainer_metadata: Optional[dict]
     ) -> dict:
         """
         Encrypt a symmetric key using an asymmetric encryption scheme.
@@ -560,7 +560,7 @@ class CryptainerEncryptor(CryptainerBase):
         Encryption can use a simple public key algorithm, or rely on a a set of public keys,
         by using a shared secret scheme.
 
-        :param keychain_uid: uuid for the set of encryption keys used
+        :param default_keychain_uid: default uuid for the set of encryption keys used
         :param key_bytes: symmetric key to encrypt (potentially already encrypted)
         :param key_cipher_layer: part of the cryptoconf related to this key encryption layer
 
@@ -595,7 +595,7 @@ class CryptainerEncryptor(CryptainerBase):
                     shard
                 )  # The tuple (idx, payload) of each shard thus becomes encryptable
                 shard_ciphertext = self._encrypt_key_through_multiple_layers(
-                    keychain_uid=keychain_uid,
+                    default_keychain_uid=default_keychain_uid,
                     key_bytes=shard_bytes,
                     key_cipher_layers=key_shared_secret_shard_conf["key_cipher_layers"],
                     cryptainer_metadata=cryptainer_metadata,
@@ -613,7 +613,7 @@ class CryptainerEncryptor(CryptainerBase):
             sub_symkey_bytes = dump_to_json_bytes(sub_symkey)
 
             sub_symkey_ciphertext = self._encrypt_key_through_multiple_layers(
-                keychain_uid=keychain_uid,
+                default_keychain_uid=default_keychain_uid,
                 key_bytes=sub_symkey_bytes,
                 key_cipher_layers=key_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
@@ -629,10 +629,10 @@ class CryptainerEncryptor(CryptainerBase):
             assert key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS
             assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
 
-            keychain_uid_for_encryption = key_cipher_layer.get("keychain_uid") or keychain_uid
+            keychain_uid = key_cipher_layer.get("keychain_uid") or default_keychain_uid
             key_cipherdict = self._encrypt_key_with_asymmetric_cipher(
                 cipher_algo=key_cipher_algo,
-                keychain_uid=keychain_uid_for_encryption,
+                keychain_uid=keychain_uid,
                 key_bytes=key_bytes,
                 trustee=key_cipher_layer["key_cipher_trustee"],
                 cryptainer_metadata=cryptainer_metadata,
@@ -660,7 +660,7 @@ class CryptainerEncryptor(CryptainerBase):
         Encrypt given payload (representing a symmetric key) with an asymmetric algorithm.
 
         :param cipher_algo: string with name of algorithm to use
-        :param keychain_uid: uuid for the set of encryption keys used
+        :param keychain_uid: final uuid for the set of encryption keys used
         :param key_bytes: symmetric key as bytes to encrypt
         :param trustee: trustee used for encryption (findable in configuration tree)
 
@@ -681,7 +681,7 @@ class CryptainerEncryptor(CryptainerBase):
         return key_cipherdict
 
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: list):
-        keychain_uid = cryptainer["keychain_uid"]
+        default_keychain_uid = cryptainer["keychain_uid"]
 
         payload_cipher_layers = cryptainer["payload_cipher_layers"]
         assert len(payload_cipher_layers) == len(payload_integrity_tags)  # Sanity check
@@ -704,7 +704,7 @@ class CryptainerEncryptor(CryptainerBase):
                 ]  # MUST exist, else incoherence
 
                 payload_signature_struct = self._generate_message_signature(
-                    keychain_uid=keychain_uid, cryptoconf=signature_conf
+                    default_keychain_uid=default_keychain_uid, cryptoconf=signature_conf
                 )
                 signature_conf["payload_signature_struct"] = payload_signature_struct
 
@@ -713,11 +713,11 @@ class CryptainerEncryptor(CryptainerBase):
 
         cryptainer["cryptainer_state"] = CRYPTAINER_STATES.FINISHED
 
-    def _generate_message_signature(self, keychain_uid: uuid.UUID, cryptoconf: dict) -> dict:
+    def _generate_message_signature(self, default_keychain_uid: uuid.UUID, cryptoconf: dict) -> dict:
         """
         Generate a signature for a specific ciphered payload.
 
-        :param keychain_uid: uuid for the set of encryption keys used
+        :param default_keychain_uid: default uuid for the set of encryption keys used
         :param cryptoconf: configuration tree inside payload_signatures, which MUST already contain the message digest
         :return: dictionary with information needed to verify_integrity_tags signature
         """
@@ -731,7 +731,7 @@ class CryptainerEncryptor(CryptainerBase):
             trustee=cryptoconf["payload_signature_trustee"], keystore_pool=self._keystore_pool
         )
 
-        keychain_uid_for_signature = cryptoconf.get("keychain_uid") or keychain_uid
+        keychain_uid_for_signature = cryptoconf.get("keychain_uid") or default_keychain_uid
 
         logger.debug("Signing hash of encrypted payload with algo %r", payload_signature_algo)
         payload_signature_struct = trustee_proxy.get_message_signature(
@@ -960,7 +960,7 @@ class CryptainerDecryptor(CryptainerBase):
         cryptainer_uid = cryptainer["cryptainer_uid"]
         del cryptainer_uid  # Might be used for logging etc, later...
 
-        keychain_uid = cryptainer["keychain_uid"]
+        default_keychain_uid = cryptainer["keychain_uid"]
 
         cryptainer_metadata = cryptainer["cryptainer_metadata"]
 
@@ -975,13 +975,13 @@ class CryptainerDecryptor(CryptainerBase):
             if payload_current is not None:
                 for signature_conf in payload_cipher_layer["payload_signatures"]:
                     signature_errors = self._verify_payload_signature(
-                        keychain_uid=keychain_uid, payload=payload_current, cryptoconf=signature_conf
+                        default_keychain_uid=default_keychain_uid, payload=payload_current, cryptoconf=signature_conf
                     )
                     errors.extend(signature_errors)
 
             key_ciphertext = payload_cipher_layer["key_ciphertext"]  # We start fully encrypted, and unravel it
             key_bytes, multiple_layer_decryption_errors = self._decrypt_key_through_multiple_layers(
-                keychain_uid=keychain_uid,
+                default_keychain_uid=default_keychain_uid,
                 key_ciphertext=key_ciphertext,
                 key_cipher_layers=payload_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
@@ -1041,7 +1041,7 @@ class CryptainerDecryptor(CryptainerBase):
 
     def _decrypt_key_through_multiple_layers(
         self,
-        keychain_uid: uuid.UUID,
+        default_keychain_uid: uuid.UUID,
         key_ciphertext: bytes,
         key_cipher_layers: list,
         cryptainer_metadata: Optional[dict],
@@ -1054,7 +1054,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         for key_cipher_layer in reversed(key_cipher_layers):
             key_ciphertext, single_layer_decryption_errors = self._decrypt_key_through_single_layer(
-                keychain_uid=keychain_uid,
+                default_keychain_uid=default_keychain_uid,
                 key_ciphertext=key_ciphertext,
                 key_cipher_layer=key_cipher_layer,
                 cryptainer_metadata=cryptainer_metadata,
@@ -1070,7 +1070,7 @@ class CryptainerDecryptor(CryptainerBase):
 
     def _decrypt_key_through_single_layer(
         self,
-        keychain_uid: uuid.UUID,
+        default_keychain_uid: uuid.UUID,
         key_ciphertext: bytes,
         key_cipher_layer: dict,
         cryptainer_metadata: Optional[dict],
@@ -1080,7 +1080,7 @@ class CryptainerDecryptor(CryptainerBase):
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
         by a asymmetric algorithm.
 
-        :param keychain_uid: uuid for the set of encryption keys used
+        :param default_keychain_uid: default uuid for the set of encryption keys used
         :param key_ciphertext: encrypted symmetric key
         :param key_cipher_layer: part of the cryptainer related to this key encryption layer
 
@@ -1110,7 +1110,7 @@ class CryptainerDecryptor(CryptainerBase):
             for shard_ciphertext, key_shared_secret_shard_conf in zip(shard_ciphertexts, key_shared_secret_shards):
 
                 shard_bytes, multiple_layer_decryption_errors = self._decrypt_key_through_multiple_layers(
-                    keychain_uid=keychain_uid,
+                    default_keychain_uid=default_keychain_uid,
                     key_ciphertext=shard_ciphertext,
                     key_cipher_layers=key_shared_secret_shard_conf["key_cipher_layers"],
                     cryptainer_metadata=cryptainer_metadata,
@@ -1154,7 +1154,7 @@ class CryptainerDecryptor(CryptainerBase):
             sub_symkey_ciphertext = key_cipher_layer["key_ciphertext"]
 
             sub_symkey_bytes, multiple_layer_decryption_errors = self._decrypt_key_through_multiple_layers(
-                keychain_uid=keychain_uid,
+                default_keychain_uid=default_keychain_uid,
                 key_ciphertext=sub_symkey_ciphertext,
                 key_cipher_layers=key_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
@@ -1182,7 +1182,7 @@ class CryptainerDecryptor(CryptainerBase):
             assert key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS
             assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
 
-            keychain_uid_for_encryption = key_cipher_layer.get("keychain_uid") or keychain_uid
+            keychain_uid = key_cipher_layer.get("keychain_uid") or default_keychain_uid
             trustee = key_cipher_layer["key_cipher_trustee"]
 
             predecrypted_symmetric_key = self._get_predecrypted_symmetric_keys_or_none(
@@ -1193,7 +1193,7 @@ class CryptainerDecryptor(CryptainerBase):
             else:
                 key_bytes, asymetric_decryption_errors = self._decrypt_with_asymmetric_cipher(
                     cipher_algo=key_cipher_algo,
-                    keychain_uid=keychain_uid_for_encryption,
+                    keychain_uid=keychain_uid,
                     cipherdict=key_cipherdict,
                     trustee=trustee,
                     cryptainer_metadata=cryptainer_metadata,
@@ -1252,7 +1252,7 @@ class CryptainerDecryptor(CryptainerBase):
         Decrypt given cipherdict with an asymmetric algorithm.
 
         :param cipher_algo: string with name of algorithm to use
-        :param keychain_uid: uuid for the set of encryption keys used
+        :param keychain_uid: final uuid for the set of encryption keys used
         :param cipherdict: dictionary with payload components needed to decrypt the ciphered payload
         :param trustee: trustee used for encryption (findable in configuration tree)
 
@@ -1323,24 +1323,24 @@ class CryptainerDecryptor(CryptainerBase):
 
         return key_bytes, errors
 
-    def _verify_payload_signature(self, keychain_uid: uuid.UUID, payload: bytes, cryptoconf: dict):
+    def _verify_payload_signature(self, default_keychain_uid: uuid.UUID, payload: bytes, cryptoconf: dict):
         """
         Verify a signature for a specific message. An error is raised if signature isn't correct.
 
-        :param keychain_uid: uuid for the set of encryption keys used
+        :param default_keychain_uid: default uuid for the set of encryption keys used
         :param payload: payload on which to verify signature (after digest)
         :param cryptoconf: configuration tree inside payload_signatures
         """
         signature_errors = []
         payload_digest_algo = cryptoconf["payload_digest_algo"]
         payload_signature_algo = cryptoconf["payload_signature_algo"]
-        keychain_uid_for_signature = cryptoconf.get("keychain_uid") or keychain_uid
+        keychain_uid= cryptoconf.get("keychain_uid") or default_keychain_uid
         trustee_proxy = get_trustee_proxy(
             trustee=cryptoconf["payload_signature_trustee"], keystore_pool=self._keystore_pool
         )
         try:
             public_key_pem = trustee_proxy.fetch_public_key(
-                keychain_uid=keychain_uid_for_signature, key_algo=payload_signature_algo, must_exist=True
+                keychain_uid=keychain_uid, key_algo=payload_signature_algo, must_exist=True
             )
         except KeyDoesNotExist as exc:
             error = self._build_error_report_message(
@@ -1529,7 +1529,7 @@ def encrypt_payload_into_cryptainer(
     :param payload: bytestring of media (image, video, sound...) or readable file object (file immediately deleted then)
     :param cryptoconf: tree of specific encryption settings
     :param cryptainer_metadata: dict of metadata describing the payload (remains unencrypted in cryptainer)
-    :param keychain_uid: optional ID of a keychain to reuse
+    :param keychain_uid: optional default ID of a keychain
     :param keystore_pool: optional key storage pool, might be required by cryptoconf
     :return: dict of cryptainer
     """
@@ -1937,7 +1937,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
                     self._delete_cryptainer(deleted_cryptainer_dict["name"])
 
     def _encrypt_payload_and_stream_cryptainer_to_filesystem(
-        self, payload, cryptainer_filepath, cryptainer_metadata, keychain_uid, cryptoconf
+        self, payload, cryptainer_filepath, cryptainer_metadata, default_keychain_uid, cryptoconf
     ):
         assert cryptoconf, cryptoconf
         encrypt_payload_and_stream_cryptainer_to_filesystem(
@@ -1945,23 +1945,23 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             payload=payload,
             cryptoconf=cryptoconf,
             cryptainer_metadata=cryptainer_metadata,
-            keychain_uid=keychain_uid,
+            keychain_uid=default_keychain_uid,
             keystore_pool=self._keystore_pool,
         )
 
-    def _encrypt_payload_into_cryptainer(self, payload, cryptainer_metadata, keychain_uid, cryptoconf):
+    def _encrypt_payload_into_cryptainer(self, payload, cryptainer_metadata, default_keychain_uid, cryptoconf):
         assert cryptoconf, cryptoconf
         return encrypt_payload_into_cryptainer(
             payload=payload,
             cryptoconf=cryptoconf,
             cryptainer_metadata=cryptainer_metadata,
-            keychain_uid=keychain_uid,
+            keychain_uid=default_keychain_uid,
             keystore_pool=self._keystore_pool,
         )
 
     @catch_and_log_exception
     def _offloaded_encrypt_payload_and_dump_cryptainer(
-        self, filename_base, payload, cryptainer_metadata, keychain_uid, cryptoconf
+        self, filename_base, payload, cryptainer_metadata, default_keychain_uid, cryptoconf
     ):
         """Task to be called by background thread, which encrypts a payload into a disk cryptainer.
 
@@ -1986,7 +1986,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
                 payload,
                 cryptainer_filepath=cryptainer_filepath,
                 cryptainer_metadata=cryptainer_metadata,
-                keychain_uid=keychain_uid,
+                default_keychain_uid=default_keychain_uid,
                 cryptoconf=cryptoconf,
             )
 
@@ -1996,7 +1996,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             logger.debug("Encrypting payload file to self-sufficient cryptainer %s", filename_base)
             # Memory warning : duplicates payload to json-compatible cryptainer
             cryptainer = self._encrypt_payload_into_cryptainer(
-                payload, cryptainer_metadata=cryptainer_metadata, keychain_uid=keychain_uid, cryptoconf=cryptoconf
+                payload, cryptainer_metadata=cryptainer_metadata, default_keychain_uid=default_keychain_uid, cryptoconf=cryptoconf
             )
             logger.debug("Writing self-sufficient cryptainer payload to storage file %s", cryptainer_filepath)
             dump_cryptainer_to_filesystem(
@@ -2049,7 +2049,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
 
         :param payload: Bytes string, or a file-like object open for reading, which will be automatically closed.
         :param cryptainer_metadata: Dict of metadata added (unencrypted) to cryptainer.
-        :param keychain_uid: If provided, replaces autogenerated keychain_uid for this cryptainer.
+        :param keychain_uid: If provided, replaces autogenerated default keychain_uid for this cryptainer.
         :param cryptoconf: If provided, replaces default cryptoconf for this cryptainer.
         """
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
@@ -2061,7 +2061,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             filename_base=filename_base,
             payload=payload,
             cryptainer_metadata=cryptainer_metadata,
-            keychain_uid=keychain_uid,
+            default_keychain_uid=keychain_uid,
             cryptoconf=cryptoconf,
         )
         self._pending_executor_futures.append(future)

@@ -121,6 +121,6 @@ Noteworthy fields of a cryptainer
 The `cryptainer_uid` field, located at the root of a cryptainer, uniquely identifies it.
 
 The `keychain_uid` field, located nearby, can on the contrary be shared by several cryptainers, which thus end up targeting a common keychain of keypairs held by trustees (these keypairs being differentiated by their key-algo value).
-However this default `keychain_uid` can also be overridden deeper in the configuration tree, for each trustee.
+However this default `keychain_uid` can also be overridden deeper in the configuration tree, for each asymmetric cipher node.
 
 A `metadata` dict field can be used to store miscellaneous information about the cryptainer (time, location, type of recording...).

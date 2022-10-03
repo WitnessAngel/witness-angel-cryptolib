@@ -2763,8 +2763,9 @@ def test_get_cryptoconf_summary():
         trustee_type="jsonrpc_api", jsonrpc_url="http://www.mydomain.com/json"
     )
     CONF_WITH_TRUSTEE["payload_cipher_layers"][1]["key_cipher_layers"][0]["key_cipher_trustee"] = dict(
-        trustee_type="authenticator", keystore_uid="320b35bb-e735-4f6a-a4b2-ada124e30190"
+        trustee_type="authenticator", keystore_uid=UUID("320b35bb-e735-4f6a-a4b2-ada124e30190")
     )
+    check_cryptoconf_sanity(CONF_WITH_TRUSTEE)
     print("'-----------------------")
     pprint(CONF_WITH_TRUSTEE)
     print("'-----------------------")

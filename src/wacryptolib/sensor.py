@@ -1,8 +1,9 @@
 import io
 import logging
+import subprocess
 import tarfile
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 
 from wacryptolib.cryptainer import CryptainerStorage, CRYPTAINER_DATETIME_FORMAT
 from wacryptolib.utilities import (
@@ -284,6 +285,175 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
             self._offloaded_add_data(result)
         except Exception as exc:
             logger.error("Error in PeriodicValuePoller offloaded task: %r" % exc, exc_info=True)
+
+
+class PeriodicSensorRestarter(PeriodicTaskHandler):
+
+    sensor_name = None
+
+    _current_start_time = None
+
+    def __init__(self, interval_s: float,):
+        super().__init__(interval_s=interval_s, runonstart=False)
+        assert self.sensor_name, self.sensor_name
+        assert not hasattr(self, "_lock")
+        self._lock = threading.Lock()
+
+    @synchronized
+    def start(self):
+        super().start()
+
+        logger.info(">>> Starting sensor %s" % self)
+
+        self._current_start_time = get_utc_now_date()
+
+        self._do_start_recording()
+
+        logger.info(">>> Started sensor %s" % self)
+
+    def _do_start_recording(self):
+        raise NotImplementedError("%s -> _do_start_recording" % self.sensor_name)
+
+    @synchronized
+    def stop(self):
+        super().stop()
+
+        logger.info(">>> Stopping sensor %s" % self)
+
+        from_datetime = self._current_start_time
+        to_datetime = get_utc_now_date()
+
+        payload = self._do_stop_recording()
+
+        if payload is not None:
+            self._handle_post_stop_data(payload=payload, from_datetime=from_datetime, to_datetime=to_datetime)
+
+        logger.info(">>> Stopped sensor %s" % self)
+
+    def _do_stop_recording(self):
+        raise NotImplementedError("%s -> _do_stop_recording" % self.sensor_name)
+
+    def _handle_post_stop_data(self, payload, from_datetime, to_datetime):
+        raise NotImplementedError("%s -> _handle_post_stop_data" % self.sensor_name)
+
+    @synchronized
+    def _offloaded_run_task(self):
+
+        if not self.is_running:
+            return
+
+        from_datetime = self._current_start_time
+        to_datetime = datetime.now(tz=timezone.utc)
+
+        payload = self._do_stop_recording() # Renames target files
+
+        self._current_start_time = get_utc_now_date()  # RESET
+        self._do_start_recording()  # Must be restarded immediately
+
+        if payload is not None:
+            self._handle_post_stop_data(payload=payload, from_datetime=from_datetime, to_datetime=to_datetime)
+
+
+class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
+
+    # Class fields to be overridden
+    record_extension = None
+
+    _subprocess = None
+    _cryptainer_encryption_stream = None
+
+    # How much data to push to encryption stream at the same time
+    DATA_CHUNK_SIZE =  2 * 1024**2
+
+    # This buffer must be big enough to avoid any overflow while encrypting+dumping data
+    SUPROCESS_BUFFER_SIZE = DATA_CHUNK_SIZE * 6
+
+    def __init__(self,
+                 interval_s,
+                 cryptainer_storage):
+        super().__init__(interval_s=interval_s)
+        self._cryptainer_storage = cryptainer_storage
+
+    def _build_filename_base(self, from_datetime):
+        extension = self.record_extension
+        assert extension.startswith("."), extension
+        from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
+        filename = "{from_ts}_cryptainer{extension}".format(**locals())
+        assert " " not in filename, repr(filename)
+        return filename
+
+    def _build_subprocess_command_line(self) -> list:
+        raise NotImplementedError("%s -> _handle_post_stop_data" % self.sensor_name)
+
+    def _launch_and_consume_subprocess(self):
+        command_line = self._build_subprocess_command_line()
+
+        logger.warning("Calling RtspCameraSensor subprocess command: {}".format(" ".join(command_line)))
+        self._subprocess = subprocess.Popen(
+            command_line,
+            bufsize=self.SUPROCESS_BUFFER_SIZE,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+
+        def _stdout_reader_thread(fh):
+            # Backported from Popen._readerthread of Python3.8
+            while True:
+                chunk = fh.read(self.DATA_CHUNK_SIZE)
+                assert chunk is not None  # We're NOT in non-blocking mode!
+                if chunk:
+                    logger.info(">>>> ENCRYPTING %s CHUNK OF LENGTH" % self.sensor_name, len(chunk))
+                    self._cryptainer_encryption_stream.encrypt_chunk(chunk)
+                else:
+                    break  # End of subprocess
+            logger.info(">>>> FINALIZING %s CONTAINER ENCRYPTION STREAM" % self.sensor_name)
+            self._cryptainer_encryption_stream.finalize()
+            fh.close()
+
+        self._stdout_thread = threading.Thread(target=_stdout_reader_thread,
+                                                args=(self._subprocess.stdout,))
+        self._stdout_thread.start()
+
+        def _sytderr_reader_thread(fh):
+            for line in fh:
+                ##print(b">>>>", repr(line).encode("ascii"))
+                line_str = repr(line)  #  line.decode("ascii", "ignore")
+                logger.warning("SUBPROCESS STDERR: %s" % line_str.rstrip("\n"))
+            fh.close()
+        self._stderr_thread = threading.Thread(target=_sytderr_reader_thread,
+                                                args=(self._subprocess.stderr,))
+        self._stderr_thread.start()
+
+    def _do_start_recording(self):
+        self._cryptainer_encryption_stream = self._cryptainer_storage.create_cryptainer_encryption_stream(
+            self._build_filename_base(self._current_start_time), cryptainer_metadata=None, dump_initial_cryptainer=True)
+        self._launch_and_consume_subprocess()
+
+    @classmethod
+    def _quit_subprocess(cls, subprocess):
+        subprocess.terminate()
+
+    @classmethod
+    def _kill_subprocess(cls, subprocess):
+        # Subclass might use terminate() instead, if signals/ctdin are used for normal quit
+        subprocess.kill()
+
+    def _do_stop_recording(self):
+        if self._subprocess is None:
+            logger.error("No subprocess to be terminated in %s stop-recording", self.sensor_name)
+            return  # Init failed previously
+        retcode = self._subprocess.poll()
+        if retcode is not None:
+            logger.error("Subprocess was already terminated with code %s in %s stop-recording", retcode, self.sensor_name)
+            return  # Stream must have crashed
+        try:
+            self._quit_subprocess(self._subprocess)
+            self._stdout_thread.join(timeout=10)
+        except Exception as exc:
+            logger.warning("Failed normal termination of %s subprocess: %s", self.sensor_name, exc)
+            if self._subprocess.poll() is None:  # It could be that the subprocess is just slow to quit, though...
+                logger.warning("Force-terminating dangling %s subprocess" % self.sensor_name)
+                self._kill_subprocess()
 
 
 class SensorManager(

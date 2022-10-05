@@ -1452,7 +1452,7 @@ class CryptainerEncryptionPipeline:
         filepath = self._cryptainer_filepath_temp if is_temporary else self._cryptainer_filepath
         dump_cryptainer_to_filesystem(
             filepath, cryptainer=self._wip_cryptainer, offload_payload_ciphertext=False
-        )  # ALREADY offloaded
+        )  # Payload is ALREADY offloaded separately
         if not is_temporary:  # Cleanup temporary cryptainer
             try:
                 self._cryptainer_filepath_temp.unlink()  # TODO use missing_ok=True later with python3.8

@@ -1,14 +1,18 @@
 import os
+import textwrap
 import time
 from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import datetime, timezone
 from datetime import timedelta
 
+import sys
 from freezegun import freeze_time
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool
+from wacryptolib.cryptainer import CryptainerStorage
 from wacryptolib.scaffolding import check_sensor_state_machine
-from wacryptolib.sensor import TarfileRecordAggregator, JsonDataAggregator, PeriodicValuePoller, SensorManager
+from wacryptolib.sensor import TarfileRecordAggregator, JsonDataAggregator, PeriodicValuePoller, SensorManager, \
+    PeriodicSubprocessStreamRecorder
 from wacryptolib.sensor import TimeLimitedAggregatorMixin
 from wacryptolib.utilities import load_from_json_bytes, TaskRunnerStateMachineBase, get_utc_now_date
 
@@ -435,6 +439,79 @@ def test_periodic_value_poller(tmp_path):
 
     check_sensor_state_machine(poller, run_duration=0.5)
     assert broken_iterations > 5
+
+
+def test_periodic_subprocess_stream_recorder(tmp_path):
+    from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
+
+    offload_payload_ciphertext = random_bool()
+
+    cryptainer_storage = CryptainerStorage(  # We need a REAL CrytpainerStorage to handle Pipeplining!
+        default_cryptoconf=SIMPLE_CRYPTOCONF,
+        cryptainer_dir=tmp_path,
+        offload_payload_ciphertext=offload_payload_ciphertext,
+    )
+
+    def _purge_cryptainer_storage(_cryptainer_names):
+        for cryptainer_name in _cryptainer_names:
+            cryptainer_storage.delete_cryptainer(cryptainer_name)
+        assert not cryptainer_storage.list_cryptainer_names()
+
+    class TestRecorder(PeriodicSubprocessStreamRecorder):
+        sensor_name = "test_sensor"
+        record_extension = ".testext"
+
+        def __init__(self, python_command_line, skip_quit_operation=False, **kwargs):
+            self._python_command_line = python_command_line
+            self._skip_quit_operation = skip_quit_operation
+            super().__init__(**kwargs)
+
+        def _build_subprocess_command_line(self):
+            return [sys.executable, "-c", self._python_command_line]
+
+        def _quit_subprocess(self, subprocess):
+            if not self._skip_quit_operation:
+                subprocess.terminate()
+
+    simple_command_line = "import time ;\nwhile True: print('This is some test output!') or time.sleep(0.5)"
+
+    recorder = TestRecorder(
+        python_command_line=simple_command_line,
+        interval_s=4, cryptainer_storage=cryptainer_storage)
+    recorder.start()
+    time.sleep(7) # Beware of python launch time...
+    recorder.stop()
+    cryptainer_names = cryptainer_storage.list_cryptainer_names()
+    assert len(cryptainer_names) == 2  # Last recording was aborted early though
+    assert "test_sensor" in str(cryptainer_names[0])
+    assert str(cryptainer_names[0]).endswith(".testext.crypt")
+
+    _purge_cryptainer_storage(cryptainer_names)
+
+    recorder = TestRecorder(
+        python_command_line="ABCDE",  # WRONG python script
+        interval_s=4, cryptainer_storage=cryptainer_storage)
+    recorder.start()
+    time.sleep(7) # Beware of python launch time...
+    recorder.stop()
+    cryptainer_names = cryptainer_storage.list_cryptainer_names()
+    assert len(cryptainer_names) == 2  # Cryptainers are EMPTY but still exist
+    assert "test_sensor" in str(cryptainer_names[0])
+    assert str(cryptainer_names[0]).endswith(".testext.crypt")
+
+    _purge_cryptainer_storage(cryptainer_names)
+
+    recorder = TestRecorder(
+        python_command_line=simple_command_line,
+        skip_quit_operation=True,
+        interval_s=5, cryptainer_storage=cryptainer_storage)
+    recorder.start()
+    time.sleep(12) # Beware of python launch time...
+    recorder.stop()
+    cryptainer_names = cryptainer_storage.list_cryptainer_names()
+    assert len(cryptainer_names) == 2  # Waiting for sigkill prevented more than that
+    assert "test_sensor" in str(cryptainer_names[0])
+    assert str(cryptainer_names[0]).endswith(".testext.crypt")
 
 
 def test_sensor_manager():

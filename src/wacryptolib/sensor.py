@@ -288,6 +288,7 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
 
 
 class PeriodicSensorRestarter(PeriodicTaskHandler):
+    """THIS IS PRIVATE API"""
 
     sensor_name = None
 
@@ -338,23 +339,26 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
 
     @synchronized
     def _offloaded_run_task(self):
+        try:
+            if not self.is_running:
+                return
 
-        if not self.is_running:
-            return
+            from_datetime = self._current_start_time
+            to_datetime = datetime.now(tz=timezone.utc)
 
-        from_datetime = self._current_start_time
-        to_datetime = datetime.now(tz=timezone.utc)
+            payload = self._do_stop_recording() # Renames target files
 
-        payload = self._do_stop_recording() # Renames target files
+            self._current_start_time = get_utc_now_date()  # RESET
+            self._do_start_recording()  # Must be restarded immediately
 
-        self._current_start_time = get_utc_now_date()  # RESET
-        self._do_start_recording()  # Must be restarded immediately
-
-        if payload is not None:
-            self._handle_post_stop_data(payload=payload, from_datetime=from_datetime, to_datetime=to_datetime)
-
+            if payload is not None:
+                self._handle_post_stop_data(payload=payload, from_datetime=from_datetime, to_datetime=to_datetime)
+        except Exception as exc:
+            logger.critical("Unexpected failure in %s _offloaded_run_task(): %r", self.sensor_name, exc)
+            raise
 
 class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
+    """THIS IS PRIVATE API"""
 
     # Class fields to be overridden
     record_extension = None
@@ -378,7 +382,8 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
         extension = self.record_extension
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
-        filename = "{from_ts}_cryptainer{extension}".format(**locals())
+        sensor_name = self.sensor_name
+        filename = "{from_ts}_{sensor_name}_cryptainer{extension}".format(**locals())
         assert " " not in filename, repr(filename)
         return filename
 
@@ -388,7 +393,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
     def _launch_and_consume_subprocess(self):
         command_line = self._build_subprocess_command_line()
 
-        logger.warning("Calling RtspCameraSensor subprocess command: {}".format(" ".join(command_line)))
+        logger.info("Calling RtspCameraSensor subprocess command: {}".format(" ".join(command_line)))
         self._subprocess = subprocess.Popen(
             command_line,
             bufsize=self.SUPROCESS_BUFFER_SIZE,
@@ -397,29 +402,38 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
             stderr=subprocess.PIPE)
 
         def _stdout_reader_thread(fh):
-            # Backported from Popen._readerthread of Python3.8
-            while True:
-                chunk = fh.read(self.DATA_CHUNK_SIZE)
-                assert chunk is not None  # We're NOT in non-blocking mode!
-                if chunk:
-                    logger.info(">>>> ENCRYPTING %s CHUNK OF LENGTH" % self.sensor_name, len(chunk))
-                    self._cryptainer_encryption_stream.encrypt_chunk(chunk)
-                else:
-                    break  # End of subprocess
-            logger.info(">>>> FINALIZING %s CONTAINER ENCRYPTION STREAM" % self.sensor_name)
-            self._cryptainer_encryption_stream.finalize()
-            fh.close()
+            try:
+                # Backported from Popen._readerthread of Python3.8
+                while True:
+                    chunk = fh.read(self.DATA_CHUNK_SIZE)
+                    assert chunk is not None  # We're NOT in non-blocking mode!
+                    if chunk:
+                        logger.info(">>>> ENCRYPTING %s CHUNK OF LENGTH %s", self.sensor_name, len(chunk))
+                        self._cryptainer_encryption_stream.encrypt_chunk(chunk)
+                    else:
+                        break  # End of subprocess
+                logger.info(">>>> FINALIZING %s CONTAINER ENCRYPTION STREAM" % self.sensor_name)
+                self._cryptainer_encryption_stream.finalize()
+                fh.close()
+            except Exception as exc:
+                logger.critical("Unexpected failure in %s stdout_reader_thread(): %r", self.sensor_name, exc)
+                raise
 
         self._stdout_thread = threading.Thread(target=_stdout_reader_thread,
                                                 args=(self._subprocess.stdout,))
         self._stdout_thread.start()
 
         def _sytderr_reader_thread(fh):
-            for line in fh:
-                ##print(b">>>>", repr(line).encode("ascii"))
-                line_str = repr(line)  #  line.decode("ascii", "ignore")
-                logger.warning("SUBPROCESS STDERR: %s" % line_str.rstrip("\n"))
-            fh.close()
+            try:
+                for line in fh:
+                    ##print(b">>>>", repr(line).encode("ascii"))
+                    line_str = repr(line)  #  line.decode("ascii", "ignore")
+                    logger.warning("SUBPROCESS STDERR: %s" % line_str.rstrip("\n"))
+                fh.close()
+            except Exception as exc:
+                logger.critical("Unexpected failure in %s sytderr_reader_thread(): %r", self.sensor_name, exc)
+                raise
+
         self._stderr_thread = threading.Thread(target=_sytderr_reader_thread,
                                                 args=(self._subprocess.stderr,))
         self._stderr_thread.start()
@@ -447,13 +461,17 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
             logger.error("Subprocess was already terminated with code %s in %s stop-recording", retcode, self.sensor_name)
             return  # Stream must have crashed
         try:
+            logger.warning("Attempting normal termination of %s subprocess", self.sensor_name)
             self._quit_subprocess(self._subprocess)
-            self._stdout_thread.join(timeout=10)
+            self._stdout_thread.join(timeout=8)  # Doesn't raise on timeout!
+            if self._stdout_thread.is_alive():
+                raise TimeoutError
         except Exception as exc:
             logger.warning("Failed normal termination of %s subprocess: %s", self.sensor_name, exc)
             if self._subprocess.poll() is None:  # It could be that the subprocess is just slow to quit, though...
                 logger.warning("Force-terminating dangling %s subprocess" % self.sensor_name)
-                self._kill_subprocess()
+                self._kill_subprocess(self._subprocess)
+                self._stdout_thread.join(timeout=4)
 
 
 class SensorManager(

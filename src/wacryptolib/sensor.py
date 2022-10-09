@@ -496,7 +496,7 @@ class SensorManager(
             try:
                 sensor.start()
             except Exception as exc:
-                logger.error(f"Failed starting sensor {sensor.__class__.__name__} ({exc!r})")
+                logger.error(f"Failed starting sensor {sensor.__class__.__name__} ({exc!r})", exc_info=True)
             else:
                 success_count += 1
         return success_count

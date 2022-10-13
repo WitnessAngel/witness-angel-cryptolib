@@ -80,7 +80,7 @@ OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER = dict(ciphertext_location=PAYLOAD_CIPHERTEX
 
 OFFLOADED_PAYLOAD_FILENAME_SUFFIX = ".payload"  # Added to CRYPTAINER_SUFFIX
 
-DATA_CHUNK_SIZE = 1024**2  # E.g. when streaming a big payload through encryptors
+DEFAULT_DATA_CHUNK_SIZE = 1024**2  # E.g. when streaming a big payload through encryptors
 
 DECRYPTED_FILE_SUFFIX = ".medium"  # To construct decrypted filename when no output filename is provided
 
@@ -1513,7 +1513,7 @@ def encrypt_payload_and_stream_cryptainer_to_filesystem(
         dump_initial_cryptainer=False,
     )
 
-    for chunk in consume_bytes_as_chunks(payload, chunk_size=DATA_CHUNK_SIZE):
+    for chunk in consume_bytes_as_chunks(payload, chunk_size=DEFAULT_DATA_CHUNK_SIZE):
         encryptor.encrypt_chunk(chunk)
 
     encryptor.finalize()  # Handles the dumping to disk

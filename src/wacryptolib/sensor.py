@@ -367,10 +367,12 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
     _cryptainer_encryption_stream = None
 
     # How much data to push to encryption stream at the same time
-    DATA_CHUNK_SIZE =  2 * 1024**2
+    subprocess_data_chunk_size = 2 * 1024**2
 
-    # This buffer must be big enough to avoid any overflow while encrypting+dumping data
-    SUPROCESS_BUFFER_SIZE = DATA_CHUNK_SIZE * 6
+    @property
+    def suprocess_buffer_size(self):
+        # This buffer must be big enough to avoid any overflow while encrypting+dumping data
+        return self.subprocess_data_chunk_size * 6
 
     def __init__(self,
                  interval_s,
@@ -393,10 +395,10 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
     def _launch_and_consume_subprocess(self):
         command_line = self._build_subprocess_command_line()
 
-        logger.info("Calling RtspCameraSensor subprocess command: {}".format(" ".join(command_line)))
+        logger.info("Calling {} sensor subprocess command: {}".format(self.sensor_name, " ".join(command_line)))
         self._subprocess = subprocess.Popen(
             command_line,
-            bufsize=self.SUPROCESS_BUFFER_SIZE,
+            bufsize=self.suprocess_buffer_size,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
@@ -405,7 +407,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
             try:
                 # Backported from Popen._readerthread of Python3.8
                 while True:
-                    chunk = fh.read(self.DATA_CHUNK_SIZE)
+                    chunk = fh.read(self.subprocess_data_chunk_size)
                     assert chunk is not None  # We're NOT in non-blocking mode!
                     if chunk:
                         logger.info(">>>> ENCRYPTING %s CHUNK OF LENGTH %s", self.sensor_name, len(chunk))

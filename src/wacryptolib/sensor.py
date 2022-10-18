@@ -312,7 +312,7 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
 
         logger.info(">>> Started sensor %s" % self)
 
-    def _do_start_recording(self):
+    def _do_start_recording(self):  # pragma: no cover
         raise NotImplementedError("%s -> _do_start_recording" % self.sensor_name)
 
     @synchronized
@@ -331,10 +331,10 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
 
         logger.info(">>> Stopped sensor %s" % self)
 
-    def _do_stop_recording(self):
+    def _do_stop_recording(self):  # pragma: no cover
         raise NotImplementedError("%s -> _do_stop_recording" % self.sensor_name)
 
-    def _handle_post_stop_data(self, payload, from_datetime, to_datetime):
+    def _handle_post_stop_data(self, payload, from_datetime, to_datetime):  # pragma: no cover
         raise NotImplementedError("%s -> _handle_post_stop_data" % self.sensor_name)
 
     @synchronized
@@ -389,7 +389,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
         assert " " not in filename, repr(filename)
         return filename
 
-    def _build_subprocess_command_line(self) -> list:
+    def _build_subprocess_command_line(self) -> list:  # pragma: no cover
         raise NotImplementedError("%s -> _handle_post_stop_data" % self.sensor_name)
 
     def _launch_and_consume_subprocess(self):
@@ -417,7 +417,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
                 logger.info(">>>> FINALIZING %s CONTAINER ENCRYPTION STREAM" % self.sensor_name)
                 self._cryptainer_encryption_stream.finalize()
                 fh.close()
-            except Exception as exc:
+            except Exception as exc:  # pragma: no cover
                 logger.critical("Unexpected failure in %s stdout_reader_thread(): %r", self.sensor_name, exc)
                 raise
 
@@ -432,7 +432,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
                     line_str = repr(line)  #  line.decode("ascii", "ignore")
                     logger.warning("SUBPROCESS STDERR: %s" % line_str.rstrip("\n"))
                 fh.close()
-            except Exception as exc:
+            except Exception as exc:  # pragma: no cover
                 logger.critical("Unexpected failure in %s sytderr_reader_thread(): %r", self.sensor_name, exc)
                 raise
 

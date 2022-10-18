@@ -461,6 +461,8 @@ def test_periodic_subprocess_stream_recorder(tmp_path):
         sensor_name = "test_sensor"
         record_extension = ".testext"
 
+        subprocess_data_chunk_size = 1024
+
         def __init__(self, python_command_line, skip_quit_operation=False, **kwargs):
             self._python_command_line = python_command_line
             self._skip_quit_operation = skip_quit_operation
@@ -471,7 +473,7 @@ def test_periodic_subprocess_stream_recorder(tmp_path):
 
         def _quit_subprocess(self, subprocess):
             if not self._skip_quit_operation:
-                subprocess.terminate()
+                super()._quit_subprocess()
 
     simple_command_line = "import time ;\nwhile True: print('This is some test output!') or time.sleep(0.5)"
 

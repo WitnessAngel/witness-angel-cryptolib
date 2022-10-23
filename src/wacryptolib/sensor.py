@@ -396,12 +396,19 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
         command_line = self._build_subprocess_command_line()
 
         logger.info("Calling {} sensor subprocess command: {}".format(self.sensor_name, " ".join(command_line)))
-        self._subprocess = subprocess.Popen(
-            command_line,
-            bufsize=self.suprocess_buffer_size,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+
+        try:
+            self._subprocess = subprocess.Popen(
+                command_line,
+                bufsize=self.suprocess_buffer_size,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+        except OSError as exc:  # E.g. program binary not found
+            logger.error("Failure when calling {} sensor subprocess command: {!r}".format(self.sensor_name, exc))
+            # FIXME here add deletion of self._cryptainer_encryption_stream instead of finalizing it?
+            self._cryptainer_encryption_stream.finalize()
+            return  # Skip the setup of threads below, and let self._subprocess be None
 
         def _stdout_reader_thread(fh):
             try:
@@ -457,7 +464,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
     def _do_stop_recording(self):
         if self._subprocess is None:
             logger.error("No subprocess to be terminated in %s stop-recording", self.sensor_name)
-            return  # Init failed previously
+            return  # Start of recording failed previously, most probably
         retcode = self._subprocess.poll()
         if retcode is not None:
             logger.error("Subprocess was already terminated with code %s in %s stop-recording", retcode, self.sensor_name)
@@ -469,7 +476,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
             if self._stdout_thread.is_alive():
                 raise TimeoutError
         except Exception as exc:
-            logger.warning("Failed normal termination of %s subprocess: %s", self.sensor_name, exc)
+            logger.warning("Failed normal termination of %s subprocess: %r", self.sensor_name, exc)
             if self._subprocess.poll() is None:  # It could be that the subprocess is just slow to quit, though...
                 logger.warning("Force-terminating dangling %s subprocess" % self.sensor_name)
                 self._kill_subprocess(self._subprocess)

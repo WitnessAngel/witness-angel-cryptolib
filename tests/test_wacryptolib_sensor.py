@@ -461,37 +461,54 @@ def test_periodic_subprocess_stream_recorder(tmp_path):
         sensor_name = "test_sensor"
         record_extension = ".testext"
 
-        subprocess_data_chunk_size = 1024
+        subprocess_data_chunk_size = 100
 
-        def __init__(self, python_command_line, skip_quit_operation=False, **kwargs):
-            self._python_command_line = python_command_line
+        def __init__(self, executable_command_line,
+                     transmit_post_stop_data=False, skip_quit_operation=False, **kwargs):
+            self._executable_command_line = executable_command_line
+            self._transmit_post_stop_data = transmit_post_stop_data
             self._skip_quit_operation = skip_quit_operation
             super().__init__(**kwargs)
 
         def _build_subprocess_command_line(self):
-            return [sys.executable, "-c", self._python_command_line]
+            return self._executable_command_line
+
+        def _do_stop_recording(self):
+            super()._do_stop_recording()
+            if self._transmit_post_stop_data:
+                return "post-stop-data__"*3
+            return None
+
+        def _handle_post_stop_data(self, payload, from_datetime, to_datetime):
+            print("POST STOP DATA RECEIVED IN TEST IS", payload, from_datetime, to_datetime)
 
         def _quit_subprocess(self, subprocess):
             if not self._skip_quit_operation:
-                super()._quit_subprocess()
+                super()._quit_subprocess(subprocess)
 
-    simple_command_line = "import time ;\nwhile True: print('This is some test output!') or time.sleep(0.5)"
+    simple_command_line = [
+        sys.executable,
+        "-c",
+        "import time ;\nwhile True: print('This is some test output!') or time.sleep(0.5)"
+    ]
+
+    for transmit_post_stop_data in (True, False):
+
+        recorder = TestRecorder(
+            executable_command_line=simple_command_line, transmit_post_stop_data=transmit_post_stop_data,
+            interval_s=4, cryptainer_storage=cryptainer_storage)
+        recorder.start()
+        time.sleep(6) # Beware of python launch time...
+        recorder.stop()
+        cryptainer_names = cryptainer_storage.list_cryptainer_names()
+        assert len(cryptainer_names) == 2  # Last recording was aborted early though
+        assert "test_sensor" in str(cryptainer_names[0])
+        assert str(cryptainer_names[0]).endswith(".testext.crypt")
+
+        _purge_cryptainer_storage(cryptainer_names)
 
     recorder = TestRecorder(
-        python_command_line=simple_command_line,
-        interval_s=4, cryptainer_storage=cryptainer_storage)
-    recorder.start()
-    time.sleep(7) # Beware of python launch time...
-    recorder.stop()
-    cryptainer_names = cryptainer_storage.list_cryptainer_names()
-    assert len(cryptainer_names) == 2  # Last recording was aborted early though
-    assert "test_sensor" in str(cryptainer_names[0])
-    assert str(cryptainer_names[0]).endswith(".testext.crypt")
-
-    _purge_cryptainer_storage(cryptainer_names)
-
-    recorder = TestRecorder(
-        python_command_line="ABCDE",  # WRONG python script
+        executable_command_line=["ABCDE"],  # WRONG executable
         interval_s=4, cryptainer_storage=cryptainer_storage)
     recorder.start()
     time.sleep(7) # Beware of python launch time...
@@ -504,7 +521,7 @@ def test_periodic_subprocess_stream_recorder(tmp_path):
     _purge_cryptainer_storage(cryptainer_names)
 
     recorder = TestRecorder(
-        python_command_line=simple_command_line,
+        executable_command_line=simple_command_line,
         skip_quit_operation=True,
         interval_s=5, cryptainer_storage=cryptainer_storage)
     recorder.start()

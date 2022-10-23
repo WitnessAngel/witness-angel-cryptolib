@@ -3,7 +3,9 @@ import logging
 import subprocess
 import tarfile
 import threading
+import time
 from datetime import datetime, timezone
+from subprocess import TimeoutExpired
 
 from wacryptolib.cryptainer import CryptainerStorage, CRYPTAINER_DATETIME_FORMAT
 from wacryptolib.utilities import (
@@ -363,11 +365,13 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
     # Class fields to be overridden
     record_extension = None
 
-    _subprocess = None
-    _cryptainer_encryption_stream = None
-
     # How much data to push to encryption stream at the same time
     subprocess_data_chunk_size = 2 * 1024**2
+
+    _cryptainer_encryption_stream = None
+    _subprocess = None
+    _stdout_thread = None
+    _stderr_thread = None
 
     @property
     def suprocess_buffer_size(self):
@@ -379,6 +383,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
                  cryptainer_storage):
         super().__init__(interval_s=interval_s)
         self._cryptainer_storage = cryptainer_storage
+        self._previous_stdout_threads = []  # To allow a proper join() at the end (we ignore stderr threads)
 
     def _build_filename_base(self, from_datetime):
         extension = self.record_extension
@@ -397,6 +402,11 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
 
         logger.info("Calling {} sensor subprocess command: {}".format(self.sensor_name, " ".join(command_line)))
 
+        # Important - keep a direct reference to cryptainer_encryption_stream_copy for threads,
+        # to allow quick restart of recording, while previous stdout threads peacefully finish
+        # building the previous cryptainers!
+        cryptainer_encryption_stream_copy = self._cryptainer_encryption_stream
+
         try:
             self._subprocess = subprocess.Popen(
                 command_line,
@@ -407,7 +417,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
         except OSError as exc:  # E.g. program binary not found
             logger.error("Failure when calling {} sensor subprocess command: {!r}".format(self.sensor_name, exc))
             # FIXME here add deletion of self._cryptainer_encryption_stream instead of finalizing it?
-            self._cryptainer_encryption_stream.finalize()
+            cryptainer_encryption_stream_copy.finalize()
             return  # Skip the setup of threads below, and let self._subprocess be None
 
         def _stdout_reader_thread(fh):
@@ -422,7 +432,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
                     else:
                         break  # End of subprocess
                 logger.info(">>>> FINALIZING %s CONTAINER ENCRYPTION STREAM" % self.sensor_name)
-                self._cryptainer_encryption_stream.finalize()
+                cryptainer_encryption_stream_copy.finalize()
                 fh.close()
             except Exception as exc:  # pragma: no cover
                 logger.critical("Unexpected failure in %s stdout_reader_thread(): %r", self.sensor_name, exc)
@@ -431,6 +441,10 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
         self._stdout_thread = threading.Thread(target=_stdout_reader_thread,
                                                 args=(self._subprocess.stdout,))
         self._stdout_thread.start()
+
+        # Do some cleanup to save memory
+        self._previous_stdout_threads = [thread for thread in self._previous_stdout_threads if thread.is_alive()]
+        self._previous_stdout_threads.append(self._stdout_thread)
 
         def _sytderr_reader_thread(fh):
             try:
@@ -462,25 +476,42 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
         subprocess.kill()
 
     def _do_stop_recording(self):
+
         if self._subprocess is None:
             logger.error("No subprocess to be terminated in %s stop-recording", self.sensor_name)
+            assert self._stdout_thread is None
+            assert self._stderr_thread is None
             return  # Start of recording failed previously, most probably
-        retcode = self._subprocess.poll()
-        if retcode is not None:
-            logger.error("Subprocess was already terminated with code %s in %s stop-recording", retcode, self.sensor_name)
-            return  # Stream must have crashed
+
         try:
-            logger.warning("Attempting normal termination of %s subprocess", self.sensor_name)
-            self._quit_subprocess(self._subprocess)
-            self._stdout_thread.join(timeout=8)  # Doesn't raise on timeout!
-            if self._stdout_thread.is_alive():
-                raise TimeoutError
-        except Exception as exc:
-            logger.warning("Failed normal termination of %s subprocess: %r", self.sensor_name, exc)
-            if self._subprocess.poll() is None:  # It could be that the subprocess is just slow to quit, though...
-                logger.warning("Force-terminating dangling %s subprocess" % self.sensor_name)
-                self._kill_subprocess(self._subprocess)
-                self._stdout_thread.join(timeout=4)
+            retcode = self._subprocess.poll()
+            if retcode is not None:
+                logger.error("Subprocess had already terminated with return code %s in %s stop-recording", retcode, self.sensor_name)
+                return  # Stream must have crashed
+            try:
+                logger.warning("Attempting normal termination of %s subprocess", self.sensor_name)
+                self._quit_subprocess(self._subprocess)
+                self._subprocess.wait(timeout=10)  # Doesn't raise on timeout!
+                # Note : self._stdout_thread might still be running to complete data encryption and cryptainer finalization!
+            except Exception as exc:  # E.g. TimeoutExpired if wait() expired
+                logger.warning("Failed normal termination of %s subprocess: %r", self.sensor_name, exc)
+                if self._subprocess.poll() is None:  # It could be that the subprocess is just slow to quit, though...
+                    logger.warning("Force-terminating dangling %s subprocess" % self.sensor_name)
+                    self._kill_subprocess(self._subprocess)
+                    try:
+                        self._subprocess.wait(timeout=5)
+                    except TimeoutExpired:  # Should never happen IRL...
+                        logger.critical("Force-termination of dangling %s subprocess failed!" % self.sensor_name)
+        finally:
+            # Cleanup recording attributes
+            self._cryptainer_encryption_stream = self._subprocess = self._stdout_thread = self._stderr_thread = None
+
+    def join(self):
+        super().join()
+        for thread in self._previous_stdout_threads:
+            thread.join(timeout=15)
+            if thread.is_alive():  # Might happen in very slow system, or if subprocess actually never exited...
+                logger.critical("Stdout thread for previous %s subprocess didn't exit" % self.sensor_name)
 
 
 class SensorManager(

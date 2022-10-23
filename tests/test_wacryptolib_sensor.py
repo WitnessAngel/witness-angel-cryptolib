@@ -492,6 +492,16 @@ def test_periodic_subprocess_stream_recorder(tmp_path):
         "import time ;\nwhile True: print('This is some test output!') or time.sleep(0.5)"
     ]
 
+    oneshot_command_line = [
+        sys.executable,
+        "-c",
+        "print('This is some test data and then I quit immediately!')"
+    ]
+
+    def _check_cryptainer_name(cryptainer_name):
+        assert "test_sensor" in str(cryptainer_name)
+        assert str(cryptainer_name).endswith(".testext.crypt")
+
     for transmit_post_stop_data in (True, False):
 
         recorder = TestRecorder(
@@ -500,10 +510,10 @@ def test_periodic_subprocess_stream_recorder(tmp_path):
         recorder.start()
         time.sleep(6) # Beware of python launch time...
         recorder.stop()
+        recorder.join()
         cryptainer_names = cryptainer_storage.list_cryptainer_names()
         assert len(cryptainer_names) == 2  # Last recording was aborted early though
-        assert "test_sensor" in str(cryptainer_names[0])
-        assert str(cryptainer_names[0]).endswith(".testext.crypt")
+        _check_cryptainer_name(cryptainer_names[0])
 
         _purge_cryptainer_storage(cryptainer_names)
 
@@ -511,12 +521,38 @@ def test_periodic_subprocess_stream_recorder(tmp_path):
         executable_command_line=["ABCDE"],  # WRONG executable
         interval_s=4, cryptainer_storage=cryptainer_storage)
     recorder.start()
-    time.sleep(7) # Beware of python launch time...
+    time.sleep(6)
     recorder.stop()
+    recorder.join()
     cryptainer_names = cryptainer_storage.list_cryptainer_names()
     assert len(cryptainer_names) == 2  # Cryptainers are EMPTY but still exist
-    assert "test_sensor" in str(cryptainer_names[0])
-    assert str(cryptainer_names[0]).endswith(".testext.crypt")
+    _check_cryptainer_name(cryptainer_names[0])
+
+    _purge_cryptainer_storage(cryptainer_names)
+
+    recorder = TestRecorder(
+        executable_command_line=oneshot_command_line,  # Program quits immediately
+        interval_s=4, cryptainer_storage=cryptainer_storage)
+    recorder.start()
+    time.sleep(6)
+    recorder.stop()  # Retcode will already have been set
+    # No need here for recorder.join()
+    cryptainer_names = cryptainer_storage.list_cryptainer_names()
+    assert len(cryptainer_names) == 2  # Cryptainers contain only the initially output data
+    _check_cryptainer_name(cryptainer_names[0])
+
+    _purge_cryptainer_storage(cryptainer_names)
+
+    recorder = TestRecorder(
+        executable_command_line=["ABCDE"],  # WRONG executable
+        interval_s=4, cryptainer_storage=cryptainer_storage)
+    recorder.start()
+    time.sleep(6) # Beware of python launch time...
+    recorder.stop()
+    recorder.join()
+    cryptainer_names = cryptainer_storage.list_cryptainer_names()
+    assert len(cryptainer_names) == 2  # Cryptainers are EMPTY but still exist
+    _check_cryptainer_name(cryptainer_names[0])
 
     _purge_cryptainer_storage(cryptainer_names)
 
@@ -527,10 +563,10 @@ def test_periodic_subprocess_stream_recorder(tmp_path):
     recorder.start()
     time.sleep(12) # Beware of python launch time...
     recorder.stop()
+    recorder.join()
     cryptainer_names = cryptainer_storage.list_cryptainer_names()
     assert len(cryptainer_names) == 2  # Waiting for sigkill prevented more than that
-    assert "test_sensor" in str(cryptainer_names[0])
-    assert str(cryptainer_names[0]).endswith(".testext.crypt")
+    _check_cryptainer_name(cryptainer_names[0])
 
 
 def test_sensor_manager():

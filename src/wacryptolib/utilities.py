@@ -318,17 +318,15 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
 
     def stop(self):
         """Request the secondary thread to stop. If it's currently processing data,
-        it will not stop immediately, and another data aggregation operation might happen."""
+        it will not stop immediately, and another offloaded operation might happen."""
         super().stop()
         self._multitimer.stop()
 
     def join(self):  # TODO - add a join timeout everywhere?
         """
         Wait for the secondary thread to really exit, after `stop()` was called.
-        When this function returns, no more data will be sent to the json aggregator by this poller,
+        When this function returns, no more offloaded operation will happen,
         until the next `start()`.
-
-        This does NOT flush the underlying json aggregator!
         """
         super().join()
         timer_thread = self._multitimer._timer

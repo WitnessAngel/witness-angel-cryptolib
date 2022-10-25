@@ -2029,7 +2029,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
     def create_cryptainer_encryption_stream(
         self, filename_base, cryptainer_metadata, keychain_uid=None, cryptoconf=None, dump_initial_cryptainer=True
     ):
-        logger.info("Enqueuing file %r for encryption and storage", filename_base)
+        logger.info("Building cryptainer stream %r", filename_base)
         cryptainer_filepath = self._make_absolute(filename_base + CRYPTAINER_SUFFIX)
         cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
         cryptainer_encryption_stream = CryptainerEncryptionPipeline(

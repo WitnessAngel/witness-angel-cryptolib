@@ -306,13 +306,13 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
     def start(self):
         super().start()
 
-        logger.info(">>> Starting sensor %s" % self)
+        logger.info(">>> Starting sensor %s" % self.sensor_name)
 
         self._current_start_time = get_utc_now_date()
 
         self._do_start_recording()
 
-        logger.info(">>> Started sensor %s" % self)
+        logger.info(">>> Started sensor %s" % self.sensor_name)
 
     def _do_start_recording(self):  # pragma: no cover
         raise NotImplementedError("%s -> _do_start_recording" % self.sensor_name)
@@ -321,7 +321,7 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
     def stop(self):
         super().stop()
 
-        logger.info(">>> Stopping sensor %s" % self)
+        logger.info(">>> Stopping sensor %s" % self.sensor_name)
 
         from_datetime = self._current_start_time
         to_datetime = get_utc_now_date()
@@ -331,7 +331,7 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
         if payload is not None:
             self._handle_post_stop_data(payload=payload, from_datetime=from_datetime, to_datetime=to_datetime)
 
-        logger.info(">>> Stopped sensor %s" % self)
+        logger.info(">>> Stopped sensor %s" % self.sensor_name)
 
     def _do_stop_recording(self):  # pragma: no cover
         raise NotImplementedError("%s -> _do_stop_recording" % self.sensor_name)
@@ -343,7 +343,7 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
     def _offloaded_run_task(self):
         try:
             if not self.is_running:
-                return
+                return  # In case of race condition...
 
             from_datetime = self._current_start_time
             to_datetime = datetime.now(tz=timezone.utc)
@@ -355,9 +355,10 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
 
             if payload is not None:
                 self._handle_post_stop_data(payload=payload, from_datetime=from_datetime, to_datetime=to_datetime)
-        except Exception as exc:
+        except Exception as exc:  # pragma: no cover
             logger.critical("Unexpected failure in %s _offloaded_run_task(): %r", self.sensor_name, exc)
-            raise
+            raise  # Can't recover from that
+
 
 class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
     """THIS IS PRIVATE API"""
@@ -428,12 +429,13 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
                     assert chunk is not None  # We're NOT in non-blocking mode!
                     if chunk:
                         logger.info(">>>> ENCRYPTING %s CHUNK OF LENGTH %s", self.sensor_name, len(chunk))
-                        self._cryptainer_encryption_stream.encrypt_chunk(chunk)
+                        cryptainer_encryption_stream_copy.encrypt_chunk(chunk)
                     else:
                         break  # End of subprocess
-                logger.info(">>>> FINALIZING %s CONTAINER ENCRYPTION STREAM" % self.sensor_name)
+                logger.info(">>>> FINALIZING %s CONTAINER ENCRYPTION STREAM AT %.1f" % (cryptainer_encryption_stream_copy._cryptainer_filepath.basename, time.time()))
                 cryptainer_encryption_stream_copy.finalize()
                 fh.close()
+                logger.info(">>>> FINALIZED %s CONTAINER ENCRYPTION" % (cryptainer_encryption_stream_copy._cryptainer_filepath.basename,))
             except Exception as exc:  # pragma: no cover
                 logger.critical("Unexpected failure in %s stdout_reader_thread(): %r", self.sensor_name, exc)
                 raise

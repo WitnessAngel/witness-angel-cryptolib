@@ -301,6 +301,7 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
         self._interval_s = interval_s
         if task_func:  # Important
             self._task_func = task_func
+
         self._multitimer = multitimer.MultiTimer(
             interval=interval_s, function=self._offloaded_run_task, count=count, runonstart=runonstart
         )

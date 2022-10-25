@@ -281,6 +281,7 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
 
     def _offloaded_run_task(self):
         """This function is meant to be called by secondary thread, to fetch and store data."""
+        assert self.is_running
         try:
             assert self._task_func  # Sanity check, else _offloaded_run_task() should have been overridden
             result = self._task_func()
@@ -341,10 +342,8 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
 
     @synchronized
     def _offloaded_run_task(self):
+        assert self.is_running
         try:
-            if not self.is_running:
-                return  # In case of race condition...
-
             from_datetime = self._current_start_time
             to_datetime = datetime.now(tz=timezone.utc)
 
@@ -432,10 +431,10 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
                         cryptainer_encryption_stream_copy.encrypt_chunk(chunk)
                     else:
                         break  # End of subprocess
-                logger.info(">>>> FINALIZING %s CONTAINER ENCRYPTION STREAM AT %.1f" % (cryptainer_encryption_stream_copy._cryptainer_filepath.basename, time.time()))
+                logger.info(">>>> FINALIZING %s CONTAINER ENCRYPTION STREAM AT %.1f" % (cryptainer_encryption_stream_copy._cryptainer_filepath.name, time.time()))
                 cryptainer_encryption_stream_copy.finalize()
                 fh.close()
-                logger.info(">>>> FINALIZED %s CONTAINER ENCRYPTION" % (cryptainer_encryption_stream_copy._cryptainer_filepath.basename,))
+                logger.info(">>>> FINALIZED %s CONTAINER ENCRYPTION" % (cryptainer_encryption_stream_copy._cryptainer_filepath.name,))
             except Exception as exc:  # pragma: no cover
                 logger.critical("Unexpected failure in %s stdout_reader_thread(): %r", self.sensor_name, exc)
                 raise
@@ -497,13 +496,12 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
                 # Note : self._stdout_thread might still be running to complete data encryption and cryptainer finalization!
             except Exception as exc:  # E.g. TimeoutExpired if wait() expired
                 logger.warning("Failed normal termination of %s subprocess: %r", self.sensor_name, exc)
-                if self._subprocess.poll() is None:  # It could be that the subprocess is just slow to quit, though...
-                    logger.warning("Force-terminating dangling %s subprocess" % self.sensor_name)
-                    self._kill_subprocess(self._subprocess)
-                    try:
-                        self._subprocess.wait(timeout=5)
-                    except TimeoutExpired:  # Should never happen IRL...
-                        logger.critical("Force-termination of dangling %s subprocess failed!" % self.sensor_name)
+                logger.warning("Force-terminating dangling %s subprocess" % self.sensor_name)
+                self._kill_subprocess(self._subprocess)
+                try:
+                    self._subprocess.wait(timeout=5)
+                except TimeoutExpired:  # Should never happen IRL...
+                    logger.critical("Force-termination of dangling %s subprocess failed!" % self.sensor_name)
         finally:
             # Cleanup recording attributes
             self._cryptainer_encryption_stream = self._subprocess = self._stdout_thread = self._stderr_thread = None

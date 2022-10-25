@@ -545,7 +545,7 @@ def test_periodic_subprocess_stream_recorder_broken_executable(tmp_path):
 
     recorder = TestStreamRecorderForTesting(
         executable_command_line=["ABCDE"],  # WRONG executable
-        interval_s=4, cryptainer_storage=cryptainer_storage)
+        interval_s=5, cryptainer_storage=cryptainer_storage)
     recorder.start()
     time.sleep(6)
     recorder.stop()
@@ -561,29 +561,13 @@ def test_periodic_subprocess_stream_recorder_autoexiting_executable(tmp_path):
 
     recorder = TestStreamRecorderForTesting(
         executable_command_line=oneshot_command_line,  # This program quits immediately
-        interval_s=4, cryptainer_storage=cryptainer_storage)
+        interval_s=5, cryptainer_storage=cryptainer_storage)
     recorder.start()
     time.sleep(6)
     recorder.stop()  # Retcode will already have been set
     # No need here for recorder.join()
     cryptainer_names = cryptainer_storage.list_cryptainer_names()
     assert len(cryptainer_names) == 2  # Cryptainers contain only the initially output data
-    _check_stream_recorder_cryptainer_name(cryptainer_names[0])
-
-
-def test_periodic_subprocess_stream_recorder_autoexiting_executable(tmp_path):
-
-    cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
-
-    recorder = TestStreamRecorderForTesting(
-        executable_command_line=["ABCDE"],  # WRONG executable
-        interval_s=4, cryptainer_storage=cryptainer_storage)
-    recorder.start()
-    time.sleep(6) # Beware of python launch time...
-    recorder.stop()
-    recorder.join()
-    cryptainer_names = cryptainer_storage.list_cryptainer_names()
-    assert len(cryptainer_names) == 2  # Cryptainers are EMPTY but still exist
     _check_stream_recorder_cryptainer_name(cryptainer_names[0])
 
 

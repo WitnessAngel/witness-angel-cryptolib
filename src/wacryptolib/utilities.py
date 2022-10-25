@@ -303,12 +303,21 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
             self._task_func = task_func
 
         self._multitimer = multitimer.MultiTimer(
-            interval=interval_s, function=self._offloaded_run_task, count=count, runonstart=runonstart
+            interval=interval_s, function=self._private_launch_offloaded_run_task, count=count, runonstart=runonstart
         )
+
+    def _private_launch_offloaded_run_task(self):
+        """Wrapper to ensure that offloaded task will not be run if
+        state machine has just been stopped concurrently"""
+        if not self.is_running:  # pragma: no cover
+            return  # In case of race condition (too hard to test)...
+        return self._offloaded_run_task()
 
     def _offloaded_run_task(self):
         """Method which will be run periodically by background thread,
         and which by default simply calls task_func() and returns the result.
+
+        MEANT TO BE OVERRIDDEN BY SUBCLASS
         """
         return self._task_func()
 

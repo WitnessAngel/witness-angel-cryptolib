@@ -11,7 +11,7 @@ import pytest
 from freezegun import freeze_time
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool
-from wacryptolib.cryptainer import CryptainerStorage
+from wacryptolib.cryptainer import CryptainerStorage, CryptainerEncryptionPipeline
 from wacryptolib.scaffolding import check_sensor_state_machine
 from wacryptolib.sensor import TarfileRecordAggregator, JsonDataAggregator, PeriodicValuePoller, SensorManager, \
     PeriodicSubprocessStreamRecorder
@@ -483,6 +483,33 @@ class TestStreamRecorderForTesting(PeriodicSubprocessStreamRecorder):
             super()._kill_subprocess(subprocess)
 
 
+class TestStreamRecorderForTestingWithCustomEncryptionStream(TestStreamRecorderForTesting):
+
+    class CryptainerEncryptionPipelineWithFinalizationNotification(CryptainerEncryptionPipeline):
+
+        def __init__(self,
+                     *args,
+                     finalization_callback=None,
+                     **kwargs):
+            super().__init__(*args, **kwargs)
+            assert finalization_callback is not None
+            self._finalization_callback = finalization_callback
+
+        def finalize(self):
+            self._finalization_callback()
+            return super().finalize()
+
+    def __init__(self, *args, finalization_callback, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._finalization_callback=finalization_callback
+
+    def _get_cryptainer_encryption_stream_creation_kwargs(self) -> dict:
+        return dict(
+            cryptainer_encryption_stream_class=self.__class__.CryptainerEncryptionPipelineWithFinalizationNotification,
+            cryptainer_encryption_stream_extra_kwargs=dict(finalization_callback=self._finalization_callback)
+        )
+
+
 simple_command_line = [
     sys.executable,
     "-c",
@@ -616,6 +643,32 @@ def test_periodic_subprocess_stream_recorder_non_killable_executable(tmp_path):
     finally:
         if subprocess.poll() is None:
             subprocess.kill()  # Kill abnormally remaining subprocess, even if it'd end soon
+
+
+def test_periodic_subprocess_stream_recorder_with_custom_encryption_stream(tmp_path):
+
+    cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
+
+    finalization_result_holder = []
+    def finalization_callback():
+        finalization_result_holder.append("FINALIZED")
+
+    recorder = TestStreamRecorderForTestingWithCustomEncryptionStream(
+        finalization_callback=finalization_callback,
+        executable_command_line=simple_command_line, interval_s=6,
+        cryptainer_storage=cryptainer_storage)
+    recorder.start()
+    print("BEFORE SLEEP")
+    time.sleep(1)
+    print("AFTER SLEEP")
+    recorder.stop()
+    recorder.join()
+
+    assert finalization_result_holder == ["FINALIZED"]
+
+    cryptainer_names = cryptainer_storage.list_cryptainer_names()
+    assert len(cryptainer_names) == 1  # Only one was recorded
+    _check_stream_recorder_cryptainer_name(cryptainer_names[0])
 
 
 def test_sensor_manager():

@@ -462,9 +462,15 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
                                                 args=(self._subprocess.stderr,))
         self._stderr_thread.start()
 
+    def _get_cryptainer_encryption_stream_creation_kwargs(self) -> dict:
+        """Good hook to provide e.g. cryptainer_encryption_stream_class and/or cryptainer_encryption_stream_extra_kwargs parameters"""
+        return {}
+
     def _do_start_recording(self):
+        create_cryptainer_encryption_stream_extra_kwargs = self._get_cryptainer_encryption_stream_creation_kwargs()
         self._cryptainer_encryption_stream = self._cryptainer_storage.create_cryptainer_encryption_stream(
-            self._build_filename_base(self._current_start_time), cryptainer_metadata=None, dump_initial_cryptainer=True)
+            self._build_filename_base(self._current_start_time), cryptainer_metadata=None, dump_initial_cryptainer=True,
+            **create_cryptainer_encryption_stream_extra_kwargs)
         self._launch_and_consume_subprocess()
 
     @classmethod

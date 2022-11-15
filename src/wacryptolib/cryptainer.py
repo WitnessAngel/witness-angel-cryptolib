@@ -1433,6 +1433,7 @@ class CryptainerEncryptionPipeline:
         offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
         self._output_data_stream = open(offloaded_file_path, mode="wb")
 
+        # FIXME WRONG NAME, this is _cryptainer_encryptor!
         self._cryptainer_decryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
         (
             self._wip_cryptainer,
@@ -2027,18 +2028,25 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
 
     @synchronized
     def create_cryptainer_encryption_stream(
-        self, filename_base, cryptainer_metadata, keychain_uid=None, cryptoconf=None, dump_initial_cryptainer=True
+        self, filename_base, cryptainer_metadata, keychain_uid=None, cryptoconf=None, dump_initial_cryptainer=True,
+        cryptainer_encryption_stream_class=None, cryptainer_encryption_stream_extra_kwargs=None
     ):
+        cryptainer_encryption_stream_class = cryptainer_encryption_stream_class or CryptainerEncryptionPipeline
+        cryptainer_encryption_stream_extra_kwargs = cryptainer_encryption_stream_extra_kwargs or {}
+
         logger.info("Building cryptainer stream %r", filename_base)
         cryptainer_filepath = self._make_absolute(filename_base + CRYPTAINER_SUFFIX)
         cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
-        cryptainer_encryption_stream = CryptainerEncryptionPipeline(
+
+
+        cryptainer_encryption_stream = cryptainer_encryption_stream_class(
             cryptainer_filepath,
             cryptoconf=cryptoconf,
             cryptainer_metadata=cryptainer_metadata,
             keychain_uid=keychain_uid,
             keystore_pool=self._keystore_pool,
             dump_initial_cryptainer=dump_initial_cryptainer,
+            **cryptainer_encryption_stream_extra_kwargs
         )
         return cryptainer_encryption_stream
 

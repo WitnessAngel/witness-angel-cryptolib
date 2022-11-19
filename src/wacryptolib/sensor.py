@@ -340,18 +340,22 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
     def _handle_post_stop_data(self, payload, from_datetime, to_datetime):  # pragma: no cover
         raise NotImplementedError("%s -> _handle_post_stop_data" % self.sensor_name)
 
+    def _do_restart_recording(self):
+        """Default implementation does a stop and then start, some sensors have better ways"""
+        payload = self._do_stop_recording() # Renames target files
+        self._do_start_recording()  # Must be restarded immediately
+        return payload
+
     @synchronized
     def _offloaded_run_task(self):
-        """Default implementation does a stop and then start"""
+
         assert self.is_running
         try:
             from_datetime = self._current_start_time
             to_datetime = get_utc_now_date()
-
-            payload = self._do_stop_recording() # Renames target files
-
             self._current_start_time = get_utc_now_date()  # RESET
-            self._do_start_recording()  # Must be restarded immediately
+
+            payload = self._do_restart_recording()
 
             if payload is not None:
                 self._handle_post_stop_data(payload=payload, from_datetime=from_datetime, to_datetime=to_datetime)
@@ -360,16 +364,40 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
             raise  # Can't recover from that
 
 
-class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
+class PeriodicEncryptionStreamMixin:
     """THIS IS PRIVATE API"""
 
     # Class fields to be overridden
     record_extension = None
 
+    def __init__(self, cryptainer_storage, **kwargs):
+        super().__init__(**kwargs)
+        self._cryptainer_storage = cryptainer_storage
+
+    def _build_cryptainer_filename_base(self, from_datetime):
+        extension = self.record_extension
+        assert extension.startswith("."), extension
+        from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
+        sensor_name = self.sensor_name
+        filename = "{from_ts}_{sensor_name}_cryptainer{extension}".format(**locals())
+        assert " " not in filename, repr(filename)
+        return filename
+
+    def _build_cryptainer_encryption_stream(self):
+        encryption_stream_extra_kwargs = self._get_cryptainer_encryption_stream_creation_kwargs()
+        cryptainer_encryption_stream = self._cryptainer_storage.create_cryptainer_encryption_stream(
+            self._build_cryptainer_filename_base(self._current_start_time),
+            cryptainer_metadata=None, dump_initial_cryptainer=True,
+            **encryption_stream_extra_kwargs)
+        return cryptainer_encryption_stream
+
+
+class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSensorRestarter):
+    """THIS IS PRIVATE API"""
+
     # How much data to push to encryption stream at the same time
     subprocess_data_chunk_size = 2 * 1024**2
 
-    _cryptainer_encryption_stream = None
     _subprocess = None
     _stdout_thread = None
     _stderr_thread = None
@@ -379,34 +407,16 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
         # This buffer must be big enough to avoid any overflow while encrypting+dumping data
         return self.subprocess_data_chunk_size * 6
 
-    def __init__(self,
-                 interval_s,
-                 cryptainer_storage):
-        super().__init__(interval_s=interval_s)
-        self._cryptainer_storage = cryptainer_storage
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._previous_stdout_threads = []  # To allow a proper join() at the end (we ignore stderr threads)
-
-    def _build_filename_base(self, from_datetime):
-        extension = self.record_extension
-        assert extension.startswith("."), extension
-        from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
-        sensor_name = self.sensor_name
-        filename = "{from_ts}_{sensor_name}_cryptainer{extension}".format(**locals())
-        assert " " not in filename, repr(filename)
-        return filename
 
     def _build_subprocess_command_line(self) -> list:  # pragma: no cover
         raise NotImplementedError("%s -> _handle_post_stop_data" % self.sensor_name)
 
-    def _launch_and_consume_subprocess(self):
-        command_line = self._build_subprocess_command_line()
+    def _launch_and_consume_subprocess(self, command_line, cryptainer_encryption_stream):
 
         logger.info("Calling {} sensor subprocess command: {}".format(self.sensor_name, " ".join(command_line)))
-
-        # Important - keep a direct reference to cryptainer_encryption_stream_copy for threads,
-        # to allow quick restart of recording, while previous stdout threads peacefully finish
-        # building the previous cryptainers!
-        cryptainer_encryption_stream_copy = self._cryptainer_encryption_stream
 
         try:
             self._subprocess = subprocess.Popen(
@@ -418,7 +428,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
         except OSError as exc:  # E.g. program binary not found
             logger.error("Failure when calling {} sensor subprocess command: {!r}".format(self.sensor_name, exc))
             # FIXME here add deletion of self._cryptainer_encryption_stream instead of finalizing it?
-            cryptainer_encryption_stream_copy.finalize()
+            cryptainer_encryption_stream.finalize()
             return  # Skip the setup of threads below, and let self._subprocess be None
 
         def _stdout_reader_thread(fh):
@@ -429,13 +439,13 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
                     assert chunk is not None  # We're NOT in non-blocking mode!
                     if chunk:
                         logger.info(">>>> ENCRYPTING %s CHUNK OF LENGTH %s", self.sensor_name, len(chunk))
-                        cryptainer_encryption_stream_copy.encrypt_chunk(chunk)
+                        cryptainer_encryption_stream.encrypt_chunk(chunk)
                     else:
                         break  # End of subprocess
-                logger.info(">>>> FINALIZING %s CONTAINER ENCRYPTION STREAM AT %.1f" % (cryptainer_encryption_stream_copy._cryptainer_filepath.name, time.time()))
-                cryptainer_encryption_stream_copy.finalize()
+                logger.info(">>>> FINALIZING %s CONTAINER ENCRYPTION STREAM AT %.1f" % (cryptainer_encryption_stream._cryptainer_filepath.name, time.time()))
+                cryptainer_encryption_stream.finalize()
                 fh.close()
-                logger.info(">>>> FINALIZED %s CONTAINER ENCRYPTION" % (cryptainer_encryption_stream_copy._cryptainer_filepath.name,))
+                logger.info(">>>> FINALIZED %s CONTAINER ENCRYPTION" % (cryptainer_encryption_stream._cryptainer_filepath.name,))
             except Exception as exc:  # pragma: no cover
                 logger.critical("Unexpected failure in %s stdout_reader_thread(): %r", self.sensor_name, exc)
                 raise
@@ -468,11 +478,10 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
         return {}
 
     def _do_start_recording(self):
-        create_cryptainer_encryption_stream_extra_kwargs = self._get_cryptainer_encryption_stream_creation_kwargs()
-        self._cryptainer_encryption_stream = self._cryptainer_storage.create_cryptainer_encryption_stream(
-            self._build_filename_base(self._current_start_time), cryptainer_metadata=None, dump_initial_cryptainer=True,
-            **create_cryptainer_encryption_stream_extra_kwargs)
-        self._launch_and_consume_subprocess()
+        command_line = self._build_subprocess_command_line()
+        cryptainer_encryption_stream = self._build_cryptainer_encryption_stream()
+        self._launch_and_consume_subprocess(
+            command_line=command_line, cryptainer_encryption_stream=cryptainer_encryption_stream)
 
     @classmethod
     def _quit_subprocess(cls, subprocess):
@@ -511,7 +520,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicSensorRestarter):
                     logger.critical("Force-termination of dangling %s subprocess failed!" % self.sensor_name)
         finally:
             # Cleanup recording attributes
-            self._cryptainer_encryption_stream = self._subprocess = self._stdout_thread = self._stderr_thread = None
+            self._subprocess = self._stdout_thread = self._stderr_thread = None
 
     def join(self):
         super().join()

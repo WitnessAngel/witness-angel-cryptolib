@@ -383,11 +383,16 @@ class PeriodicEncryptionStreamMixin:
         assert " " not in filename, repr(filename)
         return filename
 
-    def _build_cryptainer_encryption_stream(self):
+
+    def _get_cryptainer_encryption_stream_creation_kwargs(self) -> dict:
+        """Good hook to provide e.g. cryptainer_encryption_stream_class and/or cryptainer_encryption_stream_extra_kwargs parameters"""
+        return {}
+
+    def _build_cryptainer_encryption_stream(self):  # FIXME rename to encryption-pipeline ???
+        cryptainer_filename_base = self._build_cryptainer_filename_base(self._current_start_time)
         encryption_stream_extra_kwargs = self._get_cryptainer_encryption_stream_creation_kwargs()
         cryptainer_encryption_stream = self._cryptainer_storage.create_cryptainer_encryption_stream(
-            self._build_cryptainer_filename_base(self._current_start_time),
-            cryptainer_metadata=None, dump_initial_cryptainer=True,
+            cryptainer_filename_base, cryptainer_metadata=None, dump_initial_cryptainer=True,
             **encryption_stream_extra_kwargs)
         return cryptainer_encryption_stream
 
@@ -472,10 +477,6 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         self._stderr_thread = threading.Thread(target=_sytderr_reader_thread,
                                                 args=(self._subprocess.stderr,))
         self._stderr_thread.start()
-
-    def _get_cryptainer_encryption_stream_creation_kwargs(self) -> dict:
-        """Good hook to provide e.g. cryptainer_encryption_stream_class and/or cryptainer_encryption_stream_extra_kwargs parameters"""
-        return {}
 
     def _do_start_recording(self):
         command_line = self._build_subprocess_command_line()

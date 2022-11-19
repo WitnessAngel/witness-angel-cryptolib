@@ -1407,7 +1407,7 @@ class CryptainerDecryptor(CryptainerBase):
         return signature_errors
 
 
-class CryptainerEncryptionPipeline:
+class CryptainerEncryptionPipeline:  # FIXME rename to say it goes to disk
     """
     Helper which prebuilds a cryptainer without signatures nor payload,
     fills its offloaded ciphertext file chunk by chunk, and then

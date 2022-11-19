@@ -342,10 +342,11 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
 
     @synchronized
     def _offloaded_run_task(self):
+        """Default implementation does a stop and then start"""
         assert self.is_running
         try:
             from_datetime = self._current_start_time
-            to_datetime = datetime.now(tz=timezone.utc)
+            to_datetime = get_utc_now_date()
 
             payload = self._do_stop_recording() # Renames target files
 

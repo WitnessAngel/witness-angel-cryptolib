@@ -3,8 +3,7 @@ import logging
 import subprocess
 import tarfile
 import threading
-import time
-from datetime import datetime, timezone
+from datetime import datetime
 from subprocess import TimeoutExpired
 
 from wacryptolib.cryptainer import CryptainerStorage, CRYPTAINER_DATETIME_FORMAT

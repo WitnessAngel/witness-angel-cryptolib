@@ -40,7 +40,7 @@ from wacryptolib.keygen import (
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
     SUPPORTED_ASYMMETRIC_KEY_ALGOS,
 )
-from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase, ReadonlyFilesystemKeystore, FilesystemKeystore
+from wacryptolib.keystore import InMemoryKeystorePool, KeystorePoolBase, FilesystemKeystore
 from wacryptolib.shared_secret import split_secret_into_shards, recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature, SUPPORTED_SIGNATURE_ALGOS
 from wacryptolib.trustee import TrusteeApi, ReadonlyTrusteeApi

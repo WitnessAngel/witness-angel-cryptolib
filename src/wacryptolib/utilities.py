@@ -12,6 +12,7 @@ import uuid0
 from bson.binary import UuidRepresentation
 from bson.json_util import dumps, loads, JSONOptions, JSONMode
 from decorator import decorator
+from schema import SchemaError, Schema
 
 from wacryptolib import _crypto_backend
 from wacryptolib.exceptions import SchemaValidationError
@@ -348,6 +349,16 @@ class PeriodicTaskHandler(TaskRunnerStateMachineBase):
 
 
 # Validation-related utilities
+
+
+def validate_data_against_schema(data_tree, schema: Schema):
+    """
+    Validate data against provided python-schema, and raise SchemaValidationError if problems occur.
+    """
+    try:
+        schema.validate(data_tree)
+    except SchemaError as exc:
+        raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
 
 
 def convert_native_tree_to_extended_json_tree(data):  # FIXME push to docs?

@@ -32,7 +32,7 @@ from wacryptolib.utilities import (
     PeriodicTaskHandler,
     generate_uuid0,
     dump_to_json_file,
-    is_datetime_tz_aware, catch_and_log_exception,
+    is_datetime_tz_aware, catch_and_log_exception, validate_data_against_schema,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,19 +74,11 @@ KEYSTORE_TREE_SCHEMA = Schema(
 
 
 def validate_keystore_metadata(keystore_metadata):
-    try:
-        KEYSTORE_METADATA_SCHEMA.validate(keystore_metadata)
-    except SchemaError as exc:
-        raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
+    validate_data_against_schema(keystore_metadata, schema=KEYSTORE_METADATA_SCHEMA)
 
 
-def validate_keystore_tree(
-    authenticator,
-):  # FIXME setup utility validate_with_python_schema() to handle exceptions always
-    try:
-        KEYSTORE_TREE_SCHEMA.validate(authenticator)
-    except SchemaError as exc:
-        raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
+def validate_keystore_tree(authenticator):
+    validate_data_against_schema(authenticator, schema=KEYSTORE_TREE_SCHEMA)
 
 
 def _get_keystore_metadata_file_path(keystore_dir: Path):

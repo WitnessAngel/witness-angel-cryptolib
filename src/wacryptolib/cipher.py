@@ -264,7 +264,7 @@ class EncryptionNodeBase:
         """
         assert not self._is_finished
         if self.BLOCK_SIZE != 1:
-            formatted_plaintext, self._remainder = utilities.split_as_formatted_data(
+            formatted_plaintext, self._remainder = utilities.gather_data_as_blocks(
                 self._remainder, plaintext, block_size=self.BLOCK_SIZE
             )
             plaintext = formatted_plaintext

@@ -229,10 +229,11 @@ def generate_uuid0(ts: Optional[float] = None):
     return uuid0.generate(ts)
 
 
-def split_as_formatted_data(first_data: bytes, second_data: bytes, block_size: int):  # FIXME rename this private utility
+def gather_data_as_blocks(first_data: bytes, second_data: bytes, block_size: int):
     """PRIVATE API
 
-    Split the sum of two data into formatted data and remainder (multiple of block size)
+    Split the sum of two bytestrings between a data payload with a size multiple of block_size,
+    and remainder.
 
     :return: memory view of formatted data and remainder
     """
@@ -241,7 +242,6 @@ def split_as_formatted_data(first_data: bytes, second_data: bytes, block_size: i
     formatted_length = (len(full_data) // block_size) * block_size
     formatted_data = memoryview(full_data[0:formatted_length])
     remainder = full_data[formatted_length:]
-
     return formatted_data, remainder
 
 

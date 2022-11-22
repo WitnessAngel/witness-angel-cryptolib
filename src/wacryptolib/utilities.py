@@ -10,7 +10,7 @@ import schema
 import uuid0
 from bson.binary import UuidRepresentation
 from bson.json_util import dumps, loads, JSONOptions, JSONMode
-from decorator import decorator
+from decorator import decorator, contextmanager
 
 from wacryptolib import _crypto_backend
 from wacryptolib.exceptions import SchemaValidationError
@@ -54,12 +54,13 @@ def synchronized(func, self, *args, **kwargs):
         return func(self, *args, **kwargs)
 
 
-@decorator
-def catch_and_log_exception(f, *args, **kwargs):
+@contextmanager
+def catch_and_log_exception(context_message):
+    """Logs and stops any exception in the managed code block or the decorated function"""
     try:
-        return f(*args, **kwargs)
+        yield
     except Exception as exc:
-        logger.error(f"Caught exception when calling {f!r}(): {exc!r}", exc_info=True)
+        logger.critical("Abnormal exception caught in %s: %r", context_message, exc, exc_info=True)
         return None
 
 

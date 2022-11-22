@@ -1968,7 +1968,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             keystore_pool=self._keystore_pool,
         )
 
-    @catch_and_log_exception
+    @catch_and_log_exception("CryptainerStorage._offloaded_encrypt_payload_and_dump_cryptainer")
     def _offloaded_encrypt_payload_and_dump_cryptainer(
         self, filename_base, payload, cryptainer_metadata, default_keychain_uid, cryptoconf
     ):

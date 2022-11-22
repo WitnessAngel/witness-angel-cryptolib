@@ -14,7 +14,7 @@ from wacryptolib.utilities import (
     check_datetime_is_tz_aware,
     PeriodicTaskHandler,
     TaskRunnerStateMachineBase,
-    get_utc_now_date,
+    get_utc_now_date, catch_and_log_exception,
 )
 
 logger = logging.getLogger(__name__)
@@ -279,15 +279,13 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
     This class runs a function at a specified interval, and pushes its result to a json aggregator.
     """
 
+    @catch_and_log_exception("PeriodicValuePoller._offloaded_run_task")
     def _offloaded_run_task(self):
         """This function is meant to be called by secondary thread, to fetch and store data."""
         assert self.is_running
-        try:
-            assert self._task_func  # Sanity check, else _offloaded_run_task() should have been overridden
-            result = self._task_func()
-            self._offloaded_add_data(result)
-        except Exception as exc:
-            logger.error("Unexpected failure in PeriodicValuePoller offloaded task: %r" % exc, exc_info=True)
+        assert self._task_func  # Sanity check, else _offloaded_run_task() should have been overridden
+        result = self._task_func()
+        self._offloaded_add_data(result)
 
 
 class PeriodicSensorRestarter(PeriodicTaskHandler):
@@ -347,21 +345,17 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
         return payload
 
     @synchronized
+    @catch_and_log_exception("PeriodicSensorRestarter._offloaded_run_task")
     def _offloaded_run_task(self):
-
         assert self.is_running
-        try:
-            from_datetime = self._current_start_time
-            to_datetime = get_utc_now_date()
-            self._current_start_time = get_utc_now_date()  # RESET
+        from_datetime = self._current_start_time
+        to_datetime = get_utc_now_date()
+        self._current_start_time = get_utc_now_date()  # RESET
 
-            payload = self._do_restart_recording()
+        payload = self._do_restart_recording()
 
-            if payload is not None:
-                self._handle_post_stop_data(payload=payload, from_datetime=from_datetime, to_datetime=to_datetime)
-        except Exception as exc:  # pragma: no cover
-            logger.critical("Unexpected failure in %s _offloaded_run_task(): %r", self.sensor_name, exc)
-            raise  # Can't recover from that
+        if payload is not None:
+            self._handle_post_stop_data(payload=payload, from_datetime=from_datetime, to_datetime=to_datetime)
 
 
 class PeriodicEncryptionStreamMixin:
@@ -436,24 +430,22 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
             cryptainer_encryption_stream.finalize()
             return  # Skip the setup of threads below, and let self._subprocess be None
 
+        @catch_and_log_exception("Subprocess stdout_reader_thread of sensor %s" % self.sensor_name)
         def _stdout_reader_thread(fh):
-            try:
-                # Backported from Popen._readerthread of Python3.8
-                while True:
-                    chunk = fh.read(self.subprocess_data_chunk_size)
-                    assert chunk is not None  # We're NOT in non-blocking mode!
-                    if chunk:
-                        logger.debug("Encrypting %s chunk of length %s", self.sensor_name, len(chunk))
-                        cryptainer_encryption_stream.encrypt_chunk(chunk)
-                    else:
-                        break  # End of subprocess
-                logger.debug("Finalizing %s cryptainer encryption stream", cryptainer_encryption_stream._cryptainer_filepath.name)
-                cryptainer_encryption_stream.finalize()
-                fh.close()
-                logger.debug("Finished finalizing %s cryptainer encryption stream", cryptainer_encryption_stream._cryptainer_filepath.name)
-            except Exception as exc:  # pragma: no cover
-                logger.critical("Unexpected failure in %s stdout reader thread: %r", self.sensor_name, exc, exc_info=True)
-                raise
+            # Backported from Popen._readerthread of Python3.8
+            while True:
+                chunk = fh.read(self.subprocess_data_chunk_size)
+                assert chunk is not None  # We're NOT in non-blocking mode!
+                if chunk:
+                    logger.debug("Encrypting %s chunk of length %s", self.sensor_name, len(chunk))
+                    cryptainer_encryption_stream.encrypt_chunk(chunk)
+                else:
+                    break  # End of subprocess
+            logger.debug("Finalizing %s cryptainer encryption stream", cryptainer_encryption_stream._cryptainer_filepath.name)
+            cryptainer_encryption_stream.finalize()
+            fh.close()
+            logger.debug("Finished finalizing %s cryptainer encryption stream", cryptainer_encryption_stream._cryptainer_filepath.name)
+
 
         self._stdout_thread = threading.Thread(target=_stdout_reader_thread,
                                                 args=(self._subprocess.stdout,))
@@ -463,16 +455,13 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         self._previous_stdout_threads = [thread for thread in self._previous_stdout_threads if thread.is_alive()]
         self._previous_stdout_threads.append(self._stdout_thread)
 
+        @catch_and_log_exception("Subprocess sytderr_reader_thread of sensor %s" % self.sensor_name)
         def _sytderr_reader_thread(fh):
-            try:
-                for line in fh:
-                    ##print(b">>>>", repr(line).encode("ascii"))
-                    line_str = repr(line)  #  line.decode("ascii", "ignore")
-                    logger.warning("Subprocess stderr: %s" % line_str.rstrip("\n"))
-                fh.close()
-            except Exception as exc:  # pragma: no cover
-                logger.critical("Unexpected failure in %s stderr reader thread: %r", self.sensor_name, exc, exc_info=True)
-                raise
+            for line in fh:
+                ##print(b">>>>", repr(line).encode("ascii"))
+                line_str = repr(line)  #  line.decode("ascii", "ignore")
+                logger.warning("Subprocess stderr: %s" % line_str.rstrip("\n"))
+            fh.close()
 
         self._stderr_thread = threading.Thread(target=_sytderr_reader_thread,
                                                 args=(self._subprocess.stderr,))
@@ -550,11 +539,8 @@ class SensorManager(
         super().start()
         success_count = 0
         for sensor in self._sensors:
-            try:
+            with catch_and_log_exception(f"Failed starting sensor {sensor.__class__.__name__}"):
                 sensor.start()
-            except Exception as exc:
-                logger.critical(f"Failed starting sensor {sensor.__class__.__name__} ({exc!r})", exc_info=True)
-            else:
                 success_count += 1
         return success_count
 
@@ -563,11 +549,8 @@ class SensorManager(
         super().stop()
         success_count = 0
         for sensor in self._sensors:
-            try:
+            with catch_and_log_exception(f"Failed stopping sensor {sensor.__class__.__name__}"):
                 sensor.stop()
-            except Exception as exc:
-                logger.critical(f"Failed stopping sensor {sensor.__class__.__name__} ({exc!r})", exc_info=True)
-            else:
                 success_count += 1
         return success_count
 
@@ -576,10 +559,7 @@ class SensorManager(
         super().join()
         success_count = 0
         for sensor in self._sensors:
-            try:
+            with catch_and_log_exception(f"Failed joining sensor {sensor.__class__.__name__}"):
                 sensor.join()
-            except Exception as exc:
-                logger.critical(f"Failed joining sensor {sensor.__class__.__name__} ({exc!r})", exc_info=True)
-            else:
                 success_count += 1
         return success_count

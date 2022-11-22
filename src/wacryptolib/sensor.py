@@ -447,12 +447,12 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
                         cryptainer_encryption_stream.encrypt_chunk(chunk)
                     else:
                         break  # End of subprocess
-                logger.debug("Finalizing %s cryptainer encryption stream" % (cryptainer_encryption_stream._cryptainer_filepath.name, time.time()))
+                logger.debug("Finalizing %s cryptainer encryption stream", cryptainer_encryption_stream._cryptainer_filepath.name)
                 cryptainer_encryption_stream.finalize()
                 fh.close()
-                logger.debug("Finished finalizing %s cryptainer encryption stream" % (cryptainer_encryption_stream._cryptainer_filepath.name,))
+                logger.debug("Finished finalizing %s cryptainer encryption stream", cryptainer_encryption_stream._cryptainer_filepath.name)
             except Exception as exc:  # pragma: no cover
-                logger.critical("Unexpected failure in %s stdout reader thread: %r", self.sensor_name, exc)
+                logger.critical("Unexpected failure in %s stdout reader thread: %r", self.sensor_name, exc, exc_info=True)
                 raise
 
         self._stdout_thread = threading.Thread(target=_stdout_reader_thread,
@@ -471,7 +471,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
                     logger.warning("Subprocess stderr: %s" % line_str.rstrip("\n"))
                 fh.close()
             except Exception as exc:  # pragma: no cover
-                logger.critical("Unexpected failure in %s stderr reader thread: %r", self.sensor_name, exc)
+                logger.critical("Unexpected failure in %s stderr reader thread: %r", self.sensor_name, exc, exc_info=True)
                 raise
 
         self._stderr_thread = threading.Thread(target=_sytderr_reader_thread,

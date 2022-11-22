@@ -1328,7 +1328,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
             error_list=error_report,
             error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
             error_criticity=DecryptionErrorCriticity.WARNING,
-            error_msg_match="Error when decrypting shard",
+            error_msg_match="error prevented decrypting shard",
         )
 
         _check_error_entry(
@@ -1479,7 +1479,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         error_list=error_report,
         error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryptionErrorCriticity.WARNING,
-        error_msg_match="Error when decrypting shard",
+        error_msg_match="error prevented decrypting shard",
     )
 
     assert len(error_report) == 2
@@ -1579,7 +1579,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
             error_list=error_report,
             error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
             error_criticity=DecryptionErrorCriticity.WARNING,
-            error_msg_match="Error when decrypting shard",
+            error_msg_match="error prevented decrypting shard",
             occurrence_count=2,
         )  # 2 for Trustee2 and LOCAL_KEYFACTORY_TRUSTEE_MARKER
 
@@ -2018,7 +2018,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         error_list=error_report,
         error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryptionErrorCriticity.WARNING,
-        error_msg_match="Error when decrypting shard",
+        error_msg_match="error prevented decrypting shard",
         occurrence_count=3,
     )
 
@@ -2099,7 +2099,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         error_list=error_report,
         error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryptionErrorCriticity.WARNING,
-        error_msg_match="Error when decrypting shard",
+        error_msg_match="error prevented decrypting shard",
     )  # For Trustee 2
 
     _check_error_entry(
@@ -2125,7 +2125,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         error_list=error_report,
         error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryptionErrorCriticity.WARNING,
-        error_msg_match="Error when decrypting shard",
+        error_msg_match="error prevented decrypting shard",
     )  # For Trustee 2
     _check_error_entry(
         error_list=error_report,
@@ -2165,7 +2165,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         error_list=error_report,
         error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
         error_criticity=DecryptionErrorCriticity.WARNING,
-        error_msg_match="Error when decrypting shard",
+        error_msg_match="error prevented decrypting shard",
     )  # For Trustee 2
     assert len(error_report) == 2
 

@@ -124,7 +124,7 @@ class TrusteeApi:
 
         :return: a dict with at least a string field "response_message" detailing the status of the request.
         """
-        logger.debug("Trustee proxy: requesting decryption authorization for %d keypairs (%d passphrases submitted)", len(keypair_identifiers), len(passphrases))
+        logger.debug("Trustee proxy: requesting decryption authorization for %d keypairs (%d passphrases submitted)", len(keypair_identifiers), len(passphrases or ()))
 
         passphrases = passphrases or []
         assert isinstance(passphrases, (tuple, list)), repr(passphrases)
@@ -203,7 +203,7 @@ class TrusteeApi:
         """
         assert cipher_algo.upper() == "RSA_OAEP"  # Only supported asymmetric cipher for now
 
-        logger.debug("Trustee proxy: decrypting cipherdict with key %s %s (%d passphrases submitted)", cipher_algo, keychain_uid, len(passphrases))
+        logger.debug("Trustee proxy: decrypting cipherdict with key %s %s (%d passphrases submitted)", cipher_algo, keychain_uid, len(passphrases or ()))
 
         passphrases = passphrases or []
         assert isinstance(passphrases, (tuple, list)), repr(passphrases)

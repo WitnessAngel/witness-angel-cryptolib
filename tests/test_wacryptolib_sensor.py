@@ -485,7 +485,7 @@ class TestStreamRecorderForTesting(PeriodicSubprocessStreamRecorder):
 
 class TestStreamRecorderForTestingWithCustomEncryptionStream(TestStreamRecorderForTesting):
 
-    class CryptainerEncryptionPipelineWithFinalizationNotification(CryptainerEncryptionPipeline):
+    class TestCryptainerEncryptionPipelineWithFinalizationNotification(CryptainerEncryptionPipeline):
 
         def __init__(self,
                      *args,
@@ -505,7 +505,7 @@ class TestStreamRecorderForTestingWithCustomEncryptionStream(TestStreamRecorderF
 
     def _get_cryptainer_encryption_stream_creation_kwargs(self) -> dict:
         return dict(
-            cryptainer_encryption_stream_class=self.__class__.CryptainerEncryptionPipelineWithFinalizationNotification,
+            cryptainer_encryption_stream_class=self.__class__.TestCryptainerEncryptionPipelineWithFinalizationNotification,
             cryptainer_encryption_stream_extra_kwargs=dict(finalization_callback=self._finalization_callback)
         )
 
@@ -529,13 +529,13 @@ def _check_stream_recorder_cryptainer_name(cryptainer_name):
     assert str(cryptainer_name).endswith(".testext.crypt")
 
 
-def _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path):
-    from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
-
+def _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=False):
+    from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF, SIMPLE_CRYPTOCONF_NO_SIGNING
+    cryptoconf = SIMPLE_CRYPTOCONF_NO_SIGNING if skip_signing else SIMPLE_CRYPTOCONF
     offload_payload_ciphertext = random_bool()
 
-    cryptainer_storage = CryptainerStorage(  # We need a REAL CrytpainerStorage to handle Pipeplining!
-        default_cryptoconf=SIMPLE_CRYPTOCONF,
+    cryptainer_storage = CryptainerStorage(  # We need a REAL CrytpainerStorage to handle Pipelining!
+        default_cryptoconf=cryptoconf,
         cryptainer_dir=tmp_path,
         offload_payload_ciphertext=offload_payload_ciphertext,
     )
@@ -568,7 +568,8 @@ def test_periodic_subprocess_stream_recorder_simple_cases(tmp_path, transmit_pos
 
 def test_periodic_subprocess_stream_recorder_broken_executable(tmp_path):
 
-    cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
+    # Signing was too slow and broke the "2 cryptainers only" rule
+    cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=True)
 
     recorder = TestStreamRecorderForTesting(
         executable_command_line=["ABCDE"],  # WRONG executable

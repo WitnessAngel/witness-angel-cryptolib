@@ -136,6 +136,17 @@ SIMPLE_CRYPTOCONF = dict(
     ]
 )
 
+# Generating signing keys can be loooong, so we need this cryptoconf too for some tests
+SIMPLE_CRYPTOCONF_NO_SIGNING = dict(
+    payload_cipher_layers=[
+        dict(
+            payload_cipher_algo="AES_CBC",
+            key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
+            payload_signatures=[],
+        )
+    ]
+)
+
 SIMPLE_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
     "encryption": {
         "local_keyfactory": (

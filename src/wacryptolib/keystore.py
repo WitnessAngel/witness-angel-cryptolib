@@ -140,12 +140,12 @@ class KeystoreBase(ABC):
 
     def _check_public_key_does_not_exist(self, keychain_uid: uuid.UUID, key_algo: str):
         if self._public_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
-            raise KeyAlreadyExists("Already existing public key %s/%s" % (keychain_uid, key_algo))
+            raise KeyAlreadyExists("Already existing public key %s/%s" % (key_algo, keychain_uid))
         assert not self._private_key_exists(keychain_uid=keychain_uid, key_algo=key_algo)  # By construction
 
     def _check_private_key_does_not_exist(self, keychain_uid: uuid.UUID, key_algo: str):
         if self._private_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
-            raise KeyAlreadyExists("Already existing private key %s/%s" % (keychain_uid, key_algo))
+            raise KeyAlreadyExists("Already existing private key %s/%s" % (key_algo, keychain_uid))
 
 
 class KeystoreReadBase(KeystoreBase):
@@ -165,7 +165,7 @@ class KeystoreReadBase(KeystoreBase):
         :return: public key in clear PEM format, or raise KeyDoesNotExist
         """
         if not self._public_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
-            raise KeyDoesNotExist("Public key %s/%s not found" % (keychain_uid, key_algo))
+            raise KeyDoesNotExist("Public key %s/%s not found" % (key_algo, keychain_uid))
         return self._get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
 
     @synchronized
@@ -179,7 +179,7 @@ class KeystoreReadBase(KeystoreBase):
         :return: private key in PEM format (potentially passphrase-protected), or raise KeyDoesNotExist
         """
         if not self._private_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
-            raise KeyDoesNotExist("Private key %s/%s not found" % (keychain_uid, key_algo))
+            raise KeyDoesNotExist("Private key %s/%s not found" % (key_algo, keychain_uid))
         return self._get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
 
     @synchronized
@@ -264,7 +264,7 @@ class KeystoreWriteBase(KeystoreBase):
             keychain_uid=keychain_uid, key_algo=key_algo
         ):  # We don't want lonely private keys
             raise KeyDoesNotExist(
-                "Public key %s/%s does not exist, cannot attach private key to it" % (keychain_uid, key_algo)
+                "Public key %s/%s does not exist, cannot attach private key to it" % (key_algo, keychain_uid)
             )
         self._check_private_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_private_key(keychain_uid=keychain_uid, key_algo=key_algo, private_key=private_key)

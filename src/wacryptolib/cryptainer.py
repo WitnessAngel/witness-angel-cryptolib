@@ -668,7 +668,7 @@ class CryptainerEncryptor(CryptainerBase):
             trustee=trustee, key_algo=cipher_algo, keychain_uid=keychain_uid
         )
 
-        logger.debug("Encrypting symmetric key struct with asymmetric key %s %s", cipher_algo, keychain_uid)
+        logger.debug("Encrypting symmetric key struct with asymmetric keypair %s/%s", cipher_algo, keychain_uid)
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=cipher_algo)
 
         #FIXME provide utilities to wrap/unwrap this struct?
@@ -784,7 +784,7 @@ class CryptainerDecryptor(CryptainerBase):
         except KeyDoesNotExist as exc:
             error_entry = self._build_error_report_entry(
                 error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                error_message="Private key of revelation response not found (%s/%s)" % (keychain_uid, cipher_algo),
+                error_message="Private key of revelation response not found (%s/%s)" % (cipher_algo, keychain_uid),
                 error_criticity=DecryptionErrorCriticity.ERROR,
                 error_exception=exc,
             )
@@ -1307,7 +1307,7 @@ class CryptainerDecryptor(CryptainerBase):
             except KeyDoesNotExist as exc:
                 error_entry = self._build_error_report_entry(
                     error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                    error_message="Private key not found (%s/%s)" % (keychain_uid, cipher_algo),
+                    error_message="Private key not found (%s/%s)" % (cipher_algo, keychain_uid),
                     error_exception=exc,
                 )
                 error_report.append(error_entry)
@@ -1315,7 +1315,7 @@ class CryptainerDecryptor(CryptainerBase):
             except KeyLoadingError as exc:
                 error_entry = self._build_error_report_entry(
                     error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                    error_message="Could not load private key (%s/%s)" % (keychain_uid, cipher_algo),
+                    error_message="Could not load private key (%s/%s)" % (cipher_algo, keychain_uid),
                     error_exception=exc,
                 )
                 error_report.append(error_entry)
@@ -1353,7 +1353,7 @@ class CryptainerDecryptor(CryptainerBase):
         except KeyDoesNotExist as exc:
             error_entry = self._build_error_report_entry(
                 error_type=DecryptionErrorType.SIGNATURE_ERROR,
-                error_message="Private key %s/%s not found" % (keychain_uid, payload_signature_algo),
+                error_message="Private key %s/%s not found" % (payload_signature_algo, keychain_uid),
                 error_exception=exc,
             )
             error_report.append(error_entry)
@@ -1650,7 +1650,7 @@ def get_cryptoconf_summary(cryptoconf_or_cryptainer):
             text_lines.append(
                 2 * indent
                 + "%s/%s via trustee '%s'"
-                % (payload_signature["payload_digest_algo"], payload_signature["payload_signature_algo"], trustee_id)
+                % (payload_signature["payload_signature_algo"], payload_signature["payload_digest_algo"], trustee_id)
             )
     result = "\n".join(text_lines) + "\n"
     return result

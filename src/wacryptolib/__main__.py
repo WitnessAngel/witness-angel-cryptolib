@@ -1,4 +1,5 @@
 from pathlib import Path
+from pprint import pprint
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
@@ -146,8 +147,9 @@ def decrypt(ctx, input_cryptainer, output_medium):
     keystore_pool = _get_keystore_pool(ctx)
     medium_content, error_report = _do_decrypt(cryptainer=cryptainer, keystore_pool=keystore_pool)
 
-    if error_report:  # Fixme improve that display
-        print("Decryption errors occured:", error_report)
+    if error_report:
+        print("Decryption errors occured:")
+        pprint(error_report)
 
     if not medium_content:
         raise RuntimeError("Content could not be decrypted")

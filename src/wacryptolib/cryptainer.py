@@ -1474,7 +1474,7 @@ class CryptainerEncryptionPipeline:
 
         payload_integrity_tags = self._encryption_pipeline.get_payload_integrity_tags()
 
-        self._cryptainer_decryptor.add_authentication_data_to_cryptainer(self._wip_cryptainer, payload_integrity_tags)
+        self._cryptainer_encryptor.add_authentication_data_to_cryptainer(self._wip_cryptainer, payload_integrity_tags)
         self._dump_current_cryptainer_to_filesystem(is_temporary=False)
 
     def __del__(self):

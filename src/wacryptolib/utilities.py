@@ -1,6 +1,7 @@
 import abc
 import logging
 import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from json import JSONDecodeError
 from typing import List, Optional, Sequence, Union, BinaryIO
@@ -10,7 +11,7 @@ import schema
 import uuid0
 from bson.binary import UuidRepresentation
 from bson.json_util import dumps, loads, JSONOptions, JSONMode
-from decorator import decorator, contextmanager
+from decorator import decorator
 
 from wacryptolib import _crypto_backend
 from wacryptolib.exceptions import SchemaValidationError
@@ -57,11 +58,11 @@ def synchronized(func, self, *args, **kwargs):
 @contextmanager
 def catch_and_log_exception(context_message):
     """Logs and stops any exception in the managed code block or the decorated function"""
+    assert isinstance(context_message, str), context_message
     try:
         yield
     except Exception as exc:
         logger.critical("Abnormal exception caught in %s: %r", context_message, exc, exc_info=True)
-        return None
 
 
 def get_memory_rss_bytes():

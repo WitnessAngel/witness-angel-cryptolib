@@ -2362,11 +2362,11 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     # Test proper logging of errors occurring in thread pool executor
     assert storage._make_absolute  # Instance method
     storage._make_absolute = None  # Corruption!
-    assert "Caught exception" not in caplog.text, caplog.text
+    assert "Abnormal exception" not in caplog.text, caplog.text
     storage.enqueue_file_for_encryption("something.mpg", b"#########", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     assert storage.get_cryptainer_count() == 3  # Unchanged
-    assert "Caught exception" in caplog.text, caplog.text
+    assert "Abnormal exception" in caplog.text, caplog.text
     del storage._make_absolute
     assert storage._make_absolute  # Back to the method
 

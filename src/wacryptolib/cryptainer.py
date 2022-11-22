@@ -1650,7 +1650,7 @@ def get_cryptoconf_summary(cryptoconf_or_cryptainer):
             text_lines.append(
                 2 * indent
                 + "%s/%s via trustee '%s'"
-                % (payload_signature["payload_signature_algo"], payload_signature["payload_digest_algo"], trustee_id)
+                % (payload_signature["payload_digest_algo"], payload_signature["payload_signature_algo"] , trustee_id)
             )
     result = "\n".join(text_lines) + "\n"
     return result

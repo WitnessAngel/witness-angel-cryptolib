@@ -1369,8 +1369,8 @@ class CryptainerDecryptor(CryptainerBase):
                 error_message="Failed loading signature key from pem bytestring (%s)" % payload_signature_algo,
                 error_exception=exc,
             )
-            signature_errors.append(error_entry)
-            return signature_errors
+            error_report.append(error_entry)
+            return error_report
 
         payload_digest = hash_message(payload, hash_algo=payload_digest_algo)
 
@@ -1381,7 +1381,7 @@ class CryptainerDecryptor(CryptainerBase):
                 error_message="Mismatch between actual and expected payload digests during signature verification",
                 error_exception=None,
             )
-            signature_errors.append(error_entry)
+            error_report.append(error_entry)
 
         payload_signature_struct = cryptoconf.get("payload_signature_struct")
         if not payload_signature_struct:
@@ -1390,7 +1390,7 @@ class CryptainerDecryptor(CryptainerBase):
                 error_message="Missing signature structure",
                 error_exception=None,
             )
-            signature_errors.append(error_entry)
+            error_report.append(error_entry)
         else:
             try:
                 verify_message_signature(
@@ -1406,9 +1406,9 @@ class CryptainerDecryptor(CryptainerBase):
                     error_message="Failed signature verification %s (%s)" % (payload_signature_algo, exc),
                     error_exception=exc,
                 )
-                signature_errors.append(error_entry)
+                error_report.append(error_entry)
 
-        return signature_errors
+        return error_report
 
 
 class CryptainerEncryptionPipeline:  # FIXME rename to say it goes to disk

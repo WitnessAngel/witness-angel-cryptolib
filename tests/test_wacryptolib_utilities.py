@@ -23,7 +23,9 @@ from wacryptolib.utilities import (
     hash_message,
     get_utc_now_date,
     get_memory_rss_bytes,
-    delete_filesystem_node_for_stream, catch_and_log_exception, synchronized,
+    delete_filesystem_node_for_stream,
+    catch_and_log_exception,
+    synchronized,
 )
 
 
@@ -169,7 +171,7 @@ def test_generate_uuid0():
 
 
 def test_get_memory_rss_bytes():
-    assert 30 * 1024**2 < get_memory_rss_bytes() < 200 * 1024**2
+    assert 30 * 1024 ** 2 < get_memory_rss_bytes() < 200 * 1024 ** 2
 
 
 def test_delete_filesystem_node_for_stream(tmp_path):

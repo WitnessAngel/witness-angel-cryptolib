@@ -55,7 +55,9 @@ def decrypt_bytestring(
     :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
     :return: dictionary with encryption data."""
-    logger.debug("Decrypting cipherdict with cipher algo %s, and verify_integrity_tags=%s", cipher_algo, verify_integrity_tags)
+    logger.debug(
+        "Decrypting cipherdict with cipher algo %s, and verify_integrity_tags=%s", cipher_algo, verify_integrity_tags
+    )
     cipher_algo_conf = _get_cipher_algo_conf(cipher_algo)
     decryption_function = cipher_algo_conf["decryption_function"]
     try:
@@ -368,9 +370,7 @@ class PayloadEncryptionPipeline:
             encryption_class = cipher_algo_conf["encryption_node_class"]
 
             if encryption_class is None:
-                raise OperationNotSupported(
-                    "Node class %s is not implemented" % payload_cipher_algo
-                )
+                raise OperationNotSupported("Node class %s is not implemented" % payload_cipher_algo)
 
             self._cipher_streams.append(encryption_class(key_dict=symkey, payload_digest_algo=payload_digest_algos))
 
@@ -396,7 +396,10 @@ class PayloadEncryptionPipeline:
         self._finalized = True
 
     def get_payload_integrity_tags(self) -> list:
-        logger.debug("Getting payload integrity tags of payload encryption pipeline with %d encryption nodes", len(self._cipher_streams))
+        logger.debug(
+            "Getting payload integrity tags of payload encryption pipeline with %d encryption nodes",
+            len(self._cipher_streams),
+        )
         integrity_tags_list = []
         for cipher in self._cipher_streams:
             integrity_tags_list.append(cipher.get_payload_integrity_tags())

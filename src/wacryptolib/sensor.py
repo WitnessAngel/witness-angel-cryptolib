@@ -13,7 +13,8 @@ from wacryptolib.utilities import (
     check_datetime_is_tz_aware,
     PeriodicTaskHandler,
     TaskRunnerStateMachineBase,
-    get_utc_now_date, catch_and_log_exception,
+    get_utc_now_date,
+    catch_and_log_exception,
 )
 
 logger = logging.getLogger(__name__)
@@ -294,7 +295,7 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
 
     _current_start_time = None
 
-    def __init__(self, interval_s: float,):
+    def __init__(self, interval_s: float):
         super().__init__(interval_s=interval_s, runonstart=False)
         assert self.sensor_name, self.sensor_name
         assert not hasattr(self, "_lock")
@@ -339,7 +340,7 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
 
     def _do_restart_recording(self):
         """Default implementation does a stop and then start, some sensors have better ways"""
-        payload = self._do_stop_recording() # Renames target files
+        payload = self._do_stop_recording()  # Renames target files
         self._do_start_recording()  # Must be restarded immediately
         return payload
 
@@ -376,7 +377,6 @@ class PeriodicEncryptionStreamMixin:
         assert " " not in filename, repr(filename)
         return filename
 
-
     def _get_cryptainer_encryption_stream_creation_kwargs(self) -> dict:
         """Good hook to provide e.g. cryptainer_encryption_stream_class and/or cryptainer_encryption_stream_extra_kwargs parameters"""
         return {}
@@ -385,8 +385,11 @@ class PeriodicEncryptionStreamMixin:
         cryptainer_filename_base = self._build_cryptainer_filename_base(self._current_start_time)
         encryption_stream_extra_kwargs = self._get_cryptainer_encryption_stream_creation_kwargs()
         cryptainer_encryption_stream = self._cryptainer_storage.create_cryptainer_encryption_stream(
-            cryptainer_filename_base, cryptainer_metadata=None, dump_initial_cryptainer=True,
-            **encryption_stream_extra_kwargs)
+            cryptainer_filename_base,
+            cryptainer_metadata=None,
+            dump_initial_cryptainer=True,
+            **encryption_stream_extra_kwargs,
+        )
         return cryptainer_encryption_stream
 
 
@@ -394,7 +397,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
     """THIS IS PRIVATE API"""
 
     # How much data to push to encryption stream at the same time
-    subprocess_data_chunk_size = 2 * 1024**2
+    subprocess_data_chunk_size = 2 * 1024 ** 2
 
     _subprocess = None
     _stdout_thread = None
@@ -422,7 +425,8 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
                 bufsize=self.suprocess_buffer_size,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE)
+                stderr=subprocess.PIPE,
+            )
         except OSError as exc:  # E.g. program binary not found
             logger.error("Failure when calling {} sensor subprocess command: {!r}".format(self.sensor_name, exc))
             # FIXME here add deletion of self._cryptainer_encryption_stream instead of finalizing it?
@@ -440,14 +444,17 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
                     cryptainer_encryption_stream.encrypt_chunk(chunk)
                 else:
                     break  # End of subprocess
-            logger.debug("Finalizing %s cryptainer encryption stream", cryptainer_encryption_stream._cryptainer_filepath.name)
+            logger.debug(
+                "Finalizing %s cryptainer encryption stream", cryptainer_encryption_stream._cryptainer_filepath.name
+            )
             cryptainer_encryption_stream.finalize()
             fh.close()
-            logger.debug("Finished finalizing %s cryptainer encryption stream", cryptainer_encryption_stream._cryptainer_filepath.name)
+            logger.debug(
+                "Finished finalizing %s cryptainer encryption stream",
+                cryptainer_encryption_stream._cryptainer_filepath.name,
+            )
 
-
-        self._stdout_thread = threading.Thread(target=_stdout_reader_thread,
-                                                args=(self._subprocess.stdout,))
+        self._stdout_thread = threading.Thread(target=_stdout_reader_thread, args=(self._subprocess.stdout,))
         self._stdout_thread.start()
 
         # Do some cleanup to save memory
@@ -461,15 +468,15 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
                 logger.warning("Subprocess stderr: %s" % line_str.rstrip("\n"))
             fh.close()
 
-        self._stderr_thread = threading.Thread(target=_sytderr_reader_thread,
-                                                args=(self._subprocess.stderr,))
+        self._stderr_thread = threading.Thread(target=_sytderr_reader_thread, args=(self._subprocess.stderr,))
         self._stderr_thread.start()
 
     def _do_start_recording(self):
         command_line = self._build_subprocess_command_line()
         cryptainer_encryption_stream = self._build_cryptainer_encryption_stream()
         self._launch_and_consume_subprocess(
-            command_line=command_line, cryptainer_encryption_stream=cryptainer_encryption_stream)
+            command_line=command_line, cryptainer_encryption_stream=cryptainer_encryption_stream
+        )
 
     @classmethod
     def _quit_subprocess(cls, subprocess):
@@ -491,7 +498,11 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         try:
             retcode = self._subprocess.poll()
             if retcode is not None:
-                logger.warning("Subprocess had already terminated with return code %s in %s stop-recording", retcode, self.sensor_name)
+                logger.warning(
+                    "Subprocess had already terminated with return code %s in %s stop-recording",
+                    retcode,
+                    self.sensor_name,
+                )
                 return  # Stream must have crashed
             try:
                 logger.info("Attempting normal termination of %s subprocess", self.sensor_name)

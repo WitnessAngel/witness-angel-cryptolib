@@ -92,9 +92,7 @@ def test_cli_encryption_decryption_and_summary(tmp_path):
                 f.write(b"badcontent")
 
             result = runner.invoke(
-                cli,
-                base_args + ["summarize", "-i", cryptoconf_file],  # Wrong JSON content
-                catch_exceptions=True,
+                cli, base_args + ["summarize", "-i", cryptoconf_file], catch_exceptions=True  # Wrong JSON content
             )
             assert result.exit_code == 1
 
@@ -119,11 +117,7 @@ def test_cli_encryption_decryption_and_summary(tmp_path):
             )
             dump_to_json_file(cryptoconf_file, simple_cryptoconf_tree)
 
-            result = runner.invoke(
-                cli,
-                base_args + ["summarize", "-i", cryptoconf_file],
-                catch_exceptions=False,
-            )
+            result = runner.invoke(cli, base_args + ["summarize", "-i", cryptoconf_file], catch_exceptions=False)
             assert result.exit_code == 0
             assert b"CHACHA20_POLY1305" in result.stdout_bytes
             assert b"RSA_OAEP" in result.stdout_bytes

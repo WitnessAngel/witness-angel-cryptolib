@@ -20,7 +20,10 @@ class FakeTestCryptainerStorage(CryptainerStorage):
         self, payload, cryptainer_filepath, cryptainer_metadata, default_keychain_uid, cryptoconf
     ):
         cryptainer = self._encrypt_payload_into_cryptainer(  # No streaming pipeline in this FAKE class!
-            payload, cryptainer_metadata=cryptainer_metadata, default_keychain_uid=default_keychain_uid, cryptoconf=cryptoconf
+            payload,
+            cryptainer_metadata=cryptainer_metadata,
+            default_keychain_uid=default_keychain_uid,
+            cryptoconf=cryptoconf,
         )
         dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=True)
 

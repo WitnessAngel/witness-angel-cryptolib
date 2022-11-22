@@ -367,7 +367,7 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                                                             key_cipher_algo="RSA_OAEP",
                                                             key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
                                                             keychain_uid=ENFORCED_UID3,
-                                                        ),
+                                                        )
                                                     ]
                                                 )
                                             ],
@@ -865,10 +865,7 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
     payload = b"sdfsfsdfsdf"
 
     cryptainer_original = encrypt_payload_into_cryptainer(
-        payload=payload,
-        cryptoconf=cryptoconf,
-        keychain_uid=keychain_uid,
-        cryptainer_metadata=None,
+        payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=None
     )
     pprint(cryptainer_original)
 
@@ -1660,10 +1657,8 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
 
     # Generate revelation requests info
     revelation_requestor_uid = generate_uuid0()
-    revelation_requests_info = (
-        _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(  # FIXME TYPO KEYAIR
-            revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
-        )
+    revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(  # FIXME TYPO KEYAIR
+        revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
     )
 
     # Corrupt response privatekey

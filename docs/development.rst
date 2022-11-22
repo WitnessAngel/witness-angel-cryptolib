@@ -34,9 +34,9 @@ Add `--cov=wacryptolib` argument to the pytest command to generate coverage repo
 
 Use `bash ci.sh` to do a full checkup before committing or pushing your changes (under Windows, launch CI commands one by one).
 
-Use the `Black <https://black.readthedocs.io/en/stable/>`_ formatter to format the python code liek so::
+Use the `Black <https://black.readthedocs.io/en/stable/>`_ formatter to format the python code like so::
 
-    black -l 120 src/ tests/
+    $ black -l 120 src/ tests/
 
 
 Release process

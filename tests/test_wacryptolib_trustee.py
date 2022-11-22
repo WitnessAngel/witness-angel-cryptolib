@@ -80,7 +80,9 @@ def test_trustee_api_workflow():
     verify_message_signature(message=secret, signature=signature, public_key=public_key_dsa, signature_algo="DSA_DSS")
     signature["signature_value"] += b"xyz"
     with pytest.raises(SignatureVerificationError, match="Failed.*verification"):
-        verify_message_signature(message=secret, signature=signature, public_key=public_key_dsa, signature_algo="DSA_DSS")
+        verify_message_signature(
+            message=secret, signature=signature, public_key=public_key_dsa, signature_algo="DSA_DSS"
+        )
 
     # Keypair is well auto-created by get_message_signature(), even when no more free keys
     signature = trustee_api.get_message_signature(

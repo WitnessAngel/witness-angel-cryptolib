@@ -3,12 +3,7 @@ import uuid
 from typing import Optional, Sequence
 
 from wacryptolib.cipher import decrypt_bytestring
-from wacryptolib.exceptions import (
-    KeyDoesNotExist,
-    AuthorizationError,
-    KeyLoadingError,
-    ValidationError,
-)
+from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, KeyLoadingError, ValidationError
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import KeystoreBase, generate_keypair_for_storage
 from wacryptolib.signature import sign_message
@@ -124,7 +119,11 @@ class TrusteeApi:
 
         :return: a dict with at least a string field "response_message" detailing the status of the request.
         """
-        logger.debug("Trustee proxy: requesting decryption authorization for %d keypairs (%d passphrases submitted)", len(keypair_identifiers), len(passphrases or ()))
+        logger.debug(
+            "Trustee proxy: requesting decryption authorization for %d keypairs (%d passphrases submitted)",
+            len(keypair_identifiers),
+            len(passphrases or ()),
+        )
 
         passphrases = passphrases or []
         assert isinstance(passphrases, (tuple, list)), repr(passphrases)
@@ -203,7 +202,12 @@ class TrusteeApi:
         """
         assert cipher_algo.upper() == "RSA_OAEP"  # Only supported asymmetric cipher for now
 
-        logger.debug("Trustee proxy: decrypting cipherdict with private key %s/%s (%d passphrases submitted)", cipher_algo, keychain_uid, len(passphrases or ()))
+        logger.debug(
+            "Trustee proxy: decrypting cipherdict with private key %s/%s (%d passphrases submitted)",
+            cipher_algo,
+            keychain_uid,
+            len(passphrases or ()),
+        )
 
         passphrases = passphrases or []
         assert isinstance(passphrases, (tuple, list)), repr(passphrases)

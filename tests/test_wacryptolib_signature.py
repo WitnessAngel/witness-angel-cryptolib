@@ -27,14 +27,20 @@ def _common_signature_checks(keypair, message, signature, signature_algo):
     signature_corrupted["signature_value"] += b"x"
     with pytest.raises(SignatureVerificationError, match="signature"):
         wacryptolib.signature.verify_message_signature(
-            public_key=keypair["public_key"], message=message, signature=signature_corrupted, signature_algo=signature_algo
+            public_key=keypair["public_key"],
+            message=message,
+            signature=signature_corrupted,
+            signature_algo=signature_algo,
         )
 
     signature_corrupted = signature.copy()
     signature_corrupted["signature_timestamp_utc"] += 1
     with pytest.raises(SignatureVerificationError, match="signature"):
         wacryptolib.signature.verify_message_signature(
-            public_key=keypair["public_key"], message=message, signature=signature_corrupted, signature_algo=signature_algo
+            public_key=keypair["public_key"],
+            message=message,
+            signature=signature_corrupted,
+            signature_algo=signature_algo,
         )
 
 
@@ -89,7 +95,9 @@ def test_generic_signature_errors():
         with mock.patch(
             "wacryptolib.signature._compute_timestamped_hash", side_effect=ValueError
         ):  # Test rare cas where signing would be broken
-            wacryptolib.signature.sign_message(private_key=keypair["private_key"], message=message, signature_algo="RSA_PSS")
+            wacryptolib.signature.sign_message(
+                private_key=keypair["private_key"], message=message, signature_algo="RSA_PSS"
+            )
 
     with pytest.raises(ValueError, match="Unknown signature algorithm"):
         wacryptolib.signature.verify_message_signature(

@@ -527,7 +527,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
     To prevent corruption, caller should only persist UUIDs when the key storage operation is successfully finished.
     """
 
-    _randint_args = (10**10, 10**11 - 1)
+    _randint_args = (10 ** 10, 10 ** 11 - 1)
 
     def __init__(self, keys_dir: Path):
         super().__init__(keys_dir=keys_dir)
@@ -672,7 +672,7 @@ class InMemoryKeystorePool(KeystorePoolBase):
     def get_local_keyfactory(self):
         return self._local_keystore
 
-    def get_foreign_keystore(self, keystore_uid: UUID, writable: Optional[bool]=None):
+    def get_foreign_keystore(self, keystore_uid: UUID, writable: Optional[bool] = None):
         assert writable is None, writable  # No read/write specialization for InMemoryKeystorePool
         foreign_keystore = self._foreign_keystores.get(keystore_uid)
         if not foreign_keystore:
@@ -689,9 +689,7 @@ class InMemoryKeystorePool(KeystorePoolBase):
         self._foreign_keystores.update(new_storages)
 
 
-class FilesystemKeystorePool(
-    KeystorePoolBase
-):
+class FilesystemKeystorePool(KeystorePoolBase):
     """This class handles a set of locally stored key storages.
 
     The local storage represents the current device/owner, and is expected to be used by read-write trustees,
@@ -725,7 +723,7 @@ class FilesystemKeystorePool(
         if not foreign_keystore_dir.exists():
             foreign_keystore_dir.mkdir(parents=True, exist_ok=True)
 
-    def get_foreign_keystore(self, keystore_uid: UUID, writable: bool=False):
+    def get_foreign_keystore(self, keystore_uid: UUID, writable: bool = False):
         """The selected storage MUST exist, else a KeystoreDoesNotExist is raised."""
         foreign_keystore_dir = self._get_foreign_keystore_dir(keystore_uid=keystore_uid)
         if not foreign_keystore_dir.exists():
@@ -760,7 +758,7 @@ class FilesystemKeystorePool(
 
         return metadata_mapper
 
-    def export_foreign_keystore_to_keystore_tree(self, keystore_uid: UUID, include_private_keys: bool=True):
+    def export_foreign_keystore_to_keystore_tree(self, keystore_uid: UUID, include_private_keys: bool = True):
         """
         Exports data tree from the keystore targeted by keystore_uid.
         """

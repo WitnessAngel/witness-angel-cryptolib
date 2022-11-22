@@ -15,7 +15,8 @@ from wacryptolib.exceptions import (
     SchemaValidationError,
     ValidationError,
     KeyDoesNotExist,
-    KeystoreMetadataDoesNotExist, OperationNotSupported,
+    KeystoreMetadataDoesNotExist,
+    OperationNotSupported,
 )
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import (
@@ -40,9 +41,9 @@ from wacryptolib.utilities import generate_uuid0, get_utc_now_date, dump_to_json
 
 
 def test_keystore_basic_get_set_api(tmp_path):
-    tmp_path1 = (tmp_path / "subdir1")
+    tmp_path1 = tmp_path / "subdir1"
     tmp_path1.mkdir()
-    tmp_path2 = (tmp_path / "subdir2")
+    tmp_path2 = tmp_path / "subdir2"
     tmp_path2.mkdir()
 
     with pytest.raises(TypeError, match="Can't instantiate abstract class"):
@@ -54,15 +55,17 @@ def test_keystore_basic_get_set_api(tmp_path):
 
     class IntolerantKeystore(FilesystemKeystore):
         """Some keystores might be unable to list keypairs, e.g. servers with big databases"""
+
         def list_keypair_identifiers(self, *args, **kwargs) -> list:
             raise OperationNotSupported
+
     intolerant_keystore = IntolerantKeystore(keys_dir=tmp_path2)
 
     filesystem_keystore_test_locals = None
     for keystore, readonly_keystore in [
         (dummy_keystore, None),
         (intolerant_keystore, None),
-        (filesystem_keystore, readonly_filesystem_keystore)
+        (filesystem_keystore, readonly_filesystem_keystore),
     ]:
         res = check_keystore_basic_get_set_api(keystore=keystore, readonly_keystore=readonly_keystore)
         if keystore.__class__ == FilesystemKeystore:

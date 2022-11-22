@@ -1415,7 +1415,7 @@ class CryptainerDecryptor(CryptainerBase):
         return error_report
 
 
-class CryptainerEncryptionPipeline:
+class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionStream and expose File write/close API?
     """
     Helper which prebuilds a cryptainer without signatures nor payload,
     fills its OFFLOADED ciphertext file chunk by chunk, and then

@@ -465,7 +465,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         def _sytderr_reader_thread(fh):
             for line in fh:
                 line_str = line.decode("ascii", "ignore")
-                logger.warning("Subprocess stderr: %s" % line_str.rstrip("\n"))
+                logger.info("Subprocess stderr: %s" % line_str.rstrip("\n"))
             fh.close()
 
         self._stderr_thread = threading.Thread(target=_sytderr_reader_thread, args=(self._subprocess.stderr,))

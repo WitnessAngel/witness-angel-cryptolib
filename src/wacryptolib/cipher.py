@@ -31,9 +31,9 @@ def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) ->
 
     :return: dictionary with encryption data"""
     assert isinstance(plaintext, bytes), repr(plaintext)
+    logger.debug("Encrypting %d bytes of plaintext with cipher algo %s", len(plaintext), cipher_algo)
     cipher_algo_conf = _get_cipher_algo_conf(cipher_algo=cipher_algo)
     encryption_function = cipher_algo_conf["encryption_function"]
-    #### _check_symmetric_key_length_bytes(len(main_key))
     try:
         cipherdict = encryption_function(key_dict=key_dict, plaintext=plaintext)
     except ValueError as exc:
@@ -55,6 +55,7 @@ def decrypt_bytestring(
     :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
     :return: dictionary with encryption data."""
+    logger.debug("Decrypting cipherdict with cipher algo %s, and verify_integrity_tags=%s", cipher_algo, verify_integrity_tags)
     cipher_algo_conf = _get_cipher_algo_conf(cipher_algo)
     decryption_function = cipher_algo_conf["decryption_function"]
     try:
@@ -381,6 +382,7 @@ class PayloadEncryptionPipeline:
         self._output_stream.write(ciphertext)
 
     def finalize(self):
+        logger.debug("Finalizing payload encryption pipeline with %d encryption nodes", len(self._cipher_streams))
         assert not self._finalized
         current_plaintext = b""
         for cipher in self._cipher_streams:
@@ -394,6 +396,7 @@ class PayloadEncryptionPipeline:
         self._finalized = True
 
     def get_payload_integrity_tags(self) -> list:
+        logger.debug("Getting payload integrity tags of payload encryption pipeline with %d encryption nodes", len(self._cipher_streams))
         integrity_tags_list = []
         for cipher in self._cipher_streams:
             integrity_tags_list.append(cipher.get_payload_integrity_tags())

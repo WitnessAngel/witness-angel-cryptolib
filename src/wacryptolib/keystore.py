@@ -816,16 +816,17 @@ def generate_free_keypair_for_least_provisioned_key_algo(
     """
     assert key_algos, key_algos
     free_keys_counts = [(keystore.get_free_keypairs_count(key_algo), key_algo) for key_algo in key_algos]
-    logger.debug("Stats of free keys: %s", str(free_keys_counts))
+    logger.debug("Count of current free keypairs: %s", str(free_keys_counts))
 
     (count, key_algo) = min(free_keys_counts)
 
     if count >= max_free_keys_per_algo:
         return False
 
+    logger.debug("Generating new free keypair of type %s", key_algo)
     keypair = keygen_func(key_algo=key_algo, serialize=True)
     keystore.add_free_keypair(key_algo=key_algo, public_key=keypair["public_key"], private_key=keypair["private_key"])
-    logger.debug("New free key of type %s pregenerated" % key_algo)
+
     return True
 
 

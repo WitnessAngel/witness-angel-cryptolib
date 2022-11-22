@@ -1,4 +1,4 @@
-import cProfile
+
 import copy
 import logging
 import math
@@ -418,7 +418,7 @@ class CryptainerEncryptor(CryptainerBase):
     def _load_payload_bytes_and_cleanup(payload: Union[bytes, BinaryIO]):
         """Automatically deletes filesystem entry if it exists!"""
         if hasattr(payload, "read"):  # File-like object
-            logger.debug("Reading and deleting open file handle %s", payload)
+            logger.debug("Reading and then deleting open file handle %r", payload)
             payload_stream = payload
             payload = payload_stream.read()
             payload_stream.close()
@@ -580,13 +580,10 @@ class CryptainerEncryptor(CryptainerBase):
             threshold_count = key_cipher_layer["key_shared_secret_threshold"]
             assert threshold_count <= shard_count
 
-            logger.debug("Generating shared secret shards (%d needed amongst %d)", threshold_count, shard_count)
-
             shards = split_secret_into_shards(
                 secret=key_bytes, shard_count=shard_count, threshold_count=threshold_count
             )
 
-            logger.debug("Secret has been shared into %d shards", shard_count)
             assert len(shards) == shard_count
 
             shard_ciphertexts = []
@@ -1109,7 +1106,7 @@ class CryptainerDecryptor(CryptainerBase):
 
             shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
 
-            logger.debug("Deciphering each shard of shared secret")
+            logger.debug("Deciphering the %d shards of shared secret", len(shard_ciphertexts))
 
             # If some shards are missing, we won't detect it here because zip() stops at shortest list
             for shard_ciphertext, key_shared_secret_shard_conf in zip(shard_ciphertexts, key_shared_secret_shards):
@@ -1128,17 +1125,15 @@ class CryptainerDecryptor(CryptainerBase):
                     )  # The tuple (idx, payload) of each shard thus becomes encryptable
                     decrypted_shards.append(shard)
                 else:
-                    logger.error("Error when decrypting shard %s" % str(key_shared_secret_shard_conf), exc_info=True)
 
                     error = self._build_error_report_message(
                         error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                        error_message="Error when decrypting shard %s" % str(key_shared_secret_shard_conf),
+                        error_message="An error occurred when decrypting shard %s" % str(key_shared_secret_shard_conf),
                         error_exception=None,
                     )
                     errors.append(error)
 
                 if len(decrypted_shards) == key_shared_secret_threshold:
-                    logger.debug("A sufficient number of shards has been decrypted")
                     break
 
             if len(decrypted_shards) < key_shared_secret_threshold:
@@ -1150,7 +1145,7 @@ class CryptainerDecryptor(CryptainerBase):
                 )
                 errors.append(error)
             else:
-                logger.debug("Recombining shared-secret shards")
+                logger.debug("A sufficient number of shared-secret shards has been decrypted")
                 key_bytes = recombine_secret_from_shards(shards=decrypted_shards)
 
         elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
@@ -1221,6 +1216,14 @@ class CryptainerDecryptor(CryptainerBase):
     def _build_error_report_message(
         error_type: str, error_message: str, error_criticity=DecryptionErrorCriticity.WARNING, error_exception=None
     ) -> dict:
+
+        # We forward entry to standard logging too
+        log_level = getattr(logging, error_criticity)  # Same identifiers in the 2 worlds
+        if error_exception:
+            logger.log(log_level, "%s report entry: %s (%r)", error_type, error_message, error_exception)
+        else:
+            logger.log(log_level, "%s report entry: %s", error_type, error_message)
+
         error = {
             "error_type": error_type,
             "error_criticity": error_criticity,
@@ -2035,7 +2038,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         cryptainer_encryption_stream_class = cryptainer_encryption_stream_class or CryptainerEncryptionPipeline
         cryptainer_encryption_stream_extra_kwargs = cryptainer_encryption_stream_extra_kwargs or {}
 
-        logger.info("Building cryptainer stream %r", filename_base)
+        logger.debug("Building cryptainer stream %r", filename_base)
         cryptainer_filepath = self._make_absolute(filename_base + CRYPTAINER_SUFFIX)
         cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
 

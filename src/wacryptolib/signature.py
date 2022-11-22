@@ -35,6 +35,7 @@ def sign_message(message: bytes, *, signature_algo: str, private_key: object) ->
 
     :return: dictionary with signature data"""
 
+    logger.debug("Signing message of length %d with signature algo %s", len(message), signature_algo)
     signature_conf = _get_signature_conf(signature_algo=signature_algo, key=private_key)
     signature_function = signature_conf["signature_function"]
     timestamp_utc = _get_utc_timestamp()
@@ -58,6 +59,8 @@ def verify_message_signature(*, message: bytes, signature_algo: str, signature: 
     :param signature: structure describing the signature
     :param public_key: the cryptographic key used to verify the signature
     """
+
+    logger.debug("Verifying signature of message of length %d with signature algo %s", len(message), signature_algo)
 
     signature_conf = _get_signature_conf(signature_algo=signature_algo, key=public_key)
     verification_function = signature_conf["verification_function"]

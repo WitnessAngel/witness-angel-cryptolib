@@ -68,7 +68,7 @@ def _list_available_authdevices_win32():
                     authdevice["partition_label"] = win32api.GetVolumeInformation(device_path)[0]
                 except pywintypes.error as exc:
                     # Happens e.g. if filesystem is unknown or missing
-                    logging.warning("Skipping faulty device %s: %r", device_path, exc)
+                    logger.warning("Skipping faulty device %s: %r", device_path, exc)
                     continue
 
                 authdevice["device_type"] = "USBSTOR"  # type like 'USBSTOR'
@@ -106,9 +106,7 @@ def _list_available_authdevices_linux():
     for p in all_existing_partitions:
 
         if p.device not in removable_device_partitions:
-            # logger.warning("REJECTED %s", p)
             continue
-        # logger.warning("FOUND USB %s", p)
 
         authdevice = {}
         authdevice["device_type"] = "USBSTOR"

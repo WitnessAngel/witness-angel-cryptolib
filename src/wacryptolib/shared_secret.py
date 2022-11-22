@@ -19,8 +19,10 @@ def split_secret_into_shards(secret: bytes, *, shard_count: int, threshold_count
 
     :return: list of full bytestring shards"""
 
+    logger.debug("Generating shared-secret shards (%d needed amongst %d)", threshold_count, shard_count)
+
     if not shard_count:
-        raise ValueError("shards count must be strictly positive")
+        raise ValueError("Shards count must be strictly positive")
 
     if threshold_count > shard_count:
         raise ValueError("Threshold count %s can't be higher than shared count %s" % (threshold_count, shard_count))
@@ -55,6 +57,8 @@ def recombine_secret_from_shards(shards: Sequence) -> bytes:
     :param shards: list of k full-length shards (k being exactly the threshold of this shared secret)
 
     :return: the key reconstructed as bytes"""
+
+    logger.debug("Recombining %d shared-secret shards", len(shards))
 
     shards_per_secret = []  # List of lists of same-index 16-bytes shards
 

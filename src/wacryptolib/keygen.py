@@ -18,7 +18,7 @@ def generate_symkey(cipher_algo: str) -> dict:
     Generate the strongest dict of keys/initializers possible for the wanted symmetric cipher,
     as a dict.
     """
-
+    logger.debug("Generating symkey of type %s", cipher_algo)
     cipher_algo = cipher_algo.upper()
     if cipher_algo not in SUPPORTED_SYMMETRIC_KEY_ALGOS:
         raise ValueError("Unknown symmetric key algorithm '%s'" % cipher_algo)

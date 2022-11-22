@@ -158,7 +158,7 @@ class TarfileRecordAggregator(TimeLimitedAggregatorMixin):
         filename = self._build_record_filename(
             sensor_name=sensor_name, from_datetime=from_datetime, to_datetime=to_datetime, extension=extension
         )
-        logger.info("Adding record %r to tarfile builder" % filename)
+        logger.info("Adding record %r to tarfile builder", filename)
 
         mtime = to_datetime.timestamp()
 
@@ -287,7 +287,7 @@ class PeriodicValuePoller(PeriodicValueMixin, PeriodicTaskHandler):
             result = self._task_func()
             self._offloaded_add_data(result)
         except Exception as exc:
-            logger.error("Error in PeriodicValuePoller offloaded task: %r" % exc, exc_info=True)
+            logger.error("Unexpected failure in PeriodicValuePoller offloaded task: %r" % exc, exc_info=True)
 
 
 class PeriodicSensorRestarter(PeriodicTaskHandler):
@@ -307,13 +307,13 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
     def start(self):
         super().start()
 
-        logger.info(">>> Starting sensor %s" % self.sensor_name)
+        logger.debug("Starting sensor %s", self.sensor_name)
 
         self._current_start_time = get_utc_now_date()
 
         self._do_start_recording()
 
-        logger.info(">>> Started sensor %s" % self.sensor_name)
+        logger.debug("Finished starting sensor %s", self.sensor_name)
 
     def _do_start_recording(self):  # pragma: no cover
         raise NotImplementedError("%s -> _do_start_recording" % self.sensor_name)
@@ -322,7 +322,7 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
     def stop(self):
         super().stop()
 
-        logger.info(">>> Stopping sensor %s" % self.sensor_name)
+        logger.debug("Stopping sensor %s", self.sensor_name)
 
         from_datetime = self._current_start_time
         to_datetime = get_utc_now_date()
@@ -332,7 +332,7 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
         if payload is not None:
             self._handle_post_stop_data(payload=payload, from_datetime=from_datetime, to_datetime=to_datetime)
 
-        logger.info(">>> Stopped sensor %s" % self.sensor_name)
+        logger.debug("Finished stopping sensor %s", self.sensor_name)
 
     def _do_stop_recording(self):  # pragma: no cover
         raise NotImplementedError("%s -> _do_stop_recording" % self.sensor_name)
@@ -443,16 +443,16 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
                     chunk = fh.read(self.subprocess_data_chunk_size)
                     assert chunk is not None  # We're NOT in non-blocking mode!
                     if chunk:
-                        logger.info(">>>> ENCRYPTING %s CHUNK OF LENGTH %s", self.sensor_name, len(chunk))
+                        logger.debug("Encrypting %s chunk of length %s", self.sensor_name, len(chunk))
                         cryptainer_encryption_stream.encrypt_chunk(chunk)
                     else:
                         break  # End of subprocess
-                logger.info(">>>> FINALIZING %s CONTAINER ENCRYPTION STREAM AT %.1f" % (cryptainer_encryption_stream._cryptainer_filepath.name, time.time()))
+                logger.debug("Finalizing %s cryptainer encryption stream" % (cryptainer_encryption_stream._cryptainer_filepath.name, time.time()))
                 cryptainer_encryption_stream.finalize()
                 fh.close()
-                logger.info(">>>> FINALIZED %s CONTAINER ENCRYPTION" % (cryptainer_encryption_stream._cryptainer_filepath.name,))
+                logger.debug("Finished finalizing %s cryptainer encryption stream" % (cryptainer_encryption_stream._cryptainer_filepath.name,))
             except Exception as exc:  # pragma: no cover
-                logger.critical("Unexpected failure in %s stdout_reader_thread(): %r", self.sensor_name, exc)
+                logger.critical("Unexpected failure in %s stdout reader thread: %r", self.sensor_name, exc)
                 raise
 
         self._stdout_thread = threading.Thread(target=_stdout_reader_thread,
@@ -468,10 +468,10 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
                 for line in fh:
                     ##print(b">>>>", repr(line).encode("ascii"))
                     line_str = repr(line)  #  line.decode("ascii", "ignore")
-                    logger.warning("SUBPROCESS STDERR: %s" % line_str.rstrip("\n"))
+                    logger.warning("Subprocess stderr: %s" % line_str.rstrip("\n"))
                 fh.close()
             except Exception as exc:  # pragma: no cover
-                logger.critical("Unexpected failure in %s sytderr_reader_thread(): %r", self.sensor_name, exc)
+                logger.critical("Unexpected failure in %s stderr reader thread: %r", self.sensor_name, exc)
                 raise
 
         self._stderr_thread = threading.Thread(target=_sytderr_reader_thread,
@@ -496,7 +496,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
     def _do_stop_recording(self):
 
         if self._subprocess is None:
-            logger.error("No subprocess to be terminated in %s stop-recording", self.sensor_name)
+            logger.warning("No subprocess to be terminated in %s stop-recording", self.sensor_name)
             assert self._stdout_thread is None
             assert self._stderr_thread is None
             return  # Start of recording failed previously, most probably
@@ -504,13 +504,13 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         try:
             retcode = self._subprocess.poll()
             if retcode is not None:
-                logger.error("Subprocess had already terminated with return code %s in %s stop-recording", retcode, self.sensor_name)
+                logger.warning("Subprocess had already terminated with return code %s in %s stop-recording", retcode, self.sensor_name)
                 return  # Stream must have crashed
             try:
-                logger.warning("Attempting normal termination of %s subprocess", self.sensor_name)
+                logger.info("Attempting normal termination of %s subprocess", self.sensor_name)
                 self._quit_subprocess(self._subprocess)
                 self._subprocess.wait(timeout=10)  # Doesn't raise on timeout!
-                # Note : self._stdout_thread might still be running to complete data encryption and cryptainer finalization!
+                # Note : stdout reader thread might still be running to complete data encryption and cryptainer finalization!
             except Exception as exc:  # E.g. TimeoutExpired if wait() expired
                 logger.warning("Failed normal termination of %s subprocess: %r", self.sensor_name, exc)
                 logger.warning("Force-terminating dangling %s subprocess" % self.sensor_name)
@@ -528,7 +528,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         for thread in self._previous_stdout_threads:
             thread.join(timeout=15)
             if thread.is_alive():  # Might happen in very slow system, or if subprocess actually never exited...
-                logger.critical("Stdout thread for previous %s subprocess didn't exit" % self.sensor_name)
+                logger.critical("Stdout reader thread for previous %s subprocess didn't exit" % self.sensor_name)
 
 
 class SensorManager(
@@ -546,40 +546,40 @@ class SensorManager(
         self._sensors = sensors
 
     def start(self):
-        logger.info("Starting all managed sensors")
+        logger.info("Starting all %d managed sensors", len(self._sensors))
         super().start()
         success_count = 0
         for sensor in self._sensors:
             try:
                 sensor.start()
             except Exception as exc:
-                logger.error(f"Failed starting sensor {sensor.__class__.__name__} ({exc!r})", exc_info=True)
+                logger.critical(f"Failed starting sensor {sensor.__class__.__name__} ({exc!r})", exc_info=True)
             else:
                 success_count += 1
         return success_count
 
     def stop(self):
-        logger.info("Stopping all managed sensors")
+        logger.info("Stopping all %d managed sensors", len(self._sensors))
         super().stop()
         success_count = 0
         for sensor in self._sensors:
             try:
                 sensor.stop()
             except Exception as exc:
-                logger.error(f"Failed stopping sensor {sensor.__class__.__name__} ({exc!r})")
+                logger.critical(f"Failed stopping sensor {sensor.__class__.__name__} ({exc!r})", exc_info=True)
             else:
                 success_count += 1
         return success_count
 
     def join(self):
-        logger.info("Waiting for all managed sensors termination")
+        logger.info("Waiting for all %d managed sensors termination", len(self._sensors))
         super().join()
         success_count = 0
         for sensor in self._sensors:
             try:
                 sensor.join()
             except Exception as exc:
-                logger.error(f"Failed joining sensor {sensor.__class__.__name__} ({exc!r})")
+                logger.critical(f"Failed joining sensor {sensor.__class__.__name__} ({exc!r})", exc_info=True)
             else:
                 success_count += 1
         return success_count

@@ -48,7 +48,6 @@ def sign_message(message: bytes, *, signature_algo: str, private_key: object) ->
     return {"signature_timestamp_utc": timestamp_utc, "signature_value": signature}
 
 
-# FIXME rename "key" to "public_key", here? Or no need?
 def verify_message_signature(*, message: bytes, signature_algo: str, signature: dict, public_key: object):
     """Verify the authenticity of a signature.
 

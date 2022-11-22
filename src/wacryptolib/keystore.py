@@ -32,7 +32,7 @@ from wacryptolib.utilities import (
     PeriodicTaskHandler,
     generate_uuid0,
     dump_to_json_file,
-    is_datetime_tz_aware,
+    is_datetime_tz_aware, catch_and_log_exception,
 )
 
 logger = logging.getLogger(__name__)
@@ -709,7 +709,7 @@ class FilesystemKeystorePool(KeystorePoolBase):
         """Storage automatically created if unexisting."""
         local_keystore_dir = self._root_dir.joinpath(self.LOCAL_KEYFACTORY_DIRNAME)
         local_keystore_dir.mkdir(exist_ok=True)
-        # TODO initialize metadata for local keystore ??
+        # TODO initialize metadata for local keystore too??
         return FilesystemKeystore(local_keystore_dir)
 
     def _get_foreign_keystore_dir(self, keystore_uid: UUID):
@@ -842,7 +842,8 @@ def get_free_keypair_generator_worker(
     :return: periodic task handler
     """
 
-    def free_keypair_generator_task():  # FIXME add a @safe_catch_unhandled_exception-like mechanism
+    @catch_and_log_exception("free_keypair_generator_task")
+    def free_keypair_generator_task():
         has_generated = generate_free_keypair_for_least_provisioned_key_algo(
             keystore=keystore, max_free_keys_per_algo=max_free_keys_per_algo, **extra_generation_kwargs
         )

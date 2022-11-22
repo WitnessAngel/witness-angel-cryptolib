@@ -1912,13 +1912,14 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         logger.info("Deleting cryptainer %s" % cryptainer_name)
         self._delete_cryptainer(cryptainer_name=cryptainer_name)
 
-    def _purge_exceeding_cryptainers(self):  # TODO ADD LOGGING WHEN PURGING
+    def _purge_exceeding_cryptainers(self):
         """Purge cryptainers first by date, then total quota, then count, depending on instance settings"""
 
         if self._max_cryptainer_age is not None:  # FIRST these, since their deletion is unconditional
             cryptainer_dicts = self.list_cryptainer_properties(with_age=True)
             for cryptainer_dict in cryptainer_dicts:
                 if cryptainer_dict["age"] > self._max_cryptainer_age:
+                    logger.info("Deleting cryptainer %s due to age", cryptainer_dict["name"])
                     self._delete_cryptainer(cryptainer_dict["name"])
 
         if self._max_cryptainer_quota is not None:
@@ -1931,6 +1932,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
 
             while total_space_consumed > max_cryptainer_quota:
                 deleted_cryptainer_dict = cryptainer_dicts.pop()
+                logger.info("Deleting cryptainer %s due to lack of storage space", deleted_cryptainer_dict["name"])
                 self._delete_cryptainer(deleted_cryptainer_dict["name"])
                 total_space_consumed -= deleted_cryptainer_dict["size"]
 
@@ -1944,6 +1946,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
                 cryptainer_dicts.sort(key=lambda x: (-x["age"], x["name"]))  # Oldest first
                 deleted_cryptainer_dicts = cryptainer_dicts[:excess_count]
                 for deleted_cryptainer_dict in deleted_cryptainer_dicts:
+                    logger.info("Deleting cryptainer %s due to excessive count of cryptainers", deleted_cryptainer_dict["name"])
                     self._delete_cryptainer(deleted_cryptainer_dict["name"])
 
     def _encrypt_payload_and_stream_cryptainer_to_filesystem(
@@ -2112,6 +2115,8 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
 
     :return: a schema.
     """
+
+    # FIXME add signature of cleartext payload too, directly at root of cryptainer? Or rework the whole structure of signatures?
 
     micro_schemas = get_validation_micro_schemas(extended_json_format=extended_json_format)
 

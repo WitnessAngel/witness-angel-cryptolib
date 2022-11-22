@@ -429,7 +429,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
             )
         except OSError as exc:  # E.g. program binary not found
             logger.error("Failure when calling {} sensor subprocess command: {!r}".format(self.sensor_name, exc))
-            # FIXME here add deletion of self._cryptainer_encryption_stream instead of finalizing it?
+            # FIXME here add deletion of empty self._cryptainer_encryption_stream instead of finalizing it?
             cryptainer_encryption_stream.finalize()
             return  # Skip the setup of threads below, and let self._subprocess be None
 
@@ -531,7 +531,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
 
 class SensorManager(
     TaskRunnerStateMachineBase
-):  # FIXME deprecate this in favor of class handling the whole recording toolchain, with aggregators etc.?
+):
     """
     Manage a group of sensors for simultaneous starts/stops.
 

@@ -2,6 +2,7 @@ import os
 import uuid
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
+from threading import Lock
 
 import pytest
 import pytz
@@ -22,7 +23,7 @@ from wacryptolib.utilities import (
     hash_message,
     get_utc_now_date,
     get_memory_rss_bytes,
-    delete_filesystem_node_for_stream,
+    delete_filesystem_node_for_stream, catch_and_log_exception, synchronized,
 )
 
 
@@ -180,3 +181,43 @@ def test_delete_filesystem_node_for_stream(tmp_path):
     assert target_file.exists()
     delete_filesystem_node_for_stream(stream)
     assert not target_file.exists()
+
+
+def test_catch_and_log_exception():
+
+    variable = None
+
+    with catch_and_log_exception("testage1"):
+        variable = 12
+        raise RuntimeError
+        variable = 13
+
+    assert variable == 12
+
+    @catch_and_log_exception("testage2")
+    def myfunc(myarg):
+        if myarg == 42:
+            raise ValueError(myarg)
+        return myarg
+
+    result = myfunc(33)
+    assert result == 33
+    result = myfunc(42)  # Exception raised inside
+    assert result is None
+
+    class MyClass:
+        _lock = Lock()
+
+        @synchronized
+        @catch_and_log_exception("testage3")
+        def do_stuffs(self, myarg):
+            if myarg == 43:
+                raise ValueError(myarg)
+            return myarg
+
+    my_instance = MyClass()
+
+    result = my_instance.do_stuffs(32)
+    assert result == 32
+    result = my_instance.do_stuffs(43)  # Exception raised inside
+    assert result is None

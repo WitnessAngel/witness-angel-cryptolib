@@ -1411,11 +1411,11 @@ class CryptainerDecryptor(CryptainerBase):
         return error_report
 
 
-class CryptainerEncryptionPipeline:  # FIXME rename to say it goes to disk
+class CryptainerEncryptionPipeline:
     """
     Helper which prebuilds a cryptainer without signatures nor payload,
-    fills its offloaded ciphertext file chunk by chunk, and then
-    dumps the final cryptainer (now containing signatures).
+    fills its OFFLOADED ciphertext file chunk by chunk, and then
+    dumps the final cryptainer (with signatures) to disk.
     """
 
     def __init__(
@@ -1437,16 +1437,14 @@ class CryptainerEncryptionPipeline:  # FIXME rename to say it goes to disk
         offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
         self._output_data_stream = open(offloaded_file_path, mode="wb")
 
-        # FIXME WRONG NAME, this is _cryptainer_encryptor!
-        self._cryptainer_decryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
-        (
-            self._wip_cryptainer,
-            self._encryption_pipeline,
-        ) = self._cryptainer_decryptor.build_cryptainer_and_encryption_pipeline(
-            output_stream=self._output_data_stream,
-            cryptoconf=cryptoconf,
-            keychain_uid=keychain_uid,
-            cryptainer_metadata=cryptainer_metadata,
+        self._cryptainer_encryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
+
+        self._wip_cryptainer, self._encryption_pipeline = \
+            self._cryptainer_encryptor.build_cryptainer_and_encryption_pipeline(
+                output_stream=self._output_data_stream,
+                cryptoconf=cryptoconf,
+                keychain_uid=keychain_uid,
+                cryptainer_metadata=cryptainer_metadata,
         )
         self._wip_cryptainer["payload_ciphertext_struct"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Important
 

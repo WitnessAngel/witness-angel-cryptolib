@@ -1,4 +1,6 @@
-import sys
+import sys, logging
+
+logger = logging.getLogger(__name__)
 
 try:
     # Impossible to use pycryptodome package on iOS due to forbidden dlopen()...
@@ -13,7 +15,7 @@ if use_fallback_backend:
 
     # BEWARE - to test this fallback mode on a normal PC, erase all .so/.dll files of pycrptodome, and for use_fallback_backend to True #
 
-    print("Couldn't import full pycryptodome utilities, injecting fake C extensions")
+    logger.info("Full pycryptodome lib not available under this environment, injecting fake C extensions")
 
     # WE MONKEY PATCH PYCRYPTODOME INTERNALS TO BYPASS SOME ".so" objects #
 

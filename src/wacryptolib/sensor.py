@@ -455,11 +455,10 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         self._previous_stdout_threads = [thread for thread in self._previous_stdout_threads if thread.is_alive()]
         self._previous_stdout_threads.append(self._stdout_thread)
 
-        @catch_and_log_exception("Subprocess sytderr_reader_thread of sensor %s" % self.sensor_name)
+        @catch_and_log_exception("Subprocess stderr_reader_thread of sensor %s" % self.sensor_name)
         def _sytderr_reader_thread(fh):
             for line in fh:
-                ##print(b">>>>", repr(line).encode("ascii"))
-                line_str = repr(line)  #  line.decode("ascii", "ignore")
+                line_str = line.decode("ascii", "ignore")
                 logger.warning("Subprocess stderr: %s" % line_str.rstrip("\n"))
             fh.close()
 

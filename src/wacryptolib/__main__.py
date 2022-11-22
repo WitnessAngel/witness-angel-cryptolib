@@ -147,7 +147,7 @@ def decrypt(ctx, input_cryptainer, output_medium):
     medium_content, error_report = _do_decrypt(cryptainer=cryptainer, keystore_pool=keystore_pool)
 
     if error_report:  # Fixme improve that display
-        print("Errors occured:", error_report)
+        print("Decryption errors occured:", error_report)
 
     if not medium_content:
         raise RuntimeError("Content could not be decrypted")

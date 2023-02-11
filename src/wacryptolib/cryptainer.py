@@ -1803,7 +1803,7 @@ class ReadonlyCryptainerStorage:
             cryptainer_name = Path(cryptainer_name_or_idx)
         assert not cryptainer_name.is_absolute(), cryptainer_name
 
-        logger.info("Loading cryptainer %s from storage", cryptainer_name)
+        logger.info("Loading cryptainer %s from storage (include_payload_ciphertext=%s)", cryptainer_name, include_payload_ciphertext)
         cryptainer_filepath = self._make_absolute(cryptainer_name)
         cryptainer = load_cryptainer_from_filesystem(
             cryptainer_filepath, include_payload_ciphertext=include_payload_ciphertext
@@ -1854,7 +1854,7 @@ class ReadonlyCryptainerStorage:
         )  # Will fail if authorizations are not OK
 
     def check_cryptainer_sanity(self, cryptainer_name_or_idx):
-        """Allows the validation of a cryptainer with a python"""
+        """Allows the validation of a cryptainer structure"""
         cryptainer = self.load_cryptainer_from_storage(cryptainer_name_or_idx, include_payload_ciphertext=True)
 
         check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)

@@ -17,6 +17,7 @@ from wacryptolib.cryptainer import (
     get_cryptoconf_summary,
 )
 from wacryptolib.keystore import FilesystemKeystorePool
+from wacryptolib.operations import decrypt_payload_from_bytes
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -113,12 +114,6 @@ def encrypt(ctx, input_medium, output_cryptainer, cryptoconf):
     click.echo("Encryption finished to file '%s'" % output_cryptainer.name)
 
 
-def _do_decrypt(cryptainer, keystore_pool):
-    check_cryptainer_sanity(cryptainer)
-    result = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
-    return result
-
-
 @wacryptolib_cli.command()
 @click.option("-i", "--input-cryptainer", type=click.File("rb"), required=True)
 @click.option("-o", "--output-medium", type=click.File("wb"))
@@ -133,11 +128,10 @@ def decrypt(ctx, input_cryptainer, output_medium):
         output_medium = LazyFile(output_medium_name, "wb")
 
     # click.echo("In decrypt: %s" % str(locals()))
-
-    cryptainer = load_from_json_bytes(input_cryptainer.read())
+    cryptainer_bytes = input_cryptainer.read()
 
     keystore_pool = _get_keystore_pool(ctx)
-    medium_content, error_report = _do_decrypt(cryptainer=cryptainer, keystore_pool=keystore_pool)
+    medium_content, error_report = decrypt_payload_from_bytes(cryptainer_bytes=cryptainer_bytes, keystore_pool=keystore_pool)
 
     if error_report:
         print("Decryption errors occured:")

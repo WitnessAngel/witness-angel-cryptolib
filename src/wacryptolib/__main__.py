@@ -110,6 +110,32 @@ def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage) -> object:
 
 
 @wacryptolib_cli.command()
+@click.pass_context
+def list_foreign_keystore(ctx):
+    """List foreign keystore."""
+    keystore_pool = _get_keystore_pool(ctx)
+    foreign_keystore_uids = keystore_pool.list_foreign_keystore_uids()
+
+    click.echo(foreign_keystore_uids)
+
+
+def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):
+
+    if not cryptoconf_fileobj:
+        click.echo("No cryptoconf provided, defaulting to simple example conf")
+        cryptoconf = EXAMPLE_CRYPTOCONF
+    else:
+        cryptoconf = load_from_json_bytes(cryptoconf_fileobj.read())
+
+    check_cryptoconf_sanity(cryptoconf)
+
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload, cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
+    )
+    return cryptainer
+
+
+@wacryptolib_cli.command()
 @click.argument('input_medium', type=click.File('rb'), )
 @click.option("-o", "--output-cryptainer", type=click.Path(
     exists=False, file_okay=True, dir_okay=False, writable=True, resolve_path=True, allow_dash=False
@@ -222,7 +248,7 @@ def purge_cryptainers(ctx):
     cryptainer_dicts = cryptainer_storage.list_cryptainer_properties(with_age=True, with_size=True)
     print(cryptainer_dicts)
 
-cryptainers purge â€“max-cryptainer-quota/max-cryptainer-count/max-cryptainer-age # Purge les cryptainers en trop par rapport Ã  ces critÃ¨res
+cryptainers purge –max-cryptainer-quota/max-cryptainer-count/max-cryptainer-age # Purge les cryptainers en trop par rapport à ces critères
 '''
 
 if __name__ == "__main__":

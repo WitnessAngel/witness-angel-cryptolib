@@ -14,7 +14,7 @@ from wacryptolib.cryptainer import (
     SHARED_SECRET_ALGO_MARKER,
     check_cryptoconf_sanity,
     check_cryptainer_sanity,
-    get_cryptoconf_summary,
+    get_cryptoconf_summary, ReadonlyCryptainerStorage, CryptainerStorage,
 )
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.operations import decrypt_payload_from_bytes
@@ -22,6 +22,7 @@ from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 DEFAULT_KEYSTORE_POOL_DIRNAME = ".keystore_pool"
+DEFAULT_CRYPTAINER_STORAGE_DIRNAME = ".cryptainers"
 
 
 def _get_keystore_pool(ctx):
@@ -31,6 +32,15 @@ def _get_keystore_pool(ctx):
         click.echo("No keystore-pool directory provided, defaulting to '%s'" % keystore_pool_dir)
         keystore_pool_dir.mkdir(exist_ok=True)
     return FilesystemKeystorePool(keystore_pool_dir)
+
+
+def _get_cryptainer_storage(ctx):
+    cryptainer_storage_dir = ctx.obj["cryptainer_storage"]
+    if not cryptainer_storage_dir:
+        cryptainer_storage_dir = Path().joinpath(DEFAULT_CRYPTAINER_STORAGE_DIRNAME).resolve()
+        click.echo("No cryptainer-storage directory provided, defaulting to '%s'" % cryptainer_storage_dir)
+        cryptainer_storage_dir.mkdir(exist_ok=True)
+    return CryptainerStorage(cryptainer_storage_dir)
 
 
 EXAMPLE_CRYPTOCONF = dict(
@@ -78,10 +88,20 @@ EXAMPLE_CRYPTOCONF = dict(
         exists=True, file_okay=False, dir_okay=True, writable=True, readable=True, resolve_path=True, allow_dash=False
     ),
 )
+@click.option(
+    "-c",
+    "--cryptainer-storage",
+    default=None,
+    help="Folder to store cryptainers (else ./%s gets created)" % DEFAULT_CRYPTAINER_STORAGE_DIRNAME,
+    type=click.Path(
+        exists=True, file_okay=False, dir_okay=True, writable=True, readable=True, resolve_path=True, allow_dash=False
+    ),
+)
 @click.pass_context
-def wacryptolib_cli(ctx, keystore_pool) -> object:
+def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage) -> object:
     ctx.ensure_object(dict)
     ctx.obj["keystore_pool"] = keystore_pool
+    ctx.obj["cryptainer_storage"] = cryptainer_storage
 
 
 @wacryptolib_cli.command()
@@ -160,8 +180,22 @@ def summarize(ctx, input_file):
     print(text_summary)
 
 
-def main():
-    """Launch CLI"""
+@wacryptolib_cli.group()
+def cryptainers():
+    """Manage cryptainers"""
+    pass
+
+
+@cryptainers.command("list")
+@click.pass_context
+def list_cryptainers(ctx):
+    cryptainer_storage = _get_cryptainer_storage(ctx)
+    cryptainer_dicts = cryptainer_storage.list_cryptainer_properties(with_age=True, with_size=True)
+    print(cryptainer_dicts)
+
+
+
+if __name__ == "__main__":
     fake_prog_name = "python -m wacryptolib"  # Else __init__.py is used in help text...
     wacryptolib_cli(prog_name=fake_prog_name)
 

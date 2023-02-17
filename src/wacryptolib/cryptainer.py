@@ -1666,7 +1666,7 @@ def _get_offloaded_file_path(cryptainer_filepath: Path):
 
 
 def dump_cryptainer_to_filesystem(cryptainer_filepath: Path, cryptainer: dict, offload_payload_ciphertext=True) -> None:
-    """Dump a cryptainer to a file path, overwritting it if existing.
+    """Dump a cryptainer to a file path, overwriting it if existing.
 
     If `offload_payload_ciphertext`, actual encrypted payload is dumped to a separate bytes file nearby the json-formatted cryptainer.
     """

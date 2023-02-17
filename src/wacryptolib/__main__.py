@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from pprint import pprint
 
@@ -14,33 +15,37 @@ from wacryptolib.cryptainer import (
     SHARED_SECRET_ALGO_MARKER,
     check_cryptoconf_sanity,
     check_cryptainer_sanity,
-    get_cryptoconf_summary, ReadonlyCryptainerStorage, CryptainerStorage,
+    get_cryptoconf_summary, ReadonlyCryptainerStorage, CryptainerStorage, dump_cryptainer_to_filesystem,
 )
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.operations import decrypt_payload_from_bytes
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
-DEFAULT_KEYSTORE_POOL_DIRNAME = ".keystore_pool"
-DEFAULT_CRYPTAINER_STORAGE_DIRNAME = ".cryptainers"
+
+_internal_app_dir = Path("~/.witnessangel").expanduser().resolve()
+DEFAULT_KEYSTORE_POOL_PATH = _internal_app_dir / "keystore_pool"
+DEFAULT_CRYPTAINER_STORAGE_PATH = _internal_app_dir / "cryptainers"
 
 
 def _get_keystore_pool(ctx):
     keystore_pool_dir = ctx.obj["keystore_pool"]
     if not keystore_pool_dir:
-        keystore_pool_dir = Path().joinpath(DEFAULT_KEYSTORE_POOL_DIRNAME).resolve()
+        keystore_pool_dir = Path().joinpath(DEFAULT_KEYSTORE_POOL_PATH).resolve()
         click.echo("No keystore-pool directory provided, defaulting to '%s'" % keystore_pool_dir)
         keystore_pool_dir.mkdir(exist_ok=True)
     return FilesystemKeystorePool(keystore_pool_dir)
 
 
-def _get_cryptainer_storage(ctx):
+def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=True):
     cryptainer_storage_dir = ctx.obj["cryptainer_storage"]
     if not cryptainer_storage_dir:
-        cryptainer_storage_dir = Path().joinpath(DEFAULT_CRYPTAINER_STORAGE_DIRNAME).resolve()
+        cryptainer_storage_dir = Path().joinpath(DEFAULT_CRYPTAINER_STORAGE_PATH).resolve()
         click.echo("No cryptainer-storage directory provided, defaulting to '%s'" % cryptainer_storage_dir)
         cryptainer_storage_dir.mkdir(exist_ok=True)
-    return CryptainerStorage(cryptainer_storage_dir)
+    return CryptainerStorage(cryptainer_storage_dir,
+                             keystore_pool=keystore_pool,
+                             offload_payload_ciphertext=offload_payload_ciphertext)
 
 
 EXAMPLE_CRYPTOCONF = dict(
@@ -83,7 +88,7 @@ EXAMPLE_CRYPTOCONF = dict(
     "-k",
     "--keystore-pool",
     default=None,
-    help="Folder to get/set crypto keys (else ./%s gets created)" % DEFAULT_KEYSTORE_POOL_DIRNAME,
+    help="Folder to get/set crypto keys (else %s gets created)" % DEFAULT_KEYSTORE_POOL_PATH,
     type=click.Path(
         exists=True, file_okay=False, dir_okay=True, writable=True, readable=True, resolve_path=True, allow_dash=False
     ),
@@ -92,7 +97,7 @@ EXAMPLE_CRYPTOCONF = dict(
     "-c",
     "--cryptainer-storage",
     default=None,
-    help="Folder to store cryptainers (else ./%s gets created)" % DEFAULT_CRYPTAINER_STORAGE_DIRNAME,
+    help="Folder to store cryptainers (else %s gets created)" % DEFAULT_CRYPTAINER_STORAGE_PATH,
     type=click.Path(
         exists=True, file_okay=False, dir_okay=True, writable=True, readable=True, resolve_path=True, allow_dash=False
     ),
@@ -105,14 +110,18 @@ def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage) -> object:
 
 
 @wacryptolib_cli.command()
-@click.option("-i", "--input-medium", type=click.File("rb"), required=True)
-@click.option("-o", "--output-cryptainer", type=click.File("wb"))
+@click.argument('input_medium', type=click.File('rb'), )
+@click.option("-o", "--output-cryptainer", type=click.Path(
+    exists=False, file_okay=True, dir_okay=False, writable=True, resolve_path=True, allow_dash=False
+)) # TODO allow piping via allow-dash
 @click.option("-c", "--cryptoconf", default=None, help="Json crypotoconf file", type=click.File("rb"))
+@click.option("--bundle", help="Combine cryptainer data and metadata", is_flag=True)
 @click.pass_context
-def encrypt(ctx, input_medium, output_cryptainer, cryptoconf):
+def encrypt(ctx, input_medium, output_cryptainer, cryptoconf, bundle):
     """Turn a media file into a secure cryptainer."""
-    if not output_cryptainer:
-        output_cryptainer = LazyFile(input_medium.name + CRYPTAINER_SUFFIX, "wb")
+
+    input_medium_name = input_medium.name
+    offload_payload_ciphertext = not bundle
 
     # click.echo("In encrypt: %s" % str(locals()))
     if not cryptoconf:
@@ -123,15 +132,27 @@ def encrypt(ctx, input_medium, output_cryptainer, cryptoconf):
 
     keystore_pool = _get_keystore_pool(ctx)
 
-    cryptainer_bytes = operations.encrypt_payload_to_bytes(
-        payload=input_medium.read(),
-        cryptoconf=cryptoconf,
-        keystore_pool=keystore_pool)
+    payload = input_medium.read()
 
-    with output_cryptainer as f:
-        f.write(cryptainer_bytes)
+    if output_cryptainer:
+        cryptainer = encrypt_payload_into_cryptainer(
+            payload, cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
+        )
 
-    click.echo("Encryption finished to file '%s'" % output_cryptainer.name)
+        dump_cryptainer_to_filesystem(
+            cryptainer_filepath=output_cryptainer,
+            cryptainer=cryptainer,
+            offload_payload_ciphertext=offload_payload_ciphertext)
+
+    else:
+        cryptainer_storage = _get_cryptainer_storage(ctx, keystore_pool=keystore_pool, offload_payload_ciphertext=offload_payload_ciphertext)
+        cryptainer_storage.enqueue_file_for_encryption(
+            filename_base=input_medium.name, payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
+        )
+        cryptainer_storage.wait_for_idle_state()
+
+    ##output_cryptainer = LazyFile(input_medium.name + CRYPTAINER_SUFFIX, "wb")
+    click.echo("Encryption of file '%s' finished" % input_medium.name)
 
 
 @wacryptolib_cli.command()

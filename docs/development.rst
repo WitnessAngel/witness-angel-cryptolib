@@ -8,6 +8,17 @@ To develop on the WACryptolib, the interpreter for `python3.7` or later must be 
 
 Instead of pip, we use `poetry <https://github.com/sdispater/poetry>`_ to manage dependencies.
 
+`pip` editable installation
+------------------------
+
+Set up a virtual environment, then:
+```bash
+pip install -U pip
+pip install -e .
+python wacryptolib --help
+```
+(_Need a `pip3>=21.3`, see: [PEP 660 – Editable installs for pyproject.toml based builds ](https://www.python.org/dev/peps/pep-0660/)_)
+
 
 Automatic setup
 ------------------------

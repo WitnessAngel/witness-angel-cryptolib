@@ -193,7 +193,16 @@ def list_cryptainers(ctx):
     cryptainer_dicts = cryptainer_storage.list_cryptainer_properties(with_age=True, with_size=True)
     print(cryptainer_dicts)
 
+'''
+@cryptainers.command("purge")
+@click.pass_context
+def purge_cryptainers(ctx):
+    cryptainer_storage = _get_cryptainer_storage(ctx)
+    cryptainer_dicts = cryptainer_storage.list_cryptainer_properties(with_age=True, with_size=True)
+    print(cryptainer_dicts)
 
+cryptainers purge –max-cryptainer-quota/max-cryptainer-count/max-cryptainer-age # Purge les cryptainers en trop par rapport à ces critères
+'''
 
 if __name__ == "__main__":
     fake_prog_name = "python -m wacryptolib"  # Else __init__.py is used in help text...

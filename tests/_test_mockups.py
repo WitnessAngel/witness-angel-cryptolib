@@ -1,7 +1,11 @@
 import random
 from uuid import UUID
+import secrets
+
 
 from wacryptolib.cryptainer import CryptainerStorage, dump_cryptainer_to_filesystem, PAYLOAD_CIPHERTEXT_LOCATIONS
+from wacryptolib.utilities import generate_uuid0
+from wacryptolib.keystore import KEYSTORE_FORMAT, FilesystemKeystorePool
 
 
 class FakeTestCryptainerStorage(CryptainerStorage):
@@ -61,3 +65,28 @@ def get_fake_authdevice(device_path):
 
 def random_bool():
     return random.choice((True, False))
+
+
+def generate_keystore_pool(tmp_path):
+    keystore_uid = generate_uuid0()
+    keychain_uid = generate_uuid0()
+    key_algo = "RSA_OAEP"
+    keystore_secret = secrets.token_urlsafe(64)
+
+    keystore_tree = {
+        "keystore_type": "authenticator",
+        "keystore_format": KEYSTORE_FORMAT,
+        "keystore_owner": "Jacques",
+        "keystore_uid": keystore_uid,
+        "keystore_secret": keystore_secret,
+        "keypairs": [{"keychain_uid": keychain_uid, "key_algo": key_algo, "public_key": b"555", "private_key": b"okj"}],
+    }
+    authdevice_path = tmp_path / "device"
+    authdevice_path.mkdir()
+
+    for _ in range(2):  # Import is idempotent
+
+        keystore_pool = FilesystemKeystorePool(authdevice_path)
+        keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree)
+
+    return keystore_pool

@@ -9,6 +9,7 @@ import wacryptolib
 from wacryptolib.__main__ import wacryptolib_cli as cli
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER
 from wacryptolib.utilities import dump_to_json_file
+from _test_mockups import generate_keystore_pool
 
 
 def test_cli_help_texts():
@@ -25,6 +26,10 @@ def test_cli_help_texts():
     result = runner.invoke(cli, ["decrypt", "-h"], catch_exceptions=False)
     assert result.exit_code == 0
     assert "original media file" in result.output
+
+    result = runner.invoke(cli, ["foreign-keystores", "-h"], catch_exceptions=False)
+    assert result.exit_code == 0
+    assert "foreign-keystores" in result.output
 
 
 def test_cli_encryption_decryption_and_summary(tmp_path):
@@ -170,3 +175,29 @@ def test_cli_subprocess_invocation():
     assert b"Commands:" in stdout
     assert not stderr or b"debugger" in stderr  # For when pydev debugger connects to process...
     assert proc.returncode == 0
+
+
+def test_cli_list_foreign_keystores_not_found():
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["foreign-keystores", "list"], catch_exceptions=False)
+    assert result.exit_code == 0
+    assert "No foreign keystores found" in result.output
+
+
+def test_cli_list_foreign_keystores_yolo(tmp_path, capsys):
+    #runner = CliRunner()
+
+    keystore_pool = generate_keystore_pool(tmp_path)
+    foreign_keystores = keystore_pool.list_foreign_keystore_uids()
+    breakpoint()
+    try:
+        result = cli.main(prog_name="python -m wacryptolib", args=["-k", str(tmp_path), "foreign-keystores", "list"], standalone_mode=False)
+    except SystemExit as e:
+        captured = capsys.readouterr()
+        print(e)
+
+    #result = runner.invoke(cli, ["-k", str(tmp_path), "foreign-keystores", "list"], catch_exceptions=False)
+    breakpoint()
+    assert result.exit_code == 0
+    assert result.output == foreign_keystores

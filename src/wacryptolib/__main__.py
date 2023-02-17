@@ -174,6 +174,11 @@ def summarize(ctx, input_file):
     print(text_summary)
 
 
-if __name__ == "__main__":
+def main():
+    """Start CLI."""
     fake_prog_name = "python -m wacryptolib"  # Else __init__.py is used in help text...
     wacryptolib_cli(prog_name=fake_prog_name)
+
+
+if __name__ == "__main__":
+    main()

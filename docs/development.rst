@@ -8,8 +8,21 @@ To develop on the WACryptolib, the interpreter for `python3.7` or later must be 
 
 Instead of pip, we use `poetry <https://github.com/sdispater/poetry>`_ to manage dependencies.
 
+
+Basic `pip` setup
+------------------
+
+Set up a virtual environment, then:
+```bash
+pip install -r pip_requirements_export.txt
+python -m main --help
+```
+
+
 `pip` editable installation
 ------------------------
+
+(_Need a `pip3>=21.3`, see: [PEP 660 – Editable installs for pyproject.toml based builds ](https://www.python.org/dev/peps/pep-0660/)_)
 
 Set up a virtual environment, then:
 ```bash
@@ -17,7 +30,6 @@ pip install -U pip
 pip install -e .
 python wacryptolib --help
 ```
-(_Need a `pip3>=21.3`, see: [PEP 660 – Editable installs for pyproject.toml based builds ](https://www.python.org/dev/peps/pep-0660/)_)
 
 
 Automatic setup
@@ -83,5 +95,3 @@ Then test this preview package in some project using the wacryptolib::
 When all is verified on testpypi (Readme, files uploaded, etc.), release the package to the real pypi::
 
     $ poetry publish
-
-

@@ -82,14 +82,22 @@ def wacryptolib_cli(ctx, keystore_pool) -> object:
     ctx.obj["keystore_pool"] = keystore_pool
 
 
-@wacryptolib_cli.command()
+@wacryptolib_cli.group()
+def foreign_keystores():
+    pass
+
+
+@foreign_keystores.command("list")
 @click.pass_context
 def list_foreign_keystore(ctx):
-    """List foreign keystore."""
+    """List foreign keystores."""
     keystore_pool = _get_keystore_pool(ctx)
     foreign_keystore_uids = keystore_pool.list_foreign_keystore_uids()
 
-    click.echo(foreign_keystore_uids)
+    if not foreign_keystore_uids:
+        click.echo("No foreign keystores found")
+    else:
+        click.echo(foreign_keystore_uids)
 
 
 def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):

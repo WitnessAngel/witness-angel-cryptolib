@@ -548,7 +548,7 @@ class SensorManager(
         super().start()
         success_count = 0
         for sensor in self._sensors:
-            with catch_and_log_exception(f"Failed starting sensor {sensor.__class__.__name__}"):
+            with catch_and_log_exception(f"start of sensor {sensor.__class__.__name__}"):
                 sensor.start()
                 success_count += 1
         return success_count
@@ -558,7 +558,7 @@ class SensorManager(
         super().stop()
         success_count = 0
         for sensor in self._sensors:
-            with catch_and_log_exception(f"Failed stopping sensor {sensor.__class__.__name__}"):
+            with catch_and_log_exception(f"stop of sensor {sensor.__class__.__name__}"):
                 sensor.stop()
                 success_count += 1
         return success_count
@@ -568,7 +568,7 @@ class SensorManager(
         super().join()
         success_count = 0
         for sensor in self._sensors:
-            with catch_and_log_exception(f"Failed joining sensor {sensor.__class__.__name__}"):
+            with catch_and_log_exception(f"join of sensor {sensor.__class__.__name__}"):
                 sensor.join()
                 success_count += 1
         return success_count

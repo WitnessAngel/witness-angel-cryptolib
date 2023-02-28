@@ -68,6 +68,7 @@ CRYPTAINER_DATETIME_LENGTH = (
     15  # Important to lookup prefix of filename before matching it with CRYPTAINER_DATETIME_FORMAT
 )
 CRYPTAINER_TEMP_SUFFIX = "~"  # To name temporary, unfinalized, cryptainers
+assert len(CRYPTAINER_TEMP_SUFFIX) == 1  # Because we use strip() with it here and there
 
 
 class PAYLOAD_CIPHERTEXT_LOCATIONS:
@@ -1732,21 +1733,28 @@ class ReadonlyCryptainerStorage:
         self._cryptainer_dir = cryptainer_dir
         self._keystore_pool = keystore_pool  # Might be None, in this case fallback to in-memory pool
 
-    def get_cryptainer_count(self):
-        return len(self.list_cryptainer_names(as_absolute_paths=True))  # Fastest version
+    def get_cryptainer_count(self, finished=True):
+        return len(self.list_cryptainer_names(as_absolute_paths=True, finished=finished))  # Fastest version
 
     def list_cryptainer_names(
-        self, as_sorted_list: bool = False, as_absolute_paths: bool = False
+        self, as_sorted_list: bool = False, as_absolute_paths: bool = False, finished=True
     ):  # FIXME add function annotations everywhere in this class
         """Returns the list of encrypted cryptainers present in storage,
-        sorted by name or not, absolute or not, as Path objects."""
+        sorted by name or not, absolute or not, as Path objects.
+
+        If `finished` ìs None, both finsihed and pending cryptainers are listed.
+        """
         assert self._cryptainer_dir.is_absolute(), self._cryptainer_dir
-        paths = list(self._cryptainer_dir.glob("*" + CRYPTAINER_SUFFIX))  # As list, for multiple looping on it
+        paths = []  # Result as list, for multiple looping on it
+        if finished is None or finished:
+            paths += list(self._cryptainer_dir.glob("*" + CRYPTAINER_SUFFIX))
+        if not finished:  # None or False
+            paths += list(self._cryptainer_dir.glob("*" + CRYPTAINER_SUFFIX + CRYPTAINER_TEMP_SUFFIX))
         assert all(p.is_absolute() for p in paths), paths
         if as_sorted_list:
             paths = sorted(paths)
         if not as_absolute_paths:
-            paths = [Path(p.name) for p in paths]  # beware, only works since we don't have subfolders for now!
+            paths = [Path(p.name) for p in paths]  # Beware, it only works since we don't have subfolders for now!
         assert isinstance(paths, list), paths
         return paths
 
@@ -1769,9 +1777,9 @@ class ReadonlyCryptainerStorage:
         """Returns a size in bytes"""
         return get_cryptainer_size_on_filesystem(self._make_absolute(cryptainer_name))
 
-    def list_cryptainer_properties(self, with_age=False, with_size=False):
+    def list_cryptainer_properties(self, with_age=False, with_size=False, finished=True):
         """Returns an unsorted list of dicts having the fields "name", [age] and [size], depending on requested properties."""
-        cryptainer_names = self.list_cryptainer_names(as_sorted_list=False, as_absolute_paths=False)
+        cryptainer_names = self.list_cryptainer_names(as_sorted_list=False, as_absolute_paths=False, finished=finished)
 
         now = get_utc_now_date()
 
@@ -1780,7 +1788,7 @@ class ReadonlyCryptainerStorage:
             entry = dict(name=cryptainer_name)
             if with_age:
                 cryptainer_datetime = self._get_cryptainer_datetime_utc(cryptainer_name)
-                entry["age"] = now - cryptainer_datetime  # We keep as timedelta
+                entry["age"] = now - cryptainer_datetime  # We keep it as timedelta
             if with_size:
                 entry["size"] = self._get_cryptainer_size(cryptainer_name)
             result.append(entry)
@@ -1794,9 +1802,11 @@ class ReadonlyCryptainerStorage:
         """
         Return the encrypted cryptainer dict for `cryptainer_name_or_idx` (which must be in `list_cryptainer_names()`,
         or an index suitable for this sorted list).
+
+        Only FINISHED cryptainers are expected to be loaded.
         """
         if isinstance(cryptainer_name_or_idx, int):
-            cryptainer_names = self.list_cryptainer_names(as_sorted_list=True, as_absolute_paths=False)
+            cryptainer_names = self.list_cryptainer_names(as_sorted_list=True, as_absolute_paths=False, finished=True)
             cryptainer_name = cryptainer_names[cryptainer_name_or_idx]  # Will break if idx is out of bounds
         else:
             assert isinstance(cryptainer_name_or_idx, (Path, str)), repr(cryptainer_name_or_idx)

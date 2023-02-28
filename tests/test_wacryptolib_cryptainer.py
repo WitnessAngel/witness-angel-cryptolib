@@ -47,7 +47,7 @@ from wacryptolib.cryptainer import (
     CryptainerEncryptionPipeline,
     gather_decryptable_symkeys,
     DecryptionErrorType,
-    DecryptionErrorCriticity,
+    DecryptionErrorCriticity, CRYPTAINER_SUFFIX,
 )
 from wacryptolib.exceptions import (
     DecryptionError,
@@ -464,6 +464,22 @@ def _intialize_real_cryptainer_with_single_file(tmp_path, allow_readonly_storage
         storage = StorageClass(cryptainer_dir=tmp_path)  # We assume no default cryptoconf, then
 
     return storage, cryptainer_name
+
+
+def _add_unfinished_cryptainer_to_folder(folder_path):
+    cryptainer_filepath = folder_path / ("unfinished_cryptainer.dat" + CRYPTAINER_SUFFIX)
+
+    pipeline = CryptainerEncryptionPipeline(
+        cryptainer_filepath=cryptainer_filepath,
+        cryptoconf=SIMPLE_CRYPTOCONF,
+        cryptainer_metadata=None,
+        dump_initial_cryptainer=True)
+    del pipeline
+
+    cryptainer_filepath_pending = cryptainer_filepath.with_suffix(cryptainer_filepath.suffix + CRYPTAINER_TEMP_SUFFIX)
+    assert cryptainer_filepath_pending.exists()
+
+    return cryptainer_filepath_pending
 
 
 def _corrupt_cryptainer_tree(storage, cryptainer_name, corruptor_callback):
@@ -2263,16 +2279,18 @@ def test_get_proxy_for_trustee(tmp_path):
 def test_cryptainer_list_cryptainer_properties(tmp_path):
     storage, cryptainer_name = _intialize_real_cryptainer_with_single_file(tmp_path, allow_readonly_storage=True)
 
-    properties = storage.list_cryptainer_properties()
-    assert properties == [dict(name=Path(cryptainer_name))]
+    assert not storage.list_cryptainer_properties(finished=False)
 
-    properties = storage.list_cryptainer_properties(with_size=True)
+    properties = storage.list_cryptainer_properties()
+    assert properties == [dict(name=cryptainer_name)]
+
+    properties = storage.list_cryptainer_properties(with_size=True, finished=True)
     (first_properties,) = properties
     assert isinstance(first_properties["size"], int) and first_properties["size"] > 0
     del first_properties["size"]
     assert properties == [dict(name=cryptainer_name)]
 
-    properties = storage.list_cryptainer_properties(with_age=True)
+    properties = storage.list_cryptainer_properties(with_age=True, finished=None)
     (first_properties,) = properties
     assert isinstance(first_properties["age"], timedelta)
     del first_properties["age"]
@@ -2282,6 +2300,21 @@ def test_cryptainer_list_cryptainer_properties(tmp_path):
     (first_properties,) = properties
     assert sorted(first_properties.keys()) == ["age", "name", "size"]
 
+    cryptainer_filepath_pending = _add_unfinished_cryptainer_to_folder(tmp_path)
+
+    properties = storage.list_cryptainer_properties(finished=False)
+    (first_properties,) = properties
+    assert first_properties["name"] == Path(cryptainer_filepath_pending.name)
+
+    properties = storage.list_cryptainer_properties(finished=True)
+    (first_properties,) = properties
+    assert first_properties["name"] == cryptainer_name
+
+    properties = storage.list_cryptainer_properties(finished=None)
+    (first_properties,  second_properties) = properties
+    assert first_properties["name"] == cryptainer_name
+    assert second_properties["name"] == Path(cryptainer_filepath_pending.name)
+
 
 def test_cryptainer_storage_and_executor(tmp_path, caplog):
     side_tmp = tmp_path / "side_tmp"
@@ -2289,6 +2322,8 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
 
     cryptainer_dir = tmp_path / "cryptainers_dir"
     cryptainer_dir.mkdir()
+
+    cryptainer_filepath_unfinished = _add_unfinished_cryptainer_to_folder(cryptainer_dir)
 
     animals_file_path = side_tmp / "animals"
     animals_file_path.write_bytes(b"dogs\ncats\n")
@@ -2323,7 +2358,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
         "animals.dat.crypt.payload"
     ).is_file()  # By default, DATA OFFLOADING is activated
     assert storage._cryptainer_dir.joinpath("empty.txt.crypt.payload").is_file()
-    assert len(list(storage._cryptainer_dir.iterdir())) == 4  # 2 files per cryptainer
+    assert len(list(storage._cryptainer_dir.iterdir())) == 6  # 2 files per cryptainer, including the pending cryptainer
 
     storage = CryptainerStorage(
         default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=cryptainer_dir, offload_payload_ciphertext=False
@@ -2336,7 +2371,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert sorted(storage.list_cryptainer_names(as_sorted_list=False)) == expected_cryptainer_names
 
     assert not list(storage._cryptainer_dir.glob("newfile*data"))  # Offloading is well disabled now
-    assert len(list(storage._cryptainer_dir.iterdir())) == 5
+    assert len(list(storage._cryptainer_dir.iterdir())) == 7  # Still the pending cryptainer is here
 
     _cryptainer_for_txt = storage.load_cryptainer_from_storage("empty.txt.crypt")
     assert storage.load_cryptainer_from_storage(1) == _cryptainer_for_txt
@@ -2393,6 +2428,14 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     assert storage.get_cryptainer_count() < 11  # In progress
     storage.wait_for_idle_state()
     assert storage.get_cryptainer_count() == 11  # Still the older file remains
+
+    assert storage.get_cryptainer_count(finished=False) == 1
+    assert storage.get_cryptainer_count(finished=None) == 12
+    assert storage.list_cryptainer_names(as_sorted_list=random_bool(), finished=False) == [Path(cryptainer_filepath_unfinished.name)]
+    assert storage.list_cryptainer_names(as_sorted_list=random_bool(), as_absolute_paths=True, finished=False) == [cryptainer_filepath_unfinished]
+    assert len(storage.list_cryptainer_names(as_sorted_list=random_bool(),
+                                             as_absolute_paths=random_bool(),
+                                             finished=None)) == 12
 
 
 def test_cryptainer_storage_purge_by_max_count(tmp_path):

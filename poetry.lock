@@ -1277,21 +1277,6 @@ importlib-metadata = {version = ">=3.6.0", markers = "python_version < \"3.10\""
 pytest = "*"
 
 [[package]]
-name = "pytest-testmon"
-version = "1.3.3"
-description = "selects tests affected by changed files and methods"
-category = "dev"
-optional = false
-python-versions = ">=3.6"
-files = [
-    {file = "pytest-testmon-1.3.3.tar.gz", hash = "sha256:0ac839c089bdf99740418759a33971d3dacc695cf719acde4b967f7f88d1102c"},
-]
-
-[package.dependencies]
-coverage = ">=5,<7"
-pytest = ">=5,<8"
-
-[[package]]
 name = "pytest-timeout"
 version = "2.1.0"
 description = "pytest plugin to abort hanging tests"
@@ -2137,4 +2122,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.7, <4.0"
-content-hash = "c36dd2b8b3685a91fcf4c64aa78f46baa9e05f6f6d702fa7554c6f8a47e19e26"
+content-hash = "68cada0ad3e3d250c946e98d854a87bafc147bd089a661e5d56940c435e7b087"

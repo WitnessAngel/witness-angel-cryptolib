@@ -52,32 +52,32 @@ pyudev = { version = "^0.22.0 ", platform = 'linux' }
 [tool.poetry.dev-dependencies]
 
 # Test runners and plugins
-pytest = "^7.0.1"
-pytest-cov = "^3.0"
-pytest_mock = "^3.7.0"
-pytest-randomly = "^3.11"
-pytest-deadfixtures = "^2.2.1"
-pytest-testmon = "^1.0.3"
-pytest-timeout = "^2.1.0"
-pytest-xdist = "^2.5.0"
-responses = "^0.18.0"
-freezegun = "^1.1.0"
-typeguard = "^2.13.0"
+pytest = ">=7.0.1"
+pytest-cov = ">=4.0"
+pytest_mock = ">=3.7.0"
+pytest-randomly = ">=3.11"
+pytest-deadfixtures = ">=2.2.1"
+pytest-testmon = ">=1.0.3"
+pytest-timeout = ">=2.1.0"
+pytest-xdist = ">=3.0.0"
+responses = ">=0.18.0"
+freezegun = ">=1.1.0"
+typeguard = ">=2.13.0"
 
 # Linters and formatters
-black = {version = "^22.1.0"}
-darglint = "^1.8.1"
-pylint = "^2.6"
-mypy = "^0.931"
-xenon = "^0.9.0"
-safety = "^1.10"
-doc8 = "^0.10.1"
+black = {version = ">=22.1.0"}
+darglint = ">=1.8.1"
+pylint = ">=2.6"
+mypy = ">=0.931"
+xenon = ">=0.9.0"
+safety = ">=1.10"
+doc8 = ">=0.10.1"
 
 # Documentation
-sphinx = "^4.4.0"
-sphinx-autodoc-typehints = "^1.17.0"
-sphinx_rtd_theme = "^1.0.0"
-toml = "^0.10.2"
+sphinx = ">=4.4.0"
+sphinx-autodoc-typehints = ">=1.17.0"
+sphinx_rtd_theme = ">=1.0.0"
+toml = ">=0.10.2"
 
 # Install these with pip for manual benchmarks
 #memory-profiler = "^0.58.0"

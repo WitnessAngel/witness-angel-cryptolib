@@ -3,6 +3,16 @@ Development
 =============
 
 
+Version 0.11
+==================
+
+* Allow listing and purging UNFINISHED cryptainers in cryptainer storages
+* Add support for custom "cryptainer encryption stream" class in recording system
+* Pretty-print decryption error report in CLI
+* Add validate_data_against_schema() utility to factorize code
+* Add lots of little bugfixes
+
+
 Version 0.10
 ==================
 * Allow symmetric algos in key encryption layers, thus making cryptainers deeply recursive

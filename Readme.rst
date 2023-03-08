@@ -24,6 +24,14 @@ The decryption process can involve different steps, like entering passphrases, o
 Overall, the lib gathers lots of utilities to generate and store cryptographic keys, encrypt/check/decrypt cryptainers, access webservices and recorder sensors, and help testing other libraries willing to extend these tools.
 
 
+Installing the lib
++++++++++++++++++++++
+
+Just launch inside your python environment:
+
+    **pip install wacryptolib**
+
+
 CLI interface
 +++++++++++++++++++++
 

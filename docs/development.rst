@@ -14,7 +14,7 @@ Automatic setup
 
 Launch `python wacryptolib_installer.py` in repository root, from inside a python virtual environment.
 
-This will update pip, install a local version of poetry, install the python modules required by wacryptolib, and then launch unit-tests.
+This will update pip, install a *local* version of poetry, install the python modules required by wacryptolib, and then launch unit-tests.
 
 
 Manual setup
@@ -24,11 +24,14 @@ Use `pip install poetry` to install poetry (or better, follow its official docs 
 
 Use `poetry install` from repository root, to install python dependencies (poetry will create its own virtualenv if you don't have one activated).
 
+As an alternative, you can launch "pip install -r pip_requirements_export.txt", but this requirements file might be a bit outdated.
+
 
 Handy commands
 ------------------------
 
-Use `pytest` to launch unit-tests (default pytest arguments are in `setup.cfg`). Use `poetry run pytest` instead, if poetry created its own virtualenv.
+Use `pytest` to launch unit-tests (default pytest arguments are in `setup.cfg`).
+Use `poetry run pytest` instead, if poetry manages its own virtualenv.
 
 Add `--cov=wacryptolib` argument to the pytest command to generate coverage reports.
 

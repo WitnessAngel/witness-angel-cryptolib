@@ -4,7 +4,7 @@ Requires Python3.7+
 
 Launch it from repository root folder, using a system-wide python executable (requires sudo in Linux) or the python executable from a virtual environment.
 
-Note that this installs the "poetry" package manager in the current python environment, not system-wide with a dedicated python environment.
+Note that this installs the "poetry" package manager in the current python environment, not system-wide with a dedicated python environment. So this could create conflicts on the long term.
 """
 
 import subprocess

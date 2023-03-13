@@ -6,7 +6,7 @@ import sys
 from click.testing import CliRunner
 
 import wacryptolib
-from wacryptolib.__main__ import wacryptolib_cli as cli
+from wacryptolib.cli import wacryptolib_cli as cli
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER
 from wacryptolib.utilities import dump_to_json_file
 from _test_mockups import generate_keystore_pool

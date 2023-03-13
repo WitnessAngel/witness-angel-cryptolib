@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 from pprint import pprint
@@ -26,7 +27,7 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 _internal_app_dir = Path("~/.witnessangel").expanduser().resolve()
 DEFAULT_KEYSTORE_POOL_PATH = _internal_app_dir / "keystore_pool"
 DEFAULT_CRYPTAINER_STORAGE_PATH = _internal_app_dir / "cryptainers"
-
+INDENT = "  "
 
 def _get_keystore_pool(ctx):
     keystore_pool_dir = ctx.obj["keystore_pool"]
@@ -243,10 +244,17 @@ def cryptainers():
 
 @cryptainers.command("list")
 @click.pass_context
+#@click.option("-f", "--format", type=click.Choice(['pretty', 'json'], case_sensitive=False), default="pretty")
 def list_cryptainers(ctx):
     cryptainer_storage = _get_cryptainer_storage(ctx)
-    cryptainer_dicts = cryptainer_storage.list_cryptainer_properties(with_age=True, with_size=True)
-    print(cryptainer_dicts)
+    cryptainer_dicts = cryptainer_storage.list_cryptainer_properties(as_sorted_list=True, with_age=True, with_size=True)
+
+    #if format == "json":
+    #    json.dumps(cryptainer_dicts, indent=True, sort_keys=True)
+
+    print("\nCryptainers:\n")
+    for cryptainer_dict in cryptainer_dicts:
+        print(INDENT, cryptainer_dict["name"])
 
 '''
 @cryptainers.command("purge")

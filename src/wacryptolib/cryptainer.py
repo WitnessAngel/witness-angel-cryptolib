@@ -1777,9 +1777,9 @@ class ReadonlyCryptainerStorage:
         """Returns a size in bytes"""
         return get_cryptainer_size_on_filesystem(self._make_absolute(cryptainer_name))
 
-    def list_cryptainer_properties(self, with_age=False, with_size=False, finished=True):
-        """Returns an unsorted list of dicts having the fields "name", [age] and [size], depending on requested properties."""
-        cryptainer_names = self.list_cryptainer_names(as_sorted_list=False, as_absolute_paths=False, finished=finished)
+    def list_cryptainer_properties(self, as_sorted_list=False, with_age=False, with_size=False, finished=True):
+        """Returns an list of dicts (unsorted by default) having the fields "name", [age] and [size], depending on requested properties."""
+        cryptainer_names = self.list_cryptainer_names(as_sorted_list=as_sorted_list, as_absolute_paths=False, finished=finished)
 
         now = get_utc_now_date()
 

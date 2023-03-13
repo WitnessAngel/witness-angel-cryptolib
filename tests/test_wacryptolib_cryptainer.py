@@ -2310,7 +2310,7 @@ def test_cryptainer_list_cryptainer_properties(tmp_path):
     (first_properties,) = properties
     assert first_properties["name"] == cryptainer_name
 
-    properties = storage.list_cryptainer_properties(finished=None)
+    properties = storage.list_cryptainer_properties(as_sorted_list=random_bool(), finished=None)
     (first_properties,  second_properties) = properties
     assert first_properties["name"] == cryptainer_name
     assert second_properties["name"] == Path(cryptainer_filepath_pending.name)

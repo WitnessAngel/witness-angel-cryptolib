@@ -1916,29 +1916,35 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
 
     def _delete_cryptainer(self, cryptainer_name):
         cryptainer_filepath = self._make_absolute(cryptainer_name)
+        logger.info("Deleting cryptainer %s", cryptainer_filepath)
         delete_cryptainer_from_filesystem(cryptainer_filepath)
 
     def delete_cryptainer(self, cryptainer_name):
         logger.info("Intentionally deleting cryptainer %s" % cryptainer_name)
         self._delete_cryptainer(cryptainer_name=cryptainer_name)
 
-    def purge_exceeding_cryptainers(self):  # FIXME test this shortcut
+    def purge_exceeding_cryptainers(self) -> int:  # FIXME test this shortcut
         logger.info("Intentionally purging cryptainers")
-        self.purge_exceeding_cryptainers()
+        return self._purge_exceeding_cryptainers()
         
-    def _purge_exceeding_cryptainers(self):
+    def _purge_exceeding_cryptainers(self) -> int:
         """Purge cryptainers first by date, then total quota, then count, depending on instance settings.
 
         Unfinished cryptainers are, for now, ALWAYS included in the purge, since we assume they are forsaken
         if they are still pending at this time.
         """
 
+        deleted_cryptainer_count = 0
+        print(">>>>>>> self._max_cryptainer_age", self._max_cryptainer_age)
+
         if self._max_cryptainer_age is not None:  # FIRST these, since their deletion is unconditional
             cryptainer_dicts = self.list_cryptainer_properties(with_age=True, finished=None)
             for cryptainer_dict in cryptainer_dicts:
+                print("COMPARING", cryptainer_dict["age"], self._max_cryptainer_age)
                 if cryptainer_dict["age"] > self._max_cryptainer_age:
                     logger.info("Deleting cryptainer %s due to age", cryptainer_dict["name"])
                     self._delete_cryptainer(cryptainer_dict["name"])
+                    deleted_cryptainer_count += 1
 
         if self._max_cryptainer_quota is not None:
             max_cryptainer_quota = self._max_cryptainer_quota
@@ -1953,6 +1959,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
                 logger.info("Deleting cryptainer %s due to lack of storage space", deleted_cryptainer_dict["name"])
                 self._delete_cryptainer(deleted_cryptainer_dict["name"])
                 total_space_consumed -= deleted_cryptainer_dict["size"]
+                deleted_cryptainer_count += 1
 
         if self._max_cryptainer_count is not None:
             cryptainer_dicts = self.list_cryptainer_properties(with_age=True, finished=None)
@@ -1966,6 +1973,10 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
                 for deleted_cryptainer_dict in deleted_cryptainer_dicts:
                     logger.info("Deleting cryptainer %s due to excessive count of cryptainers", deleted_cryptainer_dict["name"])
                     self._delete_cryptainer(deleted_cryptainer_dict["name"])
+                    deleted_cryptainer_count += 1
+
+        return deleted_cryptainer_count
+
 
     def _encrypt_payload_and_stream_cryptainer_to_filesystem(
         self, payload, cryptainer_filepath, cryptainer_metadata, default_keychain_uid, cryptoconf

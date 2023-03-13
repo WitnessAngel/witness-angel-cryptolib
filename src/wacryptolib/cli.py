@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 from pprint import pprint
+from datetime import timedelta
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
@@ -38,7 +39,7 @@ def _get_keystore_pool(ctx):
     return FilesystemKeystorePool(keystore_pool_dir)
 
 
-def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=True):
+def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=True, **extra_kwargs):
     cryptainer_storage_dir = ctx.obj["cryptainer_storage"]
     if not cryptainer_storage_dir:
         cryptainer_storage_dir = Path().joinpath(DEFAULT_CRYPTAINER_STORAGE_PATH).resolve()
@@ -46,7 +47,8 @@ def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=
         cryptainer_storage_dir.mkdir(exist_ok=True)
     return CryptainerStorage(cryptainer_storage_dir,
                              keystore_pool=keystore_pool,
-                             offload_payload_ciphertext=offload_payload_ciphertext)
+                             offload_payload_ciphertext=offload_payload_ciphertext,
+                             **extra_kwargs)
 
 
 EXAMPLE_CRYPTOCONF = dict(
@@ -256,17 +258,28 @@ def list_cryptainers(ctx):
     for cryptainer_dict in cryptainer_dicts:
         print(INDENT, cryptainer_dict["name"])
 
-'''
+
 @cryptainers.command("purge")
 @click.pass_context
-def purge_cryptainers(ctx):
-    cryptainer_storage = _get_cryptainer_storage(ctx)
-    cryptainer_dicts = cryptainer_storage.list_cryptainer_properties(with_age=True, with_size=True)
-    print(cryptainer_dicts)
+@click.option("--max-age", type=int, help="Maximum age of cryptainer, in days")
+@click.option("--max-count", type=int, help="Maximum count of cryptainers in storage")
+@click.option("--max-quota", type=int, help="Maximum total size of cryptainers, in MiBs")
+def purge_cryptainers(ctx, max_age, max_count, max_quota):
+    extra_kwargs = dict(
+        max_cryptainer_age=(timedelta(days=max_age) if max_age is not None else None),
+        max_cryptainer_count=max_count,  # Might be None
+        max_cryptainer_quota=(max_quota * 1024**2 if max_quota else None),
+    )
 
-cryptainers purge max-cryptainer-quota/max-cryptainer-count/max-cryptainer-age 
-# Purge les cryptainers en trop par rapport e ces criteres
-'''
+    extra_kwargs = {k:v for (k, v) in extra_kwargs.items() if v is not None}
+
+    if not extra_kwargs:
+        print("Aborting purge, since no criterion was provided as argument")  # FIXME use click.fail?
+        return
+
+    cryptainer_storage = _get_cryptainer_storage(ctx, **extra_kwargs)
+    deleted_cryptainer_count = cryptainer_storage.purge_exceeding_cryptainers()
+    print("Cryptainers successfully deleted: %s" % deleted_cryptainer_count)
 
 
 def main():

@@ -24,10 +24,20 @@ Use `pip install poetry` to install poetry (or better, follow its official docs 
 
 Use `poetry install` from repository root, to install python dependencies (poetry will create its own virtualenv if you don't have one activated).
 
-As an alternative, you can launch "pip install -r pip_requirements_export.txt", but this requirements file might be a bit outdated.
+As an alternative, you can launch `pip install -r pip_requirements_export.txt`, but this requirements file might be a bit outdated.
 
 
-Handy commands
+Launching the CLI
+---------------------
+
+To try the command line interface, the easiest is to launch the `main.py` script.
+
+If you added "src/" to your pythonpath, e.g. with `pip install -e <repo-root>` (requires pip>=21.3), you can instead use::
+
+    $ python -m wacryptolib
+
+
+Handy dev commands
 ------------------------
 
 Use `pytest` to launch unit-tests (default pytest arguments are in `setup.cfg`).

@@ -7,6 +7,8 @@ from datetime import timedelta
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
 from prettytable import PrettyTable
+import shutil
+
 
 from wacryptolib import operations
 from wacryptolib.cryptainer import (
@@ -125,8 +127,7 @@ def foreign_keystores():
 
 @foreign_keystores.command("list")
 @click.pass_context
-def list_foreign_keystore(ctx):
-    """List foreign keystores."""
+def list_foreign_keystores(ctx):
     keystore_pool = _get_keystore_pool(ctx)
     foreign_keystore_metadata_list = keystore_pool.get_all_foreign_keystore_metadata()
     print(foreign_keystore_metadata_list)
@@ -140,6 +141,19 @@ def list_foreign_keystore(ctx):
                            foreign_keystore_metadata["keystore_owner"],
                            _short_format_datetime(foreign_keystore_metadata.get("keystore_creation_datetime")),])
         click.echo(table)
+
+
+@foreign_keystores.command("delete")
+@click.argument('keystore_uid')
+@click.pass_context
+def delete_foreign_keystore(ctx, keystore_uid):
+    keystore_pool = _get_keystore_pool(ctx)
+    path = keystore_pool._get_foreign_keystore_dir(keystore_uid)
+    try:
+        shutil.rmtree(path)
+        click.echo("Foreign keystore %s successfully deleted" % keystore_uid)
+    except OSError as exc:
+        raise click.UsageError("Failed deletion of imported authentication device %s: %r" % (keystore_uid, exc))
 
 
 def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):

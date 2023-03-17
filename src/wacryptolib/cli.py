@@ -6,6 +6,7 @@ from datetime import timedelta
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
+from prettytable import PrettyTable
 
 from wacryptolib import operations
 from wacryptolib.cryptainer import (
@@ -29,6 +30,11 @@ _internal_app_dir = Path("~/.witnessangel").expanduser().resolve()
 DEFAULT_KEYSTORE_POOL_PATH = _internal_app_dir / "keystore_pool"
 DEFAULT_CRYPTAINER_STORAGE_PATH = _internal_app_dir / "cryptainers"
 INDENT = "  "
+
+def _short_format_datetime(dt):
+    if dt is None:
+        return ""
+    return dt.strftime("%Y-%m-%d %H:%M")
 
 def _get_keystore_pool(ctx):
     keystore_pool_dir = ctx.obj["keystore_pool"]
@@ -122,12 +128,18 @@ def foreign_keystores():
 def list_foreign_keystore(ctx):
     """List foreign keystores."""
     keystore_pool = _get_keystore_pool(ctx)
-    foreign_keystore_uids = keystore_pool.list_foreign_keystore_uids()
-
-    if not foreign_keystore_uids:
+    foreign_keystore_metadata_list = keystore_pool.get_all_foreign_keystore_metadata()
+    print(foreign_keystore_metadata_list)
+    if not foreign_keystore_metadata_list:
         click.echo("No foreign keystores found")
     else:
-        click.echo(foreign_keystore_uids)
+        table = PrettyTable(["Keystore UID", "Owner", "Created at"])
+        # table.align = "l"  useless
+        for foreign_keystore_uid, foreign_keystore_metadata in sorted(foreign_keystore_metadata_list.items()):
+            table.add_row([foreign_keystore_uid,
+                           foreign_keystore_metadata["keystore_owner"],
+                           _short_format_datetime(foreign_keystore_metadata.get("keystore_creation_datetime")),])
+        click.echo(table)
 
 
 def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):

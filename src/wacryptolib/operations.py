@@ -5,7 +5,8 @@ from wacryptolib.authenticator import SENSITIVE_KEYSTORE_FIELDS, is_authenticato
 from wacryptolib.cryptainer import check_cryptoconf_sanity, encrypt_payload_into_cryptainer, check_cryptainer_sanity, \
     decrypt_payload_from_cryptainer
 from wacryptolib.exceptions import SchemaValidationError, ValidationError
-from wacryptolib.keystore import KeystorePoolBase, ReadonlyFilesystemKeystore
+from wacryptolib.jsonrpc_client import status_slugs_response_error_handler, JsonRpcProxy
+from wacryptolib.keystore import KeystorePoolBase, ReadonlyFilesystemKeystore, KEYSTORE_FORMAT, validate_keystore_tree
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 
@@ -76,3 +77,44 @@ def import_keystores_from_initialized_authdevices(keystore_pool, include_private
         already_existing_keystore_count=len(already_existing_keystore_metadata),
         corrupted_keystore_count=corrupted_keystore_count,
     )
+
+
+def _convert_public_authenticator_to_keystore_tree(public_authenticator):
+    keypairs = []
+
+    for public_key in public_authenticator["public_keys"]:
+        keypairs.append(
+            dict(
+                keychain_uid=public_key["keychain_uid"],
+                key_algo=public_key["key_algo"],
+                public_key=public_key["key_value"],
+                private_key=None,  # FIXME invalid??
+            )
+        )
+
+    keystore_tree = {
+        "keystore_type": "authenticator",
+        "keystore_format": KEYSTORE_FORMAT,
+        "keystore_owner": public_authenticator["keystore_owner"],
+        "keystore_uid": public_authenticator["keystore_uid"],
+        "keypairs": keypairs,
+    }
+    if public_authenticator["keystore_creation_datetime"]:  # NULLABLE
+        keystore_tree["keystore_creation_datetime"] = public_authenticator["keystore_creation_datetime"]
+
+    # No confidential fields, like passphrase hint or keystore secret, are present in public authenticator!
+    validate_keystore_tree(keystore_tree)  # SAFETY
+    return keystore_tree
+
+
+def import_keystore_from_web_gateway(keystore_pool, gateway_url, keystore_uid) -> bool:
+
+    gateway_proxy = JsonRpcProxy(url=gateway_url)
+
+    public_authenticator = gateway_proxy.get_public_authenticator(keystore_uid=keystore_uid)
+
+    keystore_tree = _convert_public_authenticator_to_keystore_tree(public_authenticator)
+
+    updated = keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree)
+
+    return updated

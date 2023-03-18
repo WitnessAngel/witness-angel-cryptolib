@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from pprint import pprint
 from datetime import timedelta
+import uuid
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
@@ -113,11 +114,18 @@ EXAMPLE_CRYPTOCONF = dict(
         exists=True, file_okay=False, dir_okay=True, writable=True, readable=True, resolve_path=True, allow_dash=False
     ),
 )
+@click.option(  # Fixme use Pypi click-params.URl one day?
+    "-g",
+    "--gateway-url",
+    default=None,
+    help="URL of the web registry endpoint",
+)
 @click.pass_context
-def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage) -> object:
+def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage, gateway_url) -> object:
     ctx.ensure_object(dict)
     ctx.obj["keystore_pool"] = keystore_pool
     ctx.obj["cryptainer_storage"] = cryptainer_storage
+    ctx.obj["gateway-url"] = gateway_url
 
 
 @wacryptolib_cli.group()
@@ -127,7 +135,7 @@ def foreign_keystores():
 
 @foreign_keystores.command("list")
 @click.pass_context
-def list_foreign_keystores(ctx):
+def list_foreign_keystores(ctx):  # FIXME list count of public/private keys too!
     keystore_pool = _get_keystore_pool(ctx)
     foreign_keystore_metadata_list = keystore_pool.get_all_foreign_keystore_metadata()
     print(foreign_keystore_metadata_list)
@@ -144,7 +152,7 @@ def list_foreign_keystores(ctx):
 
 
 @foreign_keystores.command("delete")
-@click.argument('keystore_uid')
+@click.argument('keystore_uid', type=click.UUID)
 @click.pass_context
 def delete_foreign_keystore(ctx, keystore_uid):
     keystore_pool = _get_keystore_pool(ctx)
@@ -158,21 +166,31 @@ def delete_foreign_keystore(ctx, keystore_uid):
 
 @foreign_keystores.command("import")
 @click.option("--from-usb", help="Fetch authenticators from plugged USB devices", is_flag=True)
+@click.option("--from-web-uid", help="Fetch authenticator by uid from gateway", type=click.UUID)
 @click.option("--include-private-keys", help="Import private keys when available", is_flag=True)
 @click.pass_context
-def import_foreign_keystores(ctx, from_usb, include_private_keys):
+def import_foreign_keystores(ctx, from_usb, from_web_uid, include_private_keys):
 
-    if not from_usb:
+    if not from_usb and not from_web_uid:
         raise click.UsageError("No source selected for keystore import")
 
     keystore_pool = _get_keystore_pool(ctx)
 
     if from_usb:
         click.echo("Importing foreign keystores from USB devices, %s private keys" % ("with" if include_private_keys else "without"))
-        results = operations.import_keystores_from_initialized_authdevices(keystore_pool,
-                                                                           include_private_keys=include_private_keys)
+        results = operations.import_keystores_from_initialized_authdevices(
+            keystore_pool,
+            include_private_keys=include_private_keys)
         msg = "{foreign_keystore_count} new authenticators imported, {already_existing_keystore_count} updated, {corrupted_keystore_count} skipped because corrupted".format(**results)
         click.echo(msg)
+
+    if from_web_uid:
+        print(">>>>>>>>>>>>>", ctx.obj)
+        gateway_url = ctx.obj["gateway-url"]
+        if not gateway_url:
+            raise click.UsageError("No web gateway URL specified for keystore import")
+        click.echo("Importing foreign keystore %s from web gateway" % from_web_uid)
+        operations.import_keystore_from_web_gateway(keystore_pool, gateway_url=gateway_url, keystore_uid=from_web_uid)
 
 
 def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):

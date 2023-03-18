@@ -18,7 +18,7 @@ _exception_classes += StatusSlugsMapper.gather_exception_subclasses(
 exception_mapper = StatusSlugsMapper(_exception_classes, fallback_exception_class=Exception)
 
 
-def status_slugs_response_error_handler(exc):
+def status_slugs_response_error_handler(exc):  # FIXME no need to pass it explicitly from now on
     """
     Generic error handler which recognizes status slugs of builtin exceptions in json-rpc error responses,
     and reraises them client-side.
@@ -49,7 +49,7 @@ class JsonRpcProxy(ServerBase):
 
     """
 
-    def __init__(self, url, *args, response_error_handler=None, **kwargs):
+    def __init__(self, url, *args, response_error_handler=status_slugs_response_error_handler, **kwargs):
         super().__init__(url, *args, **kwargs)
         self._url = url
         self._response_error_handler = response_error_handler

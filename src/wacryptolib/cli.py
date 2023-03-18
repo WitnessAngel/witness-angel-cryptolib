@@ -156,6 +156,25 @@ def delete_foreign_keystore(ctx, keystore_uid):
         raise click.UsageError("Failed deletion of imported authentication device %s: %r" % (keystore_uid, exc))
 
 
+@foreign_keystores.command("import")
+@click.option("--from-usb", help="Fetch authenticators from plugged USB devices", is_flag=True)
+@click.option("--include-private-keys", help="Import private keys when available", is_flag=True)
+@click.pass_context
+def import_foreign_keystores(ctx, from_usb, include_private_keys):
+
+    if not from_usb:
+        raise click.UsageError("No source selected for keystore import")
+
+    keystore_pool = _get_keystore_pool(ctx)
+
+    if from_usb:
+        click.echo("Importing foreign keystores from USB devices, %s private keys" % ("with" if include_private_keys else "without"))
+        results = operations.import_keystores_from_initialized_authdevices(keystore_pool,
+                                                                           include_private_keys=include_private_keys)
+        msg = "{foreign_keystore_count} new authenticators imported, {already_existing_keystore_count} updated, {corrupted_keystore_count} skipped because corrupted".format(**results)
+        click.echo(msg)
+
+
 def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):
 
     if not cryptoconf_fileobj:

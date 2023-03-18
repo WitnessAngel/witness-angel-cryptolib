@@ -14,6 +14,9 @@ from wacryptolib.utilities import dump_to_json_file, generate_uuid0, get_utc_now
 logger = logging.getLogger(__name__)
 
 
+SENSITIVE_KEYSTORE_FIELDS = ["keystore_secret", "keystore_passphrase_hint"]
+
+
 def initialize_authenticator(authenticator_dir: Path, keystore_owner: str, keystore_passphrase_hint: str) -> dict:
     """
     BEWARE - PRIVATE API FOR NOW

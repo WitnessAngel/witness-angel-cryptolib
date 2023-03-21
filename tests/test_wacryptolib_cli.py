@@ -190,7 +190,7 @@ def test_cli_list_foreign_keystores_yolo(tmp_path, capsys):
 
     keystore_pool = generate_keystore_pool(tmp_path)
     foreign_keystores = keystore_pool.list_foreign_keystore_uids()
-    breakpoint()
+    #breakpoint()
     try:
         result = cli.main(prog_name="python -m wacryptolib", args=["-k", str(tmp_path), "foreign-keystores", "list"], standalone_mode=False)
     except SystemExit as e:
@@ -198,6 +198,6 @@ def test_cli_list_foreign_keystores_yolo(tmp_path, capsys):
         print(e)
 
     #result = runner.invoke(cli, ["-k", str(tmp_path), "foreign-keystores", "list"], catch_exceptions=False)
-    breakpoint()
+    #breakpoint()
     assert result.exit_code == 0
     assert result.output == foreign_keystores

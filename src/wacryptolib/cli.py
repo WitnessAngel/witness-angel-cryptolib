@@ -4,9 +4,11 @@ from pathlib import Path
 from pprint import pprint
 from datetime import timedelta
 import uuid
+import logging
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 from click.utils import LazyFile
+import click_log
 from prettytable import PrettyTable
 import shutil
 
@@ -26,6 +28,10 @@ from wacryptolib.cryptainer import (
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.operations import decrypt_payload_from_bytes
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
+
+logger = logging.getLogger(__name__)
+click_log.basic_config(logger)
+
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
@@ -96,6 +102,7 @@ EXAMPLE_CRYPTOCONF = dict(
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
+@click_log.simple_verbosity_option(logger)
 @click.option(
     "-k",
     "--keystore-pool",
@@ -198,7 +205,7 @@ def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_pri
             keystore_path=from_path,
             include_private_keys=include_private_keys)
         msg = _build_single_import_success_message(keystore_metadata, updated)
-        click.echo(msg)
+        logger.warning(msg)
 
     if from_gateway:
         #print(">>>>>>>>>>>>>", ctx.obj)
@@ -208,7 +215,7 @@ def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_pri
         click.echo("Importing foreign keystore %s from web gateway" % from_gateway)
         keystore_metadata, updated = operations.import_keystore_from_web_gateway(keystore_pool, gateway_url=gateway_url, keystore_uid=from_gateway)
         msg = _build_single_import_success_message(keystore_metadata, updated)
-        click.echo(msg)
+        logger.error(msg)
 
 def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):
 

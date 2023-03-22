@@ -324,6 +324,17 @@ def list_cryptainers(ctx):
         print(INDENT, cryptainer_dict["name"])
 
 
+@cryptainers.command("delete")
+@click.argument('cryptainer_name')
+@click.pass_context
+def delete_cryptainer(ctx, cryptainer_name):
+    cryptainer_storage = _get_cryptainer_storage(ctx)
+    if not cryptainer_storage.is_valid_cryptainer_name(cryptainer_name):
+        raise click.UsageError("Invalid cryptainer name %s" % cryptainer_name)
+    cryptainer_storage.delete_cryptainer(cryptainer_name=cryptainer_name)
+    click.echo("Cryptainer %s successfully deleted" % cryptainer_name)
+
+
 @cryptainers.command("purge")
 @click.pass_context
 @click.option("--max-age", type=int, help="Maximum age of cryptainer, in days")
@@ -344,7 +355,7 @@ def purge_cryptainers(ctx, max_age, max_count, max_quota):
 
     cryptainer_storage = _get_cryptainer_storage(ctx, **extra_kwargs)
     deleted_cryptainer_count = cryptainer_storage.purge_exceeding_cryptainers()
-    print("Cryptainers successfully deleted: %s" % deleted_cryptainer_count)
+    click.echo("Cryptainers successfully deleted: %s" % deleted_cryptainer_count)
 
 
 def main():

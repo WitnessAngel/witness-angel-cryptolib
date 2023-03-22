@@ -1794,6 +1794,10 @@ class ReadonlyCryptainerStorage:
             result.append(entry)
         return result
 
+    def is_valid_cryptainer_name(self, cryptainer_name):
+        cryptainer_path = self._make_absolute(cryptainer_name)
+        return cryptainer_path.is_file()
+
     def _make_absolute(self, cryptainer_name):
         assert not Path(cryptainer_name).is_absolute()
         return self._cryptainer_dir.joinpath(cryptainer_name)

@@ -166,12 +166,12 @@ def delete_foreign_keystore(ctx, keystore_uid):
 
 @foreign_keystores.command("import")
 @click.option("--from-usb", help="Fetch authenticators from plugged USB devices", is_flag=True)
-@click.option("--from-web-uid", help="Fetch authenticator by uid from gateway", type=click.UUID)
+@click.option("--from-gateway", help="Fetch authenticator by uid from gateway", type=click.UUID)
 @click.option("--include-private-keys", help="Import private keys when available", is_flag=True)
 @click.pass_context
-def import_foreign_keystores(ctx, from_usb, from_web_uid, include_private_keys):
+def import_foreign_keystores(ctx, from_usb, from_gateway, include_private_keys):
 
-    if not from_usb and not from_web_uid:
+    if not from_usb and not from_gateway:
         raise click.UsageError("No source selected for keystore import")
 
     keystore_pool = _get_keystore_pool(ctx)
@@ -184,14 +184,16 @@ def import_foreign_keystores(ctx, from_usb, from_web_uid, include_private_keys):
         msg = "{foreign_keystore_count} new authenticators imported, {already_existing_keystore_count} updated, {corrupted_keystore_count} skipped because corrupted".format(**results)
         click.echo(msg)
 
-    if from_web_uid:
-        print(">>>>>>>>>>>>>", ctx.obj)
+    if from_gateway:
+        #print(">>>>>>>>>>>>>", ctx.obj)
         gateway_url = ctx.obj["gateway-url"]
         if not gateway_url:
             raise click.UsageError("No web gateway URL specified for keystore import")
-        click.echo("Importing foreign keystore %s from web gateway" % from_web_uid)
-        operations.import_keystore_from_web_gateway(keystore_pool, gateway_url=gateway_url, keystore_uid=from_web_uid)
-
+        click.echo("Importing foreign keystore %s from web gateway" % from_gateway)
+        updated = operations.import_keystore_from_web_gateway(keystore_pool, gateway_url=gateway_url, keystore_uid=from_gateway)
+        msg = "Authenticator {} updated" if updated else "Authenticator {} imported"
+        msg = msg.format(from_gateway)
+        click.echo(msg)
 
 def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):
 

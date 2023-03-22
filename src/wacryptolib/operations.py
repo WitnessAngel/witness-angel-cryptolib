@@ -31,6 +31,28 @@ def decrypt_payload_from_bytes(cryptainer_bytes: bytes, keystore_pool: KeystoreP
     return payload, error_report  # Payload might be None
 
 
+def import_keystore_from_path(keystore_pool, keystore_path, include_private_keys: bool):
+    """Might raise ValidationError while loading remote keystore, or while importing it
+    (if mismatch between keystore UIDs).
+
+    Returns True iff keystore was updated instead of created.
+    """
+
+    remote_keystore = ReadonlyFilesystemKeystore(keystore_path)
+    keystore_tree = remote_keystore.export_to_keystore_tree(include_private_keys=include_private_keys)
+
+    # Special operation: we remove optional sensitive data from this "foreign" keystore...
+    for sensitive_key in SENSITIVE_KEYSTORE_FIELDS:
+        if sensitive_key in keystore_tree:
+            del keystore_tree[sensitive_key]
+
+    updated = keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree)
+
+    keystore_metadata = _extract_metadata_from_keystore_tree(keystore_tree)
+
+    return keystore_metadata, updated
+
+
 def import_keystores_from_initialized_authdevices(keystore_pool, include_private_keys: bool):
 
     authdevices = list_available_authdevices()
@@ -45,32 +67,15 @@ def import_keystores_from_initialized_authdevices(keystore_pool, include_private
         remote_keystore_dir = authdevice["authenticator_dir"]
 
         try:
-            remote_keystore = ReadonlyFilesystemKeystore(remote_keystore_dir)
-            keystore_tree = remote_keystore.export_to_keystore_tree(include_private_keys=include_private_keys)
-
-            # Special operation: we remove optional sensitive data from this "foreign" keystore...
-            for sensitive_key in SENSITIVE_KEYSTORE_FIELDS:
-                if sensitive_key in keystore_tree:
-                    del keystore_tree[sensitive_key]
-
+            keystore_metadata, updated = import_keystore_from_path(keystore_pool, keystore_path=remote_keystore_dir, include_private_keys=include_private_keys)
         except ValidationError as exc:
             corrupted_keystore_count += 1
             continue
 
-        try:
-
-            updated = keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree)
-
-            keystore_metadata = keystore_tree.copy()
-            del keystore_metadata["keypairs"]
-
-            if updated:
-                already_existing_keystore_metadata.append(keystore_metadata)
-            else:
-                foreign_keystore_metadata.append(keystore_metadata)
-
-        except ValidationError:  # Mismatch between keystore UIDs
-            corrupted_keystore_count += 1
+        if updated:
+            already_existing_keystore_metadata.append(keystore_metadata)
+        else:
+            foreign_keystore_metadata.append(keystore_metadata)
 
     return dict(
         foreign_keystore_count=len(foreign_keystore_metadata),
@@ -78,6 +83,11 @@ def import_keystores_from_initialized_authdevices(keystore_pool, include_private
         corrupted_keystore_count=corrupted_keystore_count,
     )
 
+
+def _extract_metadata_from_keystore_tree(keystore_tree):
+    keystore_metadata = keystore_tree.copy()
+    del keystore_metadata["keypairs"]
+    return keystore_metadata
 
 def _convert_public_authenticator_to_keystore_tree(public_authenticator):
     keypairs = []
@@ -117,4 +127,6 @@ def import_keystore_from_web_gateway(keystore_pool, gateway_url, keystore_uid) -
 
     updated = keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree)
 
-    return updated
+    keystore_metadata = _extract_metadata_from_keystore_tree(keystore_tree)
+
+    return keystore_metadata, updated

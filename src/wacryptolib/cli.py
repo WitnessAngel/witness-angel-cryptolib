@@ -166,12 +166,15 @@ def delete_foreign_keystore(ctx, keystore_uid):
 
 @foreign_keystores.command("import")
 @click.option("--from-usb", help="Fetch authenticators from plugged USB devices", is_flag=True)
+@click.option("--from-path", help="Fetch authenticator from folder path", type=click.Path(
+    exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True, allow_dash=False
+))
 @click.option("--from-gateway", help="Fetch authenticator by uid from gateway", type=click.UUID)
 @click.option("--include-private-keys", help="Import private keys when available", is_flag=True)
 @click.pass_context
-def import_foreign_keystores(ctx, from_usb, from_gateway, include_private_keys):
+def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_private_keys):
 
-    if not from_usb and not from_gateway:
+    if not from_usb and not from_gateway and not from_path:
         raise click.UsageError("No source selected for keystore import")
 
     keystore_pool = _get_keystore_pool(ctx)
@@ -184,15 +187,27 @@ def import_foreign_keystores(ctx, from_usb, from_gateway, include_private_keys):
         msg = "{foreign_keystore_count} new authenticators imported, {already_existing_keystore_count} updated, {corrupted_keystore_count} skipped because corrupted".format(**results)
         click.echo(msg)
 
+    def _build_single_import_success_message(_keystore_metadata, _updated):
+        _msg = "Authenticator {} (owner: {}) %s" % ("updated" if updated else "imported")
+        return _msg.format(_keystore_metadata["keystore_uid"], _keystore_metadata["keystore_owner"])
+
+    if from_path:
+        click.echo("Importing foreign keystore from folder %s, %s private keys" % (from_path, "with" if include_private_keys else "without"))
+        keystore_metadata, updated = operations.import_keystore_from_path(
+            keystore_pool,
+            keystore_path=from_path,
+            include_private_keys=include_private_keys)
+        msg = _build_single_import_success_message(keystore_metadata, updated)
+        click.echo(msg)
+
     if from_gateway:
         #print(">>>>>>>>>>>>>", ctx.obj)
         gateway_url = ctx.obj["gateway-url"]
         if not gateway_url:
             raise click.UsageError("No web gateway URL specified for keystore import")
         click.echo("Importing foreign keystore %s from web gateway" % from_gateway)
-        updated = operations.import_keystore_from_web_gateway(keystore_pool, gateway_url=gateway_url, keystore_uid=from_gateway)
-        msg = "Authenticator {} updated" if updated else "Authenticator {} imported"
-        msg = msg.format(from_gateway)
+        keystore_metadata, updated = operations.import_keystore_from_web_gateway(keystore_pool, gateway_url=gateway_url, keystore_uid=from_gateway)
+        msg = _build_single_import_success_message(keystore_metadata, updated)
         click.echo(msg)
 
 def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):

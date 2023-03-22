@@ -31,7 +31,7 @@ from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 logger = logging.getLogger(__name__)
 click_log.basic_config(logger)
-
+click.echo = None  # Break this on purpose
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
@@ -49,7 +49,7 @@ def _get_keystore_pool(ctx):
     keystore_pool_dir = ctx.obj["keystore_pool"]
     if not keystore_pool_dir:
         keystore_pool_dir = Path().joinpath(DEFAULT_KEYSTORE_POOL_PATH).resolve()
-        click.echo("No keystore-pool directory provided, defaulting to '%s'" % keystore_pool_dir)
+        logger.debug("No keystore-pool directory provided, defaulting to '%s'" % keystore_pool_dir)
         keystore_pool_dir.mkdir(exist_ok=True)
     return FilesystemKeystorePool(keystore_pool_dir)
 
@@ -58,7 +58,7 @@ def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=
     cryptainer_storage_dir = ctx.obj["cryptainer_storage"]
     if not cryptainer_storage_dir:
         cryptainer_storage_dir = Path().joinpath(DEFAULT_CRYPTAINER_STORAGE_PATH).resolve()
-        click.echo("No cryptainer-storage directory provided, defaulting to '%s'" % cryptainer_storage_dir)
+        logger.debug("No cryptainer-storage directory provided, defaulting to '%s'" % cryptainer_storage_dir)
         cryptainer_storage_dir.mkdir(exist_ok=True)
     return CryptainerStorage(cryptainer_storage_dir,
                              keystore_pool=keystore_pool,
@@ -147,7 +147,7 @@ def list_foreign_keystores(ctx):  # FIXME list count of public/private keys too!
     foreign_keystore_metadata_list = keystore_pool.get_all_foreign_keystore_metadata()
     print(foreign_keystore_metadata_list)
     if not foreign_keystore_metadata_list:
-        click.echo("No foreign keystores found")
+        logger.warning("No foreign keystores found")
     else:
         table = PrettyTable(["Keystore UID", "Owner", "Created at"])
         # table.align = "l"  useless
@@ -155,7 +155,7 @@ def list_foreign_keystores(ctx):  # FIXME list count of public/private keys too!
             table.add_row([foreign_keystore_uid,
                            foreign_keystore_metadata["keystore_owner"],
                            _short_format_datetime(foreign_keystore_metadata.get("keystore_creation_datetime")),])
-        click.echo(table)
+        logger.info(table)
 
 
 @foreign_keystores.command("delete")
@@ -166,7 +166,7 @@ def delete_foreign_keystore(ctx, keystore_uid):
     path = keystore_pool._get_foreign_keystore_dir(keystore_uid)
     try:
         shutil.rmtree(path)
-        click.echo("Foreign keystore %s successfully deleted" % keystore_uid)
+        logger.info("Foreign keystore %s successfully deleted" % keystore_uid)
     except OSError as exc:
         raise click.UsageError("Failed deletion of imported authentication device %s: %r" % (keystore_uid, exc))
 
@@ -187,40 +187,41 @@ def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_pri
     keystore_pool = _get_keystore_pool(ctx)
 
     if from_usb:
-        click.echo("Importing foreign keystores from USB devices, %s private keys" % ("with" if include_private_keys else "without"))
+        logger.info("Importing foreign keystores from USB devices, %s private keys" % ("with" if include_private_keys else "without"))
         results = operations.import_keystores_from_initialized_authdevices(
             keystore_pool,
             include_private_keys=include_private_keys)
         msg = "{foreign_keystore_count} new authenticators imported, {already_existing_keystore_count} updated, {corrupted_keystore_count} skipped because corrupted".format(**results)
-        click.echo(msg)
+        logger.info(msg)
 
     def _build_single_import_success_message(_keystore_metadata, _updated):
         _msg = "Authenticator {} (owner: {}) %s" % ("updated" if updated else "imported")
         return _msg.format(_keystore_metadata["keystore_uid"], _keystore_metadata["keystore_owner"])
 
     if from_path:
-        click.echo("Importing foreign keystore from folder %s, %s private keys" % (from_path, "with" if include_private_keys else "without"))
+        logger.info("Importing foreign keystore from folder %s, %s private keys" % (from_path, "with" if include_private_keys else "without"))
         keystore_metadata, updated = operations.import_keystore_from_path(
             keystore_pool,
             keystore_path=from_path,
             include_private_keys=include_private_keys)
         msg = _build_single_import_success_message(keystore_metadata, updated)
-        logger.warning(msg)
+        logger.info(msg)
 
     if from_gateway:
         #print(">>>>>>>>>>>>>", ctx.obj)
         gateway_url = ctx.obj["gateway-url"]
         if not gateway_url:
             raise click.UsageError("No web gateway URL specified for keystore import")
-        click.echo("Importing foreign keystore %s from web gateway" % from_gateway)
+        logger.info("Importing foreign keystore %s from web gateway" % from_gateway)
         keystore_metadata, updated = operations.import_keystore_from_web_gateway(keystore_pool, gateway_url=gateway_url, keystore_uid=from_gateway)
         msg = _build_single_import_success_message(keystore_metadata, updated)
-        logger.error(msg)
+        logger.info(msg)
 
-def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):
+
+def _do_encrypt(payload, cryptoconf_fileobj, keystore_pool):  # FIXME REMOVE
 
     if not cryptoconf_fileobj:
-        click.echo("No cryptoconf provided, defaulting to simple example conf")
+        logger.warning("No cryptoconf provided, defaulting to simple example conf")
         cryptoconf = EXAMPLE_CRYPTOCONF
     else:
         cryptoconf = load_from_json_bytes(cryptoconf_fileobj.read())
@@ -249,7 +250,7 @@ def encrypt(ctx, input_medium, output_cryptainer, cryptoconf, bundle):
 
     # click.echo("In encrypt: %s" % str(locals()))
     if not cryptoconf:
-        click.echo("No cryptoconf provided, defaulting to simple example conf")
+        logger.warning("No cryptoconf provided, defaulting to simple example conf")
         cryptoconf = EXAMPLE_CRYPTOCONF
     else:
         cryptoconf = load_from_json_bytes(cryptoconf.read())
@@ -276,7 +277,7 @@ def encrypt(ctx, input_medium, output_cryptainer, cryptoconf, bundle):
         cryptainer_storage.wait_for_idle_state()
 
     ##output_cryptainer = LazyFile(input_medium.name + CRYPTAINER_SUFFIX, "wb")
-    click.echo("Encryption of file '%s' finished" % input_medium.name)
+    logger.info("Encryption of file '%s' finished" % input_medium.name)
 
 
 @wacryptolib_cli.command()
@@ -308,7 +309,7 @@ def decrypt(ctx, input_cryptainer, output_medium):
     with output_medium:
         output_medium.write(medium_content)
 
-    click.echo("Decryption finished to file '%s'" % output_medium.name)
+    logger.info("Decryption finished to file '%s'" % output_medium.name)
 
 
 @wacryptolib_cli.command()
@@ -354,7 +355,7 @@ def delete_cryptainer(ctx, cryptainer_name):
     if not cryptainer_storage.is_valid_cryptainer_name(cryptainer_name):
         raise click.UsageError("Invalid cryptainer name %s" % cryptainer_name)
     cryptainer_storage.delete_cryptainer(cryptainer_name=cryptainer_name)
-    click.echo("Cryptainer %s successfully deleted" % cryptainer_name)
+    logger.info("Cryptainer %s successfully deleted" % cryptainer_name)
 
 
 @cryptainers.command("purge")
@@ -377,7 +378,7 @@ def purge_cryptainers(ctx, max_age, max_count, max_quota):
 
     cryptainer_storage = _get_cryptainer_storage(ctx, **extra_kwargs)
     deleted_cryptainer_count = cryptainer_storage.purge_exceeding_cryptainers()
-    click.echo("Cryptainers successfully deleted: %s" % deleted_cryptainer_count)
+    logger.info("Cryptainers successfully deleted: %s" % deleted_cryptainer_count)
 
 
 def main():

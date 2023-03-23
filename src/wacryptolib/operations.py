@@ -89,7 +89,7 @@ def _extract_metadata_from_keystore_tree(keystore_tree):
     del keystore_metadata["keypairs"]
     return keystore_metadata
 
-def _convert_public_authenticator_to_keystore_tree(public_authenticator):
+def _convert_public_authenticator_to_keystore_tree(public_authenticator) -> dict:
     keypairs = []
 
     for public_key in public_authenticator["public_keys"]:
@@ -117,7 +117,7 @@ def _convert_public_authenticator_to_keystore_tree(public_authenticator):
     return keystore_tree
 
 
-def import_keystore_from_web_gateway(keystore_pool, gateway_url, keystore_uid) -> bool:
+def import_keystore_from_web_gateway(keystore_pool, gateway_url, keystore_uid) -> tuple:
 
     gateway_proxy = JsonRpcProxy(url=gateway_url)
 

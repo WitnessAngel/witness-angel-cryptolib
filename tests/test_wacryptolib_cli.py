@@ -6,10 +6,15 @@ import sys
 from click.testing import CliRunner
 
 import wacryptolib
+from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.cli import wacryptolib_cli as cli
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER
 from wacryptolib.utilities import dump_to_json_file
 from _test_mockups import generate_keystore_pool
+
+
+REAL_GATEWAY_URL = "https://api.witnessangel.com/gateway/jsonrpc/"  # Real gateway used by some tests
+REAL_GATEWAY_KEYSTORE_UID = "0f0c0988-80c1-9362-11c1-b06909a3a53c"  # Authenticator of ¤aaa, must exist in real prod
 
 
 def test_cli_help_texts():
@@ -177,10 +182,93 @@ def test_cli_subprocess_invocation():
     assert proc.returncode == 0
 
 
-def test_cli_list_foreign_keystores_not_found():
+def test_cli_foreign_keystore_management(tmp_path):
+    keystore_pool_path = tmp_path / "keystore-pool"
+    keystore_pool_path.mkdir()
+
+    authenticator_path = tmp_path / "authenticator"
+    authenticator_path.mkdir()
+
+    base_args = ["--keystore-pool", str(keystore_pool_path)]
+
+    wrong_uuid_str = "676ff51f-1439-48d9-94f9-a6011357fd11"
+
     runner = CliRunner()
 
-    result = runner.invoke(cli, ["foreign-keystores", "list"], catch_exceptions=False)
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "list"])
+    assert result.exit_code == 0
+    assert "No foreign keystores found" in result.output
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-usb"])
+    assert result.exit_code == 0
+    assert "0 new authenticators imported, 0 updated, 0 skipped because corrupted" in result.output   # DO NOT keep USB key in PC here!
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "list"])
+    assert result.exit_code == 0
+    assert "No foreign keystores found" in result.output
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID])
+    assert result.exit_code == 2  # click.UsageError
+    assert "No web gateway URL specified" in result.output
+
+    result = runner.invoke(cli, base_args + ["--gateway-url", REAL_GATEWAY_URL,
+                                             "foreign-keystores", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID])
+    assert result.exit_code == 0
+    assert "Authenticator 0f0c0988-80c1-9362-11c1-b06909a3a53c (owner: ¤aaa) imported" in result.output
+
+    result = runner.invoke(cli, base_args + ["--gateway-url", REAL_GATEWAY_URL,
+                                             "foreign-keystores", "import", "--from-gateway", "676ff51f-1439-48d9-94f9-xxx"])
+    assert result.exit_code == 2
+    assert "not a valid UUID." in result.output
+
+    result = runner.invoke(cli, base_args + ["--gateway-url", REAL_GATEWAY_URL,
+                                             "foreign-keystores", "import", "--from-gateway", wrong_uuid_str])
+    assert result.exit_code == 1  # Other exception raised
+    assert "does not exist in database" in str(result.exc_info[1])
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "list"])
+    assert result.exit_code == 0
+    assert " 0f0c0988-80c1-9362-11c1-b06909a3a53c " in result.output
+    assert " ¤aaa " in result.output
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID])
+    assert result.exit_code == 2
+    assert "No web gateway URL specified" in result.output
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "delete", REAL_GATEWAY_KEYSTORE_UID])
+    assert result.exit_code == 0
+    assert "successfully deleted" in result.output
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "list"])
+    assert result.exit_code == 0
+    assert "No foreign keystores found" in result.output
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-path", authenticator_path])
+    assert result.exit_code == 1
+    assert "keystore_metadata.json does not exist" in str(result.exc_info[1])
+
+    keystore_metadata = initialize_authenticator(authenticator_path, keystore_owner="myuserxyz", keystore_passphrase_hint="somestuffs")
+    new_keystore_uid = keystore_metadata["keystore_uid"]
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-path", authenticator_path])
+    assert result.exit_code == 0
+    assert "imported" in result.output
+    assert "without private keys" in result.output
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "delete", wrong_uuid_str])
+    assert result.exit_code == 2
+    assert "Failed deletion" in result.output
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "list"])
+    assert result.exit_code == 0
+    assert str(new_keystore_uid) in result.output
+    assert " myuserxyz " in result.output
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "delete", str(new_keystore_uid)])
+    assert result.exit_code == 0
+    assert "successfully deleted" in result.output
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "list"])
     assert result.exit_code == 0
     assert "No foreign keystores found" in result.output
 

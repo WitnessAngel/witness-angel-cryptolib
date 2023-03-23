@@ -31,7 +31,6 @@ from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
 
 logger = logging.getLogger(__name__)
 click_log.basic_config(logger)
-click.echo = None  # Break this on purpose
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
@@ -145,7 +144,7 @@ def foreign_keystores():
 def list_foreign_keystores(ctx):  # FIXME list count of public/private keys too!
     keystore_pool = _get_keystore_pool(ctx)
     foreign_keystore_metadata_list = keystore_pool.get_all_foreign_keystore_metadata()
-    print(foreign_keystore_metadata_list)
+    #print(foreign_keystore_metadata_list)
     if not foreign_keystore_metadata_list:
         logger.warning("No foreign keystores found")
     else:
@@ -202,7 +201,7 @@ def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_pri
         logger.info("Importing foreign keystore from folder %s, %s private keys" % (from_path, "with" if include_private_keys else "without"))
         keystore_metadata, updated = operations.import_keystore_from_path(
             keystore_pool,
-            keystore_path=from_path,
+            keystore_path=Path(from_path),
             include_private_keys=include_private_keys)
         msg = _build_single_import_success_message(keystore_metadata, updated)
         logger.info(msg)
@@ -300,7 +299,7 @@ def decrypt(ctx, input_cryptainer, output_medium):
     medium_content, error_report = decrypt_payload_from_bytes(cryptainer_bytes=cryptainer_bytes, keystore_pool=keystore_pool)
 
     if error_report:
-        print("Decryption errors occured:")
+        logger.warning("Decryption errors occured:")
         pprint(error_report)
 
     if not medium_content:
@@ -323,7 +322,7 @@ def summarize(ctx, input_file):
     cryptoconf = load_from_json_bytes(input_file.read())
 
     text_summary = get_cryptoconf_summary(cryptoconf)
-    print(text_summary)
+    logger.info(text_summary)
 
 
 @wacryptolib_cli.group()
@@ -342,9 +341,9 @@ def list_cryptainers(ctx):
     #if format == "json":
     #    json.dumps(cryptainer_dicts, indent=True, sort_keys=True)
 
-    print("\nCryptainers:\n")
+    logger.info("\nCryptainers:\n")
     for cryptainer_dict in cryptainer_dicts:
-        print(INDENT, cryptainer_dict["name"])
+        logger.info(INDENT, cryptainer_dict["name"])
 
 
 @cryptainers.command("delete")
@@ -373,7 +372,7 @@ def purge_cryptainers(ctx, max_age, max_count, max_quota):
     extra_kwargs = {k:v for (k, v) in extra_kwargs.items() if v is not None}
 
     if not extra_kwargs:
-        print("Aborting purge, since no criterion was provided as argument")  # FIXME use click.fail?
+        logger.warning("Aborting purge, since no criterion was provided as argument")  # FIXME use click.fail?
         return
 
     cryptainer_storage = _get_cryptainer_storage(ctx, **extra_kwargs)

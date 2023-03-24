@@ -106,7 +106,7 @@ EXAMPLE_CRYPTOCONF = dict(
     "-k",
     "--keystore-pool",
     default=None,
-    help="Folder to get/set crypto keys (else %s gets created)" % DEFAULT_KEYSTORE_POOL_PATH,
+    help="Folder to get/set crypto keys (else %s is used)" % DEFAULT_KEYSTORE_POOL_PATH,
     type=click.Path(
         exists=True, file_okay=False, dir_okay=True, writable=True, readable=True, resolve_path=True, allow_dash=False
     ),
@@ -115,7 +115,7 @@ EXAMPLE_CRYPTOCONF = dict(
     "-c",
     "--cryptainer-storage",
     default=None,
-    help="Folder to store cryptainers (else %s gets created)" % DEFAULT_CRYPTAINER_STORAGE_PATH,
+    help="Folder to store cryptainers (else %s is used)" % DEFAULT_CRYPTAINER_STORAGE_PATH,
     type=click.Path(
         exists=True, file_okay=False, dir_okay=True, writable=True, readable=True, resolve_path=True, allow_dash=False
     ),
@@ -340,10 +340,12 @@ def list_cryptainers(ctx):
 
     #if format == "json":
     #    json.dumps(cryptainer_dicts, indent=True, sort_keys=True)
-
-    logger.info("\nCryptainers:\n")
-    for cryptainer_dict in cryptainer_dicts:
-        logger.info(INDENT, cryptainer_dict["name"])
+    if not cryptainer_dicts:
+        logger.warning("No cryptainers found")
+    else:
+        logger.info("\nCryptainers:\n")
+        for cryptainer_dict in cryptainer_dicts:
+            logger.info(INDENT, cryptainer_dict["name"])
 
 
 @cryptainers.command("delete")

@@ -203,6 +203,10 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert result.exit_code == 0
     assert "0 new authenticators imported, 0 updated, 0 skipped because corrupted" in result.output   # DO NOT keep USB key in PC here!
 
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-usb", "--include-private-keys"])
+    assert result.exit_code == 0
+    assert "0 new authenticators imported, 0 updated, 0 skipped because corrupted" in result.output
+
     result = runner.invoke(cli, base_args + ["foreign-keystores", "list"])
     assert result.exit_code == 0
     assert "No foreign keystores found" in result.output
@@ -211,10 +215,15 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert result.exit_code == 2  # click.UsageError
     assert "No web gateway URL specified" in result.output
 
+    result = runner.invoke(cli, base_args + ["--gateway-url", REAL_GATEWAY_URL,  # Here --include-private-keys has no effect
+                                             "foreign-keystores", "import", "--include-private-keys", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID])
+    assert result.exit_code == 0
+    assert "Authenticator 0f0c0988-80c1-9362-11c1-b06909a3a53c (owner: ¤aaa) imported" in result.output
+
     result = runner.invoke(cli, base_args + ["--gateway-url", REAL_GATEWAY_URL,
                                              "foreign-keystores", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID])
     assert result.exit_code == 0
-    assert "Authenticator 0f0c0988-80c1-9362-11c1-b06909a3a53c (owner: ¤aaa) imported" in result.output
+    assert "Authenticator 0f0c0988-80c1-9362-11c1-b06909a3a53c (owner: ¤aaa) updated" in result.output
 
     result = runner.invoke(cli, base_args + ["--gateway-url", REAL_GATEWAY_URL,
                                              "foreign-keystores", "import", "--from-gateway", "676ff51f-1439-48d9-94f9-xxx"])
@@ -253,7 +262,14 @@ def test_cli_foreign_keystore_management(tmp_path):
     result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-path", authenticator_path])
     assert result.exit_code == 0
     assert "imported" in result.output
+    assert "updated" not in result.output
     assert "without private keys" in result.output
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--include-private-keys", "--from-path", authenticator_path])
+    assert result.exit_code == 0
+    assert "imported" not in result.output
+    assert "updated" in result.output
+    assert "with private keys" in result.output
 
     result = runner.invoke(cli, base_args + ["foreign-keystores", "delete", wrong_uuid_str])
     assert result.exit_code == 2
@@ -273,19 +289,7 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert "No foreign keystores found" in result.output
 
 
-def test_cli_list_foreign_keystores_yolo(tmp_path, capsys):
-    #runner = CliRunner()
+def test_cli_cryptainer_management(tmp_path):
+    keystore_pool_path = tmp_path
 
-    keystore_pool = generate_keystore_pool(tmp_path)
-    foreign_keystores = keystore_pool.list_foreign_keystore_uids()
-    #breakpoint()
-    try:
-        result = cli.main(prog_name="python -m wacryptolib", args=["-k", str(tmp_path), "foreign-keystores", "list"], standalone_mode=False)
-    except SystemExit as e:
-        captured = capsys.readouterr()
-        print(e)
-
-    #result = runner.invoke(cli, ["-k", str(tmp_path), "foreign-keystores", "list"], catch_exceptions=False)
-    #breakpoint()
-    assert result.exit_code == 0
-    assert result.output == foreign_keystores
+    base_args = ["--cryptainer-storage", str(keystore_pool_path)]

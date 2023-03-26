@@ -54,7 +54,7 @@ def _get_keystore_pool(ctx):
 
 
 def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=True, **extra_kwargs):
-    cryptainer_storage_dir = ctx.obj["cryptainer_storage"]
+    cryptainer_storage_dir = Path(ctx.obj["cryptainer_storage"])
     if not cryptainer_storage_dir:
         cryptainer_storage_dir = Path().joinpath(DEFAULT_CRYPTAINER_STORAGE_PATH).resolve()
         logger.debug("No cryptainer-storage directory provided, defaulting to '%s'" % cryptainer_storage_dir)
@@ -345,7 +345,7 @@ def list_cryptainers(ctx):
     else:
         logger.info("\nCryptainers:\n")
         for cryptainer_dict in cryptainer_dicts:
-            logger.info(INDENT, cryptainer_dict["name"])
+            logger.info(INDENT + str(cryptainer_dict["name"]))
 
 
 @cryptainers.command("delete")
@@ -374,8 +374,7 @@ def purge_cryptainers(ctx, max_age, max_count, max_quota):
     extra_kwargs = {k:v for (k, v) in extra_kwargs.items() if v is not None}
 
     if not extra_kwargs:
-        logger.warning("Aborting purge, since no criterion was provided as argument")  # FIXME use click.fail?
-        return
+        raise click.UsageError("Aborting purge, since no criterion was provided as argument")
 
     cryptainer_storage = _get_cryptainer_storage(ctx, **extra_kwargs)
     deleted_cryptainer_count = cryptainer_storage.purge_exceeding_cryptainers()

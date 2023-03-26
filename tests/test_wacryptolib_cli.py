@@ -1,15 +1,19 @@
 import os
 import pathlib
 import subprocess
+from datetime import timedelta
+from unittest import mock
+
 import sys
 
 from click.testing import CliRunner
 
 import wacryptolib
+from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.cli import wacryptolib_cli as cli
-from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER
-from wacryptolib.utilities import dump_to_json_file
+from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CryptainerStorage
+from wacryptolib.utilities import dump_to_json_file, get_utc_now_date
 from _test_mockups import generate_keystore_pool
 
 
@@ -290,6 +294,73 @@ def test_cli_foreign_keystore_management(tmp_path):
 
 
 def test_cli_cryptainer_management(tmp_path):
-    keystore_pool_path = tmp_path
+    cryptainer_storage_path = tmp_path
 
-    base_args = ["--cryptainer-storage", str(keystore_pool_path)]
+    cryptainer_storage = CryptainerStorage(cryptainer_storage_path, default_cryptoconf=SIMPLE_CRYPTOCONF)
+
+    base_args = ["--cryptainer-storage", str(cryptainer_storage_path)]
+
+    runner = CliRunner()
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "list"])
+    assert result.exit_code == 0
+    assert "No cryptainers found" in result.output
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "delete", "badname.crypt"])
+    assert result.exit_code == 2
+    assert "Invalid cryptainer name" in result.output
+
+    cryptainer_storage.enqueue_file_for_encryption("myfilename", payload=b"xyz", cryptainer_metadata=None)
+    cryptainer_storage.wait_for_idle_state()
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "list"])
+    print(result.output)
+    assert result.exit_code == 0
+    assert "myfilename.crypt" in result.output
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "delete", "myfilename.crypt"])
+    assert result.exit_code == 0
+    assert "successfully deleted" in result.output
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "list"])
+    assert result.exit_code == 0
+    assert "No cryptainers found" in result.output
+
+    recent_date_str = (get_utc_now_date() - timedelta(days=100)).strftime("%Y%m%d")
+    cryptainer_storage.enqueue_file_for_encryption("%s_152428_rtsp_camera_cryptainer.mp4" % recent_date_str, payload=b"xyz", cryptainer_metadata=None)
+    cryptainer_storage.enqueue_file_for_encryption("20420221_152428_rtsp_camera_cryptainer.mp4", payload=b"xyz"*1024**2, cryptainer_metadata=None)
+    cryptainer_storage.enqueue_file_for_encryption("20430221_152428_rtsp_camera_cryptainer.mp4", payload=b"xyz", cryptainer_metadata=None)
+    cryptainer_storage.wait_for_idle_state()
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "purge", "--max-age", "101"])
+    assert result.exit_code == 0
+    assert "Cryptainers successfully deleted: 0" in result.output
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "purge", "--max-age", "99"])
+    assert result.exit_code == 0
+    assert "Cryptainers successfully deleted: 1" in result.output
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "purge", "--max-quota", "4"])
+    assert result.exit_code == 0
+    assert "Cryptainers successfully deleted: 0" in result.output
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "purge", "--max-quota", "3"])
+    assert result.exit_code == 0
+    assert "Cryptainers successfully deleted: 1" in result.output
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "purge", "--max-count", "1"])
+    assert result.exit_code == 0
+    assert "Cryptainers successfully deleted: 0" in result.output
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "list"])
+    assert result.exit_code == 0
+    assert "20430221_152428_rtsp_camera_cryptainer.mp4.crypt" in result.output
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "purge", "--max-count", "0"])
+    assert result.exit_code == 0
+    assert "Cryptainers successfully deleted: 1" in result.output
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "list"])
+    assert result.exit_code == 0
+    assert "No cryptainers found" in result.output
+

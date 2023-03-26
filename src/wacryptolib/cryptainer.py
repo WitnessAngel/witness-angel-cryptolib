@@ -2101,7 +2101,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
 
     @synchronized
     def enqueue_file_for_encryption(
-        self, filename_base, payload, cryptainer_metadata, keychain_uid=None, cryptoconf=None
+        self, filename_base, payload, cryptainer_metadata, keychain_uid=None, cryptoconf=None  # TODO add "wait/syncrhonous" argument ?
     ):
         """Enqueue a payload for asynchronous encryption and storage.
 

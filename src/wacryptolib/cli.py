@@ -54,11 +54,13 @@ def _get_keystore_pool(ctx):
 
 
 def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=True, **extra_kwargs):
-    cryptainer_storage_dir = Path(ctx.obj["cryptainer_storage"])
-    if not cryptainer_storage_dir:
+    cryptainer_storage_dir_str = ctx.obj["cryptainer_storage"]
+    if not cryptainer_storage_dir_str:
         cryptainer_storage_dir = Path().joinpath(DEFAULT_CRYPTAINER_STORAGE_PATH).resolve()
         logger.debug("No cryptainer-storage directory provided, defaulting to '%s'" % cryptainer_storage_dir)
         cryptainer_storage_dir.mkdir(exist_ok=True)
+    else:
+        cryptainer_storage_dir = Path(cryptainer_storage_dir_str)
     return CryptainerStorage(cryptainer_storage_dir,
                              keystore_pool=keystore_pool,
                              offload_payload_ciphertext=offload_payload_ciphertext,

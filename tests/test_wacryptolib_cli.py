@@ -1,5 +1,6 @@
 import os
 import pathlib
+import random
 import subprocess
 from datetime import timedelta
 from unittest import mock
@@ -13,6 +14,7 @@ from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.cli import wacryptolib_cli as cli
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CryptainerStorage
+from wacryptolib.keystore import FilesystemKeystore, generate_keypair_for_storage
 from wacryptolib.utilities import dump_to_json_file, get_utc_now_date
 from _test_mockups import generate_keystore_pool
 
@@ -199,6 +201,10 @@ def test_cli_foreign_keystore_management(tmp_path):
 
     runner = CliRunner()
 
+    result = runner.invoke(cli, ["-v", "DEBUG", "foreign-keystores", "list"])  # No forced keystore pool here
+    assert result.exit_code == 0
+    assert "No keystore-pool directory provided, defaulting" in result.output
+
     result = runner.invoke(cli, base_args + ["foreign-keystores", "list"])
     assert result.exit_code == 0
     assert "No foreign keystores found" in result.output
@@ -262,6 +268,13 @@ def test_cli_foreign_keystore_management(tmp_path):
 
     keystore_metadata = initialize_authenticator(authenticator_path, keystore_owner="myuserxyz", keystore_passphrase_hint="somestuffs")
     new_keystore_uid = keystore_metadata["keystore_uid"]
+    filesystem_keystore = FilesystemKeystore(authenticator_path)
+    keypairs_count = random.randint(0, 2)
+
+    for i in range(keypairs_count):
+        generate_keypair_for_storage(
+            key_algo="RSA_OAEP", keystore=filesystem_keystore, passphrase=None
+        )
 
     result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-path", authenticator_path])
     assert result.exit_code == 0
@@ -301,6 +314,10 @@ def test_cli_cryptainer_management(tmp_path):
     base_args = ["--cryptainer-storage", str(cryptainer_storage_path)]
 
     runner = CliRunner()
+
+    result = runner.invoke(cli, ["-v", "DEBUG", "cryptainers", "list"])  # No forced cryptainer storage here
+    assert result.exit_code == 0
+    assert "No cryptainer-storage directory provided, defaulting" in result.output
 
     result = runner.invoke(cli, base_args + ["cryptainers", "list"])
     assert result.exit_code == 0

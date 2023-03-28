@@ -27,7 +27,7 @@ from wacryptolib.cryptainer import (
 )
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.operations import decrypt_payload_from_bytes
-from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, dump_to_json_str
+from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, dump_to_json_str, get_nice_size
 
 logger = logging.getLogger(__name__)
 click_log.basic_config(logger)
@@ -38,6 +38,7 @@ _internal_app_dir = Path("~/.witnessangel").expanduser().resolve()
 DEFAULT_KEYSTORE_POOL_PATH = _internal_app_dir / "keystore_pool"
 DEFAULT_CRYPTAINER_STORAGE_PATH = _internal_app_dir / "cryptainers"
 INDENT = "  "
+FORMAT_OPTION = click.option("-f", "--format", type=click.Choice(['plain', 'json'], case_sensitive=False), default="plain")
 
 
 def _short_format_datetime(dt):
@@ -148,7 +149,7 @@ def foreign_keystores():
 
 
 @foreign_keystores.command("list")
-@click.option("-f", "--format", type=click.Choice(['plain', 'json'], case_sensitive=False), default="plain")
+@FORMAT_OPTION
 @click.pass_context
 def list_foreign_keystores(ctx, format):  # FIXME list count of public/private keys too!
     keystore_pool = _get_keystore_pool(ctx)
@@ -177,10 +178,9 @@ def list_foreign_keystores(ctx, format):  # FIXME list count of public/private k
         logger.warning("No foreign keystores found")
         return
 
-    table = PrettyTable(["Keystore UID", "Owner", "Public keys", "Private Keys", "Created at"])
+    table = PrettyTable(["Keystore UID", "Owner", "Public keys", "Private Keys", "Created at (UTC)"])
     # table.align = "l"  useless
     for keystore_data in foreign_keystores:
-
         table.add_row([keystore_data["keystore_uid"],
                        keystore_data["keystore_owner"],
                        keystore_data["public_key_count"],
@@ -364,19 +364,32 @@ def cryptainers():
 
 
 @cryptainers.command("list")
+@FORMAT_OPTION
 @click.pass_context
-def list_cryptainers(ctx):
+def list_cryptainers(ctx, format):
     cryptainer_storage = _get_cryptainer_storage(ctx)
-    cryptainer_dicts = cryptainer_storage.list_cryptainer_properties(as_sorted_list=True, with_age=True, with_size=True)
+    cryptainer_properties_list = cryptainer_storage.list_cryptainer_properties(as_sorted_list=True, with_creation_datetime=True, with_size=True)
 
-    #if format == "json":
-    #    json.dumps(cryptainer_dicts, indent=True, sort_keys=True)
-    if not cryptainer_dicts:
+    for cryptainer_properties in cryptainer_properties_list:
+        cryptainer_properties["name"] = str(cryptainer_properties["name"])  # Avoid Path objects here
+
+    if format == "json":
+        # Even if empty, we output it
+        click.echo(_dump_as_safe_formatted_json(cryptainer_properties_list))
+        return
+
+    assert format == "plain"
+
+    if not cryptainer_properties_list:
         logger.warning("No cryptainers found")
-    else:
-        logger.info("\nCryptainers:\n")
-        for cryptainer_dict in cryptainer_dicts:
-            logger.info(INDENT + str(cryptainer_dict["name"]))
+        return
+
+    table = PrettyTable(["Name", "Size", "Created at (UTC)"])
+    for cryptainer_properties in cryptainer_properties_list:
+        table.add_row([cryptainer_properties["name"],
+                       get_nice_size(cryptainer_properties["size"]),
+                       _short_format_datetime(cryptainer_properties["creation_datetime"]),])
+    click.echo(table)
 
 
 @cryptainers.command("delete")
@@ -394,12 +407,12 @@ def delete_cryptainer(ctx, cryptainer_name):
 @click.pass_context
 @click.option("--max-age", type=int, help="Maximum age of cryptainer, in days")
 @click.option("--max-count", type=int, help="Maximum count of cryptainers in storage")
-@click.option("--max-quota", type=int, help="Maximum total size of cryptainers, in MiBs")
+@click.option("--max-quota", type=int, help="Maximum total size of cryptainers, in MBs")
 def purge_cryptainers(ctx, max_age, max_count, max_quota):
     extra_kwargs = dict(
         max_cryptainer_age=(timedelta(days=max_age) if max_age is not None else None),
         max_cryptainer_count=max_count,  # Might be None
-        max_cryptainer_quota=(max_quota * 1024**2 if max_quota else None),
+        max_cryptainer_quota=(max_quota * 1024**2 if max_quota else None),  # Actually MiBs here...
     )
 
     extra_kwargs = {k:v for (k, v) in extra_kwargs.items() if v is not None}

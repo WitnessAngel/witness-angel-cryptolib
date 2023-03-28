@@ -74,6 +74,16 @@ def get_memory_rss_bytes():
     return rss
 
 
+def get_nice_size(size):  # FIXME TEST THIS
+    """We're actually using KiB/MiB/... here"""
+    filesize_units = ('B', 'KB', 'MB', 'GB', 'TB')
+    for unit in filesize_units:
+        if size < 1024.0:
+            return "%1.0f %s" % (size, unit)
+        size /= 1023.0
+    return size
+
+
 def delete_filesystem_node_for_stream(stream: BinaryIO):
     """Deletes the corresponding filesystem node if it exists."""
     filename = getattr(stream, "name", None)
@@ -99,7 +109,7 @@ def hash_message(message: bytes, hash_algo: str):
     return digest
 
 
-def consume_bytes_as_chunks(data: Union[bytes, BinaryIO], chunk_size: int):  # FIXME DOCUMENT AND TEST ME
+def consume_bytes_as_chunks(data: Union[bytes, BinaryIO], chunk_size: int):  # FIXME RENAME (consume_io_bytes..), DOCUMENT AND TEST ME
     """Automatically deletes filesystem entry if it exists!"""
     if hasattr(data, "read"):  # File-like BinaryIO object
         while True:
@@ -231,7 +241,7 @@ def generate_uuid0(ts: Optional[float] = None):
     return uuid0.generate(ts)
 
 
-def gather_data_as_blocks(first_data: bytes, second_data: bytes, block_size: int):
+def gather_data_as_blocks(first_data: bytes, second_data: bytes, block_size: int):  # FIXME improve naming?
     """PRIVATE API
 
     Split the sum of two bytestrings between a data payload with a size multiple of block_size,

@@ -1777,7 +1777,7 @@ class ReadonlyCryptainerStorage:
         """Returns a size in bytes"""
         return get_cryptainer_size_on_filesystem(self._make_absolute(cryptainer_name))
 
-    def list_cryptainer_properties(self, as_sorted_list=False, with_age=False, with_size=False, finished=True):
+    def list_cryptainer_properties(self, as_sorted_list=False, with_creation_datetime=False, with_age=False, with_size=False, finished=True):
         """Returns an list of dicts (unsorted by default) having the fields "name", [age] and [size], depending on requested properties."""
         cryptainer_names = self.list_cryptainer_names(as_sorted_list=as_sorted_list, as_absolute_paths=False, finished=finished)
 
@@ -1786,9 +1786,12 @@ class ReadonlyCryptainerStorage:
         result = []
         for cryptainer_name in cryptainer_names:
             entry = dict(name=cryptainer_name)
-            if with_age:
-                cryptainer_datetime = self._get_cryptainer_datetime_utc(cryptainer_name)
-                entry["age"] = now - cryptainer_datetime  # We keep it as timedelta
+            if with_age or with_creation_datetime:
+                creation_datetime = self._get_cryptainer_datetime_utc(cryptainer_name)
+                if with_creation_datetime:
+                    entry["creation_datetime"] = creation_datetime
+                if with_age:
+                    entry["age"] = now - creation_datetime  # We keep it as timedelta
             if with_size:
                 entry["size"] = self._get_cryptainer_size(cryptainer_name)
             result.append(entry)

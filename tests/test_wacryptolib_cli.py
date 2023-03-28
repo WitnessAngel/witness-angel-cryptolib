@@ -348,9 +348,13 @@ def test_cli_cryptainer_management(tmp_path):
     assert result.exit_code == 0
     assert "No cryptainer-storage directory provided, defaulting" in result.stderr
 
-    result = runner.invoke(cli, base_args + ["cryptainers", "list"])
+    result = runner.invoke(cli, base_args + ["cryptainers", "list", "--format", "plain"])  # Default format
     assert result.exit_code == 0
     assert "No cryptainers found" in result.stderr
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "list", "--format", "json"])
+    assert result.exit_code == 0
+    assert result.stdout == "[]\n"
 
     result = runner.invoke(cli, base_args + ["cryptainers", "delete", "badname.crypt"])
     assert result.exit_code == 2
@@ -365,17 +369,30 @@ def test_cli_cryptainer_management(tmp_path):
 
     result = runner.invoke(cli, base_args + ["cryptainers", "delete", "myfilename.crypt"])
     assert result.exit_code == 0
-    assert "successfully deleted" in result.stdout
+    assert "successfully deleted" in result.stderr
 
     result = runner.invoke(cli, base_args + ["cryptainers", "list"])
     assert result.exit_code == 0
-    assert "No cryptainers found" in result.stdout
+    assert "No cryptainers found" in result.stderr
 
     recent_date_str = (get_utc_now_date() - timedelta(days=100)).strftime("%Y%m%d")
-    cryptainer_storage.enqueue_file_for_encryption("%s_152428_rtsp_camera_cryptainer.mp4" % recent_date_str, payload=b"xyz", cryptainer_metadata=None)
+    first_cryptainer_name_base = "%s_152428_rtsp_camera_cryptainer.mp4" % recent_date_str
+    cryptainer_storage.enqueue_file_for_encryption(first_cryptainer_name_base, payload=b"xyz", cryptainer_metadata=None)
     cryptainer_storage.enqueue_file_for_encryption("20420221_152428_rtsp_camera_cryptainer.mp4", payload=b"xyz"*1024**2, cryptainer_metadata=None)
     cryptainer_storage.enqueue_file_for_encryption("20430221_152428_rtsp_camera_cryptainer.mp4", payload=b"xyz", cryptainer_metadata=None)
     cryptainer_storage.wait_for_idle_state()
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "list"])
+    assert result.exit_code == 0
+    assert " 20420221_152428_rtsp_camera_cryptainer.mp4.crypt " in result.stdout
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "list", "--format", "json"])
+    assert result.exit_code == 0
+    assert '"20420221_152428_rtsp_camera_cryptainer.mp4.crypt"' in result.stdout
+    data_tree = load_from_json_str(result.stdout)  # Test loading of output
+    assert isinstance(data_tree, list)
+    assert len(data_tree) == 3
+    assert data_tree[0]["name"] == first_cryptainer_name_base + ".crypt"
 
     result = runner.invoke(cli, base_args + ["cryptainers", "purge", "--max-age", "101"])
     assert result.exit_code == 0
@@ -399,7 +416,7 @@ def test_cli_cryptainer_management(tmp_path):
 
     result = runner.invoke(cli, base_args + ["cryptainers", "list"])
     assert result.exit_code == 0
-    assert "20430221_152428_rtsp_camera_cryptainer.mp4.crypt" in result.stderr
+    assert " 20430221_152428_rtsp_camera_cryptainer.mp4.crypt " in result.stdout
 
     result = runner.invoke(cli, base_args + ["cryptainers", "purge", "--max-count", "0"])
     assert result.exit_code == 0

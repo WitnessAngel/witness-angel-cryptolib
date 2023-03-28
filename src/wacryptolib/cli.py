@@ -154,9 +154,6 @@ def list_foreign_keystores(ctx, format):  # FIXME list count of public/private k
     keystore_pool = _get_keystore_pool(ctx)
     foreign_keystore_metadata_list = keystore_pool.get_all_foreign_keystore_metadata(include_keypair_identifiers=True)
     #print(foreign_keystore_metadata_list)
-    if not foreign_keystore_metadata_list:
-        logger.warning("No foreign keystores found")
-        return
 
     foreign_keystores = []
 
@@ -170,18 +167,26 @@ def list_foreign_keystores(ctx, format):  # FIXME list count of public/private k
         ))
 
     if format == "json":
+        # Even if empty, we output it
         click.echo(_dump_as_safe_formatted_json(foreign_keystores))
-    else:
-        table = PrettyTable(["Keystore UID", "Owner", "Public keys", "Private Keys", "Created at"])
-        # table.align = "l"  useless
-        for keystore_data in foreign_keystores:
+        return
 
-            table.add_row([keystore_data["keystore_uid"],
-                           keystore_data["keystore_owner"],
-                           keystore_data["public_key_count"],
-                           keystore_data["private_key_count"],
-                           _short_format_datetime(keystore_data["keystore_creation_datetime"]),])
-        logger.info(table)
+    assert format == "plain"
+
+    if not foreign_keystore_metadata_list:
+        logger.warning("No foreign keystores found")
+        return
+
+    table = PrettyTable(["Keystore UID", "Owner", "Public keys", "Private Keys", "Created at"])
+    # table.align = "l"  useless
+    for keystore_data in foreign_keystores:
+
+        table.add_row([keystore_data["keystore_uid"],
+                       keystore_data["keystore_owner"],
+                       keystore_data["public_key_count"],
+                       keystore_data["private_key_count"],
+                       _short_format_datetime(keystore_data["keystore_creation_datetime"]),])
+    click.echo(table)
 
 
 @foreign_keystores.command("delete")

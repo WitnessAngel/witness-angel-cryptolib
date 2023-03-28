@@ -474,9 +474,11 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
 
         return key_information_list
 
-    def get_keystore_metadata(self):
+    def get_keystore_metadata(self, include_keypair_identifiers=False):
         """Return a metadata dict for the filesystem keystore, or raise KeystoreMetadataDoesNotExist."""
         metadata = load_keystore_metadata(self._keys_dir)
+        if include_keypair_identifiers:
+            metadata["keypair_identifiers"] = self.list_keypair_identifiers()
         return metadata
 
     def export_to_keystore_tree(self, include_private_keys=True):
@@ -730,12 +732,12 @@ class FilesystemKeystorePool(KeystorePoolBase):
         paths = foreign_keystores_dir.glob("%s*" % self.FOREIGN_KEYSTORE_PREFIX)  # This excludes TEMP folders
         return sorted([uuid.UUID(d.name.replace(self.FOREIGN_KEYSTORE_PREFIX, "")) for d in paths])
 
-    def get_foreign_keystore_metadata(self, keystore_uid: UUID):
+    def get_foreign_keystore_metadata(self, keystore_uid: UUID, include_keypair_identifiers=False):
         """Return a metadata dict for the keystore `keystore_uid`."""
         keystore = self.get_foreign_keystore(keystore_uid=keystore_uid)
-        return keystore.get_keystore_metadata()
+        return keystore.get_keystore_metadata(include_keypair_identifiers=include_keypair_identifiers)
 
-    def get_all_foreign_keystore_metadata(self) -> dict:
+    def get_all_foreign_keystore_metadata(self, include_keypair_identifiers=False) -> dict:
         """Return a dict mapping key storage UUIDs to the dicts of their metadata.
 
         Raises if any metadata loading fails.
@@ -745,7 +747,7 @@ class FilesystemKeystorePool(KeystorePoolBase):
         metadata_mapper = {}
         for keystore_uid in keystore_uids:
             assert isinstance(keystore_uid, UUID), keystore_uid
-            metadata = self.get_foreign_keystore_metadata(keystore_uid)
+            metadata = self.get_foreign_keystore_metadata(keystore_uid, include_keypair_identifiers=include_keypair_identifiers)
             metadata_mapper[keystore_uid] = metadata
 
         return metadata_mapper

@@ -203,7 +203,7 @@ def test_cli_foreign_keystore_management(tmp_path):
 
     result = runner.invoke(cli, ["-v", "DEBUG", "foreign-keystores", "list"])  # No forced keystore pool here
     assert result.exit_code == 0
-    assert "No keystore-pool directory provided, defaulting" in result.output
+    assert "No keystore-pool directory provided, defaulting " in result.output
 
     result = runner.invoke(cli, base_args + ["foreign-keystores", "list"])
     assert result.exit_code == 0
@@ -211,7 +211,7 @@ def test_cli_foreign_keystore_management(tmp_path):
 
     result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-usb"])
     assert result.exit_code == 0
-    assert "0 new authenticators imported, 0 updated, 0 skipped because corrupted" in result.output   # DO NOT keep USB key in PC here!
+    assert "0 new authenticators imported, 0 updated, 0 skipped because corrupted" in result.output   # DO NOT keep USB key in PC for now!
 
     result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-usb", "--include-private-keys"])
     assert result.exit_code == 0
@@ -269,7 +269,7 @@ def test_cli_foreign_keystore_management(tmp_path):
     keystore_metadata = initialize_authenticator(authenticator_path, keystore_owner="myuserxyz", keystore_passphrase_hint="somestuffs")
     new_keystore_uid = keystore_metadata["keystore_uid"]
     filesystem_keystore = FilesystemKeystore(authenticator_path)
-    keypairs_count = random.randint(0, 2)
+    keypairs_count = random.randint(1, 3)
 
     for i in range(keypairs_count):
         generate_keypair_for_storage(
@@ -282,11 +282,23 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert "updated" not in result.output
     assert "without private keys" in result.output
 
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "list"])
+    assert result.exit_code == 0
+    assert str(new_keystore_uid) in result.output
+    assert " 0 " in result.output  # Private keys
+    assert (" %d " % keypairs_count) in result.output  # Public keys
+
     result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--include-private-keys", "--from-path", authenticator_path])
     assert result.exit_code == 0
     assert "imported" not in result.output
     assert "updated" in result.output
     assert "with private keys" in result.output
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "list"])
+    assert result.exit_code == 0
+    assert str(new_keystore_uid) in result.output
+    assert " 0 " not in result.output
+    assert result.output.count(" %d " % keypairs_count) == 2   # Public keys AND private keys
 
     result = runner.invoke(cli, base_args + ["foreign-keystores", "delete", wrong_uuid_str])
     assert result.exit_code == 2

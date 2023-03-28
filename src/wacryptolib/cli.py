@@ -145,16 +145,20 @@ def foreign_keystores():
 @click.pass_context
 def list_foreign_keystores(ctx):  # FIXME list count of public/private keys too!
     keystore_pool = _get_keystore_pool(ctx)
-    foreign_keystore_metadata_list = keystore_pool.get_all_foreign_keystore_metadata()
+    foreign_keystore_metadata_list = keystore_pool.get_all_foreign_keystore_metadata(include_keypair_identifiers=True)
     #print(foreign_keystore_metadata_list)
     if not foreign_keystore_metadata_list:
         logger.warning("No foreign keystores found")
     else:
-        table = PrettyTable(["Keystore UID", "Owner", "Created at"])
+        table = PrettyTable(["Keystore UID", "Owner", "Public keys", "Private Keys", "Created at"])
         # table.align = "l"  useless
         for foreign_keystore_uid, foreign_keystore_metadata in sorted(foreign_keystore_metadata_list.items()):
+            public_key_count = len(foreign_keystore_metadata["keypair_identifiers"])
+            private_key_count = len([x for x in foreign_keystore_metadata["keypair_identifiers"] if x["private_key_present"]])
             table.add_row([foreign_keystore_uid,
                            foreign_keystore_metadata["keystore_owner"],
+                           public_key_count,
+                           private_key_count,
                            _short_format_datetime(foreign_keystore_metadata.get("keystore_creation_datetime")),])
         logger.info(table)
 

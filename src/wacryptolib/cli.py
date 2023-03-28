@@ -27,7 +27,7 @@ from wacryptolib.cryptainer import (
 )
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.operations import decrypt_payload_from_bytes
-from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
+from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, dump_to_json_str
 
 logger = logging.getLogger(__name__)
 click_log.basic_config(logger)
@@ -39,10 +39,16 @@ DEFAULT_KEYSTORE_POOL_PATH = _internal_app_dir / "keystore_pool"
 DEFAULT_CRYPTAINER_STORAGE_PATH = _internal_app_dir / "cryptainers"
 INDENT = "  "
 
+
 def _short_format_datetime(dt):
     if dt is None:
         return ""
     return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def _dump_as_safe_formatted_json(data_tree):
+    return dump_to_json_str(data_tree, ensure_ascii=True, indent=2)
+
 
 def _get_keystore_pool(ctx):
     keystore_pool_dir = ctx.obj["keystore_pool"]
@@ -142,24 +148,39 @@ def foreign_keystores():
 
 
 @foreign_keystores.command("list")
+@click.option("-f", "--format", type=click.Choice(['plain', 'json'], case_sensitive=False), default="plain")
 @click.pass_context
-def list_foreign_keystores(ctx):  # FIXME list count of public/private keys too!
+def list_foreign_keystores(ctx, format):  # FIXME list count of public/private keys too!
     keystore_pool = _get_keystore_pool(ctx)
     foreign_keystore_metadata_list = keystore_pool.get_all_foreign_keystore_metadata(include_keypair_identifiers=True)
     #print(foreign_keystore_metadata_list)
     if not foreign_keystore_metadata_list:
         logger.warning("No foreign keystores found")
+        return
+
+    foreign_keystores = []
+
+    for foreign_keystore_uid, foreign_keystore_metadata in sorted(foreign_keystore_metadata_list.items()):
+        foreign_keystores.append(dict(
+            keystore_uid=foreign_keystore_uid,
+            keystore_owner=foreign_keystore_metadata["keystore_owner"],
+            keystore_creation_datetime = foreign_keystore_metadata.get("keystore_creation_datetime"),
+            public_key_count = len(foreign_keystore_metadata["keypair_identifiers"]),
+            private_key_count = len([x for x in foreign_keystore_metadata["keypair_identifiers"] if x["private_key_present"]]),
+        ))
+
+    if format == "json":
+        click.echo(_dump_as_safe_formatted_json(foreign_keystores))
     else:
         table = PrettyTable(["Keystore UID", "Owner", "Public keys", "Private Keys", "Created at"])
         # table.align = "l"  useless
-        for foreign_keystore_uid, foreign_keystore_metadata in sorted(foreign_keystore_metadata_list.items()):
-            public_key_count = len(foreign_keystore_metadata["keypair_identifiers"])
-            private_key_count = len([x for x in foreign_keystore_metadata["keypair_identifiers"] if x["private_key_present"]])
-            table.add_row([foreign_keystore_uid,
-                           foreign_keystore_metadata["keystore_owner"],
-                           public_key_count,
-                           private_key_count,
-                           _short_format_datetime(foreign_keystore_metadata.get("keystore_creation_datetime")),])
+        for keystore_data in foreign_keystores:
+
+            table.add_row([keystore_data["keystore_uid"],
+                           keystore_data["keystore_owner"],
+                           keystore_data["public_key_count"],
+                           keystore_data["private_key_count"],
+                           _short_format_datetime(keystore_data["keystore_creation_datetime"]),])
         logger.info(table)
 
 
@@ -339,7 +360,6 @@ def cryptainers():
 
 @cryptainers.command("list")
 @click.pass_context
-#@click.option("-f", "--format", type=click.Choice(['pretty', 'json'], case_sensitive=False), default="pretty")
 def list_cryptainers(ctx):
     cryptainer_storage = _get_cryptainer_storage(ctx)
     cryptainer_dicts = cryptainer_storage.list_cryptainer_properties(as_sorted_list=True, with_age=True, with_size=True)

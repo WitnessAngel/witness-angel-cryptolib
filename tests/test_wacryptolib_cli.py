@@ -288,13 +288,18 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert " 0 " in result.output  # Private keys
     assert (" %d " % keypairs_count) in result.output  # Public keys
 
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "list", "--format", "json"])
+    assert result.exit_code == 0
+    assert str(new_keystore_uid) not in result.output  # Output uses ExtendedJson encoding
+    assert ('"$numberInt": "%d"' % keypairs_count) in result.output
+
     result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--include-private-keys", "--from-path", authenticator_path])
     assert result.exit_code == 0
     assert "imported" not in result.output
     assert "updated" in result.output
     assert "with private keys" in result.output
 
-    result = runner.invoke(cli, base_args + ["foreign-keystores", "list"])
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "list", "--format", "plain"]) # Plain format is teh default anyway
     assert result.exit_code == 0
     assert str(new_keystore_uid) in result.output
     assert " 0 " not in result.output

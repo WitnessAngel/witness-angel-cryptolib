@@ -301,16 +301,15 @@ def encrypt(ctx, input_file, output_cryptainer, cryptoconf, bundle):
             cryptainer_filepath=output_cryptainer,
             cryptainer=cryptainer,
             offload_payload_ciphertext=offload_payload_ciphertext)
-        logger.info("Encryption of file '%s' to cryptainer '%s' successfully finished" % (input_medium.name, output_cryptainer))
+        logger.info("Encryption of file '%s' to cryptainer '%s' successfully finished" % (input_file.name, output_cryptainer))
 
     else:
         cryptainer_storage = _get_cryptainer_storage(ctx, keystore_pool=keystore_pool, offload_payload_ciphertext=offload_payload_ciphertext)
         output_cryptainer_name = cryptainer_storage.encrypt_file(
-            filename_base=input_medium.name, payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
+            filename_base=input_file.name, payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
         )
 
-        ##output_cryptainer = LazyFile(input_medium.name + CRYPTAINER_SUFFIX, "wb")
-        logger.info("Encryption of file '%s' to storage cryptainer '%s' successfully finished" % (input_medium.name, output_cryptainer_name))
+        logger.info("Encryption of file '%s' to storage cryptainer '%s' successfully finished" % (input_file.name, output_cryptainer_name))
 
 
 @wacryptolib_cli.command()

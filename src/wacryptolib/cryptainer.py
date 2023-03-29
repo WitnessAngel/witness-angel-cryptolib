@@ -1495,7 +1495,7 @@ def is_cryptainer_cryptoconf_streamable(cryptoconf):  # FIXME rename and add to 
     return True
 
 
-def encrypt_payload_and_stream_cryptainer_to_filesystem(
+def encrypt_payload_and_stream_cryptainer_to_filesystem(  # Fixme rename to encrypt_payload_and_stream_cryptainer_to_filesystem?
     payload: Union[bytes, BinaryIO],
     *,
     cryptainer_filepath,
@@ -1665,6 +1665,7 @@ def _get_offloaded_file_path(cryptainer_filepath: Path):
     )
 
 
+# FIXME handle "overwrite" argument to prevent
 def dump_cryptainer_to_filesystem(cryptainer_filepath: Path, cryptainer: dict, offload_payload_ciphertext=True) -> None:
     """Dump a cryptainer to a file path, overwriting it if existing.
 
@@ -1942,7 +1943,6 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         """
 
         deleted_cryptainer_count = 0
-        print(">>>>>>> self._max_cryptainer_age", self._max_cryptainer_age)
 
         if self._max_cryptainer_age is not None:  # FIRST these, since their deletion is unconditional
             cryptainer_dicts = self.list_cryptainer_properties(with_age=True, finished=None)
@@ -1984,7 +1984,6 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
 
         return deleted_cryptainer_count
 
-
     def _encrypt_payload_and_stream_cryptainer_to_filesystem(
         self, payload, cryptainer_filepath, cryptainer_metadata, default_keychain_uid, cryptoconf
     ):
@@ -2008,19 +2007,15 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             keystore_pool=self._keystore_pool,
         )
 
-    @catch_and_log_exception("CryptainerStorage._offloaded_encrypt_payload_and_dump_cryptainer")
-    def _offloaded_encrypt_payload_and_dump_cryptainer(
+    def _do_encrypt_payload_and_dump_cryptainer(
         self, filename_base, payload, cryptainer_metadata, default_keychain_uid, cryptoconf
-    ):
-        """Task to be called by background thread, which encrypts a payload into a disk cryptainer.
+    ) -> str:
 
-        Returns the cryptainer basename."""
-
-        """ TODO later ass a SKIP here!
-        if not payload:
-            logger.warning("Skipping encryption of empty payload payload for file %s", filename_base)
-            return
-        """
+        # TODO later as a SKIP here!
+        #if not payload:
+        #    logger.warning("Skipping encryption of empty payload payload for file %s", filename_base)
+        #    return
+        assert cryptoconf, cryptoconf
 
         cryptainer_filepath = self._make_absolute(filename_base + CRYPTAINER_SUFFIX)
 
@@ -2043,7 +2038,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             # We use legacy API which encrypts all and then dumps all
 
             logger.debug("Encrypting payload file to self-sufficient cryptainer %s", filename_base)
-            # Memory warning : duplicates payload to json-compatible cryptainer
+            # Memory warning: duplicates payload to json-compatible cryptainer
             cryptainer = self._encrypt_payload_into_cryptainer(
                 payload,
                 cryptainer_metadata=cryptainer_metadata,
@@ -2058,20 +2053,36 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         logger.info("Data file %r successfully encrypted into storage cryptainer", filename_base)
         return cryptainer_filepath.name
 
+    @catch_and_log_exception("CryptainerStorage._offloaded_encrypt_payload_and_dump_cryptainer")
+    def _offloaded_encrypt_payload_and_dump_cryptainer(
+        self, filename_base, payload, cryptainer_metadata, default_keychain_uid, cryptoconf
+    ) -> str:
+        """Task to be called by background thread, which encrypts a payload into a disk cryptainer.
+
+        Returns the cryptainer basename."""
+        return self._do_encrypt_payload_and_dump_cryptainer(
+            filename_base=filename_base,
+            payload=payload,
+            cryptainer_metadata=cryptainer_metadata,
+            default_keychain_uid=default_keychain_uid,
+            cryptoconf=cryptoconf,
+        )
+
     def _use_streaming_encryption_for_cryptoconf(self, cryptoconf):
         return self._offload_payload_ciphertext and is_cryptainer_cryptoconf_streamable(cryptoconf)
 
-    def _prepare_for_new_record_encryption(self, cryptoconf):
-        """
-        Validate arguments for new encryption, and purge obsolete things in storage.
-        """
+    def _resolve_cryptoconf(self, cryptoconf):
         cryptoconf = cryptoconf or self._default_cryptoconf
         if not cryptoconf:
             raise RuntimeError("Either default or file-specific cryptoconf must be provided to CryptainerStorage")
+        return cryptoconf
 
+    def _cleanup_before_new_record_encryption(self):
+        """
+        Validate arguments for new encryption, and purge obsolete things in storage.
+        """
         self._purge_exceeding_cryptainers()
         self._purge_executor_results()
-        return cryptoconf
 
     @synchronized
     def create_cryptainer_encryption_stream(
@@ -2084,12 +2095,19 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         cryptainer_encryption_stream_class=None,
         cryptainer_encryption_stream_extra_kwargs=None,
     ):
+        """
+        Create and return a cryptainer encryption stream.
+
+        Purges exceeding cryptainers and pending results beforehand.
+        """
+
         cryptainer_encryption_stream_class = cryptainer_encryption_stream_class or CryptainerEncryptionPipeline
         cryptainer_encryption_stream_extra_kwargs = cryptainer_encryption_stream_extra_kwargs or {}
 
         logger.debug("Building cryptainer stream %r", filename_base)
         cryptainer_filepath = self._make_absolute(filename_base + CRYPTAINER_SUFFIX)
-        cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
+        cryptoconf = self._resolve_cryptoconf(cryptoconf)
+        self._cleanup_before_new_record_encryption()
 
         cryptainer_encryption_stream = cryptainer_encryption_stream_class(
             cryptainer_filepath,
@@ -2108,8 +2126,10 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
     ):
         """Enqueue a payload for asynchronous encryption and storage.
 
+        Purges exceeding cryptainers and pending results beforehand.
+
         The filename of final cryptainer might be different from provided one.
-        And beware, target cryptainer with the same constructed name might be overwritten.
+        Deware, target cryptainer with the same constructed name might be overwritten.
 
         :param payload: Bytes string, or a file-like object open for reading, which will be automatically closed.
         :param cryptainer_metadata: Dict of metadata added (unencrypted) to cryptainer.
@@ -2118,7 +2138,8 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         """
         logger.info("Enqueuing file %r for encryption and storage", filename_base)
 
-        cryptoconf = self._prepare_for_new_record_encryption(cryptoconf)
+        cryptoconf = self._resolve_cryptoconf(cryptoconf)
+        self._cleanup_before_new_record_encryption()
 
         future = self._thread_pool_executor.submit(
             self._offloaded_encrypt_payload_and_dump_cryptainer,
@@ -2129,6 +2150,23 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             cryptoconf=cryptoconf,
         )
         self._pending_executor_futures.append(future)
+
+    def encrypt_file(  # FIXME fidn more meaninful name?
+        self, filename_base, payload, cryptainer_metadata, keychain_uid=None, cryptoconf=None
+    ) -> str:
+        """Synchronously encrypt the provided payload into cryptainer storage.
+
+        Does NOT purge exceeding cryptainers and pending results beforehand.
+
+        Returns the cryptainer basename."""
+        cryptoconf = self._resolve_cryptoconf(cryptoconf)
+        return self._do_encrypt_payload_and_dump_cryptainer(
+            filename_base=filename_base,
+            payload=payload,
+            cryptainer_metadata=cryptainer_metadata,
+            default_keychain_uid=keychain_uid,
+            cryptoconf=cryptoconf,
+        )
 
     def _purge_executor_results(self):
         """Remove futures which are actually over. We don't care about their result/exception here"""

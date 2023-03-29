@@ -12,7 +12,6 @@ from prettytable import PrettyTable
 from wacryptolib import operations
 from wacryptolib.cryptainer import (
     LOCAL_KEYFACTORY_TRUSTEE_MARKER,
-    encrypt_payload_into_cryptainer,
     decrypt_payload_from_cryptainer,
     CRYPTAINER_SUFFIX,
     DECRYPTED_FILE_SUFFIX,
@@ -26,10 +25,10 @@ from wacryptolib.exceptions import ValidationError, DecryptionError
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_str, get_nice_size
 
+
 logger = logging.getLogger(__name__)
 click_log.basic_config(logger)
 
-CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 _internal_app_dir = Path("~/.witnessangel").expanduser().resolve()
 DEFAULT_KEYSTORE_POOL_PATH = _internal_app_dir / "keystore_pool"
@@ -37,6 +36,42 @@ DEFAULT_CRYPTAINER_STORAGE_PATH = _internal_app_dir / "cryptainers"
 INDENT = "  "
 FORMAT_OPTION = click.option(
     "-f", "--format", type=click.Choice(["plain", "json"], case_sensitive=False), default="plain"
+)
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+
+# Used as fallback when no proper cryptoconf is provided
+SIMPLE_EXAMPLE_CRYPTOCONF = dict(
+    payload_cipher_layers=[
+        dict(
+            payload_cipher_algo="AES_CBC",
+            key_cipher_layers=[
+                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
+                dict(
+                    key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                    key_shared_secret_threshold=1,
+                    key_shared_secret_shards=[
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                    ],  # Beware, same trustee for the 2 shards, for now
+                ),
+            ],
+            payload_signatures=[
+                dict(
+                    payload_digest_algo="SHA256",
+                    payload_signature_algo="DSA_DSS",
+                    payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                )
+            ],
+        )
+    ]
 )
 
 
@@ -73,41 +108,6 @@ def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=
         offload_payload_ciphertext=offload_payload_ciphertext,
         **extra_kwargs
     )
-
-
-EXAMPLE_CRYPTOCONF = dict(
-    payload_cipher_layers=[
-        dict(
-            payload_cipher_algo="AES_CBC",
-            key_cipher_layers=[
-                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
-                dict(
-                    key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
-                    key_shared_secret_threshold=1,
-                    key_shared_secret_shards=[
-                        dict(
-                            key_cipher_layers=[
-                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
-                            ]
-                        ),
-                        dict(
-                            key_cipher_layers=[
-                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
-                            ]
-                        ),
-                    ],  # Beware, same trustee for the 2 shards, for now
-                ),
-            ],
-            payload_signatures=[
-                dict(
-                    payload_digest_algo="SHA256",
-                    payload_signature_algo="DSA_DSS",
-                    payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
-                )
-            ],
-        )
-    ]
-)
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
@@ -158,12 +158,60 @@ def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage, gateway_url) -> obje
     ctx.obj["gateway-url"] = gateway_url
 
 
-@wacryptolib_cli.group()
-def cryptoconf():
+@wacryptolib_cli.command()
+@click.argument(
+    "input_file",
+    type=click.File("rb"),
+)
+@click.option(
+    "-o", "--output-basename", help="Basename of the cryptainer storage output file"
+)  # TODO allow piping via allow-dash
+@click.option("-c", "--cryptoconf", default=None, help="Json crypotoconf file", type=click.File("rb"))
+@click.option("--bundle", help="Combine cryptainer metadata and payload", is_flag=True)
+@click.pass_context
+def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
+    """Turn a media file into a secure cryptainer, stored in the cryptainer storage."""
+
+    offload_payload_ciphertext = not bundle
+
+    if not cryptoconf:
+        logger.warning("No cryptoconf provided, defaulting to simple and INSECURE example conf")
+        cryptoconf = SIMPLE_EXAMPLE_CRYPTOCONF
+    else:
+        cryptoconf = load_from_json_bytes(cryptoconf.read())
+
+    check_cryptoconf_sanity(cryptoconf)
+
+    keystore_pool = _get_keystore_pool(ctx)
+
+    payload = input_file.read()
+
+    if output_basename:
+        if output_basename.endswith(CRYPTAINER_SUFFIX):
+            output_basename = output_basename[: -len(CRYPTAINER_SUFFIX)]  # Strip premature suffix
+        filename_base = output_basename
+    else:
+        filename_base = input_file.name
+
+    cryptainer_storage = _get_cryptainer_storage(
+        ctx, keystore_pool=keystore_pool, offload_payload_ciphertext=offload_payload_ciphertext
+    )
+    output_cryptainer_name = cryptainer_storage.encrypt_file(
+        filename_base=filename_base, payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
+    )
+
+    logger.info(
+        "Encryption of file '%s' to storage cryptainer '%s' successfully finished"
+        % (input_file.name, output_cryptainer_name)
+    )
+
+
+@wacryptolib_cli.group("cryptoconf")
+def cryptoconf_group():
     pass
 
 
-@cryptoconf.command("validate")
+@cryptoconf_group.command("validate")
 @click.argument("cryptoconf_file", type=click.File("rb"))
 @click.pass_context
 def validate_cryptoconf(ctx, cryptoconf_file):
@@ -175,7 +223,7 @@ def validate_cryptoconf(ctx, cryptoconf_file):
         raise click.UsageError("Cryptoconf file '%s' is invalid: %r" % (cryptoconf_file.name, exc))
 
 
-@cryptoconf.command("summarize")
+@cryptoconf_group.command("summarize")
 @click.argument("cryptoconf_file", type=click.File("rb"))
 @click.pass_context
 def summarize_cryptoconf(ctx, cryptoconf_file):
@@ -185,12 +233,12 @@ def summarize_cryptoconf(ctx, cryptoconf_file):
     click.echo(text_summary, nl=False)
 
 
-@wacryptolib_cli.group()
-def foreign_keystores():
+@wacryptolib_cli.group("foreign-keystores")
+def foreign_keystores_group():
     pass
 
 
-@foreign_keystores.command("list")
+@foreign_keystores_group.command("list")
 @FORMAT_OPTION
 @click.pass_context
 def list_foreign_keystores(ctx, format):  # FIXME list count of public/private keys too!
@@ -239,7 +287,7 @@ def list_foreign_keystores(ctx, format):  # FIXME list count of public/private k
     click.echo(table)
 
 
-@foreign_keystores.command("delete")
+@foreign_keystores_group.command("delete")
 @click.argument("keystore_uid", type=click.UUID)
 @click.pass_context
 def delete_foreign_keystore(ctx, keystore_uid):
@@ -252,7 +300,7 @@ def delete_foreign_keystore(ctx, keystore_uid):
         raise click.UsageError("Failed deletion of imported authentication device %s: %r" % (keystore_uid, exc))
 
 
-@foreign_keystores.command("import")
+@foreign_keystores_group.command("import")
 @click.option("--from-usb", help="Fetch authenticators from plugged USB devices", is_flag=True)
 @click.option(
     "--from-path",
@@ -311,76 +359,13 @@ def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_pri
         logger.info(msg)
 
 
-def __(payload, cryptoconf_fileobj, keystore_pool):  # FIXME REMOVE
-    if not cryptoconf_fileobj:
-        logger.warning("No cryptoconf provided, defaulting to simple example conf")
-        cryptoconf = EXAMPLE_CRYPTOCONF
-    else:
-        cryptoconf = load_from_json_bytes(cryptoconf_fileobj.read())
-
-    check_cryptoconf_sanity(cryptoconf)
-
-    cryptainer = encrypt_payload_into_cryptainer(
-        payload, cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
-    )
-    return cryptainer
-
-
-@wacryptolib_cli.command()
-@click.argument(
-    "input_file",
-    type=click.File("rb"),
-)
-@click.option(
-    "-o", "--output-basename", help="Basename of the cryptainer storage output file"
-)  # TODO allow piping via allow-dash
-@click.option("-c", "--cryptoconf", default=None, help="Json crypotoconf file", type=click.File("rb"))
-@click.option("--bundle", help="Combine cryptainer metadata and payload", is_flag=True)
-@click.pass_context
-def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
-    """Turn a media file into a secure cryptainer, stored in the cryptainer storage."""
-
-    offload_payload_ciphertext = not bundle
-
-    if not cryptoconf:
-        logger.warning("No cryptoconf provided, defaulting to simple and INSECURE example conf")
-        cryptoconf = EXAMPLE_CRYPTOCONF
-    else:
-        cryptoconf = load_from_json_bytes(cryptoconf.read())
-
-    check_cryptoconf_sanity(cryptoconf)
-
-    keystore_pool = _get_keystore_pool(ctx)
-
-    payload = input_file.read()
-
-    if output_basename:
-        if output_basename.endswith(CRYPTAINER_SUFFIX):
-            output_basename = output_basename[: -len(CRYPTAINER_SUFFIX)]  # Strip premature suffix
-        filename_base = output_basename
-    else:
-        filename_base = input_file.name
-
-    cryptainer_storage = _get_cryptainer_storage(
-        ctx, keystore_pool=keystore_pool, offload_payload_ciphertext=offload_payload_ciphertext
-    )
-    output_cryptainer_name = cryptainer_storage.encrypt_file(
-        filename_base=filename_base, payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
-    )
-
-    logger.info(
-        "Encryption of file '%s' to storage cryptainer '%s' successfully finished"
-        % (input_file.name, output_cryptainer_name)
-    )
-
-
-@wacryptolib_cli.group()
-def cryptainers():
+@wacryptolib_cli.group("cryptainers")
+def cryptainers_group():
     """Manage cryptainers"""
     pass
 
 
-@cryptainers.command("list")
+@cryptainers_group.command("list")
 @FORMAT_OPTION
 @click.pass_context
 def list_cryptainers(ctx, format):
@@ -416,7 +401,7 @@ def list_cryptainers(ctx, format):
     click.echo(table)
 
 
-@cryptainers.command("validate")
+@cryptainers_group.command("validate")
 @click.argument("cryptainer_name")
 @click.pass_context
 def validate_cryptainer(ctx, cryptainer_name):
@@ -429,7 +414,7 @@ def validate_cryptainer(ctx, cryptainer_name):
         raise click.UsageError("Cryptainer file '%s' is invalid: %r" % (cryptainer_name, exc))
 
 
-@cryptainers.command("summarize")
+@cryptainers_group.command("summarize")
 @click.argument("cryptainer_name")
 @click.pass_context
 def summarize_cryptainer(ctx, cryptainer_name):
@@ -440,7 +425,7 @@ def summarize_cryptainer(ctx, cryptainer_name):
     click.echo(text_summary, nl=False)
 
 
-@cryptainers.command("delete")
+@cryptainers_group.command("delete")
 @click.argument("cryptainer_name")
 @click.pass_context
 def delete_cryptainer(ctx, cryptainer_name):
@@ -451,7 +436,7 @@ def delete_cryptainer(ctx, cryptainer_name):
     logger.info("Cryptainer %s successfully deleted" % cryptainer_name)
 
 
-@cryptainers.command("decrypt")
+@cryptainers_group.command("decrypt")
 @click.argument("cryptainer_name")
 @click.option("-o", "--output-file", type=click.File("wb"))
 @click.pass_context
@@ -500,7 +485,7 @@ def decrypt(ctx, cryptainer_name, output_file):
     )
 
 
-@cryptainers.command("purge")
+@cryptainers_group.command("purge")
 @click.pass_context
 @click.option("--max-age", type=int, help="Maximum age of cryptainer, in days")
 @click.option("--max-count", type=int, help="Maximum count of cryptainers in storage")

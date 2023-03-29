@@ -162,6 +162,16 @@ def validate_cryptoconf(ctx, cryptoconf_file):
         raise click.UsageError("Cryptoconf file '%s' is invalid: %r" % (cryptoconf_file.name, exc))
 
 
+@cryptoconf.command("summarize")
+@click.argument('cryptoconf_file', type=click.File("rb"))
+@click.pass_context
+def summarize_cryptoconf(ctx, cryptoconf_file):
+    """Display a summary of a cryptoconf structure."""
+    cryptoconf = load_from_json_bytes(cryptoconf_file.read())
+    text_summary = get_cryptoconf_summary(cryptoconf)
+    click.echo(text_summary, nl=False)
+
+
 @wacryptolib_cli.group()
 def foreign_keystores():
     pass
@@ -435,6 +445,7 @@ def summarize_cryptainer(ctx, cryptainer_name):
     cryptainer = cryptainer_storage.load_cryptainer_from_storage(cryptainer_name, include_payload_ciphertext=True)
     text_summary = get_cryptoconf_summary(cryptainer)  # Works with cryptainers too
     click.echo(text_summary, nl=False)
+
 
 @cryptainers.command("delete")
 @click.argument('cryptainer_name')

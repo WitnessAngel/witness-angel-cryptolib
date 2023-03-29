@@ -47,7 +47,7 @@ def test_cli_help_texts():
     assert "foreign-keystores" in result.stdout
 
 
-def test_cli_encryption_decryption_and_summary(tmp_path):
+def test_cli_encryption_with_default_cryptoconf(tmp_path):
 
     keystore_pool_path = tmp_path / "keystore-pool"
     keystore_pool_path.mkdir()
@@ -121,7 +121,25 @@ def test_cli_encryption_decryption_and_summary(tmp_path):
         )
         assert result.exit_code == 2  # Decryption failed because keypair was regenerated
 
-        # CUSTOM cryptoconf !
+
+def test_cli_encryption_and_cummarize_with_custom_cryptoconf(tmp_path):
+    keystore_pool_path = tmp_path / "keystore-pool"
+    keystore_pool_path.mkdir()
+
+    cryptainer_storage = tmp_path / "cryptainer-storage"
+    cryptainer_storage.mkdir()
+
+    runner = _get_cli_runner()
+
+    data_file = "test_file.txt"
+    data_sample = "Héllô\nguÿs"
+    cryptoconf_file = "mycryptoconf.json"
+
+    base_args = ["-k", str(keystore_pool_path), "-c", str(cryptainer_storage)]
+
+    with runner.isolated_filesystem() as tempdir:
+
+        print("TEMPORARY TEST DIRECTORY:", tempdir)
 
         with open(data_file, "w") as f:
             f.write(data_sample)
@@ -130,9 +148,9 @@ def test_cli_encryption_decryption_and_summary(tmp_path):
             f.write(b"badcontent")
 
         result = runner.invoke(
-            cli, base_args + ["summarize", cryptoconf_file], catch_exceptions=True  # Wrong JSON content
+            cli, base_args + ["cryptoconf", "summarize", cryptoconf_file], catch_exceptions=True
         )
-        assert result.exit_code == 1
+        assert result.exit_code == 1  # Wrong JSON content
 
         result = runner.invoke(
             cli,
@@ -158,7 +176,7 @@ def test_cli_encryption_decryption_and_summary(tmp_path):
         dump_to_json_file(cryptoconf_file, simple_cryptoconf_tree)
         assert os.path.exists(cryptoconf_file)
 
-        result = runner.invoke(cli, base_args + ["summarize", cryptoconf_file], catch_exceptions=False)
+        result = runner.invoke(cli, base_args + ["cryptoconf", "summarize", cryptoconf_file], catch_exceptions=False)
         assert result.exit_code == 0
         assert b"CHACHA20_POLY1305" in result.stdout_bytes
         assert b"RSA_OAEP" in result.stdout_bytes

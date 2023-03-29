@@ -233,12 +233,12 @@ def summarize_cryptoconf(ctx, cryptoconf_file):
     click.echo(text_summary, nl=False)
 
 
-@wacryptolib_cli.group("foreign-keystores")
-def foreign_keystores_group():
+@wacryptolib_cli.group("foreign-keystore")
+def foreign_keystore_group():
     pass
 
 
-@foreign_keystores_group.command("list")
+@foreign_keystore_group.command("list")
 @FORMAT_OPTION
 @click.pass_context
 def list_foreign_keystores(ctx, format):  # FIXME list count of public/private keys too!
@@ -287,7 +287,7 @@ def list_foreign_keystores(ctx, format):  # FIXME list count of public/private k
     click.echo(table)
 
 
-@foreign_keystores_group.command("delete")
+@foreign_keystore_group.command("delete")
 @click.argument("keystore_uid", type=click.UUID)
 @click.pass_context
 def delete_foreign_keystore(ctx, keystore_uid):
@@ -300,7 +300,7 @@ def delete_foreign_keystore(ctx, keystore_uid):
         raise click.UsageError("Failed deletion of imported authentication device %s: %r" % (keystore_uid, exc))
 
 
-@foreign_keystores_group.command("import")
+@foreign_keystore_group.command("import")
 @click.option("--from-usb", help="Fetch authenticators from plugged USB devices", is_flag=True)
 @click.option(
     "--from-path",
@@ -359,13 +359,13 @@ def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_pri
         logger.info(msg)
 
 
-@wacryptolib_cli.group("cryptainers")
-def cryptainers_group():
+@wacryptolib_cli.group("cryptainer")
+def cryptainer_group():
     """Manage cryptainers"""
     pass
 
 
-@cryptainers_group.command("list")
+@cryptainer_group.command("list")
 @FORMAT_OPTION
 @click.pass_context
 def list_cryptainers(ctx, format):
@@ -401,7 +401,7 @@ def list_cryptainers(ctx, format):
     click.echo(table)
 
 
-@cryptainers_group.command("validate")
+@cryptainer_group.command("validate")
 @click.argument("cryptainer_name")
 @click.pass_context
 def validate_cryptainer(ctx, cryptainer_name):
@@ -414,7 +414,7 @@ def validate_cryptainer(ctx, cryptainer_name):
         raise click.UsageError("Cryptainer file '%s' is invalid: %r" % (cryptainer_name, exc))
 
 
-@cryptainers_group.command("summarize")
+@cryptainer_group.command("summarize")
 @click.argument("cryptainer_name")
 @click.pass_context
 def summarize_cryptainer(ctx, cryptainer_name):
@@ -425,7 +425,7 @@ def summarize_cryptainer(ctx, cryptainer_name):
     click.echo(text_summary, nl=False)
 
 
-@cryptainers_group.command("delete")
+@cryptainer_group.command("delete")
 @click.argument("cryptainer_name")
 @click.pass_context
 def delete_cryptainer(ctx, cryptainer_name):
@@ -436,7 +436,7 @@ def delete_cryptainer(ctx, cryptainer_name):
     logger.info("Cryptainer %s successfully deleted" % cryptainer_name)
 
 
-@cryptainers_group.command("decrypt")
+@cryptainer_group.command("decrypt")
 @click.argument("cryptainer_name")
 @click.option("-o", "--output-file", type=click.File("wb"))
 @click.pass_context
@@ -485,7 +485,7 @@ def decrypt(ctx, cryptainer_name, output_file):
     )
 
 
-@cryptainers_group.command("purge")
+@cryptainer_group.command("purge")
 @click.pass_context
 @click.option("--max-age", type=int, help="Maximum age of cryptainer, in days")
 @click.option("--max-count", type=int, help="Maximum count of cryptainers in storage")

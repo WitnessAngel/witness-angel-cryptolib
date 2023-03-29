@@ -73,11 +73,11 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
         with open(data_file, "w") as output_file:
             output_file.write(data_sample)
 
-        result = runner.invoke(cli, base_args + ["encrypt", "test_file.txt"], catch_exceptions=False)
+        result = runner.invoke(cli, base_args + ["encrypt", "test_file.txt", "--bundle"], catch_exceptions=False)
         assert result.exit_code == 0
         assert "successfully finished" in result.stderr
         assert cryptainer_storage.joinpath(data_file + ".crypt").is_file()
-        assert cryptainer_storage.joinpath(data_file + ".crypt.payload").is_file()  # OFFLOADED in this case
+        assert not cryptainer_storage.joinpath(data_file + ".crypt.payload").is_file()  # NOT OFFLOADED in this case
 
         result = runner.invoke(
             cli, base_args + ["encrypt", "test_file.txt", "-o", "stuff.dat"], catch_exceptions=False
@@ -424,6 +424,7 @@ def test_cli_cryptainer_storage_list_delete_and_purge(tmp_path):
     cryptainer_storage_path = tmp_path
 
     cryptainer_storage = CryptainerStorage(cryptainer_storage_path, default_cryptoconf=SIMPLE_CRYPTOCONF)
+    cryptainer_storage_bundled = CryptainerStorage(cryptainer_storage_path, default_cryptoconf=SIMPLE_CRYPTOCONF, offload_payload_ciphertext=False)
 
     base_args = ["--cryptainer-storage", str(cryptainer_storage_path)]
 
@@ -464,12 +465,15 @@ def test_cli_cryptainer_storage_list_delete_and_purge(tmp_path):
     first_cryptainer_name_base = "%s_152428_rtsp_camera_cryptainer.mp4" % recent_date_str
     cryptainer_storage.enqueue_file_for_encryption(first_cryptainer_name_base, payload=b"xyz", cryptainer_metadata=None)
     cryptainer_storage.enqueue_file_for_encryption("20420221_152428_rtsp_camera_cryptainer.mp4", payload=b"xyz"*1024**2, cryptainer_metadata=None)
-    cryptainer_storage.enqueue_file_for_encryption("20430221_152428_rtsp_camera_cryptainer.mp4", payload=b"xyz", cryptainer_metadata=None)
+    cryptainer_storage_bundled.enqueue_file_for_encryption("20430221_152428_rtsp_camera_cryptainer.mp4", payload=b"xyz", cryptainer_metadata=None)
+
     cryptainer_storage.wait_for_idle_state()
+    cryptainer_storage_bundled.wait_for_idle_state()
 
     result = runner.invoke(cli, base_args + ["cryptainers", "list"], catch_exceptions=False)
     assert result.exit_code == 0
     assert " 20420221_152428_rtsp_camera_cryptainer.mp4.crypt " in result.stdout
+    assert " X " in result.stdout  # For "is offloaded" column
 
     result = runner.invoke(cli, base_args + ["cryptainers", "list", "--format", "json"], catch_exceptions=False)
     assert result.exit_code == 0

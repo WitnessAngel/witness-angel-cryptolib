@@ -1747,7 +1747,7 @@ class ReadonlyCryptainerStorage:
         """Returns the list of encrypted cryptainers present in storage,
         sorted by name or not, absolute or not, as Path objects.
 
-        If `finished` ìs None, both finsihed and pending cryptainers are listed.
+        If `finished` ìs None, both finished and pending cryptainers are listed.
         """
         assert self._cryptainer_dir.is_absolute(), self._cryptainer_dir
         paths = []  # Result as list, for multiple looping on it
@@ -1782,7 +1782,7 @@ class ReadonlyCryptainerStorage:
         """Returns a size in bytes"""
         return get_cryptainer_size_on_filesystem(self._make_absolute(cryptainer_name))
 
-    def list_cryptainer_properties(self, as_sorted_list=False, with_creation_datetime=False, with_age=False, with_size=False, finished=True):
+    def list_cryptainer_properties(self, as_sorted_list=False, with_creation_datetime=False, with_age=False, with_size=False, with_offloaded=False, finished=True):
         """Returns an list of dicts (unsorted by default) having the fields "name", [age] and [size], depending on requested properties."""
         cryptainer_names = self.list_cryptainer_names(as_sorted_list=as_sorted_list, as_absolute_paths=False, finished=finished)
 
@@ -1799,6 +1799,8 @@ class ReadonlyCryptainerStorage:
                     entry["age"] = now - creation_datetime  # We keep it as timedelta
             if with_size:
                 entry["size"] = self._get_cryptainer_size(cryptainer_name)
+            if with_offloaded:
+                entry["offloaded"] = _get_offloaded_file_path(self._make_absolute(cryptainer_name)).is_file()
             result.append(entry)
         return result
 

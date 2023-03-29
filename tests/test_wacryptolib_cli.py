@@ -38,16 +38,20 @@ def test_cli_help_texts():
     assert result.exit_code == 0
     assert "into a secure cryptainer" in result.stdout
 
-    result = runner.invoke(cli, ["decrypt", "-h"], catch_exceptions=False)
+    result = runner.invoke(cli, ["cryptoconf", "-h"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert "original media file" in result.stdout
+    assert "validate" in result.stdout
 
     result = runner.invoke(cli, ["foreign-keystores", "-h"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert "foreign-keystores" in result.stdout
+    assert "list" in result.stdout
+
+    result = runner.invoke(cli, ["cryptainers", "-h"], catch_exceptions=False)
+    assert result.exit_code == 0
+    assert "summarize" in result.stdout
 
 
-def test_cli_encryption_with_default_cryptoconf(tmp_path):
+def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
 
     keystore_pool_path = tmp_path / "keystore-pool"
     keystore_pool_path.mkdir()
@@ -59,7 +63,6 @@ def test_cli_encryption_with_default_cryptoconf(tmp_path):
 
     data_file = "test_file.txt"
     data_sample = "Héllô\nguÿs"
-    cryptoconf_file = "mycryptoconf.json"
 
     base_args = ["-k", str(keystore_pool_path), "-c", str(cryptainer_storage)]
 
@@ -81,9 +84,11 @@ def test_cli_encryption_with_default_cryptoconf(tmp_path):
         )
         assert result.exit_code == 0
         assert "successfully finished" in result.stderr
-        assert os.path.exists("./stuff.dat")
+        assert not os.path.exists("./stuff.dat")  # This is NOT a full target filepath
+        assert cryptainer_storage.joinpath("stuff.dat.crypt").is_file()
+        assert cryptainer_storage.joinpath("stuff.dat.crypt.payload").is_file()  # OFFLOADED in this case
 
-        with open("./stuff.dat", "r") as input_file:
+        with open(cryptainer_storage.joinpath("stuff.dat.crypt"), "r") as input_file:
             data = input_file.read()
             assert "AES_CBC" in data
             assert "CHACHA20_POLY1305" not in data  # Not in default cryptoconf
@@ -92,24 +97,28 @@ def test_cli_encryption_with_default_cryptoconf(tmp_path):
         assert not os.path.exists(data_file)
         assert not cryptainer_storage.joinpath(data_file).is_file()  # This will be the default output file for decryption
 
-        result = runner.invoke(cli, base_args + ["decrypt", str(cryptainer_storage.joinpath(data_file + ".crypt"))], catch_exceptions=False)
+        result = runner.invoke(cli, base_args + ["cryptainers", "decrypt", data_file + ".crypt"], catch_exceptions=False)
         assert result.exit_code == 0
-        assert not os.path.exists(data_file)  # Not created in CWD
-        assert cryptainer_storage.joinpath(data_file).is_file()  # Created in CRYPTAINER STORAGE itself
+        assert os.path.exists(data_file)  # Created in CWD
+        assert not cryptainer_storage.joinpath(data_file).is_file()  # Not created in CRYPTAINER STORAGE itself
+
+        # Simulate weird suffix for cryptainer file (would cause problems with cryptainer listing, though)
+        cryptainer_storage.joinpath("stuff.dat.crypt").rename(cryptainer_storage.joinpath("stuff.dat.fb"))
+        cryptainer_storage.joinpath("stuff.dat.crypt.payload").rename(cryptainer_storage.joinpath("stuff.dat.fb.payload"))
 
         assert not os.path.exists("./stuff.dat.decrypted")
-        result = runner.invoke(cli, base_args + ["decrypt", "stuff.dat"], catch_exceptions=False)
+        result = runner.invoke(cli, base_args + ["cryptainers", "decrypt", "stuff.dat.fb"], catch_exceptions=False)
         assert result.exit_code == 0
-        assert os.path.exists("./stuff.dat.decrypted")  # Automatic extension, when no ".crypt" suffix in cryptainer name
+        assert os.path.exists("./stuff.dat.fb.decrypted")  # Automatic extension, when no ".crypt" suffix in cryptainer name
 
         assert not os.path.exists("stuffs.txt")
         result = runner.invoke(
-            cli, base_args + ["decrypt", "stuff.dat", "-o", "stuffs.txt"], catch_exceptions=False
+            cli, base_args + ["cryptainers", "decrypt", "stuff.dat.fb", "-o", "stuffs.txt"], catch_exceptions=False
         )
         assert result.exit_code == 0
         assert os.path.exists("stuffs.txt")
 
-        for result_file in (cryptainer_storage.joinpath(data_file), "./stuff.dat.decrypted", "stuffs.txt"):
+        for result_file in (data_file, "./stuff.dat.fb.decrypted", "stuffs.txt"):
             with open(result_file, "r") as input_file:
                 data = input_file.read()
                 assert data == data_sample
@@ -187,11 +196,10 @@ def test_cli_encryption_and_summarize_with_custom_cryptoconf(tmp_path):
         )
         print(">>>>>>", result.stderr)
         assert result.exit_code == 0
-        assert os.path.exists("specialconf.crypt")
+        assert cryptainer_storage.joinpath("specialconf.crypt").is_file()  # No double suffix
 
-        with open("specialconf.crypt", "r") as input_file:
-            data = input_file.read()
-            assert "CHACHA20_POLY1305" in data
+        data = cryptainer_storage.joinpath("specialconf.crypt").read_text()
+        assert "CHACHA20_POLY1305" in data
 
         result = runner.invoke(
             cli,
@@ -204,7 +212,7 @@ def test_cli_encryption_and_summarize_with_custom_cryptoconf(tmp_path):
 
         result = runner.invoke(
             cli,
-            base_args + ["decrypt", "specialconf.crypt", "-o", "specialconf.crypt.decrypted"],
+            base_args + ["cryptainers", "decrypt", "specialconf.crypt", "-o", "specialconf.crypt.decrypted"],
             catch_exceptions=False,
         )
         assert result.exit_code == 0

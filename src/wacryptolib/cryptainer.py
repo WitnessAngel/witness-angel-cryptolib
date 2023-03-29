@@ -83,7 +83,7 @@ OFFLOADED_PAYLOAD_FILENAME_SUFFIX = ".payload"  # Added to CRYPTAINER_SUFFIX
 
 DEFAULT_DATA_CHUNK_SIZE = 1024 ** 2  # E.g. when streaming a big payload through encryptors
 
-DECRYPTED_FILE_SUFFIX = ".medium"  # To construct decrypted filename when no output filename is provided
+DECRYPTED_FILE_SUFFIX = ".decrypted"  # To construct decrypted filename when no output filename is provided
 
 SHARED_SECRET_ALGO_MARKER = "[SHARED_SECRET]"  # Special "key_cipher_algo" value
 
@@ -2151,7 +2151,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         )
         self._pending_executor_futures.append(future)
 
-    def encrypt_file(  # FIXME fidn more meaninful name?
+    def encrypt_file(  # FIXME find more meaningful name?
         self, filename_base, payload, cryptainer_metadata, keychain_uid=None, cryptoconf=None
     ) -> str:
         """Synchronously encrypt the provided payload into cryptainer storage.

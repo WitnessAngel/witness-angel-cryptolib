@@ -23,11 +23,11 @@ def ___encrypt_payload_to_bytes(payload: bytes, cryptoconf: dict, keystore_pool:
     return cryptainer_bytes
 
 
-def decrypt_payload_from_bytes(cryptainer_bytes: bytes, keystore_pool: KeystorePoolBase) -> tuple:
+def decrypt_payload_from_bytes(cryptainer_bytes: bytes, keystore_pool: KeystorePoolBase, passphrase_mapper=None) -> tuple:  # FIXME useless?
     cryptainer = load_from_json_bytes(cryptainer_bytes)
     check_cryptainer_sanity(cryptainer)
 
-    payload, error_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+    payload, error_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
     return payload, error_report  # Payload might be None
 
 

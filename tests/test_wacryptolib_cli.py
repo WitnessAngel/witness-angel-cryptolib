@@ -13,7 +13,7 @@ import wacryptolib
 from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.cli import wacryptolib_cli as cli
-from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CryptainerStorage
+from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CryptainerStorage, check_cryptoconf_sanity
 from wacryptolib.keystore import FilesystemKeystore, generate_keypair_for_storage
 from wacryptolib.utilities import dump_to_json_file, get_utc_now_date, load_from_json_str
 from _test_mockups import generate_keystore_pool
@@ -123,6 +123,9 @@ def test_cli_encryption_decryption_and_summary(tmp_path):
 
         # CUSTOM cryptoconf !
 
+        with open(data_file, "w") as f:
+            f.write(data_sample)
+
         with open(cryptoconf_file, "wb") as f:
             f.write(b"badcontent")
 
@@ -133,7 +136,7 @@ def test_cli_encryption_decryption_and_summary(tmp_path):
 
         result = runner.invoke(
             cli,
-            base_args + ["encrypt", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file],
+            base_args + ["encrypt", data_file, "-o", "specialconf.crypt", "-c", cryptoconf_file],
             catch_exceptions=True,
         )
         assert result.exit_code == 1
@@ -150,7 +153,10 @@ def test_cli_encryption_decryption_and_summary(tmp_path):
                 )
             ]
         )
+        check_cryptoconf_sanity(simple_cryptoconf_tree)
+
         dump_to_json_file(cryptoconf_file, simple_cryptoconf_tree)
+        assert os.path.exists(cryptoconf_file)
 
         result = runner.invoke(cli, base_args + ["summarize", cryptoconf_file], catch_exceptions=False)
         assert result.exit_code == 0
@@ -159,9 +165,10 @@ def test_cli_encryption_decryption_and_summary(tmp_path):
 
         result = runner.invoke(
             cli,
-            base_args + ["encrypt", "test_file.txt", "-o", "specialconf.crypt", "-c", cryptoconf_file],
+            base_args + ["encrypt", data_file, "-o", "specialconf.crypt", "-c", cryptoconf_file],
             catch_exceptions=False,
         )
+        print(">>>>>>", result.stderr)
         assert result.exit_code == 0
         assert os.path.exists("specialconf.crypt")
 

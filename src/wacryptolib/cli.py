@@ -361,17 +361,18 @@ def decrypt(ctx, input_cryptainer, output_file):
 
 
 @wacryptolib_cli.command()
-@click.option("-i", "--input-file", type=click.File("rb"), required=True)
+@click.argument("input_file", type=click.File("rb"), required=True)
 @click.pass_context
 def summarize(ctx, input_file):
     """Display a summary of a cryptoconf (or cryptainer) structure."""
 
     # click.echo("In display_cryptoconf_summary: %s" % str(locals()))
 
+    # We treat cryptainers as extended cryptoconfs, here
     cryptoconf = load_from_json_bytes(input_file.read())
-
+    # FIXME use check_cryptoconf_sanity(cryptoconf) or that of cryptainers, depending on cases
     text_summary = get_cryptoconf_summary(cryptoconf)
-    logger.info(text_summary)
+    click.echo(text_summary)
 
 
 @wacryptolib_cli.group()

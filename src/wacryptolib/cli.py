@@ -26,6 +26,7 @@ from wacryptolib.cryptainer import (
     get_cryptoconf_summary, ReadonlyCryptainerStorage, CryptainerStorage, dump_cryptainer_to_filesystem,
     load_cryptainer_from_filesystem,
 )
+from wacryptolib.exceptions import ValidationError
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.operations import decrypt_payload_from_bytes
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, dump_to_json_str, get_nice_size
@@ -142,6 +143,23 @@ def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage, gateway_url) -> obje
     ctx.obj["keystore_pool"] = keystore_pool
     ctx.obj["cryptainer_storage"] = cryptainer_storage
     ctx.obj["gateway-url"] = gateway_url
+
+
+@wacryptolib_cli.group()
+def cryptoconf():
+    pass
+
+
+@cryptoconf.command("validate")
+@click.argument('cryptoconf_file', type=click.File("rb"))
+@click.pass_context
+def validate(ctx, cryptoconf_file):
+    try:
+        cryptoconf = load_from_json_bytes(cryptoconf_file.read())
+        check_cryptoconf_sanity(cryptoconf)
+        logger.info("Cryptoconf file '%s' is valid" % cryptoconf_file.name)
+    except ValidationError as exc:
+        raise click.UsageError("Cryptoconf file '%s' is invalid: %r" % (cryptoconf_file.name, exc))
 
 
 @wacryptolib_cli.group()

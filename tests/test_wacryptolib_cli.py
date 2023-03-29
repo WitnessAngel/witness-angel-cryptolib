@@ -198,6 +198,42 @@ def test_cli_encryption_decryption_and_summary(tmp_path):
             assert data == data_sample
 
 
+def test_cli_cryptoconf_management(tmp_path):
+    cryptoconf_file = tmp_path / "good_cryptoconf.json"
+    wrong_cryptoconf_file = tmp_path / "wrong_cryptoconf.json"
+
+    simple_cryptoconf_tree = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="CHACHA20_POLY1305",
+                key_cipher_layers=[
+                    dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                ],
+                payload_signatures=[],
+            )
+        ]
+    )
+    check_cryptoconf_sanity(simple_cryptoconf_tree)
+    dump_to_json_file(cryptoconf_file, simple_cryptoconf_tree)
+
+    dump_to_json_file(wrong_cryptoconf_file, {})
+
+    runner = _get_cli_runner()
+
+    result = runner.invoke(cli, ["cryptoconf", "validate", "unexistingfile"])
+    assert result.exit_code == 2
+    assert "No such file or directory" in result.stderr
+
+    result = runner.invoke(cli, ["cryptoconf", "validate", str(wrong_cryptoconf_file)])
+    assert result.exit_code == 2
+    assert "is invalid" in result.stderr
+    assert "payload_cipher_layers" in result.stderr
+
+    result = runner.invoke(cli, ["cryptoconf", "validate", str(cryptoconf_file)])
+    assert result.exit_code == 0
+    assert "is valid" in result.stderr
+
+
 def test_cli_subprocess_invocation():
     src_dir = str(pathlib.Path(wacryptolib.__file__).resolve().parents[1])
 

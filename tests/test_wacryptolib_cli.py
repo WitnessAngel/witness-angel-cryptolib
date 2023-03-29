@@ -198,7 +198,7 @@ def test_cli_encryption_decryption_and_summary(tmp_path):
             assert data == data_sample
 
 
-def test_cli_cryptoconf_management(tmp_path):
+def test_cli_cryptoconf_validate(tmp_path):
     cryptoconf_file = tmp_path / "good_cryptoconf.json"
     wrong_cryptoconf_file = tmp_path / "wrong_cryptoconf.json"
 
@@ -393,7 +393,7 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert "No foreign keystores found" in result.stderr
 
 
-def test_cli_cryptainer_storage_management(tmp_path):
+def test_cli_cryptainer_storage_list_delete_and_purge(tmp_path):
     cryptainer_storage_path = tmp_path
 
     cryptainer_storage = CryptainerStorage(cryptainer_storage_path, default_cryptoconf=SIMPLE_CRYPTOCONF)
@@ -484,3 +484,34 @@ def test_cli_cryptainer_storage_management(tmp_path):
     assert result.exit_code == 0
     assert "No cryptainers found" in result.stderr
 
+
+def test_cli_cryptainer_validate(tmp_path):
+
+    cryptainer_storage_path = tmp_path
+
+    (cryptainer_storage_path / "badcryptainer.crypt").write_bytes(b"{}")
+
+    cryptainer_storage = CryptainerStorage(cryptainer_storage_path, default_cryptoconf=SIMPLE_CRYPTOCONF)
+    cryptainer_storage.encrypt_file("goodfile", payload=b"ABCD", cryptainer_metadata=None)
+    assert tmp_path.joinpath("goodfile.crypt").is_file()
+
+    runner = _get_cli_runner()
+
+    base_args = ["--cryptainer-storage", str(cryptainer_storage_path)]
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "validate", "unexistingfile"])
+    assert result.exit_code == 1  # Raised by wacryptolib code and not Click
+    assert "No such file or directory" in str(result.exc_info[1])
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "validate", "goodfile.crypt"], catch_exceptions=False)
+    assert result.exit_code == 0
+    assert "is valid" in result.stderr
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "validate", "goodfile.crypt.payload"])  # Exists but is not a proper cryptainer!
+    assert result.exit_code == 1
+    assert "is invalid" not in result.stderr
+    assert "can't decode" in str(result.exc_info[1])  # Unhandled exception for now
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "validate", "badcryptainer.crypt"])
+    assert result.exit_code == 2
+    assert "is invalid" in result.stderr

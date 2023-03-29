@@ -153,7 +153,7 @@ def cryptoconf():
 @cryptoconf.command("validate")
 @click.argument('cryptoconf_file', type=click.File("rb"))
 @click.pass_context
-def validate(ctx, cryptoconf_file):
+def validate_cryptoconf(ctx, cryptoconf_file):
     try:
         cryptoconf = load_from_json_bytes(cryptoconf_file.read())
         check_cryptoconf_sanity(cryptoconf)
@@ -365,7 +365,7 @@ def decrypt(ctx, input_cryptainer, output_file):
     medium_content, error_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool, passphrase_mapper=None)
 
     if error_report:
-        logger.warning("Decryption errors occured:")
+        logger.warning("Decryption errors occurred:")
         error_report_text = pformat(error_report)
         click.echo(error_report_text)
 
@@ -376,21 +376,6 @@ def decrypt(ctx, input_cryptainer, output_file):
         output_file.write(medium_content)
 
     logger.info("Decryption of cryptainer '%s' to file '%s' successfully finished" % (input_cryptainer, output_file.name))
-
-
-@wacryptolib_cli.command()
-@click.argument("input_file", type=click.File("rb"), required=True)
-@click.pass_context
-def summarize(ctx, input_file):
-    """Display a summary of a cryptoconf (or cryptainer) structure."""
-
-    # click.echo("In display_cryptoconf_summary: %s" % str(locals()))
-
-    # We treat cryptainers as extended cryptoconfs, here
-    cryptoconf = load_from_json_bytes(input_file.read())
-    # FIXME use check_cryptoconf_sanity(cryptoconf) or that of cryptainers, depending on cases
-    text_summary = get_cryptoconf_summary(cryptoconf)
-    click.echo(text_summary)
 
 
 @wacryptolib_cli.group()
@@ -427,6 +412,29 @@ def list_cryptainers(ctx, format):
                        _short_format_datetime(cryptainer_properties["creation_datetime"]),])
     click.echo(table)
 
+
+@cryptainers.command("validate")
+@click.argument("cryptainer_name")
+@click.pass_context
+def validate_cryptainer(ctx, cryptainer_name):
+    try:
+        cryptainer_storage = _get_cryptainer_storage(ctx)
+        cryptainer = cryptainer_storage.load_cryptainer_from_storage(cryptainer_name, include_payload_ciphertext=True)
+        check_cryptainer_sanity(cryptainer)
+        logger.info("Cryptainer file '%s' is valid" % cryptainer_name)
+    except ValidationError as exc:
+        raise click.UsageError("Cryptainer file '%s' is invalid: %r" % (cryptainer_name, exc))
+
+
+@cryptainers.command("summarize")
+@click.argument("cryptainer_name")
+@click.pass_context
+def summarize_cryptainer(ctx, cryptainer_name):
+    """Display a summary of a cryptainer structure."""
+    cryptainer_storage = _get_cryptainer_storage(ctx)
+    cryptainer = cryptainer_storage.load_cryptainer_from_storage(cryptainer_name, include_payload_ciphertext=True)
+    text_summary = get_cryptoconf_summary(cryptainer)  # Works with cryptainers too
+    click.echo(text_summary, nl=False)
 
 @cryptainers.command("delete")
 @click.argument('cryptainer_name')

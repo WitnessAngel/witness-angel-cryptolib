@@ -1689,6 +1689,10 @@ def load_cryptainer_from_filesystem(cryptainer_filepath: Path, include_payload_c
     cryptainer = load_from_json_file(cryptainer_filepath)
 
     if include_payload_ciphertext:
+
+        if "payload_ciphertext_struct" not in cryptainer:  # Early error before we have a chance to validate the whole cryptainer...
+            raise SchemaValidationError("Cryptainer has no root field 'payload_ciphertext_struct'")
+
         if cryptainer["payload_ciphertext_struct"] == OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER:
             offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
             ciphertext_value = offloaded_file_path.read_bytes()

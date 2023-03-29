@@ -1,11 +1,10 @@
 import random
-from uuid import UUID
 import secrets
-
+from uuid import UUID
 
 from wacryptolib.cryptainer import CryptainerStorage, dump_cryptainer_to_filesystem, PAYLOAD_CIPHERTEXT_LOCATIONS
-from wacryptolib.utilities import generate_uuid0
 from wacryptolib.keystore import KEYSTORE_FORMAT, FilesystemKeystorePool
+from wacryptolib.utilities import generate_uuid0
 
 
 class FakeTestCryptainerStorage(CryptainerStorage):

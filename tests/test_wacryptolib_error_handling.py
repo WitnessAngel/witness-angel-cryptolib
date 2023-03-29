@@ -1,4 +1,5 @@
 import functools
+
 import sys
 
 from wacryptolib.error_handling import (

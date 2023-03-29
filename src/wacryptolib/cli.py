@@ -1,4 +1,3 @@
-from pathlib import Path
 import logging
 import shutil
 from datetime import timedelta
@@ -21,7 +20,7 @@ from wacryptolib.cryptainer import (
     check_cryptoconf_sanity,
     check_cryptainer_sanity,
     get_cryptoconf_summary, CryptainerStorage, )
-from wacryptolib.exceptions import ValidationError
+from wacryptolib.exceptions import ValidationError, DecryptionError
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_str, get_nice_size
 
@@ -435,7 +434,7 @@ def decrypt(ctx, cryptainer_name, output_file):
         click.echo(error_report_text)
 
     if not medium_content:
-        raise click.UsageError("Content could not be decrypted")
+        raise DecryptionError("Content could not be decrypted")
 
     with output_file:
         output_file.write(medium_content)

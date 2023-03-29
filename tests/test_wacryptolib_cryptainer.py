@@ -2,10 +2,8 @@ import copy
 import os
 import random
 import textwrap
-import time
 import uuid
 from datetime import timedelta
-from itertools import product
 from pathlib import Path
 from pprint import pprint
 from unittest import mock
@@ -13,6 +11,8 @@ from unittest.mock import patch
 from uuid import UUID
 
 import pytest
+import time
+from itertools import product
 from jsonrpc_requests import TransportError
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool

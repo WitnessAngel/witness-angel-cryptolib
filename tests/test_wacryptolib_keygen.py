@@ -1,6 +1,5 @@
-import unicodedata
-
 import pytest
+import unicodedata
 
 import wacryptolib
 from wacryptolib._crypto_backend import (

@@ -3,10 +3,8 @@ import pathlib
 import random
 import subprocess
 from datetime import timedelta
-from unittest import mock
 
 import sys
-
 from click.testing import CliRunner
 
 import wacryptolib
@@ -16,8 +14,6 @@ from wacryptolib.cli import wacryptolib_cli as cli
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CryptainerStorage, check_cryptoconf_sanity
 from wacryptolib.keystore import FilesystemKeystore, generate_keypair_for_storage
 from wacryptolib.utilities import dump_to_json_file, get_utc_now_date, load_from_json_str
-from _test_mockups import generate_keystore_pool
-
 
 REAL_GATEWAY_URL = "https://api.witnessangel.com/gateway/jsonrpc/"  # Real gateway used by some tests
 REAL_GATEWAY_KEYSTORE_UID = "0f0c0988-80c1-9362-11c1-b06909a3a53c"  # Authenticator of ¤aaa, must exist in real prod
@@ -123,12 +119,14 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
                 data = input_file.read()
                 assert data == data_sample
 
-        empty_storage = tmp_path.joinpath("subdir")
-        empty_storage.mkdir()
+        empty_keystore_path = tmp_path.joinpath("subdir")
+        empty_keystore_path.mkdir()
         result = runner.invoke(
-            cli, ["-k", empty_storage, "decrypt", "stuff.dat", "-o", "stuffs.txt"],
+            cli, ["-k", empty_keystore_path, "-c", str(cryptainer_storage), "cryptainers", "decrypt", "stuff.dat.fb", "-o", "mystuffs.txt"],
         )
-        assert result.exit_code == 2  # Decryption failed because keypair was regenerated
+        assert result.exit_code == 1  # Decryption failed because keypair was regenerated
+        assert "Decryption errors occurred" in result.stderr
+        assert not os.path.exists("mystuffs.txt")
 
 
 def test_cli_encryption_and_summarize_with_custom_cryptoconf(tmp_path):
@@ -295,6 +293,10 @@ def test_cli_foreign_keystore_management(tmp_path):
     result = runner.invoke(cli, base_args + ["foreign-keystores", "list"], catch_exceptions=False)
     assert result.exit_code == 0
     assert "No foreign keystores found" in result.stderr
+
+    result = runner.invoke(cli, base_args + ["foreign-keystores", "import"])  # Must specify usb/gateway/...
+    assert result.exit_code == 2
+    assert "No source selected" in result.stderr
 
     result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-usb"], catch_exceptions=False)
     assert result.exit_code == 0
@@ -482,6 +484,10 @@ def test_cli_cryptainer_storage_list_delete_and_purge(tmp_path):
     assert isinstance(data_tree, list)
     assert len(data_tree) == 3
     assert data_tree[0]["name"] == first_cryptainer_name_base + ".crypt"
+
+    result = runner.invoke(cli, base_args + ["cryptainers", "purge"])  # Missing purge parameters
+    assert result.exit_code == 2
+    assert "no criterion was provided" in result.stderr
 
     result = runner.invoke(cli, base_args + ["cryptainers", "purge", "--max-age", "101"], catch_exceptions=False)
     assert result.exit_code == 0

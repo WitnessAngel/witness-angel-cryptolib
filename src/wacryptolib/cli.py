@@ -1,17 +1,14 @@
-import json
-import os
 from pathlib import Path
-from pprint import pprint, pformat
-from datetime import timedelta
-import uuid
 import logging
+import shutil
+from datetime import timedelta
+from pathlib import Path
+from pprint import pformat
 
 import click  # See https://click.palletsprojects.com/en/7.x/
-from click.utils import LazyFile
 import click_log
+from click.utils import LazyFile
 from prettytable import PrettyTable
-import shutil
-
 
 from wacryptolib import operations
 from wacryptolib.cryptainer import (
@@ -23,13 +20,10 @@ from wacryptolib.cryptainer import (
     SHARED_SECRET_ALGO_MARKER,
     check_cryptoconf_sanity,
     check_cryptainer_sanity,
-    get_cryptoconf_summary, ReadonlyCryptainerStorage, CryptainerStorage, dump_cryptainer_to_filesystem,
-    load_cryptainer_from_filesystem,
-)
+    get_cryptoconf_summary, CryptainerStorage, )
 from wacryptolib.exceptions import ValidationError
 from wacryptolib.keystore import FilesystemKeystorePool
-from wacryptolib.operations import decrypt_payload_from_bytes
-from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, dump_to_json_str, get_nice_size
+from wacryptolib.utilities import load_from_json_bytes, dump_to_json_str, get_nice_size
 
 logger = logging.getLogger(__name__)
 click_log.basic_config(logger)

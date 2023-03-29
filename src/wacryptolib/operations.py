@@ -4,11 +4,10 @@ from wacryptolib.authdevice import list_available_authdevices
 from wacryptolib.authenticator import SENSITIVE_KEYSTORE_FIELDS, is_authenticator_initialized
 from wacryptolib.cryptainer import check_cryptoconf_sanity, encrypt_payload_into_cryptainer, check_cryptainer_sanity, \
     decrypt_payload_from_cryptainer
-from wacryptolib.exceptions import SchemaValidationError, ValidationError
-from wacryptolib.jsonrpc_client import status_slugs_response_error_handler, JsonRpcProxy
+from wacryptolib.exceptions import ValidationError
+from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.keystore import KeystorePoolBase, ReadonlyFilesystemKeystore, KEYSTORE_FORMAT, validate_keystore_tree
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
-
 
 logger = logging.getLogger(__name__)
 

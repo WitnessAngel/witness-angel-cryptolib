@@ -1,6 +1,6 @@
-import builtins
 import logging
 
+import builtins
 from jsonrpc_requests import Server as ServerBase, ProtocolError
 
 from wacryptolib import exceptions as wacryptolib_exceptions

@@ -1,6 +1,7 @@
 import logging
-import unicodedata
 from typing import Optional, AnyStr
+
+import unicodedata
 
 from wacryptolib import _crypto_backend
 from wacryptolib.exceptions import KeyLoadingError

@@ -1,6 +1,5 @@
 import copy
 import logging
-import math
 import os
 import threading
 import uuid
@@ -11,6 +10,7 @@ from typing import Optional, Union, Sequence, BinaryIO
 from urllib.parse import urlparse
 
 import jsonschema
+import math
 import schema as pythonschema
 from jsonrpc_requests import JSONRPCError
 from jsonschema import validate as jsonschema_validate
@@ -2062,17 +2062,19 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
     @catch_and_log_exception("CryptainerStorage._offloaded_encrypt_payload_and_dump_cryptainer")
     def _offloaded_encrypt_payload_and_dump_cryptainer(
         self, filename_base, payload, cryptainer_metadata, default_keychain_uid, cryptoconf
-    ) -> str:
+    ):
         """Task to be called by background thread, which encrypts a payload into a disk cryptainer.
 
         Returns the cryptainer basename."""
-        return self._do_encrypt_payload_and_dump_cryptainer(
+        assert filename_base, repr(filename_base)
+        self._do_encrypt_payload_and_dump_cryptainer(
             filename_base=filename_base,
             payload=payload,
             cryptainer_metadata=cryptainer_metadata,
             default_keychain_uid=default_keychain_uid,
             cryptoconf=cryptoconf,
         )
+        return None
 
     def _use_streaming_encryption_for_cryptoconf(self, cryptoconf):
         return self._offload_payload_ciphertext and is_cryptainer_cryptoconf_streamable(cryptoconf)

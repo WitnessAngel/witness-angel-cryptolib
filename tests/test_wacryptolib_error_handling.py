@@ -4,11 +4,11 @@ import sys
 
 from wacryptolib.error_handling import (
     gather_exception_subclasses,
-    construct_status_slugs_mapper,
+    construct_status_slug_mapper,
     slugify_exception_class,
     get_closest_exception_class_for_status_slugs,
     _fully_qualified_name,
-    StatusSlugsMapper,
+    StatusSlugMapper,
 )
 
 LookupError = LookupError
@@ -48,7 +48,7 @@ def test_status_slugs_utilities():
     assert _fully_qualified_name(LookupError) == "LookupError"  # Builtins don't keep their module prefix
     assert _fully_qualified_name(MyExc) == "test_wacryptolib_error_handling.MyExc"
 
-    mapper_tree = construct_status_slugs_mapper(selected_classes, fallback_exception_class=NotImplementedError)
+    mapper_tree = construct_status_slug_mapper(selected_classes, fallback_exception_class=NotImplementedError)
     # from pprint import pprint ; pprint(mapper)
     assert mapper_tree == {
         "": NotImplementedError,
@@ -95,7 +95,7 @@ def test_status_slugs_utilities():
 
     # Test the case of not-included ancestor exception classes
 
-    mapper_tree = construct_status_slugs_mapper([KeyError], fallback_exception_class=RuntimeError)
+    mapper_tree = construct_status_slug_mapper([KeyError], fallback_exception_class=RuntimeError)
     assert (
         get_closest_exception_class_for_status_slugs(["LookupError", "KeyError"], mapper_tree=mapper_tree) == KeyError
     )
@@ -109,7 +109,7 @@ def test_status_slugs_utilities():
 
     # Test the case of an empty mapper
 
-    mapper_tree = construct_status_slugs_mapper([Exception], fallback_exception_class=NotImplementedError)
+    mapper_tree = construct_status_slug_mapper([Exception], fallback_exception_class=NotImplementedError)
     assert (
         get_closest_exception_class_for_status_slugs(["Exception"], mapper_tree=mapper_tree)
         == NotImplementedError  # Shadowns the "Exception" class which has an empty slug due to slugifier config
@@ -117,10 +117,10 @@ def test_status_slugs_utilities():
     assert get_closest_exception_class_for_status_slugs(["OSError"], mapper_tree=mapper_tree) == NotImplementedError
 
 
-def test_status_slugs_mapper_class():
+def test_status_slug_mapper_class():
     import builtins
 
-    exception_classes = StatusSlugsMapper.gather_exception_subclasses(
+    exception_classes = StatusSlugMapper.gather_exception_subclasses(
         builtins, parent_classes=[LookupError, UnicodeDecodeError]
     )
 
@@ -129,7 +129,7 @@ def test_status_slugs_mapper_class():
 
     exception_slugifier = functools.partial(slugify_exception_class, qualified_name_extractor=qualified_name_extractor)
 
-    mapper = StatusSlugsMapper(
+    mapper = StatusSlugMapper(
         exception_classes, fallback_exception_class=RuntimeError, exception_slugifier=exception_slugifier
     )
 

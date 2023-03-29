@@ -1,6 +1,5 @@
 import logging
 from pathlib import Path
-from pathlib import PurePath
 
 from sys import platform as sys_platform
 
@@ -108,7 +107,7 @@ def _list_available_authdevices_linux():
 
         authdevice = {}
         authdevice["device_type"] = "USBSTOR"
-        authdevice["partition_label"] = str(PurePath(p.mountpoint).name)  # E.g: 'UBUNTU 20_0'
+        authdevice["partition_label"] = str(Path(p.mountpoint).name)  # E.g: 'UBUNTU 20_0'
         authdevice["partition_mountpoint"] = p.mountpoint  # E.g: '/media/akram/UBUNTU 20_0',
         authdevice["filesystem_size"] = psutil.disk_usage(authdevice["partition_mountpoint"]).total  # E.g: 30986469376
         authdevice["filesystem_format"] = p.fstype  # E.g: 'vfat'

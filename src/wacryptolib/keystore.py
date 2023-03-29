@@ -55,7 +55,7 @@ _KEYSTORE_METADATA_SCHEMA = {
     OptionalKey("keystore_passphrase_hint"): And(str, non_empty),  # For authenticators
 }
 
-# TODO add dedicated KEYSTORE_METADATA_SCHEMA for AUTHENTICATORS, and for FOREIGN KEYSTORES (without passphrae hint)?
+# TODO add dedicated KEYSTORE_METADATA_SCHEMA for AUTHENTICATORS, and for FOREIGN KEYSTORES (without passphrase hint)?
 
 KEYSTORE_METADATA_SCHEMA = Schema({**_KEYSTORE_METADATA_SCHEMA})
 
@@ -82,20 +82,6 @@ def validate_keystore_tree(authenticator):
     validate_data_against_schema(authenticator, schema=KEYSTORE_TREE_SCHEMA)
 
 
-def _get_keystore_metadata_file_path(keystore_dir: Path):
-    """
-    Return path of standard metadata file for key storage.
-    """
-    return keystore_dir.joinpath("keystore_metadata.json")
-
-
-def _get_legacy_keystore_metadata_file_path(keystore_dir: Path):
-    """
-    Return path of legacy metadata file for key storage.
-    """
-    return keystore_dir.joinpath(".keystore.json")
-
-
 def load_keystore_metadata(keystore_dir: Path) -> dict:
     """
     Return the authenticator metadata dict stored in the given folder, after validating its format.
@@ -117,6 +103,20 @@ def load_keystore_metadata(keystore_dir: Path) -> dict:
             raise KeystoreMetadataDoesNotExist("Keystore metadata file %s does not exist" % metadata_file) from exc
     validate_keystore_metadata(metadata)
     return metadata
+
+
+def _get_keystore_metadata_file_path(keystore_dir: Path):
+    """
+    Return path of standard metadata file for key storage.
+    """
+    return keystore_dir.joinpath("keystore_metadata.json")
+
+
+def _get_legacy_keystore_metadata_file_path(keystore_dir: Path):
+    """
+    Return path of legacy metadata file for key storage.
+    """
+    return keystore_dir.joinpath(".keystore.json")
 
 
 class KeystoreBase(ABC):

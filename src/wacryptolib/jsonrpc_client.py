@@ -4,18 +4,18 @@ import builtins
 from jsonrpc_requests import Server as ServerBase, ProtocolError
 
 from wacryptolib import exceptions as wacryptolib_exceptions
-from wacryptolib.error_handling import StatusSlugsMapper
+from wacryptolib.error_handling import StatusSlugMapper
 from wacryptolib.utilities import dump_to_json_str, load_from_json_str
 
 logger = logging.getLogger(__name__)
 
 
-_exception_classes = StatusSlugsMapper.gather_exception_subclasses(builtins, parent_classes=[Exception])
-_exception_classes += StatusSlugsMapper.gather_exception_subclasses(
+_exception_classes = StatusSlugMapper.gather_exception_subclasses(builtins, parent_classes=[Exception])
+_exception_classes += StatusSlugMapper.gather_exception_subclasses(
     wacryptolib_exceptions, parent_classes=[wacryptolib_exceptions.FunctionalError]
 )
 
-exception_mapper = StatusSlugsMapper(_exception_classes, fallback_exception_class=Exception)
+exception_mapper = StatusSlugMapper(_exception_classes, fallback_exception_class=Exception)
 
 
 def status_slugs_response_error_handler(exc):  # FIXME no need to pass it explicitly from now on
@@ -80,7 +80,7 @@ class JsonRpcProxy(ServerBase):
         if args and kwargs:
             raise ProtocolError("JSON-RPC spec forbids mixing arguments and keyword arguments")
 
-        # NOPE WE DISABLE THIS AMBIGUOUS NORMALIZATION!
+        # NOPE, WE DISABLE THIS AMBIGUOUS NORMALIZATION!
         # from the specs:
         # "If present, parameters for the rpc call MUST be provided as a Structured value.
         #  Either by-position through an Array or by-name through an Object."

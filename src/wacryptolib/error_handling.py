@@ -57,7 +57,7 @@ def slugify_exception_class(
     return slugs
 
 
-def construct_status_slugs_mapper(
+def construct_status_slug_mapper(
     exception_classes, fallback_exception_class, exception_slugifier=slugify_exception_class
 ):
     """
@@ -106,14 +106,14 @@ def get_closest_exception_class_for_status_slugs(slugs, mapper_tree):
     return current.get("", fallback_exception_class)
 
 
-class StatusSlugsMapper:
+class StatusSlugMapper:
     """
     High-level wrapper for converting exceptions from/to status slugs.
     """
 
     def __init__(self, exception_classes, fallback_exception_class, exception_slugifier=slugify_exception_class):
         self._slugify_exception_class = exception_slugifier
-        self._mapper_tree = construct_status_slugs_mapper(
+        self._mapper_tree = construct_status_slug_mapper(
             exception_classes=exception_classes,
             fallback_exception_class=fallback_exception_class,
             exception_slugifier=exception_slugifier,

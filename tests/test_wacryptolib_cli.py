@@ -335,7 +335,7 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert "No foreign keystores found" in result.stderr
 
 
-def test_cli_cryptainer_management(tmp_path):
+def test_cli_cryptainer_storage_management(tmp_path):
     cryptainer_storage_path = tmp_path
 
     cryptainer_storage = CryptainerStorage(cryptainer_storage_path, default_cryptoconf=SIMPLE_CRYPTOCONF)

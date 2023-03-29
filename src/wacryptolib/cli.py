@@ -320,7 +320,15 @@ def encrypt(ctx, input_file, output_cryptainer, cryptoconf, bundle):
 @click.option("-o", "--output-file", type=click.File("wb"))
 @click.pass_context
 def decrypt(ctx, input_cryptainer, output_file):
-    """Turn a cryptainer file back into its original media file."""
+    """Turn a cryptainer file back into its original media file.
+
+    The full path to the cryptainer must be provided, even if it is e.g. inside a cryptainer storage.
+
+    This command is for test purposes only, since it only works with INSECURE cryptoconfs
+    where private keys are locally available, and not protected by passphrases.
+
+    For real world use cases, see Witness Angle software suite.
+    """
 
     if not output_file:
         input_cryptainer_name = input_cryptainer.name

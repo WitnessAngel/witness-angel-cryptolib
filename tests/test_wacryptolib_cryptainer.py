@@ -47,7 +47,8 @@ from wacryptolib.cryptainer import (
     CryptainerEncryptionPipeline,
     gather_decryptable_symkeys,
     DecryptionErrorType,
-    DecryptionErrorCriticity, CRYPTAINER_SUFFIX,
+    DecryptionErrorCriticity,
+    CRYPTAINER_SUFFIX,
 )
 from wacryptolib.exceptions import (
     DecryptionError,
@@ -473,7 +474,8 @@ def _add_unfinished_cryptainer_to_folder(folder_path):
         cryptainer_filepath=cryptainer_filepath,
         cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_metadata=None,
-        dump_initial_cryptainer=True)
+        dump_initial_cryptainer=True,
+    )
     del pipeline
 
     cryptainer_filepath_pending = cryptainer_filepath.with_suffix(cryptainer_filepath.suffix + CRYPTAINER_TEMP_SUFFIX)
@@ -789,7 +791,7 @@ def _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_reques
     decryptable_symkeys_per_trustee = gather_decryptable_symkeys(cryptainers_with_names=cryptainers_with_names)
 
     revelation_requests_info = []
-    for (shard_trustee_id, passphrase) in list_shard_trustee_id:
+    for shard_trustee_id, passphrase in list_shard_trustee_id:
         trustee_data, symkey_revelation_requests = decryptable_symkeys_per_trustee[shard_trustee_id]
         keystore_uid = trustee_data["keystore_uid"]
         keychain_uid = symkey_revelation_requests[0]["keychain_uid"]
@@ -1061,7 +1063,6 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     with _patched_gateway_revelation_request_list(
         return_value=_build_fake_gateway_revelation_request_list(fake_revelation_request_info)
     ):
-
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1089,7 +1090,6 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     ] = b'{"ciphertext_chunks": [{"$binary": {"base64": "FImgSTpvmdIGPjml5YzI1qtOrN/I34DkG1PTNWqnqg==", "subType": "00"}}]}'
 
     with _patched_gateway_revelation_request_list(return_value=gateway_revelation_request_list):
-
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1294,7 +1294,6 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     with _patched_gateway_revelation_request_list(
         return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
     ):
-
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool1,
@@ -1311,7 +1310,6 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     gateway_revelation_request_list[0]["revelation_response_keychain_uid"] = generate_uuid0()
 
     with _patched_gateway_revelation_request_list(return_value=gateway_revelation_request_list):
-
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool1,
@@ -1526,7 +1524,6 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
     gateway_revelation_request_list[0]["revelation_request_status"] = "REJECTED"
 
     with _patched_gateway_revelation_request_list(return_value=gateway_revelation_request_list):
-
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1542,7 +1539,6 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
     gateway_revelation_request_list[0]["symkey_decryption_requests"][0]["cryptainer_uid"] = generate_uuid0()
 
     with _patched_gateway_revelation_request_list(return_value=gateway_revelation_request_list):
-
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1557,7 +1553,6 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
     with _patched_gateway_revelation_request_list(
         return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
     ):
-
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1572,7 +1567,6 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
     with _patched_gateway_revelation_request_list(
         return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
     ):
-
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -1673,8 +1667,10 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
 
     # Generate revelation requests info
     revelation_requestor_uid = generate_uuid0()
-    revelation_requests_info = _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(  # FIXME TYPO KEYAIR
-        revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
+    revelation_requests_info = (
+        _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_request_info(  # FIXME TYPO KEYAIR
+            revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
+        )
     )
 
     # Corrupt response privatekey
@@ -1692,7 +1688,6 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
     with _patched_gateway_revelation_request_list(
         return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
     ):
-
         result_payload, error_report = decrypt_payload_from_cryptainer(
             cryptainer=cryptainer,
             keystore_pool=keystore_pool,
@@ -2311,7 +2306,7 @@ def test_cryptainer_list_cryptainer_properties(tmp_path):
     assert first_properties["name"] == cryptainer_name
 
     properties = storage.list_cryptainer_properties(as_sorted_list=random_bool(), finished=None)
-    (first_properties,  second_properties) = properties
+    (first_properties, second_properties) = properties
     assert first_properties["name"] == cryptainer_name
     assert second_properties["name"] == Path(cryptainer_filepath_pending.name)
 
@@ -2431,11 +2426,16 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
 
     assert storage.get_cryptainer_count(finished=False) == 1
     assert storage.get_cryptainer_count(finished=None) == 12
-    assert storage.list_cryptainer_names(as_sorted_list=random_bool(), finished=False) == [Path(cryptainer_filepath_unfinished.name)]
-    assert storage.list_cryptainer_names(as_sorted_list=random_bool(), as_absolute_paths=True, finished=False) == [cryptainer_filepath_unfinished]
-    assert len(storage.list_cryptainer_names(as_sorted_list=random_bool(),
-                                             as_absolute_paths=random_bool(),
-                                             finished=None)) == 12
+    assert storage.list_cryptainer_names(as_sorted_list=random_bool(), finished=False) == [
+        Path(cryptainer_filepath_unfinished.name)
+    ]
+    assert storage.list_cryptainer_names(as_sorted_list=random_bool(), as_absolute_paths=True, finished=False) == [
+        cryptainer_filepath_unfinished
+    ]
+    assert (
+        len(storage.list_cryptainer_names(as_sorted_list=random_bool(), as_absolute_paths=random_bool(), finished=None))
+        == 12
+    )
 
 
 def test_cryptainer_storage_purge_by_max_count(tmp_path):
@@ -2516,7 +2516,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
     storage.enqueue_file_for_encryption("lmn.dat", b"000", cryptainer_metadata=None)
     storage.wait_for_idle_state()
 
-    #print(">>>>>>>", storage.list_cryptainer_names(as_sorted_list=True))
+    # print(">>>>>>>", storage.list_cryptainer_names(as_sorted_list=True))
     assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == [
         Path("21201121_222729_smth.dat.003.crypt"),
         Path("aaa.dat.000.crypt~"),  # It's the file timestamps that counts, not the name!
@@ -2672,7 +2672,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
 
         storage.wait_for_idle_state()
 
-        first_file_purged = (max_cryptainer_count or max_cryptainer_quota or max_cryptainer_age)
+        first_file_purged = max_cryptainer_count or max_cryptainer_quota or max_cryptainer_age
 
         if not first_file_purged:
             cryptainer_path = storage._make_absolute("20001121_222729_smth.dat.000.crypt")

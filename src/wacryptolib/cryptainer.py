@@ -81,7 +81,7 @@ OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER = dict(ciphertext_location=PAYLOAD_CIPHERTEX
 
 OFFLOADED_PAYLOAD_FILENAME_SUFFIX = ".payload"  # Added to CRYPTAINER_SUFFIX
 
-DEFAULT_DATA_CHUNK_SIZE = 1024 ** 2  # E.g. when streaming a big payload through encryptors
+DEFAULT_DATA_CHUNK_SIZE = 1024**2  # E.g. when streaming a big payload through encryptors
 
 DECRYPTED_FILE_SUFFIX = ".decrypted"  # To construct decrypted filename when no output filename is provided
 
@@ -263,7 +263,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
                 key_algo_for_encryption=key_algo_for_encryption,
             )
 
-    for (cryptainer_name, cryptainer) in cryptainers_with_names:
+    for cryptainer_name, cryptainer in cryptainers_with_names:
         default_keychain_uid = cryptainer["keychain_uid"]
         cryptainer_uid = cryptainer["cryptainer_uid"]
         cryptainer_metadata = cryptainer["cryptainer_metadata"]
@@ -428,7 +428,6 @@ class CryptainerEncryptor(CryptainerBase):
         return payload
 
     def _encrypt_and_hash_payload(self, payload, payload_cipher_layer_extracts):
-
         payload_current = payload
 
         payload_integrity_tags = []
@@ -581,7 +580,6 @@ class CryptainerEncryptor(CryptainerBase):
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
 
         if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
-
             key_shared_secret_shards = key_cipher_layer["key_shared_secret_shards"]
             shard_count = len(key_shared_secret_shards)
 
@@ -696,7 +694,6 @@ class CryptainerEncryptor(CryptainerBase):
         for payload_cipher_layer, payload_integrity_tags_dict in zip(
             cryptainer["payload_cipher_layers"], payload_integrity_tags
         ):
-
             assert payload_cipher_layer["payload_macs"] is None  # Set at cryptainer build time
             payload_cipher_layer["payload_macs"] = payload_integrity_tags_dict["payload_macs"]
 
@@ -829,7 +826,6 @@ class CryptainerDecryptor(CryptainerBase):
         return key_struct_bytes, error_report
 
     def _fetch_predecrypted_symkeys(self, successful_symkey_decryptions):
-
         predecrypted_symkey_mapper = {}
         error_report = []
 
@@ -889,7 +885,6 @@ class CryptainerDecryptor(CryptainerBase):
     def _get_successful_symkey_decryptions(
         self, cryptainer: dict, gateway_urls: list, revelation_requestor_uid: uuid.UUID
     ) -> tuple:
-
         ACCEPTED = "ACCEPTED"
         REJECTED = "REJECTED"  # USE LATER
 
@@ -902,9 +897,7 @@ class CryptainerDecryptor(CryptainerBase):
         successful_symkey_decryptions = []
 
         if multiple_gateway_revelation_request_list:
-
             for revelation_request in multiple_gateway_revelation_request_list:
-
                 revelation_request_per_symkey = {
                     key: value for key, value in revelation_request.items() if key != "symkey_decryption_requests"
                 }
@@ -975,7 +968,6 @@ class CryptainerDecryptor(CryptainerBase):
         for payload_cipher_layer in reversed(
             cryptainer["payload_cipher_layers"]
         ):  # Non-emptiness of this will be checked by validator
-
             payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
 
             if payload_current is not None:
@@ -1004,7 +996,6 @@ class CryptainerDecryptor(CryptainerBase):
                 ]  # FIXME handle and test if it's None: missing integrity tags due to unfinished container!!
                 payload_cipherdict = dict(ciphertext=payload_current, **payload_macs)
                 try:
-
                     payload_current = decrypt_bytestring(
                         cipherdict=payload_cipherdict,
                         key_dict=symkey,
@@ -1103,7 +1094,6 @@ class CryptainerDecryptor(CryptainerBase):
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
 
         if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
-
             decrypted_shards = []
             key_shared_secret_shards = key_cipher_layer["key_shared_secret_shards"]
             key_shared_secret_threshold = key_cipher_layer["key_shared_secret_threshold"]
@@ -1114,7 +1104,6 @@ class CryptainerDecryptor(CryptainerBase):
 
             # If some shards are missing, we won't detect it here because zip() stops at shortest list
             for shard_ciphertext, key_shared_secret_shard_conf in zip(shard_ciphertexts, key_shared_secret_shards):
-
                 shard_bytes, multiple_layer_decryption_errors = self._decrypt_key_through_multiple_layers(
                     default_keychain_uid=default_keychain_uid,
                     key_ciphertext=shard_ciphertext,
@@ -1129,7 +1118,6 @@ class CryptainerDecryptor(CryptainerBase):
                     )  # The tuple (idx, payload) of each shard thus becomes encryptable
                     decrypted_shards.append(shard)
                 else:
-
                     error_entry = self._build_error_report_entry(
                         error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
                         error_message="A previous error prevented decrypting shard %s"
@@ -1183,7 +1171,6 @@ class CryptainerDecryptor(CryptainerBase):
                     error_report.append(error_entry)
 
         else:  # Using asymmetric algorithm
-
             assert key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS
             assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
 
@@ -1221,7 +1208,6 @@ class CryptainerDecryptor(CryptainerBase):
     def _build_error_report_entry(
         error_type: str, error_message: str, error_criticity=DecryptionErrorCriticity.WARNING, error_exception=None
     ) -> dict:
-
         # We forward entry to standard logging too
         log_level = getattr(logging, error_criticity)  # Same identifiers in the 2 worlds
         if error_exception:
@@ -1433,7 +1419,6 @@ class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionSt
         keystore_pool: Optional[KeystorePoolBase] = None,
         dump_initial_cryptainer=True,
     ):
-
         self._cryptainer_filepath = cryptainer_filepath
         self._cryptainer_filepath_temp = cryptainer_filepath.with_suffix(
             cryptainer_filepath.suffix + CRYPTAINER_TEMP_SUFFIX
@@ -1444,7 +1429,10 @@ class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionSt
 
         self._cryptainer_encryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
 
-        self._wip_cryptainer, self._encryption_pipeline = self._cryptainer_encryptor.build_cryptainer_and_encryption_pipeline(
+        (
+            self._wip_cryptainer,
+            self._encryption_pipeline,
+        ) = self._cryptainer_encryptor.build_cryptainer_and_encryption_pipeline(
             output_stream=self._output_data_stream,
             cryptoconf=cryptoconf,
             keychain_uid=keychain_uid,
@@ -1689,8 +1677,9 @@ def load_cryptainer_from_filesystem(cryptainer_filepath: Path, include_payload_c
     cryptainer = load_from_json_file(cryptainer_filepath)
 
     if include_payload_ciphertext:
-
-        if "payload_ciphertext_struct" not in cryptainer:  # Early error before we have a chance to validate the whole cryptainer...
+        if (
+            "payload_ciphertext_struct" not in cryptainer
+        ):  # Early error before we have a chance to validate the whole cryptainer...
             raise SchemaValidationError("Cryptainer has no root field 'payload_ciphertext_struct'")
 
         if cryptainer["payload_ciphertext_struct"] == OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER:
@@ -1782,9 +1771,19 @@ class ReadonlyCryptainerStorage:
         """Returns a size in bytes"""
         return get_cryptainer_size_on_filesystem(self._make_absolute(cryptainer_name))
 
-    def list_cryptainer_properties(self, as_sorted_list=False, with_creation_datetime=False, with_age=False, with_size=False, with_offloaded=False, finished=True):
+    def list_cryptainer_properties(
+        self,
+        as_sorted_list=False,
+        with_creation_datetime=False,
+        with_age=False,
+        with_size=False,
+        with_offloaded=False,
+        finished=True,
+    ):
         """Returns an list of dicts (unsorted by default) having the fields "name", [age] and [size], depending on requested properties."""
-        cryptainer_names = self.list_cryptainer_names(as_sorted_list=as_sorted_list, as_absolute_paths=False, finished=finished)
+        cryptainer_names = self.list_cryptainer_names(
+            as_sorted_list=as_sorted_list, as_absolute_paths=False, finished=finished
+        )
 
         now = get_utc_now_date()
 
@@ -1827,7 +1826,11 @@ class ReadonlyCryptainerStorage:
             cryptainer_name = Path(cryptainer_name_or_idx)
         assert not cryptainer_name.is_absolute(), cryptainer_name
 
-        logger.info("Loading cryptainer %s from storage (include_payload_ciphertext=%s)", cryptainer_name, include_payload_ciphertext)
+        logger.info(
+            "Loading cryptainer %s from storage (include_payload_ciphertext=%s)",
+            cryptainer_name,
+            include_payload_ciphertext,
+        )
         cryptainer_filepath = self._make_absolute(cryptainer_name)
         cryptainer = load_cryptainer_from_filesystem(
             cryptainer_filepath, include_payload_ciphertext=include_payload_ciphertext
@@ -1940,7 +1943,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
     def purge_exceeding_cryptainers(self) -> int:  # FIXME test this shortcut
         logger.info("Intentionally purging cryptainers")
         return self._purge_exceeding_cryptainers()
-        
+
     def _purge_exceeding_cryptainers(self) -> int:
         """Purge cryptainers first by date, then total quota, then count, depending on instance settings.
 
@@ -1984,7 +1987,9 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
                 cryptainer_dicts.sort(key=lambda x: (-x["age"], x["name"]))  # Oldest first
                 deleted_cryptainer_dicts = cryptainer_dicts[:excess_count]
                 for deleted_cryptainer_dict in deleted_cryptainer_dicts:
-                    logger.info("Deleting cryptainer %s due to excessive count of cryptainers", deleted_cryptainer_dict["name"])
+                    logger.info(
+                        "Deleting cryptainer %s due to excessive count of cryptainers", deleted_cryptainer_dict["name"]
+                    )
                     self._delete_cryptainer(deleted_cryptainer_dict["name"])
                     deleted_cryptainer_count += 1
 
@@ -2016,9 +2021,8 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
     def _do_encrypt_payload_and_dump_cryptainer(
         self, filename_base, payload, cryptainer_metadata, default_keychain_uid, cryptoconf
     ) -> str:
-
         # TODO later as a SKIP here!
-        #if not payload:
+        # if not payload:
         #    logger.warning("Skipping encryption of empty payload payload for file %s", filename_base)
         #    return
         assert cryptoconf, cryptoconf
@@ -2130,7 +2134,12 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
 
     @synchronized
     def enqueue_file_for_encryption(
-        self, filename_base, payload, cryptainer_metadata, keychain_uid=None, cryptoconf=None  # TODO add "wait/syncrhonous" argument ?
+        self,
+        filename_base,
+        payload,
+        cryptainer_metadata,
+        keychain_uid=None,
+        cryptoconf=None,  # TODO add "wait/syncrhonous" argument ?
     ):
         """Enqueue a payload for asynchronous encryption and storage.
 

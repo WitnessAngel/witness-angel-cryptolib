@@ -48,7 +48,6 @@ def test_cli_help_texts():
 
 
 def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
-
     keystore_pool_path = tmp_path / "keystore-pool"
     keystore_pool_path.mkdir()
 
@@ -63,7 +62,6 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
     base_args = ["-k", str(keystore_pool_path), "-c", str(cryptainer_storage)]
 
     with runner.isolated_filesystem() as tempdir:
-
         print("TEMPORARY TEST DIRECTORY:", tempdir)
 
         with open(data_file, "w") as output_file:
@@ -75,9 +73,7 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
         assert cryptainer_storage.joinpath(data_file + ".crypt").is_file()
         assert not cryptainer_storage.joinpath(data_file + ".crypt.payload").is_file()  # NOT OFFLOADED in this case
 
-        result = runner.invoke(
-            cli, base_args + ["encrypt", "test_file.txt", "-o", "stuff.dat"], catch_exceptions=False
-        )
+        result = runner.invoke(cli, base_args + ["encrypt", "test_file.txt", "-o", "stuff.dat"], catch_exceptions=False)
         assert result.exit_code == 0
         assert "successfully finished" in result.stderr
         assert not os.path.exists("./stuff.dat")  # This is NOT a full target filepath
@@ -91,21 +87,29 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
 
         os.remove(data_file)  # CLEANUP of original data file
         assert not os.path.exists(data_file)
-        assert not cryptainer_storage.joinpath(data_file).is_file()  # This will be the default output file for decryption
+        assert not cryptainer_storage.joinpath(
+            data_file
+        ).is_file()  # This will be the default output file for decryption
 
-        result = runner.invoke(cli, base_args + ["cryptainers", "decrypt", data_file + ".crypt"], catch_exceptions=False)
+        result = runner.invoke(
+            cli, base_args + ["cryptainers", "decrypt", data_file + ".crypt"], catch_exceptions=False
+        )
         assert result.exit_code == 0
         assert os.path.exists(data_file)  # Created in CWD
         assert not cryptainer_storage.joinpath(data_file).is_file()  # Not created in CRYPTAINER STORAGE itself
 
         # Simulate weird suffix for cryptainer file (would cause problems with cryptainer listing, though)
         cryptainer_storage.joinpath("stuff.dat.crypt").rename(cryptainer_storage.joinpath("stuff.dat.fb"))
-        cryptainer_storage.joinpath("stuff.dat.crypt.payload").rename(cryptainer_storage.joinpath("stuff.dat.fb.payload"))
+        cryptainer_storage.joinpath("stuff.dat.crypt.payload").rename(
+            cryptainer_storage.joinpath("stuff.dat.fb.payload")
+        )
 
         assert not os.path.exists("./stuff.dat.decrypted")
         result = runner.invoke(cli, base_args + ["cryptainers", "decrypt", "stuff.dat.fb"], catch_exceptions=False)
         assert result.exit_code == 0
-        assert os.path.exists("./stuff.dat.fb.decrypted")  # Automatic extension, when no ".crypt" suffix in cryptainer name
+        assert os.path.exists(
+            "./stuff.dat.fb.decrypted"
+        )  # Automatic extension, when no ".crypt" suffix in cryptainer name
 
         assert not os.path.exists("stuffs.txt")
         result = runner.invoke(
@@ -122,7 +126,18 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
         empty_keystore_path = tmp_path.joinpath("subdir")
         empty_keystore_path.mkdir()
         result = runner.invoke(
-            cli, ["-k", empty_keystore_path, "-c", str(cryptainer_storage), "cryptainers", "decrypt", "stuff.dat.fb", "-o", "mystuffs.txt"],
+            cli,
+            [
+                "-k",
+                empty_keystore_path,
+                "-c",
+                str(cryptainer_storage),
+                "cryptainers",
+                "decrypt",
+                "stuff.dat.fb",
+                "-o",
+                "mystuffs.txt",
+            ],
         )
         assert result.exit_code == 1  # Decryption failed because keypair was regenerated
         assert "Decryption errors occurred" in result.stderr
@@ -145,7 +160,6 @@ def test_cli_encryption_and_summarize_with_custom_cryptoconf(tmp_path):
     base_args = ["-k", str(keystore_pool_path), "-c", str(cryptainer_storage)]
 
     with runner.isolated_filesystem() as tempdir:
-
         print("TEMPORARY TEST DIRECTORY:", tempdir)
 
         with open(data_file, "w") as f:
@@ -155,7 +169,8 @@ def test_cli_encryption_and_summarize_with_custom_cryptoconf(tmp_path):
             f.write(b"badcontent")
 
         result = runner.invoke(
-            cli, base_args + ["cryptoconf", "summarize", cryptoconf_file],
+            cli,
+            base_args + ["cryptoconf", "summarize", cryptoconf_file],
         )
         assert result.exit_code == 1  # Wrong JSON content
 
@@ -286,7 +301,9 @@ def test_cli_foreign_keystore_management(tmp_path):
 
     runner = _get_cli_runner()
 
-    result = runner.invoke(cli, ["-v", "DEBUG", "foreign-keystores", "list"], catch_exceptions=False)  # No forced keystore pool here
+    result = runner.invoke(
+        cli, ["-v", "DEBUG", "foreign-keystores", "list"], catch_exceptions=False
+    )  # No forced keystore pool here
     assert result.exit_code == 0
     assert "No keystore-pool directory provided, defaulting " in result.stderr
 
@@ -300,9 +317,13 @@ def test_cli_foreign_keystore_management(tmp_path):
 
     result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-usb"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert "0 new authenticators imported, 0 updated, 0 skipped because corrupted" in result.stderr   # DO NOT keep USB key in PC for now!
+    assert (
+        "0 new authenticators imported, 0 updated, 0 skipped because corrupted" in result.stderr
+    )  # DO NOT keep USB key in PC for now!
 
-    result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-usb", "--include-private-keys"], catch_exceptions=False)
+    result = runner.invoke(
+        cli, base_args + ["foreign-keystores", "import", "--from-usb", "--include-private-keys"], catch_exceptions=False
+    )
     assert result.exit_code == 0
     assert "0 new authenticators imported, 0 updated, 0 skipped because corrupted" in result.stderr
 
@@ -310,29 +331,65 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert result.exit_code == 0
     assert "No foreign keystores found" in result.stderr
 
-    result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID])
+    result = runner.invoke(
+        cli, base_args + ["foreign-keystores", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID]
+    )
     assert result.exit_code == 2  # click.UsageError
     assert "No web gateway URL specified" in result.stderr
 
-    result = runner.invoke(cli, base_args + ["--gateway-url", REAL_GATEWAY_URL,  # Here --include-private-keys has no effect
-                                             "foreign-keystores", "import", "--include-private-keys", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID],
-                                             catch_exceptions=False)
+    result = runner.invoke(
+        cli,
+        base_args
+        + [
+            "--gateway-url",
+            REAL_GATEWAY_URL,  # Here --include-private-keys has no effect
+            "foreign-keystores",
+            "import",
+            "--include-private-keys",
+            "--from-gateway",
+            REAL_GATEWAY_KEYSTORE_UID,
+        ],
+        catch_exceptions=False,
+    )
     assert result.exit_code == 0
     assert "Authenticator 0f0c0988-80c1-9362-11c1-b06909a3a53c (owner: ¤aaa) imported" in result.stderr
 
-    result = runner.invoke(cli, base_args + ["--gateway-url", REAL_GATEWAY_URL,
-                                             "foreign-keystores", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID],
-                                            catch_exceptions=False)
+    result = runner.invoke(
+        cli,
+        base_args
+        + [
+            "--gateway-url",
+            REAL_GATEWAY_URL,
+            "foreign-keystores",
+            "import",
+            "--from-gateway",
+            REAL_GATEWAY_KEYSTORE_UID,
+        ],
+        catch_exceptions=False,
+    )
     assert result.exit_code == 0
     assert "Authenticator 0f0c0988-80c1-9362-11c1-b06909a3a53c (owner: ¤aaa) updated" in result.stderr
 
-    result = runner.invoke(cli, base_args + ["--gateway-url", REAL_GATEWAY_URL,
-                                             "foreign-keystores", "import", "--from-gateway", "676ff51f-1439-48d9-94f9-xxx"])
+    result = runner.invoke(
+        cli,
+        base_args
+        + [
+            "--gateway-url",
+            REAL_GATEWAY_URL,
+            "foreign-keystores",
+            "import",
+            "--from-gateway",
+            "676ff51f-1439-48d9-94f9-xxx",
+        ],
+    )
     assert result.exit_code == 2
     assert "not a valid UUID." in result.stderr
 
-    result = runner.invoke(cli, base_args + ["--gateway-url", REAL_GATEWAY_URL,
-                                             "foreign-keystores", "import", "--from-gateway", wrong_uuid_str])
+    result = runner.invoke(
+        cli,
+        base_args
+        + ["--gateway-url", REAL_GATEWAY_URL, "foreign-keystores", "import", "--from-gateway", wrong_uuid_str],
+    )
     assert result.exit_code == 1  # Other exception raised
     assert "does not exist in database" in str(result.exc_info[1])
 
@@ -341,11 +398,15 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert " 0f0c0988-80c1-9362-11c1-b06909a3a53c " in result.stdout  # Table is displayed
     assert " ¤aaa " in result.stdout
 
-    result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID])
+    result = runner.invoke(
+        cli, base_args + ["foreign-keystores", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID]
+    )
     assert result.exit_code == 2
     assert "No web gateway URL specified" in result.stderr
 
-    result = runner.invoke(cli, base_args + ["foreign-keystores", "delete", REAL_GATEWAY_KEYSTORE_UID], catch_exceptions=False)
+    result = runner.invoke(
+        cli, base_args + ["foreign-keystores", "delete", REAL_GATEWAY_KEYSTORE_UID], catch_exceptions=False
+    )
     assert result.exit_code == 0
     assert "successfully deleted" in result.stderr
 
@@ -361,17 +422,19 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert result.exit_code == 1
     assert "keystore_metadata.json does not exist" in str(result.exc_info[1])
 
-    keystore_metadata = initialize_authenticator(authenticator_path, keystore_owner="myuserxyz", keystore_passphrase_hint="somestuffs")
+    keystore_metadata = initialize_authenticator(
+        authenticator_path, keystore_owner="myuserxyz", keystore_passphrase_hint="somestuffs"
+    )
     new_keystore_uid = keystore_metadata["keystore_uid"]
     filesystem_keystore = FilesystemKeystore(authenticator_path)
     keypairs_count = random.randint(1, 3)
 
     for i in range(keypairs_count):
-        generate_keypair_for_storage(
-            key_algo="RSA_OAEP", keystore=filesystem_keystore, passphrase=None
-        )
+        generate_keypair_for_storage(key_algo="RSA_OAEP", keystore=filesystem_keystore, passphrase=None)
 
-    result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--from-path", authenticator_path], catch_exceptions=False)
+    result = runner.invoke(
+        cli, base_args + ["foreign-keystores", "import", "--from-path", authenticator_path], catch_exceptions=False
+    )
     assert result.exit_code == 0
     assert "imported" in result.stderr
     assert "updated" not in result.stderr
@@ -392,17 +455,23 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert len(data_tree) == 1
     assert data_tree[0]["keystore_owner"] == "myuserxyz"
 
-    result = runner.invoke(cli, base_args + ["foreign-keystores", "import", "--include-private-keys", "--from-path", authenticator_path], catch_exceptions=False)
+    result = runner.invoke(
+        cli,
+        base_args + ["foreign-keystores", "import", "--include-private-keys", "--from-path", authenticator_path],
+        catch_exceptions=False,
+    )
     assert result.exit_code == 0
     assert "imported" not in result.stderr
     assert "updated" in result.stderr
     assert "with private keys" in result.stderr
 
-    result = runner.invoke(cli, base_args + ["foreign-keystores", "list", "--format", "plain"], catch_exceptions=False)  # Plain format is the default anyway
+    result = runner.invoke(
+        cli, base_args + ["foreign-keystores", "list", "--format", "plain"], catch_exceptions=False
+    )  # Plain format is the default anyway
     assert result.exit_code == 0
     assert str(new_keystore_uid) in result.stdout
     assert " 0 " not in result.stdout
-    assert result.stdout.count(" %d " % keypairs_count) == 2   # Public keys AND private keys
+    assert result.stdout.count(" %d " % keypairs_count) == 2  # Public keys AND private keys
 
     result = runner.invoke(cli, base_args + ["foreign-keystores", "delete", wrong_uuid_str])
     assert result.exit_code == 2
@@ -413,7 +482,9 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert str(new_keystore_uid) in result.stdout
     assert " myuserxyz " in result.stdout
 
-    result = runner.invoke(cli, base_args + ["foreign-keystores", "delete", str(new_keystore_uid)], catch_exceptions=False)
+    result = runner.invoke(
+        cli, base_args + ["foreign-keystores", "delete", str(new_keystore_uid)], catch_exceptions=False
+    )
     assert result.exit_code == 0
     assert "successfully deleted" in result.stderr
 
@@ -426,17 +497,23 @@ def test_cli_cryptainer_storage_list_delete_and_purge(tmp_path):
     cryptainer_storage_path = tmp_path
 
     cryptainer_storage = CryptainerStorage(cryptainer_storage_path, default_cryptoconf=SIMPLE_CRYPTOCONF)
-    cryptainer_storage_bundled = CryptainerStorage(cryptainer_storage_path, default_cryptoconf=SIMPLE_CRYPTOCONF, offload_payload_ciphertext=False)
+    cryptainer_storage_bundled = CryptainerStorage(
+        cryptainer_storage_path, default_cryptoconf=SIMPLE_CRYPTOCONF, offload_payload_ciphertext=False
+    )
 
     base_args = ["--cryptainer-storage", str(cryptainer_storage_path)]
 
     runner = _get_cli_runner()
 
-    result = runner.invoke(cli, ["-v", "DEBUG", "cryptainers", "list"], catch_exceptions=False)  # No forced cryptainer storage here
+    result = runner.invoke(
+        cli, ["-v", "DEBUG", "cryptainers", "list"], catch_exceptions=False
+    )  # No forced cryptainer storage here
     assert result.exit_code == 0
     assert "No cryptainer-storage directory provided, defaulting" in result.stderr
 
-    result = runner.invoke(cli, base_args + ["cryptainers", "list", "--format", "plain"], catch_exceptions=False)  # Default format
+    result = runner.invoke(
+        cli, base_args + ["cryptainers", "list", "--format", "plain"], catch_exceptions=False
+    )  # Default format
     assert result.exit_code == 0
     assert "No cryptainers found" in result.stderr
 
@@ -466,8 +543,12 @@ def test_cli_cryptainer_storage_list_delete_and_purge(tmp_path):
     recent_date_str = (get_utc_now_date() - timedelta(days=100)).strftime("%Y%m%d")
     first_cryptainer_name_base = "%s_152428_rtsp_camera_cryptainer.mp4" % recent_date_str
     cryptainer_storage.enqueue_file_for_encryption(first_cryptainer_name_base, payload=b"xyz", cryptainer_metadata=None)
-    cryptainer_storage.enqueue_file_for_encryption("20420221_152428_rtsp_camera_cryptainer.mp4", payload=b"xyz"*1024**2, cryptainer_metadata=None)
-    cryptainer_storage_bundled.enqueue_file_for_encryption("20430221_152428_rtsp_camera_cryptainer.mp4", payload=b"xyz", cryptainer_metadata=None)
+    cryptainer_storage.enqueue_file_for_encryption(
+        "20420221_152428_rtsp_camera_cryptainer.mp4", payload=b"xyz" * 1024**2, cryptainer_metadata=None
+    )
+    cryptainer_storage_bundled.enqueue_file_for_encryption(
+        "20430221_152428_rtsp_camera_cryptainer.mp4", payload=b"xyz", cryptainer_metadata=None
+    )
 
     cryptainer_storage.wait_for_idle_state()
     cryptainer_storage_bundled.wait_for_idle_state()
@@ -523,7 +604,6 @@ def test_cli_cryptainer_storage_list_delete_and_purge(tmp_path):
 
 
 def test_cli_cryptainer_validate(tmp_path):
-
     cryptainer_storage_path = tmp_path
 
     (cryptainer_storage_path / "badcryptainer.crypt").write_bytes(b"{}")
@@ -544,7 +624,9 @@ def test_cli_cryptainer_validate(tmp_path):
     assert result.exit_code == 0
     assert "is valid" in result.stderr
 
-    result = runner.invoke(cli, base_args + ["cryptainers", "validate", "goodfile.crypt.payload"])  # Exists but is not a proper cryptainer!
+    result = runner.invoke(
+        cli, base_args + ["cryptainers", "validate", "goodfile.crypt.payload"]
+    )  # Exists but is not a proper cryptainer!
     assert result.exit_code == 1
     assert "is invalid" not in result.stderr
     assert "can't decode" in str(result.exc_info[1])  # Unhandled exception for now

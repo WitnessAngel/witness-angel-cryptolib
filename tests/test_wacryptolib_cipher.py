@@ -41,7 +41,6 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
             pass  # Proper failure
 
     for _ in range(5):
-
         # Test in-place modification of encrypted data
 
         encryption = copy.deepcopy(initial_cipherdict)
@@ -61,7 +60,6 @@ def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_cont
         _check_decryption_fails(encryption)
 
     for _ in range(3):
-
         # Test extension of encrypetd data with random bytes
 
         suffix = get_random_bytes(random.randint(4, 10))
@@ -156,7 +154,6 @@ _stream_algo_nodes = [[algo] for algo in STREAMABLE_CIPHER_ALGOS] + [STREAMABLE_
 
 @pytest.mark.parametrize("cipher_algo_list", _stream_algo_nodes)
 def test_valid_payload_encryption_pipeline(cipher_algo_list):
-
     output_stream = io.BytesIO()
 
     payload_cipher_layer_extracts = []
@@ -191,7 +188,6 @@ def test_valid_payload_encryption_pipeline(cipher_algo_list):
     for payload_encryption_node, authentication_data in zip(
         reversed(payload_cipher_layer_extracts), reversed(encryption_pipeline.get_payload_integrity_tags())
     ):
-
         for hash_algo in payload_encryption_node["payload_digest_algos"]:
             new_hash = hash_message(message=current_ciphertext, hash_algo=hash_algo)
             expected_hash = authentication_data["payload_digests"][hash_algo]
@@ -226,7 +222,6 @@ def test_invalid_payload_encryption_pipeline():
 
 @pytest.mark.parametrize("cipher_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
 def test_symmetric_decryption_verify(cipher_algo):
-
     attribute_to_corrupt = "tag"  # For now it's the only kind of authentication marker
     is_corruptable = cipher_algo in AUTHENTICATED_CIPHER_ALGOS
 

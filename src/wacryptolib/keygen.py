@@ -69,7 +69,6 @@ def generate_keypair(
 
 # Intermediate function to help monkey-patching in tests
 def _do_generate_keypair(key_algo, serialize, key_length_bits, curve, passphrase):
-
     assert serialize or passphrase is None
 
     if isinstance(passphrase, str):

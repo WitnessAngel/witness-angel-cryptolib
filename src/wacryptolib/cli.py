@@ -19,7 +19,9 @@ from wacryptolib.cryptainer import (
     SHARED_SECRET_ALGO_MARKER,
     check_cryptoconf_sanity,
     check_cryptainer_sanity,
-    get_cryptoconf_summary, CryptainerStorage, )
+    get_cryptoconf_summary,
+    CryptainerStorage,
+)
 from wacryptolib.exceptions import ValidationError, DecryptionError
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_str, get_nice_size
@@ -33,7 +35,9 @@ _internal_app_dir = Path("~/.witnessangel").expanduser().resolve()
 DEFAULT_KEYSTORE_POOL_PATH = _internal_app_dir / "keystore_pool"
 DEFAULT_CRYPTAINER_STORAGE_PATH = _internal_app_dir / "cryptainers"
 INDENT = "  "
-FORMAT_OPTION = click.option("-f", "--format", type=click.Choice(['plain', 'json'], case_sensitive=False), default="plain")
+FORMAT_OPTION = click.option(
+    "-f", "--format", type=click.Choice(["plain", "json"], case_sensitive=False), default="plain"
+)
 
 
 def _short_format_datetime(dt):
@@ -63,10 +67,12 @@ def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=
         cryptainer_storage_dir.mkdir(exist_ok=True)
     else:
         cryptainer_storage_dir = Path(cryptainer_storage_dir_str)
-    return CryptainerStorage(cryptainer_storage_dir,
-                             keystore_pool=keystore_pool,
-                             offload_payload_ciphertext=offload_payload_ciphertext,
-                             **extra_kwargs)
+    return CryptainerStorage(
+        cryptainer_storage_dir,
+        keystore_pool=keystore_pool,
+        offload_payload_ciphertext=offload_payload_ciphertext,
+        **extra_kwargs
+    )
 
 
 EXAMPLE_CRYPTOCONF = dict(
@@ -112,7 +118,14 @@ EXAMPLE_CRYPTOCONF = dict(
     default=None,
     help="Folder to get/set crypto keys (else %s is used)" % DEFAULT_KEYSTORE_POOL_PATH,
     type=click.Path(
-        exists=True, file_okay=False, dir_okay=True, writable=True, readable=True, resolve_path=True, allow_dash=False, path_type=Path
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        writable=True,
+        readable=True,
+        resolve_path=True,
+        allow_dash=False,
+        path_type=Path,
     ),
 )
 @click.option(
@@ -121,7 +134,14 @@ EXAMPLE_CRYPTOCONF = dict(
     default=None,
     help="Folder to store cryptainers (else %s is used)" % DEFAULT_CRYPTAINER_STORAGE_PATH,
     type=click.Path(
-        exists=True, file_okay=False, dir_okay=True, writable=True, readable=True, resolve_path=True, allow_dash=False, path_type=Path
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        writable=True,
+        readable=True,
+        resolve_path=True,
+        allow_dash=False,
+        path_type=Path,
     ),
 )
 @click.option(  # Fixme use Pypi click-params.URl one day?
@@ -144,7 +164,7 @@ def cryptoconf():
 
 
 @cryptoconf.command("validate")
-@click.argument('cryptoconf_file', type=click.File("rb"))
+@click.argument("cryptoconf_file", type=click.File("rb"))
 @click.pass_context
 def validate_cryptoconf(ctx, cryptoconf_file):
     try:
@@ -156,7 +176,7 @@ def validate_cryptoconf(ctx, cryptoconf_file):
 
 
 @cryptoconf.command("summarize")
-@click.argument('cryptoconf_file', type=click.File("rb"))
+@click.argument("cryptoconf_file", type=click.File("rb"))
 @click.pass_context
 def summarize_cryptoconf(ctx, cryptoconf_file):
     """Display a summary of a cryptoconf structure."""
@@ -176,18 +196,22 @@ def foreign_keystores():
 def list_foreign_keystores(ctx, format):  # FIXME list count of public/private keys too!
     keystore_pool = _get_keystore_pool(ctx)
     foreign_keystore_metadata_list = keystore_pool.get_all_foreign_keystore_metadata(include_keypair_identifiers=True)
-    #print(foreign_keystore_metadata_list)
+    # print(foreign_keystore_metadata_list)
 
     foreign_keystores = []
 
     for foreign_keystore_uid, foreign_keystore_metadata in sorted(foreign_keystore_metadata_list.items()):
-        foreign_keystores.append(dict(
-            keystore_uid=foreign_keystore_uid,
-            keystore_owner=foreign_keystore_metadata["keystore_owner"],
-            keystore_creation_datetime = foreign_keystore_metadata.get("keystore_creation_datetime"),
-            public_key_count = len(foreign_keystore_metadata["keypair_identifiers"]),
-            private_key_count = len([x for x in foreign_keystore_metadata["keypair_identifiers"] if x["private_key_present"]]),
-        ))
+        foreign_keystores.append(
+            dict(
+                keystore_uid=foreign_keystore_uid,
+                keystore_owner=foreign_keystore_metadata["keystore_owner"],
+                keystore_creation_datetime=foreign_keystore_metadata.get("keystore_creation_datetime"),
+                public_key_count=len(foreign_keystore_metadata["keypair_identifiers"]),
+                private_key_count=len(
+                    [x for x in foreign_keystore_metadata["keypair_identifiers"] if x["private_key_present"]]
+                ),
+            )
+        )
 
     if format == "json":
         # Even if empty, we output it
@@ -203,16 +227,20 @@ def list_foreign_keystores(ctx, format):  # FIXME list count of public/private k
     table = PrettyTable(["Keystore UID", "Owner", "Public keys", "Private Keys", "Created at (UTC)"])
     # table.align = "l"  useless
     for keystore_data in foreign_keystores:
-        table.add_row([keystore_data["keystore_uid"],
-                       keystore_data["keystore_owner"],
-                       keystore_data["public_key_count"],
-                       keystore_data["private_key_count"],
-                       _short_format_datetime(keystore_data["keystore_creation_datetime"]),])
+        table.add_row(
+            [
+                keystore_data["keystore_uid"],
+                keystore_data["keystore_owner"],
+                keystore_data["public_key_count"],
+                keystore_data["private_key_count"],
+                _short_format_datetime(keystore_data["keystore_creation_datetime"]),
+            ]
+        )
     click.echo(table)
 
 
 @foreign_keystores.command("delete")
-@click.argument('keystore_uid', type=click.UUID)
+@click.argument("keystore_uid", type=click.UUID)
 @click.pass_context
 def delete_foreign_keystore(ctx, keystore_uid):
     keystore_pool = _get_keystore_pool(ctx)
@@ -226,25 +254,33 @@ def delete_foreign_keystore(ctx, keystore_uid):
 
 @foreign_keystores.command("import")
 @click.option("--from-usb", help="Fetch authenticators from plugged USB devices", is_flag=True)
-@click.option("--from-path", help="Fetch authenticator from folder path", type=click.Path(
-    exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True, allow_dash=False, path_type=Path
-))
+@click.option(
+    "--from-path",
+    help="Fetch authenticator from folder path",
+    type=click.Path(
+        exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True, allow_dash=False, path_type=Path
+    ),
+)
 @click.option("--from-gateway", help="Fetch authenticator by uid from gateway", type=click.UUID)
 @click.option("--include-private-keys", help="Import private keys when available", is_flag=True)
 @click.pass_context
 def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_private_keys):
-
     if not from_usb and not from_gateway and not from_path:
         raise click.UsageError("No source selected for keystore import")
 
     keystore_pool = _get_keystore_pool(ctx)
 
     if from_usb:
-        logger.info("Importing foreign keystores from USB devices, %s private keys" % ("with" if include_private_keys else "without"))
+        logger.info(
+            "Importing foreign keystores from USB devices, %s private keys"
+            % ("with" if include_private_keys else "without")
+        )
         results = operations.import_keystores_from_initialized_authdevices(
-            keystore_pool,
-            include_private_keys=include_private_keys)
-        msg = "{foreign_keystore_count} new authenticators imported, {already_existing_keystore_count} updated, {corrupted_keystore_count} skipped because corrupted".format(**results)
+            keystore_pool, include_private_keys=include_private_keys
+        )
+        msg = "{foreign_keystore_count} new authenticators imported, {already_existing_keystore_count} updated, {corrupted_keystore_count} skipped because corrupted".format(
+            **results
+        )
         logger.info(msg)
 
     def _build_single_import_success_message(_keystore_metadata, _updated):
@@ -252,27 +288,30 @@ def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_pri
         return _msg.format(_keystore_metadata["keystore_uid"], _keystore_metadata["keystore_owner"])
 
     if from_path:
-        logger.info("Importing foreign keystore from folder %s, %s private keys" % (from_path, "with" if include_private_keys else "without"))
+        logger.info(
+            "Importing foreign keystore from folder %s, %s private keys"
+            % (from_path, "with" if include_private_keys else "without")
+        )
         keystore_metadata, updated = operations.import_keystore_from_path(
-            keystore_pool,
-            keystore_path=from_path,
-            include_private_keys=include_private_keys)
+            keystore_pool, keystore_path=from_path, include_private_keys=include_private_keys
+        )
         msg = _build_single_import_success_message(keystore_metadata, updated)
         logger.info(msg)
 
     if from_gateway:
-        #print(">>>>>>>>>>>>>", ctx.obj)
+        # print(">>>>>>>>>>>>>", ctx.obj)
         gateway_url = ctx.obj["gateway-url"]
         if not gateway_url:
             raise click.UsageError("No web gateway URL specified for keystore import")
         logger.info("Importing foreign keystore %s from web gateway" % from_gateway)
-        keystore_metadata, updated = operations.import_keystore_from_web_gateway(keystore_pool, gateway_url=gateway_url, keystore_uid=from_gateway)
+        keystore_metadata, updated = operations.import_keystore_from_web_gateway(
+            keystore_pool, gateway_url=gateway_url, keystore_uid=from_gateway
+        )
         msg = _build_single_import_success_message(keystore_metadata, updated)
         logger.info(msg)
 
 
 def __(payload, cryptoconf_fileobj, keystore_pool):  # FIXME REMOVE
-
     if not cryptoconf_fileobj:
         logger.warning("No cryptoconf provided, defaulting to simple example conf")
         cryptoconf = EXAMPLE_CRYPTOCONF
@@ -288,8 +327,13 @@ def __(payload, cryptoconf_fileobj, keystore_pool):  # FIXME REMOVE
 
 
 @wacryptolib_cli.command()
-@click.argument('input_file', type=click.File('rb'), )
-@click.option("-o", "--output-basename", help="Basename of the cryptainer storage output file")  # TODO allow piping via allow-dash
+@click.argument(
+    "input_file",
+    type=click.File("rb"),
+)
+@click.option(
+    "-o", "--output-basename", help="Basename of the cryptainer storage output file"
+)  # TODO allow piping via allow-dash
 @click.option("-c", "--cryptoconf", default=None, help="Json crypotoconf file", type=click.File("rb"))
 @click.option("--bundle", help="Combine cryptainer metadata and payload", is_flag=True)
 @click.pass_context
@@ -312,17 +356,22 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
 
     if output_basename:
         if output_basename.endswith(CRYPTAINER_SUFFIX):
-            output_basename = output_basename[:-len(CRYPTAINER_SUFFIX)]  # Strip premature suffix
+            output_basename = output_basename[: -len(CRYPTAINER_SUFFIX)]  # Strip premature suffix
         filename_base = output_basename
     else:
         filename_base = input_file.name
 
-    cryptainer_storage = _get_cryptainer_storage(ctx, keystore_pool=keystore_pool, offload_payload_ciphertext=offload_payload_ciphertext)
+    cryptainer_storage = _get_cryptainer_storage(
+        ctx, keystore_pool=keystore_pool, offload_payload_ciphertext=offload_payload_ciphertext
+    )
     output_cryptainer_name = cryptainer_storage.encrypt_file(
         filename_base=filename_base, payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
     )
 
-    logger.info("Encryption of file '%s' to storage cryptainer '%s' successfully finished" % (input_file.name, output_cryptainer_name))
+    logger.info(
+        "Encryption of file '%s' to storage cryptainer '%s' successfully finished"
+        % (input_file.name, output_cryptainer_name)
+    )
 
 
 @wacryptolib_cli.group()
@@ -337,7 +386,8 @@ def cryptainers():
 def list_cryptainers(ctx, format):
     cryptainer_storage = _get_cryptainer_storage(ctx)
     cryptainer_properties_list = cryptainer_storage.list_cryptainer_properties(
-        as_sorted_list=True, with_creation_datetime=True, with_size=True, with_offloaded=True)
+        as_sorted_list=True, with_creation_datetime=True, with_size=True, with_offloaded=True
+    )
 
     for cryptainer_properties in cryptainer_properties_list:
         cryptainer_properties["name"] = str(cryptainer_properties["name"])  # Avoid Path objects here
@@ -355,10 +405,14 @@ def list_cryptainers(ctx, format):
 
     table = PrettyTable(["Name", "Size", "Offloaded", "Created at (UTC)"])
     for cryptainer_properties in cryptainer_properties_list:
-        table.add_row([cryptainer_properties["name"],
-                       get_nice_size(cryptainer_properties["size"]),
-                       "X" if cryptainer_properties["offloaded"] else "",
-                       _short_format_datetime(cryptainer_properties["creation_datetime"]),])
+        table.add_row(
+            [
+                cryptainer_properties["name"],
+                get_nice_size(cryptainer_properties["size"]),
+                "X" if cryptainer_properties["offloaded"] else "",
+                _short_format_datetime(cryptainer_properties["creation_datetime"]),
+            ]
+        )
     click.echo(table)
 
 
@@ -387,7 +441,7 @@ def summarize_cryptainer(ctx, cryptainer_name):
 
 
 @cryptainers.command("delete")
-@click.argument('cryptainer_name')
+@click.argument("cryptainer_name")
 @click.pass_context
 def delete_cryptainer(ctx, cryptainer_name):
     cryptainer_storage = _get_cryptainer_storage(ctx)
@@ -413,7 +467,7 @@ def decrypt(ctx, cryptainer_name, output_file):
     if not output_file:
         if cryptainer_name.endswith(CRYPTAINER_SUFFIX):
             # This SHOULD be the case since we add the suffix ourselves on encryption
-            output_file_name = cryptainer_name[:-len(CRYPTAINER_SUFFIX)]
+            output_file_name = cryptainer_name[: -len(CRYPTAINER_SUFFIX)]
         else:
             output_file_name = cryptainer_name + DECRYPTED_FILE_SUFFIX
         output_file = LazyFile(output_file_name, "wb")  # We output it in current directory...
@@ -426,7 +480,9 @@ def decrypt(ctx, cryptainer_name, output_file):
 
     check_cryptainer_sanity(cryptainer)
 
-    medium_content, error_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool, passphrase_mapper=None)
+    medium_content, error_report = decrypt_payload_from_cryptainer(
+        cryptainer, keystore_pool=keystore_pool, passphrase_mapper=None
+    )
 
     if error_report:
         logger.warning("Decryption errors occurred:")
@@ -439,7 +495,9 @@ def decrypt(ctx, cryptainer_name, output_file):
     with output_file:
         output_file.write(medium_content)
 
-    logger.info("Decryption of cryptainer '%s' to file '%s' successfully finished" % (cryptainer_name, output_file.name))
+    logger.info(
+        "Decryption of cryptainer '%s' to file '%s' successfully finished" % (cryptainer_name, output_file.name)
+    )
 
 
 @cryptainers.command("purge")
@@ -454,7 +512,7 @@ def purge_cryptainers(ctx, max_age, max_count, max_quota):
         max_cryptainer_quota=(max_quota * 1024**2 if max_quota else None),  # Actually MiBs here...
     )
 
-    extra_kwargs = {k:v for (k, v) in extra_kwargs.items() if v is not None}
+    extra_kwargs = {k: v for (k, v) in extra_kwargs.items() if v is not None}
 
     if not extra_kwargs:
         raise click.UsageError("Aborting purge, since no criterion was provided as argument")

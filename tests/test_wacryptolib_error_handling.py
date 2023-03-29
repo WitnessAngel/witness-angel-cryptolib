@@ -40,7 +40,6 @@ class MyExcChild1GrandChild(MyExcChild1):
 
 
 def test_status_slugs_utilities():
-
     this_module = sys.modules[MyExc.__module__]
 
     selected_classes = gather_exception_subclasses(module=this_module, parent_classes=[MyExc])
@@ -119,7 +118,6 @@ def test_status_slugs_utilities():
 
 
 def test_status_slugs_mapper_class():
-
     import builtins
 
     exception_classes = StatusSlugsMapper.gather_exception_subclasses(

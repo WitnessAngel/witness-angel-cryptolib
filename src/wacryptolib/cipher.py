@@ -357,7 +357,6 @@ class PayloadEncryptionPipeline:
     _finalized = False
 
     def __init__(self, output_stream: BinaryIO, payload_cipher_layer_extracts: list):
-
         self._output_stream = output_stream
         self._cipher_streams = []
 

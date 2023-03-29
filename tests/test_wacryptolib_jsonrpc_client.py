@@ -11,7 +11,6 @@ from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error
 
 @responses.activate
 def test_jsonrpc_extended_json_calls():
-
     uid = uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")
 
     server = JsonRpcProxy("http://mock/xmlrpc", response_error_handler=None)
@@ -93,7 +92,6 @@ def test_jsonrpc_extended_json_calls():
 
 
 def test_status_slugs_response_error_handler():
-
     exc = ProtocolError(
         "problems occurred",
         server_data={

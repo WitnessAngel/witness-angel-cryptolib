@@ -2,8 +2,12 @@ import logging
 
 from wacryptolib.authdevice import list_available_authdevices
 from wacryptolib.authenticator import SENSITIVE_KEYSTORE_FIELDS, is_authenticator_initialized
-from wacryptolib.cryptainer import check_cryptoconf_sanity, encrypt_payload_into_cryptainer, check_cryptainer_sanity, \
-    decrypt_payload_from_cryptainer
+from wacryptolib.cryptainer import (
+    check_cryptoconf_sanity,
+    encrypt_payload_into_cryptainer,
+    check_cryptainer_sanity,
+    decrypt_payload_from_cryptainer,
+)
 from wacryptolib.exceptions import ValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.keystore import KeystorePoolBase, ReadonlyFilesystemKeystore, KEYSTORE_FORMAT, validate_keystore_tree
@@ -22,11 +26,15 @@ def ___encrypt_payload_to_bytes(payload: bytes, cryptoconf: dict, keystore_pool:
     return cryptainer_bytes
 
 
-def decrypt_payload_from_bytes(cryptainer_bytes: bytes, keystore_pool: KeystorePoolBase, passphrase_mapper=None) -> tuple:  # FIXME useless?
+def decrypt_payload_from_bytes(
+    cryptainer_bytes: bytes, keystore_pool: KeystorePoolBase, passphrase_mapper=None
+) -> tuple:  # FIXME useless?
     cryptainer = load_from_json_bytes(cryptainer_bytes)
     check_cryptainer_sanity(cryptainer)
 
-    payload, error_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper)
+    payload, error_report = decrypt_payload_from_cryptainer(
+        cryptainer, keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper
+    )
     return payload, error_report  # Payload might be None
 
 
@@ -53,7 +61,6 @@ def import_keystore_from_path(keystore_pool, keystore_path, include_private_keys
 
 
 def import_keystores_from_initialized_authdevices(keystore_pool, include_private_keys: bool):
-
     authdevices = list_available_authdevices()
     authdevices_initialized = [x for x in authdevices if is_authenticator_initialized(x["authenticator_dir"])]
 
@@ -62,11 +69,12 @@ def import_keystores_from_initialized_authdevices(keystore_pool, include_private
     corrupted_keystore_count = 0
 
     for authdevice in authdevices_initialized:
-
         remote_keystore_dir = authdevice["authenticator_dir"]
 
         try:
-            keystore_metadata, updated = import_keystore_from_path(keystore_pool, keystore_path=remote_keystore_dir, include_private_keys=include_private_keys)
+            keystore_metadata, updated = import_keystore_from_path(
+                keystore_pool, keystore_path=remote_keystore_dir, include_private_keys=include_private_keys
+            )
         except ValidationError as exc:
             corrupted_keystore_count += 1
             continue
@@ -87,6 +95,7 @@ def _extract_metadata_from_keystore_tree(keystore_tree):
     keystore_metadata = keystore_tree.copy()
     del keystore_metadata["keypairs"]
     return keystore_metadata
+
 
 def _convert_public_authenticator_to_keystore_tree(public_authenticator) -> dict:
     keypairs = []
@@ -117,7 +126,6 @@ def _convert_public_authenticator_to_keystore_tree(public_authenticator) -> dict
 
 
 def import_keystore_from_web_gateway(keystore_pool, gateway_url, keystore_uid) -> tuple:
-
     gateway_proxy = JsonRpcProxy(url=gateway_url)
 
     public_authenticator = gateway_proxy.get_public_authenticator(keystore_uid=keystore_uid)

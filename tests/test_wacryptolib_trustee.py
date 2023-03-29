@@ -26,7 +26,6 @@ from wacryptolib.utilities import generate_uuid0
 
 
 def test_trustee_api_workflow():
-
     keystore = InMemoryKeystore()
     trustee_api = TrusteeApi(keystore=keystore)
 
@@ -208,7 +207,6 @@ def test_trustee_api_workflow():
 
 
 def test_readonly_trustee_api_behaviour():
-
     keystore = InMemoryKeystore()
     trustee_api = ReadonlyTrusteeApi(keystore=keystore)
 

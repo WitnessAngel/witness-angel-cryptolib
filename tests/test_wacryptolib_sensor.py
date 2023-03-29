@@ -23,13 +23,10 @@ from wacryptolib.utilities import load_from_json_bytes, TaskRunnerStateMachineBa
 
 
 def test_time_limited_aggregator_mixin():
-
     for max_duration_s in (0.5, 20, 1000000):
-
         delta_seconds = max_duration_s / 3
 
         with freeze_time() as frozen_datetime:
-
             obj = TimeLimitedAggregatorMixin(max_duration_s=max_duration_s)
             assert obj._current_start_time is None
 
@@ -55,7 +52,6 @@ def test_time_limited_aggregator_mixin():
 
 
 def test_tarfile_aggregator(tmp_path):
-
     offload_payload_ciphertext = random_bool()
     cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf={"whatever": True},
@@ -69,7 +65,6 @@ def test_tarfile_aggregator(tmp_path):
     assert cryptainer_storage.get_cryptainer_count() == 0
 
     with freeze_time() as frozen_datetime:
-
         tarfile_aggregator.finalize_tarfile()
         cryptainer_storage.wait_for_idle_state()
         assert tarfile_aggregator.get_record_count() == 0
@@ -213,7 +208,6 @@ def test_tarfile_aggregator(tmp_path):
 
 
 def test_json_aggregator(tmp_path):
-
     offload_payload_ciphertext = random_bool()
     cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf={"qsdqsdsd": True},
@@ -237,7 +231,6 @@ def test_json_aggregator(tmp_path):
     assert not json_aggregator._current_start_time
 
     with freeze_time() as frozen_datetime:
-
         json_aggregator.add_data(dict(pulse=42))
         json_aggregator.add_data(dict(timing=True))
 
@@ -301,7 +294,6 @@ def test_json_aggregator(tmp_path):
 
 
 def test_aggregators_thread_safety(tmp_path):
-
     offload_payload_ciphertext = random_bool()
     cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf={"zesvscc": True},
@@ -381,7 +373,6 @@ def test_aggregators_thread_safety(tmp_path):
 
 
 def test_periodic_value_poller(tmp_path):
-
     offload_payload_ciphertext = random_bool()
     cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf={"zexcsc": True},
@@ -538,7 +529,6 @@ def _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_si
 
 @pytest.mark.parametrize("transmit_post_stop_data", [True, False])
 def test_periodic_subprocess_stream_recorder_simple_cases(tmp_path, transmit_post_stop_data):
-
     cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
 
     def _purge_cryptainer_storage(cryptainer_storage, _cryptainer_names):
@@ -564,7 +554,6 @@ def test_periodic_subprocess_stream_recorder_simple_cases(tmp_path, transmit_pos
 
 
 def test_periodic_subprocess_stream_recorder_broken_executable(tmp_path):
-
     # Signing was too slow and broke the "2 cryptainers only" rule
     cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=True)
 
@@ -581,7 +570,6 @@ def test_periodic_subprocess_stream_recorder_broken_executable(tmp_path):
 
 
 def test_periodic_subprocess_stream_recorder_autoexiting_executable(tmp_path):
-
     cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
 
     recorder = TestStreamRecorderForTesting(
@@ -599,7 +587,6 @@ def test_periodic_subprocess_stream_recorder_autoexiting_executable(tmp_path):
 
 
 def test_periodic_subprocess_stream_recorder_non_quittable_executable(tmp_path):
-
     cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
 
     recorder = TestStreamRecorderForTesting(
@@ -618,7 +605,6 @@ def test_periodic_subprocess_stream_recorder_non_quittable_executable(tmp_path):
 
 
 def test_periodic_subprocess_stream_recorder_non_killable_executable(tmp_path):
-
     cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
 
     recorder = TestStreamRecorderForTesting(
@@ -650,7 +636,6 @@ def test_periodic_subprocess_stream_recorder_non_killable_executable(tmp_path):
 
 
 def test_periodic_subprocess_stream_recorder_with_custom_encryption_stream(tmp_path):
-
     cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
 
     finalization_result_holder = []

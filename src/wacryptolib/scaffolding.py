@@ -113,7 +113,6 @@ def check_keystore_basic_get_set_api(keystore, readonly_keystore=None):
     # Test miscellaneous "not found" cases when any part of identifiers change
 
     for _keystore in all_keystores:
-
         # Sanity check
         assert _keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"public_data"
         assert _keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"private_data"

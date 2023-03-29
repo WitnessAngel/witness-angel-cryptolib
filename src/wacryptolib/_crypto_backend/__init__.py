@@ -14,7 +14,6 @@ except ImportError:
 
 
 if use_fallback_backend:
-
     # BEWARE - to test this fallback mode on a normal PC, erase all .so/.dll files of pycrptodome, and for use_fallback_backend to True #
 
     logger.info("Full pycryptodome lib not available under this environment, injecting fake C extensions")

@@ -7,9 +7,7 @@ from wacryptolib._crypto_backend import get_random_bytes
 
 
 def test_shared_secret_normal_cases():
-
     for _ in range(5):
-
         bytes_length = random.randint(1, 500)
 
         secret = get_random_bytes(bytes_length)
@@ -47,7 +45,6 @@ def test_shared_secret_normal_cases():
 
 
 def test_shared_secret_corner_cases():
-
     with pytest.raises(ValueError):
         wacryptolib.shared_secret.recombine_secret_from_shards([])
 

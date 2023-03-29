@@ -137,7 +137,6 @@ class TrusteeApi:
         accepted = []
 
         for keypair_identifier in keypair_identifiers:
-
             keychain_uid = keypair_identifier["keychain_uid"]
             key_algo = keypair_identifier["key_algo"]
 

@@ -84,7 +84,6 @@ def generate_keystore_pool(tmp_path):
     authdevice_path.mkdir()
 
     for _ in range(2):  # Import is idempotent
-
         keystore_pool = FilesystemKeystorePool(authdevice_path)
         keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree)
 

@@ -58,7 +58,6 @@ def _list_available_authdevices_win32():
 
         for partition in drive.associators("Win32_DiskDriveToDiskPartition"):
             for logical_disk in partition.associators("Win32_LogicalDiskToPartition"):
-
                 device_path = logical_disk.Caption + "\\"
 
                 authdevice = {}
@@ -104,7 +103,6 @@ def _list_available_authdevices_linux():
     logger.debug("All mounted psutil partitions found: %s", str(all_existing_partitions))
 
     for p in all_existing_partitions:
-
         if p.device not in removable_device_partitions:
             continue
 
@@ -135,7 +133,6 @@ def _list_available_authdevices_darwin():
 
 
 def _find_authdevices_in_macosx_system_profiler_data(device_list):
-
     authdevice_list = []
 
     def _is_plist_property_true(value):
@@ -159,7 +156,6 @@ def _find_authdevices_in_macosx_system_profiler_data(device_list):
             assert media_list  # By construction, not empty
 
             for media in media_list:
-
                 if not _is_plist_property_true(media.get("removable_media", "")):
                     # print("find_authdevices CODE 3", media)
                     continue

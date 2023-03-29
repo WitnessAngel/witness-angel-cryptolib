@@ -8,7 +8,6 @@ from wacryptolib.exceptions import SignatureVerificationError, SignatureCreation
 
 
 def _common_signature_checks(keypair, message, signature, signature_algo):
-
     assert isinstance(signature["signature_value"], bytes)
     assert isinstance(signature["signature_timestamp_utc"], int)
     utcnow = datetime.utcnow().timestamp()
@@ -75,7 +74,6 @@ def test_sign_and_verify_with_ecc_key():
 
 
 def test_generic_signature_errors():
-
     message = b"Hello"
 
     keypair = wacryptolib.keygen.generate_keypair(key_algo="RSA_OAEP", serialize=False, key_length_bits=2048)

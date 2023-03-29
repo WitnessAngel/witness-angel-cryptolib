@@ -83,7 +83,6 @@ def test_keystore_basic_get_set_api(tmp_path):
 
 
 def test_keystore_free_keys_api(tmp_path):
-
     dummy_keystore = InMemoryKeystore()
     filesystem_keystore = FilesystemKeystore(keys_dir=tmp_path)
     assert not filesystem_keystore._free_keys_dir.exists()
@@ -116,7 +115,6 @@ def test_readonly_keystore_limitations(tmp_path):
 
 
 def test_keystore_free_keys_concurrency(tmp_path):
-
     dummy_keystore = InMemoryKeystore()
     filesystem_keystore = FilesystemKeystore(keys_dir=tmp_path)
 
@@ -195,7 +193,6 @@ def test_filesystem_keystore_list_keypair_identifiers(tmp_path: Path):
 
 
 def test_in_memory_keystore_pool_corner_cases():
-
     keystore_uid = generate_uuid0()
 
     pool = InMemoryKeystorePool()
@@ -208,7 +205,6 @@ def test_in_memory_keystore_pool_corner_cases():
 
 
 def test_filesystem_keystore_pool_basics(tmp_path: Path):
-
     pool = FilesystemKeystorePool(tmp_path)
 
     assert pool.get_all_foreign_keystore_metadata() == {}
@@ -400,7 +396,7 @@ def test_keystore_import_from_keystore_tree(tmp_path: Path):
 
         assert len(loaded_metadata) == len(keystore_tree_metadata)
 
-        for (key, value) in keystore_tree_metadata.items():
+        for key, value in keystore_tree_metadata.items():
             if key == "keystore_creation_datetime":
                 # Special case: precision trouble because Bson only goes down to milliseconds
                 assert (value - loaded_metadata[key]) <= timedelta(milliseconds=1)
@@ -419,7 +415,6 @@ def test_keystore_import_from_keystore_tree(tmp_path: Path):
     # Update import
 
     for i in range(2):  # IDEMPOTENT
-
         keystore_tree["keystore_owner"] += "_corrupted"  # Corrupted, but not taken into account on update!
 
         keystore_tree["keypairs"] = keypairs2
@@ -479,7 +474,6 @@ def test_keystorepool_export_and_import_foreign_keystore_to_keystore_tree(tmp_pa
     authdevice_path.mkdir()
 
     for idx in range(2):  # Import is idempotent
-
         keystore_pool = FilesystemKeystorePool(authdevice_path)
         updated = keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree)
         assert updated == bool(idx)  # Second import is an update
@@ -510,7 +504,6 @@ def test_keystorepool_export_and_import_foreign_keystore_to_keystore_tree(tmp_pa
 
 
 def test_generate_free_keypair_for_least_provisioned_key_algo():
-
     generated_keys_count = 0
 
     def keygen_func(key_algo, serialize):
@@ -598,7 +591,6 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
 
 
 def test_get_free_keypair_generator_worker():
-
     generated_keys_count = 0
 
     keystore = InMemoryKeystore()

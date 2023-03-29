@@ -31,7 +31,9 @@ from wacryptolib.utilities import (
     PeriodicTaskHandler,
     generate_uuid0,
     dump_to_json_file,
-    is_datetime_tz_aware, catch_and_log_exception, validate_data_against_schema,
+    is_datetime_tz_aware,
+    catch_and_log_exception,
+    validate_data_against_schema,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,7 +120,6 @@ def load_keystore_metadata(keystore_dir: Path) -> dict:
 
 
 class KeystoreBase(ABC):
-
     _lock = threading.Lock()
 
     @abstractmethod
@@ -432,13 +433,11 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
         return self._read_from_storage_file(filepath)
 
     def _list_unordered_keypair_identifiers(self):
-
         key_information_list = []
 
         public_key_pem_paths = glob.glob(join(self._keys_dir, "*" + self._public_key_suffix))
 
         for public_key_pem_path in public_key_pem_paths:
-
             public_key_pem_filename = os.path.basename(public_key_pem_path)
 
             match = re.match(self.PUBLIC_KEY_FILENAME_REGEX, public_key_pem_filename)
@@ -520,7 +519,7 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
     To prevent corruption, caller should only persist UUIDs when the key storage operation is successfully finished.
     """
 
-    _randint_args = (10 ** 10, 10 ** 11 - 1)
+    _randint_args = (10**10, 10**11 - 1)
 
     def __init__(self, keys_dir: Path):
         super().__init__(keys_dir=keys_dir)
@@ -569,7 +568,6 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         )
 
     def _attach_free_keypair_to_uuid(self, *, keychain_uid, key_algo):
-
         target_public_key_filename = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True)
         target_private_key_filename = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False)
 
@@ -619,7 +617,6 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
             keystore_updated = False
 
         for keypair in keystore_tree["keypairs"]:
-
             try:
                 self.set_public_key(
                     keychain_uid=keypair["keychain_uid"], key_algo=keypair["key_algo"], public_key=keypair["public_key"]
@@ -746,7 +743,9 @@ class FilesystemKeystorePool(KeystorePoolBase):
         metadata_mapper = {}
         for keystore_uid in keystore_uids:
             assert isinstance(keystore_uid, UUID), keystore_uid
-            metadata = self.get_foreign_keystore_metadata(keystore_uid, include_keypair_identifiers=include_keypair_identifiers)
+            metadata = self.get_foreign_keystore_metadata(
+                keystore_uid, include_keypair_identifiers=include_keypair_identifiers
+            )
             metadata_mapper[keystore_uid] = metadata
 
         return metadata_mapper

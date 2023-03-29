@@ -102,7 +102,6 @@ class TarfileRecordAggregator(TimeLimitedAggregatorMixin):
         return filename
 
     def _flush_aggregated_data(self):
-
         if not self._current_start_time:
             assert not self._current_records_count
             return
@@ -397,7 +396,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
     """THIS IS PRIVATE API"""
 
     # How much data to push to encryption stream at the same time
-    subprocess_data_chunk_size = 2 * 1024 ** 2
+    subprocess_data_chunk_size = 2 * 1024**2
 
     _subprocess = None
     _stdout_thread = None
@@ -416,7 +415,6 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         raise NotImplementedError("%s -> _handle_post_stop_data" % self.sensor_name)
 
     def _launch_and_consume_subprocess(self, command_line, cryptainer_encryption_stream):
-
         logger.info("Calling {} sensor subprocess command: {}".format(self.sensor_name, " ".join(command_line)))
 
         try:
@@ -488,7 +486,6 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         subprocess.kill()
 
     def _do_stop_recording(self):
-
         if self._subprocess is None:
             logger.warning("No subprocess to be terminated in %s stop-recording", self.sensor_name)
             assert self._stdout_thread is None
@@ -529,9 +526,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
                 logger.critical("Stdout reader thread for previous %s subprocess didn't exit" % self.sensor_name)
 
 
-class SensorManager(
-    TaskRunnerStateMachineBase
-):
+class SensorManager(TaskRunnerStateMachineBase):
     """
     Manage a group of sensors for simultaneous starts/stops.
 

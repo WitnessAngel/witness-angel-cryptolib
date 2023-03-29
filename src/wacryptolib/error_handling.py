@@ -15,7 +15,7 @@ def gather_exception_subclasses(module, parent_classes: Sequence):
     """
     parent_classes = tuple(parent_classes)
     selected_classes = []
-    for (key, value) in vars(module).items():
+    for key, value in vars(module).items():
         if isinstance(value, type):
             if issubclass(value, parent_classes):  # Includes parent classes themselves
                 selected_classes.append(value)

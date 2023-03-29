@@ -36,7 +36,6 @@ def test_check_datetime_is_tz_aware():
 
 
 def test_hash_message():
-
     bytestring = get_random_bytes(1000)
 
     assert len(SUPPORTED_HASH_ALGOS) == 4  # For now
@@ -52,7 +51,6 @@ def test_hash_message():
 
 
 def test_split_as_chunks_and_recombine():
-
     bytestring = get_random_bytes(100)
 
     chunks = split_as_chunks(bytestring, chunk_size=25, must_pad=True)
@@ -80,7 +78,6 @@ def test_split_as_chunks_and_recombine():
 
 
 def test_serialization_utilities(tmp_path):
-
     uid = uuid.UUID("7c0b18f5-f410-4e83-9263-b38c2328e516")
     payload = dict(b=b"xyz", a="hêllo", c=uid)
 
@@ -149,7 +146,6 @@ def test_serialization_utilities(tmp_path):
 
 
 def test_generate_uuid0():
-
     utc = pytz.UTC
 
     some_date = datetime(year=2000, month=6, day=12, tzinfo=timezone.min)
@@ -171,7 +167,7 @@ def test_generate_uuid0():
 
 
 def test_get_memory_rss_bytes():
-    assert 30 * 1024 ** 2 < get_memory_rss_bytes() < 200 * 1024 ** 2
+    assert 30 * 1024**2 < get_memory_rss_bytes() < 200 * 1024**2
 
 
 def test_delete_filesystem_node_for_stream(tmp_path):
@@ -186,7 +182,6 @@ def test_delete_filesystem_node_for_stream(tmp_path):
 
 
 def test_catch_and_log_exception():
-
     variable = None
 
     with catch_and_log_exception("testage1"):

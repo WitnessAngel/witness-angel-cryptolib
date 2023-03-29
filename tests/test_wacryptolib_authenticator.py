@@ -31,7 +31,6 @@ def test_authenticator_basic_workflow(tmp_path):
     acceptable_path2.mkdir()  # Directory already exists on this one only
 
     for idx, acceptable_dir in enumerate([acceptable_path1, acceptable_path2]):
-
         assert not is_authenticator_initialized(acceptable_dir)
         with pytest.raises(KeystoreDoesNotExist):
             load_keystore_metadata(acceptable_dir)  # Not initialized yet!

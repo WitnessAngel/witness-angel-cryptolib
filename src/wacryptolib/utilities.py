@@ -76,7 +76,7 @@ def get_memory_rss_bytes():
 
 def get_nice_size(size):  # FIXME TEST THIS
     """We're actually using KiB/MiB/... here"""
-    filesize_units = ('B', 'KB', 'MB', 'GB', 'TB')
+    filesize_units = ("B", "KB", "MB", "GB", "TB")
     for unit in filesize_units:
         if size < 1024.0:
             return "%1.0f %s" % (size, unit)
@@ -109,7 +109,9 @@ def hash_message(message: bytes, hash_algo: str):
     return digest
 
 
-def consume_bytes_as_chunks(data: Union[bytes, BinaryIO], chunk_size: int):  # FIXME RENAME (consume_io_bytes..), DOCUMENT AND TEST ME
+def consume_bytes_as_chunks(
+    data: Union[bytes, BinaryIO], chunk_size: int
+):  # FIXME RENAME (consume_io_bytes..), DOCUMENT AND TEST ME
     """Automatically deletes filesystem entry if it exists!"""
     if hasattr(data, "read"):  # File-like BinaryIO object
         while True:
@@ -399,7 +401,6 @@ def get_validation_micro_schemas(extended_json_format=False):  # FIXME push to d
     micro_schema_int = int
 
     if extended_json_format:
-
         _micro_schema_integer = schema.And(str, schema.Regex(r"^[+-]?\d+$"))
 
         _micro_schema_base64 = schema.And(

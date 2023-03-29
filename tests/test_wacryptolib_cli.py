@@ -32,19 +32,19 @@ def test_cli_help_texts():
 
     result = runner.invoke(cli, ["-h"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert "Usage:" in result.stderr
+    assert "Usage:" in result.stdout
 
     result = runner.invoke(cli, ["encrypt", "-h"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert "into a secure cryptainer" in result.stderr
+    assert "into a secure cryptainer" in result.stdout
 
     result = runner.invoke(cli, ["decrypt", "-h"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert "original media file" in result.stderr
+    assert "original media file" in result.stdout
 
     result = runner.invoke(cli, ["foreign-keystores", "-h"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert "foreign-keystores" in result.stderr
+    assert "foreign-keystores" in result.stdout
 
 
 def test_cli_encryption_decryption_and_summary(tmp_path):

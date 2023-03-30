@@ -29,10 +29,11 @@ from wacryptolib.utilities import load_from_json_bytes, dump_to_json_str, get_ni
 logger = logging.getLogger(__name__)
 click_log.basic_config(logger)
 
-
-_internal_app_dir = Path("~/.witnessangel").expanduser().resolve()
-DEFAULT_KEYSTORE_POOL_PATH = _internal_app_dir / "keystore_pool"
-DEFAULT_CRYPTAINER_STORAGE_PATH = _internal_app_dir / "cryptainers"
+_internal_app_dir_str = "~/.witnessangel"
+_DEFAULT_KEYSTORE_POOL_STR = _internal_app_dir_str + "/keystore_pool"  # For docstrings
+DEFAULT_KEYSTORE_POOL_PATH = Path(_DEFAULT_KEYSTORE_POOL_STR).expanduser().resolve()
+_DEFAULT_CRYPTAINER_STORAGE_STR = _internal_app_dir_str + "/cryptainers"  # For docstrings
+DEFAULT_CRYPTAINER_STORAGE_PATH = Path(_DEFAULT_CRYPTAINER_STORAGE_STR).expanduser().resolve()
 INDENT = "  "
 FORMAT_OPTION = click.option(
     "-f", "--format", type=click.Choice(["plain", "json"], case_sensitive=False), default="plain"
@@ -116,7 +117,7 @@ def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=
     "-k",
     "--keystore-pool",
     default=None,
-    help="Folder to get/set crypto keys (else %s is used)" % DEFAULT_KEYSTORE_POOL_PATH,
+    help="Folder to get/set crypto keys (else %s is used)" % _DEFAULT_KEYSTORE_POOL_STR,
     type=click.Path(
         exists=True,
         file_okay=False,
@@ -132,7 +133,7 @@ def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=
     "-c",
     "--cryptainer-storage",
     default=None,
-    help="Folder to store cryptainers (else %s is used)" % DEFAULT_CRYPTAINER_STORAGE_PATH,
+    help="Folder to store cryptainers (else %s is used)" % _DEFAULT_CRYPTAINER_STORAGE_STR,
     type=click.Path(
         exists=True,
         file_okay=False,
@@ -170,7 +171,7 @@ def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage, gateway_url) -> obje
 @click.option("--bundle", help="Combine cryptainer metadata and payload", is_flag=True)
 @click.pass_context
 def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
-    """Turn a media file into a secure cryptainer, stored in the cryptainer storage."""
+    """Turn a media file into a secure container, stored in the cryptainer storage."""
 
     offload_payload_ciphertext = not bundle
 
@@ -446,7 +447,7 @@ def decrypt(ctx, cryptainer_name, output_file):
     This command is for test purposes only, since it only works with INSECURE cryptoconfs
     where private keys are locally available, and not protected by passphrases.
 
-    For real world use cases, see Witness Angle software suite.
+    For real world use cases, see the Witness Angel software suite (Authenticator, Revelation Station...).
     """
 
     if not output_file:

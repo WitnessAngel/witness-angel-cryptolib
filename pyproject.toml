@@ -51,7 +51,7 @@ pyudev = { version = "^0.22.0 ", platform = 'linux' }
 prettytable = "^3.6.0"
 click-log = "^0.4.0"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 
 # Test runners and plugins
 pytest = ">=7.0.1"
@@ -78,6 +78,7 @@ doc8 = ">=0.10.1"
 sphinx = ">=4.4.0"
 sphinx-autodoc-typehints = ">=1.17.0"
 sphinx_rtd_theme = ">=1.0.0"
+sphinx-click = "^4.4.0"
 toml = ">=0.10.2"
 
 # Install these with pip for manual benchmarks

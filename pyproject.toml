@@ -30,6 +30,9 @@ classifiers = [
 include = []
 exclude = []
 
+[tool.poetry.scripts]
+flightbox = 'wacryptolib.cli:main'
+
 [tool.poetry.dependencies]
 python = ">=3.7, <4.0"
 

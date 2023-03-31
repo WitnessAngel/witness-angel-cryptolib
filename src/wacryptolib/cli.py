@@ -153,6 +153,7 @@ def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=
 )
 @click.pass_context
 def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage, gateway_url) -> object:
+    """Flexible cryptographic toolkit for multi-tenant encryption."""
     ctx.ensure_object(dict)
     ctx.obj["keystore_pool"] = keystore_pool
     ctx.obj["cryptainer_storage"] = cryptainer_storage
@@ -508,7 +509,6 @@ def purge_cryptainers(ctx, max_age, max_count, max_quota):
     logger.info("Cryptainers successfully deleted: %s" % deleted_cryptainer_count)
 
 
-def main():
+def main(prog_name=None):
     """Launch CLI"""
-    fake_prog_name = "python -m wacryptolib"  # Else __init__.py is used in help text...
-    wacryptolib_cli(prog_name=fake_prog_name)
+    wacryptolib_cli(prog_name=prog_name)

@@ -10,6 +10,7 @@ from click.utils import LazyFile
 from prettytable import PrettyTable
 
 from wacryptolib import operations
+from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
 from wacryptolib.cryptainer import (
     LOCAL_KEYFACTORY_TRUSTEE_MARKER,
     decrypt_payload_from_cryptainer,
@@ -211,6 +212,57 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
 @wacryptolib_cli.group("cryptoconf")
 def cryptoconf_group():
     pass
+
+
+@cryptoconf_group.group("generate-simple", chain=True)  # , invoke_without_command=True)
+@click.pass_context
+def generate_simple_cryptoconf(ctx):
+    ctx.obj["cryptoconf"] = {
+        "payload_cipher_layers": [
+        ]
+    }
+    ctx.obj["current_key_cipher_layer"] = None
+
+    #@ctx.call_on_close
+    #def output_cryptolib():
+    #    click.echo(ctx.obj["cryptoconf"])
+
+#print(">>>>>>>>>>>>>>>", generate_simple_cryptoconf, dir(generate_simple_cryptoconf), generate_simple_cryptoconf.__class__.__mro__)
+
+
+@generate_simple_cryptoconf.result_callback()
+@click.pass_context
+def display_cryptoconf(ctx, processors):
+    #print(">>>>> IN RESULT CALLBACK", display_cryptoconf)
+    #print(">>>>>>display_cryptoconf", ctx.obj["cryptoconf"])
+    click.echo(_dump_as_safe_formatted_json(ctx.obj["cryptoconf"]))
+
+
+@generate_simple_cryptoconf.command('add-payload-cipher-layer')
+@click.option("--cipher-algo", help="??????????", required=True, type=click.Choice(SUPPORTED_CIPHER_ALGOS, case_sensitive=False))  # MAKE IT A CHOICEFIELD!!!
+@click.pass_context
+def cryptoconf_add_payload_cipher_layer(ctx, cipher_algo):
+    layer = {
+        "payload_cipher_algo": cipher_algo,
+        "key_cipher_layers": [
+           # {
+           #     "key_cipher_algo": "RSA_OAEP",
+           #     "key_cipher_trustee": {
+           #         "trustee_type": "local_keyfactory"
+           #     }
+           # }
+        ],
+        "payload_signatures": [
+            #{
+            #    "payload_digest_algo": "SHA256",
+            #    "payload_signature_algo": "DSA_DSS",
+            #    "payload_signature_trustee": {
+            #        "trustee_type": "local_keyfactory"
+            #    }
+            #}
+        ]
+    }
+    ctx.obj["cryptoconf"]["payload_cipher_layers"].append(layer)
 
 
 @cryptoconf_group.command("validate")

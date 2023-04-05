@@ -10,7 +10,8 @@ from click.utils import LazyFile
 from prettytable import PrettyTable
 
 from wacryptolib import operations
-from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS
+from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, \
+    SUPPORTED_SYMMETRIC_CIPHER_ALGOS
 from wacryptolib.cryptainer import (
     LOCAL_KEYFACTORY_TRUSTEE_MARKER,
     decrypt_payload_from_cryptainer,
@@ -244,16 +245,16 @@ def display_cryptoconf(ctx, processors):
 
 
 @generate_simple_cryptoconf.command('add-payload-cipher-layer')
-@click.option("--cipher-algo", help="Symmetric algorithms for payload encryption", required=True, type=click.Choice(SUPPORTED_CIPHER_ALGOS, case_sensitive=False))  # MAKE IT A CHOICEFIELD!!!
+@click.option("--sym-cipher-algo", help="Symmetric algorithms for payload encryption", required=True, type=click.Choice(SUPPORTED_SYMMETRIC_CIPHER_ALGOS, case_sensitive=False))  # MAKE IT A CHOICEFIELD!!!
 @click.pass_context
-def cryptoconf_add_payload_cipher_layer(ctx, cipher_algo):
+def cryptoconf_add_payload_cipher_layer(ctx, sym_cipher_algo):
     """
     Add a layer of symmetric encryption of the data payload.
 
     The random symmetric key used for that encryption will then have to be protected by asymmetric encryption.
     """
     payload_cipher_layer = {
-        "payload_cipher_algo": cipher_algo,
+        "payload_cipher_algo": sym_cipher_algo,
         "key_cipher_layers": [
            # {
            #     "key_cipher_algo": "RSA_OAEP",
@@ -277,6 +278,42 @@ def cryptoconf_add_payload_cipher_layer(ctx, cipher_algo):
 
 
 @generate_simple_cryptoconf.command('add-asymmetric-key-cipher-layer')
+@click.option("--asym-cipher-algo", help="Asymmetric algorithms for key encryption", required=True,
+              type=click.Choice(SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, case_sensitive=False))
+@click.option("--trustee-type", help="Kind of key-guardian used", required=True,
+              type=click.Choice([CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE, CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE], case_sensitive=False))
+@click.option("--keystore-uid", help="UID of the key-guardian (only for authenticators)", required=False,
+              type=click.UUID)
+@click.option("--sym-cipher-algo", help="Optional intermediate symmetric cipher, to avoid stacking trustees", required=False,
+              type=click.Choice(SUPPORTED_SYMMETRIC_CIPHER_ALGOS, case_sensitive=False))
+@click.pass_context
+def cryptoconf_add_asymmetric_key_cipher_layer(ctx, asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo):
+    payload_cipher_layer = ctx.obj["cryptoconf"]["payload_cipher_layers"][-1]
+
+    key_cipher_trustee = {
+        "trustee_type": trustee_type
+    }
+    if trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
+        if not keystore_uid:
+            raise click.UsageError("Authenticator trustee requires a --keystore-uid value")
+        key_cipher_trustee["keystore_uid"] = keystore_uid
+
+    key_cipher_layer = {
+        "key_cipher_algo": asym_cipher_algo,
+        "key_cipher_trustee": key_cipher_trustee,
+    }
+
+    if sym_cipher_algo:  # Hybrid encryption
+        key_cipher_layer = {
+            "key_cipher_algo": sym_cipher_algo,
+            "key_cipher_layers": [key_cipher_layer]
+        }
+
+    payload_cipher_layer["key_cipher_layers"].append(key_cipher_layer)
+
+
+'''
+@generate_simple_cryptoconf.command('add-asymmetric-key-cipher-layer')
 @click.option("--cipher-algo", help="Asymmetric algorithms for key encryption", required=True,
               type=click.Choice(SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, case_sensitive=False))
 @click.option("--trustee-type", help="Kind of key-guardian used", required=True,
@@ -285,25 +322,11 @@ def cryptoconf_add_payload_cipher_layer(ctx, cipher_algo):
               type=click.UUID)
 @click.pass_context
 def cryptoconf_add_asymmetric_key_cipher_layer(ctx, cipher_algo, trustee_type, keystore_uid):
-    payload_cipher_layer = ctx.obj["cryptoconf"]["payload_cipher_layers"][-1]
+'''
 
-    key_cipher_layer = {
-        "key_cipher_algo": "RSA_OAEP",
-        "key_cipher_trustee": {
-            "trustee_type": trustee_type
-        }
-    }
-    if trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
-
-        if not keystore_uid:
-            raise click.UsageError("Authenticator trustee requires a --keystore-uid value")
-
-        key_cipher_layer["key_cipher_trustee"]["keystore_uid"] = keystore_uid
-
-    payload_cipher_layer["key_cipher_layers"].append(key_cipher_layer)
-
-
-## EXAMPLE flightbox cryptoconf generate-simple add-payload-cipher-layer --cipher-algo aes_cbc add-asymmetric-key-cipher-layer --cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e
+## EXAMPLES
+# flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-asymmetric-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e
+# flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-asymmetric-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e --sym-cipher-algo aes_eax
 
 
 @cryptoconf_group.command("validate")

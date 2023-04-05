@@ -90,7 +90,7 @@ SHARED_SECRET_ALGO_MARKER = "[SHARED_SECRET]"  # Special "key_cipher_algo" value
 DUMMY_KEYSTORE_POOL = InMemoryKeystorePool()  # Common fallback storage with in-memory keys
 
 
-class CRYPTAINER_TRUSTEE_TYPES:
+class CRYPTAINER_TRUSTEE_TYPES:  # FIXME rename to CRYPTAINER_TRUSTEE_TYPE (singular)
     LOCAL_KEYFACTORY_TRUSTEE = "local_keyfactory"
     AUTHENTICATOR_TRUSTEE = "authenticator"
     JSONRPC_API_TRUSTEE = "jsonrpc_api"

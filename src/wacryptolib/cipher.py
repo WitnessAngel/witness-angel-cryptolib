@@ -7,7 +7,7 @@ from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionI
 from wacryptolib.keygen import (
     _check_symmetric_key_length_bytes,
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
-    _check_asymmetric_key_length_bits,
+    _check_asymmetric_key_length_bits, SUPPORTED_ASYMMETRIC_KEY_ALGOS,
 )
 from wacryptolib.utilities import split_as_chunks
 
@@ -438,6 +438,9 @@ CIPHER_ALGOS_REGISTRY = dict(
 #: These values can be used as 'cipher_algo'.
 SUPPORTED_CIPHER_ALGOS = sorted(CIPHER_ALGOS_REGISTRY.keys())
 assert set(SUPPORTED_SYMMETRIC_KEY_ALGOS) <= set(SUPPORTED_CIPHER_ALGOS)
+
+SUPPORTED_SYMMETRIC_CIPHER_ALGOS = sorted(set(SUPPORTED_SYMMETRIC_KEY_ALGOS) & set(SUPPORTED_CIPHER_ALGOS))
+SUPPORTED_ASYMMETRIC_CIPHER_ALGOS = sorted(set(SUPPORTED_ASYMMETRIC_KEY_ALGOS) & set(SUPPORTED_CIPHER_ALGOS))
 
 AUTHENTICATED_CIPHER_ALGOS = sorted(k for (k, v) in CIPHER_ALGOS_REGISTRY.items() if v["is_authenticated"])
 assert set(AUTHENTICATED_CIPHER_ALGOS) <= set(SUPPORTED_CIPHER_ALGOS)

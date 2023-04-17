@@ -335,8 +335,8 @@ def cryptoconf_add_key_cipher_layer(ctx, asym_cipher_algo, trustee_type, keystor
 @click.option("--threshold", help="Number of key-guardians required for decryption of the secret", required=True, type=click.INT)
 @click.pass_context
 def cryptoconf_add_key_shared_secret(ctx, threshold):
-    if threshold <= 1:
-        raise click.BadParameter("Shared-secret shard threshold must be higher than 1")
+    if threshold < 1:
+        raise click.BadParameter("Shared-secret shard threshold must be strictly positive")
 
     payload_cipher_layer = ctx.obj["cryptoconf"]["payload_cipher_layers"][-1]
 

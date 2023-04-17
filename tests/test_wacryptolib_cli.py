@@ -3,6 +3,8 @@ import pathlib
 import random
 import subprocess
 from datetime import timedelta
+from pprint import pprint
+from uuid import UUID
 
 import sys
 from click.testing import CliRunner
@@ -234,6 +236,70 @@ def test_cli_encryption_and_summarize_with_custom_cryptoconf(tmp_path):
         with open("specialconf.crypt.decrypted", "r") as input_file:
             data = input_file.read()
             assert data == data_sample
+
+
+def test_cli_cryptoconf_generate_simple():
+    runner = _get_cli_runner()
+
+    def _load_and_validate_cryptoconf(_result):
+        assert result.exit_code == 0, [_result.stdout, _result.stderr]
+        _cryptoconf_str = _result.stdout.strip()
+        _cryptoconf = load_from_json_str(_cryptoconf_str)
+        check_cryptoconf_sanity(_cryptoconf)  # This is ALREADY supposed to happen in cryptoconf generation command of CLI
+        return _cryptoconf
+
+    # Simplest configuration
+    command = """cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-cipher-layer
+              --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e""".split()
+    result = runner.invoke(cli, command)
+    cryptoconf = _load_and_validate_cryptoconf(result)
+    assert cryptoconf == {
+        'payload_cipher_layers': [{'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP',
+                               'key_cipher_trustee': {'keystore_uid': UUID('0f2ee6c1-d91e-7593-1310-7036dc9b782e'),
+                                                      'trustee_type': 'authenticator'}}],
+        'payload_cipher_algo': 'AES_CBC',
+        'payload_signatures': []}]}
+
+    # Simple configuration with hybrid key encryption
+    command = """cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo chacha20_poly1305 
+                    add-key-cipher-layer 
+                    --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory 
+                    --sym-cipher-algo aes_eax""".split()
+    result = runner.invoke(cli, command)
+    cryptoconf = _load_and_validate_cryptoconf(result)
+    assert cryptoconf == {
+        'payload_cipher_layers': [{'key_cipher_layers': [{'key_cipher_algo': 'AES_EAX',
+                               'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP',
+                                                      'key_cipher_trustee': {'trustee_type': 'local_keyfactory'}}]}],
+        'payload_cipher_algo': 'CHACHA20_POLY1305',
+        'payload_signatures': []}]}
+
+    # Medium configuration with a shared secret
+    command = """cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_eax 
+        add-key-shared-secret --threshold 1 
+            add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator 
+                          --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e  --sym-cipher-algo aes_eax
+            add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator 
+                          --keystore-uid af2ee6c1-d91e-7593-1310-7036dc9b782a
+        add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b783b """.split()
+    result = runner.invoke(cli, command)
+    cryptoconf = _load_and_validate_cryptoconf(result)
+    #pprint(cryptoconf)
+    assert cryptoconf == {
+        'payload_cipher_layers': [{'key_cipher_layers': [{'key_cipher_algo': '[SHARED_SECRET]',
+                               'key_shared_secret_shards': [{'key_cipher_layers': [{'key_cipher_algo': 'AES_EAX',
+                                                                                    'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP',
+                                                                                                           'key_cipher_trustee': {'keystore_uid': UUID('0f2ee6c1-d91e-7593-1310-7036dc9b782e'),
+                                                                                                                                  'trustee_type': 'authenticator'}}]}]},
+                                                            {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP',
+                                                                                    'key_cipher_trustee': {'keystore_uid': UUID('af2ee6c1-d91e-7593-1310-7036dc9b782a'),
+                                                                                                           'trustee_type': 'authenticator'}}]}],
+                               'key_shared_secret_threshold': 1},
+                              {'key_cipher_algo': 'RSA_OAEP',
+                               'key_cipher_trustee': {'keystore_uid': UUID('0f2ee6c1-d91e-7593-1310-7036dc9b783b'),
+                                                      'trustee_type': 'authenticator'}}],
+        'payload_cipher_algo': 'AES_EAX',
+        'payload_signatures': []}]}
 
 
 def test_cli_cryptoconf_validate(tmp_path):

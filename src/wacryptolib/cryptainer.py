@@ -428,8 +428,10 @@ class CryptainerEncryptor(CryptainerBase):
         return payload
 
     def _encrypt_and_hash_payload(self, payload, payload_cipher_layer_extracts):
-        payload_current = payload
 
+        assert payload_cipher_layer_extracts, payload_cipher_layer_extracts  # Else secuity flaw!
+
+        payload_current = payload
         payload_integrity_tags = []
 
         for payload_cipher_layer_extract in payload_cipher_layer_extracts:

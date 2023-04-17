@@ -301,6 +301,37 @@ def test_cli_cryptoconf_generate_simple():
         'payload_cipher_algo': 'AES_EAX',
         'payload_signatures': []}]}
 
+    # Missing payload encryption
+    result = runner.invoke(cli, "cryptoconf generate-simple".split(),)
+    assert result.exit_code == 0
+    assert "Usage:" in result.stdout  # For some reason this displays help without raising an error...
+
+    wrong_commands = [
+        # Missing key encryption
+        "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc".split(),
+
+        # Wrong threshold too small
+        "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shared-secret --threshold 0 "
+        "add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory".split(),
+
+        # Wrong threshold too big
+        "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shared-secret --threshold 2 "
+        "add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory".split(),
+
+        # Wrong place for 'add-key-shard'
+        "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shard "
+        "--asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e  --sym-cipher-algo aes_eax".split(),
+
+        # Wrong place for 'add-key-shard' again
+        "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shared-secret --threshold 1 "
+        "add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e add-payload-cipher-layer "
+        "--sym-cipher-algo aes_eax add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory"
+    ]
+    for wrong_command in wrong_commands:
+        result = runner.invoke(cli, wrong_command)
+        assert result.exit_code != 0, (result.exit_code, result.stdout)  # UsageError, not crash
+
+
 
 def test_cli_cryptoconf_validate(tmp_path):
     cryptoconf_file = tmp_path / "good_cryptoconf.json"

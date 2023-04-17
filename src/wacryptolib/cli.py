@@ -370,6 +370,10 @@ def cryptoconf_add_key_shared_secret_shard(ctx, asym_cipher_algo, trustee_type, 
 # flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e --sym-cipher-algo aes_eax
 ##  flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e add-key-shared-secret --threshold 2 add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e  --sym-cipher-algo aes_eax
 
+## flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e  --sym-cipher-algo aes_eax
+##  flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shared-secret --threshold 1 add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e add-payload-cipher-layer --sym-cipher-algo aes_eax add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory
+
+
 
 
 @cryptoconf_group.command("validate")

@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 import jsonschema
 import math
 import schema as pythonschema
+from bson import json_util
 from jsonrpc_requests import JSONRPCError
 from jsonschema import validate as jsonschema_validate
 from schema import And, Or, Schema, Optional as OptionalKey
@@ -586,7 +587,8 @@ class CryptainerEncryptor(CryptainerBase):
             shard_count = len(key_shared_secret_shards)
 
             threshold_count = key_cipher_layer["key_shared_secret_threshold"]
-            assert threshold_count <= shard_count
+            if not (0 < threshold_count <= shard_count):
+                raise SchemaValidationError("Shared secret threshold must be stricly positive and not greater than shard count, in cryptoconf")
 
             shards = split_secret_into_shards(
                 secret=key_bytes, shard_count=shard_count, threshold_count=threshold_count
@@ -2272,47 +2274,54 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
         OptionalKey("keychain_uid"): micro_schemas.schema_uid,
     }
 
-    ALL_POSSIBLE_CIPHER_LAYERS_LIST = [ASYMMETRIC_CIPHER_ALGO_BLOCK]  # Built for recursive schema
+    _ALL_POSSIBLE_CIPHER_LAYERS_LIST = [ASYMMETRIC_CIPHER_ALGO_BLOCK]  # Built for recursive schema!
+    ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY = And(_ALL_POSSIBLE_CIPHER_LAYERS_LIST, len)
 
     SYMMETRIC_CIPHER_ALGO_BLOCK = Schema(
         {
             "key_cipher_algo": Or(*SUPPORTED_SYMMETRIC_KEY_ALGOS),
-            "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST,
+            "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,  # Must be non-empty!
             **extra_asymmetric_cipher_algo_block,
         },
         name="recursive_symmetric_cipher",
         as_reference=True,
     )
-    ALL_POSSIBLE_CIPHER_LAYERS_LIST.append(SYMMETRIC_CIPHER_ALGO_BLOCK)
+    _ALL_POSSIBLE_CIPHER_LAYERS_LIST.append(SYMMETRIC_CIPHER_ALGO_BLOCK)
 
-    SHARED_SECRET_CRYPTAINER_PIECE = Schema(
+    def validate_shared_secret_threshold(shared_secret_struct):
+        threshold = shared_secret_struct["key_shared_secret_threshold"]
+        if not isinstance(threshold, int):  # It's an extended-json payload
+            threshold = json_util.object_hook()
+        if threshold < 1:
+            raise ValueError("Shared secret threshold must be strictly positive")
+        if threshold > len(shared_secret_struct["key_shared_secret_shards"]):
+            raise ValueError("Shared secret threshold can't be greater than number of shards")
+        return True
+
+    SHARED_SECRET_CRYPTAINER_BLOCK = Schema(And(
         {
             "key_cipher_algo": SHARED_SECRET_ALGO_MARKER,
-            "key_shared_secret_shards": [{"key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST}],
-            "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schemas.schema_int),
-        },
+            "key_shared_secret_shards": [{"key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY}],
+            "key_shared_secret_threshold": micro_schemas.schema_int,
+        }, validate_shared_secret_threshold),
         name="recursive_shared_secret",
         as_reference=True,
     )
-    ALL_POSSIBLE_CIPHER_LAYERS_LIST.append(SHARED_SECRET_CRYPTAINER_PIECE)
+    _ALL_POSSIBLE_CIPHER_LAYERS_LIST.append(SHARED_SECRET_CRYPTAINER_BLOCK)
 
     payload_signature.update(extra_payload_signature)
 
     CRYPTAINER_SCHEMA = Schema(
         {
             **extra_cryptainer,
-            "payload_cipher_layers": [
+            "payload_cipher_layers": And([
                 {
                     "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
                     "payload_signatures": [payload_signature],
                     **extra_payload_cipher_layer,
-                    "key_cipher_layers": [
-                        SHARED_SECRET_CRYPTAINER_PIECE,
-                        SYMMETRIC_CIPHER_ALGO_BLOCK,
-                        ASYMMETRIC_CIPHER_ALGO_BLOCK,
-                    ],
+                    "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,
                 }
-            ],
+            ], len),  # Must be non-empty!
             OptionalKey("keychain_uid"): micro_schemas.schema_uid,
         }
     )

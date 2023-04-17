@@ -101,6 +101,30 @@ VOID_CRYPTOCONF_REGARDING_KEY_CIPHER_LAYERS = dict(  # Forbidden
     ]
 )
 
+
+MISCONFIGURED_SHAMIR_CRYPTOCONF = dict(
+    payload_cipher_layers=[
+        dict(
+            payload_cipher_algo="AES_CBC",
+            key_cipher_layers=[
+                dict(
+                    key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                    key_shared_secret_threshold=random.choice([0, 2]),  # WRONG THERSHOLD
+                    key_shared_secret_shards=[
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                    ],
+                ),
+            ],
+            payload_signatures=[],
+        )
+    ]
+)
+
+
 SIGNATURELESS_CRYPTOCONF = dict(
     payload_cipher_layers=[
         dict(
@@ -510,12 +534,12 @@ def test_get_trustee_id():
 
 
 @pytest.mark.parametrize(
-    "cryptoconf", [VOID_CRYPTOCONF_REGARDING_PAYLOAD_CIPHER_LAYERS, VOID_CRYPTOCONF_REGARDING_KEY_CIPHER_LAYERS]
+    "cryptoconf", [VOID_CRYPTOCONF_REGARDING_PAYLOAD_CIPHER_LAYERS, VOID_CRYPTOCONF_REGARDING_KEY_CIPHER_LAYERS, MISCONFIGURED_SHAMIR_CRYPTOCONF]
 )
-def test_void_cryptoconfs(cryptoconf):
+def test_misconfigured_cryptoconfs(cryptoconf):
     keystore_pool = InMemoryKeystorePool()
 
-    with pytest.raises(SchemaValidationError, match="Empty .* list"):
+    with pytest.raises(SchemaValidationError, match="Empty .* list|threshold"):
         encrypt_payload_into_cryptainer(
             payload=b"stuffs",
             cryptoconf=cryptoconf,

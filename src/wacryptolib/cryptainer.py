@@ -588,7 +588,7 @@ class CryptainerEncryptor(CryptainerBase):
 
             threshold_count = key_cipher_layer["key_shared_secret_threshold"]
             if not (0 < threshold_count <= shard_count):
-                raise SchemaValidationError("Shared secret threshold must be stricly positive and not greater than shard count, in cryptoconf")
+                raise SchemaValidationError("Shared secret threshold must be strictly positive and not greater than shard count, in cryptoconf")
 
             shards = split_secret_into_shards(
                 secret=key_bytes, shard_count=shard_count, threshold_count=threshold_count

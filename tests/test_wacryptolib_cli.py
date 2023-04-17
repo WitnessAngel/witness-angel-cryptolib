@@ -310,6 +310,10 @@ def test_cli_cryptoconf_generate_simple():
         # Missing key encryption
         "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc".split(),
 
+        # Missing keystore-uid fro authenticator trustee
+        "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo chacha20_poly1305 "
+        "add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator ".split(),
+
         # Wrong threshold too small
         "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shared-secret --threshold 0 "
         "add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory".split(),

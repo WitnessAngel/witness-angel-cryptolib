@@ -175,7 +175,7 @@ def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage, gateway_url) -> obje
 @click.option("--bundle", help="Combine cryptainer metadata and payload", is_flag=True)
 @click.pass_context
 def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
-    """Turn a media file into a secure container, stored in the cryptainer storage."""
+    """Turn a media file into a secure cryptainer."""
 
     offload_payload_ciphertext = not bundle
 

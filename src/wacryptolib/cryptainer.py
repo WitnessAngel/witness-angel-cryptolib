@@ -2270,29 +2270,29 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
         OptionalKey("keychain_uid"): micro_schemas.schema_uid,
     }
 
-    ALL_BLOCK_KINDS_LIST = [ASYMMETRIC_CIPHER_ALGO_BLOCK]  # Built for recursive schema
+    ALL_POSSIBLE_CIPHER_LAYERS_LIST = [ASYMMETRIC_CIPHER_ALGO_BLOCK]  # Built for recursive schema
 
     SYMMETRIC_CIPHER_ALGO_BLOCK = Schema(
         {
             "key_cipher_algo": Or(*SUPPORTED_SYMMETRIC_KEY_ALGOS),
-            "key_cipher_layers": ALL_BLOCK_KINDS_LIST,
+            "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST,
             **extra_asymmetric_cipher_algo_block,
         },
         name="recursive_symmetric_cipher",
         as_reference=True,
     )
-    ALL_BLOCK_KINDS_LIST.append(SYMMETRIC_CIPHER_ALGO_BLOCK)
+    ALL_POSSIBLE_CIPHER_LAYERS_LIST.append(SYMMETRIC_CIPHER_ALGO_BLOCK)
 
     SHARED_SECRET_CRYPTAINER_PIECE = Schema(
         {
             "key_cipher_algo": SHARED_SECRET_ALGO_MARKER,
-            "key_shared_secret_shards": [{"key_cipher_layers": ALL_BLOCK_KINDS_LIST}],
+            "key_shared_secret_shards": [{"key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST}],
             "key_shared_secret_threshold": Or(And(int, lambda n: 0 < n < math.inf), micro_schemas.schema_int),
         },
         name="recursive_shared_secret",
         as_reference=True,
     )
-    ALL_BLOCK_KINDS_LIST.append(SHARED_SECRET_CRYPTAINER_PIECE)
+    ALL_POSSIBLE_CIPHER_LAYERS_LIST.append(SHARED_SECRET_CRYPTAINER_PIECE)
 
     payload_signature.update(extra_payload_signature)
 

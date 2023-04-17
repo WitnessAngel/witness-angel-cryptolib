@@ -1,3 +1,4 @@
+import functools
 import logging
 import shutil
 from datetime import timedelta
@@ -240,8 +241,9 @@ def display_cryptoconf(ctx, processors):
     #print(">>>>> IN RESULT CALLBACK", display_cryptoconf)
     #print(">>>>>>display_cryptoconf", ctx.obj["cryptoconf"])
     cryptoconf = ctx.obj["cryptoconf"]
-    check_cryptoconf_sanity(cryptoconf)
     click.echo(_dump_as_safe_formatted_json(cryptoconf))
+    check_cryptoconf_sanity(cryptoconf)  # FIXME put ut upper
+
 
 
 @generate_simple_cryptoconf.command('add-payload-cipher-layer')
@@ -263,7 +265,7 @@ def cryptoconf_add_payload_cipher_layer(ctx, sym_cipher_algo):
            #     }
            # }
         ],
-        "payload_signatures": [
+        "payload_signatures": [  # No payload signatures for now with simple confs!
             #{
             #    "payload_digest_algo": "SHA256",
             #    "payload_signature_algo": "DSA_DSS",
@@ -274,28 +276,34 @@ def cryptoconf_add_payload_cipher_layer(ctx, sym_cipher_algo):
         ]
     }
     ctx.obj["cryptoconf"]["payload_cipher_layers"].append(payload_cipher_layer)
-    #ctx.obj["current_key_cipher_layer"] = layer
+    ctx.obj["current_add_key_shared_secret"] = None  # RESET
 
 
-@generate_simple_cryptoconf.command('add-asymmetric-key-cipher-layer')
-@click.option("--asym-cipher-algo", help="Asymmetric algorithms for key encryption", required=True,
-              type=click.Choice(SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, case_sensitive=False))
-@click.option("--trustee-type", help="Kind of key-guardian used", required=True,
-              type=click.Choice([CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE, CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE], case_sensitive=False))
-@click.option("--keystore-uid", help="UID of the key-guardian (only for authenticators)", required=False,
-              type=click.UUID)
-@click.option("--sym-cipher-algo", help="Optional intermediate symmetric cipher, to avoid stacking trustees", required=False,
-              type=click.Choice(SUPPORTED_SYMMETRIC_CIPHER_ALGOS, case_sensitive=False))
-@click.pass_context
-def cryptoconf_add_asymmetric_key_cipher_layer(ctx, asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo):
-    payload_cipher_layer = ctx.obj["cryptoconf"]["payload_cipher_layers"][-1]
+def _key_cipher_options(cmd):
+    @click.option("--asym-cipher-algo", help="Asymmetric algorithms for key encryption", required=True,
+                  type=click.Choice(SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, case_sensitive=False))
+    @click.option("--trustee-type", help="Kind of key-guardian used", required=True,
+                  type=click.Choice([CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE,
+                                     CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE], case_sensitive=False))
+    @click.option("--keystore-uid", help="UID of the key-guardian (only for authenticators)", required=False,
+                  type=click.UUID)
+    @click.option("--sym-cipher-algo", help="Optional intermediate symmetric cipher, to avoid stacking trustees",
+                  required=False,
+                  type=click.Choice(SUPPORTED_SYMMETRIC_CIPHER_ALGOS, case_sensitive=False))
+    @click.pass_context
+    @functools.wraps(cmd)
+    def wrapper_common_options(*args, **kwargs):
+        return cmd(*args, **kwargs)
+    return wrapper_common_options
 
+
+def _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo):
     key_cipher_trustee = {
         "trustee_type": trustee_type
     }
     if trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
         if not keystore_uid:
-            raise click.UsageError("Authenticator trustee requires a --keystore-uid value")
+            raise click.BadParameter("Authenticator trustee requires a --keystore-uid value")
         key_cipher_trustee["keystore_uid"] = keystore_uid
 
     key_cipher_layer = {
@@ -308,25 +316,60 @@ def cryptoconf_add_asymmetric_key_cipher_layer(ctx, asym_cipher_algo, trustee_ty
             "key_cipher_algo": sym_cipher_algo,
             "key_cipher_layers": [key_cipher_layer]
         }
+    return key_cipher_layer
+
+
+@generate_simple_cryptoconf.command('add-key-cipher-layer')
+@_key_cipher_options
+def cryptoconf_add_key_cipher_layer(ctx, asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo):
+    payload_cipher_layer = ctx.obj["cryptoconf"]["payload_cipher_layers"][-1]
+
+    key_cipher_layer = _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo)
 
     payload_cipher_layer["key_cipher_layers"].append(key_cipher_layer)
+    ctx.obj["current_add_key_shared_secret"] = None  # RESET
 
 
-'''
-@generate_simple_cryptoconf.command('add-asymmetric-key-cipher-layer')
-@click.option("--cipher-algo", help="Asymmetric algorithms for key encryption", required=True,
-              type=click.Choice(SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, case_sensitive=False))
-@click.option("--trustee-type", help="Kind of key-guardian used", required=True,
-              type=click.Choice([CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE, CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE], case_sensitive=False))
-@click.option("--keystore-uid", help="UID of the key-guardian (only for authenticators)", required=False,
-              type=click.UUID)
+
+@generate_simple_cryptoconf.command('add-key-shared-secret')
+@click.option("--threshold", help="Number of key-guardians required for decryption of the secret", required=True, type=click.INT)
 @click.pass_context
-def cryptoconf_add_asymmetric_key_cipher_layer(ctx, cipher_algo, trustee_type, keystore_uid):
-'''
+def cryptoconf_add_key_shared_secret(ctx, threshold):
+    if threshold <= 1:
+        raise click.BadParameter("Shared-secret shard threshold must be higher than 1")
+
+    payload_cipher_layer = ctx.obj["cryptoconf"]["payload_cipher_layers"][-1]
+
+    shared_secret = {
+        "key_cipher_algo": SHARED_SECRET_ALGO_MARKER,
+        "key_shared_secret_threshold": threshold,
+        "key_shared_secret_shards": [],  # Will be filled by "add-key-shard" subcommands
+
+    }
+    payload_cipher_layer["key_cipher_layers"].append(shared_secret)
+    ctx.obj["current_add_key_shared_secret"] = shared_secret
+
+
+@generate_simple_cryptoconf.command('add-key-shard')
+@_key_cipher_options
+def cryptoconf_add_key_shared_secret_shard(ctx, asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo):
+    shared_secret = ctx.obj.get("current_add_key_shared_secret", None)
+
+    if shared_secret is None:
+        raise click.UsageError("Command add-key-shard can only be used after add-key-shared-secret")
+
+    key_cipher_layer = _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo)
+
+    shared_secret["key_shared_secret_shards"].append(
+        dict(key_cipher_layers=[key_cipher_layer])  # SINGLE layer for shards, for now
+    )
+
 
 ## EXAMPLES
-# flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-asymmetric-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e
-# flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-asymmetric-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e --sym-cipher-algo aes_eax
+# flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e
+# flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e --sym-cipher-algo aes_eax
+##  flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e add-key-shared-secret --threshold 2 add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e  --sym-cipher-algo aes_eax
+
 
 
 @cryptoconf_group.command("validate")

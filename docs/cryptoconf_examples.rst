@@ -73,7 +73,6 @@ Binary subType 03 means "UUID", whereas subType 00 means "bytes".
           },
           "payload_cipher_algo":"AES_CBC",
           "payload_macs":{
-
           },
           "payload_signatures":[
             {
@@ -140,7 +139,6 @@ We also see how share secrets, symmetric ciphers, and asymmetric ciphers (RSA_OA
           ],
           "payload_cipher_algo":"AES_EAX",
           "payload_signatures":[
-
           ]
         },
         {

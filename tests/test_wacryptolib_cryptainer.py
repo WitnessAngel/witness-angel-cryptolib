@@ -3016,14 +3016,14 @@ def test_create_cryptainer_encryption_stream(tmp_path):
 @pytest.mark.parametrize(
     "cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF]
 )
-def test_conf_validation_success(cryptoconf):
+def test_cryptoconf_validation_success(cryptoconf):
     check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
 
     conf_json = convert_native_tree_to_extended_json_tree(cryptoconf)
     check_cryptoconf_sanity(cryptoconf=conf_json, jsonschema_mode=True)
 
 
-def _generate_corrupted_confs(cryptoconf):
+def _generate_corrupted_cryptoconfs(cryptoconf, include_extended_checks):
     corrupted_confs = []
 
     # Add a false information to config
@@ -3031,7 +3031,7 @@ def _generate_corrupted_confs(cryptoconf):
     corrupted_conf1["payload_cipher_layers"][0]["keychain_uid"] = ENFORCED_UID2
     corrupted_confs.append(corrupted_conf1)
 
-    # Delete a "key_cipher_layers" in an element of cryptoconf
+    # Delete a "key_cipher_layers" at top level
     corrupted_conf2 = copy.deepcopy(cryptoconf)
     del corrupted_conf2["payload_cipher_layers"][0]["key_cipher_layers"]
     corrupted_confs.append(corrupted_conf2)
@@ -3046,14 +3046,49 @@ def _generate_corrupted_confs(cryptoconf):
     corrupted_conf4["payload_cipher_layers"][0]["key_cipher_layers"] = " "
     corrupted_confs.append(corrupted_conf4)
 
+    if include_extended_checks:
+
+        # Empty the ciphers of payload
+        corrupted_conf5 = copy.deepcopy(cryptoconf)
+        del corrupted_conf5["payload_cipher_layers"][:]
+        corrupted_confs.append(corrupted_conf5)
+
+        # Empty the ciphers of payload key
+        corrupted_conf6 = copy.deepcopy(cryptoconf)
+        del corrupted_conf6["payload_cipher_layers"][0]["key_cipher_layers"][:]
+        corrupted_confs.append(corrupted_conf6)
+
+        # Empty the ciphers of shared secret key
+        corrupted_conf6_bis = copy.deepcopy(cryptoconf)
+        del corrupted_conf6_bis["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_shards"][0]["key_cipher_layers"]
+        corrupted_confs.append(corrupted_conf6_bis)
+
+        # Empty the ciphers of first key
+        corrupted_conf6_ter = copy.deepcopy(cryptoconf)
+        del corrupted_conf6_ter["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_shards"][1]["key_cipher_layers"][0]["key_cipher_layers"]
+        corrupted_confs.append(corrupted_conf6_ter)
+
+        # Corrupt the threshold of shared secret
+        corrupted_conf7 = copy.deepcopy(cryptoconf)
+        shared_secret = corrupted_conf7["payload_cipher_layers"][2]["key_cipher_layers"][0]
+        assert shared_secret["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER
+        shared_secret["key_shared_secret_threshold"] = random.choice([-1, 0, 5, 100])
+        corrupted_confs.append(corrupted_conf7)
+
     return corrupted_confs
 
 
-@pytest.mark.parametrize("corrupted_conf", _generate_corrupted_confs(COMPLEX_SHAMIR_CRYPTOCONF))
-def test_conf_validation_error(corrupted_conf):
+@pytest.mark.parametrize("corrupted_conf", _generate_corrupted_cryptoconfs(COMPLEX_SHAMIR_CRYPTOCONF, include_extended_checks=True))
+def test_cryptoconf_validation_error_via_python_schema(corrupted_conf):
+    print("corrupted_conf>>>>>>>>>:")
+    pprint(corrupted_conf)
     with pytest.raises(ValidationError):
         check_cryptoconf_sanity(cryptoconf=corrupted_conf, jsonschema_mode=False)
 
+
+@pytest.mark.parametrize("corrupted_conf",
+                         _generate_corrupted_cryptoconfs(COMPLEX_SHAMIR_CRYPTOCONF, include_extended_checks=False))
+def test_cryptoconf_validation_error_via_json_schema(corrupted_conf):
     with pytest.raises(ValidationError):
         corrupted_conf_json = convert_native_tree_to_extended_json_tree(corrupted_conf)
         check_cryptoconf_sanity(cryptoconf=corrupted_conf_json, jsonschema_mode=True)

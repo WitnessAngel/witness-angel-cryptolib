@@ -2,6 +2,7 @@ import functools
 import logging
 import os
 import shutil
+import sys
 from datetime import timedelta
 from pathlib import Path
 from pprint import pformat
@@ -25,7 +26,7 @@ from wacryptolib.cryptainer import (
     get_cryptoconf_summary,
     CryptainerStorage, CRYPTAINER_TRUSTEE_TYPES,
 )
-from wacryptolib.exceptions import ValidationError, DecryptionError
+from wacryptolib.exceptions import ValidationError, DecryptionError, SchemaValidationError, KeystoreMetadataDoesNotExist
 from wacryptolib.keystore import FilesystemKeystorePool
 from wacryptolib.operations import _check_target_authenticator_parameters_validity
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_str, get_nice_size
@@ -170,11 +171,23 @@ def authenticator_group():
     pass
 
 
+def _retrieve_keystore_passphrase():
+    keystore_passphrase = os.getenv("WA_PASSPHRASE")
+
+    if keystore_passphrase:
+        logger.info("Using passphrase specified as WA_PASSPHRASE environment variable")
+    else:
+        keystore_passphrase = click.prompt("Please enter a passphrase for the authenticator", hide_input=True)
+    assert keystore_passphrase, keystore_passphrase  # MUST be non-empty now
+
+    return keystore_passphrase
+
+
 @authenticator_group.command("create")
 @click.argument(
     "authenticator_dir",
     type=click.Path(
-        exists=False, writable=True, resolve_path=True, path_type=Path
+        exists=False, writable=True, resolve_path=True, path_type=Path  # Beware, before python3.10 resolve_path is buggy on Windows
     ),
 )
 @click.option("--keypair-count", default=3, help="Count of keypairs to generate (min 1)", type=click.INT)
@@ -191,17 +204,78 @@ def create_authenticator(ctx, authenticator_dir, keypair_count, owner, passphras
 
     No constraints are applied to the lengths of the passphrase or other fields, so beware of security considerations!
     """
+
     _check_target_authenticator_parameters_validity(authenticator_dir, keypair_count=keypair_count, exception_cls=click.UsageError)  # Early check, to not ask for passphrase in vain
 
-    keystore_passphrase = os.getenv("WA_PASSPHRASE")
-
-    if not keystore_passphrase:
-        keystore_passphrase = click.prompt("Please enter a passphrase for the authenticator", hide_input=True)
-    assert keystore_passphrase, keystore_passphrase  # MUST be non-empty now
+    keystore_passphrase = _retrieve_keystore_passphrase()
 
     operations.create_authenticator(authenticator_dir, keypair_count=keypair_count, keystore_owner=owner,
                                     keystore_passphrase_hint=passphrase_hint, keystore_passphrase=keystore_passphrase)
 
+    logger.info("Authenticator successfully initialized with %d keypairs in directory %s",
+                keypair_count, authenticator_dir)
+
+
+@authenticator_group.command("check")
+@click.argument(
+    "authenticator_dir",
+    type=click.Path(
+        exists=True, dir_okay=True, file_okay=False, readable=True, resolve_path=True, path_type=Path
+    ),
+)
+@click.pass_context
+def check_authenticator(ctx, authenticator_dir):
+    """
+    Verify the metadata and keypairs of an authenticator directory.
+
+    Authenticator passphrase can be provided as WA_PASSPHRASE environment variable, else user will be prompted for it.
+    """
+
+    keystore_passphrase = _retrieve_keystore_passphrase()
+
+    success = True
+
+    try:
+        results = operations.check_authenticator(authenticator_dir, keystore_passphrase)  # Raises if metadata are corrupted
+    except (KeystoreMetadataDoesNotExist, SchemaValidationError) as exc:
+        click.echo("Authenticator metadata couldn't be loaded: %s" % exc)
+        success = False
+
+    else:
+        authenticator_metadata = results["authenticator_metadata"]
+        keypair_count = results["keypair_count"]
+        missing_private_keys = results["missing_private_keys"]
+        undecodable_private_keys = results["undecodable_private_keys"]
+
+        def _format_keypair_ids_list(keypair_ids_list):
+            return ", ".join("-".join(str(y) for y in x) for x in keypair_ids_list)
+
+        click.echo("Authenticator has UID %s and belongs to owner %s" %
+                   (authenticator_metadata["keystore_uid"], authenticator_metadata["keystore_owner"]))
+
+        keystore_creation_datetime = authenticator_metadata.get("keystore_creation_datetime")
+        if keystore_creation_datetime:
+            click.echo("Creation date: %s" % keystore_creation_datetime.isoformat(sep=" ", timespec="seconds"))
+
+        click.echo("Keypair count: %s" % keypair_count)
+
+        click.echo("")
+
+        if not keypair_count:
+            click.echo("No keypairs found, there should be at least one")
+            success = False
+        if missing_private_keys:
+            click.echo("Missing private keys: %s" % _format_keypair_ids_list(missing_private_keys))
+            success = False
+        if undecodable_private_keys:
+            click.echo("Undecodable private keys: %s" % _format_keypair_ids_list(undecodable_private_keys))
+            success = False
+
+    if success:
+        logger.info("Authenticator successfully checked, no integrity errors found")
+    else:
+        logger.error("Integrity errors were found in authenticator")
+        sys.exit(1)
 
 @wacryptolib_cli.command("encrypt")
 @click.argument(

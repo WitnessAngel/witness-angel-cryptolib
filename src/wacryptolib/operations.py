@@ -10,11 +10,12 @@ from wacryptolib.cryptainer import (
     check_cryptainer_sanity,
     decrypt_payload_from_cryptainer,
 )
-from wacryptolib.exceptions import ValidationError, ExistenceError, KeystoreAlreadyExists
+from wacryptolib.exceptions import ValidationError, ExistenceError, KeystoreAlreadyExists, KeyLoadingError, \
+    SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy
-from wacryptolib.keygen import generate_keypair
+from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import KeystorePoolBase, ReadonlyFilesystemKeystore, KEYSTORE_FORMAT, validate_keystore_tree, \
-    FilesystemKeystore
+    FilesystemKeystore, load_keystore_metadata
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, generate_uuid0
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,40 @@ def create_authenticator(authenticator_dir: Path, keypair_count: int, keystore_o
         logger.warning("Exception encountered while creating authenticator keypairs, deleting authenticator %s", authenticator_dir)
         shutil.rmtree(authenticator_dir)
         raise
+
+
+def check_authenticator(authenticator_dir: Path, keystore_passphrase: str):
+
+    authenticator_metadata = load_keystore_metadata(authenticator_dir)  # Might raise SchemaValidationError
+
+    filesystem_keystore = ReadonlyFilesystemKeystore(authenticator_dir)
+
+    missing_private_keys = []
+    undecodable_private_keys = []
+
+    keypair_identifiers = filesystem_keystore.list_keypair_identifiers()
+
+    for key_information in keypair_identifiers:
+        keychain_uid = key_information["keychain_uid"]
+        key_algo = key_information["key_algo"]
+        if not key_information["private_key_present"]:
+            missing_private_keys.append((key_algo, keychain_uid))
+            continue
+        private_key_pem = filesystem_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
+        try:
+            key_obj = load_asymmetric_key_from_pem_bytestring(
+                key_pem=private_key_pem, key_algo=key_algo, passphrase=keystore_passphrase
+            )
+            assert key_obj, key_obj
+        except KeyLoadingError:
+            undecodable_private_keys.append((key_algo, keychain_uid))
+
+    return dict(
+        authenticator_metadata=authenticator_metadata,
+        keypair_count=len(keypair_identifiers),
+        missing_private_keys=missing_private_keys,
+        undecodable_private_keys=undecodable_private_keys,
+    )
 
 
 def ___encrypt_payload_to_bytes(payload: bytes, cryptoconf: dict, keystore_pool: KeystorePoolBase) -> bytes:

@@ -15,7 +15,7 @@ from wacryptolib.exceptions import ValidationError, ExistenceError, KeystoreAlre
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import KeystorePoolBase, ReadonlyFilesystemKeystore, KEYSTORE_FORMAT, validate_keystore_tree, \
-    FilesystemKeystore, load_keystore_metadata
+    FilesystemKeystore, load_keystore_metadata, _get_keystore_metadata_file_path
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, generate_uuid0
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ def create_authenticator(authenticator_dir: Path, keypair_count: int, keystore_o
             )
     except Exception as exc:
         logger.warning("Exception encountered while creating authenticator keypairs, deleting authenticator %s", authenticator_dir)
-        shutil.rmtree(authenticator_dir)
+        delete_authenticator(authenticator_dir)  # Shouldn't raise, since we just initialized authenticator above
         raise
 
 
@@ -107,6 +107,13 @@ def check_authenticator(authenticator_dir: Path, keystore_passphrase: str):
         missing_private_keys=missing_private_keys,
         undecodable_private_keys=undecodable_private_keys,
     )
+
+
+def delete_authenticator(authenticator_dir: Path):
+    """Deletion works even if authenticator metadata are corrupted, but the metadata file must be present."""
+    if not is_authenticator_initialized(authenticator_dir):
+        raise ValidationError("Directory %s is not an initialized authenticator" % authenticator_dir)
+    shutil.rmtree(authenticator_dir)  # VIOLENT
 
 
 def ___encrypt_payload_to_bytes(payload: bytes, cryptoconf: dict, keystore_pool: KeystorePoolBase) -> bytes:

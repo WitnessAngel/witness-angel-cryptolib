@@ -277,6 +277,25 @@ def check_authenticator(ctx, authenticator_dir):
         logger.error("Integrity errors were found in authenticator")
         sys.exit(1)
 
+
+@authenticator_group.command("delete")
+@click.argument(
+    "authenticator_dir",
+    type=click.Path(
+        exists=True, dir_okay=True, file_okay=False, writable=True, readable=True, resolve_path=True, path_type=Path
+    ),
+)
+@click.pass_context
+def delete_authenticator(ctx, authenticator_dir):
+    try:
+        operations.delete_authenticator(authenticator_dir)
+    except Exception as exc:
+        logger.error("Deletion failed: %s", exc)
+        sys.exit(1)
+    else:
+        logger.info("Authenticator %s successfully deleted", authenticator_dir)
+
+
 @wacryptolib_cli.command("encrypt")
 @click.argument(
     "input_file",

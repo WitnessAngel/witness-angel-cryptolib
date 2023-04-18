@@ -70,7 +70,7 @@ def is_authenticator_initialized(authenticator_dir: Path):
 
     Check if an authenticator folder SEEMS initialized.
 
-    Doesn't actually load the authenticator metadata file.
+    Doesn't actually load the authenticator metadata file, nor check related keypairs.
 
     :param authenticator_dir: (Path) folder where the metadata file is expected.
 

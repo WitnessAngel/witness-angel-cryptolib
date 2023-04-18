@@ -82,7 +82,7 @@ class KeyLoadingError(CryptographyError):
 
 
 class ValidationError(FunctionalError):
-    pass  # Base for all errors related to corrupted data and invalid config tree
+    pass  # Base for all errors related to corrupted data, and invalid config tree, and bad command parameters
 
 
 class SchemaValidationError(ValidationError):

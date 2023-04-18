@@ -1,19 +1,77 @@
 import logging
+import shutil
+from pathlib import Path
 
 from wacryptolib.authdevice import list_available_authdevices
-from wacryptolib.authenticator import SENSITIVE_KEYSTORE_FIELDS, is_authenticator_initialized
+from wacryptolib.authenticator import SENSITIVE_KEYSTORE_FIELDS, is_authenticator_initialized, initialize_authenticator
 from wacryptolib.cryptainer import (
     check_cryptoconf_sanity,
     encrypt_payload_into_cryptainer,
     check_cryptainer_sanity,
     decrypt_payload_from_cryptainer,
 )
-from wacryptolib.exceptions import ValidationError
+from wacryptolib.exceptions import ValidationError, ExistenceError, KeystoreAlreadyExists
 from wacryptolib.jsonrpc_client import JsonRpcProxy
-from wacryptolib.keystore import KeystorePoolBase, ReadonlyFilesystemKeystore, KEYSTORE_FORMAT, validate_keystore_tree
-from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes
+from wacryptolib.keygen import generate_keypair
+from wacryptolib.keystore import KeystorePoolBase, ReadonlyFilesystemKeystore, KEYSTORE_FORMAT, validate_keystore_tree, \
+    FilesystemKeystore
+from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, generate_uuid0
 
 logger = logging.getLogger(__name__)
+
+
+def _check_target_authenticator_parameters_validity(authenticator_dir, keypair_count, exception_cls=ValidationError):
+
+    if authenticator_dir.is_dir():
+        raise exception_cls("Target directory %s must not exist yet" % authenticator_dir)
+
+    authenticator_dir_parent = authenticator_dir.parent
+    if not authenticator_dir_parent.is_dir():
+        raise exception_cls("Parent directory %s must already exist" % authenticator_dir_parent)
+
+    if keypair_count < 1:
+        raise exception_cls("At least 1 keypair must be created")
+
+
+def create_authenticator(authenticator_dir: Path, keypair_count: int, keystore_owner: str, keystore_passphrase_hint: str, keystore_passphrase: str):
+
+    _check_target_authenticator_parameters_validity(authenticator_dir, keypair_count=keypair_count)
+    assert keypair_count >= 1, keypair_count
+
+    authenticator_dir.mkdir(parents=False)  # Only 1 level of folder will be created here!
+    assert authenticator_dir and authenticator_dir.is_dir(), authenticator_dir
+
+    # We initialize FIRST, to avoid troubles on retry, if process gets interrupted
+    logger.debug("Initializing authenticator directory %s", authenticator_dir)
+    initialize_authenticator(
+        authenticator_dir,
+        keystore_owner=keystore_owner,
+        keystore_passphrase_hint=keystore_passphrase_hint,
+    )
+
+    filesystem_keystore = FilesystemKeystore(authenticator_dir)
+
+    key_algo = "RSA_OAEP"  # No choice for now
+    keychain_uids = []
+
+    try:
+        for i in range(1, keypair_count + 1):
+
+            logger.debug("Generating %s keypair %d into directory %s", (key_algo, i, authenticator_dir))
+            new_key_pair = generate_keypair(key_algo=key_algo, passphrase=keystore_passphrase)
+            new_keychain_uid = generate_uuid0()
+            keychain_uids.append(new_keychain_uid)
+
+            filesystem_keystore.set_keypair(
+                keychain_uid=new_keychain_uid,
+                key_algo=key_algo,
+                public_key=new_key_pair["public_key"],
+                private_key=new_key_pair["private_key"],
+            )
+    except Exception as exc:
+        logger.warning("Exception encountered while creating authenticator keypairs, deleting authenticator %s", authenticator_dir)
+        shutil.rmtree(authenticator_dir)
+        raise
 
 
 def ___encrypt_payload_to_bytes(payload: bytes, cryptoconf: dict, keystore_pool: KeystorePoolBase) -> bytes:

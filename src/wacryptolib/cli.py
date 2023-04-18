@@ -1,5 +1,6 @@
 import functools
 import logging
+import os
 import shutil
 from datetime import timedelta
 from pathlib import Path
@@ -26,6 +27,7 @@ from wacryptolib.cryptainer import (
 )
 from wacryptolib.exceptions import ValidationError, DecryptionError
 from wacryptolib.keystore import FilesystemKeystorePool
+from wacryptolib.operations import _check_target_authenticator_parameters_validity
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_str, get_nice_size
 
 
@@ -163,7 +165,45 @@ def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage, gateway_url) -> obje
     ctx.obj["gateway-url"] = gateway_url
 
 
-@wacryptolib_cli.command()
+@wacryptolib_cli.group("authenticator")
+def authenticator_group():
+    pass
+
+
+@authenticator_group.command("create")
+@click.argument(
+    "authenticator_dir",
+    type=click.Path(
+        exists=False, writable=True, resolve_path=True, path_type=Path
+    ),
+)
+@click.option("--keypair-count", default=3, help="Count of keypairs to generate (min 1)", type=click.INT)
+@click.option("--owner", help="Name of the authenticator owner", required=True)
+@click.option("--passphrase-hint", help="Non-sensitive hint to help remember the passphrase", required=True)
+@click.pass_context
+def create_authenticator(ctx, authenticator_dir, keypair_count, owner, passphrase_hint):
+    """
+    Initialize an authenticator with a set of keypairs, in the specified directory.
+
+    The directory must not exist yet, but its parent directory must exist.
+
+    Authenticator passphrase can be provided as WA_PASSPHRASE environment variable, else user will be prompted for it.
+
+    No constraints are applied to the lengths of the passphrase or other fields, so beware of security considerations!
+    """
+    _check_target_authenticator_parameters_validity(authenticator_dir, keypair_count=keypair_count, exception_cls=click.UsageError)  # Early check, to not ask for passphrase in vain
+
+    keystore_passphrase = os.getenv("WA_PASSPHRASE")
+
+    if not keystore_passphrase:
+        keystore_passphrase = click.prompt("Please enter a passphrase for the authenticator", hide_input=True)
+    assert keystore_passphrase, keystore_passphrase  # MUST be non-empty now
+
+    operations.create_authenticator(authenticator_dir, keypair_count=keypair_count, keystore_owner=owner,
+                                    keystore_passphrase_hint=passphrase_hint, keystore_passphrase=keystore_passphrase)
+
+
+@wacryptolib_cli.command("encrypt")
 @click.argument(
     "input_file",
     type=click.File("rb"),
@@ -243,7 +283,6 @@ def display_cryptoconf(ctx, processors):
     cryptoconf = ctx.obj["cryptoconf"]
     click.echo(_dump_as_safe_formatted_json(cryptoconf))
     check_cryptoconf_sanity(cryptoconf)  # FIXME put ut upper
-
 
 
 @generate_simple_cryptoconf.command('add-payload-cipher-layer')

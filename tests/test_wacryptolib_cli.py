@@ -110,6 +110,7 @@ def test_cli_authenticator_management(tmp_path):
         keypair = authenticator_data["keypair_identifiers"][0]
         assert set(keypair) == set(["keychain_uid", "key_algo", "private_key_present"])
         assert isinstance(keypair["keychain_uid"], UUID), keypair
+        assert keypair["key_algo"] == "RSA_OAEP"
 
         result = runner.invoke(cli, ["authenticator", "view", str(authenticator_path)])  # PLAIN format
         assert str(authenticator_data["keystore_uid"]) in result.stdout

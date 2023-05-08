@@ -177,7 +177,7 @@ class KeystoreReadBase(KeystoreBase):
     @synchronized
     def list_keypair_identifiers(self) -> list:
         """
-        List identifiers of public keys present in the storage, along with their potential private key existence.
+        List identifiers of PUBLIC keys present in the storage, along with their potential private key existence.
 
         Might raise an OperationNotSupported exception if not supported by this keystore.
 

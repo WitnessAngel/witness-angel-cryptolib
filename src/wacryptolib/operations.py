@@ -75,22 +75,24 @@ def create_authenticator(authenticator_dir: Path, keypair_count: int, keystore_o
         raise
 
 
-def check_authenticator(authenticator_dir: Path, keystore_passphrase: str):
+def check_authenticator(authenticator_dir: Path, keystore_passphrase: str):  # FIXME rename to validate_xx
 
     authenticator_metadata = load_keystore_metadata(authenticator_dir)  # Might raise SchemaValidationError
 
     filesystem_keystore = ReadonlyFilesystemKeystore(authenticator_dir)
+    metadata = filesystem_keystore.get_keystore_metadata(include_keypair_identifiers=True)
+    keypair_identifiers = metadata["keypair_identifiers"]
 
     missing_private_keys = []
     undecodable_private_keys = []
 
-    keypair_identifiers = filesystem_keystore.list_keypair_identifiers()
-
     for key_information in keypair_identifiers:
-        keychain_uid = key_information["keychain_uid"]
         key_algo = key_information["key_algo"]
+        keychain_uid = key_information["keychain_uid"]
+        keypair_identifiers = (key_algo, keychain_uid)
+
         if not key_information["private_key_present"]:
-            missing_private_keys.append((key_algo, keychain_uid))
+            missing_private_keys.append(keypair_identifiers)
             continue
         private_key_pem = filesystem_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
         try:
@@ -99,11 +101,11 @@ def check_authenticator(authenticator_dir: Path, keystore_passphrase: str):
             )
             assert key_obj, key_obj
         except KeyLoadingError:
-            undecodable_private_keys.append((key_algo, keychain_uid))
+            undecodable_private_keys.append(keypair_identifiers)
 
     return dict(
         authenticator_metadata=authenticator_metadata,
-        keypair_count=len(keypair_identifiers),
+        keypair_identifiers=keypair_identifiers,
         missing_private_keys=missing_private_keys,
         undecodable_private_keys=undecodable_private_keys,
     )

@@ -27,7 +27,7 @@ from wacryptolib.cryptainer import (
     CryptainerStorage, CRYPTAINER_TRUSTEE_TYPES,
 )
 from wacryptolib.exceptions import ValidationError, DecryptionError, SchemaValidationError, KeystoreMetadataDoesNotExist
-from wacryptolib.keystore import FilesystemKeystorePool
+from wacryptolib.keystore import FilesystemKeystorePool, ReadonlyFilesystemKeystore
 from wacryptolib.operations import _check_target_authenticator_parameters_validity
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_str, get_nice_size
 
@@ -86,6 +86,14 @@ def _short_format_datetime(dt):
     if dt is None:
         return ""
     return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def _convert_dict_to_table_of_properties(dictionary, key_list):
+    table = PrettyTable(["Property", "Value"])
+    selected_fields = [(k, dictionary[k]) for k in key_list]
+    for selected_field in selected_fields:
+        table.add_row(selected_field)
+    return table
 
 
 def _dump_as_safe_formatted_json(data_tree):
@@ -216,7 +224,7 @@ def create_authenticator(ctx, authenticator_dir, keypair_count, owner, passphras
                 keypair_count, authenticator_dir)
 
 
-@authenticator_group.command("check")
+@authenticator_group.command("validate")
 @click.argument(
     "authenticator_dir",
     type=click.Path(
@@ -224,7 +232,7 @@ def create_authenticator(ctx, authenticator_dir, keypair_count, owner, passphras
     ),
 )
 @click.pass_context
-def check_authenticator(ctx, authenticator_dir):
+def validate_authenticator(ctx, authenticator_dir):
     """
     Verify the metadata and keypairs of an authenticator directory.
 
@@ -236,14 +244,14 @@ def check_authenticator(ctx, authenticator_dir):
     success = True
 
     try:
-        results = operations.check_authenticator(authenticator_dir, keystore_passphrase)  # Raises if metadata are corrupted
+        results = operations.check_authenticator(authenticator_dir, keystore_passphrase=keystore_passphrase)
     except (KeystoreMetadataDoesNotExist, SchemaValidationError) as exc:
         click.echo("Authenticator metadata couldn't be loaded: %s" % exc)
         success = False
 
     else:
         authenticator_metadata = results["authenticator_metadata"]
-        keypair_count = results["keypair_count"]
+        keypair_identifiers = results["keypair_identifiers"]
         missing_private_keys = results["missing_private_keys"]
         undecodable_private_keys = results["undecodable_private_keys"]
 
@@ -257,11 +265,11 @@ def check_authenticator(ctx, authenticator_dir):
         if keystore_creation_datetime:
             click.echo("Creation date: %s" % keystore_creation_datetime.isoformat(sep=" ", timespec="seconds"))
 
-        click.echo("Keypair count: %s" % keypair_count)
+        click.echo("Keypair count: %s" % len(keypair_identifiers))
 
         click.echo("")
 
-        if not keypair_count:
+        if not keypair_identifiers:
             click.echo("No keypairs found, there should be at least one")
             success = False
         if missing_private_keys:
@@ -278,6 +286,41 @@ def check_authenticator(ctx, authenticator_dir):
         sys.exit(1)
 
 
+@authenticator_group.command("view")
+@click.argument(
+    "authenticator_dir",
+    type=click.Path(
+        exists=True, dir_okay=True, file_okay=False, readable=True, resolve_path=True, path_type=Path
+    ),
+)
+@FORMAT_OPTION
+@click.pass_context
+def view_authenticator(ctx, authenticator_dir, format):
+    """View metadata and public keypair identifiers of an authenticator.
+
+    The presence and validity of private keys isn't checked
+    """
+    filesystem_keystore = ReadonlyFilesystemKeystore(authenticator_dir)
+    metadata_enriched = filesystem_keystore.get_keystore_metadata(include_keypair_identifiers=True)
+    metadata_enriched.setdefault("keystore_creation_datetime", None)  # Fixme do this at loading time and fix the Schema accordingly!
+
+    # Restrict data to mask authenticator format, secret, etc.
+    selected_key_list = ["keystore_uid", "keystore_owner", "keystore_passphrase_hint", "keystore_creation_datetime", "keypair_identifiers"]
+    metadata_enriched = {k: metadata_enriched[k] for k in selected_key_list}
+
+    if format == "json":
+        # Even if empty, we output it
+        click.echo(_dump_as_safe_formatted_json(metadata_enriched))
+        return
+
+    # Change the nested list to a string for display
+    metadata_enriched["keystore_creation_datetime"] = _short_format_datetime(metadata_enriched["keystore_creation_datetime"])
+    metadata_enriched["keypair_identifiers"] = "\n".join("%s %s" % (x["key_algo"], x["keychain_uid"])
+                                                              for x in metadata_enriched["keypair_identifiers"])
+    table = _convert_dict_to_table_of_properties(metadata_enriched, key_list=selected_key_list)
+    click.echo(table)
+
+
 @authenticator_group.command("delete")
 @click.argument(
     "authenticator_dir",
@@ -287,6 +330,7 @@ def check_authenticator(ctx, authenticator_dir):
 )
 @click.pass_context
 def delete_authenticator(ctx, authenticator_dir):
+    """Delete an authenticator folder along with all its content."""
     try:
         operations.delete_authenticator(authenticator_dir)
     except Exception as exc:

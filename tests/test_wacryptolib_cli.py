@@ -49,6 +49,69 @@ def test_cli_help_texts():
     assert "summarize" in result.stdout
 
 
+def test_cli_authenticator_management(tmp_path):
+
+    authenticator_path = tmp_path / "myauthenticator"
+    authenticator_subpath = authenticator_path / "mysubauthenticator"
+    passphrase = "somepassphrase"
+
+    runner = _get_cli_runner()
+
+    result = runner.invoke(cli, ["authenticator", "create", str(tmp_path), "--owner", "Donald", "--passphrase-hint", "somehint"])
+    assert result.exit_code == 2
+    assert "Target directory" in result.stderr
+    assert "must not exist yet" in result.stderr
+
+    result = runner.invoke(cli, ["authenticator", "create", str(authenticator_subpath), "--owner", "Donald", "--passphrase-hint", "somehint"])
+    assert result.exit_code == 2
+    assert "Parent directory" in result.stderr
+    assert "must already exist" in result.stderr
+
+    result = runner.invoke(cli, ["authenticator", "create", str(authenticator_path), "--owner", "Donald", "--passphrase-hint", "somehint", "--keypair-count", "0"])
+    assert result.exit_code == 2
+    assert "At least 1 keypair must be created" in result.stderr
+
+    booleans = [True]
+    random.shuffle(booleans)
+
+    for use_env_var_for_passphrase in booleans:
+        assert not authenticator_path.exists()
+
+        if use_env_var_for_passphrase:
+            env = dict(WA_PASSPHRASE=passphrase)
+            input = None
+        else:
+            env = None
+            input = passphrase
+
+        result = runner.invoke(cli, ["authenticator", "create", str(authenticator_path), "--owner", "Donald", "--passphrase-hint", "somehint", "--keypair-count", "1"],
+                               env=env, input=input)  # Passphrase needed, else this freezes
+        assert result.exit_code == 0
+        assert authenticator_path.is_dir()
+
+        result = runner.invoke(cli, ["authenticator", "validate", str(authenticator_path)],
+                               env=env, input=input)
+        assert result.exit_code == 0
+        assert "no integrity errors found" in result.stderr
+
+        result = runner.invoke(cli, ["authenticator", "view", str(authenticator_path), "--format", "json"])
+        assert result.exit_code == 0
+        authenticator_data = load_from_json_str(result.stdout)  # Test loading of output
+        assert len(authenticator_data) == 5
+        assert authenticator_data["keystore_uid"]
+        assert authenticator_data["keystore_owner"] == "Donald"
+        assert authenticator_data["keystore_passphrase_hint"] == "somehint"
+        assert authenticator_data["keystore_creation_datetime"] <= get_utc_now_date()
+        assert len(authenticator_data["keypair_identifiers"]) == 1
+        keypair = authenticator_data["keypair_identifiers"][0]
+        assert set(keypair) == set(["keychain_uid", "key_algo", "private_key_present"])
+
+        result = runner.invoke(cli, ["authenticator", "delete", str(authenticator_path)])
+        assert result.exit_code == 0
+        assert not authenticator_path.exists()
+
+
+
 def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
     keystore_pool_path = tmp_path / "keystore-pool"
     keystore_pool_path.mkdir()

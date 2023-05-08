@@ -12,7 +12,7 @@ from click.testing import CliRunner
 import wacryptolib
 from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.authenticator import initialize_authenticator
-from wacryptolib.cli import wacryptolib_cli as cli
+from wacryptolib.cli import wacryptolib_cli as cli, _short_format_datetime
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CryptainerStorage, check_cryptoconf_sanity
 from wacryptolib.keystore import FilesystemKeystore, generate_keypair_for_storage, _get_keystore_metadata_file_path
 from wacryptolib.utilities import dump_to_json_file, get_utc_now_date, load_from_json_str
@@ -109,6 +109,15 @@ def test_cli_authenticator_management(tmp_path):
         assert len(authenticator_data["keypair_identifiers"]) == 1
         keypair = authenticator_data["keypair_identifiers"][0]
         assert set(keypair) == set(["keychain_uid", "key_algo", "private_key_present"])
+        assert isinstance(keypair["keychain_uid"], UUID), keypair
+
+        result = runner.invoke(cli, ["authenticator", "view", str(authenticator_path)])  # PLAIN format
+        assert str(authenticator_data["keystore_uid"]) in result.stdout
+        assert "Donald" in result.stdout
+        assert "somehint" in result.stdout
+        assert _short_format_datetime(authenticator_data["keystore_creation_datetime"]) in result.stdout
+        assert keypair["key_algo"] in result.stdout
+        assert str(keypair["keychain_uid"]) in result.stdout
 
         result = runner.invoke(cli, ["authenticator", "delete", str(authenticator_path)])
         assert result.exit_code == 0

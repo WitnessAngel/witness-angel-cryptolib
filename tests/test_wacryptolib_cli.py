@@ -14,7 +14,7 @@ from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.cli import wacryptolib_cli as cli
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CryptainerStorage, check_cryptoconf_sanity
-from wacryptolib.keystore import FilesystemKeystore, generate_keypair_for_storage
+from wacryptolib.keystore import FilesystemKeystore, generate_keypair_for_storage, _get_keystore_metadata_file_path
 from wacryptolib.utilities import dump_to_json_file, get_utc_now_date, load_from_json_str
 
 REAL_GATEWAY_URL = "https://api.witnessangel.com/gateway/jsonrpc/"  # Real gateway used by some tests
@@ -71,7 +71,11 @@ def test_cli_authenticator_management(tmp_path):
     assert result.exit_code == 2
     assert "At least 1 keypair must be created" in result.stderr
 
-    booleans = [True]
+    result = runner.invoke(cli, ["authenticator", "delete", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "not an initialized authenticator" in result.stderr
+
+    booleans = [True, False]
     random.shuffle(booleans)
 
     for use_env_var_for_passphrase in booleans:
@@ -110,6 +114,46 @@ def test_cli_authenticator_management(tmp_path):
         assert result.exit_code == 0
         assert not authenticator_path.exists()
 
+
+def test_cli_authenticator_validation_errors(tmp_path):
+
+    authenticator_path = tmp_path / "myauthenticator"
+    runner = _get_cli_runner()
+    passphrase = "my pâssphraze"
+
+    result = runner.invoke(cli, ["authenticator", "create", str(authenticator_path), "--owner", "Donald",
+                                 "--passphrase-hint", "somehint", "--keypair-count", "1"],
+                           input=passphrase)  # Passphrase needed, else this freezes
+    assert result.exit_code == 0
+    assert authenticator_path.is_dir()
+
+    def do_validate(pwd):
+        return runner.invoke(cli, ["authenticator", "validate", str(authenticator_path)], input=pwd)
+
+    result = do_validate(passphrase)
+    assert result.exit_code == 0
+
+    result = do_validate("badpassphrase")
+    assert result.exit_code == 1
+    assert "Undecodable private keys" in result.stdout
+
+    private_key_path = next(authenticator_path.glob("*_private_key.pem"))
+    private_key_path.unlink()
+    result = do_validate(passphrase)
+    assert result.exit_code == 1
+    assert "Missing private keys" in result.stdout
+
+    for public_key in authenticator_path.glob("*_public_key.pem"):
+        public_key.unlink()
+    result = do_validate(passphrase)
+    assert result.exit_code == 1
+    assert "No keypairs found" in result.stdout
+
+    metadata_file = _get_keystore_metadata_file_path(authenticator_path)
+    metadata_file.unlink()
+    result = do_validate(passphrase)
+    assert result.exit_code == 1
+    assert "Authenticator metadata couldn't be loaded" in result.stdout
 
 
 def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):

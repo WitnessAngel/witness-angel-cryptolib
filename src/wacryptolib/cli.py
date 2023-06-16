@@ -32,8 +32,11 @@ from wacryptolib.operations import _check_target_authenticator_parameters_validi
 from wacryptolib.utilities import load_from_json_bytes, dump_to_json_str, get_nice_size
 
 
+# We setup the whole logging tree!
+_root_logger = logging.getLogger()
+click_log.basic_config(logging.getLogger())
+
 logger = logging.getLogger(__name__)
-click_log.basic_config(logger)
 
 _internal_app_dir_str = "~/.witnessangel"
 _DEFAULT_KEYSTORE_POOL_STR = _internal_app_dir_str + "/keystore_pool"  # For docstrings
@@ -126,7 +129,7 @@ def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
-@click_log.simple_verbosity_option(logger)
+@click_log.simple_verbosity_option(_root_logger)
 @click.option(
     "-k",
     "--keystore-pool",
@@ -343,7 +346,9 @@ def delete_authenticator(ctx, authenticator_dir):
 @wacryptolib_cli.command("encrypt")
 @click.argument(
     "input_file",
-    type=click.File("rb"),
+    type=click.Path(
+        exists=True, file_okay=True, dir_okay=True, readable=False, resolve_path=True, allow_dash=True, path_type=Path
+    ),
 )
 @click.option(
     "-o", "--output-basename", help="Basename of the cryptainer storage output file"
@@ -366,7 +371,7 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
 
     keystore_pool = _get_keystore_pool(ctx)
 
-    payload = input_file.read()
+    payload = click.open_file(input_file, mode="rb")  # Handles "-" for STDIN
 
     if output_basename:
         if output_basename.endswith(CRYPTAINER_SUFFIX):

@@ -17,7 +17,7 @@ The Witness Angel Cryptolib is a toolkit aimed at handling secure configuration-
 
 By leveraging a flexible JSON-based format called *cryptoconf*, users can define their own hybrid cryptosystem, recursively combining symmetric cihers, asymmetric ciphers, shared secrets, and data signatures.
 
-Access to the cyptainers is secured by a variety of actors: local device, remote server, trusted third parties...
+Access to the cryptainers is secured by a variety of actors: local device, remote server, trusted third parties...
 
 The decryption process can involve different steps, like entering passphrases, or submitting authorization requests to third parties.
 

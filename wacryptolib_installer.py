@@ -11,9 +11,9 @@ import subprocess
 import sys
 
 commands = """
-PYTHON_EXE -m pip install -U pip==20.3.3
-PYTHON_EXE -m pip install poetry==1.1.11
-PYTHON_EXE -m poetry install
+PYTHON_EXE -m pip install -U pip==23.2
+PYTHON_EXE -m pip install poetry==1.5.1
+PYTHON_EXE -m pip install -r pip_requirements_export.txt
 PYTHON_EXE -m pytest
 """
 commands = [x.strip() for x in commands.splitlines() if x.strip()]

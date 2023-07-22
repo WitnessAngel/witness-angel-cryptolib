@@ -55,7 +55,6 @@ from wacryptolib.utilities import (
     catch_and_log_exception,
     get_utc_now_date,
     consume_bytes_as_chunks,
-    delete_filesystem_node_for_stream,
     SUPPORTED_HASH_ALGOS,
     get_validation_micro_schemas,
 )
@@ -397,7 +396,7 @@ class CryptainerEncryptor(CryptainerBase):
         :return: cryptainer with all the information needed to attempt data decryption
         """
 
-        payload = self._load_payload_bytes_and_cleanup(payload)  # Ensure we get the whole payload buffer
+        payload = self._load_all_payload_bytes(payload)  # Ensure we get the whole payload buffer
 
         cryptainer, payload_cipher_layer_extracts = self._generate_cryptainer_base_and_secrets(
             cryptoconf=cryptoconf, default_keychain_uid=keychain_uid, cryptainer_metadata=cryptainer_metadata
@@ -416,14 +415,13 @@ class CryptainerEncryptor(CryptainerBase):
         return cryptainer
 
     @staticmethod
-    def _load_payload_bytes_and_cleanup(payload: Union[bytes, BinaryIO]):
-        """Automatically deletes filesystem entry if it exists!"""
+    def _load_all_payload_bytes(payload: Union[bytes, BinaryIO]):
         if hasattr(payload, "read"):  # File-like object
             logger.debug("Reading and then deleting open file handle %r", payload)
             payload_stream = payload
             payload = payload_stream.read()
             payload_stream.close()
-            delete_filesystem_node_for_stream(payload_stream)
+            # DO NOT delete the file, e.g. it might come from CLI!
         assert isinstance(payload, bytes), payload
         ## FIXME LATER ADD THIS - assert payload, payload  # No encryption must be launched if we have no payload to process!
         return payload

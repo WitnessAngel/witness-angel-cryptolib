@@ -83,14 +83,6 @@ def get_nice_size(size):  # FIXME TEST THIS
         size /= 1023.0
     return size
 
-
-def delete_filesystem_node_for_stream(stream: BinaryIO):
-    """Deletes the corresponding filesystem node if it exists."""
-    filename = getattr(stream, "name", None)
-    if filename and os.path.exists(filename):  # Can't be false on Win32, since files are not deletable when open
-        os.remove(filename)  # We let errors flow here!
-
-
 ### Public utilities ###
 
 
@@ -112,7 +104,6 @@ def hash_message(message: bytes, hash_algo: str):
 def consume_bytes_as_chunks(
     data: Union[bytes, BinaryIO], chunk_size: int
 ):  # FIXME RENAME (consume_io_bytes..), DOCUMENT AND TEST ME
-    """Automatically deletes filesystem entry if it exists!"""
     if hasattr(data, "read"):  # File-like BinaryIO object
         while True:
             chunk = data.read(chunk_size)
@@ -120,7 +111,7 @@ def consume_bytes_as_chunks(
                 break
             yield chunk
         data.close()
-        delete_filesystem_node_for_stream(data)
+        # DO NOT delete the file, e.g. it might come from CLI!
     else:  # Object with a len()
         for i in range(0, len(data), chunk_size):
             yield data[i : i + chunk_size]  # TODO use memoryview to optimize?

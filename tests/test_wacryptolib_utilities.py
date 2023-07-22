@@ -23,7 +23,6 @@ from wacryptolib.utilities import (
     hash_message,
     get_utc_now_date,
     get_memory_rss_bytes,
-    delete_filesystem_node_for_stream,
     catch_and_log_exception,
     synchronized,
 )
@@ -168,17 +167,6 @@ def test_generate_uuid0():
 
 def test_get_memory_rss_bytes():
     assert 30 * 1024**2 < get_memory_rss_bytes() < 200 * 1024**2
-
-
-def test_delete_filesystem_node_for_stream(tmp_path):
-    delete_filesystem_node_for_stream(BytesIO())  # Does nothing
-
-    target_file = tmp_path / "target_file.txt"
-    with open(target_file, "wb") as stream:
-        stream.write(b"777")
-    assert target_file.exists()
-    delete_filesystem_node_for_stream(stream)
-    assert not target_file.exists()
 
 
 def test_catch_and_log_exception():

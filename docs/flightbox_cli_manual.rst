@@ -2,5 +2,5 @@ Flightbox CLI Reference
 ===================================
 
 .. click:: wacryptolib.cli:wacryptolib_cli
-   :prog: Flightbox command
+   :prog: flightbox
    :nested: full

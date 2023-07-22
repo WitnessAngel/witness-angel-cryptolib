@@ -565,7 +565,7 @@ def test_encrypt_payload_into_cryptainer_from_file_object(tmp_path):
     assert cryptainer
 
     assert open_fileobj.closed
-    assert not source.exists()  # Source is autodeleted!
+    assert source.exists()  # Source is NOT autodeleted!
 
 
 def test_cryptainer_encryption_pipeline_autocleanup(tmp_path):
@@ -2369,7 +2369,7 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
 
     storage.wait_for_idle_state()
 
-    assert not animals_file_path.is_file()  # AUTO-DELETED after encryption!
+    assert animals_file_path.is_file()  # NOT AUTO-DELETED after encryption!
 
     assert storage.get_cryptainer_count() == 2
     assert storage.list_cryptainer_names(as_sorted_list=True) == [Path("animals.dat.crypt"), Path("empty.txt.crypt")]

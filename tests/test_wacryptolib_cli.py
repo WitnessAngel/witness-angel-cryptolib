@@ -537,7 +537,7 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert result.exit_code == 0
     assert (
         "0 new authenticators imported, 0 updated, 0 skipped because corrupted" in result.stderr
-    )  # DO NOT keep USB key in PC for now!
+    )  # DO NOT keep USB key in PC for now when running unit-tests, else this fails!
 
     result = runner.invoke(
         cli, base_args + ["foreign-keystore", "import", "--from-usb", "--include-private-keys"], catch_exceptions=False

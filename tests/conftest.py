@@ -2,6 +2,9 @@ import functools
 from unittest.mock import patch
 
 import pytest
+import logging
+
+logging.getLogger().setLevel(logging.DEBUG)
 
 # Ensure that test scaffolding benefits from advanced assertions
 pytest.register_assert_rewrite("wacryptolib.scaffolding")

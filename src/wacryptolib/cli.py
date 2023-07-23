@@ -371,26 +371,27 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
     keystore_pool = _get_keystore_pool(ctx)
 
     is_stdin = os.fsdecode(input_file) == "-"
-    payload = click.open_file(input_file, mode="rb")  # Handles "-" for STDIN
-
     if is_stdin and not output_basename:
         raise click.MissingParameter("Ouput basename must be provided when input file is STDIN")
+
+    if output_basename:
+        if not is_file_basename(output_basename):
+            raise click.BadParameter("Output basename must not contain path separators")
+        if output_basename.endswith(CRYPTAINER_SUFFIX):
+            output_basename = output_basename[: -len(CRYPTAINER_SUFFIX)]  # Strip premature suffix
 
     output_basename = output_basename or input_file.name
     assert isinstance(output_basename, str), repr(output_basename)
 
-    if not is_file_basename(output_basename):
-        raise click.BadParameter("Output basename must not contain path separators")
-
-    if output_basename.endswith(CRYPTAINER_SUFFIX):
-        output_basename = output_basename[: -len(CRYPTAINER_SUFFIX)]  # Strip premature suffix
-
     cryptainer_storage = _get_cryptainer_storage(
         ctx, keystore_pool=keystore_pool, offload_payload_ciphertext=offload_payload_ciphertext
     )
-    output_cryptainer_name = cryptainer_storage.encrypt_file(
-        filename_base=output_basename, payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
-    )
+
+    with click.open_file(input_file, mode="rb") as payload:  # Also handles "-" for STDIN
+
+        output_cryptainer_name = cryptainer_storage.encrypt_file(
+            filename_base=output_basename, payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
+        )
 
     logger.info(
         "Encryption of file '%s' to storage cryptainer '%s' successfully finished"
@@ -787,6 +788,7 @@ def delete_cryptainer(ctx, cryptainer_name):
     logger.info("Cryptainer %s successfully deleted" % cryptainer_name)
 
 
+# FIXE move this OUT of cryptainer storage subcommand!!!!??? For symmetry
 @cryptainer_group.command("decrypt")
 @click.argument("cryptainer_name")
 @click.option("-o", "--output-file", type=click.File("wb"))

@@ -10,7 +10,7 @@ import sys
 from click.testing import CliRunner
 
 import wacryptolib
-from _test_mockups import oneshot_command_line
+from _test_mockups import oneshot_command_line, random_bool
 from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.cli import wacryptolib_cli as cli, _short_format_datetime
@@ -188,14 +188,31 @@ def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
     base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
     runner = _get_cli_runner()  # Only used for isolated dir, here...
 
-    feeder = subprocess.Popen(oneshot_command_line,
-                          stdout=subprocess.PIPE)
-    consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + ["encrypt", "-", "--bundle"],
-                              stdin=feeder.stdout)
-    assert consumer_process_completed.returncode == 0
-    assert "successfully finished" in consumer_process_completed.stderr
-    assert cryptainer_storage.joinpath(data_file + ".crypt").is_file()
-    assert not cryptainer_storage.joinpath(data_file + ".crypt.payload").is_file()  # NOT OFFLOADED in this case
+    feeder = subprocess.Popen(oneshot_command_line, stdout=subprocess.PIPE)
+    _encryption_args = ["encrypt", "-"] + (["--bundle"] if random_bool() else [])
+    consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
+                              stdin=feeder.stdout, stderr=subprocess.PIPE)
+    assert consumer_process_completed.returncode == 2, consumer_process_completed.stderr
+    assert b"Ouput basename must be provided when input file is STDIN" in consumer_process_completed.stderr
+
+    for idx in range(2):  # Test both bundled (so all-at-once) and unbundled (so streamable) encryptions
+        feeder = subprocess.Popen(oneshot_command_line, stdout=subprocess.PIPE)
+        _encryption_args = ["encrypt", "-", "-o", "my_piped_cryptainer_bundle%d.crypt" % idx] + (["--bundle"] if idx else [])
+        consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
+                                  stdin=feeder.stdout, stderr=subprocess.PIPE)
+        assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
+        assert b"successfully finished" in consumer_process_completed.stderr
+        assert cryptainer_storage.joinpath("my_piped_cryptainer_bundle%d.crypt" % idx).is_file()
+        assert cryptainer_storage.joinpath("my_piped_cryptainer_bundle%d.crypt.payload" % idx).is_file() != bool(idx)
+
+        _decryption_args = ["cryptainer", "decrypt", "my_piped_cryptainer_bundle%d.crypt" % idx]
+        consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _decryption_args, stderr=subprocess.PIPE)
+        assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
+        assert b"successfully finished" in consumer_process_completed.stderr
+        result_file = pathlib.Path("./my_piped_cryptainer_bundle%d" % idx)
+        assert result_file.is_file()
+        result_data = result_file.read_bytes()
+        assert result_data.strip() == b"This is some test data output and then I quit immediately!"  # Beware of newlines
 
 
 def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
@@ -220,12 +237,17 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
         assert not cryptainer_storage.joinpath(data_file + ".crypt.payload").is_file()  # NOT OFFLOADED in this case
 
         result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "stuff.dat"], catch_exceptions=False)
-        print("TEST-STDERR:", result.stderr)
+        print("TEST-STDERR1:", result.stderr)
         assert result.exit_code == 0
         assert "successfully finished" in result.stderr
         assert not os.path.exists("./stuff.dat")  # This is NOT a full target filepath
         assert cryptainer_storage.joinpath("stuff.dat.crypt").is_file()
         assert cryptainer_storage.joinpath("stuff.dat.crypt.payload").is_file()  # OFFLOADED in this case
+
+        result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "folder/stuff.dat"], catch_exceptions=False)
+        print("TEST-STDERR2:", result.stderr)
+        assert result.exit_code == 2
+        assert "basename must not contain path separators" in result.stderr
 
         with open(cryptainer_storage.joinpath("stuff.dat.crypt"), "r") as input_file:
             data = input_file.read()

@@ -387,11 +387,12 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
         ctx, keystore_pool=keystore_pool, offload_payload_ciphertext=offload_payload_ciphertext
     )
 
-    with click.open_file(input_file, mode="rb") as payload:  # Also handles "-" for STDIN
+    with click.open_file(input_file, mode="rb") as payload_handle:  # Also handles "-" for STDIN
 
         output_cryptainer_name = cryptainer_storage.encrypt_file(
-            filename_base=output_basename, payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
+            filename_base=output_basename, payload=payload_handle, cryptainer_metadata=None, cryptoconf=cryptoconf
         )
+        assert not payload_handle.closed, payload_handle  # We do not automatically alter the file handle
 
     logger.info(
         "Encryption of file '%s' to storage cryptainer '%s' successfully finished"
@@ -823,12 +824,16 @@ def decrypt(ctx, cryptainer_name, output_file):
     )
 
     if error_report:
-        logger.warning("Decryption errors occurred:")
+        logger.info("Decryption report:")
         error_report_text = pformat(error_report)
         click.echo(error_report_text)
+    else:
+        logger.info("No decryption report was generated")
 
-    if not medium_content:
+    if medium_content is None:
         raise DecryptionError("Content could not be decrypted")
+    if not medium_content:
+        raise DecryptionError("Decrypted content is empty")
 
     with output_file:
         output_file.write(medium_content)

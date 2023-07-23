@@ -1,5 +1,5 @@
 import os
-from concurrent.futures.thread import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from datetime import timedelta
 

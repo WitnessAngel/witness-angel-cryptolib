@@ -115,12 +115,13 @@ def consume_bytes_as_chunks(
 ):  # FIXME RENAME (consume_io_bytes..), DOCUMENT AND TEST ME
     if hasattr(data, "read"):  # File-like BinaryIO object
         while True:
+            #print("READING", chunk_size, "bytes of data")
             chunk = data.read(chunk_size)
+            #print("READ", str(chunk))
             if not chunk:
                 break
             yield chunk
-        data.close()
-        # DO NOT delete the file, e.g. it might come from CLI!
+        # DO NOT close/delete the file, e.g. it might come from CLI!
     else:  # Object with a len()
         for i in range(0, len(data), chunk_size):
             yield data[i : i + chunk_size]  # TODO use memoryview to optimize?

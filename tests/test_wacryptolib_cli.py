@@ -2,15 +2,17 @@ import os
 import pathlib
 import random
 import subprocess
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pprint import pprint
 from uuid import UUID
 
-import sys
 from click.testing import CliRunner
 
 import wacryptolib
-from _test_mockups import oneshot_command_line, random_bool
+from _test_mockups import oneshot_command_line, random_bool, longrun_command_line
 from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.cli import wacryptolib_cli as cli, _short_format_datetime
@@ -188,31 +190,69 @@ def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
     base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
     runner = _get_cli_runner()  # Only used for isolated dir, here...
 
-    feeder = subprocess.Popen(oneshot_command_line, stdout=subprocess.PIPE)
-    _encryption_args = ["encrypt", "-"] + (["--bundle"] if random_bool() else [])
-    consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
-                              stdin=feeder.stdout, stderr=subprocess.PIPE)
-    assert consumer_process_completed.returncode == 2, consumer_process_completed.stderr
-    assert b"Ouput basename must be provided when input file is STDIN" in consumer_process_completed.stderr
+    with runner.isolated_filesystem() as tempdir, ThreadPoolExecutor(max_workers=1) as executor:
+        print("TEMPORARY TEST DIRECTORY:", tempdir)
 
-    for idx in range(2):  # Test both bundled (so all-at-once) and unbundled (so streamable) encryptions
+        # Test specific CLI constraints when using STDIN PIPE
         feeder = subprocess.Popen(oneshot_command_line, stdout=subprocess.PIPE)
-        _encryption_args = ["encrypt", "-", "-o", "my_piped_cryptainer_bundle%d.crypt" % idx] + (["--bundle"] if idx else [])
+        _encryption_args = ["encrypt", "-"] + (["--bundle"] if random_bool() else [])
         consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
                                   stdin=feeder.stdout, stderr=subprocess.PIPE)
-        assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
-        assert b"successfully finished" in consumer_process_completed.stderr
-        assert cryptainer_storage.joinpath("my_piped_cryptainer_bundle%d.crypt" % idx).is_file()
-        assert cryptainer_storage.joinpath("my_piped_cryptainer_bundle%d.crypt.payload" % idx).is_file() != bool(idx)
+        assert consumer_process_completed.returncode == 2, consumer_process_completed.stderr
+        assert b"Ouput basename must be provided when input file is STDIN" in consumer_process_completed.stderr
 
-        _decryption_args = ["cryptainer", "decrypt", "my_piped_cryptainer_bundle%d.crypt" % idx]
-        consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _decryption_args, stderr=subprocess.PIPE)
-        assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
-        assert b"successfully finished" in consumer_process_completed.stderr
-        result_file = pathlib.Path("./my_piped_cryptainer_bundle%d" % idx)
-        assert result_file.is_file()
-        result_data = result_file.read_bytes()
-        assert result_data.strip() == b"This is some test data output and then I quit immediately!"  # Beware of newlines
+        for idx in range(2):  # Test both bundled (so all-at-once) and unbundled (so streamable) encryptions
+            must_bundle = bool(idx)
+
+            # First we test NORMAL execution of a short encryption pipeline
+    
+            feeder = subprocess.Popen(oneshot_command_line, stdout=subprocess.PIPE)
+            _encryption_args = ["encrypt", "-", "-o", "my_piped_oneshot_cryptainer%d.crypt" % idx] + (["--bundle"] if must_bundle else [])
+            consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
+                                      stdin=feeder.stdout, stderr=subprocess.PIPE)
+            assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
+            assert b"successfully finished" in consumer_process_completed.stderr
+            assert cryptainer_storage.joinpath("my_piped_oneshot_cryptainer%d.crypt" % idx).is_file()
+            assert cryptainer_storage.joinpath("my_piped_oneshot_cryptainer%d.crypt.payload" % idx).is_file() != must_bundle
+    
+            _decryption_args = ["cryptainer", "decrypt", "my_piped_oneshot_cryptainer%d.crypt" % idx]
+            consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _decryption_args, stderr=subprocess.PIPE)
+            assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
+            assert b"successfully finished" in consumer_process_completed.stderr
+            result_file = pathlib.Path("./my_piped_oneshot_cryptainer%d" % idx)
+            assert result_file.is_file()
+            result_data = result_file.read_bytes()
+            assert result_data.strip() == b"This is some test data output and then I quit immediately!"  # Beware of newlines
+
+            # Then we test ABNORMAL execution of a long, INTERRUPTED, encryption pipeline
+
+            feeder = subprocess.Popen(longrun_command_line, stdout=subprocess.PIPE)
+
+            def _interrupt_feeder_soon():
+                time.sleep(6)  # Let it some time to launch and output things
+                feeder.kill()  # Brutal termination
+            executor.submit(_interrupt_feeder_soon)
+
+            _encryption_args = ["encrypt", "-", "-o", "my_piped_longrun_cryptainer%d.crypt" % idx] + (["--bundle"] if must_bundle else [])
+            consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
+                                      stdin=feeder.stdout, stderr=subprocess.PIPE)
+            assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
+            assert b"successfully finished" in consumer_process_completed.stderr
+            assert cryptainer_storage.joinpath("my_piped_longrun_cryptainer%d.crypt" % idx).is_file()
+            assert cryptainer_storage.joinpath("my_piped_longrun_cryptainer%d.crypt.payload" % idx).is_file() != must_bundle
+
+            _decryption_args = ["cryptainer", "decrypt", "my_piped_longrun_cryptainer%d.crypt" % idx]
+            consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _decryption_args, stderr=subprocess.PIPE)
+            print("STDERR FROM DECRYPTION:")
+            print(consumer_process_completed.stderr.decode("utf8", "ignore"))
+            assert consumer_process_completed.returncode == 0
+            assert b"successfully finished" in consumer_process_completed.stderr
+            result_file = pathlib.Path("./my_piped_longrun_cryptainer%d" % idx)
+            assert result_file.is_file()
+            result_data = result_file.read_bytes()
+            result_data = result_data.splitlines()
+            assert len(result_data) > 6, result_data
+            assert set(result_data) == {b"This is some test data output!"}  # No TRUNCATED line!
 
 
 def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):

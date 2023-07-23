@@ -417,10 +417,9 @@ class CryptainerEncryptor(CryptainerBase):
     @staticmethod
     def _load_all_payload_bytes(payload: Union[bytes, BinaryIO]):
         if hasattr(payload, "read"):  # File-like object
-            logger.debug("Reading and then deleting open file handle %r", payload)
+            logger.debug("Reading all data from open file handle %r", payload)
             payload_stream = payload
             payload = payload_stream.read()
-            payload_stream.close()
             # DO NOT delete the file, e.g. it might come from CLI!
         assert isinstance(payload, bytes), payload
         ## FIXME LATER ADD THIS - assert payload, payload  # No encryption must be launched if we have no payload to process!

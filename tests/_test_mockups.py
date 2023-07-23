@@ -1,10 +1,22 @@
 import random
 import secrets
+import sys
 from uuid import UUID
 
 from wacryptolib.cryptainer import CryptainerStorage, dump_cryptainer_to_filesystem, PAYLOAD_CIPHERTEXT_LOCATIONS
 from wacryptolib.keystore import KEYSTORE_FORMAT, FilesystemKeystorePool
 from wacryptolib.utilities import generate_uuid0
+
+
+longrun_command_line = [
+    sys.executable,
+    "-c",
+    # We use "or" to chain the two print() expressions, it's not a bug!
+    "import time, sys ;\nfor i in range(600): print('This is some test data output!') or print('Some stderr logging here!', file=sys.stderr) or time.sleep(0.33)",
+]
+
+
+oneshot_command_line = [sys.executable, "-c", "print('This is some test data output and then I quit immediately!')"]
 
 
 class FakeTestCryptainerStorage(CryptainerStorage):

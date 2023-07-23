@@ -8,7 +8,7 @@ import sys
 import time
 from freezegun import freeze_time
 
-from _test_mockups import FakeTestCryptainerStorage, random_bool
+from _test_mockups import FakeTestCryptainerStorage, random_bool, longrun_command_line, oneshot_command_line
 from wacryptolib.cryptainer import CryptainerStorage, CryptainerEncryptionPipeline
 from wacryptolib.scaffolding import check_sensor_state_machine
 from wacryptolib.sensor import (
@@ -500,16 +500,6 @@ class TestStreamRecorderForTestingWithCustomEncryptionStream(TestStreamRecorderF
         )
 
 
-simple_command_line = [
-    sys.executable,
-    "-c",
-    "import time, sys ;\nfor i in range(600): print('This is some test data output!') or print('Some stderr logging here!', file=sys.stderr) or time.sleep(0.33)",
-]
-
-
-oneshot_command_line = [sys.executable, "-c", "print('This is some test data output and then I quit immediately!')"]
-
-
 def _check_stream_recorder_cryptainer_name(cryptainer_name):
     assert "test_sensor" in str(cryptainer_name)
     assert str(cryptainer_name).endswith(".testext.crypt")
@@ -537,7 +527,7 @@ def test_periodic_subprocess_stream_recorder_simple_cases(tmp_path, transmit_pos
         assert not cryptainer_storage.list_cryptainer_names()
 
     recorder = TestStreamRecorderForTesting(
-        executable_command_line=simple_command_line,
+        executable_command_line=longrun_command_line,
         transmit_post_stop_data=transmit_post_stop_data,
         interval_s=5,
         cryptainer_storage=cryptainer_storage,
@@ -580,7 +570,7 @@ def test_periodic_subprocess_stream_recorder_autoexiting_executable(tmp_path):
     recorder.start()
     time.sleep(6)
     recorder.stop()  # Retcode will already have been set
-    # No need here for recorder.join()
+    recorder.join()  # Necessary for files to be output to disk
     cryptainer_names = cryptainer_storage.list_cryptainer_names()
     assert len(cryptainer_names) == 2  # Cryptainers contain only the initially output data
     _check_stream_recorder_cryptainer_name(cryptainer_names[0])
@@ -590,7 +580,7 @@ def test_periodic_subprocess_stream_recorder_non_quittable_executable(tmp_path):
     cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
 
     recorder = TestStreamRecorderForTesting(
-        executable_command_line=simple_command_line,
+        executable_command_line=longrun_command_line,
         skip_quit_operation=True,
         interval_s=5,
         cryptainer_storage=cryptainer_storage,
@@ -608,7 +598,7 @@ def test_periodic_subprocess_stream_recorder_non_killable_executable(tmp_path):
     cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
 
     recorder = TestStreamRecorderForTesting(
-        executable_command_line=simple_command_line,
+        executable_command_line=longrun_command_line,
         skip_quit_operation=True,
         skip_kill_operation=True,
         interval_s=5,
@@ -645,7 +635,7 @@ def test_periodic_subprocess_stream_recorder_with_custom_encryption_stream(tmp_p
 
     recorder = TestStreamRecorderForTestingWithCustomEncryptionStream(
         finalization_callback=finalization_callback,
-        executable_command_line=simple_command_line,
+        executable_command_line=longrun_command_line,
         interval_s=6,
         cryptainer_storage=cryptainer_storage,
     )

@@ -220,6 +220,7 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
         assert not cryptainer_storage.joinpath(data_file + ".crypt.payload").is_file()  # NOT OFFLOADED in this case
 
         result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "stuff.dat"], catch_exceptions=False)
+        print("TEST-STDERR:", result.stderr)
         assert result.exit_code == 0
         assert "successfully finished" in result.stderr
         assert not os.path.exists("./stuff.dat")  # This is NOT a full target filepath

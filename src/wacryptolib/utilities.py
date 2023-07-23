@@ -4,6 +4,7 @@ import os
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from json import JSONDecodeError
+from pathlib import Path
 from typing import List, Optional, Sequence, Union, BinaryIO
 
 import multitimer
@@ -82,6 +83,14 @@ def get_nice_size(size):  # FIXME TEST THIS
             return "%1.0f %s" % (size, unit)
         size /= 1023.0
     return size
+
+
+def is_file_basename(path):
+    """Returns True iff path is a proper filename, without dots or path separators.
+
+    Does not check for forbidden characters or reserved filenames."""
+    return Path(path).resolve().name == str(path)
+
 
 ### Public utilities ###
 

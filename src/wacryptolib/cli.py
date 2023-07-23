@@ -29,8 +29,7 @@ from wacryptolib.cryptainer import (
 from wacryptolib.exceptions import ValidationError, DecryptionError, SchemaValidationError, KeystoreMetadataDoesNotExist
 from wacryptolib.keystore import FilesystemKeystorePool, ReadonlyFilesystemKeystore
 from wacryptolib.operations import _check_target_authenticator_parameters_validity
-from wacryptolib.utilities import load_from_json_bytes, dump_to_json_str, get_nice_size
-
+from wacryptolib.utilities import load_from_json_bytes, dump_to_json_str, get_nice_size, is_file_basename
 
 # We setup the whole logging tree!
 _root_logger = logging.getLogger()
@@ -352,7 +351,7 @@ def delete_authenticator(ctx, authenticator_dir):
 )
 @click.option(
     "-o", "--output-basename", help="Basename of the cryptainer storage output file"
-)  # TODO allow piping via allow-dash
+)
 @click.option("-c", "--cryptoconf", default=None, help="Json crypotoconf file", type=click.File("rb"))
 @click.option("--bundle", help="Combine cryptainer metadata and payload", is_flag=True)
 @click.pass_context
@@ -371,20 +370,26 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
 
     keystore_pool = _get_keystore_pool(ctx)
 
+    is_stdin = os.fsdecode(input_file) == "-"
     payload = click.open_file(input_file, mode="rb")  # Handles "-" for STDIN
 
-    if output_basename:
-        if output_basename.endswith(CRYPTAINER_SUFFIX):
-            output_basename = output_basename[: -len(CRYPTAINER_SUFFIX)]  # Strip premature suffix
-        filename_base = output_basename
-    else:
-        filename_base = input_file.name
+    if is_stdin and not output_basename:
+        raise click.MissingParameter("Ouput basename must be provided when input file is STDIN")
+
+    output_basename = output_basename or input_file.name
+    assert isinstance(output_basename, str), repr(output_basename)
+
+    if not is_file_basename(output_basename):
+        raise click.BadParameter("Output basename must not contain path separators")
+
+    if output_basename.endswith(CRYPTAINER_SUFFIX):
+        output_basename = output_basename[: -len(CRYPTAINER_SUFFIX)]  # Strip premature suffix
 
     cryptainer_storage = _get_cryptainer_storage(
         ctx, keystore_pool=keystore_pool, offload_payload_ciphertext=offload_payload_ciphertext
     )
     output_cryptainer_name = cryptainer_storage.encrypt_file(
-        filename_base=filename_base, payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
+        filename_base=output_basename, payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
     )
 
     logger.info(

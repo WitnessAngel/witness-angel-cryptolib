@@ -10,6 +10,7 @@ import sys
 from click.testing import CliRunner
 
 import wacryptolib
+from _test_mockups import oneshot_command_line
 from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.cli import wacryptolib_cli as cli, _short_format_datetime
@@ -20,9 +21,25 @@ from wacryptolib.utilities import dump_to_json_file, get_utc_now_date, load_from
 REAL_GATEWAY_URL = "https://api.witnessangel.com/gateway/jsonrpc/"  # Real gateway used by some tests
 REAL_GATEWAY_KEYSTORE_UID = "0f0c0988-80c1-9362-11c1-b06909a3a53c"  # Authenticator of ¤aaa, must exist in real prod
 
+# For when runner.invoke() is not sufficient
+FLIGHTBOX_CLI_INVOCATION_ARGS = [sys.executable, "-m", "wacryptolib"]
+
 
 def _get_cli_runner():
     return CliRunner(mix_stderr=False)
+
+
+def _get_cli_base_args_for_folder_isolation(tmp_path):
+
+    keystore_pool_path = tmp_path / "keystore-pool"
+    keystore_pool_path.mkdir()
+
+    cryptainer_storage = tmp_path / "cryptainer-storage"
+    cryptainer_storage.mkdir()
+
+    base_args = ["-k", str(keystore_pool_path), "-c", str(cryptainer_storage)]
+
+    return base_args, keystore_pool_path, cryptainer_storage
 
 
 def test_cli_help_texts():
@@ -166,19 +183,29 @@ def test_cli_authenticator_validation_errors(tmp_path):
     assert "Authenticator metadata couldn't be loaded" in result.stdout
 
 
-def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
-    keystore_pool_path = tmp_path / "keystore-pool"
-    keystore_pool_path.mkdir()
+def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
 
-    cryptainer_storage = tmp_path / "cryptainer-storage"
-    cryptainer_storage.mkdir()
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
+    runner = _get_cli_runner()  # Only used for isolated dir, here...
+
+    feeder = subprocess.Popen(oneshot_command_line,
+                          stdout=subprocess.PIPE)
+    consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + ["encrypt", "-", "--bundle"],
+                              stdin=feeder.stdout)
+    assert consumer_process_completed.returncode == 0
+    assert "successfully finished" in consumer_process_completed.stderr
+    assert cryptainer_storage.joinpath(data_file + ".crypt").is_file()
+    assert not cryptainer_storage.joinpath(data_file + ".crypt.payload").is_file()  # NOT OFFLOADED in this case
+
+
+def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
+
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
 
     runner = _get_cli_runner()
 
     data_file = "test_file.txt"
     data_sample = "Héllô\nguÿs"
-
-    base_args = ["-k", str(keystore_pool_path), "-c", str(cryptainer_storage)]
 
     with runner.isolated_filesystem() as tempdir:
         print("TEMPORARY TEST DIRECTORY:", tempdir)
@@ -186,13 +213,13 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
         with open(data_file, "w") as output_file:
             output_file.write(data_sample)
 
-        result = runner.invoke(cli, base_args + ["encrypt", "test_file.txt", "--bundle"], catch_exceptions=False)
+        result = runner.invoke(cli, base_args + ["encrypt", data_file, "--bundle"], catch_exceptions=False)
         assert result.exit_code == 0
         assert "successfully finished" in result.stderr
         assert cryptainer_storage.joinpath(data_file + ".crypt").is_file()
         assert not cryptainer_storage.joinpath(data_file + ".crypt.payload").is_file()  # NOT OFFLOADED in this case
 
-        result = runner.invoke(cli, base_args + ["encrypt", "test_file.txt", "-o", "stuff.dat"], catch_exceptions=False)
+        result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "stuff.dat"], catch_exceptions=False)
         assert result.exit_code == 0
         assert "successfully finished" in result.stderr
         assert not os.path.exists("./stuff.dat")  # This is NOT a full target filepath
@@ -264,19 +291,13 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
 
 
 def test_cli_encryption_and_summarize_with_custom_cryptoconf(tmp_path):
-    keystore_pool_path = tmp_path / "keystore-pool"
-    keystore_pool_path.mkdir()
-
-    cryptainer_storage = tmp_path / "cryptainer-storage"
-    cryptainer_storage.mkdir()
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
 
     runner = _get_cli_runner()
 
     data_file = "test_file.txt"
     data_sample = "Héllô\nguÿs"
     cryptoconf_file = "mycryptoconf.json"
-
-    base_args = ["-k", str(keystore_pool_path), "-c", str(cryptainer_storage)]
 
     with runner.isolated_filesystem() as tempdir:
         print("TEMPORARY TEST DIRECTORY:", tempdir)
@@ -453,7 +474,6 @@ def test_cli_cryptoconf_generate_simple():
         assert result.exit_code != 0, (result.exit_code, result.stdout)  # UsageError, not crash
 
 
-
 def test_cli_cryptoconf_validate(tmp_path):
     cryptoconf_file = tmp_path / "good_cryptoconf.json"
     wrong_cryptoconf_file = tmp_path / "wrong_cryptoconf.json"
@@ -497,7 +517,7 @@ def test_cli_subprocess_invocation():
     env["PYTHONPATH"] = env.get("PYTHONPATH", "") + os.pathsep + src_dir
 
     proc = subprocess.Popen(
-        [sys.executable, "-m", "wacryptolib", "-h"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        FLIGHTBOX_CLI_INVOCATION_ARGS + ["-h"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     stdout, stderr = proc.communicate(timeout=15)
     assert b"Options:" in stdout
@@ -507,13 +527,10 @@ def test_cli_subprocess_invocation():
 
 
 def test_cli_foreign_keystore_management(tmp_path):
-    keystore_pool_path = tmp_path / "keystore-pool"
-    keystore_pool_path.mkdir()
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
 
     authenticator_path = tmp_path / "authenticator"
     authenticator_path.mkdir()
-
-    base_args = ["--keystore-pool", str(keystore_pool_path)]
 
     wrong_uuid_str = "676ff51f-1439-48d9-94f9-a6011357fd11"
 

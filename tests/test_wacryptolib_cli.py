@@ -349,7 +349,8 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
             ],
         )
         assert result.exit_code == 1  # Decryption failed because keypair was regenerated
-        assert "Decryption errors occurred" in result.stderr
+        assert "Decryption report:" in result.stderr
+        assert "Content could not be decrypted" in str(result.exc_info[1])
         assert not os.path.exists("mystuffs.txt")
 
 

@@ -554,17 +554,17 @@ def test_encrypt_payload_into_cryptainer_from_file_object(tmp_path):
     source.write_bytes(b"12345")
     assert source.exists()
 
-    open_fileobj = open(source, "rb")
+    file_handle = open(source, "rb")
 
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=open_fileobj,
+        payload=file_handle,
         cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_metadata=None,
         keystore_pool=InMemoryKeystorePool(),
     )
     assert cryptainer
 
-    assert open_fileobj.closed
+    assert not file_handle.closed
     assert source.exists()  # Source is NOT autodeleted!
 
 
@@ -2335,7 +2335,7 @@ def test_cryptainer_list_cryptainer_properties(tmp_path):
     assert second_properties["name"] == Path(cryptainer_filepath_pending.name)
 
 
-def test_cryptainer_storage_and_executor(tmp_path, caplog):
+def test_cryptainer_storage_and_executor(tmp_path, capsys):
     side_tmp = tmp_path / "side_tmp"
     side_tmp.mkdir()
 
@@ -2411,11 +2411,13 @@ def test_cryptainer_storage_and_executor(tmp_path, caplog):
     # Test proper logging of errors occurring in thread pool executor
     assert storage._make_absolute  # Instance method
     storage._make_absolute = None  # Corruption!
-    assert "Abnormal exception" not in caplog.text, caplog.text
+    captured = capsys.readouterr()
+    assert "Abnormal exception" not in captured.err, captured.err
     storage.enqueue_file_for_encryption("something.mpg", b"#########", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     assert storage.get_cryptainer_count() == 3  # Unchanged
-    assert "Abnormal exception" in caplog.text, caplog.text
+    captured = capsys.readouterr()
+    assert "Abnormal exception" in captured.err, captured.err
     del storage._make_absolute
     assert storage._make_absolute  # Back to the method
 

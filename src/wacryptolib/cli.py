@@ -833,7 +833,7 @@ def decrypt(ctx, cryptainer_name, output_file):
     if medium_content is None:
         raise DecryptionError("Content could not be decrypted")
     if not medium_content:
-        raise DecryptionError("Decrypted content is empty")
+        raise DecryptionError("Decrypted content is empty")  # FIXME test this separately!
 
     with output_file:
         output_file.write(medium_content)

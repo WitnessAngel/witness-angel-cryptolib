@@ -459,14 +459,14 @@ pipenv = ["pipenv (<=2022.12.19)"]
 
 [[package]]
 name = "exceptiongroup"
-version = "1.1.2"
+version = "1.1.3"
 description = "Backport of PEP 654 (exception groups)"
 category = "dev"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "exceptiongroup-1.1.2-py3-none-any.whl", hash = "sha256:e346e69d186172ca7cf029c8c1d16235aa0e04035e5750b4b95039e65204328f"},
-    {file = "exceptiongroup-1.1.2.tar.gz", hash = "sha256:12c3e887d6485d16943a309616de20ae5582633e0a2eda17f4e10fd61c1e8af5"},
+    {file = "exceptiongroup-1.1.3-py3-none-any.whl", hash = "sha256:343280667a4585d195ca1cf9cef84a4e178c4b6cf2274caef9859782b567d5e3"},
+    {file = "exceptiongroup-1.1.3.tar.gz", hash = "sha256:097acd85d473d75af5bb98e41b61ff7fe35efe6675e4f9370ec6ec5126d160e9"},
 ]
 
 [package.extras]
@@ -501,17 +501,6 @@ files = [
 
 [package.dependencies]
 python-dateutil = ">=2.7"
-
-[[package]]
-name = "future"
-version = "0.18.3"
-description = "Clean single-source support for Python 3 and 2"
-category = "dev"
-optional = false
-python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
-files = [
-    {file = "future-0.18.3.tar.gz", hash = "sha256:34a17436ed1e96697a86f9de3d15a3b0be01d8bc8de9c1dffd59fb8234ed5307"},
-]
 
 [[package]]
 name = "idna"
@@ -711,14 +700,14 @@ files = [
 
 [[package]]
 name = "mando"
-version = "0.6.4"
+version = "0.7.1"
 description = "Create Python CLI apps with little to no effort at all!"
 category = "dev"
 optional = false
 python-versions = "*"
 files = [
-    {file = "mando-0.6.4-py2.py3-none-any.whl", hash = "sha256:4ce09faec7e5192ffc3c57830e26acba0fd6cd11e1ee81af0d4df0657463bd1c"},
-    {file = "mando-0.6.4.tar.gz", hash = "sha256:79feb19dc0f097daa64a1243db578e7674909b75f88ac2220f1c065c10a0d960"},
+    {file = "mando-0.7.1-py2.py3-none-any.whl", hash = "sha256:26ef1d70928b6057ee3ca12583d73c63e05c49de8972d620c278a7b206581a8a"},
+    {file = "mando-0.7.1.tar.gz", hash = "sha256:18baa999b4b613faefb00eac4efadcf14f510b59b924b66e08289aa1de8c3500"},
 ]
 
 [package.dependencies]
@@ -1058,14 +1047,14 @@ files = [
 
 [[package]]
 name = "pygments"
-version = "2.15.1"
+version = "2.16.1"
 description = "Pygments is a syntax highlighting package written in Python."
 category = "dev"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "Pygments-2.15.1-py3-none-any.whl", hash = "sha256:db2db3deb4b4179f399a09054b023b6a586b76499d36965813c71aa8ed7b5fd1"},
-    {file = "Pygments-2.15.1.tar.gz", hash = "sha256:8ace4d3c1dd481894b2005f560ead0f9f19ee64fe983366be1a21e171d12775c"},
+    {file = "Pygments-2.16.1-py3-none-any.whl", hash = "sha256:13fc09fa63bc8d8671a6d247e1eb303c4b343eaee81d861f3404db2935653692"},
+    {file = "Pygments-2.16.1.tar.gz", hash = "sha256:1daff0494820c69bc8941e407aa20f577374ee88364ee10a98fdbe0aece96e29"},
 ]
 
 [package.extras]
@@ -1473,20 +1462,22 @@ files = [
 
 [[package]]
 name = "radon"
-version = "5.1.0"
+version = "6.0.1"
 description = "Code Metrics in Python"
 category = "dev"
 optional = false
 python-versions = "*"
 files = [
-    {file = "radon-5.1.0-py2.py3-none-any.whl", hash = "sha256:fa74e018197f1fcb54578af0f675d8b8e2342bd8e0b72bef8197bc4c9e645f36"},
-    {file = "radon-5.1.0.tar.gz", hash = "sha256:cb1d8752e5f862fb9e20d82b5f758cbc4fb1237c92c9a66450ea0ea7bf29aeee"},
+    {file = "radon-6.0.1-py2.py3-none-any.whl", hash = "sha256:632cc032364a6f8bb1010a2f6a12d0f14bc7e5ede76585ef29dc0cecf4cd8859"},
+    {file = "radon-6.0.1.tar.gz", hash = "sha256:d1ac0053943a893878940fedc8b19ace70386fc9c9bf0a09229a44125ebf45b5"},
 ]
 
 [package.dependencies]
 colorama = {version = ">=0.4.1", markers = "python_version > \"3.4\""}
-future = "*"
-mando = ">=0.6,<0.7"
+mando = ">=0.6,<0.8"
+
+[package.extras]
+toml = ["tomli (>=2.0.1)"]
 
 [[package]]
 name = "requests"
@@ -2194,19 +2185,19 @@ files = [
 
 [[package]]
 name = "xenon"
-version = "0.9.0"
+version = "0.9.1"
 description = "Monitor code metrics for Python on your CI server"
 category = "dev"
 optional = false
 python-versions = "*"
 files = [
-    {file = "xenon-0.9.0-py2.py3-none-any.whl", hash = "sha256:994c80c7f1c6d40596b600b93734d85a5739208f31895ef99f1e4d362caf9e35"},
-    {file = "xenon-0.9.0.tar.gz", hash = "sha256:d2b9cb6c6260f771a432c1e588e51fddb17858f88f73ef641e7532f7a5f58fb8"},
+    {file = "xenon-0.9.1-py2.py3-none-any.whl", hash = "sha256:b2888a5764ebd57a1f9f1624fde86e8303cb30c686e492f19d98867c458f7870"},
+    {file = "xenon-0.9.1.tar.gz", hash = "sha256:d6745111c3e258b749a4fd424b1b899d99ea183cea232365ee2f88fe7d80c03b"},
 ]
 
 [package.dependencies]
 PyYAML = ">=4.2b1,<7.0"
-radon = ">=4,<6"
+radon = ">=4,<7"
 requests = ">=2.0,<3.0"
 
 [[package]]

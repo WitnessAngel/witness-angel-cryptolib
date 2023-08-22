@@ -1957,7 +1957,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         if self._max_cryptainer_age is not None:  # FIRST these, since their deletion is unconditional
             cryptainer_dicts = self.list_cryptainer_properties(with_age=True, finished=None)
             for cryptainer_dict in cryptainer_dicts:
-                print("COMPARING", cryptainer_dict["age"], self._max_cryptainer_age)
+                ##print("COMPARING", cryptainer_dict["age"], self._max_cryptainer_age)
                 if cryptainer_dict["age"] > self._max_cryptainer_age:
                     logger.info("Deleting cryptainer %s due to age", cryptainer_dict["name"])
                     self._delete_cryptainer(cryptainer_dict["name"])

@@ -368,6 +368,7 @@ class PeriodicEncryptionStreamMixin:
         self._cryptainer_storage = cryptainer_storage
 
     def _build_cryptainer_filename_base(self, from_datetime):
+        # FIXME use same format as build_record_filename, less verbose!!!!
         extension = self.record_extension
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)

@@ -786,11 +786,11 @@ class CryptainerDecryptor(CryptainerBase):
         try:
             private_key_pem = keystore.get_private_key(keychain_uid=keychain_uid, key_algo=cipher_algo)
         except KeyDoesNotExist as exc:
-            error_entry = self._build_error_report_entry(
-                error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                error_message="Private key of revelation response not found (%s/%s)" % (cipher_algo, keychain_uid),
-                error_criticity=DecryptionErrorCriticity.ERROR,
-                error_exception=exc,
+            error_entry = self._build_operation_report_entry(
+                entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                entry_message="Private key of revelation response not found (%s/%s)" % (cipher_algo, keychain_uid),
+                entry_criticity=DecryptionErrorCriticity.ERROR,
+                entry_exception=exc,
             )
             error_report.append(error_entry)
             return key_struct_bytes, error_report
@@ -799,11 +799,11 @@ class CryptainerDecryptor(CryptainerBase):
             private_key = load_asymmetric_key_from_pem_bytestring(key_pem=private_key_pem, key_algo=cipher_algo)
 
         except KeyLoadingError as exc:
-            error_entry = self._build_error_report_entry(
-                error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                error_message="Failed loading revelation response key of from pem bytestring (%s)" % cipher_algo,
-                error_criticity=DecryptionErrorCriticity.ERROR,
-                error_exception=exc,
+            error_entry = self._build_operation_report_entry(
+                entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                entry_message="Failed loading revelation response key of from pem bytestring (%s)" % cipher_algo,
+                entry_criticity=DecryptionErrorCriticity.ERROR,
+                entry_exception=exc,
             )
 
             error_report.append(error_entry)
@@ -814,11 +814,11 @@ class CryptainerDecryptor(CryptainerBase):
                 cipherdict=cipherdict, cipher_algo=cipher_algo, key_dict=dict(key=private_key)
             )
         except DecryptionError as exc:
-            error_entry = self._build_error_report_entry(
-                error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                error_message="Failed decryption of remote symkey/shard %s (%s) " % (cipher_algo, exc),
-                error_criticity=DecryptionErrorCriticity.ERROR,
-                error_exception=exc,
+            error_entry = self._build_operation_report_entry(
+                entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                entry_message="Failed decryption of remote symkey/shard %s (%s) " % (cipher_algo, exc),
+                entry_criticity=DecryptionErrorCriticity.ERROR,
+                entry_exception=exc,
             )
             error_report.append(error_entry)
 
@@ -859,10 +859,10 @@ class CryptainerDecryptor(CryptainerBase):
                 revelation_requestor_uid=revelation_requestor_uid
             )
         except (JSONRPCError, OSError) as exc:
-            error_entry = self._build_error_report_entry(
-                error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                error_message="Unable to reach remote server %s" % gateway_url,
-                error_exception=exc,
+            error_entry = self._build_operation_report_entry(
+                entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                entry_message="Unable to reach remote server %s" % gateway_url,
+                entry_exception=exc,
             )
             error_report.append(error_entry)
 
@@ -1004,32 +1004,32 @@ class CryptainerDecryptor(CryptainerBase):
                     # Now decrypted
 
                 except DecryptionIntegrityError as exc:
-                    error_entry = self._build_error_report_entry(
-                        error_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
-                        error_criticity=DecryptionErrorCriticity.ERROR,
-                        error_message="Failed decryption authentication %s (MAC check failed)" % payload_cipher_algo,
-                        error_exception=exc,
+                    error_entry = self._build_operation_report_entry(
+                        entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+                        entry_criticity=DecryptionErrorCriticity.ERROR,
+                        entry_message="Failed decryption authentication %s (MAC check failed)" % payload_cipher_algo,
+                        entry_exception=exc,
                     )
                     error_report.append(error_entry)
                     payload_current = None
 
                 except DecryptionError as exc:
-                    error_entry = self._build_error_report_entry(
-                        error_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
-                        error_criticity=DecryptionErrorCriticity.ERROR,
-                        error_message="Failed symmetric decryption (%s)" % payload_cipher_algo,
-                        error_exception=exc,
+                    error_entry = self._build_operation_report_entry(
+                        entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+                        entry_criticity=DecryptionErrorCriticity.ERROR,
+                        entry_message="Failed symmetric decryption (%s)" % payload_cipher_algo,
+                        entry_exception=exc,
                     )
                     error_report.append(error_entry)
                     payload_current = None
             else:
                 payload_current = None
-                error_entry = self._build_error_report_entry(
-                    error_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
-                    error_criticity=DecryptionErrorCriticity.ERROR,
-                    error_message="Failed symmetric decryption (%s)"
+                error_entry = self._build_operation_report_entry(
+                    entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+                    entry_criticity=DecryptionErrorCriticity.ERROR,
+                    entry_message="Failed symmetric decryption (%s)"
                     % payload_cipher_algo,  # FIXME change this message to "aborted"? Or just skip this step?
-                    error_exception=None,
+                    entry_exception=None,
                 )
                 error_report.append(error_entry)
             payload = payload_current
@@ -1117,11 +1117,11 @@ class CryptainerDecryptor(CryptainerBase):
                     )  # The tuple (idx, payload) of each shard thus becomes encryptable
                     decrypted_shards.append(shard)
                 else:
-                    error_entry = self._build_error_report_entry(
-                        error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                        error_message="A previous error prevented decrypting shard %s"
+                    error_entry = self._build_operation_report_entry(
+                        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                        entry_message="A previous error prevented decrypting shard %s"
                         % str(key_shared_secret_shard_conf),
-                        error_exception=None,
+                        entry_exception=None,
                     )
                     error_report.append(error_entry)
 
@@ -1129,11 +1129,11 @@ class CryptainerDecryptor(CryptainerBase):
                     break
 
             if len(decrypted_shards) < key_shared_secret_threshold:
-                error_entry = self._build_error_report_entry(
-                    error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                    error_message="%s valid shard(s) missing for reconstitution "
+                error_entry = self._build_operation_report_entry(
+                    entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                    entry_message="%s valid shard(s) missing for reconstitution "
                     "of symmetric key" % (key_shared_secret_threshold - len(decrypted_shards)),
-                    error_exception=None,
+                    entry_exception=None,
                 )
                 error_report.append(error_entry)
             else:
@@ -1161,11 +1161,11 @@ class CryptainerDecryptor(CryptainerBase):
                         key_cipherdict, cipher_algo=key_cipher_algo, key_dict=sub_symkey_dict
                     )
                 except DecryptionError as exc:
-                    error_entry = self._build_error_report_entry(
-                        error_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
-                        error_message="Error decrypting key with symmetric algorithm %s algorithm" % key_cipher_algo,
-                        error_criticity=DecryptionErrorCriticity.ERROR,
-                        error_exception=exc,
+                    error_entry = self._build_operation_report_entry(
+                        entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+                        entry_message="Error decrypting key with symmetric algorithm %s algorithm" % key_cipher_algo,
+                        entry_criticity=DecryptionErrorCriticity.ERROR,
+                        entry_exception=exc,
                     )
                     error_report.append(error_entry)
 
@@ -1204,33 +1204,33 @@ class CryptainerDecryptor(CryptainerBase):
         return predecrypted_symkey
 
     @staticmethod
-    def _build_error_report_entry(
-        error_type: str, error_message: str, error_criticity=DecryptionErrorCriticity.WARNING, error_exception=None
+    def _build_operation_report_entry(
+        entry_type: str, entry_message: str, entry_criticity=DecryptionErrorCriticity.WARNING, entry_exception=None
     ) -> dict:
         # We forward entry to standard logging too
-        log_level = getattr(logging, error_criticity)  # Same identifiers in the 2 worlds
-        if error_exception:
-            logger.log(log_level, "%s report entry: %s (%r)", error_type, error_message, error_exception)
+        log_level = getattr(logging, entry_criticity)  # Same identifiers in the 2 worlds
+        if entry_exception:
+            logger.log(log_level, "%s report entry: %s (%r)", entry_type, entry_message, entry_exception)
         else:
-            logger.log(log_level, "%s report entry: %s", error_type, error_message)
+            logger.log(log_level, "%s report entry: %s", entry_type, entry_message)
 
         error_entry = {
-            "error_type": error_type,
-            "error_criticity": error_criticity,
-            "error_message": error_message,
-            "error_exception": error_exception,
+            "entry_type": entry_type,
+            "entry_criticity": entry_criticity,
+            "entry_message": entry_message,
+            "entry_exception": entry_exception,
         }
 
-        SCHEMA_ERROR = Schema(
+        SCHEMA_ERROR = Schema(  # FIXME move that OUT of here
             {
-                "error_type": Or(
+                "entry_type": Or(
                     DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
                     DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
                     DecryptionErrorType.SIGNATURE_ERROR,
                 ),
-                "error_criticity": Or(DecryptionErrorCriticity.ERROR, DecryptionErrorCriticity.WARNING),
-                "error_message": And(str, len),
-                "error_exception": Or(Exception, None),
+                "entry_criticity": Or(DecryptionErrorCriticity.ERROR, DecryptionErrorCriticity.WARNING),
+                "entry_message": And(str, len),
+                "entry_exception": Or(Exception, None),
             }
         )
 
@@ -1268,10 +1268,10 @@ class CryptainerDecryptor(CryptainerBase):
         try:
             trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
         except KeystoreDoesNotExist as exc:
-            error_entry = self._build_error_report_entry(
-                error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                error_message="Trustee key storage not found (%s)" % trustee["keystore_uid"],
-                error_exception=exc,
+            error_entry = self._build_operation_report_entry(
+                entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                entry_message="Trustee key storage not found (%s)" % trustee["keystore_uid"],
+                entry_exception=exc,
             )
             error_report.append(error_entry)
 
@@ -1295,27 +1295,27 @@ class CryptainerDecryptor(CryptainerBase):
                 del actual_cryptainer_metadata  # No use for now
 
             except KeyDoesNotExist as exc:
-                error_entry = self._build_error_report_entry(
-                    error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                    error_message="Private key not found (%s/%s)" % (cipher_algo, keychain_uid),
-                    error_exception=exc,
+                error_entry = self._build_operation_report_entry(
+                    entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                    entry_message="Private key not found (%s/%s)" % (cipher_algo, keychain_uid),
+                    entry_exception=exc,
                 )
                 error_report.append(error_entry)
 
             except KeyLoadingError as exc:
-                error_entry = self._build_error_report_entry(
-                    error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                    error_message="Could not load private key (%s/%s)" % (cipher_algo, keychain_uid),
-                    error_exception=exc,
+                error_entry = self._build_operation_report_entry(
+                    entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                    entry_message="Could not load private key (%s/%s)" % (cipher_algo, keychain_uid),
+                    entry_exception=exc,
                 )
                 error_report.append(error_entry)
 
             except DecryptionError as exc:
-                error_entry = self._build_error_report_entry(
-                    error_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                    error_message="Failed decrypting key with asymmetric algorithm %s (%s)" % (cipher_algo, exc),
-                    error_criticity=DecryptionErrorCriticity.ERROR,
-                    error_exception=exc,
+                error_entry = self._build_operation_report_entry(
+                    entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                    entry_message="Failed decrypting key with asymmetric algorithm %s (%s)" % (cipher_algo, exc),
+                    entry_criticity=DecryptionErrorCriticity.ERROR,
+                    entry_exception=exc,
                 )
                 error_report.append(error_entry)
 
@@ -1341,10 +1341,10 @@ class CryptainerDecryptor(CryptainerBase):
                 keychain_uid=keychain_uid, key_algo=payload_signature_algo, must_exist=True
             )
         except KeyDoesNotExist as exc:
-            error_entry = self._build_error_report_entry(
-                error_type=DecryptionErrorType.SIGNATURE_ERROR,
-                error_message="Private key %s/%s not found" % (payload_signature_algo, keychain_uid),
-                error_exception=exc,
+            error_entry = self._build_operation_report_entry(
+                entry_type=DecryptionErrorType.SIGNATURE_ERROR,
+                entry_message="Private key %s/%s not found" % (payload_signature_algo, keychain_uid),
+                entry_exception=exc,
             )
             error_report.append(error_entry)
             return error_report
@@ -1354,10 +1354,10 @@ class CryptainerDecryptor(CryptainerBase):
                 key_pem=public_key_pem, key_algo=payload_signature_algo
             )
         except KeyLoadingError as exc:
-            error_entry = self._build_error_report_entry(
-                error_type=DecryptionErrorType.SIGNATURE_ERROR,
-                error_message="Failed loading signature key from pem bytestring (%s)" % payload_signature_algo,
-                error_exception=exc,
+            error_entry = self._build_operation_report_entry(
+                entry_type=DecryptionErrorType.SIGNATURE_ERROR,
+                entry_message="Failed loading signature key from pem bytestring (%s)" % payload_signature_algo,
+                entry_exception=exc,
             )
             error_report.append(error_entry)
             return error_report
@@ -1366,19 +1366,19 @@ class CryptainerDecryptor(CryptainerBase):
 
         expected_payload_digest = cryptoconf.get("payload_digest_value")  # Might be missing
         if expected_payload_digest and expected_payload_digest != payload_digest:
-            error_entry = self._build_error_report_entry(
-                error_type=DecryptionErrorType.SIGNATURE_ERROR,
-                error_message="Mismatch between actual and expected payload digests during signature verification",
-                error_exception=None,
+            error_entry = self._build_operation_report_entry(
+                entry_type=DecryptionErrorType.SIGNATURE_ERROR,
+                entry_message="Mismatch between actual and expected payload digests during signature verification",
+                entry_exception=None,
             )
             error_report.append(error_entry)
 
         payload_signature_struct = cryptoconf.get("payload_signature_struct")
         if not payload_signature_struct:
-            error_entry = self._build_error_report_entry(
-                error_type=DecryptionErrorType.SIGNATURE_ERROR,
-                error_message="Missing signature structure",
-                error_exception=None,
+            error_entry = self._build_operation_report_entry(
+                entry_type=DecryptionErrorType.SIGNATURE_ERROR,
+                entry_message="Missing signature structure",
+                entry_exception=None,
             )
             error_report.append(error_entry)
         else:
@@ -1391,10 +1391,10 @@ class CryptainerDecryptor(CryptainerBase):
                 )  # Raises if troubles
 
             except SignatureVerificationError as exc:
-                error_entry = self._build_error_report_entry(
-                    error_type=DecryptionErrorType.SIGNATURE_ERROR,
-                    error_message="Failed signature verification %s (%s)" % (payload_signature_algo, exc),
-                    error_exception=exc,
+                error_entry = self._build_operation_report_entry(
+                    entry_type=DecryptionErrorType.SIGNATURE_ERROR,
+                    entry_message="Failed signature verification %s (%s)" % (payload_signature_algo, exc),
+                    entry_exception=exc,
                 )
                 error_report.append(error_entry)
 

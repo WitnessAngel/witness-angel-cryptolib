@@ -766,6 +766,54 @@ class DecryptionErrorCriticity:
     ERROR = "ERROR"
 
 
+OPERATION_REPORT_ENTRY_SCHEMA = Schema(
+    {
+        "entry_type": Or(
+            DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+            DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+            DecryptionErrorType.SIGNATURE_ERROR,
+        ),
+        "entry_criticity": Or(DecryptionErrorCriticity.ERROR, DecryptionErrorCriticity.WARNING),
+        "entry_message": And(str, len),
+        "entry_exception": Or(Exception, None),
+    }
+)
+
+
+class OperationReport:
+
+    def __int__(self):
+        self._entries = []
+
+    def add_entry(self,
+                entry_type: str,
+                  entry_message: str,
+                  entry_criticity=DecryptionErrorCriticity.WARNING,
+                entry_exception=None) -> dict:
+
+        # We immediately forward entry to standard logging too!
+        log_level = getattr(logging, entry_criticity)  # Same identifiers in the 2 worlds
+        if entry_exception:
+            logger.log(log_level, "%s report entry: %s (%r)", entry_type, entry_message, entry_exception)
+        else:
+            logger.log(log_level, "%s report entry: %s", entry_type, entry_message)
+
+        error_entry = {
+            "entry_type": entry_type,
+            "entry_criticity": entry_criticity,
+            "entry_message": entry_message,
+            "entry_exception": entry_exception,
+        }
+
+        if __debug__:  # Sanity check
+            _validate_data_tree(data_tree=error_entry, valid_schema=OPERATION_REPORT_ENTRY_SCHEMA)
+
+        self._entries.append(error_entry)
+
+    def get_entries(self):
+        return self._entries[:]  # COPY
+
+
 class CryptainerDecryptor(CryptainerBase):
     """
     THIS CLASS IS PRIVATE API

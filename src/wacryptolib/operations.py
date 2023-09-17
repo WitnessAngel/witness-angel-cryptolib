@@ -133,10 +133,10 @@ def ___decrypt_payload_from_bytes(
     cryptainer = load_from_json_bytes(cryptainer_bytes)
     check_cryptainer_sanity(cryptainer)
 
-    payload, error_report = decrypt_payload_from_cryptainer(
+    payload = decrypt_payload_from_cryptainer(
         cryptainer, keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper
     )
-    return payload, error_report  # Payload might be None
+    return payload  # Payload might be None
 
 
 def import_keystore_from_path(keystore_pool, keystore_path, include_private_keys: bool):

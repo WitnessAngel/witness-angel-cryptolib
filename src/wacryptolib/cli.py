@@ -853,14 +853,14 @@ def decrypt(ctx, cryptainer_name, output_file):
 
     check_cryptainer_sanity(cryptainer)
 
-    medium_content, error_report = decrypt_payload_from_cryptainer(
+    medium_content, operation_report = decrypt_payload_from_cryptainer(
         cryptainer, keystore_pool=keystore_pool, passphrase_mapper=None
     )
 
-    if error_report:
+    if operation_report:
         logger.info("Decryption report:")
-        error_report_text = pformat(error_report)
-        click.echo(error_report_text)
+        operation_report_text = operation_report.format_entries()
+        click.echo(operation_report_text)
     else:
         logger.info("No decryption report was generated")
 

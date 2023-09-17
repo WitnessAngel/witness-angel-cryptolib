@@ -996,7 +996,6 @@ class CryptainerDecryptor(CryptainerBase):
                 successful_symkey_decryptions=successful_symkey_decryptions, operation_report=operation_report
             )
 
-
         assert isinstance(cryptainer, dict), cryptainer
 
         cryptainer_format = cryptainer["cryptainer_format"]
@@ -1090,7 +1089,7 @@ class CryptainerDecryptor(CryptainerBase):
         cryptainer_metadata: Optional[dict],
         operation_report: OperationReport,
         predecrypted_symkey_mapper: Optional[dict] = None,
-    ) -> tuple:
+    ) -> Optional[bytes]:
         assert len(key_cipher_layers), key_cipher_layers  # Extra safety
 
         key_bytes = None
@@ -1119,7 +1118,7 @@ class CryptainerDecryptor(CryptainerBase):
         cryptainer_metadata: Optional[dict],
         operation_report: OperationReport,
         predecrypted_symkey_mapper: Optional[dict] = None,
-    ) -> tuple:
+    ) -> Optional[bytes]:
         """
         Function called when decryption of a symmetric key is needed. Encryption may be made by shared secret or
         by a asymmetric algorithm.
@@ -1291,7 +1290,7 @@ class CryptainerDecryptor(CryptainerBase):
         trustee: dict,
         cryptainer_metadata: Optional[dict],
         operation_report: OperationReport,
-    ) -> tuple:
+    ) -> Optional[bytes]:
         """
         Decrypt given cipherdict with an asymmetric algorithm.
 

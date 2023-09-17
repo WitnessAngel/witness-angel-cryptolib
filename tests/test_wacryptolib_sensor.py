@@ -338,13 +338,13 @@ def test_aggregators_thread_safety(tmp_path):
 
     cryptainer_names = cryptainer_storage.list_cryptainer_names(as_sorted_list=True)
 
-    tarfiles_bytes = []
+    tarfiles_bytes_list = []
     for cryptainer_name in cryptainer_names:
-        tarfiles_byte = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name)
-        tarfiles_bytes.append(tarfiles_byte)
+        tarfiles_bytes, _operation_report = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name)
+        tarfiles_bytes_list.append(tarfiles_bytes)
 
     tarfiles = [
-        TarfileRecordAggregator.read_tarfile_from_bytestring(bytestring) for bytestring in tarfiles_bytes if bytestring
+        TarfileRecordAggregator.read_tarfile_from_bytestring(bytestring) for bytestring in tarfiles_bytes_list if bytestring
     ]
 
     tarfiles_count = len(tarfiles)

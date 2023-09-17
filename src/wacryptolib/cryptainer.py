@@ -1019,7 +1019,7 @@ class CryptainerDecryptor(CryptainerBase):
 
             if payload_current is not None:
                 for signature_conf in payload_cipher_layer["payload_signatures"]:
-                    self._verify_payload_signature(
+                    self._verify_payload_signature(  # Should NOT raise for now, just report errors!
                         default_keychain_uid=default_keychain_uid, payload=payload_current, cryptoconf=signature_conf, operation_report=operation_report
                     )
 
@@ -1364,13 +1364,15 @@ class CryptainerDecryptor(CryptainerBase):
 
     def _verify_payload_signature(self, default_keychain_uid: uuid.UUID, payload: bytes, cryptoconf: dict, operation_report: OperationReport):
         """
-        Verify a signature for a specific message. An error is raised if signature isn't correct.
+        Verify a signature for a specific message.
+
+        DOES NOT raise for now, just reports troubels in operation_report.
 
         :param default_keychain_uid: default uuid for the set of encryption keys used
         :param payload: payload on which to verify signature (after digest)
         :param cryptoconf: configuration tree inside payload_signatures
         """
-        # FIXME REDO ERROR HANDLING OF THIS SECTION !!!
+
         payload_digest_algo = cryptoconf["payload_digest_algo"]
         payload_signature_algo = cryptoconf["payload_signature_algo"]
         keychain_uid = cryptoconf.get("keychain_uid") or default_keychain_uid
@@ -1382,13 +1384,13 @@ class CryptainerDecryptor(CryptainerBase):
                 keychain_uid=keychain_uid, key_algo=payload_signature_algo, must_exist=True
             )
         except KeyDoesNotExist as exc:
-            message = "Private key %s/%s not found" % (payload_signature_algo, keychain_uid)
+            message = "Public signature key %s/%s not found" % (payload_signature_algo, keychain_uid)
             operation_report.add_entry(
                 entry_type=DecryptionErrorType.SIGNATURE_ERROR,
                 entry_message=message,
                 entry_exception=exc,
             )
-            raise SignatureVerificationError(message) # FIXME test this case!
+            return
 
         try:
             public_key = load_asymmetric_key_from_pem_bytestring(
@@ -1401,7 +1403,7 @@ class CryptainerDecryptor(CryptainerBase):
                 entry_message=message,
                 entry_exception=exc,
             )
-            raise SignatureVerificationError(message) # FIXME test this case!
+            return
 
         payload_digest = hash_message(payload, hash_algo=payload_digest_algo)
 
@@ -1413,8 +1415,7 @@ class CryptainerDecryptor(CryptainerBase):
                 entry_message=message,
                 entry_exception=None,
             )
-            raise SignatureVerificationError(message)
-
+            return
 
         payload_signature_struct = cryptoconf.get("payload_signature_struct")
         if not payload_signature_struct:
@@ -1424,7 +1425,7 @@ class CryptainerDecryptor(CryptainerBase):
                 entry_message=message,
                 entry_exception=None,
             )
-            raise SignatureVerificationError(message)
+            return
             
         else:
             try:
@@ -1441,7 +1442,7 @@ class CryptainerDecryptor(CryptainerBase):
                     entry_message="Failed signature verification %s (%s)" % (payload_signature_algo, exc),
                     entry_exception=exc,
                 )
-                raise
+                return
 
 
 class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionStream and expose File write/close API?

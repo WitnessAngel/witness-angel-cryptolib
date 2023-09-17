@@ -863,7 +863,7 @@ def _check_operation_report_entry(
     real_occurrence_count = 0
 
     print("REPORT LIST:")
-    pprint(operation_report.format_entries())
+    print(operation_report.format_entries())
 
     for entry in operation_report.get_entries():
         try:
@@ -1840,12 +1840,12 @@ def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify_fail
 
     cryptainer = encrypt_payload_into_cryptainer(payload=b"1234", cryptoconf=cryptoconf, cryptainer_metadata=None)
 
-    result = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=True)
+    result, _operation_report = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=True)
     assert result == b"1234"
 
     cryptainer["payload_cipher_layers"][0]["payload_macs"]["tag"] += b"hi"  # CORRUPTION
 
-    result = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=False)
+    result, _operation_report = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=False)
     assert result == b"1234"
 
     # DecryptionIntegrityError
@@ -1868,7 +1868,7 @@ def test_decrypt_payload_from_cryptainer_with_signature_troubles():
         payload=b"1234abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None
     )
 
-    result = decrypt_payload_from_cryptainer(
+    result, _operation_report = decrypt_payload_from_cryptainer(
         cryptainer_original, verify_integrity_tags=verify_integrity_tags
     )
     assert result == b"1234abc"
@@ -1877,7 +1877,7 @@ def test_decrypt_payload_from_cryptainer_with_signature_troubles():
     # pprint(cryptainer_corrupted)
     del cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_digest_value"]
 
-    result = decrypt_payload_from_cryptainer(
+    result, _operation_report = decrypt_payload_from_cryptainer(
         cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags
     )
     assert result == b"1234abc"  # Missing the payload_digest_value is OK
@@ -1902,7 +1902,7 @@ def test_decrypt_payload_from_cryptainer_with_signature_troubles():
     del cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_signature_struct"]
 
     # RuntimeError, match="Missing signature structure"
-    result = decrypt_payload_from_cryptainer(
+    result, operation_report = decrypt_payload_from_cryptainer(
         cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags
     )
 
@@ -1920,12 +1920,12 @@ def test_decrypt_payload_from_cryptainer_with_signature_troubles():
         "signature_timestamp_utc": 1645905017,
         "signature_value": b"abcd",
     }
-    payload_signature_algo = cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0][
+    _payload_signature_algo = cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0][
         "payload_signature_algo"
     ]
 
     # SignatureVerificationError, match="signature verification"
-    result = decrypt_payload_from_cryptainer(
+    result, operation_report = decrypt_payload_from_cryptainer(
         cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags
     )
 
@@ -2270,7 +2270,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         entry_msg_match="Failed symmetric decryption",
         exception_class=DecryptionError,
     )
-    assert len(operation_report) == 3  # with SignatureError
+    assert len(operation_report) == 2  # with SignatureError
 
 
 def test_get_proxy_for_trustee(tmp_path):

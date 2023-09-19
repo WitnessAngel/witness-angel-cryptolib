@@ -1030,75 +1030,106 @@ class CryptainerDecryptor(CryptainerBase):
 
         payload_current = _get_cryptainer_inline_ciphertext_value(cryptainer)
 
+        payload_cipher_layer_count = len(cryptainer["payload_cipher_layers"])
+
         for payload_cipher_layer in reversed(
             cryptainer["payload_cipher_layers"]
         ):  # Non-emptiness of this will be checked by validator
-            payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
-
-            if payload_current is not None:
-                for signature_conf in payload_cipher_layer["payload_signatures"]:
-                    self._verify_payload_signature(  # Should NOT raise for now, just report errors!
-                        default_keychain_uid=default_keychain_uid, payload=payload_current, cryptoconf=signature_conf, operation_report=operation_report
-                    )
-
-            key_ciphertext = payload_cipher_layer["key_ciphertext"]  # We start fully encrypted, and unravel it
-            key_bytes = self._decrypt_key_through_multiple_layers(
+            payload_current = self._decrypt_single_payload_cipher_layer(
+                payload_ciphertext=payload_current,
+                payload_cipher_layer=payload_cipher_layer,
+                verify_integrity_tags=verify_integrity_tags,
                 default_keychain_uid=default_keychain_uid,
-                key_ciphertext=key_ciphertext,
-                key_cipher_layers=payload_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
-                predecrypted_symkey_mapper=predecrypted_symkey_mapper,
                 operation_report=operation_report,
+                predecrypted_symkey_mapper=predecrypted_symkey_mapper,
+                )
+            if payload_current is None:
+                '''  # TODO
+                operation_report.add_entry(
+                    entry_type=,
+                    entry_message: str,
+                    entry_criticity=DecryptionErrorCriticity.WARNING,
+                    entry_exception=None):
+                )'''
+                break
+
+        return payload_current, operation_report
+
+    def _decrypt_single_payload_cipher_layer(
+            self,
+            payload_ciphertext: bytes,
+            payload_cipher_layer: dict,
+            verify_integrity_tags: bool,
+            default_keychain_uid: uuid.UUID,
+            cryptainer_metadata: Optional[dict],
+            operation_report: OperationReport,
+            predecrypted_symkey_mapper: Optional[dict]) -> Optional[bytes]:
+
+        assert isinstance(payload_ciphertext, bytes), repr(payload_ciphertext)
+        payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
+
+        for signature_conf in payload_cipher_layer["payload_signatures"]:
+            self._verify_payload_signature(  # Should NOT raise for now, just report errors!
+                default_keychain_uid=default_keychain_uid, payload=payload_ciphertext,
+                cryptoconf=signature_conf, operation_report=operation_report
             )
 
-            if key_bytes is not None and payload_current is not None:
-                assert isinstance(key_bytes, bytes), key_bytes
-                symkey = load_from_json_bytes(key_bytes)
+        key_ciphertext = payload_cipher_layer["key_ciphertext"]  # We start fully encrypted, and unravel it
+        key_bytes = self._decrypt_key_through_multiple_layers(
+            default_keychain_uid=default_keychain_uid,
+            key_ciphertext=key_ciphertext,
+            key_cipher_layers=payload_cipher_layer["key_cipher_layers"],
+            cryptainer_metadata=cryptainer_metadata,
+            predecrypted_symkey_mapper=predecrypted_symkey_mapper,
+            operation_report=operation_report,
+        )
 
-                payload_macs = payload_cipher_layer[
-                    "payload_macs"
-                ]  # FIXME handle and test if it's None: missing integrity tags due to unfinished container!!
-                payload_cipherdict = dict(ciphertext=payload_current, **payload_macs)
-                try:
-                    payload_current = decrypt_bytestring(
-                        cipherdict=payload_cipherdict,
-                        key_dict=symkey,
-                        cipher_algo=payload_cipher_algo,
-                        verify_integrity_tags=verify_integrity_tags,
-                    )
-                    # Now decrypted
+        if key_bytes is not None:
+            assert isinstance(key_bytes, bytes), key_bytes
+            symkey = load_from_json_bytes(key_bytes)
 
-                except DecryptionIntegrityError as exc:
-                    operation_report.add_entry(
-                        entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
-                        entry_criticity=DecryptionErrorCriticity.ERROR,
-                        entry_message="Failed decryption authentication %s (MAC check failed)" % payload_cipher_algo,
-                        entry_exception=exc,
-                    )
-                    
-                    payload_current = None
+            payload_macs = payload_cipher_layer[
+                "payload_macs"
+            ]  # FIXME handle and test if it's None: missing integrity tags due to unfinished container!!
+            payload_cipherdict = dict(ciphertext=payload_ciphertext, **payload_macs)
+            try:
+                payload_cleartext = decrypt_bytestring(
+                    cipherdict=payload_cipherdict,
+                    key_dict=symkey,
+                    cipher_algo=payload_cipher_algo,
+                    verify_integrity_tags=verify_integrity_tags,
+                )
+                assert isinstance(payload_cleartext, bytes), payload_cleartext  # Now decrypted
 
-                except DecryptionError as exc:
-                    operation_report.add_entry(
-                        entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
-                        entry_criticity=DecryptionErrorCriticity.ERROR,
-                        entry_message="Failed symmetric decryption (%s)" % payload_cipher_algo,
-                        entry_exception=exc,
-                    )
-                    
-                    payload_current = None
-            else:
-                payload_current = None
+            except DecryptionIntegrityError as exc:
                 operation_report.add_entry(
                     entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
                     entry_criticity=DecryptionErrorCriticity.ERROR,
-                    entry_message="Failed symmetric decryption (%s)"
-                    % payload_cipher_algo,  # FIXME change this message to "aborted"? Or just skip this step?
-                    entry_exception=None,
+                    entry_message="Failed decryption authentication %s (MAC check failed)" % payload_cipher_algo,
+                    entry_exception=exc,
                 )
-                
-            payload = payload_current
-        return payload, operation_report
+                payload_cleartext = None
+
+            except DecryptionError as exc:
+                operation_report.add_entry(
+                    entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+                    entry_criticity=DecryptionErrorCriticity.ERROR,
+                    entry_message="Failed symmetric decryption (%s)" % payload_cipher_algo,
+                    entry_exception=exc,
+                )
+                payload_cleartext = None
+        else:
+            payload_cleartext = None
+            operation_report.add_entry(
+                entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+                entry_criticity=DecryptionErrorCriticity.ERROR,
+                entry_message="Failed symmetric decryption (%s)"
+                % payload_cipher_algo,  # FIXME change this message to "aborted"? Or just skip this step?
+                entry_exception=None,
+            )
+
+        return payload_cleartext  # Might be None
 
     def _decrypt_key_through_multiple_layers(
         self,

@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import logging
 import os
@@ -755,13 +756,14 @@ def _get_cryptainer_inline_ciphertext_value(cryptainer):
     return ciphertext_value
 
 
-class DecryptionErrorType:
+class DecryptionErrorType:  # FIXME RENAME THIS
+    INFORMATION = "INFORMATION"
     SIGNATURE_ERROR = "SIGNATURE_ERROR"
     SYMMETRIC_DECRYPTION_ERROR = "SYMMETRIC_DECRYPTION_ERROR"
     ASYMMETRIC_DECRYPTION_ERROR = "ASYMMETRIC_DECRYPTION_ERROR"
 
 
-class DecryptionErrorCriticity:
+class DecryptionErrorCriticity:  # FIXME rename that
     INFO = "INFO"
     WARNING = "WARNING"
     ERROR = "ERROR"
@@ -777,6 +779,7 @@ OPERATION_REPORT_ENTRY_SCHEMA = Schema(
         "entry_criticity": Or(DecryptionErrorCriticity.ERROR, DecryptionErrorCriticity.WARNING),
         "entry_message": And(str, len),
         "entry_exception": Or(Exception, None),
+        "entry_nesting": And(int, lambda x: x >= 0),
     }
 )
 
@@ -787,10 +790,25 @@ class OperationReport:
     """
 
     def __init__(self):
+        self._current_nesting = 0
         self._entries = []
 
     def __len__(self):
         return len(self._entries)
+
+    @contextlib.contextmanager
+    def operation_section(self, section_message):
+        """Add an INFO message and add an extra level to entries in the with... keyword"""
+        self.add_entry(
+            entry_type=DecryptionErrorType.INFORMATION,
+            entry_message=section_message,
+            entry_criticity=DecryptionErrorCriticity.INFO,
+        )
+        self._current_nesting += 1  # NOw only we raise the
+        try:
+            yield
+        finally:
+            self._current_nesting -= 1
 
     def add_entry(self,
                 entry_type: str,
@@ -810,6 +828,7 @@ class OperationReport:
             "entry_criticity": entry_criticity,
             "entry_message": entry_message,
             "entry_exception": entry_exception,
+            "entry_nesting": self._current_nesting,
         }
 
         if __debug__:  # Sanity check

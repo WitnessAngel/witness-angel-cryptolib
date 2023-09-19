@@ -697,7 +697,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
     result_payload, operation_report = decrypt_payload_from_cryptainer(
         cryptainer=cryptainer, keystore_pool=keystore_pool, verify_integrity_tags=verify_integrity_tags
     )
-    assert not operation_report.has_errors()
+    assert not operation_report.get_error_entries()
     # pprint.pprint(result, width=120)
     assert result_payload == payload
 
@@ -1085,7 +1085,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
-        assert not operation_report.has_errors()
+        assert not operation_report.get_error_entries()
 
     # Response keypair in not local key factory
     fake_revelation_request_info = copy.deepcopy(revelation_requests_info)
@@ -1285,7 +1285,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
         passphrase_mapper=passphrase_mapper,
         verify_integrity_tags=verify_integrity_tags,
     )
-    assert not operation_report.has_errors()
+    assert not operation_report.get_error_entries()
     assert result_payload == payload
     result_metadata = extract_metadata_from_cryptainer(cryptainer=cryptainer)
     assert result_metadata == metadata
@@ -1314,7 +1314,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
-        assert not operation_report.has_errors()
+        assert not operation_report.get_error_entries()
 
     # Trustee keypair does not exist in storage
     # Create new keystore pool with response keypair in localkeyfactory without trustee keystore
@@ -1334,7 +1334,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
-        assert not operation_report.has_errors()  # Using remote_revelation_request so no trustee needed
+        assert not operation_report.get_error_entries()  # Using remote_revelation_request so no trustee needed
 
     # Trustee and response keypair does not exist in storage
     gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(revelation_requests_info)
@@ -1549,7 +1549,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
-        assert not operation_report.has_errors()  # All passphrases are provided
+        assert not operation_report.get_error_entries()  # All passphrases are provided
 
     # Remote decryption request for this container and requestor is rejected
     gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(revelation_requests_info)
@@ -1564,7 +1564,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
-        assert not operation_report.has_errors()  # All passphrases are provided
+        assert not operation_report.get_error_entries()  # All passphrases are provided
 
     # No remote decryption request exists for this container and requestor
     gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(revelation_requests_info)
@@ -1579,7 +1579,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
-        assert not operation_report.has_errors()  # All passphrases are provided
+        assert not operation_report.get_error_entries()  # All passphrases are provided
 
     # Remote revelation request with two trustee (1,3) and local trustee
     with _patched_gateway_revelation_request_list(
@@ -1593,7 +1593,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
-        assert not operation_report.has_errors()  # Trustee 1, 3 decrypted from server, trustee2 and localkey have passphrases
+        assert not operation_report.get_error_entries()  # Trustee 1, 3 decrypted from server, trustee2 and localkey have passphrases
 
     # Remote revelation request with two trustee (1,3) and without any passphrase(decrypted_shards below threshold)
     with _patched_gateway_revelation_request_list(
@@ -1776,7 +1776,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
     result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
     assert result_payload == payload
-    assert not operation_report.has_errors()
+    assert not operation_report.get_error_entries()
 
     payload_encryption_shamir = {}
     # Delete 1, 2 and too many share(s) from cipherdict key
@@ -1798,7 +1798,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
         cryptainer=cryptainer, verify_integrity_tags=verify_integrity_tags
     )
     assert result_payload == payload
-    assert not operation_report.has_errors()
+    assert not operation_report.get_error_entries()
 
     # Another share is deleted
 
@@ -1808,7 +1808,7 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
 
     result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
     assert result_payload == payload
-    assert not operation_report.has_errors()
+    assert not operation_report.get_error_entries()
 
     # Another share is deleted and now there aren't enough valid ones to decipher data
 
@@ -2220,7 +2220,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         },
     )
     assert result_payload == payload
-    assert not operation_report.has_errors()
+    assert not operation_report.get_error_entries()
 
     # Proper forwarding of parameters in cryptainer storage class
 
@@ -2252,7 +2252,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         "beauty.txt.crypt", passphrase_mapper={None: all_passphrases}, verify_integrity_tags=verify_integrity_tags
     )
     assert result_payload == payload
-    assert not operation_report.has_errors()
+    assert not operation_report.get_error_entries()
 
     # Decryption Error with wrong payload
     cryptainer_paylod_path = tmp_path / "beauty.txt.crypt.payload"

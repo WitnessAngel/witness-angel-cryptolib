@@ -766,17 +766,22 @@ class DecryptionErrorType:  # FIXME RENAME THIS
 class DecryptionErrorCriticity:  # FIXME rename that
     INFO = "INFO"
     WARNING = "WARNING"
-    ERROR = "ERROR"
+    ERROR = "ERROR"  # Potentially non-fatal error
+    CRITICAL = "CRITICAL"  # Fatal error
 
 
 OPERATION_REPORT_ENTRY_SCHEMA = Schema(
     {
         "entry_type": Or(
+            DecryptionErrorType.INFORMATION,
             DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
             DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
             DecryptionErrorType.SIGNATURE_ERROR,
         ),
-        "entry_criticity": Or(DecryptionErrorCriticity.ERROR, DecryptionErrorCriticity.WARNING),
+        "entry_criticity": Or(DecryptionErrorCriticity.INFO,
+                              DecryptionErrorCriticity.ERROR,
+                              DecryptionErrorCriticity.WARNING,
+                              DecryptionErrorCriticity.CRITICAL),
         "entry_message": And(str, len),
         "entry_exception": Or(Exception, None),
         "entry_nesting": And(int, lambda x: x >= 0),
@@ -836,10 +841,20 @@ class OperationReport:
 
         self._entries.append(error_entry)
 
-    def get_entries(self):
+    def get_all_entries(self):
         return self._entries[:]  # COPY
 
-    def format_entries(self):
+    def get_error_entries(self):
+        return [x for x in self._entries if x["entry_criticity"] != DecryptionErrorCriticity.INFO]
+
+    def get_error_count(self):
+        return len(self.get_error_entries())
+
+    def has_errors(self):
+        """Returns True iff report contains warnings/erros"""
+        return bool(self.get_error_count)
+
+    def format_entries(self):  # FIXME MAKE IT CLASSMETHOD?
         return pformat(self._entries)
 
 
@@ -1030,29 +1045,31 @@ class CryptainerDecryptor(CryptainerBase):
 
         payload_current = _get_cryptainer_inline_ciphertext_value(cryptainer)
 
+        # Non-emptiness of this will be checked by validator
         payload_cipher_layer_count = len(cryptainer["payload_cipher_layers"])
 
-        for payload_cipher_layer in reversed(
-            cryptainer["payload_cipher_layers"]
-        ):  # Non-emptiness of this will be checked by validator
-            payload_current = self._decrypt_single_payload_cipher_layer(
-                payload_ciphertext=payload_current,
-                payload_cipher_layer=payload_cipher_layer,
-                verify_integrity_tags=verify_integrity_tags,
-                default_keychain_uid=default_keychain_uid,
-                cryptainer_metadata=cryptainer_metadata,
-                operation_report=operation_report,
-                predecrypted_symkey_mapper=predecrypted_symkey_mapper,
-                )
-            if payload_current is None:
-                '''  # TODO
-                operation_report.add_entry(
-                    entry_type=,
-                    entry_message: str,
-                    entry_criticity=DecryptionErrorCriticity.WARNING,
-                    entry_exception=None):
-                )'''
-                break
+        for payload_cipher_layer_idx, payload_cipher_layer in enumerate(reversed(cryptainer["payload_cipher_layers"]), start=1):
+
+            with operation_report.operation_section(
+                    "Starting decryption of payload cipher layer %d/%d" % (payload_cipher_layer_idx, payload_cipher_layer_count)):
+                payload_current = self._decrypt_single_payload_cipher_layer(
+                    payload_ciphertext=payload_current,
+                    payload_cipher_layer=payload_cipher_layer,
+                    verify_integrity_tags=verify_integrity_tags,
+                    default_keychain_uid=default_keychain_uid,
+                    cryptainer_metadata=cryptainer_metadata,
+                    operation_report=operation_report,
+                    predecrypted_symkey_mapper=predecrypted_symkey_mapper,
+                    )
+                if payload_current is None:
+                    ''' TODO PUT BACK
+                    operation_report.add_entry(
+                        entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+                        entry_criticity=DecryptionErrorCriticity.CRITICAL,
+                        entry_message="Payload cipher layer decryption failed, aborting decryption of cryptainer",
+                    )
+                    '''
+                    break
 
         return payload_current, operation_report
 

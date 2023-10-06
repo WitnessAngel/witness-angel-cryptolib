@@ -13,10 +13,14 @@ formats: all
 
 # Optionally set the version of Python and requirements required to build your docs
 python:
-  version: 3.7
   install:
     - requirements: docs/doc_requirements.txt
     # Also install the package itself (without dev dependencies) so that autodoc can load its modules
     - method: pip
       path: .
+
+build:
+  os: "ubuntu-20.04"
+  tools:
+    python: "3.7"
 

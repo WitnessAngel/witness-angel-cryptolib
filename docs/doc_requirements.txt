@@ -1,2 +1,6 @@
-
+toml
+sphinx_autodoc_typehints
+sphinx_rtd_theme
+sphinx_click
+sphinxcontrib.programoutput
 Jinja2<3.1

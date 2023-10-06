@@ -5,7 +5,7 @@ Discover cryptainers
 Overview
 +++++++++++++++++++++++++++++++++
 
-A **cryptainer** is a flexible, recursive structure dedicated to hybrid encryption: each piece of data is encrypted one or several times in a row, and the "keys" (random symmetric keys, or shards obtained from a shared secret algorithm) used for these encryption operations become themselves pieces of encryptable data, thus repeating the process.
+A **cryptainer** is a flexible, recursive structure dedicated to hybrid encryption. Each piece of data is encrypted one or several times in a row, and the "keys" (random symmetric keys, or shards obtained from a shared secret algorithm) used for these encryption operations become themselves pieces of encryptable data, thus repeating the process.
 
 This gives a tree of protected data, in which the leaves are "trustees" relying on asymmetric (public key) encryption algorithms to protect intermediate "keys", and thus secure the encrypted payload.
 

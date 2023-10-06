@@ -22,20 +22,6 @@ When a bytestring (typically a serialized symkey) is split via a "Shamir shared 
 Note that inside configurations and containers, we mostly use the term **key**, since the context should make it clear what exactly is at stake (mostly symmetric keys or their shards being encrypted via miscellaneous algorithms)
 
 
-Keypair repositories
-+++++++++++++++++++++++++
-
-A **keystore** is a generic storage for asymmetric keypairs. Its is typically a set of public/private PEM files in a directory. Keys can be a predetermined and immutable set, or on the contrary generated on demand; private keys can be present or not, protected by passphrases or not; a JSON metadata file describing this repository (type, owner, unique id...) can be present or not; it all depends on the subtype of the keystore.
-
-The **local-keyfactory keystore** is the default keystore available on recording devices, as well as **servers trustees** (see below). It can generate keypairs on demands, and typically doesn't protect them with passphrases.
-
-An **authenticator** is a subtype of keystore used to provide a digital identity keychain to a trusted third party (typically an individual). It is a fixed set of keypairs, all protected by the same passphrase, with some additional authentication fields in a metadata file. An **authdevice**, or authentication device, is a physical device on which an authenticator can be stored (for now, we use a simple folder at the root of an usb storage), if it is not simply stored in a local disk.
-
-Authenticators can publish their public keys, and public metadata, to a **web gateway** - a simple online registry - so that other people may easily access them.
-
-When keystores are **imported** from an authdevice or a web gateway, the imported copies naturally only contains a part (public, or at least without confidential information) of the initial authenticator.
-
-
 Data naming and integrity
 ++++++++++++++++++++++++++++
 
@@ -48,6 +34,20 @@ The term **mac** (message authentication code) is used, instead of "tag", to des
 Those digests and macs can be considered all together as **integrity tags**.
 
 Only when dealing with bytestrings that could be anything (serialized key, serialized json, final encrypted payload...), for example in filesystem utilies, we use the all-embracing term **data**.
+
+
+Keypair repositories
++++++++++++++++++++++++++
+
+A **keystore** is a generic storage for asymmetric keypairs. Its is typically a set of public/private PEM files in a directory. Keys can be a predetermined and immutable set, or on the contrary generated on demand; private keys can be present or not, protected by passphrases or not; a JSON metadata file describing this repository (type, owner, unique id...) can be present or not; it all depends on the subtype of the keystore.
+
+The **local-keyfactory keystore** is the default keystore available on recording devices, as well as **server trustees** (see below). It can generate keypairs on demands, and typically doesn't protect them with passphrases.
+
+An **authenticator** is a subtype of keystore used to provide a digital identity keychain to a trusted third party (typically an individual). It is a fixed set of keypairs, all protected by the same passphrase, with some additional authentication fields in a metadata file. An **authdevice**, or authentication device, is a physical device on which an authenticator can be stored (for now, we use a simple folder at the root of an usb storage), if it is not simply stored in a local disk.
+
+Authenticators can publish their public keys, and public metadata, to a **web gateway** - a simple online registry - so that other people may easily access them.
+
+When keystores are **imported** from an authdevice or a web gateway, the imported copies naturally only contains a part (public, or at least without confidential information) of the initial authenticator.
 
 
 Trusted parties
@@ -65,6 +65,6 @@ But real protection is provided by trustees also called **key guardians**, which
 Cryptainers and cryptoconfs
 ++++++++++++++++++++++++++++++++++++++++++
 
-For more information on these concepts, see the :doc:`dedicated page <cryptainer_explanations>` above.
+For more information on these concepts, see the :doc:`dedicated page <cryptainer_explanations>`.
 
 

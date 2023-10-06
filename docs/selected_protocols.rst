@@ -1,6 +1,6 @@
 
 
-Selected algorithms, protocols and formats
+Selected algorithms and formats
 ==================================================
 
 

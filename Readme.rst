@@ -17,11 +17,11 @@ The Witness Angel Cryptolib is a toolkit aimed at handling secure configuration-
 
 By leveraging a flexible JSON-based format called *cryptoconf*, users can define their own hybrid cryptosystem, recursively combining symmetric cihers, asymmetric ciphers, shared secrets, and data signatures.
 
-Access to the cryptainers is secured by a variety of actors: local device, remote server, trusted third parties...
+Access to the cryptainers is secured by a variety of actors: local device, remote servers, trusted third parties...
 
-The decryption process can involve different steps, like entering passphrases, or submitting authorization requests to third parties.
+The decryption process can involve different steps, like entering passphrases, or submitting authorization requests to remote "key guardians".
 
-Overall, the lib gathers lots of utilities to generate and store cryptographic keys, encrypt/check/decrypt cryptainers, access webservices and recorder sensors, and help testing other libraries willing to extend these tools.
+Overall, the lib gathers utilities to generate and store cryptographic keys, encrypt/check/decrypt cryptainers, access webservices and recorder sensors, and help testing other libraries willing to extend these tools.
 
 
 Installing the lib
@@ -35,7 +35,7 @@ Just launch inside your python environment:
 CLI interface
 +++++++++++++++++++++
 
-A command-line interface launcher, "flightbox", is available to play with simple cryptainers.
+A command-line interface launcher, **flightbox**, is available to play with simple cryptainers.
 
 ::
 

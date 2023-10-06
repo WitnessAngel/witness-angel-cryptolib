@@ -5,7 +5,7 @@ Cryptoconf examples
 Simple cryptoconf
 +++++++++++++++++++++++++++
 
-Below is a minimal cryptainer configuration in python format, with a single encryption layer and its single signature, both backed by the "local" trustee service of the device; this workflow should not be used in real life of course, since the data is not protected against illegal reads.
+Below is a minimal cryptainer configuration in python format, with a single encryption layer and its single signature, both backed by the local "trustee" (or "key guardian") of the device; this workflow should not be used in real life of course, since the data is not protected against illegal reads.
 
 ::
 
@@ -119,9 +119,9 @@ Complex cryptoconf
 
 Below is a python data tree showing all the types of node possible in a cryptoconf.
 
-We see the 3 currently supported types of trustee: local_keyfactory, authenticator (with a keystore_uid), and jsonrpc_api (with a jsonrpc_url).
+We see the 3 currently supported types of trustee: `local_keyfactory`, `authenticator` (with a keystore_uid), and `jsonrpc_api` (with a jsonrpc_url).
 
-We also see how share secrets, symmetric ciphers, and asymmetric ciphers (RSA_OAEP and its attached key_cipher_trustee) can be combined to create a deeply nested structure.
+We also see how share secrets, symmetric ciphers, and asymmetric ciphers (RSA_OAEP and its attached trustee) can be combined to create a deeply nested structure.
 
 ::
 

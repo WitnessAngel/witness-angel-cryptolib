@@ -1,14 +1,17 @@
 Flightbox CLI Tutorial
 ===================================
 
-The flightbox command-line utility provides all subcommands for an end-to-end workflow of the Flightbox cryptosystem.
+The flightbox command-line utility provides all subcommands for an end-to-end workflow around cryptainers.
 
 .. command-output:: flightbox -h
 
-Let's see together how it actually works.
+*Flightbox CLI tutorial is coming later...*
 
-Imagine that we won't to encrypt a readme file. The corresponding command could be as simple as:
+..
+    Let's see together how it actually works.
 
-.. command-output:: flightbox encrypt readme.rst
+    Imagine that we won't to encrypt a readme file. The corresponding command could be as simple as:
 
-As the command mentions it, this is not a very satisfying
+    .. command-output:: flightbox encrypt readme.rst
+
+    As the command mentions it, this is not a very satisfying

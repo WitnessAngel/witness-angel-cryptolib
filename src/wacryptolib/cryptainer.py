@@ -817,12 +817,11 @@ class OperationReport:
                 entry_criticity=DecryptionErrorCriticity.WARNING,
                 entry_exception=None):
 
-        # We immediately forward entry to standard logging too!
-        log_level = getattr(logging, entry_criticity)  # Same identifiers in the 2 worlds
+        # We immediately forward entry to standard logging too, but always in DEBUG level!
         if entry_exception:
-            logger.log(log_level, "%s report entry: %s (%r)", entry_type, entry_message, entry_exception)
+            logger.debug("%s report entry: %s (%r)", entry_type, entry_message, entry_exception)
         else:
-            logger.log(log_level, "%s report entry: %s", entry_type, entry_message)
+            logger.debug("%s report entry: %s", entry_type, entry_message)
 
         error_entry = {
             "entry_type": entry_type,

@@ -1371,7 +1371,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
             operation_report=operation_report,
             entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
             entry_criticity=DecryptionErrorCriticity.WARNING,
-            entry_msg_match="error prevented decrypting shard",
+            entry_msg_match="error prevented decrypting this shard",
         )
 
         _check_operation_report_entry(
@@ -1522,7 +1522,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         operation_report=operation_report,
         entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
         entry_criticity=DecryptionErrorCriticity.WARNING,
-        entry_msg_match="error prevented decrypting shard",
+        entry_msg_match="error prevented decrypting this shard",
     )
 
     assert operation_report.get_error_count() == 2
@@ -1618,7 +1618,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
             operation_report=operation_report,
             entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
             entry_criticity=DecryptionErrorCriticity.WARNING,
-            entry_msg_match="error prevented decrypting shard",
+            entry_msg_match="error prevented decrypting this shard",
             occurrence_count=2,
         )  # 2 for Trustee2 and LOCAL_KEYFACTORY_TRUSTEE_MARKER
 
@@ -2057,7 +2057,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         operation_report=operation_report,
         entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
         entry_criticity=DecryptionErrorCriticity.WARNING,
-        entry_msg_match="error prevented decrypting shard",
+        entry_msg_match="error prevented decrypting this shard",
         occurrence_count=3,
     )
 
@@ -2138,7 +2138,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         operation_report=operation_report,
         entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
         entry_criticity=DecryptionErrorCriticity.WARNING,
-        entry_msg_match="error prevented decrypting shard",
+        entry_msg_match="error prevented decrypting this shard",
     )  # For Trustee 2
 
     _check_operation_report_entry(
@@ -2164,7 +2164,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         operation_report=operation_report,
         entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
         entry_criticity=DecryptionErrorCriticity.WARNING,
-        entry_msg_match="error prevented decrypting shard",
+        entry_msg_match="error prevented decrypting this shard",
     )  # For Trustee 2
     _check_operation_report_entry(
         operation_report=operation_report,
@@ -2204,7 +2204,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
         operation_report=operation_report,
         entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
         entry_criticity=DecryptionErrorCriticity.WARNING,
-        entry_msg_match="error prevented decrypting shard",
+        entry_msg_match="error prevented decrypting this shard",
     )  # For Trustee 2
     assert operation_report.get_error_count() == 2
 

@@ -35,21 +35,10 @@ Just launch inside your python environment:
 CLI interface
 +++++++++++++++++++++
 
-A command-line interface is available to play with simple cryptainers.
-
-If you didn't install the library via `pip`, ensure that "src/" is in your PYTHONPATH environnement variable.
+A command-line interface launcher, "flightbox", is available to play with simple cryptainers.
 
 ::
 
-    $ python -m wacryptolib --help
+    $ flightbox --help
 
-    $ python -m wacryptolib encrypt -i <data-file> -o <cryptainer-file>
-
-    $ python -m wacryptolib decrypt -i <cryptainer-file> -o <data-file>
-
-    $ python -m wacryptolib summarize -i <cryptoconf-or-cryptainer>
-
-
-By default, CLI-generated cryptainers use a simple hard-coded cryptographic conf, using unprotected local keypairs, so they are insecure.
-Use a `--cryptoconf` argument during encryption, to specify a config with your own trusted third parties.
-But note that many cases (accessing remote web gateways, entering passphrases...) are not yet supported by this CLI.
+Look at the Flightbox manual, on readthedocs.org, for more details.

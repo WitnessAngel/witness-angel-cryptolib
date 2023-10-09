@@ -586,7 +586,7 @@ def test_cli_subprocess_invocation():
     stdout, stderr = proc.communicate(timeout=15)
     assert b"Options:" in stdout
     assert b"Commands:" in stdout
-    assert not stderr or b"debugger" in stderr  # For when pydev debugger connects to process...
+    assert b"CLI is using temp APP DIR PARENT" in stderr
     assert proc.returncode == 0
 
 

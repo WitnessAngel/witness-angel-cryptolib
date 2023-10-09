@@ -3,6 +3,7 @@ import logging
 import os
 import shutil
 import sys
+import tempfile
 from datetime import timedelta
 from pathlib import Path
 from pprint import pformat
@@ -37,11 +38,20 @@ click_log.basic_config(logging.getLogger())
 
 logger = logging.getLogger(__name__)
 
-_internal_app_dir_str = "~/.witnessangel"
-_DEFAULT_KEYSTORE_POOL_STR = _internal_app_dir_str + "/keystore_pool"  # For docstrings
-DEFAULT_KEYSTORE_POOL_PATH = Path(_DEFAULT_KEYSTORE_POOL_STR).expanduser().resolve()
-_DEFAULT_CRYPTAINER_STORAGE_STR = _internal_app_dir_str + "/cryptainers"  # For docstrings
-DEFAULT_CRYPTAINER_STORAGE_PATH = Path(_DEFAULT_CRYPTAINER_STORAGE_STR).expanduser().resolve()
+
+if os.getenv("_WA_RANDOMIZE_CLI_APP_DIR"):  # Only for TESTING
+    _internal_app_dir_parent = tempfile.mkdtemp().replace("\\", "/")
+    logger.warning("CLI is using temp APP DIR PARENT: %s" % _internal_app_dir_parent)
+else:
+    _internal_app_dir_parent = "~"
+
+_INTERNAL_APP_DIR_STR = os.path.expanduser(os.path.join(_internal_app_dir_parent, ".witnessangel"))
+Path(_INTERNAL_APP_DIR_STR).mkdir(exist_ok=True)
+
+_DEFAULT_KEYSTORE_POOL_STR = _INTERNAL_APP_DIR_STR + "/keystore_pool"  # For docstrings
+DEFAULT_KEYSTORE_POOL_PATH = Path(_DEFAULT_KEYSTORE_POOL_STR).resolve()
+_DEFAULT_CRYPTAINER_STORAGE_STR = _INTERNAL_APP_DIR_STR + "/cryptainers"  # For docstrings
+DEFAULT_CRYPTAINER_STORAGE_PATH = Path(_DEFAULT_CRYPTAINER_STORAGE_STR).resolve()
 INDENT = "  "
 FORMAT_OPTION = click.option(
     "-f", "--format", type=click.Choice(["plain", "json"], case_sensitive=False), default="plain"
@@ -173,7 +183,7 @@ def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage, gateway_url) -> obje
     ctx.ensure_object(dict)
     ctx.obj["keystore_pool"] = keystore_pool
     ctx.obj["cryptainer_storage"] = cryptainer_storage
-    ctx.obj["gateway-url"] = gateway_url
+    ctx.obj["gateway_url"] = gateway_url
 
 
 @wacryptolib_cli.group("authenticator")
@@ -701,7 +711,7 @@ def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_pri
 
     if from_gateway:
         # print(">>>>>>>>>>>>>", ctx.obj)
-        gateway_url = ctx.obj["gateway-url"]
+        gateway_url = ctx.obj["gateway_url"]
         if not gateway_url:
             raise click.UsageError("No web gateway URL specified for keystore import")
         logger.info("Importing foreign keystore %s from web gateway" % from_gateway)

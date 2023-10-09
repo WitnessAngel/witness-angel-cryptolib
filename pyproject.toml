@@ -54,11 +54,13 @@ pyudev = { version = "^0.22.0 ", platform = 'linux' }
 prettytable = "^3.6.0"
 click-log = "^0.4.0"
 
+
 [tool.poetry.group.dev.dependencies]
 
 # Test runners and plugins
 pytest = ">=7.0.1"
 pytest-cov = ">=4.0"
+pytest-env = "^1.0.1"
 pytest_mock = ">=3.7.0"
 pytest-randomly = ">=3.11"
 pytest-deadfixtures = ">=2.2.1"

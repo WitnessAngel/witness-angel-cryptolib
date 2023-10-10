@@ -410,7 +410,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._previous_stdout_threads = []  # To allow a proper join() at the end (we ignore stderr threads)
+        self._previous_stdio_threads = []  # To allow a proper join() at the end (for stdout+stderr streams)
 
     def _build_subprocess_command_line(self) -> list:  # pragma: no cover
         raise NotImplementedError("%s -> _handle_post_stop_data" % self.sensor_name)
@@ -431,6 +431,9 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
             # FIXME here add deletion of empty self._cryptainer_encryption_stream instead of finalizing it?
             cryptainer_encryption_stream.finalize()
             return  # Skip the setup of threads below, and let self._subprocess be None
+
+        # Do some cleanup to save memory
+        self._previous_stdio_threads = [thread for thread in self._previous_stdio_threads if thread.is_alive()]
 
         @catch_and_log_exception("Subprocess stdout_reader_thread of sensor %s" % self.sensor_name)
         def _stdout_reader_thread(fh):
@@ -455,10 +458,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
 
         self._stdout_thread = threading.Thread(target=_stdout_reader_thread, args=(self._subprocess.stdout,))
         self._stdout_thread.start()
-
-        # Do some cleanup to save memory
-        self._previous_stdout_threads = [thread for thread in self._previous_stdout_threads if thread.is_alive()]
-        self._previous_stdout_threads.append(self._stdout_thread)
+        self._previous_stdio_threads.append(self._stdout_thread)
 
         @catch_and_log_exception("Subprocess stderr_reader_thread of sensor %s" % self.sensor_name)
         def _sytderr_reader_thread(fh):
@@ -469,6 +469,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
 
         self._stderr_thread = threading.Thread(target=_sytderr_reader_thread, args=(self._subprocess.stderr,))
         self._stderr_thread.start()
+        self._previous_stdio_threads.append(self._stderr_thread)
 
     def _do_start_recording(self):
         command_line = self._build_subprocess_command_line()
@@ -521,10 +522,10 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
 
     def join(self):
         super().join()
-        for thread in self._previous_stdout_threads:
+        for thread in self._previous_stdio_threads:
             thread.join(timeout=15)
             if thread.is_alive():  # Might happen in very slow system, or if subprocess actually never exited...
-                logger.critical("Stdout reader thread for previous %s subprocess didn't exit" % self.sensor_name)
+                logger.critical("An stdio reader thread for previous %s subprocess didn't exit" % self.sensor_name)
 
 
 class SensorManager(TaskRunnerStateMachineBase):

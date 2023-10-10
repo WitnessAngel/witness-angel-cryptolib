@@ -38,7 +38,11 @@ click_log.basic_config(logging.getLogger())
 
 logger = logging.getLogger(__name__)
 
+from pprint import pprint
+print("ENVIRONMENT")
+pprint(dict(os.environ))
 
+print(">>>>>", os.getenv("_WA_RANDOMIZE_CLI_APP_DIR"))
 if os.getenv("_WA_RANDOMIZE_CLI_APP_DIR"):  # Only for TESTING
     _internal_app_dir_parent = tempfile.mkdtemp().replace("\\", "/")
     logger.warning("CLI is using temp APP DIR PARENT: %s" % _internal_app_dir_parent)

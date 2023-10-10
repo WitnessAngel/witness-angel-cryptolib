@@ -933,3 +933,14 @@ def test_cli_cryptainer_validate(tmp_path):
     result = runner.invoke(cli, base_args + ["cryptainer", "validate", "badcryptainer.crypt"])
     assert result.exit_code == 2
     assert "is invalid" in result.stderr
+
+
+def test_cli_default_app_root_creation():
+    std_env = os.environ.copy()
+    del std_env["_WA_RANDOMIZE_CLI_APP_DIR"]
+
+    proc = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + ["-h"], env=std_env)
+    assert proc.returncode == 0
+
+    assert os.path.exists(os.path.expanduser("~/.witnessangel/"))  # Auto-created on launch
+

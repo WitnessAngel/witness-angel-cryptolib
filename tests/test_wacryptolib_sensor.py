@@ -8,7 +8,8 @@ import sys
 import time
 from freezegun import freeze_time
 
-from _test_mockups import FakeTestCryptainerStorage, random_bool, longrun_command_line, oneshot_command_line
+from _test_mockups import FakeTestCryptainerStorage, random_bool, oneshot_command_line, \
+    get_longrun_command_line
 from wacryptolib.cryptainer import CryptainerStorage, CryptainerEncryptionPipeline
 from wacryptolib.scaffolding import check_sensor_state_machine
 from wacryptolib.sensor import (
@@ -527,7 +528,7 @@ def test_periodic_subprocess_stream_recorder_simple_cases(tmp_path, transmit_pos
         assert not cryptainer_storage.list_cryptainer_names()
 
     recorder = TestStreamRecorderForTesting(
-        executable_command_line=longrun_command_line,
+        executable_command_line=get_longrun_command_line("simple_cases"),
         transmit_post_stop_data=transmit_post_stop_data,
         interval_s=5,
         cryptainer_storage=cryptainer_storage,
@@ -580,7 +581,7 @@ def test_periodic_subprocess_stream_recorder_non_quittable_executable(tmp_path):
     cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
 
     recorder = TestStreamRecorderForTesting(
-        executable_command_line=longrun_command_line,
+        executable_command_line=get_longrun_command_line("non_quittable_executable"),
         skip_quit_operation=True,
         interval_s=5,
         cryptainer_storage=cryptainer_storage,
@@ -598,7 +599,7 @@ def test_periodic_subprocess_stream_recorder_non_killable_executable(tmp_path):
     cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
 
     recorder = TestStreamRecorderForTesting(
-        executable_command_line=longrun_command_line,
+        executable_command_line=get_longrun_command_line("non_killable_executable"),
         skip_quit_operation=True,
         skip_kill_operation=True,
         interval_s=5,
@@ -635,7 +636,7 @@ def test_periodic_subprocess_stream_recorder_with_custom_encryption_stream(tmp_p
 
     recorder = TestStreamRecorderForTestingWithCustomEncryptionStream(
         finalization_callback=finalization_callback,
-        executable_command_line=longrun_command_line,
+        executable_command_line=get_longrun_command_line("custom_encryption_stream"),
         interval_s=6,
         cryptainer_storage=cryptainer_storage,
     )

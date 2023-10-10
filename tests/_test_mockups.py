@@ -8,13 +8,15 @@ from wacryptolib.keystore import KEYSTORE_FORMAT, FilesystemKeystorePool
 from wacryptolib.utilities import generate_uuid0
 
 
-longrun_command_line = [
-    sys.executable,
-    "-u",  # UNBUFFERED OUTPUT STREAMS
-    "-c",
-    # We use "or" to chain the two print() expressions, it's not a bug!
-    "import time, sys ;\nfor i in range(600): print('This is some test data output!') or print('Some stderr logging here!', file=sys.stderr) or time.sleep(0.33)",
-]
+def get_longrun_command_line(marker):
+    longrun_command_line = [
+        sys.executable,
+        "-u",  # UNBUFFERED OUTPUT STREAMS
+        "-c",
+        # We use "or" to chain the two print() expressions, it's not a bug!
+        "import time, sys ;\nfor i in range(600): print('This is some test data output [%s]!') or print('Some stderr logging here [%s]!', file=sys.stderr) or time.sleep(0.33)" % (marker, marker),
+    ]
+    return longrun_command_line
 
 
 # No need for UNBUFFERED here, termination of programs seems to trigger a flush of streams

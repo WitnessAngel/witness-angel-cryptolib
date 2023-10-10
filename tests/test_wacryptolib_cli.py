@@ -12,7 +12,7 @@ from uuid import UUID
 from click.testing import CliRunner
 
 import wacryptolib
-from _test_mockups import oneshot_command_line, random_bool, longrun_command_line
+from _test_mockups import oneshot_command_line, random_bool, get_longrun_command_line
 from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.cli import wacryptolib_cli as cli, _short_format_datetime
@@ -226,7 +226,7 @@ def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
 
             # Then we test ABNORMAL execution of a long, INTERRUPTED, encryption pipeline
 
-            feeder = subprocess.Popen(longrun_command_line, stdout=subprocess.PIPE)
+            feeder = subprocess.Popen(get_longrun_command_line("encryption_and_decryption_via_pipe"), stdout=subprocess.PIPE)
 
             def _interrupt_feeder_soon():
                 time.sleep(6)  # Let it some time to launch and output things
@@ -252,7 +252,7 @@ def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
             result_data = result_file.read_bytes()
             result_data = result_data.splitlines()
             assert len(result_data) > 6, result_data
-            assert set(result_data) == {b"This is some test data output!"}  # No TRUNCATED line!
+            assert set(result_data) == {b"This is some test data output [encryption_and_decryption_via_pipe]!"}  # No TRUNCATED line!
 
 
 def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):

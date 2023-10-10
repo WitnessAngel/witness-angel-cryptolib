@@ -51,9 +51,9 @@ else:
 _INTERNAL_APP_DIR_STR = os.path.expanduser(os.path.join(_internal_app_dir_parent, ".witnessangel"))
 Path(_INTERNAL_APP_DIR_STR).mkdir(exist_ok=True)
 
-_DEFAULT_KEYSTORE_POOL_STR = _INTERNAL_APP_DIR_STR + "/keystore_pool"  # For docstrings
+_DEFAULT_KEYSTORE_POOL_STR = os.path.join(_INTERNAL_APP_DIR_STR, "keystore_pool")  # For docstrings
 DEFAULT_KEYSTORE_POOL_PATH = Path(_DEFAULT_KEYSTORE_POOL_STR).resolve()
-_DEFAULT_CRYPTAINER_STORAGE_STR = _INTERNAL_APP_DIR_STR + "/cryptainers"  # For docstrings
+_DEFAULT_CRYPTAINER_STORAGE_STR = os.path.join(_INTERNAL_APP_DIR_STR, "cryptainers")  # For docstrings
 DEFAULT_CRYPTAINER_STORAGE_PATH = Path(_DEFAULT_CRYPTAINER_STORAGE_STR).resolve()
 INDENT = "  "
 FORMAT_OPTION = click.option(
@@ -191,6 +191,7 @@ def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage, gateway_url) -> obje
 
 @wacryptolib_cli.group("authenticator")
 def authenticator_group():
+    """Manage authenticator trustees"""
     pass
 
 
@@ -369,7 +370,7 @@ def delete_authenticator(ctx, authenticator_dir):
 @click.option("--bundle", help="Combine cryptainer metadata and payload", is_flag=True)
 @click.pass_context
 def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
-    """Turn a media file into a secure cryptainer."""
+    """Turn a media file into a secure cryptainer"""
 
     offload_payload_ciphertext = not bundle
 
@@ -415,6 +416,7 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
 
 @wacryptolib_cli.group("cryptoconf")
 def cryptoconf_group():
+    """Manage cryptographic configurations"""
     pass
 
 
@@ -601,6 +603,7 @@ def summarize_cryptoconf(ctx, cryptoconf_file):
 
 @wacryptolib_cli.group("foreign-keystore")
 def foreign_keystore_group():
+    """Manage imported keystores"""
     pass
 
 

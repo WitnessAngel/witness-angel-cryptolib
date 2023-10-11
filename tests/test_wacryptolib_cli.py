@@ -53,7 +53,7 @@ def test_cli_help_texts():
 
     result = runner.invoke(cli, ["encrypt", "-h"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert "into a secure cryptainer" in result.stdout
+    assert "into a secure container" in result.stdout
 
     result = runner.invoke(cli, ["cryptoconf", "-h"], catch_exceptions=False)
     assert result.exit_code == 0

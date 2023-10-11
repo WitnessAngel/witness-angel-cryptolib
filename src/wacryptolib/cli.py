@@ -10,6 +10,7 @@ from pprint import pformat
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 import click_log
+from click import BaseCommand
 from click.utils import LazyFile
 from prettytable import PrettyTable
 
@@ -182,7 +183,7 @@ def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=
 )
 @click.pass_context
 def wacryptolib_cli(ctx, keystore_pool, cryptainer_storage, gateway_url) -> object:
-    """Flexible cryptographic toolkit for multi-tenant encryption."""
+    """Flexible cryptographic toolkit for multi-tenant encryption and signature"""
     ctx.ensure_object(dict)
     ctx.obj["keystore_pool"] = keystore_pool
     ctx.obj["cryptainer_storage"] = cryptainer_storage
@@ -220,9 +221,9 @@ def _retrieve_keystore_passphrase():
 @click.pass_context
 def create_authenticator(ctx, authenticator_dir, keypair_count, owner, passphrase_hint):
     """
-    Initialize an authenticator with a set of keypairs, in the specified directory.
+    Initialize an authenticator folder with a set of keypairs
 
-    The directory must not exist yet, but its parent directory must exist.
+    The target directory must not exist yet, but its parent directory must exist.
 
     Authenticator passphrase can be provided as WA_PASSPHRASE environment variable, else user will be prompted for it.
 
@@ -250,7 +251,7 @@ def create_authenticator(ctx, authenticator_dir, keypair_count, owner, passphras
 @click.pass_context
 def validate_authenticator(ctx, authenticator_dir):
     """
-    Verify the metadata and keypairs of an authenticator directory.
+    Verify the metadata and keypairs of an authenticator folder
 
     Authenticator passphrase can be provided as WA_PASSPHRASE environment variable, else user will be prompted for it.
     """
@@ -312,7 +313,7 @@ def validate_authenticator(ctx, authenticator_dir):
 @FORMAT_OPTION
 @click.pass_context
 def view_authenticator(ctx, authenticator_dir, format):
-    """View metadata and public keypair identifiers of an authenticator.
+    """View metadata and public keypair identifiers of an authenticator
 
     The presence and validity of private keys isn't checked
     """
@@ -346,7 +347,7 @@ def view_authenticator(ctx, authenticator_dir, format):
 )
 @click.pass_context
 def delete_authenticator(ctx, authenticator_dir):
-    """Delete an authenticator folder along with all its content."""
+    """Delete an authenticator folder along with all its content"""
     try:
         operations.delete_authenticator(authenticator_dir)
     except Exception as exc:
@@ -370,7 +371,7 @@ def delete_authenticator(ctx, authenticator_dir):
 @click.option("--bundle", help="Combine cryptainer metadata and payload", is_flag=True)
 @click.pass_context
 def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
-    """Turn a media file into a secure cryptainer"""
+    """Turn a media file into a secure container"""
 
     offload_payload_ciphertext = not bundle
 
@@ -424,26 +425,18 @@ def cryptoconf_group():
 @click.pass_context
 def generate_simple_cryptoconf(ctx):
     """
-    Pipeline of subcommands to generate a simple cryptoconf.
+    Generate a simple cryptoconf using subcommands
     """
     ctx.obj["cryptoconf"] = {
         "payload_cipher_layers": [
         ]
     }
-    #ctx.obj["current_key_cipher_layer"] = None
-
-    #@ctx.call_on_close
-    #def output_cryptolib():
-    #    click.echo(ctx.obj["cryptoconf"])
-
-#print(">>>>>>>>>>>>>>>", generate_simple_cryptoconf, dir(generate_simple_cryptoconf), generate_simple_cryptoconf.__class__.__mro__)
 
 
 @generate_simple_cryptoconf.result_callback()
 @click.pass_context
 def display_cryptoconf(ctx, processors):
-    #print(">>>>> IN RESULT CALLBACK", display_cryptoconf)
-    #print(">>>>>>display_cryptoconf", ctx.obj["cryptoconf"])
+    """Format and print a cryptoconf"""
     cryptoconf = ctx.obj["cryptoconf"]
     click.echo(_dump_as_safe_formatted_json(cryptoconf))
     check_cryptoconf_sanity(cryptoconf)  # FIXME put ut upper
@@ -454,29 +447,14 @@ def display_cryptoconf(ctx, processors):
 @click.pass_context
 def cryptoconf_add_payload_cipher_layer(ctx, sym_cipher_algo):
     """
-    Add a layer of symmetric encryption of the data payload.
+    Add a layer of symmetric encryption of the data
 
     The random symmetric key used for that encryption will then have to be protected by asymmetric encryption.
     """
     payload_cipher_layer = {
         "payload_cipher_algo": sym_cipher_algo,
-        "key_cipher_layers": [
-           # {
-           #     "key_cipher_algo": "RSA_OAEP",
-           #     "key_cipher_trustee": {
-           #         "trustee_type": "local_keyfactory"
-           #     }
-           # }
-        ],
-        "payload_signatures": [  # No payload signatures for now with simple confs!
-            #{
-            #    "payload_digest_algo": "SHA256",
-            #    "payload_signature_algo": "DSA_DSS",
-            #    "payload_signature_trustee": {
-            #        "trustee_type": "local_keyfactory"
-            #    }
-            #}
-        ]
+        "key_cipher_layers": [],
+        "payload_signatures": []
     }
     ctx.obj["cryptoconf"]["payload_cipher_layers"].append(payload_cipher_layer)
     ctx.obj["current_add_key_shared_secret"] = None  # RESET
@@ -525,6 +503,11 @@ def _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_ci
 @generate_simple_cryptoconf.command('add-key-cipher-layer')
 @_key_cipher_options
 def cryptoconf_add_key_cipher_layer(ctx, asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo):
+    """
+    Add a layer of asymmetric encryption of the key
+
+    A symmetric cipher can also be used, resulting in a hybrid encryption scheme.
+    """
     payload_cipher_layer = ctx.obj["cryptoconf"]["payload_cipher_layers"][-1]
 
     key_cipher_layer = _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo)
@@ -538,6 +521,9 @@ def cryptoconf_add_key_cipher_layer(ctx, asym_cipher_algo, trustee_type, keystor
 @click.option("--threshold", help="Number of key-guardians required for decryption of the secret", required=True, type=click.INT)
 @click.pass_context
 def cryptoconf_add_key_shared_secret(ctx, threshold):
+    """
+    Transform a key into a shared secret
+    """
     if threshold < 1:
         raise click.BadParameter("Shared-secret shard threshold must be strictly positive")
 
@@ -556,6 +542,9 @@ def cryptoconf_add_key_shared_secret(ctx, threshold):
 @generate_simple_cryptoconf.command('add-key-shard')
 @_key_cipher_options
 def cryptoconf_add_key_shared_secret_shard(ctx, asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo):
+    """
+    Add a shard configuration to a shared secret
+    """
     shared_secret = ctx.obj.get("current_add_key_shared_secret", None)
 
     if shared_secret is None:
@@ -568,21 +557,11 @@ def cryptoconf_add_key_shared_secret_shard(ctx, asym_cipher_algo, trustee_type, 
     )
 
 
-## EXAMPLES
-# flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e
-# flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e --sym-cipher-algo aes_eax
-##  flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e add-key-shared-secret --threshold 2 add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e  --sym-cipher-algo aes_eax
-
-## flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e  --sym-cipher-algo aes_eax
-##  flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shared-secret --threshold 1 add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e add-payload-cipher-layer --sym-cipher-algo aes_eax add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory
-
-
-
-
 @cryptoconf_group.command("validate")
 @click.argument("cryptoconf_file", type=click.File("rb"))
 @click.pass_context
 def validate_cryptoconf(ctx, cryptoconf_file):
+    """Ensure that a cryptoconf structure is valid"""
     try:
         cryptoconf = load_from_json_bytes(cryptoconf_file.read())
         check_cryptoconf_sanity(cryptoconf)
@@ -595,7 +574,7 @@ def validate_cryptoconf(ctx, cryptoconf_file):
 @click.argument("cryptoconf_file", type=click.File("rb"))
 @click.pass_context
 def summarize_cryptoconf(ctx, cryptoconf_file):
-    """Display a summary of a cryptoconf structure."""
+    """Display a summary of a cryptoconf structure"""
     cryptoconf = load_from_json_bytes(cryptoconf_file.read())
     text_summary = get_cryptoconf_summary(cryptoconf)
     click.echo(text_summary, nl=False)
@@ -603,7 +582,7 @@ def summarize_cryptoconf(ctx, cryptoconf_file):
 
 @wacryptolib_cli.group("foreign-keystore")
 def foreign_keystore_group():
-    """Manage imported keystores"""
+    """Manage locally imported keystores"""
     pass
 
 
@@ -611,6 +590,7 @@ def foreign_keystore_group():
 @FORMAT_OPTION
 @click.pass_context
 def list_foreign_keystores(ctx, format):  # FIXME list count of public/private keys too!
+    """List locally imported keystores"""
     keystore_pool = _get_keystore_pool(ctx)
     foreign_keystore_metadata_list = keystore_pool.get_all_foreign_keystore_metadata(include_keypair_identifiers=True)
     # print(foreign_keystore_metadata_list)
@@ -660,6 +640,7 @@ def list_foreign_keystores(ctx, format):  # FIXME list count of public/private k
 @click.argument("keystore_uid", type=click.UUID)
 @click.pass_context
 def delete_foreign_keystore(ctx, keystore_uid):
+    """Delete a locally imported keystore"""
     keystore_pool = _get_keystore_pool(ctx)
     path = keystore_pool._get_foreign_keystore_dir(keystore_uid)
     try:
@@ -682,6 +663,8 @@ def delete_foreign_keystore(ctx, keystore_uid):
 @click.option("--include-private-keys", help="Import private keys when available", is_flag=True)
 @click.pass_context
 def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_private_keys):
+    """Import a remote keystore"""
+
     if not from_usb and not from_gateway and not from_path:
         raise click.UsageError("No source selected for keystore import")
 
@@ -730,7 +713,7 @@ def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_pri
 
 @wacryptolib_cli.group("cryptainer")
 def cryptainer_group():
-    """Manage cryptainers"""
+    """Manage encrypted containers"""
     pass
 
 
@@ -738,6 +721,7 @@ def cryptainer_group():
 @FORMAT_OPTION
 @click.pass_context
 def list_cryptainers(ctx, format):
+    """List local cryptainers"""
     cryptainer_storage = _get_cryptainer_storage(ctx)
     cryptainer_properties_list = cryptainer_storage.list_cryptainer_properties(
         as_sorted_list=True, with_creation_datetime=True, with_size=True, with_offloaded=True
@@ -774,6 +758,7 @@ def list_cryptainers(ctx, format):
 @click.argument("cryptainer_name")
 @click.pass_context
 def validate_cryptainer(ctx, cryptainer_name):
+    """Validate a cryptainer structure"""
     try:
         cryptainer_storage = _get_cryptainer_storage(ctx)
         cryptainer = cryptainer_storage.load_cryptainer_from_storage(cryptainer_name, include_payload_ciphertext=True)
@@ -787,7 +772,7 @@ def validate_cryptainer(ctx, cryptainer_name):
 @click.argument("cryptainer_name")
 @click.pass_context
 def summarize_cryptainer(ctx, cryptainer_name):
-    """Display a summary of a cryptainer structure."""
+    """Display a summary of a cryptainer structure"""
     cryptainer_storage = _get_cryptainer_storage(ctx)
     cryptainer = cryptainer_storage.load_cryptainer_from_storage(cryptainer_name, include_payload_ciphertext=True)
     text_summary = get_cryptoconf_summary(cryptainer)  # Works with cryptainers too
@@ -798,6 +783,7 @@ def summarize_cryptainer(ctx, cryptainer_name):
 @click.argument("cryptainer_name")
 @click.pass_context
 def delete_cryptainer(ctx, cryptainer_name):
+    """Delete a local cryptainer"""
     cryptainer_storage = _get_cryptainer_storage(ctx)
     if not cryptainer_storage.is_valid_cryptainer_name(cryptainer_name):
         raise click.UsageError("Invalid cryptainer name %s" % cryptainer_name)
@@ -811,7 +797,7 @@ def delete_cryptainer(ctx, cryptainer_name):
 @click.option("-o", "--output-file", type=click.File("wb"))
 @click.pass_context
 def decrypt(ctx, cryptainer_name, output_file):
-    """Turn a stored cryptainer file back into its original media file.
+    """Turn a cryptainer back into the original media file
 
     This command is for test purposes only, since it only works with INSECURE cryptoconfs
     where private keys are locally available, and not protected by passphrases.
@@ -865,6 +851,8 @@ def decrypt(ctx, cryptainer_name, output_file):
 @click.option("--max-count", type=int, help="Maximum count of cryptainers in storage")
 @click.option("--max-quota", type=int, help="Maximum total size of cryptainers, in MBs")
 def purge_cryptainers(ctx, max_age, max_count, max_quota):
+    """Delete oldest cryptainers per criteria"""
+
     extra_kwargs = dict(
         max_cryptainer_age=(timedelta(days=max_age) if max_age is not None else None),
         max_cryptainer_count=max_count,  # Might be None
@@ -882,5 +870,11 @@ def purge_cryptainers(ctx, max_age, max_count, max_quota):
 
 
 def main(prog_name=None):
-    """Launch CLI"""
+    """Launch Flightbox CLI"""
     wacryptolib_cli(prog_name=prog_name)
+
+
+if __debug__:
+    for k, v in globals().copy().items():
+        if isinstance(v, BaseCommand):
+            assert v.__doc__, "%s has no dosctring" % k

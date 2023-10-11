@@ -49,13 +49,13 @@ if os.getenv("_WA_RANDOMIZE_CLI_APP_DIR"):  # Only for TESTING
 else:
     _internal_app_dir_parent = "~"
 
-_INTERNAL_APP_DIR_STR = os.path.expanduser(os.path.join(_internal_app_dir_parent, ".witnessangel"))
-Path(_INTERNAL_APP_DIR_STR).mkdir(exist_ok=True)
+_INTERNAL_APP_DIR_STR = os.path.join(_internal_app_dir_parent, ".witnessangel")  # With ~ for docstrings
+Path(_INTERNAL_APP_DIR_STR).expanduser().mkdir(exist_ok=True)
 
-_DEFAULT_KEYSTORE_POOL_STR = os.path.join(_INTERNAL_APP_DIR_STR, "keystore_pool")  # For docstrings
-DEFAULT_KEYSTORE_POOL_PATH = Path(_DEFAULT_KEYSTORE_POOL_STR).resolve()
-_DEFAULT_CRYPTAINER_STORAGE_STR = os.path.join(_INTERNAL_APP_DIR_STR, "cryptainers")  # For docstrings
-DEFAULT_CRYPTAINER_STORAGE_PATH = Path(_DEFAULT_CRYPTAINER_STORAGE_STR).resolve()
+_DEFAULT_KEYSTORE_POOL_STR = os.path.join(_INTERNAL_APP_DIR_STR, "keystore_pool")  # With ~ for docstrings
+DEFAULT_KEYSTORE_POOL_PATH = Path(_DEFAULT_KEYSTORE_POOL_STR).expanduser().resolve()
+_DEFAULT_CRYPTAINER_STORAGE_STR = os.path.join(_INTERNAL_APP_DIR_STR, "cryptainers")  # With ~ for docstrings
+DEFAULT_CRYPTAINER_STORAGE_PATH = Path(_DEFAULT_CRYPTAINER_STORAGE_STR).expanduser().resolve()
 INDENT = "  "
 FORMAT_OPTION = click.option(
     "-f", "--format", type=click.Choice(["plain", "json"], case_sensitive=False), default="plain"
@@ -376,7 +376,7 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
     offload_payload_ciphertext = not bundle
 
     if not cryptoconf:
-        logger.warning("No cryptoconf provided, defaulting to simple and INSECURE example conf")
+        logger.warning("No cryptoconf provided, defaulting to simple and INSECURE example cryptoconf")
         cryptoconf = SIMPLE_EXAMPLE_CRYPTOCONF
     else:
         cryptoconf = load_from_json_bytes(cryptoconf.read())

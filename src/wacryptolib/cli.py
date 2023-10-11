@@ -58,7 +58,7 @@ _DEFAULT_CRYPTAINER_STORAGE_STR = os.path.join(_INTERNAL_APP_DIR_STR, "cryptaine
 DEFAULT_CRYPTAINER_STORAGE_PATH = Path(_DEFAULT_CRYPTAINER_STORAGE_STR).expanduser().resolve()
 INDENT = "  "
 FORMAT_OPTION = click.option(
-    "-f", "--format", type=click.Choice(["plain", "json"], case_sensitive=False), default="plain"
+    "-f", "--format", type=click.Choice(["plain", "json"], case_sensitive=False), default="plain", show_default=True
 )
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
@@ -215,7 +215,7 @@ def _retrieve_keystore_passphrase():
         exists=False, writable=True, resolve_path=True, path_type=Path  # Beware, before python3.10 resolve_path is buggy on Windows
     ),
 )
-@click.option("--keypair-count", default=3, help="Count of keypairs to generate (min 1)", type=click.INT)
+@click.option("--keypair-count", default=3, help="Count of keypairs to generate (min 1)", type=click.INT, show_default=True)
 @click.option("--owner", help="Name of the authenticator owner", required=True)
 @click.option("--passphrase-hint", help="Non-sensitive hint to help remember the passphrase", required=True)
 @click.pass_context
@@ -282,7 +282,7 @@ def validate_authenticator(ctx, authenticator_dir):
         if keystore_creation_datetime:
             click.echo("Creation date: %s" % keystore_creation_datetime.isoformat(sep=" ", timespec="seconds"))
 
-        click.echo("Keypair count: %s" % len(keypair_identifiers))
+        click.echo("Keypair count: %d" % len(keypair_identifiers))
 
         click.echo("")
 

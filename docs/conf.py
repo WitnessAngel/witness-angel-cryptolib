@@ -3,10 +3,11 @@
 # This file only contains a selection of the most common options. For a full
 # list see the documentation:
 # http://www.sphinx-doc.org/en/master/config
-
+import os
 # -- Path setup --------------------------------------------------------------
 
 import pathlib
+import shutil
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -20,6 +21,14 @@ root_dir = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root_dir / "src"))
 
 _metadata = toml.load(str(root_dir / "pyproject.toml"))
+
+# -- Tweak environment for CLI docs generation -------------------------------
+
+authenticator_dir = pathlib.Path("~/mysphinxdocauthenticator").expanduser()
+if authenticator_dir.exists():
+    shutil.rmtree(authenticator_dir)
+
+os.environ["WA_PASSPHRASE"] = "My Passphrase For Sphinx-CLI"
 
 # -- Project information -----------------------------------------------------
 

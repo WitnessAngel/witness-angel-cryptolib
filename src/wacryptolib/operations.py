@@ -82,17 +82,16 @@ def check_authenticator(authenticator_dir: Path, keystore_passphrase: str):  # F
     filesystem_keystore = ReadonlyFilesystemKeystore(authenticator_dir)
     metadata = filesystem_keystore.get_keystore_metadata(include_keypair_identifiers=True)
     keypair_identifiers = metadata["keypair_identifiers"]
-
     missing_private_keys = []
     undecodable_private_keys = []
 
     for key_information in keypair_identifiers:
         key_algo = key_information["key_algo"]
         keychain_uid = key_information["keychain_uid"]
-        keypair_identifiers = (key_algo, keychain_uid)
+        keypair_identifier = (key_algo, keychain_uid)
 
         if not key_information["private_key_present"]:
-            missing_private_keys.append(keypair_identifiers)
+            missing_private_keys.append(keypair_identifier)
             continue
         private_key_pem = filesystem_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
         try:
@@ -101,7 +100,7 @@ def check_authenticator(authenticator_dir: Path, keystore_passphrase: str):  # F
             )
             assert key_obj, key_obj
         except KeyLoadingError:
-            undecodable_private_keys.append(keypair_identifiers)
+            undecodable_private_keys.append(keypair_identifier)
 
     return dict(
         authenticator_metadata=authenticator_metadata,

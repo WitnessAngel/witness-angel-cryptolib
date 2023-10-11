@@ -161,6 +161,7 @@ def test_cli_authenticator_validation_errors(tmp_path):
 
     result = do_validate(passphrase)
     assert result.exit_code == 0
+    assert "Keypair count: 1" in result.stdout  # Prevent regression on this count
 
     result = do_validate("badpassphrase")
     assert result.exit_code == 1

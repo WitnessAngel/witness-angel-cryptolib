@@ -147,7 +147,7 @@ def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=
     "-k",
     "--keystore-pool",
     default=None,
-    help="Folder to get/set crypto keys (else %s is used)" % _DEFAULT_KEYSTORE_POOL_STR,
+    help="Folder tree to store keystores (else %s is used)" % _DEFAULT_KEYSTORE_POOL_STR,
     type=click.Path(
         exists=True,
         file_okay=False,

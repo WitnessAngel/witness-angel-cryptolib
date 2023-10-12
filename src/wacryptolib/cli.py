@@ -415,10 +415,11 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
         )
         assert not payload_handle.closed, payload_handle  # We do not automatically alter the file handle
 
-    logger.info(
-        "Encryption of file '%s' to storage cryptainer '%s' successfully finished"
-        % (input_file.name, output_cryptainer_name)
-    )
+    #Redundant:
+    #logger.info(
+    #    "Encryption of file '%s' to storage cryptainer '%s' successfully finished"
+    #    % (input_file.name, output_cryptainer_name)
+    #)
 
 
 @wacryptolib_cli.group("cryptoconf")

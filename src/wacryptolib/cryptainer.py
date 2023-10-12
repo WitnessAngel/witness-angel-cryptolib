@@ -1763,7 +1763,7 @@ class ReadonlyCryptainerStorage:
             dt = datetime.strptime(cryptainer_name.name[:CRYPTAINER_DATETIME_LENGTH], CRYPTAINER_DATETIME_FORMAT)
             dt = dt.replace(tzinfo=timezone.utc)
         except ValueError:
-            logger.warning(
+            logger.debug(
                 "Couldn't recognize timestamp in filename %s, falling back to file time", cryptainer_name.name
             )
             mtime = (

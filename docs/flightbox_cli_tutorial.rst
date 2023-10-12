@@ -25,9 +25,18 @@ Let's check the structure of the resulting "cryptainer", which has been saved in
 
 .. command-output:: flightbox cryptainer list
 
+.. hint::
+
+    For performance reasons, the cryptainer is, by default, "offloaded". This means it is separated in two files: the metadata in "readme.rst.crypt", and the (possibly huge) encrypted data in "readme.rst.crypt.payload".
+
+
 .. command-output:: flightbox cryptainer summarize readme.rst.crypt
 
 As we see, the cryptainer uses several types of encryption, but only relies on local device keys, which are not protected by a passphrase.
+
+.. hint::
+
+    If you open readme.rst.crypt with a text editor, you'll notice that it's just a JSON file, but in Pymongo's Extended Json format: it uses specific fields like $binary or $date to add better types to the serialized data.
 
 
 Creating an authenticator trustee
@@ -35,7 +44,7 @@ Creating an authenticator trustee
 
 To encrypt data in a more secure fashion, we'll need some key guardians, called `trustees` in Flightbox.
 
-The simplest form of trustee is an authenticator, a digital identity for a single person. Currently it is represented by a folder containing some metadata and a bunch of keypairs - all protected by the same "passphrase" (a very long password).
+The simplest form of trustee is an authenticator, a digital identity for a single person. Currentl, it is backed by a keystore folder containing some metadata and a bunch of keypairs - all protected by the same "passphrase" (a very long password).
 
 The standard way of generating this identity would be to use a standalone program like the mobile application Witness Angel Authenticator (for Android and iOS), and then to publish the public part of this identity to a web registry.
 
@@ -83,8 +92,16 @@ We can then review the imported keystores, which will be usable for encryption:
 .. command-output:: flightbox foreign-keystore list
 
 
-Creating an cryptoconf
+Generating a cryptoconf
 --------------------------------
 
-Now that we have setup a trustee, it's time to specify how it should protect our data.
+Now that we have locally registered some trustees, it's time to specify how they should protect our data, how they should become our "key guardians". This happens with a cryptoconf, a JSON cryptainer template recursively describing the different layers of encryption to be used on data and on keys, as well as the signatures to apply.
+
+For some simple, signatureless cases, we can use the CLI to generate a cryptoconf fo us.
+
+For example, imagien we want to encrypt the data using AES-CBC, and then protect the
+
+
+.. command-output:: flightbox cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f0c0988-80c1-9362-11c1-b06909a3a53c
+
 

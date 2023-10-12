@@ -421,25 +421,29 @@ def cryptoconf_group():
     pass
 
 
-@cryptoconf_group.group("generate-simple", chain=True)  # , invoke_without_command=True)
+@cryptoconf_group.group("generate-simple", chain=True)
+@click.option("--keychain-uid", help="Default UID for asymmetric keys", required=False, type=click.UUID)
 @click.pass_context
-def generate_simple_cryptoconf(ctx):
+def generate_simple_cryptoconf(ctx, keychain_uid):
     """
     Generate a simple cryptoconf using subcommands
     """
-    ctx.obj["cryptoconf"] = {
+    cryptoconf = {
         "payload_cipher_layers": [
         ]
     }
+    if keychain_uid:
+        cryptoconf["keychain_uid"] = keychain_uid
+    ctx.obj["cryptoconf"] = cryptoconf
 
 
 @generate_simple_cryptoconf.result_callback()
 @click.pass_context
-def display_cryptoconf(ctx, processors):
+def display_cryptoconf(ctx, processors, keychain_uid):
     """Format and print a cryptoconf"""
     cryptoconf = ctx.obj["cryptoconf"]
+    check_cryptoconf_sanity(cryptoconf)  # Safety
     click.echo(_dump_as_safe_formatted_json(cryptoconf))
-    check_cryptoconf_sanity(cryptoconf)  # FIXME put ut upper
 
 
 @generate_simple_cryptoconf.command('add-payload-cipher-layer')
@@ -468,6 +472,7 @@ def _key_cipher_options(cmd):
                                      CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE], case_sensitive=False))
     @click.option("--keystore-uid", help="UID of the key-guardian (only for authenticators)", required=False,
                   type=click.UUID)
+    @click.option("--keychain-uid", help="Overridden UID for asymmetric key", required=False, type=click.UUID)
     @click.option("--sym-cipher-algo", help="Optional intermediate symmetric cipher, to avoid stacking trustees",
                   required=False,
                   type=click.Choice(SUPPORTED_SYMMETRIC_CIPHER_ALGOS, case_sensitive=False))
@@ -478,10 +483,11 @@ def _key_cipher_options(cmd):
     return wrapper_common_options
 
 
-def _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo):
+def _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo, keychain_uid=None):
     key_cipher_trustee = {
         "trustee_type": trustee_type
     }
+
     if trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
         if not keystore_uid:
             raise click.BadParameter("Authenticator trustee requires a --keystore-uid value")
@@ -491,6 +497,8 @@ def _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_ci
         "key_cipher_algo": asym_cipher_algo,
         "key_cipher_trustee": key_cipher_trustee,
     }
+    if keychain_uid:
+        key_cipher_layer["keychain_uid"] = keychain_uid  # Local override
 
     if sym_cipher_algo:  # Hybrid encryption
         key_cipher_layer = {
@@ -502,7 +510,7 @@ def _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_ci
 
 @generate_simple_cryptoconf.command('add-key-cipher-layer')
 @_key_cipher_options
-def cryptoconf_add_key_cipher_layer(ctx, asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo):
+def cryptoconf_add_key_cipher_layer(ctx, asym_cipher_algo, trustee_type, keystore_uid, keychain_uid, sym_cipher_algo):
     """
     Add a layer of asymmetric encryption of the key
 
@@ -510,7 +518,7 @@ def cryptoconf_add_key_cipher_layer(ctx, asym_cipher_algo, trustee_type, keystor
     """
     payload_cipher_layer = ctx.obj["cryptoconf"]["payload_cipher_layers"][-1]
 
-    key_cipher_layer = _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo)
+    key_cipher_layer = _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo, keychain_uid=keychain_uid)
 
     payload_cipher_layer["key_cipher_layers"].append(key_cipher_layer)
     ctx.obj["current_add_key_shared_secret"] = None  # RESET
@@ -541,7 +549,7 @@ def cryptoconf_add_key_shared_secret(ctx, threshold):
 
 @generate_simple_cryptoconf.command('add-key-shard')
 @_key_cipher_options
-def cryptoconf_add_key_shared_secret_shard(ctx, asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo):
+def cryptoconf_add_key_shared_secret_shard(ctx, asym_cipher_algo, trustee_type, keystore_uid, keychain_uid, sym_cipher_algo):
     """
     Add a shard configuration to a shared secret
     """
@@ -550,7 +558,7 @@ def cryptoconf_add_key_shared_secret_shard(ctx, asym_cipher_algo, trustee_type, 
     if shared_secret is None:
         raise click.UsageError("Command add-key-shard can only be used after add-key-shared-secret")
 
-    key_cipher_layer = _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo)
+    key_cipher_layer = _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo, keychain_uid=keychain_uid)
 
     shared_secret["key_shared_secret_shards"].append(
         dict(key_cipher_layers=[key_cipher_layer])  # SINGLE layer for shards, for now

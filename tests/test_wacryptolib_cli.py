@@ -464,16 +464,19 @@ def test_cli_cryptoconf_generate_simple():
         'payload_signatures': []}]}
 
     # Simple configuration with hybrid key encryption
-    command = """cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo chacha20_poly1305 
+    command = """cryptoconf generate-simple --keychain-uid 123e4567-e89b-12d3-a456-426614174000 
+                    add-payload-cipher-layer --sym-cipher-algo chacha20_poly1305 
                     add-key-cipher-layer 
                     --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory 
-                    --sym-cipher-algo aes_eax""".split()
+                    --sym-cipher-algo aes_eax --keychain-uid 6a3c8ac8-c26b-45fa-8810-6dd3157b97fa""".split()
     result = runner.invoke(cli, command)
     cryptoconf = _load_and_validate_cryptoconf(result)
     assert cryptoconf == {
+        'keychain_uid': UUID("123e4567-e89b-12d3-a456-426614174000"),
         'payload_cipher_layers': [{'key_cipher_layers': [{'key_cipher_algo': 'AES_EAX',
                                'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP',
-                                                      'key_cipher_trustee': {'trustee_type': 'local_keyfactory'}}]}],
+                                                      'key_cipher_trustee': {'trustee_type': 'local_keyfactory'},
+                                                      'keychain_uid': UUID("6a3c8ac8-c26b-45fa-8810-6dd3157b97fa")}]}],
         'payload_cipher_algo': 'CHACHA20_POLY1305',
         'payload_signatures': []}]}
 
@@ -483,7 +486,7 @@ def test_cli_cryptoconf_generate_simple():
             add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator 
                           --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e  --sym-cipher-algo aes_eax
             add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator 
-                          --keystore-uid af2ee6c1-d91e-7593-1310-7036dc9b782a
+                          --keystore-uid af2ee6c1-d91e-7593-1310-7036dc9b782a --keychain-uid 6a3c8ac8-c26b-45fa-8810-6dd3157b97fd
         add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b783b """.split()
     result = runner.invoke(cli, command)
     cryptoconf = _load_and_validate_cryptoconf(result)
@@ -496,7 +499,8 @@ def test_cli_cryptoconf_generate_simple():
                                                                                                                                   'trustee_type': 'authenticator'}}]}]},
                                                             {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP',
                                                                                     'key_cipher_trustee': {'keystore_uid': UUID('af2ee6c1-d91e-7593-1310-7036dc9b782a'),
-                                                                                                           'trustee_type': 'authenticator'}}]}],
+                                                                                                           'trustee_type': 'authenticator'},
+                                                                                    'keychain_uid': UUID("6a3c8ac8-c26b-45fa-8810-6dd3157b97fd")}]}],
                                'key_shared_secret_threshold': 1},
                               {'key_cipher_algo': 'RSA_OAEP',
                                'key_cipher_trustee': {'keystore_uid': UUID('0f2ee6c1-d91e-7593-1310-7036dc9b783b'),

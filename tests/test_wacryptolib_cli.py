@@ -702,6 +702,16 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert " 0f0c0988-80c1-9362-11c1-b06909a3a53c " in result.stdout  # Table is displayed
     assert " ¤aaa " in result.stdout
 
+    result = runner.invoke(cli, base_args + ["foreign-keystore", "view", REAL_GATEWAY_KEYSTORE_UID], catch_exceptions=False)
+    assert result.exit_code == 0
+    assert " 0f0c0988-80c1-9362-11c1-b06909a3a53c " in result.stdout  # Table is displayed
+    assert " ¤aaa " in result.stdout
+    assert " RSA_OAEP 0f0c0989-1111-a226-c471-99cbb2d203c3 "  in result.stdout  # Keypairs are listed
+
+    result = runner.invoke(cli, base_args + ["foreign-keystore", "view", wrong_uuid_str])
+    assert result.exit_code == 2
+    assert "not found" in result.stderr
+
     result = runner.invoke(
         cli, base_args + ["foreign-keystore", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID]
     )

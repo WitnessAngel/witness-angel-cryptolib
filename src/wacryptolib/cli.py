@@ -303,6 +303,29 @@ def validate_authenticator(ctx, authenticator_dir):
         sys.exit(1)
 
 
+def _analyse_keystore_and_return_data_table(keystore_dir, format, skipped_fields=()):
+    filesystem_keystore = ReadonlyFilesystemKeystore(keystore_dir)
+    metadata_enriched = filesystem_keystore.get_keystore_metadata(include_keypair_identifiers=True)
+    metadata_enriched.setdefault("keystore_creation_datetime", None)  # Fixme do this at loading time and fix the Schema accordingly!
+
+    # Restrict data to mask authenticator format, secret, etc.
+    selected_field_list = ["keystore_uid", "keystore_owner", "keystore_passphrase_hint", "keystore_creation_datetime", "keypair_identifiers"]
+    selected_field_list = [k for k in selected_field_list if k not in skipped_fields]
+    metadata_enriched = {k: metadata_enriched[k] for k in selected_field_list}
+
+    if format == "json":
+        # Even if empty, we output it
+        click.echo(_dump_as_safe_formatted_json(metadata_enriched))
+        return
+
+    # Change the nested list to a string for display
+    metadata_enriched["keystore_creation_datetime"] = _short_format_datetime(metadata_enriched["keystore_creation_datetime"])
+    metadata_enriched["keypair_identifiers"] = "\n".join("%s %s" % (x["key_algo"], x["keychain_uid"])
+                                                              for x in metadata_enriched["keypair_identifiers"])
+    table = _convert_dict_to_table_of_properties(metadata_enriched, key_list=selected_field_list)
+    return table
+
+
 @authenticator_group.command("view")
 @click.argument(
     "authenticator_dir",
@@ -315,26 +338,9 @@ def validate_authenticator(ctx, authenticator_dir):
 def view_authenticator(ctx, authenticator_dir, format):
     """View metadata and public keypair identifiers of an authenticator
 
-    The presence and validity of private keys isn't checked
+    The presence and validity of private keys isn't checked.
     """
-    filesystem_keystore = ReadonlyFilesystemKeystore(authenticator_dir)
-    metadata_enriched = filesystem_keystore.get_keystore_metadata(include_keypair_identifiers=True)
-    metadata_enriched.setdefault("keystore_creation_datetime", None)  # Fixme do this at loading time and fix the Schema accordingly!
-
-    # Restrict data to mask authenticator format, secret, etc.
-    selected_key_list = ["keystore_uid", "keystore_owner", "keystore_passphrase_hint", "keystore_creation_datetime", "keypair_identifiers"]
-    metadata_enriched = {k: metadata_enriched[k] for k in selected_key_list}
-
-    if format == "json":
-        # Even if empty, we output it
-        click.echo(_dump_as_safe_formatted_json(metadata_enriched))
-        return
-
-    # Change the nested list to a string for display
-    metadata_enriched["keystore_creation_datetime"] = _short_format_datetime(metadata_enriched["keystore_creation_datetime"])
-    metadata_enriched["keypair_identifiers"] = "\n".join("%s %s" % (x["key_algo"], x["keychain_uid"])
-                                                              for x in metadata_enriched["keypair_identifiers"])
-    table = _convert_dict_to_table_of_properties(metadata_enriched, key_list=selected_key_list)
+    table = _analyse_keystore_and_return_data_table(authenticator_dir, format=format)
     click.echo(table)
 
 
@@ -644,15 +650,34 @@ def list_foreign_keystores(ctx, format):  # FIXME list count of public/private k
     click.echo(table)
 
 
+@foreign_keystore_group.command("view")
+@click.argument("keystore_uid", type=click.UUID)
+@FORMAT_OPTION
+@click.pass_context
+def view_foreign_keystore(ctx, keystore_uid, format):
+    """View metadata and public keypair identifiers of an imported keystore
+
+    The presence and validity of private keys isn't checked.
+    """
+    keystore_pool = _get_keystore_pool(ctx)
+    keystore_path = keystore_pool._get_foreign_keystore_dir(keystore_uid)
+
+    if not keystore_path.is_dir():
+        raise click.UsageError("Foreign keystore UID %s not found" % keystore_uid)
+
+    table = _analyse_keystore_and_return_data_table(keystore_path, format=format, skipped_fields=("keystore_passphrase_hint",))
+    click.echo(table)
+
+
 @foreign_keystore_group.command("delete")
 @click.argument("keystore_uid", type=click.UUID)
 @click.pass_context
 def delete_foreign_keystore(ctx, keystore_uid):
     """Delete a locally imported keystore"""
     keystore_pool = _get_keystore_pool(ctx)
-    path = keystore_pool._get_foreign_keystore_dir(keystore_uid)
+    keystore_path = keystore_pool._get_foreign_keystore_dir(keystore_uid)
     try:
-        shutil.rmtree(path)
+        shutil.rmtree(keystore_path)
         logger.info("Foreign keystore %s successfully deleted" % keystore_uid)
     except OSError as exc:
         raise click.UsageError("Failed deletion of imported authentication device %s: %r" % (keystore_uid, exc))

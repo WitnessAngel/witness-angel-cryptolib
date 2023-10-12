@@ -577,7 +577,7 @@ def summarize_cryptoconf(ctx, cryptoconf_file):
     """Display a summary of a cryptoconf structure"""
     cryptoconf = load_from_json_bytes(cryptoconf_file.read())
     text_summary = get_cryptoconf_summary(cryptoconf)
-    click.echo(text_summary, nl=False)
+    click.echo("\n" + text_summary, nl=False)
 
 
 @wacryptolib_cli.group("foreign-keystore")
@@ -662,7 +662,7 @@ def delete_foreign_keystore(ctx, keystore_uid):
 @click.option("--from-gateway", help="Fetch authenticator by uid from gateway", type=click.UUID)
 @click.option("--include-private-keys", help="Import private keys when available", is_flag=True)
 @click.pass_context
-def import_foreign_keystores(ctx, from_usb, from_gateway, from_path, include_private_keys):
+def import_foreign_keystore(ctx, from_usb, from_gateway, from_path, include_private_keys):
     """Import a remote keystore"""
 
     if not from_usb and not from_gateway and not from_path:
@@ -776,7 +776,7 @@ def summarize_cryptainer(ctx, cryptainer_name):
     cryptainer_storage = _get_cryptainer_storage(ctx)
     cryptainer = cryptainer_storage.load_cryptainer_from_storage(cryptainer_name, include_payload_ciphertext=True)
     text_summary = get_cryptoconf_summary(cryptainer)  # Works with cryptainers too
-    click.echo(text_summary, nl=False)
+    click.echo("\n" +text_summary, nl=False)
 
 
 @cryptainer_group.command("delete")

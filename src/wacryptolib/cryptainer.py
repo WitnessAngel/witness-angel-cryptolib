@@ -2333,8 +2333,8 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
     return CRYPTAINER_SCHEMA
 
 
-CONF_SCHEMA_PYTHON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=False, extended_json_format=False)
-CONF_SCHEMA_JSON = _create_cryptainer_and_cryptoconf_schema(
+CRYPTOCONF_SCHEMA_PYTHON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=False, extended_json_format=False)
+CRYPTOCONF_SCHEMA_JSON = _create_cryptainer_and_cryptoconf_schema(
     for_cryptainer=False, extended_json_format=True
 ).json_schema("conf_schema.json")
 CRYPTAINER_SCHEMA_PYTHON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=True, extended_json_format=False)
@@ -2384,6 +2384,6 @@ def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
            (with $binary, $numberInt and such) and will be checked using a jsonschema validator.
     """
 
-    schema = CONF_SCHEMA_JSON if jsonschema_mode else CONF_SCHEMA_PYTHON
+    schema = CRYPTOCONF_SCHEMA_JSON if jsonschema_mode else CRYPTOCONF_SCHEMA_PYTHON
 
     _validate_data_tree(data_tree=cryptoconf, valid_schema=schema)

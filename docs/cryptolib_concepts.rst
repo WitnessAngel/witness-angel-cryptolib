@@ -13,7 +13,7 @@ Lots of different "keys" and related concepts are used cryptolib code, so we use
 A **key-algo** is a reference to either an encryption scheme (symmetric or asymmetric), or to a signature scheme (always asymmetric).
 In some parts of the code, when the purpose of the key is already sure, the names "cipher-algo" or "signature-algo" are used instead.
 
-A **keypair** is a dict containing both "public" and "private" keys, for use in an asymmetric cipher or signature. Depending on the situation, these keys can be python objects, or serialized as PEM bytestrings (the private key being then possibly passphrase-protected. Keypairs are meant to be identified by a pair of [keychain_uid, key_algo] references (since for security, a keypair should indeed only be used for a single purpose). A *keychain* is thus of set of keypairs having a common UUID, but each used for a different purpose/algorithm.
+A **keypair** is a dict containing both "public" and "private" keys, for use in an asymmetric cipher or signature. Depending on the situation, these keys can be python objects, or serialized as PEM bytestrings (the private key being then possibly passphrase-protected. Keypairs are meant to be identified by a pair of **[keychain_uid, key_algo] references** (since for security, a keypair should indeed only be used for a single purpose). A *keychain* is thus of set of keypairs having a common UUID, but each used for a different purpose/algorithm.
 
 A **symkey** is a dict containing all parameters required to configure a symmetric encryption/decryption cipher. Typically, it means a binary "secret key", and additional fields like "initialization vector" or "nonce", depending on the symmetric key-algo concerned. These symkeys are meant to be randomly generated, immediately protected by asymmetric ciphers, and stored along the encrypted data - as usual in a hybrid cryptosystem. Symkeys are anonymous.
 
@@ -43,7 +43,7 @@ A **keystore** is a generic storage for asymmetric keypairs. Its is typically a 
 
 The **local-keyfactory keystore** is the default keystore available on recording devices, as well as **server trustees** (see below). It can generate keypairs on demands, and typically doesn't protect them with passphrases.
 
-An **authenticator** is a subtype of keystore used to provide a digital identity keychain to a trusted third party (typically an individual). It is a fixed set of keypairs, all protected by the same passphrase, with some additional authentication fields in a metadata file. An **authdevice**, or authentication device, is a physical device on which an authenticator can be stored (for now, we use a simple folder at the root of an usb storage), if it is not simply stored in a local disk.
+An **authenticator** is a subtype of keystore used to provide a digital identity to a trusted third party (typically an individual). It is a fixed set of keypairs, all protected by the same passphrase, with some additional authentication fields in a metadata file. An **authdevice**, or authentication device, is a physical device on which an authenticator can be stored (for now, we use a simple folder at the root of an usb storage), if it is not simply stored in a local disk.
 
 Authenticators can publish their public keys, and public metadata, to a **web gateway** - a simple online registry - so that other people may easily access them.
 

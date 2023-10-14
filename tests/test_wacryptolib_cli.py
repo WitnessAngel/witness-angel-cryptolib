@@ -212,7 +212,7 @@ def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
             consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
                                       stdin=feeder.stdout, stderr=subprocess.PIPE)
             assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
-            assert b"successfully finished" in consumer_process_completed.stderr
+            assert b"successfully encrypted" in consumer_process_completed.stderr
             assert cryptainer_storage.joinpath("my_piped_oneshot_cryptainer%d.crypt" % idx).is_file()
             assert cryptainer_storage.joinpath("my_piped_oneshot_cryptainer%d.crypt.payload" % idx).is_file() != must_bundle
     
@@ -238,7 +238,7 @@ def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
             consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
                                       stdin=feeder.stdout, stderr=subprocess.PIPE)
             assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
-            assert b"successfully finished" in consumer_process_completed.stderr
+            assert b"successfully encrypted" in consumer_process_completed.stderr
             assert cryptainer_storage.joinpath("my_piped_longrun_cryptainer%d.crypt" % idx).is_file()
             assert cryptainer_storage.joinpath("my_piped_longrun_cryptainer%d.crypt.payload" % idx).is_file() != must_bundle
 
@@ -273,14 +273,14 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
 
         result = runner.invoke(cli, base_args + ["encrypt", data_file, "--bundle"], catch_exceptions=False)
         assert result.exit_code == 0
-        assert "successfully finished" in result.stderr
+        assert "successfully encrypted" in result.stderr
         assert cryptainer_storage.joinpath(data_file + ".crypt").is_file()
         assert not cryptainer_storage.joinpath(data_file + ".crypt.payload").is_file()  # NOT OFFLOADED in this case
 
         result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "stuff.dat"], catch_exceptions=False)
         print("TEST-STDERR1:", result.stderr)
         assert result.exit_code == 0
-        assert "successfully finished" in result.stderr
+        assert "successfully encrypted" in result.stderr
         assert not os.path.exists("./stuff.dat")  # This is NOT a full target filepath
         assert cryptainer_storage.joinpath("stuff.dat.crypt").is_file()
         assert cryptainer_storage.joinpath("stuff.dat.crypt.payload").is_file()  # OFFLOADED in this case

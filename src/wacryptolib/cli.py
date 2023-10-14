@@ -303,7 +303,7 @@ def validate_authenticator(ctx, authenticator_dir):
         sys.exit(1)
 
 
-def _analyse_keystore_and_return_data_table(keystore_dir, format, skipped_fields=()):
+def _analyse_keystore_and_return_data(keystore_dir, format, skipped_fields=()):
     filesystem_keystore = ReadonlyFilesystemKeystore(keystore_dir)
     metadata_enriched = filesystem_keystore.get_keystore_metadata(include_keypair_identifiers=True)
     metadata_enriched.setdefault("keystore_creation_datetime", None)  # Fixme do this at loading time and fix the Schema accordingly!
@@ -315,15 +315,13 @@ def _analyse_keystore_and_return_data_table(keystore_dir, format, skipped_fields
 
     if format == "json":
         # Even if empty, we output it
-        click.echo(_dump_as_safe_formatted_json(metadata_enriched))
-        return
+        return _dump_as_safe_formatted_json(metadata_enriched)
 
     # Change the nested list to a string for display
     metadata_enriched["keystore_creation_datetime"] = _short_format_datetime(metadata_enriched["keystore_creation_datetime"])
     metadata_enriched["keypair_identifiers"] = "\n".join("%s %s" % (x["key_algo"], x["keychain_uid"])
                                                               for x in metadata_enriched["keypair_identifiers"])
-    table = _convert_dict_to_table_of_properties(metadata_enriched, key_list=selected_field_list)
-    return table
+    return _convert_dict_to_table_of_properties(metadata_enriched, key_list=selected_field_list)
 
 
 @authenticator_group.command("view")
@@ -340,8 +338,8 @@ def view_authenticator(ctx, authenticator_dir, format):
 
     The presence and validity of private keys isn't checked.
     """
-    table = _analyse_keystore_and_return_data_table(authenticator_dir, format=format)
-    click.echo(table)
+    data = _analyse_keystore_and_return_data(authenticator_dir, format=format)
+    click.echo(data)
 
 
 @authenticator_group.command("delete")
@@ -666,8 +664,8 @@ def view_foreign_keystore(ctx, keystore_uid, format):
     if not keystore_path.is_dir():
         raise click.UsageError("Foreign keystore UID %s not found" % keystore_uid)
 
-    table = _analyse_keystore_and_return_data_table(keystore_path, format=format, skipped_fields=("keystore_passphrase_hint",))
-    click.echo(table)
+    data = _analyse_keystore_and_return_data(keystore_path, format=format, skipped_fields=("keystore_passphrase_hint",))
+    click.echo(data)
 
 
 @foreign_keystore_group.command("delete")

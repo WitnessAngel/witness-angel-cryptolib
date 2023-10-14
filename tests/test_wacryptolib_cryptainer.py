@@ -79,6 +79,14 @@ from wacryptolib.utilities import (
 )
 from wacryptolib.utilities import load_from_json_file
 
+
+def _get_enriched_cryptoconf(cryptoconf, keychain_uid):
+    cryptoconf = cryptoconf.copy()
+    if keychain_uid:
+        cryptoconf["keychain_uid"] = keychain_uid
+    return cryptoconf
+
+
 ENFORCED_UID1 = UUID("0e8e861e-f0f7-e54b-18ea-34798d5daaaa")
 ENFORCED_UID2 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeebbbb")
 ENFORCED_UID3 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeecccc")
@@ -543,7 +551,6 @@ def test_misconfigured_cryptoconfs(cryptoconf):
         encrypt_payload_into_cryptainer(
             payload=b"stuffs",
             cryptoconf=cryptoconf,
-            keychain_uid=None,
             cryptainer_metadata=None,
             keystore_pool=keystore_pool,
         )
@@ -621,6 +628,8 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
     payload = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
+    cryptoconf = _get_enriched_cryptoconf(cryptoconf, keychain_uid=keychain_uid)
+
     use_streaming_encryption = random_bool()
 
     keystore_pool = InMemoryKeystorePool()
@@ -632,7 +641,6 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
             payload=payload,
             cryptainer_filepath=cryptainer_filepath,
             cryptoconf=cryptoconf,
-            keychain_uid=keychain_uid,
             cryptainer_metadata=metadata,
             keystore_pool=keystore_pool,
         )
@@ -641,7 +649,6 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
         cryptainer = encrypt_payload_into_cryptainer(
             payload=payload,
             cryptoconf=cryptoconf,
-            keychain_uid=keychain_uid,
             cryptainer_metadata=metadata,
             keystore_pool=keystore_pool,
         )
@@ -881,6 +888,7 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
     keychain_uid = generate_uuid0()
 
     cryptoconf = dict(
+        keychain_uid=keychain_uid,
         payload_cipher_layers=[
             dict(
                 payload_cipher_algo="AES_CBC",
@@ -907,7 +915,7 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
     payload = b"sdfsfsdfsdf"
 
     cryptainer_original = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=None
+        payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=None
     )
     pprint(cryptainer_original)
 
@@ -998,12 +1006,12 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
 
     # Ecrypt payload into cryptainer
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
+    cryptoconf = _get_enriched_cryptoconf(cryptoconf, keychain_uid=keychain_uid)
     payload = b"sjzgzj"
 
     cryptainer = encrypt_payload_into_cryptainer(
         payload=payload,
         cryptoconf=cryptoconf,
-        keychain_uid=keychain_uid,
         keystore_pool=keystore_pool,
         cryptainer_metadata=None,
     )
@@ -1252,12 +1260,12 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
     # Encrypt data into cryptainer
     payload = _get_binary_or_empty_content()
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
+    cryptoconf = _get_enriched_cryptoconf(cryptoconf, keychain_uid=keychain_uid)
     metadata = random.choice([None, dict(a=[123])])
 
     cryptainer = encrypt_payload_into_cryptainer(
         payload=payload,
         cryptoconf=cryptoconf,
-        keychain_uid=keychain_uid,
         cryptainer_metadata=metadata,
         keystore_pool=keystore_pool,
     )
@@ -1437,6 +1445,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
     list_shard_trustee_id.append(trustee_info3)
 
     cryptoconf = dict(
+        keychain_uid=keychain_uid,
         payload_cipher_layers=[
             dict(
                 payload_cipher_algo="AES_CBC",
@@ -1487,7 +1496,6 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
     cryptainer = encrypt_payload_into_cryptainer(
         payload=payload,
         cryptoconf=cryptoconf,
-        keychain_uid=keychain_uid,
         keystore_pool=keystore_pool,
         cryptainer_metadata=None,
     )
@@ -1658,6 +1666,7 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
     list_shard_trustee_id.append(trustee_info)
 
     cryptoconf = dict(
+        keychain_uid=keychain_uid,
         payload_cipher_layers=[
             dict(
                 payload_cipher_algo="AES_CBC",
@@ -1682,7 +1691,6 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
     cryptainer = encrypt_payload_into_cryptainer(
         payload=payload,
         cryptoconf=cryptoconf,
-        keychain_uid=keychain_uid,
         keystore_pool=keystore_pool,
         cryptainer_metadata=None,
     )
@@ -1748,11 +1756,12 @@ def test_shamir_cryptainer_encryption_and_decryption(shamir_cryptoconf, trustee_
     payload = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
+    shamir_cryptoconf = _get_enriched_cryptoconf(shamir_cryptoconf, keychain_uid=keychain_uid)
 
     metadata = random.choice([None, dict(a=[123])])
 
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=shamir_cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=metadata
+        payload=payload, cryptoconf=shamir_cryptoconf, cryptainer_metadata=metadata
     )
 
     assert cryptainer["keychain_uid"]
@@ -1981,6 +1990,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     shard_trustee3_id = get_trustee_id(shard_trustee3)
 
     cryptoconf = dict(
+        keychain_uid=keychain_uid,
         payload_cipher_layers=[
             dict(
                 payload_cipher_algo="AES_CBC",
@@ -2025,7 +2035,6 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     cryptainer = encrypt_payload_into_cryptainer(
         payload=payload,
         cryptoconf=cryptoconf,
-        keychain_uid=keychain_uid,
         keystore_pool=keystore_pool,
         cryptainer_metadata=None,
     )
@@ -2217,7 +2226,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
 
     storage = CryptainerStorage(tmp_path, keystore_pool=keystore_pool)
     storage.enqueue_file_for_encryption(
-        "beauty.txt", payload=payload, cryptainer_metadata=None, keychain_uid=keychain_uid, cryptoconf=cryptoconf
+        "beauty.txt", payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
     )
     storage.wait_for_idle_state()
 
@@ -2839,7 +2848,7 @@ def test_get_cryptoconf_summary():
     )  # Ending by newline!
 
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=SIMPLE_CRYPTOCONF, keychain_uid=None, cryptainer_metadata=None
+        payload=payload, cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None
     )
     summary2 = get_cryptoconf_summary(cryptainer)
     assert summary2 == summary  # Identical summary for cryptoconf and generated cryptainers!
@@ -2900,7 +2909,7 @@ def test_get_cryptoconf_summary():
         CryptainerEncryptor, "_fetch_asymmetric_key_pem_from_trustee", return_value=_public_key, create=True
     ) as mock_method:
         cryptainer = encrypt_payload_into_cryptainer(
-            payload=payload, cryptoconf=CONF_WITH_TRUSTEE, keychain_uid=None, cryptainer_metadata=None
+            payload=payload, cryptoconf=CONF_WITH_TRUSTEE, cryptainer_metadata=None
         )
         summary2 = get_cryptoconf_summary(cryptainer)
         assert summary2 == summary  # Identical summary for cryptoconf and generated cryptainers!
@@ -2919,11 +2928,12 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
     payload = b"jhf" * 200
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
+    cryptoconf = _get_enriched_cryptoconf(cryptoconf, keychain_uid=keychain_uid)
 
     metadata = random.choice([None, dict(a=[123])])
 
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=cryptoconf, keychain_uid=keychain_uid, cryptainer_metadata=metadata
+        payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=metadata
     )
     cryptainer_ciphertext_struct_before_dump = cryptainer["payload_ciphertext_struct"]
     cryptainer_ciphertext_value_before_dump = cryptainer_ciphertext_struct_before_dump["ciphertext_value"]
@@ -3127,7 +3137,7 @@ def test_cryptoconf_validation_error_via_json_schema(corrupted_conf):
 )
 def test_cryptainer_validation_success(cryptoconf):
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, cryptainer_metadata=None
+        payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None
     )
     check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 
@@ -3137,7 +3147,7 @@ def test_cryptainer_validation_success(cryptoconf):
 
 def _generate_corrupted_cryptainers(cryptoconf, include_extended_checks):
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=b"stuffs", cryptoconf=cryptoconf, keychain_uid=None, cryptainer_metadata=None
+        payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None
     )
 
     # We can treat cryptainer as a cryptoconf sructure too!

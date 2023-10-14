@@ -36,12 +36,11 @@ class FakeTestCryptainerStorage(CryptainerStorage):
         return self._offload_payload_ciphertext  # Do NOT dig cryptoconf here, it might be all wrong
 
     def _encrypt_payload_and_stream_cryptainer_to_filesystem(
-        self, payload, cryptainer_filepath, cryptainer_metadata, default_keychain_uid, cryptoconf
+        self, payload, cryptainer_filepath, cryptainer_metadata, cryptoconf
     ):
         cryptainer = self._encrypt_payload_into_cryptainer(  # No streaming pipeline in this FAKE class!
             payload,
             cryptainer_metadata=cryptainer_metadata,
-            default_keychain_uid=default_keychain_uid,
             cryptoconf=cryptoconf,
         )
         dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=True)

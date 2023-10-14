@@ -7,13 +7,13 @@ Welcome to the WACryptolib documentation!
    :maxdepth: 2
 
    Presentation<readme>
-   concepts
+   cryptolib_concepts
    cryptainer_explanations
    cryptoconf_examples
    flightbox_cli_tutorial
    flightbox_cli_manual
    selected_protocols
-   api
+   crypolib_api
    development.rst
 
 

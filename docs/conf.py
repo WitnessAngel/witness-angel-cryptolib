@@ -24,7 +24,7 @@ _metadata = toml.load(str(root_dir / "pyproject.toml"))
 
 # -- Tweak environment for CLI docs generation -------------------------------
 
-authenticator_dir = pathlib.Path("~/mysphinxdocauthenticator").expanduser()
+authenticator_dir = root_dir.joinpath("docs/mysphinxdocauthenticator")
 if authenticator_dir.exists():
     shutil.rmtree(authenticator_dir)
 

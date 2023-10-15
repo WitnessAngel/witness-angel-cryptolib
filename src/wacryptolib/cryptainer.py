@@ -856,7 +856,7 @@ class OperationReport:
         """Returns True iff report contains warnings/erros"""
         return bool(self.get_error_count)
 
-    def format_entries(self):  # FIXME MAKE IT CLASSMETHOD?
+    def format_entries(self):  # FIXME improve that
         return pformat(self._entries)
 
 
@@ -993,7 +993,7 @@ class CryptainerDecryptor(CryptainerBase):
                             symkey_decryption["cryptainer_uid"] == cryptainer["cryptainer_uid"]
                             and symkey_decryption["symkey_decryption_status"] == "DECRYPTED"
                         ):
-                            symkey_decryption_accepted_for_cryptainer = dict(symkey_decryption.items())
+                            symkey_decryption_accepted_for_cryptainer = dict(symkey_decryption.items())  #FIXME use .copy()
                             symkey_decryption_accepted_for_cryptainer[
                                 "revelation_request"
                             ] = revelation_request_per_symkey
@@ -1021,7 +1021,6 @@ class CryptainerDecryptor(CryptainerBase):
         :return: deciphered plaintext and operation report
         """
         predecrypted_symkey_mapper = None
-        payload = None
         operation_report = OperationReport()
 
         if revelation_requestor_uid and gateway_urls:

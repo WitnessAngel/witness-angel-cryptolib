@@ -616,7 +616,7 @@ def test_periodic_subprocess_stream_recorder_non_killable_executable(tmp_path):
         cryptainer_names = cryptainer_storage.list_cryptainer_names()
         assert len(cryptainer_names) == 0  # Not ready yet
         subprocess.kill()
-        stdout_thread.join(timeout=15)
+        recorder.join()  # Will join all stdout/stderr threads
         assert not stdout_thread.is_alive()  # Join() was a success
         cryptainer_names = cryptainer_storage.list_cryptainer_names()
         assert len(cryptainer_names) == 1  # First record was at last finished

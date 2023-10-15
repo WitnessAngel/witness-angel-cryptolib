@@ -57,7 +57,8 @@ from wacryptolib.utilities import (
     get_utc_now_date,
     consume_bytes_as_chunks,
     SUPPORTED_HASH_ALGOS,
-    get_validation_micro_schemas, is_file_basename,
+    get_validation_micro_schemas,
+    is_file_basename,
 )
 
 logger = logging.getLogger(__name__)
@@ -380,9 +381,7 @@ class CryptainerEncryptor(CryptainerBase):
 
         return cryptainer, encryption_pipeline
 
-    def encrypt_data(
-        self, payload: Union[bytes, BinaryIO], *, cryptoconf: dict, cryptainer_metadata=None
-    ) -> dict:
+    def encrypt_data(self, payload: Union[bytes, BinaryIO], *, cryptoconf: dict, cryptainer_metadata=None) -> dict:
         """
         Shortcut when data is already available.
 
@@ -425,7 +424,6 @@ class CryptainerEncryptor(CryptainerBase):
         return payload
 
     def _encrypt_and_hash_payload(self, payload, payload_cipher_layer_extracts):
-
         assert payload_cipher_layer_extracts, payload_cipher_layer_extracts  # Else security flaw!
 
         payload_current = payload
@@ -462,9 +460,7 @@ class CryptainerEncryptor(CryptainerBase):
 
         return payload_current, payload_integrity_tags
 
-    def _generate_cryptainer_base_and_secrets(
-        self, cryptoconf: dict, cryptainer_metadata=None
-    ) -> tuple:
+    def _generate_cryptainer_base_and_secrets(self, cryptoconf: dict, cryptainer_metadata=None) -> tuple:
         """
         Build a payload-less and signature-less cryptainer, preconfigured with a set of symmetric keys
         under their final form (encrypted by trustees). A separate extract, with symmetric keys as well as algo names, is returned so that actual payload encryption and signature can be performed separately.
@@ -479,7 +475,9 @@ class CryptainerEncryptor(CryptainerBase):
         cryptainer_format = CRYPTAINER_FORMAT
         cryptainer_uid = generate_uuid0()  # ALWAYS UNIQUE!
 
-        default_keychain_uid = cryptoconf.get("keychain_uid") or generate_uuid0()  # Might be shared by lots of cryptainers
+        default_keychain_uid = (
+            cryptoconf.get("keychain_uid") or generate_uuid0()
+        )  # Might be shared by lots of cryptainers
 
         assert isinstance(cryptoconf, dict), cryptoconf
         cryptainer = copy.deepcopy(cryptoconf)  # So that we can manipulate it as new cryptainer
@@ -584,7 +582,9 @@ class CryptainerEncryptor(CryptainerBase):
 
             threshold_count = key_cipher_layer["key_shared_secret_threshold"]
             if not (0 < threshold_count <= shard_count):
-                raise SchemaValidationError("Shared secret threshold must be strictly positive and not greater than shard count, in cryptoconf")
+                raise SchemaValidationError(
+                    "Shared secret threshold must be strictly positive and not greater than shard count, in cryptoconf"
+                )
 
             shards = split_secret_into_shards(
                 secret=key_bytes, shard_count=shard_count, threshold_count=threshold_count
@@ -777,10 +777,12 @@ OPERATION_REPORT_ENTRY_SCHEMA = Schema(
             DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
             DecryptionErrorType.SIGNATURE_ERROR,
         ),
-        "entry_criticity": Or(DecryptionErrorCriticity.INFO,
-                              DecryptionErrorCriticity.ERROR,
-                              DecryptionErrorCriticity.WARNING,
-                              DecryptionErrorCriticity.CRITICAL),
+        "entry_criticity": Or(
+            DecryptionErrorCriticity.INFO,
+            DecryptionErrorCriticity.ERROR,
+            DecryptionErrorCriticity.WARNING,
+            DecryptionErrorCriticity.CRITICAL,
+        ),
         "entry_message": And(str, len),
         "entry_exception": Or(Exception, None),
         "entry_nesting": And(int, lambda x: x >= 0),
@@ -810,12 +812,13 @@ class OperationReport:
         finally:
             self._current_nesting -= 1
 
-    def add_entry(self,
-                entry_type: str,
-                entry_message: str,
-                entry_criticity=DecryptionErrorCriticity.WARNING,
-                entry_exception=None):
-
+    def add_entry(
+        self,
+        entry_type: str,
+        entry_message: str,
+        entry_criticity=DecryptionErrorCriticity.WARNING,
+        entry_exception=None,
+    ):
         # We immediately forward entry to standard logging too, but always in DEBUG level!
         if entry_exception:
             logger.debug("%s report entry: %s (%r)", entry_type, entry_message, entry_exception)
@@ -839,7 +842,7 @@ class OperationReport:
         self.add_entry(
             entry_type=DecryptionErrorType.INFORMATION,
             entry_message=entry_message,
-            entry_criticity = DecryptionErrorCriticity.INFO,
+            entry_criticity=DecryptionErrorCriticity.INFO,
         )
 
     def get_all_entries(self):
@@ -870,7 +873,9 @@ class CryptainerDecryptor(CryptainerBase):
         assert isinstance(cryptainer, dict), cryptainer
         return cryptainer["cryptainer_metadata"]
 
-    def _decrypt_with_local_private_key(self, cipherdict: dict, keychain_uid: uuid.UUID, cipher_algo: str, operation_report: OperationReport):
+    def _decrypt_with_local_private_key(
+        self, cipherdict: dict, keychain_uid: uuid.UUID, cipher_algo: str, operation_report: OperationReport
+    ):
         # TODO USE TrusteeApi() with local keystore then decrypt_with_private_key() function, instead ???
         keystore = self._keystore_pool.get_local_keyfactory()
         key_struct_bytes = None  # Returns "None" when unable to decrypt with the answer key
@@ -897,7 +902,6 @@ class CryptainerDecryptor(CryptainerBase):
                 entry_exception=exc,
             )
 
-            
             return key_struct_bytes
 
         try:
@@ -911,7 +915,6 @@ class CryptainerDecryptor(CryptainerBase):
                 entry_criticity=DecryptionErrorCriticity.ERROR,
                 entry_exception=exc,
             )
-            
 
         return key_struct_bytes
 
@@ -929,7 +932,10 @@ class CryptainerDecryptor(CryptainerBase):
             # FIXME handle errors?
             # FIXME immediately deserialize "key_struct_bytes" here and handle operation_report ? Or somewhere else ?
             key_struct_bytes = self._decrypt_with_local_private_key(
-                cipherdict=cipherdict, keychain_uid=keychain_uid, cipher_algo=cipher_algo, operation_report=operation_report
+                cipherdict=cipherdict,
+                keychain_uid=keychain_uid,
+                cipher_algo=cipher_algo,
+                operation_report=operation_report,
             )
 
             if key_struct_bytes:
@@ -937,7 +943,9 @@ class CryptainerDecryptor(CryptainerBase):
 
         return predecrypted_symkey_mapper
 
-    def _get_single_gateway_revelation_request_list(self, gateway_url: str, revelation_requestor_uid: uuid.UUID, operation_report: OperationReport):
+    def _get_single_gateway_revelation_request_list(
+        self, gateway_url: str, revelation_requestor_uid: uuid.UUID, operation_report: OperationReport
+    ):
         assert gateway_url and revelation_requestor_uid  # By construction
 
         gateway_revelation_request_list = []
@@ -955,7 +963,9 @@ class CryptainerDecryptor(CryptainerBase):
             )
         return gateway_revelation_request_list
 
-    def _get_multiple_gateway_revelation_request_list(self, gateway_urls: list, revelation_requestor_uid: uuid.UUID, operation_report: OperationReport):
+    def _get_multiple_gateway_revelation_request_list(
+        self, gateway_urls: list, revelation_requestor_uid: uuid.UUID, operation_report: OperationReport
+    ):
         assert gateway_urls and revelation_requestor_uid  # By construction
 
         multiple_gateway_revelation_request_list = []
@@ -968,7 +978,11 @@ class CryptainerDecryptor(CryptainerBase):
         return multiple_gateway_revelation_request_list
 
     def _get_successful_symkey_decryptions(
-        self, cryptainer: dict, gateway_urls: list, revelation_requestor_uid: uuid.UUID, operation_report: OperationReport
+        self,
+        cryptainer: dict,
+        gateway_urls: list,
+        revelation_requestor_uid: uuid.UUID,
+        operation_report: OperationReport,
     ) -> list:
         ACCEPTED = "ACCEPTED"
         REJECTED = "REJECTED"  # USE LATER
@@ -992,7 +1006,9 @@ class CryptainerDecryptor(CryptainerBase):
                             symkey_decryption["cryptainer_uid"] == cryptainer["cryptainer_uid"]
                             and symkey_decryption["symkey_decryption_status"] == "DECRYPTED"
                         ):
-                            symkey_decryption_accepted_for_cryptainer = dict(symkey_decryption.items())  #FIXME use .copy()
+                            symkey_decryption_accepted_for_cryptainer = dict(
+                                symkey_decryption.items()
+                            )  # FIXME use .copy()
                             symkey_decryption_accepted_for_cryptainer[
                                 "revelation_request"
                             ] = revelation_request_per_symkey
@@ -1024,16 +1040,22 @@ class CryptainerDecryptor(CryptainerBase):
 
         if revelation_requestor_uid and gateway_urls:
             successful_symkey_decryptions = self._get_successful_symkey_decryptions(
-                cryptainer=cryptainer, gateway_urls=gateway_urls, revelation_requestor_uid=revelation_requestor_uid, operation_report=operation_report
+                cryptainer=cryptainer,
+                gateway_urls=gateway_urls,
+                revelation_requestor_uid=revelation_requestor_uid,
+                operation_report=operation_report,
             )
 
             predecrypted_symkey_mapper = self._unwrap_predecrypted_symkeys(
                 successful_symkey_decryptions=successful_symkey_decryptions, operation_report=operation_report
             )
             operation_report.add_information(
-                "Performed retrieval of remotely predecrypted symkeys: %d found" % len(predecrypted_symkey_mapper))
+                "Performed retrieval of remotely predecrypted symkeys: %d found" % len(predecrypted_symkey_mapper)
+            )
         else:
-            operation_report.add_information("Skipping retrieval of remotely predecrypted symkeys (requires requestor-uid and gateway urls)")
+            operation_report.add_information(
+                "Skipping retrieval of remotely predecrypted symkeys (requires requestor-uid and gateway urls)"
+            )
 
         assert isinstance(cryptainer, dict), cryptainer
 
@@ -1053,11 +1075,13 @@ class CryptainerDecryptor(CryptainerBase):
         # Non-emptiness of this will be checked by validator
         payload_cipher_layer_count = len(cryptainer["payload_cipher_layers"])
 
-        for payload_cipher_layer_idx, payload_cipher_layer in enumerate(reversed(cryptainer["payload_cipher_layers"]), start=1):
-
+        for payload_cipher_layer_idx, payload_cipher_layer in enumerate(
+            reversed(cryptainer["payload_cipher_layers"]), start=1
+        ):
             with operation_report.operation_section(
-                    "Starting decryption of payload cipher layer %d/%d (algo: %s)" % (
-                            payload_cipher_layer_idx, payload_cipher_layer_count, payload_cipher_layer["payload_cipher_algo"])):
+                "Starting decryption of payload cipher layer %d/%d (algo: %s)"
+                % (payload_cipher_layer_idx, payload_cipher_layer_count, payload_cipher_layer["payload_cipher_algo"])
+            ):
                 payload_current = self._decrypt_single_payload_cipher_layer(
                     payload_ciphertext=payload_current,
                     payload_cipher_layer=payload_cipher_layer,
@@ -1066,40 +1090,44 @@ class CryptainerDecryptor(CryptainerBase):
                     cryptainer_metadata=cryptainer_metadata,
                     operation_report=operation_report,
                     predecrypted_symkey_mapper=predecrypted_symkey_mapper,
-                    )
+                )
                 if payload_current is None:
-                    ''' TODO PUT BACK LATER
+                    """TODO PUT BACK LATER
                     operation_report.add_entry(
                         entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
                         entry_criticity=DecryptionErrorCriticity.CRITICAL,
                         entry_message="Payload cipher layer decryption failed, aborting decryption of cryptainer",
                     )
-                    '''
+                    """
                     break
 
         return payload_current, operation_report
 
     def _decrypt_single_payload_cipher_layer(
-            self,
-            payload_ciphertext: bytes,
-            payload_cipher_layer: dict,
-            verify_integrity_tags: bool,
-            default_keychain_uid: uuid.UUID,
-            cryptainer_metadata: Optional[dict],
-            operation_report: OperationReport,
-            predecrypted_symkey_mapper: Optional[dict]) -> Optional[bytes]:
-
+        self,
+        payload_ciphertext: bytes,
+        payload_cipher_layer: dict,
+        verify_integrity_tags: bool,
+        default_keychain_uid: uuid.UUID,
+        cryptainer_metadata: Optional[dict],
+        operation_report: OperationReport,
+        predecrypted_symkey_mapper: Optional[dict],
+    ) -> Optional[bytes]:
         assert isinstance(payload_ciphertext, bytes), repr(payload_ciphertext)
         payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
 
         for signature_conf in payload_cipher_layer["payload_signatures"]:
             self._verify_payload_signature(  # Should NOT raise for now, just report errors!
-                default_keychain_uid=default_keychain_uid, payload=payload_ciphertext,
-                cryptoconf=signature_conf, operation_report=operation_report
+                default_keychain_uid=default_keychain_uid,
+                payload=payload_ciphertext,
+                cryptoconf=signature_conf,
+                operation_report=operation_report,
             )
 
         key_cipher_layers = payload_cipher_layer["key_cipher_layers"]
-        operation_report.add_information("Decrypting %s symmetric key through %d cipher layer(s)" % (payload_cipher_algo, len(key_cipher_layers)))
+        operation_report.add_information(
+            "Decrypting %s symmetric key through %d cipher layer(s)" % (payload_cipher_algo, len(key_cipher_layers))
+        )
 
         key_ciphertext = payload_cipher_layer["key_ciphertext"]  # We start fully encrypted, and unravel it
         key_bytes = self._decrypt_key_through_multiple_layers(
@@ -1221,14 +1249,18 @@ class CryptainerDecryptor(CryptainerBase):
 
             shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
 
-            with operation_report.operation_section("Deciphering %d shards of shared secret (threshold: %d)" %
-                                                    (len(shard_ciphertexts), key_shared_secret_threshold)):
-
+            with operation_report.operation_section(
+                "Deciphering %d shards of shared secret (threshold: %d)"
+                % (len(shard_ciphertexts), key_shared_secret_threshold)
+            ):
                 # If some shards are missing, we won't detect it here because zip() stops at shortest list
-                for shard_idx, (shard_ciphertext, key_shared_secret_shard_conf) in enumerate(zip(shard_ciphertexts, key_shared_secret_shards), start=1):
-
+                for shard_idx, (shard_ciphertext, key_shared_secret_shard_conf) in enumerate(
+                    zip(shard_ciphertexts, key_shared_secret_shards), start=1
+                ):
                     operation_report.add_information(
-                        "Decrypting shard #%d through %d cipher layer(s)" % (shard_idx, len(key_shared_secret_shard_conf["key_cipher_layers"])))
+                        "Decrypting shard #%d through %d cipher layer(s)"
+                        % (shard_idx, len(key_shared_secret_shard_conf["key_cipher_layers"]))
+                    )
 
                     shard_bytes = self._decrypt_key_through_multiple_layers(
                         default_keychain_uid=default_keychain_uid,
@@ -1262,7 +1294,9 @@ class CryptainerDecryptor(CryptainerBase):
                     )
 
                 else:
-                    operation_report.add_information("A sufficient number of shared-secret shards (%d) have been decrypted" % len(decrypted_shards))
+                    operation_report.add_information(
+                        "A sufficient number of shared-secret shards (%d) have been decrypted" % len(decrypted_shards)
+                    )
                     key_bytes = recombine_secret_from_shards(shards=decrypted_shards)
 
         elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
@@ -1271,7 +1305,9 @@ class CryptainerDecryptor(CryptainerBase):
             sub_symkey_ciphertext = key_cipher_layer["key_ciphertext"]
 
             operation_report.add_information(
-                "Decrypting %s symmetric key through %d cipher layer(s)" % (key_cipher_algo, len(key_cipher_layer["key_cipher_layers"])))
+                "Decrypting %s symmetric key through %d cipher layer(s)"
+                % (key_cipher_algo, len(key_cipher_layer["key_cipher_layers"]))
+            )
 
             sub_symkey_bytes = self._decrypt_key_through_multiple_layers(
                 default_keychain_uid=default_keychain_uid,
@@ -1307,24 +1343,29 @@ class CryptainerDecryptor(CryptainerBase):
             if "keystore_owner" in trustee:
                 trustee_label += " " + trustee["keystore_owner"]
 
-            with operation_report.operation_section("Attempting to decrypt key with asymmetric algorithm %s (trustee: %s)" %
-                                                    (key_cipher_algo, trustee_label)):
-
+            with operation_report.operation_section(
+                "Attempting to decrypt key with asymmetric algorithm %s (trustee: %s)"
+                % (key_cipher_algo, trustee_label)
+            ):
                 predecrypted_symmetric_key = self._get_predecrypted_symkey_or_none(
                     key_ciphertext, predecrypted_symkey_mapper=predecrypted_symkey_mapper
                 )
                 if predecrypted_symmetric_key:
-                    operation_report.add_information("Predecrypted symmetric key found (e.g. coming from remote trustee)")
+                    operation_report.add_information(
+                        "Predecrypted symmetric key found (e.g. coming from remote trustee)"
+                    )
                     key_bytes = predecrypted_symmetric_key
                 else:
-                    operation_report.add_information("No predecrypted symmetric found (e.g. coming from remote trustee)")
+                    operation_report.add_information(
+                        "No predecrypted symmetric found (e.g. coming from remote trustee)"
+                    )
                     key_bytes = self._decrypt_with_asymmetric_cipher(
                         cipher_algo=key_cipher_algo,
                         keychain_uid=keychain_uid,
                         cipherdict=key_cipherdict,
                         trustee=trustee,
                         cryptainer_metadata=cryptainer_metadata,
-                        operation_report=operation_report
+                        operation_report=operation_report,
                     )
 
         return key_bytes
@@ -1401,7 +1442,9 @@ class CryptainerDecryptor(CryptainerBase):
 
         passphrases += self._passphrase_mapper.get(None) or []  # Add COMMON passphrases
 
-        operation_report.add_information("Attempting actual decryption of key using asymmetric algorithm %s (via trustee)" % cipher_algo)
+        operation_report.add_information(
+            "Attempting actual decryption of key using asymmetric algorithm %s (via trustee)" % cipher_algo
+        )
 
         try:
             trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
@@ -1441,7 +1484,8 @@ class CryptainerDecryptor(CryptainerBase):
             except KeyLoadingError as exc:
                 operation_report.add_entry(
                     entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                    entry_message="Could not load private key %s/%s (missing passphrase?)" % (cipher_algo, keychain_uid),
+                    entry_message="Could not load private key %s/%s (missing passphrase?)"
+                    % (cipher_algo, keychain_uid),
                     entry_exception=exc,
                 )
 
@@ -1455,7 +1499,9 @@ class CryptainerDecryptor(CryptainerBase):
 
         return key_bytes
 
-    def _verify_payload_signature(self, default_keychain_uid: uuid.UUID, payload: bytes, cryptoconf: dict, operation_report: OperationReport):
+    def _verify_payload_signature(
+        self, default_keychain_uid: uuid.UUID, payload: bytes, cryptoconf: dict, operation_report: OperationReport
+    ):
         """
         Verify a signature for a specific message.
 
@@ -1519,7 +1565,7 @@ class CryptainerDecryptor(CryptainerBase):
                 entry_exception=None,
             )
             return
-            
+
         else:
             try:
                 verify_message_signature(
@@ -1892,9 +1938,7 @@ class ReadonlyCryptainerStorage:
             dt = datetime.strptime(cryptainer_name.name[:CRYPTAINER_DATETIME_LENGTH], CRYPTAINER_DATETIME_FORMAT)
             dt = dt.replace(tzinfo=timezone.utc)
         except ValueError:
-            logger.debug(
-                "Couldn't recognize timestamp in filename %s, falling back to file time", cryptainer_name.name
-            )
+            logger.debug("Couldn't recognize timestamp in filename %s, falling back to file time", cryptainer_name.name)
             mtime = (
                 self._make_absolute(cryptainer_name).stat().st_mtime
             )  # FIXME - Might fail if file got deleted concurrently
@@ -2153,9 +2197,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             keystore_pool=self._keystore_pool,
         )
 
-    def _do_encrypt_payload_and_dump_cryptainer(
-        self, filename_base, payload, cryptainer_metadata, cryptoconf
-    ) -> str:
+    def _do_encrypt_payload_and_dump_cryptainer(self, filename_base, payload, cryptainer_metadata, cryptoconf) -> str:
         # TODO later as a SKIP here!
         # if not payload:
         #    logger.warning("Skipping encryption of empty payload payload for file %s", filename_base)
@@ -2171,8 +2213,8 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
                 filename_base,
                 cryptainer_filepath,
             )
-            #import logging_tree
-            #logging_tree.printout()
+            # import logging_tree
+            # logging_tree.printout()
             self._encrypt_payload_and_stream_cryptainer_to_filesystem(
                 payload,
                 cryptainer_filepath=cryptainer_filepath,
@@ -2198,9 +2240,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         return cryptainer_filepath.name
 
     @catch_and_log_exception("CryptainerStorage._offloaded_encrypt_payload_and_dump_cryptainer")
-    def _offloaded_encrypt_payload_and_dump_cryptainer(
-        self, filename_base, payload, cryptainer_metadata, cryptoconf
-    ):
+    def _offloaded_encrypt_payload_and_dump_cryptainer(self, filename_base, payload, cryptainer_metadata, cryptoconf):
         """Task to be called by background thread, which encrypts a payload into a disk cryptainer.
 
         Returns the cryptainer basename."""
@@ -2424,12 +2464,15 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
             raise ValueError("Shared secret threshold can't be greater than number of shards")
         return True
 
-    SHARED_SECRET_CRYPTAINER_BLOCK = Schema(And(
-        {
-            "key_cipher_algo": SHARED_SECRET_ALGO_MARKER,
-            "key_shared_secret_shards": [{"key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY}],
-            "key_shared_secret_threshold": micro_schemas.schema_int,
-        }, validate_shared_secret_threshold),
+    SHARED_SECRET_CRYPTAINER_BLOCK = Schema(
+        And(
+            {
+                "key_cipher_algo": SHARED_SECRET_ALGO_MARKER,
+                "key_shared_secret_shards": [{"key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY}],
+                "key_shared_secret_threshold": micro_schemas.schema_int,
+            },
+            validate_shared_secret_threshold,
+        ),
         name="recursive_shared_secret",
         as_reference=True,
     )
@@ -2440,14 +2483,17 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
     CRYPTAINER_SCHEMA = Schema(
         {
             **extra_cryptainer,
-            "payload_cipher_layers": And([
-                {
-                    "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
-                    "payload_signatures": [payload_signature],
-                    **extra_payload_cipher_layer,
-                    "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,
-                }
-            ], len),  # Must be non-empty!
+            "payload_cipher_layers": And(
+                [
+                    {
+                        "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
+                        "payload_signatures": [payload_signature],
+                        **extra_payload_cipher_layer,
+                        "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,
+                    }
+                ],
+                len,
+            ),  # Must be non-empty!
             OptionalKey("keychain_uid"): micro_schemas.schema_uid,
         }
     )

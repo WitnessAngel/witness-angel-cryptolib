@@ -31,7 +31,6 @@ def _get_cli_runner():
 
 
 def _get_cli_base_args_for_folder_isolation(tmp_path):
-
     keystore_pool_path = tmp_path / "keystore-pool"
     keystore_pool_path.mkdir()
 
@@ -68,24 +67,41 @@ def test_cli_help_texts():
 
 
 def test_cli_authenticator_management(tmp_path):
-
     authenticator_path = tmp_path / "myauthenticator"
     authenticator_subpath = authenticator_path / "mysubauthenticator"
     passphrase = "somepassphrase"
 
     runner = _get_cli_runner()
 
-    result = runner.invoke(cli, ["authenticator", "create", str(tmp_path), "--owner", "Donald", "--passphrase-hint", "somehint"])
+    result = runner.invoke(
+        cli, ["authenticator", "create", str(tmp_path), "--owner", "Donald", "--passphrase-hint", "somehint"]
+    )
     assert result.exit_code == 2
     assert "Target directory" in result.stderr
     assert "must not exist yet" in result.stderr
 
-    result = runner.invoke(cli, ["authenticator", "create", str(authenticator_subpath), "--owner", "Donald", "--passphrase-hint", "somehint"])
+    result = runner.invoke(
+        cli,
+        ["authenticator", "create", str(authenticator_subpath), "--owner", "Donald", "--passphrase-hint", "somehint"],
+    )
     assert result.exit_code == 2
     assert "Parent directory" in result.stderr
     assert "must already exist" in result.stderr
 
-    result = runner.invoke(cli, ["authenticator", "create", str(authenticator_path), "--owner", "Donald", "--passphrase-hint", "somehint", "--keypair-count", "0"])
+    result = runner.invoke(
+        cli,
+        [
+            "authenticator",
+            "create",
+            str(authenticator_path),
+            "--owner",
+            "Donald",
+            "--passphrase-hint",
+            "somehint",
+            "--keypair-count",
+            "0",
+        ],
+    )
     assert result.exit_code == 2
     assert "At least 1 keypair must be created" in result.stderr
 
@@ -106,13 +122,26 @@ def test_cli_authenticator_management(tmp_path):
             env = None
             input = passphrase
 
-        result = runner.invoke(cli, ["authenticator", "create", str(authenticator_path), "--owner", "Donald", "--passphrase-hint", "somehint", "--keypair-count", "1"],
-                               env=env, input=input)  # Passphrase needed, else this freezes
+        result = runner.invoke(
+            cli,
+            [
+                "authenticator",
+                "create",
+                str(authenticator_path),
+                "--owner",
+                "Donald",
+                "--passphrase-hint",
+                "somehint",
+                "--keypair-count",
+                "1",
+            ],
+            env=env,
+            input=input,
+        )  # Passphrase needed, else this freezes
         assert result.exit_code == 0
         assert authenticator_path.is_dir()
 
-        result = runner.invoke(cli, ["authenticator", "validate", str(authenticator_path)],
-                               env=env, input=input)
+        result = runner.invoke(cli, ["authenticator", "validate", str(authenticator_path)], env=env, input=input)
         assert result.exit_code == 0
         assert "no integrity errors found" in result.stderr
 
@@ -144,14 +173,25 @@ def test_cli_authenticator_management(tmp_path):
 
 
 def test_cli_authenticator_validation_errors(tmp_path):
-
     authenticator_path = tmp_path / "myauthenticator"
     runner = _get_cli_runner()
     passphrase = "my pâssphraze"
 
-    result = runner.invoke(cli, ["authenticator", "create", str(authenticator_path), "--owner", "Donald",
-                                 "--passphrase-hint", "somehint", "--keypair-count", "1"],
-                           input=passphrase)  # Passphrase needed, else this freezes
+    result = runner.invoke(
+        cli,
+        [
+            "authenticator",
+            "create",
+            str(authenticator_path),
+            "--owner",
+            "Donald",
+            "--passphrase-hint",
+            "somehint",
+            "--keypair-count",
+            "1",
+        ],
+        input=passphrase,
+    )  # Passphrase needed, else this freezes
     assert result.exit_code == 0
     assert authenticator_path.is_dir()
 
@@ -186,7 +226,6 @@ def test_cli_authenticator_validation_errors(tmp_path):
 
 
 def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
-
     base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
     runner = _get_cli_runner()  # Only used for isolated dir, here...
 
@@ -196,8 +235,9 @@ def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
         # Test specific CLI constraints when using STDIN PIPE
         feeder = subprocess.Popen(oneshot_command_line, stdout=subprocess.PIPE)
         _encryption_args = ["encrypt", "-"] + (["--bundle"] if random_bool() else [])
-        consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
-                                  stdin=feeder.stdout, stderr=subprocess.PIPE)
+        consumer_process_completed = subprocess.run(
+            FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args, stdin=feeder.stdout, stderr=subprocess.PIPE
+        )
         assert consumer_process_completed.returncode == 2, consumer_process_completed.stderr
         assert b"Ouput basename must be provided when input file is STDIN" in consumer_process_completed.stderr
 
@@ -205,44 +245,69 @@ def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
             must_bundle = bool(idx)
 
             # First we test NORMAL execution of a short encryption pipeline
-    
+
             feeder = subprocess.Popen(oneshot_command_line, stdout=subprocess.PIPE)
-            _encryption_args = ["encrypt", "-", "-o", "my_piped_oneshot_cryptainer%d.crypt" % idx] + (["--bundle"] if must_bundle else [])
-            consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
-                                      stdin=feeder.stdout, stderr=subprocess.PIPE)
+            _encryption_args = ["encrypt", "-", "-o", "my_piped_oneshot_cryptainer%d.crypt" % idx] + (
+                ["--bundle"] if must_bundle else []
+            )
+            consumer_process_completed = subprocess.run(
+                FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
+                stdin=feeder.stdout,
+                stderr=subprocess.PIPE,
+            )
             assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
             assert b"successfully encrypted" in consumer_process_completed.stderr
             assert cryptainer_storage.joinpath("my_piped_oneshot_cryptainer%d.crypt" % idx).is_file()
-            assert cryptainer_storage.joinpath("my_piped_oneshot_cryptainer%d.crypt.payload" % idx).is_file() != must_bundle
-    
+            assert (
+                cryptainer_storage.joinpath("my_piped_oneshot_cryptainer%d.crypt.payload" % idx).is_file()
+                != must_bundle
+            )
+
             _decryption_args = ["cryptainer", "decrypt", "my_piped_oneshot_cryptainer%d.crypt" % idx]
-            consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _decryption_args, stderr=subprocess.PIPE)
+            consumer_process_completed = subprocess.run(
+                FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _decryption_args, stderr=subprocess.PIPE
+            )
             assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
             assert b"successfully finished" in consumer_process_completed.stderr
             result_file = pathlib.Path("./my_piped_oneshot_cryptainer%d" % idx)
             assert result_file.is_file()
             result_data = result_file.read_bytes()
-            assert result_data.strip() == b"This is some test data output and then I quit immediately!"  # Beware of newlines
+            assert (
+                result_data.strip() == b"This is some test data output and then I quit immediately!"
+            )  # Beware of newlines
 
             # Then we test ABNORMAL execution of a long, INTERRUPTED, encryption pipeline
 
-            feeder = subprocess.Popen(get_longrun_command_line("encryption_and_decryption_via_pipe"), stdout=subprocess.PIPE)
+            feeder = subprocess.Popen(
+                get_longrun_command_line("encryption_and_decryption_via_pipe"), stdout=subprocess.PIPE
+            )
 
             def _interrupt_feeder_soon():
                 time.sleep(6)  # Let it some time to launch and output things
                 feeder.kill()  # Brutal termination
+
             executor.submit(_interrupt_feeder_soon)
 
-            _encryption_args = ["encrypt", "-", "-o", "my_piped_longrun_cryptainer%d.crypt" % idx] + (["--bundle"] if must_bundle else [])
-            consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
-                                      stdin=feeder.stdout, stderr=subprocess.PIPE)
+            _encryption_args = ["encrypt", "-", "-o", "my_piped_longrun_cryptainer%d.crypt" % idx] + (
+                ["--bundle"] if must_bundle else []
+            )
+            consumer_process_completed = subprocess.run(
+                FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _encryption_args,
+                stdin=feeder.stdout,
+                stderr=subprocess.PIPE,
+            )
             assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
             assert b"successfully encrypted" in consumer_process_completed.stderr
             assert cryptainer_storage.joinpath("my_piped_longrun_cryptainer%d.crypt" % idx).is_file()
-            assert cryptainer_storage.joinpath("my_piped_longrun_cryptainer%d.crypt.payload" % idx).is_file() != must_bundle
+            assert (
+                cryptainer_storage.joinpath("my_piped_longrun_cryptainer%d.crypt.payload" % idx).is_file()
+                != must_bundle
+            )
 
             _decryption_args = ["cryptainer", "decrypt", "my_piped_longrun_cryptainer%d.crypt" % idx]
-            consumer_process_completed = subprocess.run(FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _decryption_args, stderr=subprocess.PIPE)
+            consumer_process_completed = subprocess.run(
+                FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _decryption_args, stderr=subprocess.PIPE
+            )
             print("STDERR FROM DECRYPTION:")
             print(consumer_process_completed.stderr.decode("utf8", "ignore"))
             assert consumer_process_completed.returncode == 0
@@ -252,11 +317,12 @@ def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
             result_data = result_file.read_bytes()
             result_data = result_data.splitlines()
             assert len(result_data) > 6, result_data
-            assert set(result_data) == {b"This is some test data output [encryption_and_decryption_via_pipe]!"}  # No TRUNCATED line!
+            assert set(result_data) == {
+                b"This is some test data output [encryption_and_decryption_via_pipe]!"
+            }  # No TRUNCATED line!
 
 
 def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
-
     base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
 
     runner = _get_cli_runner()
@@ -284,7 +350,9 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
         assert cryptainer_storage.joinpath("stuff.dat.crypt").is_file()
         assert cryptainer_storage.joinpath("stuff.dat.crypt.payload").is_file()  # OFFLOADED in this case
 
-        result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "folder/stuff.dat"], catch_exceptions=False)
+        result = runner.invoke(
+            cli, base_args + ["encrypt", data_file, "-o", "folder/stuff.dat"], catch_exceptions=False
+        )
         print("TEST-STDERR2:", result.stderr)
         assert result.exit_code == 2
         assert "basename must not contain path separators" in result.stderr
@@ -300,9 +368,7 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
             data_file
         ).is_file()  # This will be the default output file for decryption
 
-        result = runner.invoke(
-            cli, base_args + ["cryptainer", "decrypt", data_file + ".crypt"], catch_exceptions=False
-        )
+        result = runner.invoke(cli, base_args + ["cryptainer", "decrypt", data_file + ".crypt"], catch_exceptions=False)
         assert result.exit_code == 0
         assert os.path.exists(data_file)  # Created in CWD
         assert not cryptainer_storage.joinpath(data_file).is_file()  # Not created in CRYPTAINER STORAGE itself
@@ -447,7 +513,9 @@ def test_cli_cryptoconf_generate_simple():
         assert result.exit_code == 0, [_result.stdout, _result.stderr]
         _cryptoconf_str = _result.stdout.strip()
         _cryptoconf = load_from_json_str(_cryptoconf_str)
-        check_cryptoconf_sanity(_cryptoconf)  # This is ALREADY supposed to happen in cryptoconf generation command of CLI
+        check_cryptoconf_sanity(
+            _cryptoconf
+        )  # This is ALREADY supposed to happen in cryptoconf generation command of CLI
         return _cryptoconf
 
     # Simplest configuration
@@ -456,11 +524,22 @@ def test_cli_cryptoconf_generate_simple():
     result = runner.invoke(cli, command)
     cryptoconf = _load_and_validate_cryptoconf(result)
     assert cryptoconf == {
-        'payload_cipher_layers': [{'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP',
-                               'key_cipher_trustee': {'keystore_uid': UUID('0f2ee6c1-d91e-7593-1310-7036dc9b782e'),
-                                                      'trustee_type': 'authenticator'}}],
-        'payload_cipher_algo': 'AES_CBC',
-        'payload_signatures': []}]}
+        "payload_cipher_layers": [
+            {
+                "key_cipher_layers": [
+                    {
+                        "key_cipher_algo": "RSA_OAEP",
+                        "key_cipher_trustee": {
+                            "keystore_uid": UUID("0f2ee6c1-d91e-7593-1310-7036dc9b782e"),
+                            "trustee_type": "authenticator",
+                        },
+                    }
+                ],
+                "payload_cipher_algo": "AES_CBC",
+                "payload_signatures": [],
+            }
+        ]
+    }
 
     # Simple configuration with hybrid key encryption
     command = """cryptoconf generate-simple --keychain-uid 123e4567-e89b-12d3-a456-426614174000 
@@ -471,13 +550,26 @@ def test_cli_cryptoconf_generate_simple():
     result = runner.invoke(cli, command)
     cryptoconf = _load_and_validate_cryptoconf(result)
     assert cryptoconf == {
-        'keychain_uid': UUID("123e4567-e89b-12d3-a456-426614174000"),
-        'payload_cipher_layers': [{'key_cipher_layers': [{'key_cipher_algo': 'AES_EAX',
-                               'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP',
-                                                      'key_cipher_trustee': {'trustee_type': 'local_keyfactory'},
-                                                      'keychain_uid': UUID("6a3c8ac8-c26b-45fa-8810-6dd3157b97fa")}]}],
-        'payload_cipher_algo': 'CHACHA20_POLY1305',
-        'payload_signatures': []}]}
+        "keychain_uid": UUID("123e4567-e89b-12d3-a456-426614174000"),
+        "payload_cipher_layers": [
+            {
+                "key_cipher_layers": [
+                    {
+                        "key_cipher_algo": "AES_EAX",
+                        "key_cipher_layers": [
+                            {
+                                "key_cipher_algo": "RSA_OAEP",
+                                "key_cipher_trustee": {"trustee_type": "local_keyfactory"},
+                                "keychain_uid": UUID("6a3c8ac8-c26b-45fa-8810-6dd3157b97fa"),
+                            }
+                        ],
+                    }
+                ],
+                "payload_cipher_algo": "CHACHA20_POLY1305",
+                "payload_signatures": [],
+            }
+        ],
+    }
 
     # Medium configuration with a shared secret
     command = """cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_eax 
@@ -489,53 +581,86 @@ def test_cli_cryptoconf_generate_simple():
         add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b783b """.split()
     result = runner.invoke(cli, command)
     cryptoconf = _load_and_validate_cryptoconf(result)
-    #pprint(cryptoconf)
+    # pprint(cryptoconf)
     assert cryptoconf == {
-        'payload_cipher_layers': [{'key_cipher_layers': [{'key_cipher_algo': '[SHARED_SECRET]',
-                               'key_shared_secret_shards': [{'key_cipher_layers': [{'key_cipher_algo': 'AES_EAX',
-                                                                                    'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP',
-                                                                                                           'key_cipher_trustee': {'keystore_uid': UUID('0f2ee6c1-d91e-7593-1310-7036dc9b782e'),
-                                                                                                                                  'trustee_type': 'authenticator'}}]}]},
-                                                            {'key_cipher_layers': [{'key_cipher_algo': 'RSA_OAEP',
-                                                                                    'key_cipher_trustee': {'keystore_uid': UUID('af2ee6c1-d91e-7593-1310-7036dc9b782a'),
-                                                                                                           'trustee_type': 'authenticator'},
-                                                                                    'keychain_uid': UUID("6a3c8ac8-c26b-45fa-8810-6dd3157b97fd")}]}],
-                               'key_shared_secret_threshold': 1},
-                              {'key_cipher_algo': 'RSA_OAEP',
-                               'key_cipher_trustee': {'keystore_uid': UUID('0f2ee6c1-d91e-7593-1310-7036dc9b783b'),
-                                                      'trustee_type': 'authenticator'}}],
-        'payload_cipher_algo': 'AES_EAX',
-        'payload_signatures': []}]}
+        "payload_cipher_layers": [
+            {
+                "key_cipher_layers": [
+                    {
+                        "key_cipher_algo": "[SHARED_SECRET]",
+                        "key_shared_secret_shards": [
+                            {
+                                "key_cipher_layers": [
+                                    {
+                                        "key_cipher_algo": "AES_EAX",
+                                        "key_cipher_layers": [
+                                            {
+                                                "key_cipher_algo": "RSA_OAEP",
+                                                "key_cipher_trustee": {
+                                                    "keystore_uid": UUID("0f2ee6c1-d91e-7593-1310-7036dc9b782e"),
+                                                    "trustee_type": "authenticator",
+                                                },
+                                            }
+                                        ],
+                                    }
+                                ]
+                            },
+                            {
+                                "key_cipher_layers": [
+                                    {
+                                        "key_cipher_algo": "RSA_OAEP",
+                                        "key_cipher_trustee": {
+                                            "keystore_uid": UUID("af2ee6c1-d91e-7593-1310-7036dc9b782a"),
+                                            "trustee_type": "authenticator",
+                                        },
+                                        "keychain_uid": UUID("6a3c8ac8-c26b-45fa-8810-6dd3157b97fd"),
+                                    }
+                                ]
+                            },
+                        ],
+                        "key_shared_secret_threshold": 1,
+                    },
+                    {
+                        "key_cipher_algo": "RSA_OAEP",
+                        "key_cipher_trustee": {
+                            "keystore_uid": UUID("0f2ee6c1-d91e-7593-1310-7036dc9b783b"),
+                            "trustee_type": "authenticator",
+                        },
+                    },
+                ],
+                "payload_cipher_algo": "AES_EAX",
+                "payload_signatures": [],
+            }
+        ]
+    }
 
     # Missing payload encryption
-    result = runner.invoke(cli, "cryptoconf generate-simple".split(),)
+    result = runner.invoke(
+        cli,
+        "cryptoconf generate-simple".split(),
+    )
     assert result.exit_code == 0
     assert "Usage:" in result.stdout  # For some reason this displays help without raising an error...
 
     wrong_commands = [
         # Missing key encryption
         "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc".split(),
-
         # Missing keystore-uid fro authenticator trustee
         "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo chacha20_poly1305 "
         "add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type authenticator ".split(),
-
         # Wrong threshold too small
         "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shared-secret --threshold 0 "
         "add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory".split(),
-
         # Wrong threshold too big
         "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shared-secret --threshold 2 "
         "add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory".split(),
-
         # Wrong place for 'add-key-shard'
         "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shard "
         "--asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e  --sym-cipher-algo aes_eax".split(),
-
         # Wrong place for 'add-key-shard' again
         "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc add-key-shared-secret --threshold 1 "
         "add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type authenticator --keystore-uid 0f2ee6c1-d91e-7593-1310-7036dc9b782e add-payload-cipher-layer "
-        "--sym-cipher-algo aes_eax add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory"
+        "--sym-cipher-algo aes_eax add-key-shard --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory",
     ]
     for wrong_command in wrong_commands:
         result = runner.invoke(cli, wrong_command)
@@ -634,9 +759,7 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert result.exit_code == 0
     assert "No foreign keystores found" in result.stderr
 
-    result = runner.invoke(
-        cli, base_args + ["foreign-keystore", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID]
-    )
+    result = runner.invoke(cli, base_args + ["foreign-keystore", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID])
     assert result.exit_code == 2  # click.UsageError
     assert "No web gateway URL specified" in result.stderr
 
@@ -690,8 +813,7 @@ def test_cli_foreign_keystore_management(tmp_path):
 
     result = runner.invoke(
         cli,
-        base_args
-        + ["--gateway-url", REAL_GATEWAY_URL, "foreign-keystore", "import", "--from-gateway", wrong_uuid_str],
+        base_args + ["--gateway-url", REAL_GATEWAY_URL, "foreign-keystore", "import", "--from-gateway", wrong_uuid_str],
     )
     assert result.exit_code == 1  # Other exception raised
     assert "does not exist in database" in str(result.exc_info[1])
@@ -701,19 +823,19 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert " 0f0c0988-80c1-9362-11c1-b06909a3a53c " in result.stdout  # Table is displayed
     assert " ¤aaa " in result.stdout
 
-    result = runner.invoke(cli, base_args + ["foreign-keystore", "view", REAL_GATEWAY_KEYSTORE_UID], catch_exceptions=False)
+    result = runner.invoke(
+        cli, base_args + ["foreign-keystore", "view", REAL_GATEWAY_KEYSTORE_UID], catch_exceptions=False
+    )
     assert result.exit_code == 0
     assert " 0f0c0988-80c1-9362-11c1-b06909a3a53c " in result.stdout  # Table is displayed
     assert " ¤aaa " in result.stdout
-    assert " RSA_OAEP 0f0c0989-1111-a226-c471-99cbb2d203c3 "  in result.stdout  # Keypairs are listed
+    assert " RSA_OAEP 0f0c0989-1111-a226-c471-99cbb2d203c3 " in result.stdout  # Keypairs are listed
 
     result = runner.invoke(cli, base_args + ["foreign-keystore", "view", wrong_uuid_str])
     assert result.exit_code == 2
     assert "not found" in result.stderr
 
-    result = runner.invoke(
-        cli, base_args + ["foreign-keystore", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID]
-    )
+    result = runner.invoke(cli, base_args + ["foreign-keystore", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID])
     assert result.exit_code == 2
     assert "No web gateway URL specified" in result.stderr
 
@@ -957,4 +1079,3 @@ def test_cli_default_app_root_creation():
     assert proc.returncode == 0
 
     assert os.path.exists(os.path.expanduser("~/.witnessangel/"))  # Auto-created on launch
-

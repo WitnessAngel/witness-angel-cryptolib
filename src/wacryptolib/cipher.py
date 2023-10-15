@@ -7,7 +7,8 @@ from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionI
 from wacryptolib.keygen import (
     _check_symmetric_key_length_bytes,
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
-    _check_asymmetric_key_length_bits, SUPPORTED_ASYMMETRIC_KEY_ALGOS,
+    _check_asymmetric_key_length_bits,
+    SUPPORTED_ASYMMETRIC_KEY_ALGOS,
 )
 from wacryptolib.utilities import split_as_chunks
 

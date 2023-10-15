@@ -14,8 +14,7 @@ from click.utils import LazyFile
 from prettytable import PrettyTable
 
 from wacryptolib import operations
-from wacryptolib.cipher import SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, \
-    SUPPORTED_SYMMETRIC_CIPHER_ALGOS
+from wacryptolib.cipher import SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, SUPPORTED_SYMMETRIC_CIPHER_ALGOS
 from wacryptolib.cryptainer import (
     LOCAL_KEYFACTORY_TRUSTEE_MARKER,
     decrypt_payload_from_cryptainer,
@@ -25,7 +24,8 @@ from wacryptolib.cryptainer import (
     check_cryptoconf_sanity,
     check_cryptainer_sanity,
     get_cryptoconf_summary,
-    CryptainerStorage, CRYPTAINER_TRUSTEE_TYPES,
+    CryptainerStorage,
+    CRYPTAINER_TRUSTEE_TYPES,
 )
 from wacryptolib.exceptions import ValidationError, DecryptionError, SchemaValidationError, KeystoreMetadataDoesNotExist
 from wacryptolib.keystore import FilesystemKeystorePool, ReadonlyFilesystemKeystore
@@ -38,9 +38,9 @@ click_log.basic_config(logging.getLogger())
 
 logger = logging.getLogger(__name__)
 
-#from pprint import pprint
-#print("ENVIRONMENT")
-#pprint(dict(os.environ))
+# from pprint import pprint
+# print("ENVIRONMENT")
+# pprint(dict(os.environ))
 
 if os.getenv("_WA_RANDOMIZE_CLI_APP_DIR"):  # Only for TESTING
     _internal_app_dir_parent = tempfile.mkdtemp().replace("\\", "/")
@@ -211,10 +211,15 @@ def _retrieve_keystore_passphrase():
 @click.argument(
     "authenticator_dir",
     type=click.Path(
-        exists=False, writable=True, resolve_path=True, path_type=Path  # Beware, before python3.10 resolve_path is buggy on Windows
+        exists=False,
+        writable=True,
+        resolve_path=True,
+        path_type=Path,  # Beware, before python3.10 resolve_path is buggy on Windows
     ),
 )
-@click.option("--keypair-count", default=3, help="Count of keypairs to generate (min 1)", type=click.INT, show_default=True)
+@click.option(
+    "--keypair-count", default=3, help="Count of keypairs to generate (min 1)", type=click.INT, show_default=True
+)
 @click.option("--owner", help="Name of the authenticator owner", required=True)
 @click.option("--passphrase-hint", help="Non-sensitive hint to help remember the passphrase", required=True)
 @click.pass_context
@@ -229,23 +234,29 @@ def create_authenticator(ctx, authenticator_dir, keypair_count, owner, passphras
     No constraints are applied to the lengths of the passphrase or other fields, so beware of security considerations!
     """
 
-    _check_target_authenticator_parameters_validity(authenticator_dir, keypair_count=keypair_count, exception_cls=click.UsageError)  # Early check, to not ask for passphrase in vain
+    _check_target_authenticator_parameters_validity(
+        authenticator_dir, keypair_count=keypair_count, exception_cls=click.UsageError
+    )  # Early check, to not ask for passphrase in vain
 
     keystore_passphrase = _retrieve_keystore_passphrase()
 
-    operations.create_authenticator(authenticator_dir, keypair_count=keypair_count, keystore_owner=owner,
-                                    keystore_passphrase_hint=passphrase_hint, keystore_passphrase=keystore_passphrase)
+    operations.create_authenticator(
+        authenticator_dir,
+        keypair_count=keypair_count,
+        keystore_owner=owner,
+        keystore_passphrase_hint=passphrase_hint,
+        keystore_passphrase=keystore_passphrase,
+    )
 
-    logger.info("Authenticator successfully initialized with %d keypairs in directory %s",
-                keypair_count, authenticator_dir)
+    logger.info(
+        "Authenticator successfully initialized with %d keypairs in directory %s", keypair_count, authenticator_dir
+    )
 
 
 @authenticator_group.command("validate")
 @click.argument(
     "authenticator_dir",
-    type=click.Path(
-        exists=True, dir_okay=True, file_okay=False, readable=True, resolve_path=True, path_type=Path
-    ),
+    type=click.Path(exists=True, dir_okay=True, file_okay=False, readable=True, resolve_path=True, path_type=Path),
 )
 @click.pass_context
 def validate_authenticator(ctx, authenticator_dir):
@@ -274,8 +285,10 @@ def validate_authenticator(ctx, authenticator_dir):
         def _format_keypair_ids_list(keypair_ids_list):
             return ", ".join("-".join(str(y) for y in x) for x in keypair_ids_list)
 
-        click.echo("Authenticator has UID %s and belongs to owner %s" %
-                   (authenticator_metadata["keystore_uid"], authenticator_metadata["keystore_owner"]))
+        click.echo(
+            "Authenticator has UID %s and belongs to owner %s"
+            % (authenticator_metadata["keystore_uid"], authenticator_metadata["keystore_owner"])
+        )
 
         keystore_creation_datetime = authenticator_metadata.get("keystore_creation_datetime")
         if keystore_creation_datetime:
@@ -305,10 +318,18 @@ def validate_authenticator(ctx, authenticator_dir):
 def _analyse_keystore_and_return_data(keystore_dir, format, skipped_fields=()):
     filesystem_keystore = ReadonlyFilesystemKeystore(keystore_dir)
     metadata_enriched = filesystem_keystore.get_keystore_metadata(include_keypair_identifiers=True)
-    metadata_enriched.setdefault("keystore_creation_datetime", None)  # Fixme do this at loading time and fix the Schema accordingly!
+    metadata_enriched.setdefault(
+        "keystore_creation_datetime", None
+    )  # Fixme do this at loading time and fix the Schema accordingly!
 
     # Restrict data to mask authenticator format, secret, etc.
-    selected_field_list = ["keystore_uid", "keystore_owner", "keystore_passphrase_hint", "keystore_creation_datetime", "keypair_identifiers"]
+    selected_field_list = [
+        "keystore_uid",
+        "keystore_owner",
+        "keystore_passphrase_hint",
+        "keystore_creation_datetime",
+        "keypair_identifiers",
+    ]
     selected_field_list = [k for k in selected_field_list if k not in skipped_fields]
     metadata_enriched = {k: metadata_enriched[k] for k in selected_field_list}
 
@@ -317,18 +338,19 @@ def _analyse_keystore_and_return_data(keystore_dir, format, skipped_fields=()):
         return _dump_as_safe_formatted_json(metadata_enriched)
 
     # Change the nested list to a string for display
-    metadata_enriched["keystore_creation_datetime"] = _short_format_datetime(metadata_enriched["keystore_creation_datetime"])
-    metadata_enriched["keypair_identifiers"] = "\n".join("%s %s" % (x["key_algo"], x["keychain_uid"])
-                                                              for x in metadata_enriched["keypair_identifiers"])
+    metadata_enriched["keystore_creation_datetime"] = _short_format_datetime(
+        metadata_enriched["keystore_creation_datetime"]
+    )
+    metadata_enriched["keypair_identifiers"] = "\n".join(
+        "%s %s" % (x["key_algo"], x["keychain_uid"]) for x in metadata_enriched["keypair_identifiers"]
+    )
     return _convert_dict_to_table_of_properties(metadata_enriched, key_list=selected_field_list)
 
 
 @authenticator_group.command("view")
 @click.argument(
     "authenticator_dir",
-    type=click.Path(
-        exists=True, dir_okay=True, file_okay=False, readable=True, resolve_path=True, path_type=Path
-    ),
+    type=click.Path(exists=True, dir_okay=True, file_okay=False, readable=True, resolve_path=True, path_type=Path),
 )
 @FORMAT_OPTION
 @click.pass_context
@@ -367,9 +389,7 @@ def delete_authenticator(ctx, authenticator_dir):
         exists=True, file_okay=True, dir_okay=True, readable=False, resolve_path=True, allow_dash=True, path_type=Path
     ),
 )
-@click.option(
-    "-o", "--output-basename", help="Basename of the cryptainer storage output file"
-)
+@click.option("-o", "--output-basename", help="Basename of the cryptainer storage output file")
 @click.option("-c", "--cryptoconf", default=None, help="Json crypotoconf file", type=click.File("rb"))
 @click.option("--bundle", help="Combine cryptainer metadata and payload", is_flag=True)
 @click.pass_context
@@ -406,17 +426,16 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
     )
 
     with click.open_file(input_file, mode="rb") as payload_handle:  # Also handles "-" for STDIN
-
         output_cryptainer_name = cryptainer_storage.encrypt_file(
             filename_base=output_basename, payload=payload_handle, cryptainer_metadata=None, cryptoconf=cryptoconf
         )
         assert not payload_handle.closed, payload_handle  # We do not automatically alter the file handle
 
-    #Redundant:
-    #logger.info(
+    # Redundant:
+    # logger.info(
     #    "Encryption of file '%s' to storage cryptainer '%s' successfully finished"
     #    % (input_file.name, output_cryptainer_name)
-    #)
+    # )
 
 
 @wacryptolib_cli.group("cryptoconf")
@@ -432,10 +451,7 @@ def generate_simple_cryptoconf(ctx, keychain_uid):
     """
     Generate a simple cryptoconf using subcommands
     """
-    cryptoconf = {
-        "payload_cipher_layers": [
-        ]
-    }
+    cryptoconf = {"payload_cipher_layers": []}
     if keychain_uid:
         cryptoconf["keychain_uid"] = keychain_uid
     ctx.obj["cryptoconf"] = cryptoconf
@@ -450,8 +466,13 @@ def display_cryptoconf(ctx, processors, keychain_uid):
     click.echo(_dump_as_safe_formatted_json(cryptoconf))
 
 
-@generate_simple_cryptoconf.command('add-payload-cipher-layer')
-@click.option("--sym-cipher-algo", help="Symmetric algorithms for payload encryption", required=True, type=click.Choice(SUPPORTED_SYMMETRIC_CIPHER_ALGOS, case_sensitive=False))  # MAKE IT A CHOICEFIELD!!!
+@generate_simple_cryptoconf.command("add-payload-cipher-layer")
+@click.option(
+    "--sym-cipher-algo",
+    help="Symmetric algorithms for payload encryption",
+    required=True,
+    type=click.Choice(SUPPORTED_SYMMETRIC_CIPHER_ALGOS, case_sensitive=False),
+)  # MAKE IT A CHOICEFIELD!!!
 @click.pass_context
 def cryptoconf_add_payload_cipher_layer(ctx, sym_cipher_algo):
     """
@@ -459,38 +480,47 @@ def cryptoconf_add_payload_cipher_layer(ctx, sym_cipher_algo):
 
     The random symmetric key used for that encryption will then have to be protected by asymmetric encryption.
     """
-    payload_cipher_layer = {
-        "payload_cipher_algo": sym_cipher_algo,
-        "key_cipher_layers": [],
-        "payload_signatures": []
-    }
+    payload_cipher_layer = {"payload_cipher_algo": sym_cipher_algo, "key_cipher_layers": [], "payload_signatures": []}
     ctx.obj["cryptoconf"]["payload_cipher_layers"].append(payload_cipher_layer)
     ctx.obj["current_add_key_shared_secret"] = None  # RESET
 
 
 def _key_cipher_options(cmd):
-    @click.option("--asym-cipher-algo", help="Asymmetric algorithms for key encryption", required=True,
-                  type=click.Choice(SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, case_sensitive=False))
-    @click.option("--trustee-type", help="Kind of key-guardian used", required=True,
-                  type=click.Choice([CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE,
-                                     CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE], case_sensitive=False))
-    @click.option("--keystore-uid", help="UID of the key-guardian (only for authenticators)", required=False,
-                  type=click.UUID)
+    @click.option(
+        "--asym-cipher-algo",
+        help="Asymmetric algorithms for key encryption",
+        required=True,
+        type=click.Choice(SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, case_sensitive=False),
+    )
+    @click.option(
+        "--trustee-type",
+        help="Kind of key-guardian used",
+        required=True,
+        type=click.Choice(
+            [CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE, CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE],
+            case_sensitive=False,
+        ),
+    )
+    @click.option(
+        "--keystore-uid", help="UID of the key-guardian (only for authenticators)", required=False, type=click.UUID
+    )
     @click.option("--keychain-uid", help="Overridden UID for asymmetric key", required=False, type=click.UUID)
-    @click.option("--sym-cipher-algo", help="Optional intermediate symmetric cipher, to avoid stacking trustees",
-                  required=False,
-                  type=click.Choice(SUPPORTED_SYMMETRIC_CIPHER_ALGOS, case_sensitive=False))
+    @click.option(
+        "--sym-cipher-algo",
+        help="Optional intermediate symmetric cipher, to avoid stacking trustees",
+        required=False,
+        type=click.Choice(SUPPORTED_SYMMETRIC_CIPHER_ALGOS, case_sensitive=False),
+    )
     @click.pass_context
     @functools.wraps(cmd)
     def wrapper_common_options(*args, **kwargs):
         return cmd(*args, **kwargs)
+
     return wrapper_common_options
 
 
 def _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo, keychain_uid=None):
-    key_cipher_trustee = {
-        "trustee_type": trustee_type
-    }
+    key_cipher_trustee = {"trustee_type": trustee_type}
 
     if trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
         if not keystore_uid:
@@ -505,14 +535,11 @@ def _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_ci
         key_cipher_layer["keychain_uid"] = keychain_uid  # Local override
 
     if sym_cipher_algo:  # Hybrid encryption
-        key_cipher_layer = {
-            "key_cipher_algo": sym_cipher_algo,
-            "key_cipher_layers": [key_cipher_layer]
-        }
+        key_cipher_layer = {"key_cipher_algo": sym_cipher_algo, "key_cipher_layers": [key_cipher_layer]}
     return key_cipher_layer
 
 
-@generate_simple_cryptoconf.command('add-key-cipher-layer')
+@generate_simple_cryptoconf.command("add-key-cipher-layer")
 @_key_cipher_options
 def cryptoconf_add_key_cipher_layer(ctx, asym_cipher_algo, trustee_type, keystore_uid, keychain_uid, sym_cipher_algo):
     """
@@ -522,15 +549,18 @@ def cryptoconf_add_key_cipher_layer(ctx, asym_cipher_algo, trustee_type, keystor
     """
     payload_cipher_layer = ctx.obj["cryptoconf"]["payload_cipher_layers"][-1]
 
-    key_cipher_layer = _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo, keychain_uid=keychain_uid)
+    key_cipher_layer = _build_key_cipher_layer(
+        asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo, keychain_uid=keychain_uid
+    )
 
     payload_cipher_layer["key_cipher_layers"].append(key_cipher_layer)
     ctx.obj["current_add_key_shared_secret"] = None  # RESET
 
 
-
-@generate_simple_cryptoconf.command('add-key-shared-secret')
-@click.option("--threshold", help="Number of key-guardians required for decryption of the secret", required=True, type=click.INT)
+@generate_simple_cryptoconf.command("add-key-shared-secret")
+@click.option(
+    "--threshold", help="Number of key-guardians required for decryption of the secret", required=True, type=click.INT
+)
 @click.pass_context
 def cryptoconf_add_key_shared_secret(ctx, threshold):
     """
@@ -545,15 +575,16 @@ def cryptoconf_add_key_shared_secret(ctx, threshold):
         "key_cipher_algo": SHARED_SECRET_ALGO_MARKER,
         "key_shared_secret_threshold": threshold,
         "key_shared_secret_shards": [],  # Will be filled by "add-key-shard" subcommands
-
     }
     payload_cipher_layer["key_cipher_layers"].append(shared_secret)
     ctx.obj["current_add_key_shared_secret"] = shared_secret
 
 
-@generate_simple_cryptoconf.command('add-key-shard')
+@generate_simple_cryptoconf.command("add-key-shard")
 @_key_cipher_options
-def cryptoconf_add_key_shared_secret_shard(ctx, asym_cipher_algo, trustee_type, keystore_uid, keychain_uid, sym_cipher_algo):
+def cryptoconf_add_key_shared_secret_shard(
+    ctx, asym_cipher_algo, trustee_type, keystore_uid, keychain_uid, sym_cipher_algo
+):
     """
     Add a shard configuration to a shared secret
     """
@@ -562,7 +593,9 @@ def cryptoconf_add_key_shared_secret_shard(ctx, asym_cipher_algo, trustee_type, 
     if shared_secret is None:
         raise click.UsageError("Command add-key-shard can only be used after add-key-shared-secret")
 
-    key_cipher_layer = _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo, keychain_uid=keychain_uid)
+    key_cipher_layer = _build_key_cipher_layer(
+        asym_cipher_algo, trustee_type, keystore_uid, sym_cipher_algo, keychain_uid=keychain_uid
+    )
 
     shared_secret["key_shared_secret_shards"].append(
         dict(key_cipher_layers=[key_cipher_layer])  # SINGLE layer for shards, for now
@@ -807,7 +840,7 @@ def summarize_cryptainer(ctx, cryptainer_name):
     cryptainer_storage = _get_cryptainer_storage(ctx)
     cryptainer = cryptainer_storage.load_cryptainer_from_storage(cryptainer_name, include_payload_ciphertext=True)
     text_summary = get_cryptoconf_summary(cryptainer)  # Works with cryptainers too
-    click.echo("\n" +text_summary, nl=False)
+    click.echo("\n" + text_summary, nl=False)
 
 
 @cryptainer_group.command("delete")

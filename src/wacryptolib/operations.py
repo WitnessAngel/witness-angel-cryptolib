@@ -13,15 +13,20 @@ from wacryptolib.cryptainer import (
 from wacryptolib.exceptions import ValidationError, KeyLoadingError
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring
-from wacryptolib.keystore import KeystorePoolBase, ReadonlyFilesystemKeystore, KEYSTORE_FORMAT, validate_keystore_tree, \
-    FilesystemKeystore, load_keystore_metadata
+from wacryptolib.keystore import (
+    KeystorePoolBase,
+    ReadonlyFilesystemKeystore,
+    KEYSTORE_FORMAT,
+    validate_keystore_tree,
+    FilesystemKeystore,
+    load_keystore_metadata,
+)
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, generate_uuid0
 
 logger = logging.getLogger(__name__)
 
 
 def _check_target_authenticator_parameters_validity(authenticator_dir, keypair_count, exception_cls=ValidationError):
-
     if authenticator_dir.is_dir():
         raise exception_cls("Target directory %s must not exist yet" % authenticator_dir)
 
@@ -33,8 +38,13 @@ def _check_target_authenticator_parameters_validity(authenticator_dir, keypair_c
         raise exception_cls("At least 1 keypair must be created")
 
 
-def create_authenticator(authenticator_dir: Path, keypair_count: int, keystore_owner: str, keystore_passphrase_hint: str, keystore_passphrase: str):
-
+def create_authenticator(
+    authenticator_dir: Path,
+    keypair_count: int,
+    keystore_owner: str,
+    keystore_passphrase_hint: str,
+    keystore_passphrase: str,
+):
     _check_target_authenticator_parameters_validity(authenticator_dir, keypair_count=keypair_count)
     assert keypair_count >= 1, keypair_count
 
@@ -56,7 +66,6 @@ def create_authenticator(authenticator_dir: Path, keypair_count: int, keystore_o
 
     try:
         for i in range(1, keypair_count + 1):
-
             logger.debug("Generating %s keypair %d into directory %s", (key_algo, i, authenticator_dir))
             new_key_pair = generate_keypair(key_algo=key_algo, passphrase=keystore_passphrase)
             new_keychain_uid = generate_uuid0()
@@ -69,13 +78,14 @@ def create_authenticator(authenticator_dir: Path, keypair_count: int, keystore_o
                 private_key=new_key_pair["private_key"],
             )
     except Exception as exc:
-        logger.warning("Exception encountered while creating authenticator keypairs, deleting authenticator %s", authenticator_dir)
+        logger.warning(
+            "Exception encountered while creating authenticator keypairs, deleting authenticator %s", authenticator_dir
+        )
         delete_authenticator(authenticator_dir)  # Shouldn't raise, since we just initialized authenticator above
         raise
 
 
 def check_authenticator(authenticator_dir: Path, keystore_passphrase: str):  # FIXME rename to validate_xx
-
     authenticator_metadata = load_keystore_metadata(authenticator_dir)  # Might raise SchemaValidationError
 
     filesystem_keystore = ReadonlyFilesystemKeystore(authenticator_dir)

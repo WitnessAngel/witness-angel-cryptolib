@@ -542,7 +542,12 @@ def test_get_trustee_id():
 
 
 @pytest.mark.parametrize(
-    "cryptoconf", [VOID_CRYPTOCONF_REGARDING_PAYLOAD_CIPHER_LAYERS, VOID_CRYPTOCONF_REGARDING_KEY_CIPHER_LAYERS, MISCONFIGURED_SHAMIR_CRYPTOCONF]
+    "cryptoconf",
+    [
+        VOID_CRYPTOCONF_REGARDING_PAYLOAD_CIPHER_LAYERS,
+        VOID_CRYPTOCONF_REGARDING_KEY_CIPHER_LAYERS,
+        MISCONFIGURED_SHAMIR_CRYPTOCONF,
+    ],
 )
 def test_misconfigured_cryptoconfs(cryptoconf):
     keystore_pool = InMemoryKeystorePool()
@@ -858,7 +863,7 @@ def _create_response_keyair_in_local_keyfactory_and_build_fake_revelation_reques
 
 
 def _check_operation_report_entry(
-        operation_report, entry_type, entry_criticity, entry_msg_match, exception_class=None, occurrence_count=1
+    operation_report, entry_type, entry_criticity, entry_msg_match, exception_class=None, occurrence_count=1
 ):
     real_occurrence_count = 0
 
@@ -906,7 +911,7 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
                 ],
                 payload_signatures=[],
             )
-        ]
+        ],
     )
 
     check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
@@ -1487,7 +1492,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
                     )
                 ],
             )
-        ]
+        ],
     )
     check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
 
@@ -1593,7 +1598,9 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
             revelation_requestor_uid=revelation_requestor_uid,
         )
         assert result_payload == payload
-        assert not operation_report.get_error_entries()  # Trustee 1, 3 decrypted from server, trustee2 and localkey have passphrases
+        assert (
+            not operation_report.get_error_entries()
+        )  # Trustee 1, 3 decrypted from server, trustee2 and localkey have passphrases
 
     # Remote revelation request with two trustee (1,3) and without any passphrase(decrypted_shards below threshold)
     with _patched_gateway_revelation_request_list(
@@ -1683,7 +1690,7 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
                     )
                 ],
             )
-        ]
+        ],
     )
 
     payload = b"azertyuiop"
@@ -2027,7 +2034,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                     )
                 ],
             )
-        ]
+        ],
     )
 
     payload = b"sjzgzj"
@@ -2225,9 +2232,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
     # Proper forwarding of parameters in cryptainer storage class
 
     storage = CryptainerStorage(tmp_path, keystore_pool=keystore_pool)
-    storage.enqueue_file_for_encryption(
-        "beauty.txt", payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf
-    )
+    storage.enqueue_file_for_encryption("beauty.txt", payload=payload, cryptainer_metadata=None, cryptoconf=cryptoconf)
     storage.wait_for_idle_state()
 
     StorageClass = _get_random_cryptainer_storage_class()  # Test READONLY mode too!
@@ -2932,9 +2937,7 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
 
     metadata = random.choice([None, dict(a=[123])])
 
-    cryptainer = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=metadata
-    )
+    cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=metadata)
     cryptainer_ciphertext_struct_before_dump = cryptainer["payload_ciphertext_struct"]
     cryptainer_ciphertext_value_before_dump = cryptainer_ciphertext_struct_before_dump["ciphertext_value"]
 
@@ -3083,7 +3086,6 @@ def _generate_corrupted_cryptoconfs(cryptoconf, is_complex_conf, include_extende
     corrupted_confs.append(corrupted_conf4)
 
     if include_extended_checks:
-
         # Empty the ciphers of payload
         corrupted_conf5 = copy.deepcopy(cryptoconf)
         del corrupted_conf5["payload_cipher_layers"][:]
@@ -3095,15 +3097,18 @@ def _generate_corrupted_cryptoconfs(cryptoconf, is_complex_conf, include_extende
         corrupted_confs.append(corrupted_conf6)
 
         if is_complex_conf:
-
             # Empty the ciphers of shared secret key
             corrupted_conf6_bis = copy.deepcopy(cryptoconf)
-            del corrupted_conf6_bis["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_shards"][0]["key_cipher_layers"]
+            del corrupted_conf6_bis["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_shards"][0][
+                "key_cipher_layers"
+            ]
             corrupted_confs.append(corrupted_conf6_bis)
 
             # Empty the ciphers of first key
             corrupted_conf6_ter = copy.deepcopy(cryptoconf)
-            del corrupted_conf6_ter["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_shards"][1]["key_cipher_layers"][0]["key_cipher_layers"]
+            del corrupted_conf6_ter["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_shards"][1][
+                "key_cipher_layers"
+            ][0]["key_cipher_layers"]
             corrupted_confs.append(corrupted_conf6_ter)
 
             # Corrupt the threshold of shared secret
@@ -3116,7 +3121,10 @@ def _generate_corrupted_cryptoconfs(cryptoconf, is_complex_conf, include_extende
     return corrupted_confs
 
 
-@pytest.mark.parametrize("corrupted_conf", _generate_corrupted_cryptoconfs(COMPLEX_SHAMIR_CRYPTOCONF, is_complex_conf=True, include_extended_checks=True))
+@pytest.mark.parametrize(
+    "corrupted_conf",
+    _generate_corrupted_cryptoconfs(COMPLEX_SHAMIR_CRYPTOCONF, is_complex_conf=True, include_extended_checks=True),
+)
 def test_cryptoconf_validation_error_via_python_schema(corrupted_conf):
     print("corrupted_conf>>>>>>>>>:")
     pprint(corrupted_conf)
@@ -3124,8 +3132,10 @@ def test_cryptoconf_validation_error_via_python_schema(corrupted_conf):
         check_cryptoconf_sanity(cryptoconf=corrupted_conf, jsonschema_mode=False)
 
 
-@pytest.mark.parametrize("corrupted_conf",
-                         _generate_corrupted_cryptoconfs(COMPLEX_SHAMIR_CRYPTOCONF, is_complex_conf=True, include_extended_checks=False))
+@pytest.mark.parametrize(
+    "corrupted_conf",
+    _generate_corrupted_cryptoconfs(COMPLEX_SHAMIR_CRYPTOCONF, is_complex_conf=True, include_extended_checks=False),
+)
 def test_cryptoconf_validation_error_via_json_schema(corrupted_conf):
     with pytest.raises(ValidationError):
         corrupted_conf_json = convert_native_tree_to_extended_json_tree(corrupted_conf)
@@ -3136,9 +3146,7 @@ def test_cryptoconf_validation_error_via_json_schema(corrupted_conf):
     "cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF]
 )
 def test_cryptainer_validation_success(cryptoconf):
-    cryptainer = encrypt_payload_into_cryptainer(
-        payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None
-    )
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None)
     check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 
     cryptainer_json = convert_native_tree_to_extended_json_tree(cryptainer)
@@ -3146,12 +3154,12 @@ def test_cryptainer_validation_success(cryptoconf):
 
 
 def _generate_corrupted_cryptainers(cryptoconf, include_extended_checks):
-    cryptainer = encrypt_payload_into_cryptainer(
-        payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None
-    )
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None)
 
     # We can treat cryptainer as a cryptoconf sructure too!
-    corrupted_cryptainers = _generate_corrupted_cryptoconfs(cryptainer, is_complex_conf=False, include_extended_checks=include_extended_checks)
+    corrupted_cryptainers = _generate_corrupted_cryptoconfs(
+        cryptainer, is_complex_conf=False, include_extended_checks=include_extended_checks
+    )
 
     corrupted_cryptainer1 = copy.deepcopy(cryptainer)
     corrupted_cryptainer1["payload_cipher_layers"][0]["keychain_uid"] = ENFORCED_UID1
@@ -3183,5 +3191,3 @@ def test_cryptainer_validation_error_via_json_schema():
         with pytest.raises(ValidationError):
             corrupted_cryptainer_json = convert_native_tree_to_extended_json_tree(corrupted_cryptainer)
             check_cryptainer_sanity(cryptainer=corrupted_cryptainer_json, jsonschema_mode=True)
-
-

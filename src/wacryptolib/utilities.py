@@ -115,9 +115,9 @@ def consume_bytes_as_chunks(
 ):  # FIXME RENAME (consume_io_bytes..), DOCUMENT AND TEST ME
     if hasattr(data, "read"):  # File-like BinaryIO object
         while True:
-            #print("READING", chunk_size, "bytes of data")
+            # print("READING", chunk_size, "bytes of data")
             chunk = data.read(chunk_size)
-            #print("READ", str(chunk))
+            # print("READ", str(chunk))
             if not chunk:
                 break
             yield chunk

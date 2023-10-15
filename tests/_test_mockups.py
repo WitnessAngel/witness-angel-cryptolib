@@ -14,7 +14,8 @@ def get_longrun_command_line(marker):
         "-u",  # UNBUFFERED OUTPUT STREAMS
         "-c",
         # We use "or" to chain the two print() expressions, it's not a bug!
-        "import time, sys ;\nfor i in range(600): print('This is some test data output [%s]!') or print('Some stderr logging here [%s]!', file=sys.stderr) or time.sleep(0.33)" % (marker, marker),
+        "import time, sys ;\nfor i in range(600): print('This is some test data output [%s]!') or print('Some stderr logging here [%s]!', file=sys.stderr) or time.sleep(0.33)"
+        % (marker, marker),
     ]
     return longrun_command_line
 

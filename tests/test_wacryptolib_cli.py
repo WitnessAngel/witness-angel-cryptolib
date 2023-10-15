@@ -6,7 +6,6 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
-from pprint import pprint
 from uuid import UUID
 
 from click.testing import CliRunner

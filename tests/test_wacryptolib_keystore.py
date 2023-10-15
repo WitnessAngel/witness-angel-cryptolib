@@ -1,12 +1,12 @@
 import random
 import secrets
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import ANY
 from uuid import UUID
 
 import pytest
-import time
 
 from _test_mockups import get_fake_authdevice, random_bool
 from wacryptolib.authenticator import initialize_authenticator

@@ -1,8 +1,8 @@
 import functools
+import logging
 from unittest.mock import patch
 
 import pytest
-import logging
 
 logging.getLogger().setLevel(logging.DEBUG)
 

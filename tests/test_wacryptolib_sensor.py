@@ -1,11 +1,10 @@
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from datetime import timedelta
 
 import pytest
-import sys
-import time
 from freezegun import freeze_time
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool, oneshot_command_line, \

@@ -6,7 +6,6 @@ import sys
 import tempfile
 from datetime import timedelta
 from pathlib import Path
-from pprint import pformat
 
 import click  # See https://click.palletsprojects.com/en/7.x/
 import click_log
@@ -15,7 +14,7 @@ from click.utils import LazyFile
 from prettytable import PrettyTable
 
 from wacryptolib import operations
-from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, \
+from wacryptolib.cipher import SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, \
     SUPPORTED_SYMMETRIC_CIPHER_ALGOS
 from wacryptolib.cryptainer import (
     LOCAL_KEYFACTORY_TRUSTEE_MARKER,

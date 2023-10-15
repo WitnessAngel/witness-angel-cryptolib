@@ -4,6 +4,7 @@ import os
 import random
 import re
 import threading
+import time
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
@@ -13,7 +14,6 @@ from pathlib import Path
 from typing import AnyStr, Optional
 from uuid import UUID
 
-import time
 from schema import Or, And, Optional as OptionalKey, Schema
 
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS

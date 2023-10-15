@@ -1,7 +1,6 @@
 import os
 import uuid
 from datetime import datetime, timezone, timedelta
-from io import BytesIO
 from threading import Lock
 
 import pytest

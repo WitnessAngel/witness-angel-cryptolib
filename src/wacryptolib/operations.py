@@ -10,12 +10,11 @@ from wacryptolib.cryptainer import (
     check_cryptainer_sanity,
     decrypt_payload_from_cryptainer,
 )
-from wacryptolib.exceptions import ValidationError, ExistenceError, KeystoreAlreadyExists, KeyLoadingError, \
-    SchemaValidationError
+from wacryptolib.exceptions import ValidationError, KeyLoadingError
 from wacryptolib.jsonrpc_client import JsonRpcProxy
 from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import KeystorePoolBase, ReadonlyFilesystemKeystore, KEYSTORE_FORMAT, validate_keystore_tree, \
-    FilesystemKeystore, load_keystore_metadata, _get_keystore_metadata_file_path
+    FilesystemKeystore, load_keystore_metadata
 from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, generate_uuid0
 
 logger = logging.getLogger(__name__)

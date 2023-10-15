@@ -12,7 +12,6 @@ from typing import Optional, Union, Sequence, BinaryIO
 from urllib.parse import urlparse
 
 import jsonschema
-import math
 import schema as pythonschema
 from bson import json_util
 from jsonrpc_requests import JSONRPCError

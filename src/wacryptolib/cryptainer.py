@@ -2511,7 +2511,7 @@ CRYPTAINER_SCHEMA_JSON = _create_cryptainer_and_cryptoconf_schema(
 ).json_schema("cryptainer_schema.json")
 
 
-def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):
+def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):  # Fixme why call it "valid_schema"?
     """Allows the validation of a data_tree with a pythonschema or jsonschema
 
     :param data_tree: cryptainer or cryptoconf to validate

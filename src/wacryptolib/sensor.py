@@ -339,8 +339,13 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
 
     def _do_restart_recording(self):
         """Default implementation does a stop and then start, some sensors have better ways"""
-        payload = self._do_stop_recording()  # Renames target files
-        self._do_start_recording()  # Must be restarded immediately
+        try:
+            payload = self._do_stop_recording()  # Renames target files
+        except Exception as es:
+            logger.critical("Unrecoverable error when stopping sensor %s for restart - aborting sensor operation" % self.sensor_name)
+            super().stop()  # Stops state and multitimer thread (we don't want to overflow the device with e.g. processes)
+            raise  # Will propagate up to catch_and_log_exception()
+        self._do_start_recording()  # Recording must be restarted immediately
         return payload
 
     @synchronized
@@ -465,6 +470,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
             for line in fh:
                 line_str = line.decode("ascii", "ignore")
                 logger.info("Subprocess stderr: %s" % line_str.rstrip("\n"))
+                ##print(">>>>>>>>>>>>>_sytderr_reader_thread output done")
             fh.close()
 
         self._stderr_thread = threading.Thread(target=_sytderr_reader_thread, args=(self._subprocess.stderr,))
@@ -472,6 +478,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         self._previous_stdio_threads.append(self._stderr_thread)
 
     def _do_start_recording(self):
+        ##print(">>>>>>>>>> DO START RECORDING CALLED")
         command_line = self._build_subprocess_command_line()
         cryptainer_encryption_stream = self._build_cryptainer_encryption_stream()
         self._launch_and_consume_subprocess(
@@ -504,10 +511,10 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
                 )
                 return  # Stream must have crashed
             try:
-                logger.info("Attempting normal termination of %s subprocess", self.sensor_name)
+                logger.warning("Attempting normal termination of %s subprocess", self.sensor_name)
                 self._quit_subprocess(self._subprocess)
-                self._subprocess.wait(timeout=10)  # Doesn't raise on timeout!
-                # Note : stdout reader thread might still be running to complete data encryption and cryptainer finalization!
+                self._subprocess.wait(timeout=10)  # Will raise on timeout!
+                # Note : stdout reader thread might still be running now to complete data encryption and cryptainer finalization!
             except Exception as exc:  # E.g. TimeoutExpired if wait() expired
                 logger.warning("Failed normal termination of %s subprocess: %r", self.sensor_name, exc)
                 logger.warning("Force-terminating dangling %s subprocess" % self.sensor_name)
@@ -515,18 +522,20 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
                 try:
                     self._subprocess.wait(timeout=5)
                 except TimeoutExpired:  # Should never happen IRL...
-                    logger.critical("Force-termination of dangling %s subprocess failed!" % self.sensor_name)
+                    raise RuntimeError("Force-termination of dangling %s subprocess failed!" % self.sensor_name)
+
         finally:
             # Cleanup recording attributes
             self._subprocess = self._stdout_thread = self._stderr_thread = None
 
     def join(self):
+        ##print(">>>>>>>>>> PREPARING JOIN ON", len(self._previous_stdio_threads), "STDIO THREADS")
         super().join()
         for thread in self._previous_stdio_threads:
             thread.join(timeout=15)
             if thread.is_alive():  # Might happen in very slow system, or if subprocess actually never exited...
                 logger.critical("An stdio reader thread for previous %s subprocess didn't exit" % self.sensor_name)
-
+        ##print(">>>>>>>>>>>>>PeriodicSubprocessStreamRecorder join done")
 
 class SensorManager(TaskRunnerStateMachineBase):
     """

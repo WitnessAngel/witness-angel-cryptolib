@@ -1,4 +1,5 @@
 import os
+import random
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -616,16 +617,28 @@ def test_periodic_subprocess_stream_recorder_non_killable_executable(tmp_path):
     recorder.start()
     subprocess = recorder._subprocess
     try:
-        time.sleep(12)  # Beware of python launch time...
-        recorder.stop()  # Will wait for still in-process stop+start anyway...
-        recorder.join()  # Will give up even before stdout stream ended...
+        sleep_time = random.choice([1, 8, 20])  # Wake up before or after the 5s interval above
+        print("##################### SLEEPING FOR %ss ##############" % sleep_time)
+        time.sleep(sleep_time)  # Might already have auto-stopped, or not
+        print("##################### STOPPING SENSOR ##############")
+        # Same exception whether sensor is already auto-stopped, or we fail at stopping him (because unkillable)
+        with pytest.raises(RuntimeError):
+            recorder.stop()  # Will wait for still in-process stop+start anyway...
+            # SensorManager would swallow this unexpected stop() failure so it's OK
+        assert not recorder._subprocess
+        print("##################### JOINING SENSOR ##############")
+        recorder.join()  # Will give up since stdout stream never ends...
+        print("##################### CHECKUP STUFFS ##############")
         stdout_thread = recorder._previous_stdio_threads[0]
         assert stdout_thread.is_alive()
         cryptainer_names = cryptainer_storage.list_cryptainer_names()
         assert len(cryptainer_names) == 0  # Not ready yet
+        print("##################### FORCE-KILLING SENSOR ##############")
         subprocess.kill()
-        recorder.join()  # Will join all stdout/stderr threads
-        assert not stdout_thread.is_alive()  # Join() was a success
+        print("##################### REJOINING SENSOR ##############")
+        recorder.join()  # Will join all stdout/stderr threads for good
+        print("##################### JOINING SENSOR DONE ##############")
+        assert not stdout_thread.is_alive()  # Join() was a success now
         cryptainer_names = cryptainer_storage.list_cryptainer_names()
         assert len(cryptainer_names) == 1  # First record was at last finished
         _check_stream_recorder_cryptainer_name(cryptainer_names[0])

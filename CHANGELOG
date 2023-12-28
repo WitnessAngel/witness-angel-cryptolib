@@ -6,10 +6,20 @@ Development
 Version 0.11
 ==================
 
+* Add CLI for Flightbox operations
 * Allow listing and purging UNFINISHED cryptainers in cryptainer storages
 * Add support for custom "cryptainer encryption stream" class in recording system
 * Pretty-print decryption error report in CLI
 * Add validate_data_against_schema() utility to factorize code
+* Rename "errors" to "operation_report" in cryptainer decryption process, for clarity
+* Add nesting to error report, to better understand the steps of decryption operations
+* Rename private API split_as_formatted_data() to gather_data_as_blocks()
+* Rework cryptainer storage API to allow synchronous operations
+* Document CLI using sphinxcontrib.programoutput utility
+* Stop automatically deleting files when they get encrypted (it makes no sense on the CLI)
+* Auto-close CryptainerEncryptionPipeline stream on init error
+* Remove keychain_uid from toolchain parameters, and fetch it from cryptoconf root if available
+* Improve handling of stop failures for sensors
 * Add lots of little bugfixes
 
 

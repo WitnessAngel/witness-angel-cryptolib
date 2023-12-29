@@ -92,4 +92,8 @@ When all is verified on testpypi (Readme, files uploaded, etc.), release the pac
 
     $ poetry publish
 
+If authentication troubles, try setting credentials with something like this::
+
+    $ poetry config http-basic.<testpypi/pypi> <username> <password>
+
 

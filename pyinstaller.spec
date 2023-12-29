@@ -19,6 +19,19 @@ sys.path.append(src_dir)
 
 app_name = "flightbox_%s" % version.replace(".","-")
 
+program_icon = "assets/flightbox_512x512.png"
+extra_exe_params= []
+
+is_macos = sys.platform.startswith("darwin")
+
+codesign_identity = os.environ.get("MACOS_CODESIGN_IDENTITY", None)
+print(">>> macosx codesign identity is", codesign_identity)
+
+if sys.platform.startswith("win32"):
+    program_icon = "assets/flightbox_favicon.ico"
+elif is_macos:
+    program_icon = "assets/flightbox_512x512.icns"
+
 USE_CONSOLE = True  # Change this if needed, to debug
 
 main_script = os.path.join(root_dir, 'main.py')
@@ -55,11 +68,16 @@ exe = EXE(pyz,
           upx=True,
           runtime_tmpdir=None,
           console=USE_CONSOLE,
-          icon='assets/flightbox_favicon.ico'
-          )
+          icon=program_icon,
+          codesign_identity=codesign_identity,
+          entitlements_file="assets/entitlements.plist", # For MacOS only
+)
 
 if sys.platform.startswith("darwin"):
     app = BUNDLE(exe,
              name=app_name+".app",
-             icon=None,
-             bundle_identifier=None)
+             icon=program_icon,
+             bundle_identifier="org.witnessangel.flightbox",
+             codesign_identity=codesign_identity,
+             entitlements_file="assets/entitlements.plist", # For MacOS only
+    )

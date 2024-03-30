@@ -60,7 +60,7 @@ click-log = "^0.4.0"
 # Test runners and plugins
 pytest = ">=7.0.1"
 pytest-cov = ">=4.0"
-pytest-env = "^1.0.1"
+pytest-env = ">=1.0.1"
 pytest_mock = ">=3.7.0"
 pytest-randomly = ">=3.11"
 pytest-deadfixtures = ">=2.2.1"

@@ -856,7 +856,7 @@ class OperationReport:
 
     def has_errors(self):
         """Returns True iff report contains warnings/erros"""
-        return bool(self.get_error_count)
+        return bool(self.get_error_count())
 
     def format_entries(self):  # FIXME improve that
         return pformat(self._entries)

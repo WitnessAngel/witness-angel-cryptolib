@@ -703,6 +703,8 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
         cryptainer=cryptainer, keystore_pool=keystore_pool, verify_integrity_tags=verify_integrity_tags
     )
     assert not operation_report.get_error_entries()
+    assert not operation_report.get_error_count()
+    assert not operation_report.has_errors()
     # pprint.pprint(result, width=120)
     assert result_payload == payload
 
@@ -946,6 +948,7 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
         exception_class=DecryptionIntegrityError,
     )
     assert operation_report.get_error_count() == 2
+    assert operation_report.has_errors()
 
     # ---
 
@@ -1118,6 +1121,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
             exception_class=KeyDoesNotExist,
         )
         assert operation_report.get_error_count() == 1
+        assert operation_report.has_errors()
 
     # Wrong symkey revelation response data
     gateway_revelation_request_list = _build_fake_gateway_revelation_request_list(revelation_requests_info)
@@ -1847,7 +1851,9 @@ def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify_fail
 
     cryptainer = encrypt_payload_into_cryptainer(payload=b"1234", cryptoconf=cryptoconf, cryptainer_metadata=None)
 
-    result, _operation_report = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=True)
+    result, operation_report = decrypt_payload_from_cryptainer(cryptainer, verify_integrity_tags=True)
+    assert not operation_report.get_error_count()
+    assert not operation_report.has_errors()
     assert result == b"1234"
 
     cryptainer["payload_cipher_layers"][0]["payload_macs"]["tag"] += b"hi"  # CORRUPTION

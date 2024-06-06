@@ -8,7 +8,6 @@ from wacryptolib.cipher import encrypt_bytestring, decrypt_bytestring, _encrypt_
 from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring
 from wolfcrypt._ffi import lib as _lib
 
-
 plaintext = b"Every"  # get_random_bytes(500)
 print(">>>>>>> plaintext", plaintext)
 
@@ -78,37 +77,36 @@ OKNaJnZowGs7CHq995DhqLjUV7PQ7kcXjCMsNI8Hpi/B+WfQVHmKN40=
 -----END RSA PRIVATE KEY-----"""
 
 pubkey = load_asymmetric_key_from_pem_bytestring(pem_public, key_algo="RSA_OAEP")
-ciphertext = _encrypt_via_rsa_oaep(plaintext, key_dict=dict(key=pubkey))
-print("RSA PYCRYPTODOME CIPHERTEXT", ciphertext)
+ciphertext_pycryptodome = _encrypt_via_rsa_oaep(plaintext, key_dict=dict(key=pubkey))
+print("RSA PYCRYPTODOME CIPHERTEXT", ciphertext_pycryptodome)
 
-privkey = load_asymmetric_key_from_pem_bytestring(pem_private, key_algo="RSA_OAEP")
-decrypted = _decrypt_via_rsa_oaep(ciphertext, key_dict=dict(key=privkey))
-print("RSA PYCRYPTODOME DECRYPTED", decrypted)
+##public_key_der = pem_to_der(pem_public, _lib.PUBLICKEY_TYPE)  USELESS
+# print("RSA PUBLIC DER", public_key_der)
+##cipher_public = RsaPublic(public_key_der, hash_type=HASH_TYPE_SHA512)
+
+cipher_public = RsaPublic.from_pem(pem_public, hash_type=HASH_TYPE_SHA512)
+ciphertext_wolfcrypt = {"ciphertext_chunks": [cipher_public.encrypt_oaep(plaintext)]}
+print("RSA WOLFCRYPT CIPHERTEXT", ciphertext_wolfcrypt)
 
 print("-------------")
 
-''' 
-public_key_der = pem_to_der(pem_public, _lib.PUBLICKEY_TYPE)
-# print("RSA PUBLIC DER", public_key_der)
-cipher_public = RsaPublic(public_key_der, hash_type=HASH_TYPE_SHA512)
-ciphertext = cipher_public.encrypt_oaep(plaintext)
-print("RSA WOLFCRYPT CIPHERTEXT", ciphertext)
-'''
+wanted_ciphertext = ciphertext_pycryptodome  # OR ciphertext_wolfcrypt
+
+privkey = load_asymmetric_key_from_pem_bytestring(pem_private, key_algo="RSA_OAEP")
+decrypted = _decrypt_via_rsa_oaep(wanted_ciphertext, key_dict=dict(key=privkey))
+print("RSA PYCRYPTODOME DECRYPTED", decrypted)
 
 private_key_der = pem_to_der(pem_private, _lib.PRIVATEKEY_TYPE)
 cipher_private = RsaPrivate(private_key_der, hash_type=HASH_TYPE_SHA512)
-decrypted = cipher_private.decrypt_oaep(ciphertext["ciphertext_chunks"][0])
+decrypted = cipher_private.decrypt_oaep(wanted_ciphertext["ciphertext_chunks"][0])
 print("RSA CIPHERTEXT DECRYPTED", decrypted)
 
-"""
-decrypted1 = _decrypt_via_rsa_oaep({'ciphertext_chunks': [res]}, key_dict=dict(key=privkey))
-print("RSA CIPHERTEXT DECRYPTED2", decrypted1)
-"""
 
-'''
+print("\n\n\n")
+"""
 sys.exit()
 assert False
-'''
+"""
 
 ### print(Sha256('wolfcrypt').hexdigest())
 

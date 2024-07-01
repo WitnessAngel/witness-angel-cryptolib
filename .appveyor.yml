@@ -2,14 +2,14 @@
 ---
 environment:
   matrix:
-  - TOXENV: py37
-    PYTHON: "3.7"
-  - TOXENV: py38
-    PYTHON: "3.8"
-  - TOXENV: py39
-    PYTHON: "3.9"
-  - TOXENV: py310
-    PYTHON: "3.10"
+    - TOXENV: py37
+      PYTHON: "3.7"
+    - TOXENV: py38
+      PYTHON: "3.8"
+    - TOXENV: py39
+      PYTHON: "3.9"
+    - TOXENV: py310
+      PYTHON: "3.10"
 
 stack: python %PYTHON%
 
@@ -18,7 +18,7 @@ build: off
 image: Ubuntu
 
 install:
-- python -m pip install tox poetry==1.1.11
+  - python -m pip install tox poetry==1.1.11
 
 test_script:
-- python -m tox
+  - python -m tox

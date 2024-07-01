@@ -346,7 +346,9 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
         try:
             payload = self._do_stop_recording()  # Renames target files
         except Exception as es:
-            logger.critical("Unrecoverable error when stopping sensor %s for restart - aborting sensor operation" % self.sensor_name)
+            logger.critical(
+                "Unrecoverable error when stopping sensor %s for restart - aborting sensor operation" % self.sensor_name
+            )
             super().stop()  # Stops state and multitimer thread (we don't want to overflow the device with e.g. processes)
             raise  # Will propagate up to catch_and_log_exception()
         self._do_start_recording()  # Recording must be restarted immediately
@@ -540,6 +542,7 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
             if thread.is_alive():  # Might happen in very slow system, or if subprocess actually never exited...
                 logger.critical("An stdio reader thread for previous %s subprocess didn't exit" % self.sensor_name)
         ##print(">>>>>>>>>>>>>PeriodicSubprocessStreamRecorder join done")
+
 
 class SensorManager(TaskRunnerStateMachineBase):
     """

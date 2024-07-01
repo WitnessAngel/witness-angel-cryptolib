@@ -36,7 +36,6 @@ from memory_profiler import profile
 
 @profile(precision=4)
 def profile_simple_encryption():
-
     tmp_path = tempfile.gettempdir()
     now = datetime.now(tz=timezone.utc)
 
@@ -46,7 +45,7 @@ def profile_simple_encryption():
 
     tarfile_aggregator = TarfileRecordAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=100)
 
-    payload = b"abcdefghij" * 10 * 1024 ** 2
+    payload = b"abcdefghij" * 10 * 1024**2
 
     copy_payload = io.BytesIO(payload)  # To stress memory
     del copy_payload

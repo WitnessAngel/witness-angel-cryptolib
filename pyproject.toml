@@ -6,7 +6,7 @@ build-backend = "poetry.core.masonry.api"
 name = "wacryptolib"
 description = "Witness Angel Cryptolib"
 version = "0.11"
-license = {file = "LICENSE.txt"}
+license = { file = "LICENSE.txt" }
 readme = "Readme.rst"
 authors = ["Pascal Chambon", "Manon Michelet", "Akram Bourichi", "Francinette Atchade"]
 homepage = "https://witnessangel.com/"
@@ -71,7 +71,7 @@ freezegun = ">=1.1.0"
 typeguard = ">=2.13.0"
 
 # Linters and formatters
-black = {version = ">=22.1.0"}
+black = { version = ">=22.1.0" }
 darglint = ">=1.8.1"
 pylint = ">=2.6"
 mypy = ">=0.931"

@@ -4,8 +4,6 @@
 # list see the documentation:
 # http://www.sphinx-doc.org/en/master/config
 import os
-# -- Path setup --------------------------------------------------------------
-
 import pathlib
 import shutil
 
@@ -16,6 +14,8 @@ import shutil
 import sys
 
 import toml
+
+# -- Path setup --------------------------------------------------------------
 
 root_dir = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root_dir / "src"))
@@ -46,7 +46,13 @@ release = version
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ["sphinx.ext.autodoc", "sphinx_autodoc_typehints", "sphinx_rtd_theme", 'sphinx_click', 'sphinxcontrib.programoutput']
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx_autodoc_typehints",
+    "sphinx_rtd_theme",
+    "sphinx_click",
+    "sphinxcontrib.programoutput",
+]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]

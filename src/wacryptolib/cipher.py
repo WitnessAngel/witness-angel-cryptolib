@@ -1,3 +1,7 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 import logging
 from typing import BinaryIO
 
@@ -405,6 +409,10 @@ class PayloadEncryptionPipeline:
             integrity_tags_list.append(cipher.get_payload_integrity_tags())
         return integrity_tags_list
 
+
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 CIPHER_ALGOS_REGISTRY = dict(
     ## SYMMETRIC ENCRYPTION ##

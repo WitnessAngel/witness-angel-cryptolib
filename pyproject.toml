@@ -6,7 +6,7 @@ build-backend = "poetry.core.masonry.api"
 name = "wacryptolib"
 description = "Witness Angel Cryptolib"
 version = "0.11"
-license = "MIT"
+license = {file = "LICENSE.txt"}
 readme = "Readme.rst"
 authors = ["Pascal Chambon", "Manon Michelet", "Akram Bourichi", "Francinette Atchade"]
 homepage = "https://witnessangel.com/"
@@ -16,12 +16,12 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
-    "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: Unix",

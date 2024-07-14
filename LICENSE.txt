@@ -11,5 +11,7 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
+Note that due to dependencies released under Apache License V2 (Requests, PyMongo...), the whole library may only be used in a GPL version 3 codebase.
+
 For users who cannot use our code under this open-source license, a commercial license is available.
 Please contact the Witness Angel project directly at https://witnessangel.com/

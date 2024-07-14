@@ -4,7 +4,7 @@ Development instructions
 Getting started
 ++++++++++++++++++++++++
 
-To develop on the WACryptolib, the interpreter for `python3.7` or later must be installed (see `pyproject.toml` for version details).
+To develop on the WACryptolib, the interpreter for `python3.8` or later must be installed (see `pyproject.toml` for version details).
 
 Instead of pip, we use `poetry <https://github.com/sdispater/poetry>`_ to manage dependencies.
 

@@ -2,14 +2,14 @@
 ---
 environment:
   matrix:
-    - TOXENV: py37
-      PYTHON: "3.7"
     - TOXENV: py38
       PYTHON: "3.8"
     - TOXENV: py39
       PYTHON: "3.9"
     - TOXENV: py310
       PYTHON: "3.10"
+    - TOXENV: py311
+      PYTHON: "3.11"
 
 stack: python %PYTHON%
 

@@ -1379,7 +1379,9 @@ class CryptainerDecryptor(CryptainerBase):
         predecrypted_symkey = None
 
         if predecrypted_symkey_mapper and (key_ciphertext in predecrypted_symkey_mapper):
-            predecrypted_symkey_struct = load_from_json_bytes(predecrypted_symkey_mapper[key_ciphertext])
+            predecrypted_symkey_json = predecrypted_symkey_mapper[key_ciphertext]
+            ##print(">>> predecrypted_symkey_json", repr(predecrypted_symkey_json))
+            predecrypted_symkey_struct = load_from_json_bytes(predecrypted_symkey_json)
             predecrypted_symkey = predecrypted_symkey_struct["key_bytes"]
 
         return predecrypted_symkey

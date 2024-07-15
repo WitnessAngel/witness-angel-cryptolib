@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import logging
+import os
 
 import sys
 
@@ -14,7 +15,7 @@ try:
 
     use_fallback_backend = True
 except ImportError:
-    use_fallback_backend = False
+    use_fallback_backend = True if os.getenv("FORCE_WACRYPTOLIB_FALLBACK_BACKEND") else False
 
 
 if use_fallback_backend:
@@ -141,6 +142,27 @@ if use_fallback_backend:
         return cipher
 
     Crypto.Cipher.AES.new = patched_aes_new
+
+    from Crypto.Cipher import PKCS1_OAEP
+
+    def patched_oaep_decode(em, lHash, db):
+        # Replace the 2023 C implementation by the old Python one
+        from Crypto.Util.strxor import strxor
+        from Crypto.Util.py3compat import bord
+
+        y = em[0]
+        hLen = len(lHash)
+        one_pos = hLen + db[hLen:].find(b"\x01")
+        lHash1 = db[:hLen]
+        invalid = bord(y) | int(one_pos < hLen)
+        hash_compare = strxor(lHash1, lHash)
+        for x in hash_compare:
+            invalid |= bord(x)
+        for x in db[hLen:one_pos]:
+            invalid |= bord(x)
+        return -1 if invalid else (one_pos + 1)
+
+    PKCS1_OAEP.oaep_decode = patched_oaep_decode
 
 
 from .pycryptodome import (

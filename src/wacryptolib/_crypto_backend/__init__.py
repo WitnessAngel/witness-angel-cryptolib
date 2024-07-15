@@ -74,6 +74,14 @@ if use_fallback_backend:
             def new(self, *args, **kwargs):
                 return hasher_factory(*args, **kwargs)
 
+            @property
+            def digest_size(self):
+                return self._hasher.digest_size
+
+            @property
+            def block_size(self):
+                return self._hasher.block_size
+
         return PatchedHasherClass
 
     PATCHABLE_HASH_ALGOS = [

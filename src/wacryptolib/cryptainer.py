@@ -2422,6 +2422,7 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
                 },
                 OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
             ),
+            OptionalKey("payload_plaintext_signatures"): [payload_signature],  # PLAIN data signatures
             "cryptainer_metadata": Or(dict, None),
         }
 
@@ -2493,7 +2494,7 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
                 [
                     {
                         "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
-                        "payload_signatures": [payload_signature],
+                        "payload_signatures": [payload_signature],  # Signatures AFTER encryption
                         **extra_payload_cipher_layer,
                         "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,
                     }

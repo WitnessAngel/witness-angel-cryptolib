@@ -3,7 +3,10 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import logging
+import traceback
 from typing import BinaryIO
+
+import sys
 
 from wacryptolib import _crypto_backend
 from wacryptolib import utilities
@@ -238,11 +241,14 @@ def _create_hashers_dict(hash_algos):
         hasher_instance = _crypto_backend.get_hasher_instance(hash_algo)
         hashers_dict[hash_algo] = hasher_instance
 
+    print(">>>>>>>#### CREATING HASHERS DICT", hashers_dict)
     return hashers_dict
 
 
 def _update_hashers_dict(hashers_dict, chunk):
     for hash_algo, hasher_instance in hashers_dict.items():
+        print(">>>>>>>#### UPDATING HASHER", hasher_instance, "WITH", bytes(chunk))
+        ##traceback.print_stack(file=sys.stdout)
         hasher_instance.update(chunk)
 
 
@@ -251,6 +257,7 @@ def _get_hashers_dict_digests(hashers_dict):
     for hash_algo, hasher_instance in hashers_dict.items():
         digest = hasher_instance.digest()
         assert 32 <= len(digest) <= 64, len(digest)
+        print(">>>>>>>#### GETTING DIGEST FOR", hasher_instance, "GAVE", digest)
         digests[hash_algo] = digest
     return digests
 
@@ -266,19 +273,19 @@ class EncryptionNodeBase:
     _cipher = None  # Created by subclasses
     _hashers_dict = None
 
-    def __init__(self, payload_hash_algos=()):
+    def __init__(self, ciphertext_hash_algos=()):
         """Base class for nodes able to encrypt and digest data chunk by chunk.
 
-        :param payload_hash_algos: different hash algorithms to apply on ciphertext
+        :param ciphertext_hash_algos: different hash algorithms to apply on ciphertext
         """
-        self._hashers_dict = _create_hashers_dict(payload_hash_algos)
+        self._hashers_dict = _create_hashers_dict(ciphertext_hash_algos)
 
     def _encrypt_aligned_payload(self, plaintext):
+        if not plaintext:
+            return b""  # Shortcut
         ciphertext = self._cipher.encrypt(plaintext)
         assert isinstance(ciphertext, bytes), repr(ciphertext)
-
-        _update_hashers_dict(self._hashers_dict)
-
+        _update_hashers_dict(self._hashers_dict, chunk=ciphertext)
         return ciphertext
 
     def encrypt(self, plaintext) -> bytes:
@@ -288,9 +295,11 @@ class EncryptionNodeBase:
         """
         assert not self._is_finished
         if self.BLOCK_SIZE != 1:
+            print(">>>>>>>>>> CURRENT REMAINDER WAs", self._remainder)
             formatted_plaintext, self._remainder = utilities.gather_data_as_blocks(
                 self._remainder, plaintext, block_size=self.BLOCK_SIZE
             )
+            print(">>>>>>>>>> TRANSFORMED", plaintext, "INTO", bytes(formatted_plaintext))
             plaintext = formatted_plaintext
         ciphertext = self._encrypt_aligned_payload(plaintext)
         return ciphertext
@@ -330,8 +339,8 @@ class AesCbcEncryptionNode(EncryptionNodeBase):
 
     BLOCK_SIZE = _crypto_backend.AES_BLOCK_SIZE
 
-    def __init__(self, key_dict: dict, payload_hash_algos=()):
-        super().__init__(payload_hash_algos=payload_hash_algos)
+    def __init__(self, key_dict: dict, ciphertext_hash_algos=()):
+        super().__init__(ciphertext_hash_algos=ciphertext_hash_algos)
         self._key = key_dict["key"]
         self._iv = key_dict["iv"]
         self._cipher = _crypto_backend.build_aes_cbc_cipher(self._key, iv=self._iv)
@@ -340,8 +349,8 @@ class AesCbcEncryptionNode(EncryptionNodeBase):
 class AesEaxEncryptionNode(EncryptionNodeBase):
     """Encrypt a bytestring using AES (EAX mode)."""
 
-    def __init__(self, key_dict: dict, payload_hash_algos=()):
-        super().__init__(payload_hash_algos=payload_hash_algos)
+    def __init__(self, key_dict: dict, ciphertext_hash_algos=()):
+        super().__init__(ciphertext_hash_algos=ciphertext_hash_algos)
         self._key = key_dict["key"]
         self._nonce = key_dict["nonce"]
         self._cipher = _crypto_backend.build_aes_eax_cipher(self._key, nonce=self._nonce)
@@ -353,8 +362,8 @@ class AesEaxEncryptionNode(EncryptionNodeBase):
 class Chacha20Poly1305EncryptionNode(EncryptionNodeBase):
     """Encrypt a bytestring using ChaCha20 with Poly1305 authentication."""
 
-    def __init__(self, key_dict: dict, payload_hash_algos=()):
-        super().__init__(payload_hash_algos=payload_hash_algos)
+    def __init__(self, key_dict: dict, ciphertext_hash_algos=()):
+        super().__init__(ciphertext_hash_algos=ciphertext_hash_algos)
 
         self._key = key_dict["key"]
         self._nonce = key_dict["nonce"]
@@ -385,7 +394,7 @@ class PayloadEncryptionPipeline:
         for payload_cipher_layer_extract in payload_cipher_layer_extracts:
             payload_cipher_algo = payload_cipher_layer_extract["cipher_algo"]
             symkey = payload_cipher_layer_extract["symkey"]
-            payload_hash_algos = payload_cipher_layer_extract["payload_hash_algos"]
+            payload_hash_algos = payload_cipher_layer_extract["hash_algos"]
 
             cipher_algo_conf = _get_cipher_algo_conf(cipher_algo=payload_cipher_algo)
             encryption_class = cipher_algo_conf["encryption_node_class"]
@@ -393,12 +402,12 @@ class PayloadEncryptionPipeline:
             if encryption_class is None:
                 raise OperationNotSupported("Node class %s is not implemented" % payload_cipher_algo)
 
-            self._cipher_streams.append(encryption_class(key_dict=symkey, payload_hash_algos=payload_hash_algos))
+            self._cipher_streams.append(encryption_class(key_dict=symkey, ciphertext_hash_algos=payload_hash_algos))
 
     def encrypt_chunk(self, chunk):
         assert not self._finalized
 
-        _update_hashers_dict(self._plaintext_hashers_dict)
+        _update_hashers_dict(self._plaintext_hashers_dict, chunk=chunk)
 
         for cipher in self._cipher_streams:
             ciphertext = cipher.encrypt(chunk)
@@ -431,8 +440,7 @@ class PayloadEncryptionPipeline:
         for cipher in self._cipher_streams:
             ciphertext_integrity_tags.append(cipher.get_ciphertext_integrity_tags())
 
-        return dict(plaintext_digests=plaintext_digests,
-                    ciphertext_integrity_tags=ciphertext_integrity_tags)
+        return dict(plaintext_digests=plaintext_digests, ciphertext_integrity_tags=ciphertext_integrity_tags)
 
 
 # This file is part of Witness Angel Cryptolib

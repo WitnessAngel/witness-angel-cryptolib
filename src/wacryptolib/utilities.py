@@ -251,7 +251,7 @@ def generate_uuid0(ts: Optional[float] = None):
 def gather_data_as_blocks(first_data: bytes, second_data: bytes, block_size: int):  # FIXME improve naming?
     """PRIVATE API
 
-    Split the sum of two bytestrings between a data payload with a size multiple of block_size,
+    Split the sum of two bytestrings between a non-empty data payload with a size multiple of block_size,
     and remainder.
 
     :return: memory view of formatted data and remainder

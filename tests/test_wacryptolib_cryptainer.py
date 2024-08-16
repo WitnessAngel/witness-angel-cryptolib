@@ -3011,18 +3011,23 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
 
 def test_generate_cryptainer_base_and_symmetric_keys():
     cryptainer_decryptor = CryptainerEncryptor()
-    cryptainer, extracts = cryptainer_decryptor._generate_cryptainer_base_and_secrets(COMPLEX_CRYPTOCONF)
+    cryptainer, secrets = cryptainer_decryptor._generate_cryptainer_base_and_secrets(COMPLEX_CRYPTOCONF)
 
-    for payload_cipher_layer in extracts:
+    payload_plaintext_hash_algos = secrets["payload_plaintext_hash_algos"]
+    assert payload_plaintext_hash_algos == []
+
+    payload_cipher_layer_extracts = secrets["payload_cipher_layer_extracts"]
+
+    for payload_cipher_layer in payload_cipher_layer_extracts:
         symkey = payload_cipher_layer["symkey"]
         assert isinstance(symkey, dict)
         assert symkey["key"]  # actual main key
         del payload_cipher_layer["symkey"]
 
-    assert extracts == [
-        {"cipher_algo": "AES_EAX", "payload_hash_algos": []},
-        {"cipher_algo": "AES_CBC", "payload_hash_algos": ["SHA3_512"]},
-        {"cipher_algo": "CHACHA20_POLY1305", "payload_hash_algos": ["SHA3_256", "SHA512"]},
+    assert payload_cipher_layer_extracts == [
+        {"cipher_algo": "AES_EAX", "hash_algos": []},
+        {"cipher_algo": "AES_CBC", "hash_algos": ["SHA3_512"]},
+        {"cipher_algo": "CHACHA20_POLY1305", "hash_algos": ["SHA3_256", "SHA512"]},
     ]
 
 

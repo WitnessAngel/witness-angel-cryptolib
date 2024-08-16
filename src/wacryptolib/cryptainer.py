@@ -434,7 +434,7 @@ class CryptainerEncryptor(CryptainerBase):
         for payload_cipher_layer_extract in payload_cipher_layer_extracts:
             payload_cipher_algo = payload_cipher_layer_extract["cipher_algo"]
             symkey = payload_cipher_layer_extract["symkey"]
-            payload_digest_algos = payload_cipher_layer_extract["payload_digest_algos"]
+            payload_hash_algos = payload_cipher_layer_extract["payload_digest_algos"]
 
             logger.debug("Encrypting payload with symmetric key of type %r", payload_cipher_algo)
             payload_cipherdict = encrypt_bytestring(
@@ -450,8 +450,8 @@ class CryptainerEncryptor(CryptainerBase):
             ), payload_ciphertext  # Same raw content as would be in offloaded payload file
 
             payload_digests = {
-                payload_digest_algo: hash_message(payload_ciphertext, hash_algo=payload_digest_algo)
-                for payload_digest_algo in payload_digest_algos
+                payload_hash_algo: hash_message(payload_ciphertext, hash_algo=payload_hash_algo)
+                for payload_hash_algo in payload_hash_algos
             }
 
             payload_integrity_tags.append(
@@ -471,9 +471,9 @@ class CryptainerEncryptor(CryptainerBase):
         :param cryptoconf: configuration tree
         :param cryptainer_metadata: additional payload to store unencrypted in cryptainer, and also inside encrypted keys/shards
 
-        :return: a (cryptainer: dict, secrets: list) tuple, where each secret has 'payload_plaintext_digest_algos' and
+        :return: a (cryptainer: dict, secrets: list) tuple, where each secret has 'payload_plaintext_hash_algos' and
         'payload_cipher_layer_extracts' keys, and each of 'payload_cipher_layer_extracts' items has
-        keys 'cipher_algo', 'symmetric_key' and 'payload_digest_algos'.
+        keys 'cipher_algo', 'symmetric_key' and 'payload_hash_algos'.
         """
 
         assert cryptainer_metadata is None or isinstance(cryptainer_metadata, dict), cryptainer_metadata
@@ -490,7 +490,7 @@ class CryptainerEncryptor(CryptainerBase):
         if not cryptainer["payload_cipher_layers"]:
             raise SchemaValidationError("Empty payload_cipher_layers list is forbidden in cryptoconf")
 
-        payload_plaintext_digest_algos = [
+        payload_plaintext_hash_algos = [
             signature["payload_digest_algo"] for signature in cryptoconf.get("payload_plaintext_signatures", ())
         ]
 
@@ -518,7 +518,7 @@ class CryptainerEncryptor(CryptainerBase):
             payload_cipher_layer_extract = dict(
                 cipher_algo=payload_cipher_algo,
                 symkey=symkey,
-                payload_digest_algos=[
+                payload_hash_algos=[
                     signature["payload_digest_algo"] for signature in payload_cipher_layer["payload_signatures"]
                 ],
             )
@@ -534,7 +534,7 @@ class CryptainerEncryptor(CryptainerBase):
         )
 
         secrets = dict(
-            payload_plaintext_digest_algos=payload_plaintext_digest_algos,
+            payload_plaintext_hash_algos=payload_plaintext_hash_algos,
             payload_cipher_layer_extracts=payload_cipher_layer_extracts,
         )
 
@@ -702,12 +702,12 @@ class CryptainerEncryptor(CryptainerBase):
 
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: list):
         def _inject_layer_signatures(signature_confs, payload_digests):
-            _encountered_payload_digest_algos = set()
+            _encountered_payload_hash_algos = set()
             for signature_conf in signature_confs:
-                payload_digest_algo = signature_conf["payload_digest_algo"]
+                payload_hash_algo = signature_conf["payload_digest_algo"]
 
                 signature_conf["payload_digest_value"] = payload_digests[
-                    payload_digest_algo
+                    payload_hash_algo
                 ]  # MUST exist, else incoherence
 
                 payload_signature_struct = self._generate_message_signature(
@@ -715,8 +715,8 @@ class CryptainerEncryptor(CryptainerBase):
                 )
                 signature_conf["payload_signature_struct"] = payload_signature_struct
 
-                _encountered_payload_digest_algos.add(payload_digest_algo)
-            assert _encountered_payload_digest_algos == set(payload_digests)  # No abnormal extra digest
+                _encountered_payload_hash_algos.add(payload_hash_algo)
+            assert _encountered_payload_hash_algos == set(payload_digests)  # No abnormal extra digest
 
         plaintext_digests = payload_integrity_tags["plaintext_digests"]
         if plaintext_digests:
@@ -755,7 +755,7 @@ class CryptainerEncryptor(CryptainerBase):
         payload_signature_algo = cryptoconf["payload_signature_algo"]
         payload_digest = cryptoconf[
             "payload_digest_value"
-        ]  # Must have been set before, using payload_digest_algo field
+        ]  # Must have been set before, using payload_hash_algo field
         assert payload_digest, payload_digest
 
         trustee_proxy = get_trustee_proxy(
@@ -1541,7 +1541,7 @@ class CryptainerDecryptor(CryptainerBase):
         :param cryptoconf: configuration tree inside payload_signatures
         """
 
-        payload_digest_algo = cryptoconf["payload_digest_algo"]
+        payload_hash_algo = cryptoconf["payload_digest_algo"]
         payload_signature_algo = cryptoconf["payload_signature_algo"]
         keychain_uid = cryptoconf.get("keychain_uid") or default_keychain_uid
         trustee_proxy = get_trustee_proxy(
@@ -1573,7 +1573,7 @@ class CryptainerDecryptor(CryptainerBase):
             )
             return
 
-        payload_digest = hash_message(payload, hash_algo=payload_digest_algo)
+        payload_digest = hash_message(payload, hash_algo=payload_hash_algo)
 
         expected_payload_digest = cryptoconf.get("payload_digest_value")  # Might be missing
         if expected_payload_digest and expected_payload_digest != payload_digest:

@@ -160,20 +160,17 @@ _stream_algo_nodes = [[algo] for algo in STREAMABLE_CIPHER_ALGOS] + [STREAMABLE_
 def test_valid_payload_encryption_pipeline(cipher_algo_list):
     output_stream = io.BytesIO()
 
-
     payload_plaintext_hash_algos = random.choices(
-        SUPPORTED_HASH_ALGOS,
-        k=random.randint(1, len(SUPPORTED_HASH_ALGOS))  # Length of the returned list
-    ),
+        SUPPORTED_HASH_ALGOS, k=random.randint(1, len(SUPPORTED_HASH_ALGOS))  # Length of the returned list
+    )
 
     payload_cipher_layer_extracts = []
     for cipher_algo in cipher_algo_list:
         payload_cipher_layers_extract = {
             "cipher_algo": cipher_algo,
             "symkey": generate_symkey(cipher_algo),
-            "payload_hash_algos": random.choices(
-                SUPPORTED_HASH_ALGOS,
-                k=random.randint(1, len(SUPPORTED_HASH_ALGOS))  # Length of the returned list
+            "hash_algos": random.choices(
+                SUPPORTED_HASH_ALGOS, k=random.randint(1, len(SUPPORTED_HASH_ALGOS))  # Length of the returned list
             ),
         }
         payload_cipher_layer_extracts.append(payload_cipher_layers_extract)
@@ -183,30 +180,40 @@ def test_valid_payload_encryption_pipeline(cipher_algo_list):
         output_stream=output_stream,
         secrets=dict(
             payload_plaintext_hash_algos=payload_plaintext_hash_algos,
-            payload_cipher_layer_extracts=payload_cipher_layer_extracts
-        )
+            payload_cipher_layer_extracts=payload_cipher_layer_extracts,
+        ),
     )
 
     plaintext_full = get_random_bytes(random.randint(10, 10000))
 
-    plaintext_current = plaintext_full
-    while plaintext_current:  # TODO factorize this utility of looping through chunks!
+    _plaintext_current = plaintext_full
+    while _plaintext_current:
         chunk_length = random.randint(1, 300)
-        chunk = plaintext_current[0:chunk_length]
-        plaintext_current = plaintext_current[chunk_length:]
+        chunk = _plaintext_current[0:chunk_length]
         encryption_pipeline.encrypt_chunk(chunk)
+        _plaintext_current = _plaintext_current[chunk_length:]
 
     encryption_pipeline.finalize()
 
     current_ciphertext = output_stream.getvalue()
 
+    payload_integrity_tags = encryption_pipeline.get_payload_integrity_tags()
+
+    plaintext_digests = payload_integrity_tags["plaintext_digests"]
+    for hash_algo, expected_digest in plaintext_digests.items():
+        real_digest = hash_message(message=plaintext_full, hash_algo=hash_algo)
+        assert real_digest == expected_digest
+
+    ciphertext_integrity_tags = payload_integrity_tags["ciphertext_integrity_tags"]
+
     for payload_encryption_node, authentication_data in zip(
-        reversed(payload_cipher_layer_extracts), reversed(encryption_pipeline.get_payload_integrity_tags())
+        reversed(payload_cipher_layer_extracts), reversed(ciphertext_integrity_tags)
     ):
-        for hash_algo in payload_encryption_node["payload_digest_algos"]:
-            new_hash = hash_message(message=current_ciphertext, hash_algo=hash_algo)
-            expected_hash = authentication_data["payload_digests"][hash_algo]
-            assert new_hash == expected_hash
+        for hash_algo in payload_encryption_node["hash_algos"]:
+            real_digest  = hash_message(message=current_ciphertext, hash_algo=hash_algo)
+            expected_digest = authentication_data["payload_digests"][hash_algo]
+            assert real_digest == expected_digest
+        assert set(payload_encryption_node["hash_algos"]) == set(authentication_data["payload_digests"])
 
         cipherdict = {"ciphertext": current_ciphertext}
         cipherdict.update(authentication_data["payload_macs"])
@@ -226,13 +233,16 @@ def test_invalid_payload_encryption_pipeline():
     payload_cipher_layers_extract = {
         "cipher_algo": "RSA_OAEP",
         "symkey": b"123",
-        "payload_digest_algos": SUPPORTED_HASH_ALGOS[0],
+        "hash_algos": SUPPORTED_HASH_ALGOS[0],
     }
+    secrets = dict(
+        payload_plaintext_hash_algos=[],
+        payload_cipher_layer_extracts=[payload_cipher_layers_extract],
+    )
+
     output_stream = io.BytesIO()
     with pytest.raises(OperationNotSupported):
-        PayloadEncryptionPipeline(
-            payload_cipher_layer_extracts=[payload_cipher_layers_extract], output_stream=output_stream
-        )
+        PayloadEncryptionPipeline(output_stream=output_stream, secrets=secrets)
 
 
 @pytest.mark.parametrize("cipher_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)

@@ -396,20 +396,31 @@ class CryptainerEncryptor(CryptainerBase):
         :return: cryptainer with all the information needed to attempt data decryption
         """
 
-        payload = self._load_all_payload_bytes(payload)  # Ensure we get the whole payload buffer
+        payload_plaintext = self._load_all_payload_bytes(payload)  # Ensure we get the whole payload buffer
 
         cryptainer, secrets = self._generate_cryptainer_base_and_secrets(
             cryptoconf=cryptoconf, cryptainer_metadata=cryptainer_metadata
         )
 
-        payload_ciphertext, payload_integrity_tags = self._encrypt_and_hash_payload(
-            payload, payload_cipher_layer_extracts
+        payload_plaintext_hash_algos = secrets["payload_plaintext_hash_algos"]
+        plaintext_digests = {
+            payload_hash_algo: hash_message(payload_plaintext, hash_algo=payload_hash_algo)
+            for payload_hash_algo in payload_plaintext_hash_algos
+        }
+
+        payload_cipher_layer_extracts = secrets["payload_cipher_layer_extracts"]
+        payload_ciphertext, ciphertext_integrity_tags = self._encrypt_and_hash_payload(
+            payload_plaintext, payload_cipher_layer_extracts
         )
 
         cryptainer["payload_ciphertext_struct"] = dict(
             ciphertext_location=PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE, ciphertext_value=payload_ciphertext
         )
 
+        payload_integrity_tags = dict(
+            plaintext_digests=plaintext_digests,
+            ciphertext_integrity_tags=ciphertext_integrity_tags,
+        )
         self.add_authentication_data_to_cryptainer(cryptainer, payload_integrity_tags)
 
         return cryptainer
@@ -429,12 +440,12 @@ class CryptainerEncryptor(CryptainerBase):
         assert payload_cipher_layer_extracts, payload_cipher_layer_extracts  # Else security flaw!
 
         payload_current = payload
-        payload_integrity_tags = []
+        ciphertext_integrity_tags = []
 
         for payload_cipher_layer_extract in payload_cipher_layer_extracts:
             payload_cipher_algo = payload_cipher_layer_extract["cipher_algo"]
             symkey = payload_cipher_layer_extract["symkey"]
-            payload_hash_algos = payload_cipher_layer_extract["payload_digest_algos"]
+            payload_hash_algos = payload_cipher_layer_extract["hash_algos"]
 
             logger.debug("Encrypting payload with symmetric key of type %r", payload_cipher_algo)
             payload_cipherdict = encrypt_bytestring(
@@ -454,13 +465,13 @@ class CryptainerEncryptor(CryptainerBase):
                 for payload_hash_algo in payload_hash_algos
             }
 
-            payload_integrity_tags.append(
+            ciphertext_integrity_tags.append(
                 dict(payload_macs=payload_cipherdict, payload_digests=payload_digests)  # Only remains tags, macs etc.
             )
 
             payload_current = payload_ciphertext
 
-        return payload_current, payload_integrity_tags
+        return payload_current, ciphertext_integrity_tags
 
     def _generate_cryptainer_base_and_secrets(self, cryptoconf: dict, cryptainer_metadata=None) -> tuple:
         """
@@ -491,7 +502,7 @@ class CryptainerEncryptor(CryptainerBase):
             raise SchemaValidationError("Empty payload_cipher_layers list is forbidden in cryptoconf")
 
         payload_plaintext_hash_algos = [
-            signature["payload_digest_algo"] for signature in cryptoconf.get("payload_plaintext_signatures", ())
+            signature["payload_digest_algo"] for signature in cryptainer.get("payload_plaintext_signatures", ())
         ]
 
         payload_cipher_layer_extracts = []  # Sensitive info with secret keys!
@@ -518,7 +529,7 @@ class CryptainerEncryptor(CryptainerBase):
             payload_cipher_layer_extract = dict(
                 cipher_algo=payload_cipher_algo,
                 symkey=symkey,
-                payload_hash_algos=[
+                hash_algos=[
                     signature["payload_digest_algo"] for signature in payload_cipher_layer["payload_signatures"]
                 ],
             )
@@ -700,7 +711,7 @@ class CryptainerEncryptor(CryptainerBase):
         )
         return key_cipherdict
 
-    def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: list):
+    def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: dict):
         def _inject_layer_signatures(signature_confs, payload_digests):
             _encountered_payload_hash_algos = set()
             for signature_conf in signature_confs:
@@ -720,8 +731,10 @@ class CryptainerEncryptor(CryptainerBase):
 
         plaintext_digests = payload_integrity_tags["plaintext_digests"]
         if plaintext_digests:
-            _inject_layer_signatures(signature_confs=cryptainer["payload_plaintext_signatures"],  # Entry MUST exist here
-                                     payload_digests=plaintext_digests)
+            _inject_layer_signatures(
+                signature_confs=cryptainer["payload_plaintext_signatures"],  # Entry MUST exist here
+                payload_digests=plaintext_digests,
+            )
 
         ciphertext_integrity_tags = payload_integrity_tags["ciphertext_integrity_tags"]
         del payload_integrity_tags
@@ -735,12 +748,13 @@ class CryptainerEncryptor(CryptainerBase):
             cryptainer["payload_cipher_layers"], ciphertext_integrity_tags
         ):
             assert payload_cipher_layer["payload_macs"] is None  # Set at cryptainer build time
-            payload_cipher_layer["payload_macs"] = ciphertext_integrity_tags["payload_macs"]
+            payload_cipher_layer["payload_macs"] = ciphertext_integrity_tags_dict["payload_macs"]
 
-            payload_digests = ciphertext_integrity_tags["payload_digests"]
+            payload_digests = ciphertext_integrity_tags_dict["payload_digests"]
 
-            _inject_layer_signatures(signature_confs=payload_cipher_layer["payload_signatures"],
-                                     payload_digests=payload_digests)
+            _inject_layer_signatures(
+                signature_confs=payload_cipher_layer["payload_signatures"], payload_digests=payload_digests
+            )
 
         cryptainer["cryptainer_state"] = CRYPTAINER_STATES.FINISHED
 
@@ -753,9 +767,7 @@ class CryptainerEncryptor(CryptainerBase):
         :return: dictionary with information needed to verify_integrity_tags signature
         """
         payload_signature_algo = cryptoconf["payload_signature_algo"]
-        payload_digest = cryptoconf[
-            "payload_digest_value"
-        ]  # Must have been set before, using payload_hash_algo field
+        payload_digest = cryptoconf["payload_digest_value"]  # Must have been set before, using payload_hash_algo field
         assert payload_digest, payload_digest
 
         trustee_proxy = get_trustee_proxy(

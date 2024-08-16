@@ -231,6 +231,30 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify_integrity_tag
     return b"".join(decrypted_chunks)
 
 
+def _create_hashers_dict(hash_algos):
+    hashers_dict = {}
+
+    for hash_algo in hash_algos:
+        hasher_instance = _crypto_backend.get_hasher_instance(hash_algo)
+        hashers_dict[hash_algo] = hasher_instance
+
+    return hashers_dict
+
+
+def _update_hashers_dict(hashers_dict, chunk):
+    for hash_algo, hasher_instance in hashers_dict.items():
+        hasher_instance.update(chunk)
+
+
+def _get_hashers_dict_digests(hashers_dict):
+    digests = {}
+    for hash_algo, hasher_instance in hashers_dict.items():
+        digest = hasher_instance.digest()
+        assert 32 <= len(digest) <= 64, len(digest)
+        digests[hash_algo] = digest
+    return digests
+
+
 class EncryptionNodeBase:
     """General class of Encrytion Stream Node"""
 
@@ -242,25 +266,18 @@ class EncryptionNodeBase:
     _cipher = None  # Created by subclasses
     _hashers_dict = None
 
-    def __init__(self, payload_digest_algo=()):
+    def __init__(self, payload_digest_algos=()):
         """Base class for nodes able to encrypt and digest data chunk by chunk.
 
-        :param payload_digest_algo: different hash algorithms to apply on ciphertext
+        :param payload_digest_algos: different hash algorithms to apply on ciphertext
         """
-        hashers_dict = {}
-
-        for hash_algo in payload_digest_algo:
-            hasher_instance = _crypto_backend.get_hasher_instance(hash_algo)
-            hashers_dict[hash_algo] = hasher_instance
-
-        self._hashers_dict = hashers_dict
+        self._hashers_dict = _create_hashers_dict(payload_digest_algos)
 
     def _encrypt_aligned_payload(self, plaintext):
         ciphertext = self._cipher.encrypt(plaintext)
         assert isinstance(ciphertext, bytes), repr(ciphertext)
 
-        for hash_algo, hasher_instance in self._hashers_dict.items():
-            hasher_instance.update(ciphertext)
+        _update_hashers_dict(self._hashers_dict)
 
         return ciphertext
 
@@ -297,17 +314,12 @@ class EncryptionNodeBase:
 
         return ciphertext
 
-    def get_payload_integrity_tags(self) -> dict:
+    def get_ciphertext_integrity_tags(self) -> dict:
         assert self._is_finished
         return dict(payload_macs=self._get_payload_macs(), payload_digests=self._get_payload_digests())
 
     def _get_payload_digests(self) -> dict:
-        hashes = {}
-        for hash_algo, hasher_instance in self._hashers_dict.items():
-            digest = hasher_instance.digest()
-            assert 32 <= len(digest) <= 64, len(digest)
-            hashes[hash_algo] = digest
-        return hashes
+        return _get_hashers_dict_digests(self._hashers_dict)
 
     def _get_payload_macs(self) -> dict:
         return {}
@@ -318,8 +330,8 @@ class AesCbcEncryptionNode(EncryptionNodeBase):
 
     BLOCK_SIZE = _crypto_backend.AES_BLOCK_SIZE
 
-    def __init__(self, key_dict: dict, payload_digest_algo=()):
-        super().__init__(payload_digest_algo=payload_digest_algo)
+    def __init__(self, key_dict: dict, payload_digest_algos=()):
+        super().__init__(payload_digest_algos=payload_digest_algos)
         self._key = key_dict["key"]
         self._iv = key_dict["iv"]
         self._cipher = _crypto_backend.build_aes_cbc_cipher(self._key, iv=self._iv)
@@ -328,8 +340,8 @@ class AesCbcEncryptionNode(EncryptionNodeBase):
 class AesEaxEncryptionNode(EncryptionNodeBase):
     """Encrypt a bytestring using AES (EAX mode)."""
 
-    def __init__(self, key_dict: dict, payload_digest_algo=()):
-        super().__init__(payload_digest_algo=payload_digest_algo)
+    def __init__(self, key_dict: dict, payload_digest_algos=()):
+        super().__init__(payload_digest_algos=payload_digest_algos)
         self._key = key_dict["key"]
         self._nonce = key_dict["nonce"]
         self._cipher = _crypto_backend.build_aes_eax_cipher(self._key, nonce=self._nonce)
@@ -341,8 +353,8 @@ class AesEaxEncryptionNode(EncryptionNodeBase):
 class Chacha20Poly1305EncryptionNode(EncryptionNodeBase):
     """Encrypt a bytestring using ChaCha20 with Poly1305 authentication."""
 
-    def __init__(self, key_dict: dict, payload_digest_algo=()):
-        super().__init__(payload_digest_algo=payload_digest_algo)
+    def __init__(self, key_dict: dict, payload_digest_algos=()):
+        super().__init__(payload_digest_algos=payload_digest_algos)
 
         self._key = key_dict["key"]
         self._nonce = key_dict["nonce"]
@@ -361,9 +373,14 @@ class PayloadEncryptionPipeline:
 
     _finalized = False
 
-    def __init__(self, output_stream: BinaryIO, payload_cipher_layer_extracts: list):
+    def __init__(self, output_stream: BinaryIO, secrets: dict):
         self._output_stream = output_stream
         self._cipher_streams = []
+
+        _payload_plaintext_digest_algos = secrets["payload_plaintext_digest_algos"]
+        self._plaintext_hashers_dict = _create_hashers_dict(_payload_plaintext_digest_algos)
+
+        payload_cipher_layer_extracts = secrets["payload_cipher_layer_extracts"]
 
         for payload_cipher_layer_extract in payload_cipher_layer_extracts:
             payload_cipher_algo = payload_cipher_layer_extract["cipher_algo"]
@@ -376,10 +393,13 @@ class PayloadEncryptionPipeline:
             if encryption_class is None:
                 raise OperationNotSupported("Node class %s is not implemented" % payload_cipher_algo)
 
-            self._cipher_streams.append(encryption_class(key_dict=symkey, payload_digest_algo=payload_digest_algos))
+            self._cipher_streams.append(encryption_class(key_dict=symkey, payload_digest_algos=payload_digest_algos))
 
     def encrypt_chunk(self, chunk):
         assert not self._finalized
+
+        _update_hashers_dict(self._plaintext_hashers_dict)
+
         for cipher in self._cipher_streams:
             ciphertext = cipher.encrypt(chunk)
             chunk = ciphertext
@@ -404,10 +424,15 @@ class PayloadEncryptionPipeline:
             "Getting payload integrity tags of payload encryption pipeline with %d encryption nodes",
             len(self._cipher_streams),
         )
-        integrity_tags_list = []
+
+        plaintext_digests = _get_hashers_dict_digests(self._plaintext_hashers_dict)
+
+        ciphertext_integrity_tags = []
         for cipher in self._cipher_streams:
-            integrity_tags_list.append(cipher.get_payload_integrity_tags())
-        return integrity_tags_list
+            ciphertext_integrity_tags.append(cipher.get_ciphertext_integrity_tags())
+
+        return dict(plaintext_digests=plaintext_digests,
+                    ciphertext_integrity_tags=ciphertext_integrity_tags)
 
 
 # This file is part of Witness Angel Cryptolib

@@ -3020,9 +3020,9 @@ def test_generate_cryptainer_base_and_symmetric_keys():
         del payload_cipher_layer["symkey"]
 
     assert extracts == [
-        {"cipher_algo": "AES_EAX", "payload_digest_algos": []},
-        {"cipher_algo": "AES_CBC", "payload_digest_algos": ["SHA3_512"]},
-        {"cipher_algo": "CHACHA20_POLY1305", "payload_digest_algos": ["SHA3_256", "SHA512"]},
+        {"cipher_algo": "AES_EAX", "payload_hash_algos": []},
+        {"cipher_algo": "AES_CBC", "payload_hash_algos": ["SHA3_512"]},
+        {"cipher_algo": "CHACHA20_POLY1305", "payload_hash_algos": ["SHA3_256", "SHA512"]},
     ]
 
 

@@ -266,12 +266,12 @@ class EncryptionNodeBase:
     _cipher = None  # Created by subclasses
     _hashers_dict = None
 
-    def __init__(self, payload_digest_algos=()):
+    def __init__(self, payload_hash_algos=()):
         """Base class for nodes able to encrypt and digest data chunk by chunk.
 
-        :param payload_digest_algos: different hash algorithms to apply on ciphertext
+        :param payload_hash_algos: different hash algorithms to apply on ciphertext
         """
-        self._hashers_dict = _create_hashers_dict(payload_digest_algos)
+        self._hashers_dict = _create_hashers_dict(payload_hash_algos)
 
     def _encrypt_aligned_payload(self, plaintext):
         ciphertext = self._cipher.encrypt(plaintext)
@@ -330,8 +330,8 @@ class AesCbcEncryptionNode(EncryptionNodeBase):
 
     BLOCK_SIZE = _crypto_backend.AES_BLOCK_SIZE
 
-    def __init__(self, key_dict: dict, payload_digest_algos=()):
-        super().__init__(payload_digest_algos=payload_digest_algos)
+    def __init__(self, key_dict: dict, payload_hash_algos=()):
+        super().__init__(payload_hash_algos=payload_hash_algos)
         self._key = key_dict["key"]
         self._iv = key_dict["iv"]
         self._cipher = _crypto_backend.build_aes_cbc_cipher(self._key, iv=self._iv)
@@ -340,8 +340,8 @@ class AesCbcEncryptionNode(EncryptionNodeBase):
 class AesEaxEncryptionNode(EncryptionNodeBase):
     """Encrypt a bytestring using AES (EAX mode)."""
 
-    def __init__(self, key_dict: dict, payload_digest_algos=()):
-        super().__init__(payload_digest_algos=payload_digest_algos)
+    def __init__(self, key_dict: dict, payload_hash_algos=()):
+        super().__init__(payload_hash_algos=payload_hash_algos)
         self._key = key_dict["key"]
         self._nonce = key_dict["nonce"]
         self._cipher = _crypto_backend.build_aes_eax_cipher(self._key, nonce=self._nonce)
@@ -353,8 +353,8 @@ class AesEaxEncryptionNode(EncryptionNodeBase):
 class Chacha20Poly1305EncryptionNode(EncryptionNodeBase):
     """Encrypt a bytestring using ChaCha20 with Poly1305 authentication."""
 
-    def __init__(self, key_dict: dict, payload_digest_algos=()):
-        super().__init__(payload_digest_algos=payload_digest_algos)
+    def __init__(self, key_dict: dict, payload_hash_algos=()):
+        super().__init__(payload_hash_algos=payload_hash_algos)
 
         self._key = key_dict["key"]
         self._nonce = key_dict["nonce"]
@@ -377,15 +377,15 @@ class PayloadEncryptionPipeline:
         self._output_stream = output_stream
         self._cipher_streams = []
 
-        _payload_plaintext_digest_algos = secrets["payload_plaintext_digest_algos"]
-        self._plaintext_hashers_dict = _create_hashers_dict(_payload_plaintext_digest_algos)
+        _payload_plaintext_hash_algos = secrets["payload_plaintext_hash_algos"]
+        self._plaintext_hashers_dict = _create_hashers_dict(_payload_plaintext_hash_algos)
 
         payload_cipher_layer_extracts = secrets["payload_cipher_layer_extracts"]
 
         for payload_cipher_layer_extract in payload_cipher_layer_extracts:
             payload_cipher_algo = payload_cipher_layer_extract["cipher_algo"]
             symkey = payload_cipher_layer_extract["symkey"]
-            payload_digest_algos = payload_cipher_layer_extract["payload_digest_algos"]
+            payload_hash_algos = payload_cipher_layer_extract["payload_hash_algos"]
 
             cipher_algo_conf = _get_cipher_algo_conf(cipher_algo=payload_cipher_algo)
             encryption_class = cipher_algo_conf["encryption_node_class"]
@@ -393,7 +393,7 @@ class PayloadEncryptionPipeline:
             if encryption_class is None:
                 raise OperationNotSupported("Node class %s is not implemented" % payload_cipher_algo)
 
-            self._cipher_streams.append(encryption_class(key_dict=symkey, payload_digest_algos=payload_digest_algos))
+            self._cipher_streams.append(encryption_class(key_dict=symkey, payload_hash_algos=payload_hash_algos))
 
     def encrypt_chunk(self, chunk):
         assert not self._finalized

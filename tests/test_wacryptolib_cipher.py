@@ -160,20 +160,31 @@ _stream_algo_nodes = [[algo] for algo in STREAMABLE_CIPHER_ALGOS] + [STREAMABLE_
 def test_valid_payload_encryption_pipeline(cipher_algo_list):
     output_stream = io.BytesIO()
 
+
+    payload_plaintext_hash_algos = random.choices(
+        SUPPORTED_HASH_ALGOS,
+        k=random.randint(1, len(SUPPORTED_HASH_ALGOS))  # Length of the returned list
+    ),
+
     payload_cipher_layer_extracts = []
     for cipher_algo in cipher_algo_list:
         payload_cipher_layers_extract = {
             "cipher_algo": cipher_algo,
             "symkey": generate_symkey(cipher_algo),
-            "payload_digest_algos": random.choices(
-                SUPPORTED_HASH_ALGOS, k=random.randint(1, len(SUPPORTED_HASH_ALGOS))
+            "payload_hash_algos": random.choices(
+                SUPPORTED_HASH_ALGOS,
+                k=random.randint(1, len(SUPPORTED_HASH_ALGOS))  # Length of the returned list
             ),
         }
         payload_cipher_layer_extracts.append(payload_cipher_layers_extract)
     print(payload_cipher_layer_extracts)
 
     encryption_pipeline = PayloadEncryptionPipeline(
-        payload_cipher_layer_extracts=payload_cipher_layer_extracts, output_stream=output_stream
+        output_stream=output_stream,
+        secrets=dict(
+            payload_plaintext_hash_algos=payload_plaintext_hash_algos,
+            payload_cipher_layer_extracts=payload_cipher_layer_extracts
+        )
     )
 
     plaintext_full = get_random_bytes(random.randint(10, 10000))

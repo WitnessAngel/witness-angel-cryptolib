@@ -366,6 +366,13 @@ def SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
 
 
 COMPLEX_SHAMIR_CRYPTOCONF = dict(
+    payload_plaintext_signatures=[
+        dict(
+            payload_digest_algo="SHA512",
+            payload_signature_algo="DSA_DSS",
+            payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+        )
+    ],
     payload_cipher_layers=[
         dict(
             payload_cipher_algo="AES_EAX",
@@ -456,7 +463,7 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                 ),
             ],
         ),
-    ]
+    ],
 )
 
 
@@ -2879,10 +2886,11 @@ def test_get_cryptoconf_summary():
 
     assert summary == textwrap.dedent(
         """\
+        Plaintext signatures: None
         Data encryption layer 1: AES_CBC
           Key encryption layers:
             RSA_OAEP via trustee 'local device'
-          Signatures:
+          Ciphertext signatures:
             SHA256/DSA_DSS via trustee 'local device'
             """
     )  # Ending by newline!
@@ -2912,14 +2920,16 @@ def test_get_cryptoconf_summary():
 
     assert summary == textwrap.dedent(
         """\
+        Plaintext signatures:
+          SHA512/DSA_DSS via trustee 'local device'
         Data encryption layer 1: AES_EAX
           Key encryption layers:
             RSA_OAEP via trustee 'server www.mydomain.com'
-          Signatures: None
+          Ciphertext signatures: None
         Data encryption layer 2: AES_CBC
           Key encryption layers:
             RSA_OAEP via trustee 'authenticator 320b35bb-e735-4f6a-a4b2-ada124e30190'
-          Signatures:
+          Ciphertext signatures:
             SHA3_512/DSA_DSS via trustee 'local device'
         Data encryption layer 3: CHACHA20_POLY1305
           Key encryption layers:
@@ -2937,7 +2947,7 @@ def test_get_cryptoconf_summary():
                 RSA_OAEP via trustee 'local device'
               Shard 4 encryption layers:
                 RSA_OAEP via trustee 'local device'
-          Signatures:
+          Ciphertext signatures:
             SHA3_256/RSA_PSS via trustee 'local device'
             SHA512/ECC_DSS via trustee 'local device'
             """
@@ -3234,7 +3244,6 @@ def test_cryptainer_validation_error_via_json_schema():
 
 
 def test_retrocompatibility_for_payload_ciphertext_signatures_field():
-
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
     layer_dict = cryptoconf["payload_cipher_layers"][0]
     layer_dict["payload_signatures"] = _temp = layer_dict.pop("payload_ciphertext_signatures")  # OLD naming

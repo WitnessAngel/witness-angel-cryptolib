@@ -2445,7 +2445,6 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
     extra_cryptainer = {}
     extra_payload_cipher_layer = {}
     extra_asymmetric_cipher_algo_block = {}
-    extra_payload_signature = {}
 
     trustee_schemas = Or(
         LOCAL_KEYFACTORY_TRUSTEE_MARKER,

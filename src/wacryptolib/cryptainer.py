@@ -874,7 +874,7 @@ class OperationReport:
         }
 
         if __debug__:  # Sanity check
-            _validate_data_tree(data_tree=error_entry, valid_schema=OPERATION_REPORT_ENTRY_SCHEMA)
+            _validate_data_tree(data_tree=error_entry, validation_schema=OPERATION_REPORT_ENTRY_SCHEMA)
 
         self._entries.append(error_entry)
 
@@ -1462,7 +1462,7 @@ class CryptainerDecryptor(CryptainerBase):
             }
         )
 
-        _validate_data_tree(data_tree=error_entry, valid_schema=SCHEMA_ERROR)
+        _validate_data_tree(data_tree=error_entry, validation_schema=SCHEMA_ERROR)
 
         return error_entry
 
@@ -1823,8 +1823,11 @@ def get_cryptoconf_summary(cryptoconf_or_cryptainer):
     def _get_signature_description(_payload_signature):
         payload_signature_trustee = payload_signature["payload_signature_trustee"]
         trustee_id = _get_trustee_displayable_identifier(payload_signature_trustee)
-        return "%s/%s via trustee '%s'" \
-            % (payload_signature["payload_digest_algo"], payload_signature["payload_signature_algo"], trustee_id)
+        return "%s/%s via trustee '%s'" % (
+            payload_signature["payload_digest_algo"],
+            payload_signature["payload_signature_algo"],
+            trustee_id,
+        )
 
     def _get_trustee_displayable_identifier(_trustee_conf):
         trustee_type = _trustee_conf.get("trustee_type", None)
@@ -1866,9 +1869,7 @@ def get_cryptoconf_summary(cryptoconf_or_cryptainer):
             )
 
     payload_plaintext_signatures = cryptoconf_or_cryptainer.get("payload_plaintext_signatures", [])
-    text_lines.append(
-        "Plaintext signatures:" + ("" if payload_plaintext_signatures else " None")
-    )
+    text_lines.append("Plaintext signatures:" + ("" if payload_plaintext_signatures else " None"))
     for payload_signature in payload_plaintext_signatures:
         text_lines.append(indent + _get_signature_description(payload_signature))
 
@@ -1878,7 +1879,9 @@ def get_cryptoconf_summary(cryptoconf_or_cryptainer):
         for key_cipher_layer in payload_cipher_layer["key_cipher_layers"]:
             _get_key_encryption_layer_description(key_cipher_layer, current_level=2)
         text_lines.append(
-            indent + "Ciphertext signatures:" + ("" if payload_cipher_layer["payload_ciphertext_signatures"] else " None")
+            indent
+            + "Ciphertext signatures:"
+            + ("" if payload_cipher_layer["payload_ciphertext_signatures"] else " None")
         )
         for payload_signature in payload_cipher_layer["payload_ciphertext_signatures"]:
             text_lines.append(2 * indent + _get_signature_description(payload_signature))
@@ -2430,15 +2433,15 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         self._purge_exceeding_cryptainers()  # Good to have now
 
 
-def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json_format: bool):
-    """Create validation schema for confs and cryptainers.
-    :param for_cryptainer: true if instance is a cryptainer
-    :param extended_json_format: true if the scheme is extended to json format
+def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, extended_json_format: bool):
+    """Create validation schema for confs and cryptainers, as well as cryptosig conf/data.
+
+    :param for_cryptainer: true to add "after processing" fields of cryptainer/cryptosig
+    :param for_cryptosig: true to limit fields to those of media signatures (no ciphers are configured)
+    :param extended_json_format: true if the schema is formatted as extended-json format (with $binary etc.)
 
     :return: a schema.
     """
-
-    # FIXME add signature of cleartext payload too, directly at root of cryptainer? Or rework the whole structure of signatures?
 
     micro_schemas = get_validation_micro_schemas(extended_json_format=extended_json_format)
 
@@ -2476,8 +2479,9 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
 
         extra_cryptainer = {
             "cryptainer_state": Or(CRYPTAINER_STATES.STARTED, CRYPTAINER_STATES.FINISHED),
-            "cryptainer_format": "cryptainer_1.0",
+            "cryptainer_format": CRYPTAINER_FORMAT,
             "cryptainer_uid": micro_schemas.schema_uid,
+            "cryptainer_metadata": Or(dict, None),
             "payload_ciphertext_struct": Or(
                 {
                     "ciphertext_location": PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE,
@@ -2485,7 +2489,6 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
                 },
                 OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
             ),
-            "cryptainer_metadata": Or(dict, None),
         }
 
         extra_payload_cipher_layer = {
@@ -2545,59 +2548,83 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
             ## print(">>>>>>>> WE convert legacy name 'payload_signatures' ->", layer_dict)
         return layer_dict
 
-    CRYPTAINER_SCHEMA = Schema(
-        {
-            **extra_cryptainer,
-            OptionalKey("payload_plaintext_signatures"): [payload_signature],  # PLAIN data signatures
-            "payload_cipher_layers": And(
-                [
-                    And(
-                        Use(_handle_payload_signatures_retrocompatibility),
-                        {
-                            "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
-                            "payload_ciphertext_signatures": [payload_signature],  # Signatures AFTER encryption
-                            **extra_payload_cipher_layer,
-                            "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,
-                        },
-                    )
-                ],
-                len,
-            ),  # Must be non-empty!
-            OptionalKey("keychain_uid"): micro_schemas.schema_uid,
+    full_schema_dict = {
+        **extra_cryptainer,
+        OptionalKey("payload_plaintext_signatures"): [payload_signature],  # PLAIN data signatures
+        "payload_cipher_layers": And(
+            [
+                And(
+                    Use(_handle_payload_signatures_retrocompatibility),
+                    {
+                        "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
+                        "payload_ciphertext_signatures": [payload_signature],  # Signatures AFTER encryption
+                        **extra_payload_cipher_layer,
+                        "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,
+                    },
+                )
+            ],
+            len,
+        ),  # Must be non-empty!
+        OptionalKey("keychain_uid"): micro_schemas.schema_uid,
+    }
+
+    if for_cryptosig:
+        # Subset of cryptainer just for plaintext signatures (as config or as finished signature) !
+        relevant_sig_fields = ["payload_plaintext_signatures"]
+        if for_cryptainer:
+            relevant_sig_fields += ["cryptainer_state", "cryptainer_format", "cryptainer_uid", "cryptainer_metadata"]
+        full_schema_dict = {
+            k: v
+            for (k, v) in full_schema_dict.items()
+            if k in relevant_sig_fields
         }
-    )
 
-    return CRYPTAINER_SCHEMA
+    return Schema(full_schema_dict)
 
 
-CRYPTOCONF_SCHEMA_PYTHON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=False, extended_json_format=False)
-CRYPTOCONF_SCHEMA_JSON = _create_cryptainer_and_cryptoconf_schema(
-    for_cryptainer=False, extended_json_format=True
-).json_schema("conf_schema.json")
-CRYPTAINER_SCHEMA_PYTHON = _create_cryptainer_and_cryptoconf_schema(for_cryptainer=True, extended_json_format=False)
-CRYPTAINER_SCHEMA_JSON = _create_cryptainer_and_cryptoconf_schema(
-    for_cryptainer=True, extended_json_format=True
+# CONFIGURATION IN ORDER TO ENCRYPT DATA
+CRYPTOCONF_SCHEMA_PYTHON = _create_cryptostructure_schema(for_cryptainer=False, for_cryptosig=False, extended_json_format=False)
+CRYPTOCONF_SCHEMA_JSON = _create_cryptostructure_schema(
+    for_cryptainer=False, for_cryptosig=False, extended_json_format=True
+).json_schema("cryptoconf_schema.json")
+
+# CONTAINER OF ENCRYPTED DATA
+CRYPTAINER_SCHEMA_PYTHON = _create_cryptostructure_schema(for_cryptainer=True, for_cryptosig=False, extended_json_format=False)
+CRYPTAINER_SCHEMA_JSON = _create_cryptostructure_schema(
+    for_cryptainer=True, for_cryptosig=False, extended_json_format=True
 ).json_schema("cryptainer_schema.json")
 
+# CONFIGURATION IN ORDER TO ONLY SIGN DATA
+SIGCONF_SCHEMA_PYTHON = _create_cryptostructure_schema(for_cryptainer=False, for_cryptosig=True, extended_json_format=False)
+SIGCONF_SCHEMA_JSON = _create_cryptostructure_schema(
+    for_cryptainer=False, for_cryptosig=True, extended_json_format=True
+).json_schema("sig_schema.json")
 
-def _validate_data_tree(data_tree: dict, valid_schema: Union[dict, Schema]):  # Fixme why call it "valid_schema"?
+# CONTAINER OF SIGNATURES FOR DATA
+SIGAINER_SCHEMA_PYTHON = _create_cryptostructure_schema(for_cryptainer=True, for_cryptosig=True, extended_json_format=False)
+SIGAINER_SCHEMA_JSON = _create_cryptostructure_schema(
+    for_cryptainer=True, for_cryptosig=True, extended_json_format=True
+).json_schema("sig_schema.json")
+
+
+def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema]):  # Fixme why call it "valid_schema"?
     """Allows the validation of a data_tree with a pythonschema or jsonschema
 
     :param data_tree: cryptainer or cryptoconf to validate
     :param valid_schema: validation scheme
     """
-    if isinstance(valid_schema, Schema):
+    if isinstance(validation_schema, Schema):
         # we use the python schema module
         try:
-            valid_schema.validate(data_tree)
+            validation_schema.validate(data_tree)
         except pythonschema.SchemaError as exc:
             raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
 
     else:
         # we use the json schema module
-        assert isinstance(valid_schema, dict)
+        assert isinstance(validation_schema, dict)
         try:
-            jsonschema_validate(instance=data_tree, schema=valid_schema)
+            jsonschema_validate(instance=data_tree, schema=validation_schema)
         except jsonschema.exceptions.ValidationError as exc:
             raise SchemaValidationError("Error validating data tree with json-schema: {}".format(exc)) from exc
 
@@ -2611,7 +2638,7 @@ def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False):
 
     schema = CRYPTAINER_SCHEMA_JSON if jsonschema_mode else CRYPTAINER_SCHEMA_PYTHON
 
-    _validate_data_tree(data_tree=cryptainer, valid_schema=schema)
+    _validate_data_tree(data_tree=cryptainer, validation_schema=schema)
 
 
 def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
@@ -2623,4 +2650,4 @@ def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
 
     schema = CRYPTOCONF_SCHEMA_JSON if jsonschema_mode else CRYPTOCONF_SCHEMA_PYTHON
 
-    _validate_data_tree(data_tree=cryptoconf, valid_schema=schema)
+    _validate_data_tree(data_tree=cryptoconf, validation_schema=schema)

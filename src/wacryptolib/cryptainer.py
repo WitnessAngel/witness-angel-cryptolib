@@ -20,7 +20,7 @@ import schema as pythonschema
 from bson import json_util
 from jsonrpc_requests import JSONRPCError
 from jsonschema import validate as jsonschema_validate
-from schema import And, Or, Schema, Optional as OptionalKey
+from schema import And, Or, Schema, Optional as OptionalKey, Use
 
 from wacryptolib.cipher import (
     encrypt_bytestring,
@@ -169,7 +169,7 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
     for cryptainer in cryptainers:
         keychain_uid = cryptainer["keychain_uid"]
         for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
-            for signature_conf in payload_cipher_layer["payload_signatures"]:
+            for signature_conf in payload_cipher_layer["payload_ciphertext_signatures"]:
                 key_algo_signature = signature_conf["payload_signature_algo"]
                 keychain_uid_for_signature = signature_conf.get("keychain_uid") or keychain_uid
                 trustee_conf = signature_conf["payload_signature_trustee"]
@@ -530,7 +530,8 @@ class CryptainerEncryptor(CryptainerBase):
                 cipher_algo=payload_cipher_algo,
                 symkey=symkey,
                 hash_algos=[
-                    signature["payload_digest_algo"] for signature in payload_cipher_layer["payload_signatures"]
+                    signature["payload_digest_algo"]
+                    for signature in payload_cipher_layer["payload_ciphertext_signatures"]
                 ],
             )
             payload_cipher_layer_extracts.append(payload_cipher_layer_extract)
@@ -753,7 +754,7 @@ class CryptainerEncryptor(CryptainerBase):
             payload_digests = ciphertext_integrity_tags_dict["payload_digests"]
 
             _inject_layer_signatures(
-                signature_confs=payload_cipher_layer["payload_signatures"], payload_digests=payload_digests
+                signature_confs=payload_cipher_layer["payload_ciphertext_signatures"], payload_digests=payload_digests
             )
 
         cryptainer["cryptainer_state"] = CRYPTAINER_STATES.FINISHED
@@ -763,7 +764,7 @@ class CryptainerEncryptor(CryptainerBase):
         Generate a signature for a specific ciphered payload.
 
         :param default_keychain_uid: default uuid for the set of encryption keys used
-        :param cryptoconf: configuration tree inside payload_signatures, which MUST already contain the message digest
+        :param cryptoconf: configuration tree inside payload_\*_signatures, which MUST already contain the message digest
         :return: dictionary with information needed to verify_integrity_tags signature
         """
         payload_signature_algo = cryptoconf["payload_signature_algo"]
@@ -1164,7 +1165,7 @@ class CryptainerDecryptor(CryptainerBase):
         assert isinstance(payload_ciphertext, bytes), repr(payload_ciphertext)
         payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
 
-        for signature_conf in payload_cipher_layer["payload_signatures"]:
+        for signature_conf in payload_cipher_layer["payload_ciphertext_signatures"]:
             self._verify_payload_signature(  # Should NOT raise for now, just report errors!
                 default_keychain_uid=default_keychain_uid,
                 payload=payload_ciphertext,
@@ -1559,7 +1560,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         :param default_keychain_uid: default uuid for the set of encryption keys used
         :param payload: payload on which to verify signature (after digest)
-        :param cryptoconf: configuration tree inside payload_signatures
+        :param cryptoconf: configuration tree inside payload_\*_signatures
         """
 
         payload_hash_algo = cryptoconf["payload_digest_algo"]
@@ -1863,8 +1864,10 @@ def get_cryptoconf_summary(cryptoconf_or_cryptainer):
         text_lines.append(indent + "Key encryption layers:")
         for key_cipher_layer in payload_cipher_layer["key_cipher_layers"]:
             _get_key_encryption_layer_description(key_cipher_layer, current_level=2)
-        text_lines.append(indent + "Signatures:" + ("" if payload_cipher_layer["payload_signatures"] else " None"))
-        for payload_signature in payload_cipher_layer["payload_signatures"]:
+        text_lines.append(
+            indent + "Signatures:" + ("" if payload_cipher_layer["payload_ciphertext_signatures"] else " None")
+        )
+        for payload_signature in payload_cipher_layer["payload_ciphertext_signatures"]:
             payload_signature_trustee = payload_signature["payload_signature_trustee"]
             trustee_id = _get_trustee_displayable_identifier(payload_signature_trustee)
             text_lines.append(
@@ -2479,8 +2482,8 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
         }
 
         extra_payload_cipher_layer = {
-            "key_ciphertext": micro_schemas.schema_binary,
             "payload_macs": {OptionalKey("tag"): micro_schemas.schema_binary},  # For now only "tag" is used
+            "key_ciphertext": micro_schemas.schema_binary,
         }
 
         extra_asymmetric_cipher_algo_block = {"key_ciphertext": micro_schemas.schema_binary}
@@ -2529,18 +2532,27 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
     )
     _ALL_POSSIBLE_CIPHER_LAYERS_LIST.append(SHARED_SECRET_CRYPTAINER_BLOCK)
 
+    def _handle_payload_signatures_retrocompatibility(layer_dict):
+        if "payload_signatures" in layer_dict and "payload_ciphertext_signatures" not in layer_dict:
+            layer_dict["payload_ciphertext_signatures"] = layer_dict.pop("payload_signatures")  # Old naming
+            ## print(">>>>>>>> WE convert legacy name 'payload_signatures' ->", layer_dict)
+        return layer_dict
+
     CRYPTAINER_SCHEMA = Schema(
         {
             **extra_cryptainer,
             OptionalKey("payload_plaintext_signatures"): [payload_signature],  # PLAIN data signatures
             "payload_cipher_layers": And(
                 [
-                    {
-                        "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
-                        "payload_signatures": [payload_signature],  # Signatures AFTER encryption
-                        **extra_payload_cipher_layer,
-                        "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,
-                    }
+                    And(
+                        Use(_handle_payload_signatures_retrocompatibility),
+                        {
+                            "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
+                            "payload_ciphertext_signatures": [payload_signature],  # Signatures AFTER encryption
+                            **extra_payload_cipher_layer,
+                            "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,
+                        },
+                    )
                 ],
                 len,
             ),  # Must be non-empty!

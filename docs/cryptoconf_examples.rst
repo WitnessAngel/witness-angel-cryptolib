@@ -21,7 +21,7 @@ Below is a minimal cryptainer configuration in python format, with a single encr
             }
           ],
           "payload_cipher_algo":"AES_CBC",
-          "payload_signatures":[
+          "payload_ciphertext_signatures":[
             {
               "payload_digest_algo":"SHA256",
               "payload_signature_algo":"DSA_DSS",
@@ -74,7 +74,7 @@ Binary subType 03 means "UUID", whereas subType 00 means "bytes".
           "payload_cipher_algo":"AES_CBC",
           "payload_macs":{
           },
-          "payload_signatures":[
+          "payload_ciphertext_signatures":[
             {
               "payload_digest_value":{
                 "$binary":{
@@ -138,7 +138,7 @@ We also see how share secrets, symmetric ciphers, and asymmetric ciphers (RSA_OA
             }
           ],
           "payload_cipher_algo":"AES_EAX",
-          "payload_signatures":[
+          "payload_ciphertext_signatures":[
           ]
         },
         {
@@ -152,7 +152,7 @@ We also see how share secrets, symmetric ciphers, and asymmetric ciphers (RSA_OA
             }
           ],
           "payload_cipher_algo":"AES_CBC",
-          "payload_signatures":[
+          "payload_ciphertext_signatures":[
             {
               "payload_digest_algo":"SHA3_512",
               "payload_signature_algo":"DSA_DSS",
@@ -241,7 +241,7 @@ We also see how share secrets, symmetric ciphers, and asymmetric ciphers (RSA_OA
             }
           ],
           "payload_cipher_algo":"CHACHA20_POLY1305",
-          "payload_signatures":[
+          "payload_ciphertext_signatures":[
             {
               "keychain_uid":UUID("0e8e861e-f0f7-e54b-18ea-34798d5daaaa"),
               "payload_digest_algo":"SHA3_256",

@@ -15,17 +15,17 @@ CRYPTOCONF = dict(
         dict(
             payload_cipher_algo="AES_EAX",
             key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
-            payload_signatures=[],
+            payload_ciphertext_signatures=[],
         ),
         dict(
             payload_cipher_algo="CHACHA20_POLY1305",
             key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
-            payload_signatures=[],
+            payload_ciphertext_signatures=[],
         ),
         dict(
             payload_cipher_algo="AES_CBC",
             key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
-            payload_signatures=[],
+            payload_ciphertext_signatures=[],
         ),
     ]
 )

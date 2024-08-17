@@ -28,6 +28,9 @@ from wacryptolib.cipher import (
     PayloadEncryptionPipeline,
     STREAMABLE_CIPHER_ALGOS,
     SUPPORTED_CIPHER_ALGOS,
+    _create_hashers_dict,
+    _update_hashers_dict,
+    _get_hashers_dict_digests,
 )
 from wacryptolib.exceptions import (
     DecryptionError,
@@ -2570,38 +2573,66 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
 
     if for_cryptosig:
         # Subset of cryptainer just for plaintext signatures (as config or as finished signature) !
-        relevant_sig_fields = ["payload_plaintext_signatures"]
+        full_schema_dict = {"payload_plaintext_signatures": And([payload_signature], len)}  # MANDATORY HERE
         if for_cryptainer:
-            relevant_sig_fields += ["cryptainer_state", "cryptainer_format", "cryptainer_uid", "cryptainer_metadata"]
-        full_schema_dict = {
-            k: v
-            for (k, v) in full_schema_dict.items()
-            if k in relevant_sig_fields
-        }
+            _relevant_sig_fields = ["cryptainer_state", "cryptainer_format", "cryptainer_uid", "cryptainer_metadata"]
+            full_schema_dict.update({k: v for (k, v) in full_schema_dict.items() if k in _relevant_sig_fields})
 
     return Schema(full_schema_dict)
 
 
+def sign_payload_into_sigainer(payload, *, sigconf):
+    """
+    Compute digests and retrieve signatures for a plaintext payload
+    """
+
+    payload_hash_algos = [
+        signature["payload_digest_algo"] for signature in sigconf["payload_plaintext_signatures"]
+    ]
+
+    hashers_dict = _create_hashers_dict(payload_hash_algos)
+
+    if hasattr(payload, "read"):  # File-like object
+        for chunk in payload.read(DEFAULT_DATA_CHUNK_SIZE):
+            _update_hashers_dict(hashers_dict, chunk=chunk)
+    else:
+        assert isinstance(payload, bytes), payload
+        _update_hashers_dict(hashers_dict, chunk=payload)  # All at once
+
+    payload_digests = _get_hashers_dict_digests(hashers_dict)
+
+    # TODO extract code of _generate_message_signature() method!!
+    
+
+
 # CONFIGURATION IN ORDER TO ENCRYPT DATA
-CRYPTOCONF_SCHEMA_PYTHON = _create_cryptostructure_schema(for_cryptainer=False, for_cryptosig=False, extended_json_format=False)
+CRYPTOCONF_SCHEMA_PYTHON = _create_cryptostructure_schema(
+    for_cryptainer=False, for_cryptosig=False, extended_json_format=False
+)
 CRYPTOCONF_SCHEMA_JSON = _create_cryptostructure_schema(
     for_cryptainer=False, for_cryptosig=False, extended_json_format=True
 ).json_schema("cryptoconf_schema.json")
 
 # CONTAINER OF ENCRYPTED DATA
-CRYPTAINER_SCHEMA_PYTHON = _create_cryptostructure_schema(for_cryptainer=True, for_cryptosig=False, extended_json_format=False)
+CRYPTAINER_SCHEMA_PYTHON = _create_cryptostructure_schema(
+    for_cryptainer=True, for_cryptosig=False, extended_json_format=False
+)
 CRYPTAINER_SCHEMA_JSON = _create_cryptostructure_schema(
     for_cryptainer=True, for_cryptosig=False, extended_json_format=True
 ).json_schema("cryptainer_schema.json")
 
 # CONFIGURATION IN ORDER TO ONLY SIGN DATA
-SIGCONF_SCHEMA_PYTHON = _create_cryptostructure_schema(for_cryptainer=False, for_cryptosig=True, extended_json_format=False)
+SIGCONF_SCHEMA_PYTHON = _create_cryptostructure_schema(
+    for_cryptainer=False, for_cryptosig=True, extended_json_format=False
+)
 SIGCONF_SCHEMA_JSON = _create_cryptostructure_schema(
     for_cryptainer=False, for_cryptosig=True, extended_json_format=True
 ).json_schema("sig_schema.json")
 
 # CONTAINER OF SIGNATURES FOR DATA
-SIGAINER_SCHEMA_PYTHON = _create_cryptostructure_schema(for_cryptainer=True, for_cryptosig=True, extended_json_format=False)
+SIGAINER_SCHEMA_PYTHON = _create_cryptostructure_schema(
+    for_cryptainer=True, for_cryptosig=True, extended_json_format=False
+)
 SIGAINER_SCHEMA_JSON = _create_cryptostructure_schema(
     for_cryptainer=True, for_cryptosig=True, extended_json_format=True
 ).json_schema("sig_schema.json")

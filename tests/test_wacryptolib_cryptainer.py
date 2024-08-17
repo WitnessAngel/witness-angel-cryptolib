@@ -200,6 +200,13 @@ SIMPLE_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
 }
 
 COMPLEX_CRYPTOCONF = dict(
+    payload_plaintext_signatures=[
+        dict(
+            payload_digest_algo="SHA256",
+            payload_signature_algo="RSA_PSS",
+            payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+        )
+    ],
     payload_cipher_layers=[
         dict(
             payload_cipher_algo="AES_EAX",
@@ -258,7 +265,7 @@ COMPLEX_CRYPTOCONF = dict(
                 ),
             ],
         ),
-    ]
+    ],
 )
 
 COMPLEX_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
@@ -3014,7 +3021,7 @@ def test_generate_cryptainer_base_and_symmetric_keys():
     cryptainer, secrets = cryptainer_decryptor._generate_cryptainer_base_and_secrets(COMPLEX_CRYPTOCONF)
 
     payload_plaintext_hash_algos = secrets["payload_plaintext_hash_algos"]
-    assert payload_plaintext_hash_algos == []
+    assert payload_plaintext_hash_algos == ['SHA256']
 
     payload_cipher_layer_extracts = secrets["payload_cipher_layer_extracts"]
 

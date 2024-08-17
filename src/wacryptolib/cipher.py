@@ -241,13 +241,13 @@ def _create_hashers_dict(hash_algos):
         hasher_instance = _crypto_backend.get_hasher_instance(hash_algo)
         hashers_dict[hash_algo] = hasher_instance
 
-    print(">>>>>>>#### CREATING HASHERS DICT", hashers_dict)
+    ##print(">>>>>>>#### CREATING HASHERS DICT", hashers_dict)
     return hashers_dict
 
 
 def _update_hashers_dict(hashers_dict, chunk):
     for hash_algo, hasher_instance in hashers_dict.items():
-        print(">>>>>>>#### UPDATING HASHER", hasher_instance, "WITH", bytes(chunk))
+        ##print(">>>>>>>#### UPDATING HASHER", hasher_instance, "WITH", bytes(chunk))
         ##traceback.print_stack(file=sys.stdout)
         hasher_instance.update(chunk)
 
@@ -257,7 +257,7 @@ def _get_hashers_dict_digests(hashers_dict):
     for hash_algo, hasher_instance in hashers_dict.items():
         digest = hasher_instance.digest()
         assert 32 <= len(digest) <= 64, len(digest)
-        print(">>>>>>>#### GETTING DIGEST FOR", hasher_instance, "GAVE", digest)
+        ##print(">>>>>>>#### GETTING DIGEST FOR", hasher_instance, "GAVE", digest)
         digests[hash_algo] = digest
     return digests
 
@@ -295,11 +295,11 @@ class EncryptionNodeBase:
         """
         assert not self._is_finished
         if self.BLOCK_SIZE != 1:
-            print(">>>>>>>>>> CURRENT REMAINDER WAs", self._remainder)
+            ##print(">>>>>>>>>> CURRENT REMAINDER WAs", self._remainder)
             formatted_plaintext, self._remainder = utilities.gather_data_as_blocks(
                 self._remainder, plaintext, block_size=self.BLOCK_SIZE
             )
-            print(">>>>>>>>>> TRANSFORMED", plaintext, "INTO", bytes(formatted_plaintext))
+            ##print(">>>>>>>>>> TRANSFORMED", plaintext, "INTO", bytes(formatted_plaintext))
             plaintext = formatted_plaintext
         ciphertext = self._encrypt_aligned_payload(plaintext)
         return ciphertext

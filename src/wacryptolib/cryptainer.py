@@ -712,6 +712,8 @@ class CryptainerEncryptor(CryptainerBase):
         return key_cipherdict
 
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: dict):
+        default_keychain_uid = cryptainer["keychain_uid"]
+
         def _inject_layer_signatures(signature_confs, payload_digests):
             _encountered_payload_hash_algos = set()
             for signature_conf in signature_confs:
@@ -738,8 +740,6 @@ class CryptainerEncryptor(CryptainerBase):
 
         ciphertext_integrity_tags = payload_integrity_tags["ciphertext_integrity_tags"]
         del payload_integrity_tags
-
-        default_keychain_uid = cryptainer["keychain_uid"]
 
         payload_cipher_layers = cryptainer["payload_cipher_layers"]
         assert len(payload_cipher_layers) == len(ciphertext_integrity_tags)  # Sanity check
@@ -2446,6 +2446,15 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
     }
 
     if for_cryptainer:
+        extra_payload_signature = {
+            OptionalKey("payload_digest_value"): micro_schemas.schema_binary,
+            OptionalKey("payload_signature_struct"): {
+                "signature_value": micro_schemas.schema_binary,
+                "signature_timestamp_utc": micro_schemas.schema_int,
+            },
+        }
+        payload_signature.update(extra_payload_signature)
+
         extra_cryptainer = {
             "cryptainer_state": Or(CRYPTAINER_STATES.STARTED, CRYPTAINER_STATES.FINISHED),
             "cryptainer_format": "cryptainer_1.0",
@@ -2457,7 +2466,6 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
                 },
                 OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
             ),
-            OptionalKey("payload_plaintext_signatures"): [payload_signature],  # PLAIN data signatures
             "cryptainer_metadata": Or(dict, None),
         }
 
@@ -2467,14 +2475,6 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
         }
 
         extra_asymmetric_cipher_algo_block = {"key_ciphertext": micro_schemas.schema_binary}
-
-        extra_payload_signature = {
-            OptionalKey("payload_digest_value"): micro_schemas.schema_binary,
-            OptionalKey("payload_signature_struct"): {
-                "signature_value": micro_schemas.schema_binary,
-                "signature_timestamp_utc": micro_schemas.schema_int,
-            },
-        }
 
     ASYMMETRIC_CIPHER_ALGO_BLOCK = {
         "key_cipher_algo": Or(*SUPPORTED_ASYMMETRIC_KEY_ALGOS),
@@ -2520,11 +2520,10 @@ def _create_cryptainer_and_cryptoconf_schema(for_cryptainer: bool, extended_json
     )
     _ALL_POSSIBLE_CIPHER_LAYERS_LIST.append(SHARED_SECRET_CRYPTAINER_BLOCK)
 
-    payload_signature.update(extra_payload_signature)
-
     CRYPTAINER_SCHEMA = Schema(
         {
             **extra_cryptainer,
+            OptionalKey("payload_plaintext_signatures"): [payload_signature],  # PLAIN data signatures
             "payload_cipher_layers": And(
                 [
                     {

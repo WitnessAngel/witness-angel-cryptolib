@@ -1820,6 +1820,12 @@ def get_cryptoconf_summary(cryptoconf_or_cryptainer):
 
     text_lines = []
 
+    def _get_signature_description(_payload_signature):
+        payload_signature_trustee = payload_signature["payload_signature_trustee"]
+        trustee_id = _get_trustee_displayable_identifier(payload_signature_trustee)
+        return "%s/%s via trustee '%s'" \
+            % (payload_signature["payload_digest_algo"], payload_signature["payload_signature_algo"], trustee_id)
+
     def _get_trustee_displayable_identifier(_trustee_conf):
         trustee_type = _trustee_conf.get("trustee_type", None)
         if trustee_type == CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE:
@@ -1859,22 +1865,24 @@ def get_cryptoconf_summary(cryptoconf_or_cryptainer):
                 current_level * indent + "%s via trustee '%s'" % (key_cipher_layer["key_cipher_algo"], trustee_id)
             )
 
+    payload_plaintext_signatures = cryptoconf_or_cryptainer.get("payload_plaintext_signatures", [])
+    text_lines.append(
+        "Plaintext signatures:" + ("" if payload_plaintext_signatures else " None")
+    )
+    for payload_signature in payload_plaintext_signatures:
+        text_lines.append(indent + _get_signature_description(payload_signature))
+
     for idx, payload_cipher_layer in enumerate(cryptoconf_or_cryptainer["payload_cipher_layers"], start=1):
         text_lines.append("Data encryption layer %d: %s" % (idx, payload_cipher_layer["payload_cipher_algo"]))
         text_lines.append(indent + "Key encryption layers:")
         for key_cipher_layer in payload_cipher_layer["key_cipher_layers"]:
             _get_key_encryption_layer_description(key_cipher_layer, current_level=2)
         text_lines.append(
-            indent + "Signatures:" + ("" if payload_cipher_layer["payload_ciphertext_signatures"] else " None")
+            indent + "Ciphertext signatures:" + ("" if payload_cipher_layer["payload_ciphertext_signatures"] else " None")
         )
         for payload_signature in payload_cipher_layer["payload_ciphertext_signatures"]:
-            payload_signature_trustee = payload_signature["payload_signature_trustee"]
-            trustee_id = _get_trustee_displayable_identifier(payload_signature_trustee)
-            text_lines.append(
-                2 * indent
-                + "%s/%s via trustee '%s'"
-                % (payload_signature["payload_digest_algo"], payload_signature["payload_signature_algo"], trustee_id)
-            )
+            text_lines.append(2 * indent + _get_signature_description(payload_signature))
+
     result = "\n".join(text_lines) + "\n"
     return result
 

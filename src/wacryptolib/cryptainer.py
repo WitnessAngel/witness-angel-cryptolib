@@ -2629,6 +2629,17 @@ def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema])
             raise SchemaValidationError("Error validating data tree with json-schema: {}".format(exc)) from exc
 
 
+def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
+    """Validate the format of an encryption config.
+
+    :param jsonschema_mode: If True, the cryptoconf must have been loaded as raw json
+           (with $binary, $numberInt and such) and will be checked using a jsonschema validator.
+    """
+
+    schema = CRYPTOCONF_SCHEMA_JSON if jsonschema_mode else CRYPTOCONF_SCHEMA_PYTHON
+    _validate_data_tree(data_tree=cryptoconf, validation_schema=schema)
+
+
 def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False):
     """Validate the format of a cryptainer.
 
@@ -2637,17 +2648,26 @@ def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False):
     """
 
     schema = CRYPTAINER_SCHEMA_JSON if jsonschema_mode else CRYPTAINER_SCHEMA_PYTHON
-
     _validate_data_tree(data_tree=cryptainer, validation_schema=schema)
 
 
-def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
-    """Validate the format of a conf.
+def check_sigconf_sanity(cryptoconf: dict, jsonschema_mode=False):
+    """Validate the format of a plaintext signature config.
 
-    :param jsonschema_mode: If True, the cryptainer must have been loaded as raw json
+    :param jsonschema_mode: If True, the sigconf must have been loaded as raw json
            (with $binary, $numberInt and such) and will be checked using a jsonschema validator.
     """
 
-    schema = CRYPTOCONF_SCHEMA_JSON if jsonschema_mode else CRYPTOCONF_SCHEMA_PYTHON
+    schema = SIGCONF_SCHEMA_JSON if jsonschema_mode else SIGCONF_SCHEMA_PYTHON
+    _validate_data_tree(data_tree=cryptoconf, validation_schema=schema)
 
+
+def check_sigainer_sanity(cryptoconf: dict, jsonschema_mode=False):
+    """Validate the format of a plaintext signature file.
+
+    :param jsonschema_mode: If True, the sigainer must have been loaded as raw json
+           (with $binary, $numberInt and such) and will be checked using a jsonschema validator.
+    """
+
+    schema = SIGAINER_SCHEMA_JSON if jsonschema_mode else SIGAINER_SCHEMA_PYTHON
     _validate_data_tree(data_tree=cryptoconf, validation_schema=schema)

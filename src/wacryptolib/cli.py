@@ -89,7 +89,7 @@ SIMPLE_EXAMPLE_CRYPTOCONF = dict(
                     ],  # Beware, same trustee for the 2 shards, for now
                 ),
             ],
-            payload_signatures=[
+            payload_ciphertext_signatures=[
                 dict(
                     payload_digest_algo="SHA256",
                     payload_signature_algo="DSA_DSS",
@@ -484,7 +484,7 @@ def cryptoconf_add_payload_cipher_layer(ctx, sym_cipher_algo):
 
     The random symmetric key used for that encryption will then have to be protected by asymmetric encryption.
     """
-    payload_cipher_layer = {"payload_cipher_algo": sym_cipher_algo, "key_cipher_layers": [], "payload_signatures": []}
+    payload_cipher_layer = {"payload_cipher_algo": sym_cipher_algo, "key_cipher_layers": [], "payload_ciphertext_signatures": []}
     ctx.obj["cryptoconf"]["payload_cipher_layers"].append(payload_cipher_layer)
     ctx.obj["current_add_key_shared_secret"] = None  # RESET
 

@@ -102,7 +102,7 @@ VOID_CRYPTOCONF_REGARDING_KEY_CIPHER_LAYERS = dict(  # Forbidden
         dict(
             payload_cipher_algo="AES_CBC",
             key_cipher_layers=[],
-            payload_signatures=[
+            payload_ciphertext_signatures=[
                 dict(
                     payload_digest_algo="SHA256",
                     payload_signature_algo="DSA_DSS",
@@ -131,7 +131,7 @@ MISCONFIGURED_SHAMIR_CRYPTOCONF = dict(
                     ],
                 ),
             ],
-            payload_signatures=[],
+            payload_ciphertext_signatures=[],
         )
     ]
 )
@@ -142,7 +142,7 @@ SIGNATURELESS_CRYPTOCONF = dict(
         dict(
             payload_cipher_algo="AES_EAX",
             key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
-            payload_signatures=[],
+            payload_ciphertext_signatures=[],
         )
     ]
 )
@@ -162,7 +162,7 @@ SIMPLE_CRYPTOCONF = dict(
         dict(
             payload_cipher_algo="AES_CBC",
             key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
-            payload_signatures=[
+            payload_ciphertext_signatures=[
                 dict(
                     payload_digest_algo="SHA256",
                     payload_signature_algo="DSA_DSS",
@@ -179,7 +179,7 @@ SIMPLE_CRYPTOCONF_NO_SIGNING = dict(
         dict(
             payload_cipher_algo="AES_CBC",
             key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
-            payload_signatures=[],
+            payload_ciphertext_signatures=[],
         )
     ]
 )
@@ -211,7 +211,7 @@ COMPLEX_CRYPTOCONF = dict(
         dict(
             payload_cipher_algo="AES_EAX",
             key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
-            payload_signatures=[],
+            payload_ciphertext_signatures=[],
         ),
         dict(
             payload_cipher_algo="AES_CBC",
@@ -237,7 +237,7 @@ COMPLEX_CRYPTOCONF = dict(
                     ],
                 ),
             ],
-            payload_signatures=[
+            payload_ciphertext_signatures=[
                 dict(
                     payload_digest_algo="SHA3_512",
                     payload_signature_algo="DSA_DSS",
@@ -251,7 +251,7 @@ COMPLEX_CRYPTOCONF = dict(
                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
             ],
-            payload_signatures=[
+            payload_ciphertext_signatures=[
                 dict(
                     payload_digest_algo="SHA3_256",
                     payload_signature_algo="RSA_PSS",
@@ -333,7 +333,7 @@ SIMPLE_SHAMIR_CRYPTOCONF = dict(
                     ],
                 ),
             ],
-            payload_signatures=[
+            payload_ciphertext_signatures=[
                 dict(
                     payload_digest_algo="SHA256",
                     payload_signature_algo="DSA_DSS",
@@ -370,12 +370,12 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
         dict(
             payload_cipher_algo="AES_EAX",
             key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
-            payload_signatures=[],
+            payload_ciphertext_signatures=[],
         ),
         dict(
             payload_cipher_algo="AES_CBC",
             key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
-            payload_signatures=[
+            payload_ciphertext_signatures=[
                 dict(
                     payload_digest_algo="SHA3_512",
                     payload_signature_algo="DSA_DSS",
@@ -442,7 +442,7 @@ COMPLEX_SHAMIR_CRYPTOCONF = dict(
                     ],
                 )
             ],
-            payload_signatures=[
+            payload_ciphertext_signatures=[
                 dict(
                     payload_digest_algo="SHA3_256",
                     payload_signature_algo="RSA_PSS",
@@ -922,7 +922,7 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
                         ],
                     )
                 ],
-                payload_signatures=[],
+                payload_ciphertext_signatures=[],
             )
         ],
     )
@@ -1017,7 +1017,7 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
                         key_cipher_trustee=key_cipher_trustee,
                     )
                 ],
-                payload_signatures=[],
+                payload_ciphertext_signatures=[],
             )
         ]
     )
@@ -1270,7 +1270,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
                         ],
                     )
                 ],
-                payload_signatures=[],
+                payload_ciphertext_signatures=[],
             )
         ]
     )
@@ -1498,7 +1498,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
                         ],
                     ),
                 ],
-                payload_signatures=[
+                payload_ciphertext_signatures=[
                     dict(
                         payload_digest_algo="SHA256",
                         payload_signature_algo="DSA_DSS",
@@ -1698,7 +1698,7 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
                         key_cipher_algo="RSA_OAEP", key_cipher_trustee=shard_trustee, keychain_uid=keychain_uid_trustee
                     )
                 ],
-                payload_signatures=[
+                payload_ciphertext_signatures=[
                     dict(
                         payload_digest_algo="SHA256",
                         payload_signature_algo="DSA_DSS",
@@ -1969,15 +1969,17 @@ def test_decrypt_payload_from_cryptainer_with_plaintext_signature_troubles():
         return _cryptainer["payload_plaintext_signatures"][0]
 
     _test_decrypt_payload_from_cryptainer_with_signature_troubles(
-        COMPLEX_CRYPTOCONF, signature_struct_getter_cb=plaintext_signature_struct_getter_cb)
+        COMPLEX_CRYPTOCONF, signature_struct_getter_cb=plaintext_signature_struct_getter_cb
+    )
 
 
 def test_decrypt_payload_from_cryptainer_with_ciphertext_signature_troubles():
     def ciphertext_signature_struct_getter_cb(_cryptainer):
-        return _cryptainer["payload_cipher_layers"][0]["payload_signatures"][0]
+        return _cryptainer["payload_cipher_layers"][0]["payload_ciphertext_signatures"][0]
 
     _test_decrypt_payload_from_cryptainer_with_signature_troubles(
-        SIMPLE_CRYPTOCONF, signature_struct_getter_cb=ciphertext_signature_struct_getter_cb)
+        SIMPLE_CRYPTOCONF, signature_struct_getter_cb=ciphertext_signature_struct_getter_cb
+    )
 
 
 def test_passphrase_mapping_during_decryption(tmp_path):
@@ -2058,7 +2060,7 @@ def test_passphrase_mapping_during_decryption(tmp_path):
                         ],
                     ),
                 ],
-                payload_signatures=[
+                payload_ciphertext_signatures=[
                     dict(
                         payload_digest_algo="SHA256",
                         payload_signature_algo="DSA_DSS",
@@ -3229,3 +3231,27 @@ def test_cryptainer_validation_error_via_json_schema():
         with pytest.raises(ValidationError):
             corrupted_cryptainer_json = convert_native_tree_to_extended_json_tree(corrupted_cryptainer)
             check_cryptainer_sanity(cryptainer=corrupted_cryptainer_json, jsonschema_mode=True)
+
+
+def test_retrocompatibility_for_payload_ciphertext_signatures_field():
+
+    cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    layer_dict = cryptoconf["payload_cipher_layers"][0]
+    layer_dict["payload_signatures"] = _temp = layer_dict.pop("payload_ciphertext_signatures")  # OLD naming
+
+    check_cryptoconf_sanity(cryptoconf)
+
+    assert layer_dict["payload_ciphertext_signatures"] == _temp
+    assert "payload_signatures" not in layer_dict
+
+    # ---
+
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None)
+
+    layer_dict = cryptainer["payload_cipher_layers"][0]
+    layer_dict["payload_signatures"] = _temp = layer_dict.pop("payload_ciphertext_signatures")  # OLD naming
+
+    check_cryptainer_sanity(cryptainer)
+
+    assert layer_dict["payload_ciphertext_signatures"] == _temp
+    assert "payload_signatures" not in layer_dict

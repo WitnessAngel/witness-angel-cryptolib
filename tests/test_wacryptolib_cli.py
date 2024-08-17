@@ -462,7 +462,7 @@ def test_cli_encryption_and_summarize_with_custom_cryptoconf(tmp_path):
                     key_cipher_layers=[
                         dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
                     ],
-                    payload_signatures=[],
+                    payload_ciphertext_signatures=[],
                 )
             ]
         )
@@ -540,7 +540,7 @@ def test_cli_cryptoconf_generate_simple():
                     }
                 ],
                 "payload_cipher_algo": "AES_CBC",
-                "payload_signatures": [],
+                "payload_ciphertext_signatures": [],
             }
         ]
     }
@@ -570,7 +570,7 @@ def test_cli_cryptoconf_generate_simple():
                     }
                 ],
                 "payload_cipher_algo": "CHACHA20_POLY1305",
-                "payload_signatures": [],
+                "payload_ciphertext_signatures": [],
             }
         ],
     }
@@ -633,7 +633,7 @@ def test_cli_cryptoconf_generate_simple():
                     },
                 ],
                 "payload_cipher_algo": "AES_EAX",
-                "payload_signatures": [],
+                "payload_ciphertext_signatures": [],
             }
         ]
     }
@@ -682,7 +682,7 @@ def test_cli_cryptoconf_validate(tmp_path):
                 key_cipher_layers=[
                     dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
                 ],
-                payload_signatures=[],
+                payload_ciphertext_signatures=[],
             )
         ]
     )

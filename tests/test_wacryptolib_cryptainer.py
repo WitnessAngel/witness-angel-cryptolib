@@ -1660,7 +1660,8 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
 
 
 def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO CHANGE THIS NAME
-    # TODO NOT FINISH
+    # TODO FINISH THIS, TEST MORE SIGNATURE ERRORS
+    # But deduplicate with test_decrypt_payload_from_cryptainer_with_signature_troubles()
     keychain_uid = generate_uuid0()
 
     keystore_uid = generate_uuid0()
@@ -1757,6 +1758,7 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
             entry_msg_match="Failed loading signature key from pem bytestring",
             exception_class=KeyLoadingError,
         )  # SIGNATURE KEY LOADING ERROR
+
         _check_operation_report_entry(
             operation_report=operation_report,
             entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
@@ -1885,11 +1887,11 @@ def test_decrypt_payload_from_cryptainer_with_authenticated_algo_and_verify_fail
     assert operation_report.get_error_count() == 1
 
 
-def test_decrypt_payload_from_cryptainer_with_signature_troubles():
+def _test_decrypt_payload_from_cryptainer_with_signature_troubles(cryptoconf, signature_struct_getter_cb):
     verify_integrity_tags = random_bool()
 
     cryptainer_original = encrypt_payload_into_cryptainer(
-        payload=b"1234abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None
+        payload=b"1234abc", cryptoconf=cryptoconf, cryptainer_metadata=None
     )
 
     result, _operation_report = decrypt_payload_from_cryptainer(
@@ -1899,7 +1901,7 @@ def test_decrypt_payload_from_cryptainer_with_signature_troubles():
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
     # pprint(cryptainer_corrupted)
-    del cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_digest_value"]
+    del signature_struct_getter_cb(cryptainer_corrupted)["payload_digest_value"]
 
     result, _operation_report = decrypt_payload_from_cryptainer(
         cryptainer_corrupted, verify_integrity_tags=verify_integrity_tags
@@ -1907,7 +1909,7 @@ def test_decrypt_payload_from_cryptainer_with_signature_troubles():
     assert result == b"1234abc"  # Missing the payload_digest_value is OK
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
-    cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_digest_value"] = b"000"
+    signature_struct_getter_cb(cryptainer_corrupted)["payload_digest_value"] = b"000"
 
     # RuntimeError, match="Mismatch"
     result, operation_report = decrypt_payload_from_cryptainer(
@@ -1923,7 +1925,7 @@ def test_decrypt_payload_from_cryptainer_with_signature_troubles():
     assert operation_report.get_error_count() == 1
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
-    del cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_signature_struct"]
+    del signature_struct_getter_cb(cryptainer_corrupted)["payload_signature_struct"]
 
     # RuntimeError, match="Missing signature structure"
     result, operation_report = decrypt_payload_from_cryptainer(
@@ -1940,13 +1942,11 @@ def test_decrypt_payload_from_cryptainer_with_signature_troubles():
     assert operation_report.get_error_count() == 1
 
     cryptainer_corrupted = copy.deepcopy(cryptainer_original)
-    cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0]["payload_signature_struct"] = {
+    signature_struct_getter_cb(cryptainer_corrupted)["payload_signature_struct"] = {
         "signature_timestamp_utc": 1645905017,
         "signature_value": b"abcd",
     }
-    _payload_signature_algo = cryptainer_corrupted["payload_cipher_layers"][0]["payload_signatures"][0][
-        "payload_signature_algo"
-    ]
+    _payload_signature_algo = signature_struct_getter_cb(cryptainer_corrupted)["payload_signature_algo"]
 
     # SignatureVerificationError, match="signature verification"
     result, operation_report = decrypt_payload_from_cryptainer(
@@ -1962,6 +1962,22 @@ def test_decrypt_payload_from_cryptainer_with_signature_troubles():
         exception_class=SignatureVerificationError,
     )
     assert operation_report.get_error_count() == 1
+
+
+def test_decrypt_payload_from_cryptainer_with_plaintext_signature_troubles():
+    def plaintext_signature_struct_getter_cb(_cryptainer):
+        return _cryptainer["payload_plaintext_signatures"][0]
+
+    _test_decrypt_payload_from_cryptainer_with_signature_troubles(
+        COMPLEX_CRYPTOCONF, signature_struct_getter_cb=plaintext_signature_struct_getter_cb)
+
+
+def test_decrypt_payload_from_cryptainer_with_ciphertext_signature_troubles():
+    def ciphertext_signature_struct_getter_cb(_cryptainer):
+        return _cryptainer["payload_cipher_layers"][0]["payload_signatures"][0]
+
+    _test_decrypt_payload_from_cryptainer_with_signature_troubles(
+        SIMPLE_CRYPTOCONF, signature_struct_getter_cb=ciphertext_signature_struct_getter_cb)
 
 
 def test_passphrase_mapping_during_decryption(tmp_path):
@@ -3021,7 +3037,7 @@ def test_generate_cryptainer_base_and_symmetric_keys():
     cryptainer, secrets = cryptainer_decryptor._generate_cryptainer_base_and_secrets(COMPLEX_CRYPTOCONF)
 
     payload_plaintext_hash_algos = secrets["payload_plaintext_hash_algos"]
-    assert payload_plaintext_hash_algos == ['SHA256']
+    assert payload_plaintext_hash_algos == ["SHA256"]
 
     payload_cipher_layer_extracts = secrets["payload_cipher_layer_extracts"]
 

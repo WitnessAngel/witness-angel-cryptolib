@@ -1140,6 +1140,15 @@ class CryptainerDecryptor(CryptainerBase):
                     """
                     break
 
+        if payload_current is not None:
+            for signature_conf in cryptainer.get("payload_plaintext_signatures", ()):
+                self._verify_payload_signature(  # Should NOT raise for now, just report errors!
+                    default_keychain_uid=default_keychain_uid,
+                    payload=payload_current,
+                    cryptoconf=signature_conf,
+                    operation_report=operation_report,
+                )
+
         return payload_current, operation_report
 
     def _decrypt_single_payload_cipher_layer(

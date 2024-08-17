@@ -5,7 +5,7 @@ Cryptoconf examples
 Simple cryptoconf
 +++++++++++++++++++++++++++
 
-Below is a minimal cryptainer configuration in python format, with a single encryption layer and its single signature, both backed by the local "trustee" (or "key guardian") of the device; this workflow should not be used in real life of course, since the data is not protected against illegal reads.
+Below is a minimal cryptainer configuration in python format, with a single encryption layer and its single signature, both backed by the local "trustee" (or "key guardian") of the device; this workflow should not be used in real life of course, since the data is not protected against illegal reads. Note that in this simple configuration, no signatures are requested for the data plaintext itself.
 
 ::
 
@@ -123,9 +123,20 @@ We see the 3 currently supported types of trustee: `local_keyfactory`, `authenti
 
 We also see how share secrets, symmetric ciphers, and asymmetric ciphers (RSA_OAEP and its attached trustee) can be combined to create a deeply nested structure.
 
+And thanks to the "payload_plaintext_signatures" field, the unencrypted media itself is signed, not only its encrypted forms.
+
 ::
 
     {
+      "payload_plaintext_signatures": [
+        {
+           "payload_digest_algo":"SHA256",
+           "payload_signature_algo":"RSA_PSS",
+           "payload_signature_trustee":{
+              "trustee_type":"local_keyfactory"
+           }
+        }
+      ],
       "payload_cipher_layers":[
         {
           "key_cipher_layers":[

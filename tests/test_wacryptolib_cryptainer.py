@@ -53,6 +53,7 @@ from wacryptolib.cryptainer import (
     DecryptionErrorType,
     DecryptionErrorCriticity,
     CRYPTAINER_SUFFIX,
+    SIGNATURE_POLICIES,
 )
 from wacryptolib.exceptions import (
     DecryptionError,
@@ -524,6 +525,7 @@ def _add_unfinished_cryptainer_to_folder(folder_path):
         cryptainer_filepath=cryptainer_filepath,
         cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_metadata=None,
+        signature_policy=SIGNATURE_POLICIES.SKIP_SIGNING,
         dump_initial_cryptainer=True,
     )
     del pipeline
@@ -603,6 +605,7 @@ def test_cryptainer_encryption_pipeline_autocleanup(tmp_path):
         cryptainer_filepath=tmp_path.joinpath("destination.crypt"),
         cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_metadata=None,
+        signature_policy=SIGNATURE_POLICIES.REQUIRE_SIGNING,
     )
     assert not pipeline._output_data_stream.closed
     pipeline.encrypt_chunk(b"abc")
@@ -614,6 +617,7 @@ def test_cryptainer_encryption_pipeline_autocleanup(tmp_path):
         cryptainer_filepath=tmp_path.joinpath("destination.crypt"),
         cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_metadata=None,
+        signature_policy=SIGNATURE_POLICIES.SKIP_SIGNING,
     )
     output_data_stream2 = pipeline2._output_data_stream
     assert not output_data_stream2.closed
@@ -3045,7 +3049,7 @@ def test_filesystem_cryptainer_loading_and_dumping(tmp_path, cryptoconf):
 
 
 def test_generate_cryptainer_base_and_symmetric_keys():
-    cryptainer_decryptor = CryptainerEncryptor()
+    cryptainer_decryptor = CryptainerEncryptor(signature_policy=SIGNATURE_POLICIES.REQUIRE_SIGNING)
     cryptainer, secrets = cryptainer_decryptor._generate_cryptainer_base_and_secrets(COMPLEX_CRYPTOCONF)
 
     payload_plaintext_hash_algos = secrets["payload_plaintext_hash_algos"]
@@ -3078,6 +3082,7 @@ def test_create_cryptainer_encryption_stream(tmp_path):
     cryptainer_encryption_stream = storage.create_cryptainer_encryption_stream(
         filename_base,
         cryptainer_metadata={"mymetadata": True},
+        signature_policy=None,
         cryptoconf=SIMPLE_CRYPTOCONF,
         dump_initial_cryptainer=True,
     )

@@ -114,6 +114,12 @@ class CRYPTAINER_STATES:
     FINISHED = "FINISHED"
 
 
+class SIGNATURE_POLICIES:
+    SKIP_SIGNING = "SKIP_SIGNING"
+    ATTEMPT_SIGNING = "ATTEMPT_SIGNING"  # Fail silently if errors
+    REQUIRE_SIGNING = "REQUIRE_SIGNING"
+
+
 def get_trustee_id(trustee_conf: dict) -> str:
     """Build opaque identifier unique for a given trustee."""
     trustee_type = trustee_conf.get("trustee_type", None)
@@ -332,6 +338,78 @@ def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):
     raise ValueError("Unrecognized trustee identifiers: %s" % str(trustee))
 
 
+def _retrieve_and_inject_message_signature(signature_conf: dict, default_keychain_uid: uuid.UUID,
+                                           signature_policy: str, keystore_pool: KeystorePoolBase) -> dict:
+    """
+    Generate a signature for a provided digest, and store it in signature_conf dict
+
+    :param signature_conf: configuration tree of the signature, which SHOULD already contain the message digest
+    :param signature_policy: how to handle signing operation and potential errors
+    :param default_keychain_uid: default uuid for the set of encryption keys used
+    :param keystore_pool: optional key storage pool, might be required by cryptoconf
+
+    :return: dictionary with information needed to verify_integrity_tags signature
+    """
+    payload_digest_algo = signature_conf["payload_digest_algo"]
+    payload_signature_algo = signature_conf["payload_signature_algo"]
+
+    if signature_policy == SIGNATURE_POLICIES.SKIP_SIGNING:
+        logger.debug("Skipping signing of %s digest with algo %r, per signature policy",
+                     payload_digest_algo, payload_signature_algo)
+        return
+
+    try:
+        payload_digest = signature_conf.get("payload_digest_value")
+
+        if payload_digest is None:
+            raise SignatureVerificationError("No %s digest available in %s signature configuration" %
+                                             (payload_digest_algo, payload_signature_algo))
+
+        trustee_proxy = get_trustee_proxy(
+            trustee=signature_conf["payload_signature_trustee"], keystore_pool=keystore_pool
+        )
+
+        keychain_uid_for_signature = signature_conf.get("keychain_uid") or default_keychain_uid
+
+        logger.debug("Signing %s digest with algo %r", payload_digest_algo, payload_signature_algo)
+        payload_signature_struct = trustee_proxy.get_message_signature(
+            keychain_uid=keychain_uid_for_signature, message=payload_digest, signature_algo=payload_signature_algo
+        )
+
+        signature_conf["payload_signature_struct"] = payload_signature_struct
+
+    except Exception as exc:
+        if signature_policy == SIGNATURE_POLICIES.ATTEMPT_SIGNING:
+            logger.warning("Abort signing of %s digest with algo %r, due to exception: %r",
+                           payload_digest_algo, payload_signature_algo, exc)
+        else:
+            raise  # Let frames below handle/log this error
+
+
+def _inject_payload_digests_and_signatures(signature_confs: list, payload_digests: dict,
+                                           default_keychain_uid: uuid.UUID, signature_policy: Optional[str], keystore_pool: KeystorePoolBase):
+
+    _encountered_payload_hash_algos = set()
+
+    for signature_conf in signature_confs:
+        payload_hash_algo = signature_conf["payload_digest_algo"]
+
+        signature_conf["payload_digest_value"] = payload_digests[
+            payload_hash_algo
+        ]  # MUST exist, else incoherence
+
+        #payload_signature_struct = self._generate_message_signature(
+        _retrieve_and_inject_message_signature(
+            signature_conf=signature_conf,
+            default_keychain_uid=default_keychain_uid,
+            signature_policy=signature_policy,
+            keystore_pool=keystore_pool
+        )
+
+        _encountered_payload_hash_algos.add(payload_hash_algo)
+    assert _encountered_payload_hash_algos == set(payload_digests)  # No abnormal extra digest
+
+
 class CryptainerBase:
     """
     THIS CLASS IS PRIVATE API
@@ -361,8 +439,19 @@ class CryptainerEncryptor(CryptainerBase):
     Contains every method used to write and encrypt a cryptainer, IN MEMORY.
     """
 
+    def __init__(self, signature_policy, **kwargs):
+        if signature_policy is None:
+            signature_policy = SIGNATURE_POLICIES.ATTEMPT_SIGNING  # Sensible default
+        assert getattr(SIGNATURE_POLICIES, signature_policy), signature_policy
+        self._signature_policy = signature_policy
+        super().__init__(**kwargs)
+
     def build_cryptainer_and_encryption_pipeline(
-        self, *, cryptoconf: dict, output_stream: BinaryIO, cryptainer_metadata=None
+        self,
+        *,
+        cryptoconf: dict,
+        output_stream: BinaryIO,
+        cryptainer_metadata=None,
     ) -> tuple:
         """
         Build a base cryptainer to store encrypted keys, as well as a stream encryptor
@@ -716,30 +805,16 @@ class CryptainerEncryptor(CryptainerBase):
         return key_cipherdict
 
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: dict):
-        default_keychain_uid = cryptainer["keychain_uid"]
-
-        def _inject_layer_signatures(signature_confs, payload_digests):
-            _encountered_payload_hash_algos = set()
-            for signature_conf in signature_confs:
-                payload_hash_algo = signature_conf["payload_digest_algo"]
-
-                signature_conf["payload_digest_value"] = payload_digests[
-                    payload_hash_algo
-                ]  # MUST exist, else incoherence
-
-                payload_signature_struct = self._generate_message_signature(
-                    default_keychain_uid=default_keychain_uid, cryptoconf=signature_conf
-                )
-                signature_conf["payload_signature_struct"] = payload_signature_struct
-
-                _encountered_payload_hash_algos.add(payload_hash_algo)
-            assert _encountered_payload_hash_algos == set(payload_digests)  # No abnormal extra digest
+        default_keychain_uid = cryptainer["keychain_uid"]  # No hierarchical override of uids here
 
         plaintext_digests = payload_integrity_tags["plaintext_digests"]
         if plaintext_digests:
-            _inject_layer_signatures(
+            _inject_payload_digests_and_signatures(
                 signature_confs=cryptainer["payload_plaintext_signatures"],  # Entry MUST exist here
                 payload_digests=plaintext_digests,
+                default_keychain_uid=default_keychain_uid,
+                signature_policy=self._signature_policy,
+                keystore_pool=self._keystore_pool,
             )
 
         ciphertext_integrity_tags = payload_integrity_tags["ciphertext_integrity_tags"]
@@ -749,42 +824,22 @@ class CryptainerEncryptor(CryptainerBase):
         assert len(payload_cipher_layers) == len(ciphertext_integrity_tags)  # Sanity check
 
         for payload_cipher_layer, ciphertext_integrity_tags_dict in zip(
-            cryptainer["payload_cipher_layers"], ciphertext_integrity_tags
+                cryptainer["payload_cipher_layers"], ciphertext_integrity_tags
         ):
             assert payload_cipher_layer["payload_macs"] is None  # Set at cryptainer build time
             payload_cipher_layer["payload_macs"] = ciphertext_integrity_tags_dict["payload_macs"]
 
             payload_digests = ciphertext_integrity_tags_dict["payload_digests"]
 
-            _inject_layer_signatures(
-                signature_confs=payload_cipher_layer["payload_ciphertext_signatures"], payload_digests=payload_digests
+            _inject_payload_digests_and_signatures(
+                signature_confs=payload_cipher_layer["payload_ciphertext_signatures"],
+                payload_digests=payload_digests,
+                default_keychain_uid=default_keychain_uid,
+                signature_policy=self._signature_policy,
+                keystore_pool=self._keystore_pool,
             )
 
         cryptainer["cryptainer_state"] = CRYPTAINER_STATES.FINISHED
-
-    def _generate_message_signature(self, default_keychain_uid: uuid.UUID, cryptoconf: dict) -> dict:
-        """
-        Generate a signature for a specific ciphered payload.
-
-        :param default_keychain_uid: default uuid for the set of encryption keys used
-        :param cryptoconf: configuration tree inside payload_\*_signatures, which MUST already contain the message digest
-        :return: dictionary with information needed to verify_integrity_tags signature
-        """
-        payload_signature_algo = cryptoconf["payload_signature_algo"]
-        payload_digest = cryptoconf["payload_digest_value"]  # Must have been set before, using payload_hash_algo field
-        assert payload_digest, payload_digest
-
-        trustee_proxy = get_trustee_proxy(
-            trustee=cryptoconf["payload_signature_trustee"], keystore_pool=self._keystore_pool
-        )
-
-        keychain_uid_for_signature = cryptoconf.get("keychain_uid") or default_keychain_uid
-
-        logger.debug("Signing hash of encrypted payload with algo %r", payload_signature_algo)
-        payload_signature_struct = trustee_proxy.get_message_signature(
-            keychain_uid=keychain_uid_for_signature, message=payload_digest, signature_algo=payload_signature_algo
-        )
-        return payload_signature_struct
 
 
 def _get_cryptainer_inline_ciphertext_value(cryptainer):
@@ -1651,6 +1706,7 @@ class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionSt
         *,
         cryptoconf: dict,
         cryptainer_metadata: Optional[dict],
+        signature_policy: Optional[str],
         keystore_pool: Optional[KeystorePoolBase] = None,
         dump_initial_cryptainer=True,
     ):
@@ -1663,7 +1719,7 @@ class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionSt
         self._output_data_stream = open(offloaded_file_path, mode="wb")
 
         try:
-            self._cryptainer_encryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
+            self._cryptainer_encryptor = CryptainerEncryptor(signature_policy=signature_policy, keystore_pool=keystore_pool)
 
             (
                 self._wip_cryptainer,
@@ -1721,13 +1777,14 @@ def is_cryptainer_cryptoconf_streamable(cryptoconf):  # FIXME rename and add to 
     return True
 
 
-def encrypt_payload_and_stream_cryptainer_to_filesystem(  # Fixme rename to encrypt_payload_and_stream_cryptainer_to_filesystem?
+def encrypt_payload_and_stream_cryptainer_to_filesystem(
     payload: Union[bytes, BinaryIO],
     *,
     cryptainer_filepath,
     cryptoconf: dict,
     cryptainer_metadata: Optional[dict],
     keystore_pool: Optional[KeystorePoolBase] = None,
+    signature_policy=None,
 ) -> None:
     """
     Optimized version which directly streams encrypted payload to **offloaded** file,
@@ -1740,6 +1797,7 @@ def encrypt_payload_and_stream_cryptainer_to_filesystem(  # Fixme rename to encr
         cryptainer_filepath,
         cryptoconf=cryptoconf,
         cryptainer_metadata=cryptainer_metadata,
+        signature_policy=signature_policy,
         keystore_pool=keystore_pool,
         dump_initial_cryptainer=False,
     )
@@ -1755,6 +1813,7 @@ def encrypt_payload_into_cryptainer(
     *,
     cryptoconf: dict,
     cryptainer_metadata: Optional[dict],
+    signature_policy: Optional[str] = None,
     keystore_pool: Optional[KeystorePoolBase] = None,
 ) -> dict:
     """Turn a raw payload into a secure cryptainer, which can only be decrypted with
@@ -1766,7 +1825,7 @@ def encrypt_payload_into_cryptainer(
     :param keystore_pool: optional key storage pool, might be required by cryptoconf
     :return: dict of cryptainer
     """
-    cryptainer_encryptor = CryptainerEncryptor(keystore_pool=keystore_pool)
+    cryptainer_encryptor = CryptainerEncryptor(signature_policy=signature_policy, keystore_pool=keystore_pool)
     cryptainer = cryptainer_encryptor.encrypt_data(
         payload, cryptoconf=cryptoconf, cryptainer_metadata=cryptainer_metadata
     )
@@ -2341,6 +2400,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         self,
         filename_base,
         cryptainer_metadata,
+        signature_policy: Optional[str],
         cryptoconf=None,
         dump_initial_cryptainer=True,
         cryptainer_encryption_stream_class=None,
@@ -2364,6 +2424,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             cryptainer_filepath,
             cryptoconf=cryptoconf,
             cryptainer_metadata=cryptainer_metadata,
+            signature_policy=signature_policy,
             keystore_pool=self._keystore_pool,
             dump_initial_cryptainer=dump_initial_cryptainer,
             **cryptainer_encryption_stream_extra_kwargs,
@@ -2581,14 +2642,12 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
     return Schema(full_schema_dict)
 
 
-def sign_payload_into_sigainer(payload, *, sigconf):
+def __wip_sign_payload_into_sigainer(payload, *, sigconf):
     """
     Compute digests and retrieve signatures for a plaintext payload
     """
 
-    payload_hash_algos = [
-        signature["payload_digest_algo"] for signature in sigconf["payload_plaintext_signatures"]
-    ]
+    payload_hash_algos = [signature["payload_digest_algo"] for signature in sigconf["payload_plaintext_signatures"]]
 
     hashers_dict = _create_hashers_dict(payload_hash_algos)
 
@@ -2601,8 +2660,11 @@ def sign_payload_into_sigainer(payload, *, sigconf):
 
     payload_digests = _get_hashers_dict_digests(hashers_dict)
 
+    assert len(payload_digests) == len(sigconf["payload_plaintext_signatures"])  # Coherence
+    for signature in sigconf["payload_plaintext_signatures"]:
+        signature["payload_digest_value"] = payload_digests[signature["payload_digest_algo"]]
+
     # TODO extract code of _generate_message_signature() method!!
-    
 
 
 # CONFIGURATION IN ORDER TO ENCRYPT DATA

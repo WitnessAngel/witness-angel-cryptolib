@@ -10,7 +10,7 @@ import threading
 from datetime import datetime
 from subprocess import TimeoutExpired
 
-from wacryptolib.cryptainer import CryptainerStorage, CRYPTAINER_DATETIME_FORMAT
+from wacryptolib.cryptainer import CryptainerStorage, CRYPTAINER_DATETIME_FORMAT, SIGNATURE_POLICIES
 from wacryptolib.utilities import (
     dump_to_json_bytes,
     synchronized,
@@ -374,9 +374,10 @@ class PeriodicEncryptionStreamMixin:
     # Class fields to be overridden
     record_extension = None
 
-    def __init__(self, cryptainer_storage, **kwargs):
+    def __init__(self, cryptainer_storage, signature_policy=None, **kwargs):
         super().__init__(**kwargs)
         self._cryptainer_storage = cryptainer_storage
+        self._signature_policy = signature_policy
 
     def _build_cryptainer_filename_base(self, from_datetime):
         # FIXME use same format as build_record_filename, less verbose!!!!
@@ -398,6 +399,7 @@ class PeriodicEncryptionStreamMixin:
         cryptainer_encryption_stream = self._cryptainer_storage.create_cryptainer_encryption_stream(
             cryptainer_filename_base,
             cryptainer_metadata=None,
+            signature_policy=self._signature_policy,
             dump_initial_cryptainer=True,
             **encryption_stream_extra_kwargs,
         )

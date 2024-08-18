@@ -5,6 +5,7 @@
 import copy
 import os
 import random
+import tempfile
 import textwrap
 import time
 import uuid
@@ -54,6 +55,8 @@ from wacryptolib.cryptainer import (
     DecryptionErrorCriticity,
     CRYPTAINER_SUFFIX,
     SIGNATURE_POLICIES,
+    CRYPTAINER_TRUSTEE_TYPES,
+    _do_get_message_signature,
 )
 from wacryptolib.exceptions import (
     DecryptionError,
@@ -64,6 +67,7 @@ from wacryptolib.exceptions import (
     KeyDoesNotExist,
     KeystoreDoesNotExist,
     KeyLoadingError,
+    CryptographyError,
 )
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring
@@ -491,6 +495,47 @@ def COMPLEX_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
             )
         },
     }
+
+
+SIMPLE_CRYPTOCONF_WITH_BAD_PLAINTEXT_SIGNING = dict(
+    payload_plaintext_signatures=[
+        dict(
+            payload_digest_algo="SHA256",
+            payload_signature_algo="DSA_DSS",
+            payload_signature_trustee=dict(
+                trustee_type=CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE,
+                keystore_uid=ENFORCED_UID1,
+            ),
+        )
+    ],
+    payload_cipher_layers=[
+        dict(
+            payload_cipher_algo="AES_CBC",
+            key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
+            payload_ciphertext_signatures=[],
+        )
+    ],
+)
+
+
+SIMPLE_CRYPTOCONF_WITH_BAD_CIPHERTEXT_SIGNING = dict(
+    payload_cipher_layers=[
+        dict(
+            payload_cipher_algo="AES_EAX",
+            key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
+            payload_ciphertext_signatures=[
+                dict(
+                    payload_digest_algo="SHA512",
+                    payload_signature_algo="RSA_PSS",
+                    payload_signature_trustee=dict(
+                        trustee_type=CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE,
+                        keystore_uid=ENFORCED_UID1,
+                    ),
+                )
+            ],
+        )
+    ]
+)
 
 
 def _get_binary_or_empty_content():
@@ -3269,3 +3314,88 @@ def test_retrocompatibility_for_payload_ciphertext_signatures_field():
 
     assert layer_dict["payload_ciphertext_signatures"] == _temp
     assert "payload_signatures" not in layer_dict
+
+
+@pytest.mark.parametrize(
+    "cryptoconf",
+    [SIMPLE_CRYPTOCONF_WITH_BAD_PLAINTEXT_SIGNING, SIMPLE_CRYPTOCONF_WITH_BAD_CIPHERTEXT_SIGNING],
+)
+def test_encryption_signature_policy_with_error_cases(cryptoconf):
+    keystore_pool = InMemoryKeystorePool()
+
+    def _build_normal_cryptainer_with_signature_policy(signature_policy):
+        return encrypt_payload_into_cryptainer(
+            payload=b"stuffs",
+            cryptoconf=cryptoconf,
+            cryptainer_metadata=None,
+            keystore_pool=keystore_pool,
+            signature_policy=signature_policy,
+        )
+
+    def _build_streamed_cryptainer_with_signature_policy(signature_policy):
+        _cryptainer_filepath = Path(tempfile.mktemp() + ".crypt")
+        encrypt_payload_and_stream_cryptainer_to_filesystem(
+            payload=b"stuffs",
+            cryptoconf=cryptoconf,
+            cryptainer_metadata=None,
+            keystore_pool=keystore_pool,
+            signature_policy=signature_policy,
+            cryptainer_filepath=_cryptainer_filepath
+        )
+        cryptainer = load_cryptainer_from_filesystem(_cryptainer_filepath)
+        return cryptainer
+
+    for _build_cryptainer_with_signature_policy in [
+        _build_normal_cryptainer_with_signature_policy, _build_streamed_cryptainer_with_signature_policy
+    ]:
+        with mock.patch(
+            "wacryptolib.cryptainer._do_get_message_signature",
+            wraps=_do_get_message_signature,
+        ) as patched_do_get_message_signature:
+            cryptainer = _build_cryptainer_with_signature_policy(signature_policy=SIGNATURE_POLICIES.SKIP_SIGNING)
+            check_cryptainer_sanity(cryptainer)
+            assert patched_do_get_message_signature.call_count == 0
+
+        with mock.patch(
+            "wacryptolib.cryptainer._do_get_message_signature", wraps=_do_get_message_signature
+        ) as patched_do_get_message_signature:
+            cryptainer = _build_cryptainer_with_signature_policy(signature_policy=SIGNATURE_POLICIES.ATTEMPT_SIGNING)
+            check_cryptainer_sanity(cryptainer)
+            assert patched_do_get_message_signature.call_count == 1
+
+        with pytest.raises(KeystoreDoesNotExist):
+            _build_cryptainer_with_signature_policy(signature_policy=SIGNATURE_POLICIES.REQUIRE_SIGNING)
+
+
+def test_encryption_signature_policy_with_success_cases():
+    keystore_pool = InMemoryKeystorePool()
+
+    cryptoconf = None  # Placeholder
+
+    def _build_cryptainer_with_signature_policy(signature_policy):
+        return encrypt_payload_into_cryptainer(
+            payload=b"stuffs",
+            cryptoconf=cryptoconf,
+            cryptainer_metadata=None,
+            keystore_pool=keystore_pool,
+            signature_policy=signature_policy,
+        )
+
+    for cryptoconf, signature_conf_cb in [
+        (SIMPLE_CRYPTOCONF, lambda _cryptainer: _cryptainer["payload_cipher_layers"][0]["payload_ciphertext_signatures"][0]),
+        (COMPLEX_CRYPTOCONF, lambda _cryptainer: _cryptainer["payload_plaintext_signatures"][0]),
+    ]:
+
+        for signature_policy in [SIGNATURE_POLICIES.REQUIRE_SIGNING, SIGNATURE_POLICIES.ATTEMPT_SIGNING]:
+            cryptainer = _build_cryptainer_with_signature_policy(signature_policy=signature_policy)
+            check_cryptainer_sanity(cryptainer)
+            signature_conf = signature_conf_cb(cryptainer)
+            assert signature_conf["payload_digest_value"]  # Properly updated
+            assert signature_conf["payload_signature_struct"]  # SUCCESS
+
+        cryptainer = _build_cryptainer_with_signature_policy(signature_policy=SIGNATURE_POLICIES.SKIP_SIGNING)
+        check_cryptainer_sanity(cryptainer)
+        signature_conf = signature_conf_cb(cryptainer)
+        assert signature_conf["payload_digest_value"]  # Properly updated
+        assert "payload_signature_struct" not in signature_conf  # SKIPPED
+

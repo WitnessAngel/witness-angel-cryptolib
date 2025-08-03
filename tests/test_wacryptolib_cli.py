@@ -31,7 +31,7 @@ FLIGHTBOX_CLI_INVOCATION_ARGS = [sys.executable, "-m", "wacryptolib"]
 
 
 def _get_cli_runner():
-    return CliRunner(mix_stderr=False)
+    return CliRunner()
 
 
 def _get_cli_base_args_for_folder_isolation(tmp_path):
@@ -638,15 +638,9 @@ def test_cli_cryptoconf_generate_simple():
         ]
     }
 
-    # Missing payload encryption
-    result = runner.invoke(
-        cli,
-        "cryptoconf generate-simple".split(),
-    )
-    assert result.exit_code == 0
-    assert "Usage:" in result.stdout  # For some reason this displays help without raising an error...
-
     wrong_commands = [
+        # Missing payload encryption
+        "cryptoconf generate-simple".split(),
         # Missing key encryption
         "cryptoconf generate-simple add-payload-cipher-layer --sym-cipher-algo aes_cbc".split(),
         # Missing keystore-uid fro authenticator trustee
@@ -668,7 +662,7 @@ def test_cli_cryptoconf_generate_simple():
     ]
     for wrong_command in wrong_commands:
         result = runner.invoke(cli, wrong_command)
-        assert result.exit_code != 0, (result.exit_code, result.stdout)  # UsageError, not crash
+        assert result.exit_code != 0, (result.exit_code, result.output)  # UsageError, not crash
 
 
 def test_cli_cryptoconf_validate(tmp_path):

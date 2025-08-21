@@ -198,21 +198,21 @@ def import_ecc_key_from_pem(*args, **kwargs):
     return ECC.import_key(*args, **kwargs)
 
 
-def export_rsa_key_to_pem(private_key, passphrase=None):
+def export_rsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
     extra_params = (
         dict(passphrase=passphrase, pkcs=8, protection="PBKDF2WithHMAC-SHA1AndAES256-CBC") if passphrase else {}
     )
     return private_key.export_key(format="PEM", **extra_params)
 
 
-def export_dsa_key_to_pem(private_key, passphrase=None):
+def export_dsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
     extra_params = (
         dict(passphrase=passphrase, pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC") if passphrase else {}
     )
     return private_key.export_key(format="PEM", **extra_params)
 
 
-def export_ecc_key_to_pem(private_key, passphrase=None):
+def export_ecc_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
     extra_params = (
         dict(passphrase=passphrase, use_pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndAES128-CBC") if passphrase else {}
     )

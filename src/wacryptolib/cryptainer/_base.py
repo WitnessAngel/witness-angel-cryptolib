@@ -1,10 +1,13 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 from typing import Optional
 
-from wacryptolib.cryptainer import logger, DUMMY_KEYSTORE_POOL
-from wacryptolib.keystore import KeystorePoolBase
-
-logger = logging.getLogger(__name__)
-
+from wacryptolib.cryptainer import logger
+from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
+from wacryptolib.keystore import KeystorePoolBase, InMemoryKeystorePool, FilesystemKeystore
+from wacryptolib.trustee import TrusteeApi, ReadonlyTrusteeApi
 
 CRYPTAINER_FORMAT = "cryptainer_1.0"
 CRYPTAINER_SUFFIX = ".crypt"
@@ -32,6 +35,7 @@ DECRYPTED_FILE_SUFFIX = ".decrypted"  # To construct decrypted filename when no 
 
 SHARED_SECRET_ALGO_MARKER = "[SHARED_SECRET]"  # Special "key_cipher_algo" value
 
+# FIXME get rid of this heavy global dependency? Make it lazy-loaded at least?
 DUMMY_KEYSTORE_POOL = InMemoryKeystorePool()  # Common fallback storage with in-memory keys
 
 
@@ -105,8 +109,6 @@ def _get_cryptainer_inline_ciphertext_value(cryptainer):
     ciphertext_value = payload_ciphertext_struct["ciphertext_value"]
     assert isinstance(ciphertext_value, bytes), repr(ciphertext_value)  # Always (no more "special markers")
     return ciphertext_value
-
-
 
 
 def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):

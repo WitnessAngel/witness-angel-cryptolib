@@ -1,6 +1,27 @@
-from wacryptolib.cryptainer._cryptainer_base import CryptainerBase
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
 
-logger = logging.getLogger(__name__)
+import contextlib
+import logging
+from pprint import pformat
+from typing import Optional
+import uuid
+
+from jsonrpc_requests import JSONRPCError
+from schema import Schema, Or, And
+
+from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_CIPHER_ALGOS
+from wacryptolib.cryptainer import CryptainerBase, logger, CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
+    get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value
+from wacryptolib.exceptions import KeyDoesNotExist, KeyLoadingError, DecryptionError, DecryptionIntegrityError, \
+    KeystoreDoesNotExist, SignatureVerificationError
+from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
+from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring, SUPPORTED_SYMMETRIC_KEY_ALGOS, \
+    SUPPORTED_ASYMMETRIC_KEY_ALGOS
+from wacryptolib.shared_secret import recombine_secret_from_shards
+from wacryptolib.signature import verify_message_signature
+from wacryptolib.utilities import load_from_json_bytes, hash_message
 
 
 class DecryptionErrorType:  # FIXME RENAME THIS
@@ -82,6 +103,7 @@ class OperationReport:
         }
 
         if __debug__:  # Sanity check
+            from wacryptolib.cryptainer import _validate_data_tree  # LAZY import!
             _validate_data_tree(data_tree=error_entry, validation_schema=OPERATION_REPORT_ENTRY_SCHEMA)
 
         self._entries.append(error_entry)
@@ -198,7 +220,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         gateway_revelation_request_list = []
 
-        gateway_proxy = JsonRpcProxy(url=gateway_url, response_error_handler=status_slugs_response_error_handler)
+        gateway_proxy = JsonRpcProxy(url=gateway_url, response_error_handler=status_slugs_response_error_handler())
         try:
             gateway_revelation_request_list = gateway_proxy.list_requestor_revelation_requests(
                 revelation_requestor_uid=revelation_requestor_uid

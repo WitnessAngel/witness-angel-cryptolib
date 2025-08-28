@@ -1,6 +1,36 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
 
+import copy
+from typing import Optional, Union, BinaryIO
+import uuid
 
-logger = logging.getLogger(__name__)
+from wacryptolib.cryptainer import CryptainerBase, SIGNATURE_POLICIES, PAYLOAD_CIPHERTEXT_LOCATIONS, logger, \
+    CRYPTAINER_FORMAT, CRYPTAINER_STATES, SHARED_SECRET_ALGO_MARKER, get_trustee_proxy, \
+    _inject_payload_digests_and_signatures
+
+from wacryptolib.cipher import (
+    encrypt_bytestring,
+    PayloadEncryptionPipeline,
+    SUPPORTED_CIPHER_ALGOS,
+)
+from wacryptolib.exceptions import (
+    SchemaValidationError,
+)
+from wacryptolib.keygen import (
+    generate_symkey,
+    load_asymmetric_key_from_pem_bytestring,
+    SUPPORTED_SYMMETRIC_KEY_ALGOS,
+    SUPPORTED_ASYMMETRIC_KEY_ALGOS,
+)
+from wacryptolib.shared_secret import split_secret_into_shards
+from wacryptolib.utilities import (
+    dump_to_json_bytes,
+    generate_uuid0,
+    hash_message,
+)
+
 
 class CryptainerEncryptor(CryptainerBase):
     """

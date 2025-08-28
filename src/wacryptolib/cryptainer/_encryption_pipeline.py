@@ -1,5 +1,15 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
 
-logger = logging.getLogger(__name__)
+from pathlib import Path
+
+from typing import Optional
+
+from wacryptolib.cryptainer import CRYPTAINER_TEMP_SUFFIX, CryptainerEncryptor, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, \
+    dump_cryptainer_to_filesystem, logger
+from wacryptolib.cryptainer import _get_offloaded_file_path
+from wacryptolib.keystore import KeystorePoolBase
 
 
 class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionStream and expose File write/close API?

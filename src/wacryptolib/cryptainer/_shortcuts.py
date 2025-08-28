@@ -1,5 +1,20 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
 
-logger = logging.getLogger(__name__)
+from typing import Sequence, Optional, BinaryIO, Union
+from urllib.parse import urlparse
+import uuid
+
+from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS, _update_hashers_dict, _create_hashers_dict, \
+    _get_hashers_dict_digests
+from wacryptolib.cryptainer import get_trustee_id, SHARED_SECRET_ALGO_MARKER, get_trustee_proxy, \
+    DEFAULT_DATA_CHUNK_SIZE, CryptainerEncryptionPipeline, CryptainerEncryptor, CryptainerDecryptor, \
+    CRYPTAINER_TRUSTEE_TYPES
+from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, SUPPORTED_ASYMMETRIC_KEY_ALGOS
+from wacryptolib.keystore import KeystorePoolBase
+from wacryptolib.utilities import load_from_json_bytes, consume_bytes_as_chunks
+
 
 def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
     """Analyse a cryptainer and return the trustees (and their keypairs) used by it.

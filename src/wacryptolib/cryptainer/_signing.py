@@ -1,5 +1,14 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
 
-logger = logging.getLogger(__name__)
+
+from typing import Optional
+import uuid
+
+from wacryptolib.cryptainer import get_trustee_proxy, logger, SIGNATURE_POLICIES
+from wacryptolib.exceptions import SignatureVerificationError
+from wacryptolib.keystore import KeystorePoolBase
 
 
 def _do_get_message_signature(signature_conf, default_keychain_uid, keystore_pool):

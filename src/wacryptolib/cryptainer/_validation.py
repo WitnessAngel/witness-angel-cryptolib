@@ -1,3 +1,7 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 from typing import Union
 
 import jsonschema
@@ -7,15 +11,13 @@ from jsonschema import validate as jsonschema_validate
 from schema import Or, Optional as OptionalKey, And, Schema, Use
 
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
-from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_TRUSTEE_TYPES, CRYPTAINER_STATES, \
+from wacryptolib.cryptainer import logger, LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_TRUSTEE_TYPES, CRYPTAINER_STATES, \
     CRYPTAINER_FORMAT, PAYLOAD_CIPHERTEXT_LOCATIONS, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, SHARED_SECRET_ALGO_MARKER
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS, SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
 from wacryptolib.utilities import get_validation_micro_schemas, SUPPORTED_HASH_ALGOS
 
-
-logger = logging.getLogger(__name__)
 
 def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, extended_json_format: bool):
     """Create validation schema for confs and cryptainers, as well as cryptosig conf/data.

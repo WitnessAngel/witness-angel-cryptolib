@@ -1,5 +1,14 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
 
-logger = logging.getLogger(__name__)
+import os
+from pathlib import Path
+
+from wacryptolib.cryptainer import CRYPTAINER_TEMP_SUFFIX, OFFLOADED_PAYLOAD_FILENAME_SUFFIX, \
+    OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, PAYLOAD_CIPHERTEXT_LOCATIONS, _get_cryptainer_inline_ciphertext_value
+from wacryptolib.exceptions import SchemaValidationError
+from wacryptolib.utilities import dump_to_json_file, load_from_json_file
 
 
 def _get_offloaded_file_path(cryptainer_filepath: Path):

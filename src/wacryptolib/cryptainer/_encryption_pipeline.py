@@ -7,8 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from wacryptolib.cryptainer import CRYPTAINER_TEMP_SUFFIX, CryptainerEncryptor, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, \
-    dump_cryptainer_to_filesystem, logger
-from wacryptolib.cryptainer import _get_offloaded_file_path
+    dump_cryptainer_to_filesystem, logger, _get_offloaded_file_path
 from wacryptolib.keystore import KeystorePoolBase
 
 

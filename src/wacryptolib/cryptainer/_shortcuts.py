@@ -7,8 +7,7 @@ from urllib.parse import urlparse
 import uuid
 
 from wacryptolib.cryptainer import SHARED_SECRET_ALGO_MARKER, DEFAULT_DATA_CHUNK_SIZE, CryptainerEncryptionPipeline, \
-    CryptainerEncryptor, CryptainerDecryptor, \
-    CRYPTAINER_TRUSTEE_TYPES
+    CryptainerEncryptor, CryptainerDecryptor, CRYPTAINER_TRUSTEE_TYPES
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import KeystorePoolBase
 from wacryptolib.utilities import consume_bytes_as_chunks

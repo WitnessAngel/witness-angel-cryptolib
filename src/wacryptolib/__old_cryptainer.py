@@ -28,8 +28,8 @@ from wacryptolib.cipher import (
     _update_hashers_dict,
     _get_hashers_dict_digests,
 )
-from wacryptolib.cryptainer._cryptainer_base import CryptainerBase
-from wacryptolib.cryptainer.cryptainer_validation import _validate_data_tree, check_cryptainer_sanity
+from wacryptolib.cryptainer import CryptainerBase
+from wacryptolib.cryptainer import _validate_data_tree, check_cryptainer_sanity
 from wacryptolib.exceptions import (
     DecryptionError,
     SchemaValidationError,

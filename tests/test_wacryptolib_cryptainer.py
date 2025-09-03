@@ -20,7 +20,7 @@ from uuid import UUID
 import pytest
 from jsonrpc_requests import TransportError
 
-import wacryptolib.cryptainer.cryptainer_validation
+import wacryptolib.cryptainer
 from _test_mockups import FakeTestCryptainerStorage, random_bool
 from wacryptolib._crypto_backend import get_random_bytes
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS, AUTHENTICATED_CIPHER_ALGOS, encrypt_bytestring
@@ -2895,7 +2895,7 @@ def test_cryptainer_storage_decryption_with_authenticated_algo_and_verify_failur
 def test_cryptainer_storage_check_cryptainer_sanity(tmp_path):
     storage, cryptainer_name = _intialize_real_cryptainer_with_single_file(tmp_path, allow_readonly_storage=True)
 
-    wacryptolib.cryptainer.cryptainer_validation.check_cryptainer_sanity(cryptainer_name_or_idx=cryptainer_name)
+    wacryptolib.cryptainer.check_cryptainer_sanity(cryptainer_name_or_idx=cryptainer_name)
 
     def add_wrong_attribute(cryptainer):
         cryptainer["payload_cipher_layers"][0]["bad_name_of_attribute"] = 42
@@ -2903,7 +2903,7 @@ def test_cryptainer_storage_check_cryptainer_sanity(tmp_path):
     _corrupt_cryptainer_tree(storage, cryptainer_name=cryptainer_name, corruptor_callback=add_wrong_attribute)
 
     with pytest.raises(ValidationError):
-        wacryptolib.cryptainer.cryptainer_validation.check_cryptainer_sanity(cryptainer_name_or_idx=cryptainer_name)
+        wacryptolib.cryptainer.check_cryptainer_sanity(cryptainer_name_or_idx=cryptainer_name)
 
 
 def test_readonly_cryptainer_storage_limitations(tmp_path):

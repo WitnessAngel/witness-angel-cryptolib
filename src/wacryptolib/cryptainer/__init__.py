@@ -19,7 +19,7 @@ from ._base import CryptainerBase, get_trustee_id, get_trustee_proxy, _get_crypt
 from ._validation import (_validate_data_tree, check_cryptoconf_sanity, check_cryptainer_sanity,
                           check_sigconf_sanity, check_sigainer_sanity)
 
-from ._signing import _inject_payload_digests_and_signatures
+from ._signing import _do_get_message_signature, _inject_payload_digests_and_signatures
 
 from ._filesystem import _get_offloaded_file_path, dump_cryptainer_to_filesystem, load_cryptainer_from_filesystem, \
     delete_cryptainer_from_filesystem, get_cryptainer_size_on_filesystem
@@ -33,3 +33,5 @@ from ._shortcuts import gather_trustee_dependencies, gather_decryptable_symkeys,
     is_cryptainer_cryptoconf_streamable, encrypt_payload_and_stream_cryptainer_to_filesystem, \
     encrypt_payload_into_cryptainer, decrypt_payload_from_cryptainer, extract_metadata_from_cryptainer,  \
     get_cryptoconf_summary
+
+from ._storage import ReadonlyCryptainerStorage, CryptainerStorage

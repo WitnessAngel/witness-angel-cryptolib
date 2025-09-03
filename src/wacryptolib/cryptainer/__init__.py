@@ -16,6 +16,10 @@ from ._base import (CRYPTAINER_FORMAT, CRYPTAINER_SUFFIX, CRYPTAINER_DATETIME_FO
                           LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_STATES, SIGNATURE_POLICIES)
 from ._base import CryptainerBase, get_trustee_id, get_trustee_proxy, _get_cryptainer_inline_ciphertext_value
 
+from ._authorization import request_decryption_authorizations
+
+from ._analysis import gather_trustee_dependencies, gather_decryptable_symkeys, is_cryptainer_cryptoconf_streamable
+
 from ._validation import (_validate_data_tree, check_cryptoconf_sanity, check_cryptainer_sanity,
                           check_sigconf_sanity, check_sigainer_sanity)
 
@@ -29,8 +33,7 @@ from ._decryptor import DecryptionErrorType, DecryptionErrorCriticity, Operation
 from ._encryptor import CryptainerEncryptor
 from ._encryption_pipeline import CryptainerEncryptionPipeline
 
-from ._shortcuts import gather_trustee_dependencies, gather_decryptable_symkeys, request_decryption_authorizations, \
-    is_cryptainer_cryptoconf_streamable, encrypt_payload_and_stream_cryptainer_to_filesystem, \
+from ._shortcuts import encrypt_payload_and_stream_cryptainer_to_filesystem, \
     encrypt_payload_into_cryptainer, decrypt_payload_from_cryptainer, extract_metadata_from_cryptainer,  \
     get_cryptoconf_summary
 

@@ -6,7 +6,9 @@
 from typing import Optional
 import uuid
 
-from wacryptolib.cryptainer import get_trustee_proxy, logger, SIGNATURE_POLICIES
+from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS, _update_hashers_dict, _create_hashers_dict, \
+    _get_hashers_dict_digests
+from wacryptolib.cryptainer import get_trustee_proxy, logger, SIGNATURE_POLICIES, DEFAULT_DATA_CHUNK_SIZE
 from wacryptolib.exceptions import SignatureVerificationError
 from wacryptolib.keystore import KeystorePoolBase
 
@@ -102,3 +104,27 @@ def _inject_payload_digests_and_signatures(
         _encountered_payload_hash_algos.add(payload_hash_algo)
     assert _encountered_payload_hash_algos == set(payload_digests)  # No abnormal extra digest
 
+
+def __wip_sign_payload_into_sigainer(payload, *, sigconf):  # FIXME IMPLEMENT LATER
+    """
+    Compute digests and retrieve signatures for a plaintext payload
+    """
+
+    payload_hash_algos = [signature["payload_digest_algo"] for signature in sigconf["payload_plaintext_signatures"]]
+
+    hashers_dict = _create_hashers_dict(payload_hash_algos)
+
+    if hasattr(payload, "read"):  # File-like object
+        for chunk in payload.read(DEFAULT_DATA_CHUNK_SIZE):
+            _update_hashers_dict(hashers_dict, chunk=chunk)
+    else:
+        assert isinstance(payload, bytes), payload
+        _update_hashers_dict(hashers_dict, chunk=payload)  # All at once
+
+    payload_digests = _get_hashers_dict_digests(hashers_dict)
+
+    assert len(payload_digests) == len(sigconf["payload_plaintext_signatures"])  # Coherence
+    for signature in sigconf["payload_plaintext_signatures"]:
+        signature["payload_digest_value"] = payload_digests[signature["payload_digest_algo"]]
+
+    # TODO extract code of _generate_message_signature() method!!

@@ -6,8 +6,7 @@
 from typing import Optional
 import uuid
 
-from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS, _update_hashers_dict, _create_hashers_dict, \
-    _get_hashers_dict_digests
+from wacryptolib.cipher import _update_hashers_dict, _create_hashers_dict, _get_hashers_dict_digests
 from wacryptolib.cryptainer import get_trustee_proxy, logger, SIGNATURE_POLICIES, DEFAULT_DATA_CHUNK_SIZE
 from wacryptolib.exceptions import SignatureVerificationError
 from wacryptolib.keystore import KeystorePoolBase
@@ -50,6 +49,7 @@ def _retrieve_and_inject_message_signature(
 
     :return: dictionary with information needed to verify_integrity_tags signature
     """
+    from wacryptolib.cryptainer import _do_get_message_signature  # To allow test-side monkey-patching...
 
     payload_digest_algo = signature_conf["payload_digest_algo"]
     payload_signature_algo = signature_conf["payload_signature_algo"]

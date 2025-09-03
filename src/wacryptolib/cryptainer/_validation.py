@@ -11,7 +11,7 @@ from jsonschema import validate as jsonschema_validate
 from schema import Or, Optional as OptionalKey, And, Schema, Use
 
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
-from wacryptolib.cryptainer import logger, LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_TRUSTEE_TYPES, CRYPTAINER_STATES, \
+from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_TRUSTEE_TYPES, CRYPTAINER_STATES, \
     CRYPTAINER_FORMAT, PAYLOAD_CIPHERTEXT_LOCATIONS, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, SHARED_SECRET_ALGO_MARKER
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS, SUPPORTED_SYMMETRIC_KEY_ALGOS

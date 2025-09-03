@@ -220,7 +220,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         gateway_revelation_request_list = []
 
-        gateway_proxy = JsonRpcProxy(url=gateway_url, response_error_handler=status_slugs_response_error_handler())
+        gateway_proxy = JsonRpcProxy(url=gateway_url, response_error_handler=status_slugs_response_error_handler)
         try:
             gateway_revelation_request_list = gateway_proxy.list_requestor_revelation_requests(
                 revelation_requestor_uid=revelation_requestor_uid

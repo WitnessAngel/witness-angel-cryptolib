@@ -9,7 +9,7 @@ from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error
 from wacryptolib.keystore import KeystorePoolBase, InMemoryKeystorePool, FilesystemKeystore
 from wacryptolib.trustee import TrusteeApi, ReadonlyTrusteeApi
 
-CRYPTAINER_FORMAT = "cryptainer_1.0"
+
 CRYPTAINER_SUFFIX = ".crypt"
 CRYPTAINER_DATETIME_FORMAT = "%Y%m%d_%H%M%S"  # For use in cryptainer names and their records
 CRYPTAINER_DATETIME_LENGTH = (
@@ -47,12 +47,6 @@ class CRYPTAINER_TRUSTEE_TYPES:  # FIXME rename to CRYPTAINER_TRUSTEE_TYPE (sing
 
 # Shortcut helper, should NOT be modified
 LOCAL_KEYFACTORY_TRUSTEE_MARKER = dict(trustee_type=CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE)
-
-
-class CRYPTAINER_STATES:
-    STARTED = "STARTED"
-    FINISHED = "FINISHED"
-
 
 class SIGNATURE_POLICIES:
     SKIP_SIGNING = "SKIP_SIGNING"

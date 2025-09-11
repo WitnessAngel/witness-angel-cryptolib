@@ -33,7 +33,6 @@ DEFAULT_DATA_CHUNK_SIZE = 1024**2  # E.g. when streaming a big payload through e
 
 DECRYPTED_FILE_SUFFIX = ".decrypted"  # To construct decrypted filename when no output filename is provided
 
-SHARED_SECRET_ALGO_MARKER = "[SHARED_SECRET]"  # Special "key_cipher_algo" value
 
 # FIXME get rid of this heavy global dependency? Make it lazy-loaded at least?
 DUMMY_KEYSTORE_POOL = InMemoryKeystorePool()  # Common fallback storage with in-memory keys

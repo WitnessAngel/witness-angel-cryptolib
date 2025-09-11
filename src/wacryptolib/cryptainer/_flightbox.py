@@ -12,7 +12,10 @@ specific by itself.
 import copy
 import logging
 import uuid
+import typing
 
+
+SHARED_SECRET_ALGO_MARKER = "[SHARED_SECRET]"  # Special "key_cipher_algo" value
 
 CRYPTAINER_FORMAT = "cryptainer_1.0"
 
@@ -31,16 +34,29 @@ class FlightboxUtilities:
 
     logger: logging.Logger
 
-    def generate_uuid0(self) -> uuid.UUID:
-        raise NotImplementedError
+    SUPPORTED_ASYMMETRIC_KEY_ALGOS: typing.Sequence[str]
+    SUPPORTED_SYMMETRIC_KEY_ALGOS: typing.Sequence[str]
+    SUPPORTED_CIPHER_ALGOS: typing.Sequence[str]
 
-    def generate_symkey(self, cipher_algo: str):
+    def raise_validation_error(self, msg: str) -> None:
         raise NotImplementedError
 
     def dump_to_json_bytes(self, data):
         raise NotImplementedError
 
-    def raise_validation_error(self, msg: str) -> None:
+    def generate_uuid0(self) -> uuid.UUID:
+        raise NotImplementedError
+
+    def split_secret_into_shards(secret: bytes, *, shard_count: int, threshold_count: int) -> list:
+        raise NotImplementedError
+
+    def generate_symkey(self, cipher_algo: str):
+        raise NotImplementedError
+
+    def get_public_key(self, trustee: dict, key_algo: str, keychain_uid: uuid.UUID) -> dict:
+        raise NotImplementedError
+
+    def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) -> dict:
         raise NotImplementedError
 
 
@@ -269,13 +285,13 @@ class FlightBox:
         default_keychain_uid: uuid.UUID,
         key_bytes: bytes,
         key_cipher_layers: list,
-        cryptainer_metadata: Optional[dict],
+        cryptainer_metadata: typing.Optional[dict],
     ) -> bytes:
         # HERE KEY IS A REAL KEY OR A SHARD !!!
         key_bytes_initial = key_bytes
 
         if not key_cipher_layers:
-            raise SchemaValidationError("Empty key_cipher_layers list is forbidden in cryptoconf")
+            raise self._fbu.raise_validation_error("Empty key_cipher_layers list is forbidden in cryptoconf")
 
         for key_cipher_layer in key_cipher_layers:
             key_cipherdict = self._encrypt_key_through_single_layer(
@@ -284,7 +300,7 @@ class FlightBox:
                 key_cipher_layer=key_cipher_layer,
                 cryptainer_metadata=cryptainer_metadata,
             )
-            key_bytes = dump_to_json_bytes(key_cipherdict)  # Thus its remains as bytes all along
+            key_bytes = self._fbu.dump_to_json_bytes(key_cipherdict)  # Thus its remains as bytes all along
 
         assert key_bytes != key_bytes_initial  # safety
         key_ciphertext = key_bytes
@@ -295,7 +311,7 @@ class FlightBox:
         default_keychain_uid: uuid.UUID,
         key_bytes: bytes,
         key_cipher_layer: dict,
-        cryptainer_metadata: Optional[dict],
+        cryptainer_metadata: typing.Optional[dict],
     ) -> dict:
         """
         Encrypt a symmetric key using an asymmetric encryption scheme.
@@ -321,11 +337,11 @@ class FlightBox:
 
             threshold_count = key_cipher_layer["key_shared_secret_threshold"]
             if not (0 < threshold_count <= shard_count):
-                raise SchemaValidationError(
+                raise self._fbu.raise_validation_error(
                     "Shared secret threshold must be strictly positive and not greater than shard count, in cryptoconf"
                 )
 
-            shards = split_secret_into_shards(
+            shards = self._fbu.split_secret_into_shards(
                 secret=key_bytes, shard_count=shard_count, threshold_count=threshold_count
             )
 
@@ -334,7 +350,7 @@ class FlightBox:
             shard_ciphertexts = []
 
             for shard, key_shared_secret_shard_conf in zip(shards, key_shared_secret_shards):
-                shard_bytes = dump_to_json_bytes(
+                shard_bytes = self._fbu.dump_to_json_bytes(
                     shard
                 )  # The tuple (idx, payload) of each shard thus becomes encryptable
                 shard_ciphertext = self._encrypt_key_through_multiple_layers(
@@ -348,12 +364,12 @@ class FlightBox:
 
             key_cipherdict = {"shard_ciphertexts": shard_ciphertexts}  # A dict is more future-proof than list
 
-        elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
-            assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
+        elif key_cipher_algo in self._fbu.SUPPORTED_SYMMETRIC_KEY_ALGOS:
+            assert key_cipher_algo in self._fbu.SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
 
-            logger.debug("Generating symmetric subkey of type %r for key encryption", key_cipher_algo)
-            sub_symkey = generate_symkey(cipher_algo=key_cipher_algo)
-            sub_symkey_bytes = dump_to_json_bytes(sub_symkey)
+            self._logger.debug("Generating symmetric subkey of type %r for key encryption", key_cipher_algo)
+            sub_symkey = self._fbu.generate_symkey(cipher_algo=key_cipher_algo)
+            sub_symkey_bytes = self._fbu.dump_to_json_bytes(sub_symkey)
 
             sub_symkey_ciphertext = self._encrypt_key_through_multiple_layers(
                 default_keychain_uid=default_keychain_uid,
@@ -365,12 +381,12 @@ class FlightBox:
 
             key_cipher_layer["key_ciphertext"] = sub_symkey_ciphertext
 
-            key_cipherdict = encrypt_bytestring(key_bytes, cipher_algo=key_cipher_algo, key_dict=sub_symkey)
+            key_cipherdict = self._fbu.encrypt_bytestring(key_bytes, cipher_algo=key_cipher_algo, key_dict=sub_symkey)
             # We do not need to separate ciphertext from integrity/authentication data here, since key encryption is atomic
 
         else:  # Using asymmetric algorithm
-            assert key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS
-            assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
+            assert key_cipher_algo in self._fbu.SUPPORTED_ASYMMETRIC_KEY_ALGOS
+            assert key_cipher_algo in self._fbu.SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
 
             keychain_uid = key_cipher_layer.get("keychain_uid") or default_keychain_uid
             key_cipherdict = self._encrypt_key_with_asymmetric_cipher(
@@ -384,7 +400,7 @@ class FlightBox:
         assert isinstance(key_cipherdict, dict), key_cipherdict
         return key_cipherdict
 
-    def _fetch_asymmetric_key_pem_from_trustee(self, trustee, key_algo, keychain_uid):
+    def _____fetch_asymmetric_key_pem_from_trustee(self, trustee, key_algo, keychain_uid):
         """Method meant to be easily replaced by a mockup in tests"""
         trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
         logger.debug("Fetching asymmetric key %s %r", key_algo, keychain_uid)
@@ -397,7 +413,7 @@ class FlightBox:
         keychain_uid: uuid.UUID,
         key_bytes: bytes,
         trustee: dict,
-        cryptainer_metadata: Optional[dict],
+        cryptainer_metadata: typing.Optional[dict],
     ) -> dict:
         """
         Encrypt given payload (representing a symmetric key) with an asymmetric algorithm.
@@ -409,22 +425,25 @@ class FlightBox:
 
         :return: dictionary which contains every payload needed to decrypt the ciphered key
         """
+        public_key = self._fbu.get_public_key(trustee=trustee, key_algo=cipher_algo, keychain_uid=keychain_uid)
+        '''
         public_key_pem = self._fetch_asymmetric_key_pem_from_trustee(
             trustee=trustee, key_algo=cipher_algo, keychain_uid=keychain_uid
         )
 
         logger.debug("Encrypting symmetric key struct with asymmetric keypair %s/%s", cipher_algo, keychain_uid)
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=cipher_algo)
+        '''
 
         # FIXME provide utilities to wrap/unwrap this struct?
         key_struct = dict(key_bytes=key_bytes, cryptainer_metadata=cryptainer_metadata)  # SPECIAL FORMAT FOR CHECKUPS
-        key_struct_bytes = dump_to_json_bytes(key_struct)
-        key_cipherdict = encrypt_bytestring(
+        key_struct_bytes = self._fbu.dump_to_json_bytes(key_struct)
+        key_cipherdict = self._fbu.encrypt_bytestring(
             plaintext=key_struct_bytes, cipher_algo=cipher_algo, key_dict=dict(key=public_key)
         )
         return key_cipherdict
 
-    def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: dict):
+    def ________add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: dict):
         default_keychain_uid = cryptainer["keychain_uid"]  # No hierarchical override of uids here
 
         plaintext_digests = payload_integrity_tags["plaintext_digests"]

@@ -10,6 +10,7 @@ from wacryptolib.cipher import _update_hashers_dict, _create_hashers_dict, _get_
 from wacryptolib.cryptainer import get_trustee_proxy, logger, SIGNATURE_POLICIES, DEFAULT_DATA_CHUNK_SIZE
 from wacryptolib.exceptions import SignatureVerificationError
 from wacryptolib.keystore import KeystorePoolBase
+from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
 
 
 def _do_get_message_signature(signature_conf, default_keychain_uid, keystore_pool):
@@ -53,6 +54,7 @@ def _retrieve_and_inject_message_signature(
 
     payload_digest_algo = signature_conf["payload_digest_algo"]
     payload_signature_algo = signature_conf["payload_signature_algo"]
+    assert payload_signature_algo in SUPPORTED_SIGNATURE_ALGOS, payload_signature_algo
 
     if signature_policy == SIGNATURE_POLICIES.SKIP_SIGNING:
         logger.debug(

@@ -3,12 +3,13 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import copy
+import logging
 from typing import Optional, Union, BinaryIO
 import uuid
 
 from wacryptolib.cryptainer import CryptainerBase, SIGNATURE_POLICIES, PAYLOAD_CIPHERTEXT_LOCATIONS, logger, \
     CRYPTAINER_FORMAT, CRYPTAINER_STATES, SHARED_SECRET_ALGO_MARKER, get_trustee_proxy, \
-    _inject_payload_digests_and_signatures
+    _inject_payload_digests_and_signatures, FlightboxUtilitiesBase, FlightBox
 
 from wacryptolib.cipher import (
     encrypt_bytestring,
@@ -32,6 +33,48 @@ from wacryptolib.utilities import (
 )
 
 
+class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
+    """
+    THIS CLASS IS PRIVATE API
+
+    Contains a set of platform-specific functions to deal with time,
+    cryptography, and other primitives required for Flightbox to operate.
+    """
+
+    SUPPORTED_SYMMETRIC_CIPHER_ALGOS = sorted(set(SUPPORTED_SYMMETRIC_KEY_ALGOS) & set(SUPPORTED_CIPHER_ALGOS))
+    SUPPORTED_ASYMMETRIC_CIPHER_ALGOS = sorted(set(SUPPORTED_ASYMMETRIC_KEY_ALGOS) & set(SUPPORTED_CIPHER_ALGOS))
+
+    def __init__(self, logger: logging.Logger, keystore_pool: CryptainerBase) -> None:
+        self.logger = logger
+        self._keystore_pool = keystore_pool
+
+    def raise_validation_error(self, msg: str) -> None:
+        raise SchemaValidationError(msg)
+
+    def dump_to_json_bytes(self, data):
+        raise dump_to_json_bytes(data)
+
+    def generate_uuid0(self) -> uuid.UUID:
+        raise generate_uuid0()
+
+    def split_secret_into_shards(secret: bytes, *, shard_count: int, threshold_count: int) -> list:
+        raise split_secret_into_shards(secret, shard_count=shard_count, threshold_count=threshold_count)
+
+    def generate_symkey(self, cipher_algo: str):
+        raise generate_symkey(cipher_algo)
+
+    def get_public_key(self, trustee: dict, key_algo: str, keychain_uid: uuid.UUID) -> dict:
+        trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
+        self.logger.debug("Fetching asymmetric key %s %r", key_algo, keychain_uid)
+        public_key_pem = trustee_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
+        self.logger.debug("Encrypting symmetric key struct with asymmetric keypair %s/%s", key_algo, keychain_uid)
+        public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=key_algo)
+        return public_key
+
+    def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) -> dict:
+        return encrypt_bytestring(plaintext=plaintext, cipher_algo=cipher_algo, key_dict=key_dict)
+
+
 class CryptainerEncryptor(CryptainerBase):
     """
     THIS CLASS IS PRIVATE API
@@ -44,6 +87,10 @@ class CryptainerEncryptor(CryptainerBase):
             signature_policy = SIGNATURE_POLICIES.ATTEMPT_SIGNING  # Sensible default
         assert getattr(SIGNATURE_POLICIES, signature_policy), signature_policy
         self._signature_policy = signature_policy
+
+        _flightbox_utilities = FlightboxUtilitiesImpl(logger=logger, keystore_pool=self._keystore_pool)
+        self._flightbox = FlightBox(_flightbox_utilities)
+
         super().__init__(**kwargs)
 
     def build_cryptainer_and_encryption_pipeline(

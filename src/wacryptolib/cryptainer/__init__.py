@@ -9,12 +9,14 @@ logger = logging.getLogger(__name__)
 # Beware, the order of these imports is crucial, all submodules are supposed
 # to import their own utilities from THIS __init__.py file, not from each other
 
-from ._base import (CRYPTAINER_FORMAT, CRYPTAINER_SUFFIX, CRYPTAINER_DATETIME_FORMAT, CRYPTAINER_DATETIME_LENGTH,
+from ._base import (CRYPTAINER_SUFFIX, CRYPTAINER_DATETIME_FORMAT, CRYPTAINER_DATETIME_LENGTH,
                           CRYPTAINER_TEMP_SUFFIX, PAYLOAD_CIPHERTEXT_LOCATIONS, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
                           OFFLOADED_PAYLOAD_FILENAME_SUFFIX, DEFAULT_DATA_CHUNK_SIZE, DECRYPTED_FILE_SUFFIX,
-                          SHARED_SECRET_ALGO_MARKER, DUMMY_KEYSTORE_POOL, CRYPTAINER_TRUSTEE_TYPES,
-                          LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_STATES, SIGNATURE_POLICIES)
+                          DUMMY_KEYSTORE_POOL, CRYPTAINER_TRUSTEE_TYPES,
+                          LOCAL_KEYFACTORY_TRUSTEE_MARKER, SIGNATURE_POLICIES)
 from ._base import CryptainerBase, get_trustee_id, get_trustee_proxy, _get_cryptainer_inline_ciphertext_value
+
+from ._flightbox import CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, CRYPTAINER_STATES, FlightboxUtilitiesBase, FlightBox
 
 from ._authorization import request_decryption_authorizations
 

@@ -9,6 +9,7 @@ Python environment, including MicroPython.
 As such, it must only use dependency injection, and not import anything
 specific by itself.
 """
+from __future__ import annotations
 import copy
 import logging
 import uuid
@@ -24,7 +25,7 @@ class CRYPTAINER_STATES:
     FINISHED = "FINISHED"
 
 
-class FlightboxUtilities:
+class FlightboxUtilitiesBase:
     """
     THIS CLASS IS PRIVATE API
 
@@ -34,9 +35,8 @@ class FlightboxUtilities:
 
     logger: logging.Logger
 
-    SUPPORTED_ASYMMETRIC_KEY_ALGOS: typing.Sequence[str]
-    SUPPORTED_SYMMETRIC_KEY_ALGOS: typing.Sequence[str]
-    SUPPORTED_CIPHER_ALGOS: typing.Sequence[str]
+    SUPPORTED_SYMMETRIC_CIPHER_ALGOS: typing.Sequence[str]
+    SUPPORTED_ASYMMETRIC_CIPHER_ALGOS: typing.Sequence[str]
 
     def raise_validation_error(self, msg: str) -> None:
         raise NotImplementedError
@@ -60,8 +60,6 @@ class FlightboxUtilities:
         raise NotImplementedError
 
 
-
-
 class FlightBox:
     """
     THIS CLASS IS PRIVATE API
@@ -70,7 +68,7 @@ class FlightBox:
     to use in an encryption pipeline.
     """
 
-    def __init__(self, flightbox_utilities: FlightboxUtilities):
+    def __init__(self, flightbox_utilities: FlightboxUtilitiesBase):
         self._fbu = flightbox_utilities
         self._logger = self._fbu.logger  # Shortcut
 
@@ -154,7 +152,7 @@ class FlightBox:
         return cryptainer
 
     @staticmethod
-    def _load_all_payload_bytes(payload: Union[bytes, BinaryIO]):
+    def ______load_all_payload_bytes(payload: Union[bytes, BinaryIO]):
         if hasattr(payload, "read"):  # File-like object
             logger.debug("Reading all data from open file handle %r", payload)
             payload_stream = payload
@@ -164,7 +162,7 @@ class FlightBox:
         ## FIXME LATER ADD THIS - assert payload, payload  # No encryption must be launched if we have no payload to process!
         return payload
 
-    def _encrypt_and_hash_payload(self, payload, payload_cipher_layer_extracts):
+    def ______encrypt_and_hash_payload(self, payload, payload_cipher_layer_extracts):
         assert payload_cipher_layer_extracts, payload_cipher_layer_extracts  # Else security flaw!
 
         payload_current = payload
@@ -364,8 +362,7 @@ class FlightBox:
 
             key_cipherdict = {"shard_ciphertexts": shard_ciphertexts}  # A dict is more future-proof than list
 
-        elif key_cipher_algo in self._fbu.SUPPORTED_SYMMETRIC_KEY_ALGOS:
-            assert key_cipher_algo in self._fbu.SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
+        elif key_cipher_algo in self._fbu.SUPPORTED_SYMMETRIC_CIPHER_ALGOS:
 
             self._logger.debug("Generating symmetric subkey of type %r for key encryption", key_cipher_algo)
             sub_symkey = self._fbu.generate_symkey(cipher_algo=key_cipher_algo)
@@ -385,8 +382,7 @@ class FlightBox:
             # We do not need to separate ciphertext from integrity/authentication data here, since key encryption is atomic
 
         else:  # Using asymmetric algorithm
-            assert key_cipher_algo in self._fbu.SUPPORTED_ASYMMETRIC_KEY_ALGOS
-            assert key_cipher_algo in self._fbu.SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
+            assert key_cipher_algo in self._fbu.SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, repr(key_cipher_algo)
 
             keychain_uid = key_cipher_layer.get("keychain_uid") or default_keychain_uid
             key_cipherdict = self._encrypt_key_with_asymmetric_cipher(
@@ -426,7 +422,7 @@ class FlightBox:
         :return: dictionary which contains every payload needed to decrypt the ciphered key
         """
         public_key = self._fbu.get_public_key(trustee=trustee, key_algo=cipher_algo, keychain_uid=keychain_uid)
-        '''
+        ''' TO MOVE TO MAIN WACRYPTOLIB
         public_key_pem = self._fetch_asymmetric_key_pem_from_trustee(
             trustee=trustee, key_algo=cipher_algo, keychain_uid=keychain_uid
         )

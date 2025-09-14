@@ -3005,8 +3005,8 @@ def test_get_cryptoconf_summary():
 
     _public_key = generate_keypair(key_algo="RSA_OAEP", serialize=True)["public_key"]
     # We mockup the call to remote trustees
-    with patch.object(
-        CryptainerEncryptor, "_fetch_asymmetric_key_pem_from_trustee", return_value=_public_key, create=True
+    with patch("wacryptolib.cryptainer._encryptor.FlightboxUtilitiesImpl._fetch_asymmetric_key_pem_from_trustee",
+        return_value=_public_key
     ) as mock_method:
         cryptainer = encrypt_payload_into_cryptainer(
             payload=payload, cryptoconf=CONF_WITH_TRUSTEE, cryptainer_metadata=None

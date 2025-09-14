@@ -52,26 +52,31 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
         raise SchemaValidationError(msg)
 
     def dump_to_json_bytes(self, data):
-        raise dump_to_json_bytes(data)
+        return dump_to_json_bytes(data)
 
     def generate_uuid0(self) -> uuid.UUID:
-        raise generate_uuid0()
+        return generate_uuid0()
 
-    def split_secret_into_shards(secret: bytes, *, shard_count: int, threshold_count: int) -> list:
-        raise split_secret_into_shards(secret, shard_count=shard_count, threshold_count=threshold_count)
+    def split_secret_into_shards(self, secret: bytes, *, shard_count: int, threshold_count: int) -> list:
+        return split_secret_into_shards(secret, shard_count=shard_count, threshold_count=threshold_count)
 
     def generate_symkey(self, cipher_algo: str):
-        raise generate_symkey(cipher_algo)
+        return generate_symkey(cipher_algo)
 
-    def get_public_key(self, trustee: dict, key_algo: str, keychain_uid: uuid.UUID) -> dict:
+    def _fetch_asymmetric_key_pem_from_trustee(self, trustee, key_algo, keychain_uid):
+        """Method meant to be easily replaced by a mockup in tests"""
         trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
         self.logger.debug("Fetching asymmetric key %s %r", key_algo, keychain_uid)
         public_key_pem = trustee_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
+        return public_key_pem
+
+    def get_public_key(self, trustee: dict, key_algo: str, keychain_uid: uuid.UUID) -> dict:
+        public_key_pem = self._fetch_asymmetric_key_pem_from_trustee(trustee, key_algo=key_algo, keychain_uid=keychain_uid)
         self.logger.debug("Encrypting symmetric key struct with asymmetric keypair %s/%s", key_algo, keychain_uid)
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=key_algo)
         return public_key
 
-    def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) -> dict:
+    def encrypt_bytestring(self, plaintext: bytes, *, cipher_algo: str, key_dict: dict) -> dict:
         return encrypt_bytestring(plaintext=plaintext, cipher_algo=cipher_algo, key_dict=key_dict)
 
 
@@ -83,6 +88,7 @@ class CryptainerEncryptor(CryptainerBase):
     """
 
     def __init__(self, signature_policy, **kwargs):
+        super().__init__(**kwargs)
         if signature_policy is None:
             signature_policy = SIGNATURE_POLICIES.ATTEMPT_SIGNING  # Sensible default
         assert getattr(SIGNATURE_POLICIES, signature_policy), signature_policy
@@ -90,8 +96,6 @@ class CryptainerEncryptor(CryptainerBase):
 
         _flightbox_utilities = FlightboxUtilitiesImpl(logger=logger, keystore_pool=self._keystore_pool)
         self._flightbox = FlightBox(_flightbox_utilities)
-
-        super().__init__(**kwargs)
 
     def build_cryptainer_and_encryption_pipeline(
         self,
@@ -225,231 +229,10 @@ class CryptainerEncryptor(CryptainerBase):
         'payload_cipher_layer_extracts' keys, and each of 'payload_cipher_layer_extracts' items has
         keys 'cipher_algo', 'symmetric_key' and 'payload_hash_algos'.
         """
-
-        assert cryptainer_metadata is None or isinstance(cryptainer_metadata, dict), cryptainer_metadata
-        cryptainer_format = CRYPTAINER_FORMAT
-        cryptainer_uid = generate_uuid0()  # ALWAYS UNIQUE!
-
-        default_keychain_uid = (
-            cryptoconf.get("keychain_uid") or generate_uuid0()
-        )  # Might be shared by lots of cryptainers
-
-        assert isinstance(cryptoconf, dict), cryptoconf
-        cryptainer = copy.deepcopy(cryptoconf)  # So that we can manipulate it as new cryptainer
-        del cryptoconf
-        if not cryptainer["payload_cipher_layers"]:
-            raise SchemaValidationError("Empty payload_cipher_layers list is forbidden in cryptoconf")
-
-        payload_plaintext_hash_algos = [
-            signature["payload_digest_algo"] for signature in cryptainer.get("payload_plaintext_signatures", ())
-        ]
-
-        payload_cipher_layer_extracts = []  # Sensitive info with secret keys!
-
-        for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
-            payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
-
-            payload_cipher_layer["payload_macs"] = None  # Will be filled later with MAC tags etc.
-
-            logger.debug("Generating symmetric key of type %r for payload encryption", payload_cipher_algo)
-            symkey = generate_symkey(cipher_algo=payload_cipher_algo)
-            key_bytes = dump_to_json_bytes(symkey)
-            key_cipher_layers = payload_cipher_layer["key_cipher_layers"]
-
-            key_ciphertext = self._encrypt_key_through_multiple_layers(
-                default_keychain_uid=default_keychain_uid,
-                key_bytes=key_bytes,
-                key_cipher_layers=key_cipher_layers,
-                cryptainer_metadata=cryptainer_metadata,
-            )
-            assert isinstance(key_ciphertext, bytes), key_ciphertext
-            payload_cipher_layer["key_ciphertext"] = key_ciphertext
-
-            payload_cipher_layer_extract = dict(
-                cipher_algo=payload_cipher_algo,
-                symkey=symkey,
-                hash_algos=[
-                    signature["payload_digest_algo"]
-                    for signature in payload_cipher_layer["payload_ciphertext_signatures"]
-                ],
-            )
-            payload_cipher_layer_extracts.append(payload_cipher_layer_extract)
-
-        cryptainer.update(
-            cryptainer_state=CRYPTAINER_STATES.STARTED,
-            cryptainer_format=cryptainer_format,
-            cryptainer_uid=cryptainer_uid,
-            keychain_uid=default_keychain_uid,
-            payload_ciphertext_struct=None,  # Must be filled asap, by OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER if needed!
-            cryptainer_metadata=cryptainer_metadata,
+        cryptainer, secrets = self._flightbox.generate_cryptainer_base_and_secrets(
+            cryptoconf=cryptoconf, cryptainer_metadata=cryptainer_metadata
         )
-
-        secrets = dict(
-            payload_plaintext_hash_algos=payload_plaintext_hash_algos,
-            payload_cipher_layer_extracts=payload_cipher_layer_extracts,
-        )
-
         return cryptainer, secrets
-
-    def _encrypt_key_through_multiple_layers(
-        self,
-        default_keychain_uid: uuid.UUID,
-        key_bytes: bytes,
-        key_cipher_layers: list,
-        cryptainer_metadata: Optional[dict],
-    ) -> bytes:
-        # HERE KEY IS A REAL KEY OR A SHARD !!!
-        key_bytes_initial = key_bytes
-
-        if not key_cipher_layers:
-            raise SchemaValidationError("Empty key_cipher_layers list is forbidden in cryptoconf")
-
-        for key_cipher_layer in key_cipher_layers:
-            key_cipherdict = self._encrypt_key_through_single_layer(
-                default_keychain_uid=default_keychain_uid,
-                key_bytes=key_bytes,
-                key_cipher_layer=key_cipher_layer,
-                cryptainer_metadata=cryptainer_metadata,
-            )
-            key_bytes = dump_to_json_bytes(key_cipherdict)  # Thus its remains as bytes all along
-
-        assert key_bytes != key_bytes_initial  # safety
-        key_ciphertext = key_bytes
-        return key_ciphertext
-
-    def _encrypt_key_through_single_layer(
-        self,
-        default_keychain_uid: uuid.UUID,
-        key_bytes: bytes,
-        key_cipher_layer: dict,
-        cryptainer_metadata: Optional[dict],
-    ) -> dict:
-        """
-        Encrypt a symmetric key using an asymmetric encryption scheme.
-
-        The symmetric key payload might already be the result of previous encryption passes.
-        Encryption can use a simple public key algorithm, or rely on a a set of public keys,
-        by using a shared secret scheme.
-
-        :param default_keychain_uid: default uuid for the set of encryption keys used
-        :param key_bytes: symmetric key to encrypt (potentially already encrypted)
-        :param key_cipher_layer: part of the cryptoconf related to this key encryption layer
-
-        :return: if the scheme used is 'SHARED_SECRET', a list of encrypted shards is returned.
-                 If an asymmetric algorithm has been used, a dictionary with all the information
-                 needed to decipher the symmetric key is returned.
-        """
-        assert isinstance(key_bytes, bytes), key_bytes
-        key_cipher_algo = key_cipher_layer["key_cipher_algo"]
-
-        if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
-            key_shared_secret_shards = key_cipher_layer["key_shared_secret_shards"]
-            shard_count = len(key_shared_secret_shards)
-
-            threshold_count = key_cipher_layer["key_shared_secret_threshold"]
-            if not (0 < threshold_count <= shard_count):
-                raise SchemaValidationError(
-                    "Shared secret threshold must be strictly positive and not greater than shard count, in cryptoconf"
-                )
-
-            shards = split_secret_into_shards(
-                secret=key_bytes, shard_count=shard_count, threshold_count=threshold_count
-            )
-
-            assert len(shards) == shard_count
-
-            shard_ciphertexts = []
-
-            for shard, key_shared_secret_shard_conf in zip(shards, key_shared_secret_shards):
-                shard_bytes = dump_to_json_bytes(
-                    shard
-                )  # The tuple (idx, payload) of each shard thus becomes encryptable
-                shard_ciphertext = self._encrypt_key_through_multiple_layers(
-                    default_keychain_uid=default_keychain_uid,
-                    key_bytes=shard_bytes,
-                    key_cipher_layers=key_shared_secret_shard_conf["key_cipher_layers"],
-                    cryptainer_metadata=cryptainer_metadata,
-                )  # Recursive structure
-                assert isinstance(shard_ciphertext, bytes), shard_ciphertext
-                shard_ciphertexts.append(shard_ciphertext)
-
-            key_cipherdict = {"shard_ciphertexts": shard_ciphertexts}  # A dict is more future-proof than list
-
-        elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
-            assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
-
-            logger.debug("Generating symmetric subkey of type %r for key encryption", key_cipher_algo)
-            sub_symkey = generate_symkey(cipher_algo=key_cipher_algo)
-            sub_symkey_bytes = dump_to_json_bytes(sub_symkey)
-
-            sub_symkey_ciphertext = self._encrypt_key_through_multiple_layers(
-                default_keychain_uid=default_keychain_uid,
-                key_bytes=sub_symkey_bytes,
-                key_cipher_layers=key_cipher_layer["key_cipher_layers"],
-                cryptainer_metadata=cryptainer_metadata,
-            )  # Recursive structure
-            assert isinstance(sub_symkey_ciphertext, bytes), sub_symkey_ciphertext
-
-            key_cipher_layer["key_ciphertext"] = sub_symkey_ciphertext
-
-            key_cipherdict = encrypt_bytestring(key_bytes, cipher_algo=key_cipher_algo, key_dict=sub_symkey)
-            # We do not need to separate ciphertext from integrity/authentication data here, since key encryption is atomic
-
-        else:  # Using asymmetric algorithm
-            assert key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS
-            assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
-
-            keychain_uid = key_cipher_layer.get("keychain_uid") or default_keychain_uid
-            key_cipherdict = self._encrypt_key_with_asymmetric_cipher(
-                cipher_algo=key_cipher_algo,
-                keychain_uid=keychain_uid,
-                key_bytes=key_bytes,
-                trustee=key_cipher_layer["key_cipher_trustee"],
-                cryptainer_metadata=cryptainer_metadata,
-            )
-
-        assert isinstance(key_cipherdict, dict), key_cipherdict
-        return key_cipherdict
-
-    def _fetch_asymmetric_key_pem_from_trustee(self, trustee, key_algo, keychain_uid):
-        """Method meant to be easily replaced by a mockup in tests"""
-        trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
-        logger.debug("Fetching asymmetric key %s %r", key_algo, keychain_uid)
-        public_key_pem = trustee_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
-        return public_key_pem
-
-    def _encrypt_key_with_asymmetric_cipher(
-        self,
-        cipher_algo: str,
-        keychain_uid: uuid.UUID,
-        key_bytes: bytes,
-        trustee: dict,
-        cryptainer_metadata: Optional[dict],
-    ) -> dict:
-        """
-        Encrypt given payload (representing a symmetric key) with an asymmetric algorithm.
-
-        :param cipher_algo: string with name of algorithm to use
-        :param keychain_uid: final uuid for the set of encryption keys used
-        :param key_bytes: symmetric key as bytes to encrypt
-        :param trustee: trustee used for encryption (findable in configuration tree)
-
-        :return: dictionary which contains every payload needed to decrypt the ciphered key
-        """
-        public_key_pem = self._fetch_asymmetric_key_pem_from_trustee(
-            trustee=trustee, key_algo=cipher_algo, keychain_uid=keychain_uid
-        )
-
-        logger.debug("Encrypting symmetric key struct with asymmetric keypair %s/%s", cipher_algo, keychain_uid)
-        public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=cipher_algo)
-
-        # FIXME provide utilities to wrap/unwrap this struct?
-        key_struct = dict(key_bytes=key_bytes, cryptainer_metadata=cryptainer_metadata)  # SPECIAL FORMAT FOR CHECKUPS
-        key_struct_bytes = dump_to_json_bytes(key_struct)
-        key_cipherdict = encrypt_bytestring(
-            plaintext=key_struct_bytes, cipher_algo=cipher_algo, key_dict=dict(key=public_key)
-        )
-        return key_cipherdict
 
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: dict):
         default_keychain_uid = cryptainer["keychain_uid"]  # No hierarchical override of uids here

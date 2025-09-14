@@ -10,10 +10,13 @@ As such, it must only use dependency injection, and not import anything
 specific by itself.
 """
 from __future__ import annotations
-import copy
-import logging
-import uuid
+
 import typing
+if typing.TYPE_CHECKING:
+    import uuid
+    import logging
+
+import copy
 
 
 SHARED_SECRET_ALGO_MARKER = "[SHARED_SECRET]"  # Special "key_cipher_algo" value
@@ -47,7 +50,7 @@ class FlightboxUtilitiesBase:
     def generate_uuid0(self) -> uuid.UUID:
         raise NotImplementedError
 
-    def split_secret_into_shards(secret: bytes, *, shard_count: int, threshold_count: int) -> list:
+    def split_secret_into_shards(self, secret: bytes, *, shard_count: int, threshold_count: int) -> list:
         raise NotImplementedError
 
     def generate_symkey(self, cipher_algo: str):
@@ -56,7 +59,7 @@ class FlightboxUtilitiesBase:
     def get_public_key(self, trustee: dict, key_algo: str, keychain_uid: uuid.UUID) -> dict:
         raise NotImplementedError
 
-    def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) -> dict:
+    def encrypt_bytestring(self, plaintext: bytes, *, cipher_algo: str, key_dict: dict) -> dict:
         raise NotImplementedError
 
 
@@ -72,7 +75,7 @@ class FlightBox:
         self._fbu = flightbox_utilities
         self._logger = self._fbu.logger  # Shortcut
 
-
+    '''
     def ________init__(self, signature_policy, **kwargs):
         if signature_policy is None:
             signature_policy = SIGNATURE_POLICIES.ATTEMPT_SIGNING  # Sensible default
@@ -198,6 +201,7 @@ class FlightBox:
             payload_current = payload_ciphertext
 
         return payload_current, ciphertext_integrity_tags
+    '''
 
     def generate_cryptainer_base_and_secrets(self, cryptoconf: dict, cryptainer_metadata=None) -> tuple:
         """
@@ -396,12 +400,14 @@ class FlightBox:
         assert isinstance(key_cipherdict, dict), key_cipherdict
         return key_cipherdict
 
+    '''
     def _____fetch_asymmetric_key_pem_from_trustee(self, trustee, key_algo, keychain_uid):
         """Method meant to be easily replaced by a mockup in tests"""
         trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
         logger.debug("Fetching asymmetric key %s %r", key_algo, keychain_uid)
         public_key_pem = trustee_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
         return public_key_pem
+    '''
 
     def _encrypt_key_with_asymmetric_cipher(
         self,
@@ -435,10 +441,11 @@ class FlightBox:
         key_struct = dict(key_bytes=key_bytes, cryptainer_metadata=cryptainer_metadata)  # SPECIAL FORMAT FOR CHECKUPS
         key_struct_bytes = self._fbu.dump_to_json_bytes(key_struct)
         key_cipherdict = self._fbu.encrypt_bytestring(
-            plaintext=key_struct_bytes, cipher_algo=cipher_algo, key_dict=dict(key=public_key)
+            key_struct_bytes, cipher_algo=cipher_algo, key_dict=dict(key=public_key)
         )
         return key_cipherdict
 
+    '''
     def ________add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: dict):
         default_keychain_uid = cryptainer["keychain_uid"]  # No hierarchical override of uids here
 
@@ -475,4 +482,4 @@ class FlightBox:
             )
 
         cryptainer["cryptainer_state"] = CRYPTAINER_STATES.FINISHED
-
+        '''

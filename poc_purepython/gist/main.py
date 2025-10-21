@@ -2,6 +2,9 @@ import base64
 import rsa_ as rsa
 ####import asn1
 
+### SOURCE : https://gist.github.com/ppoffice/e10e0a418d5dafdd5efe9495e962d3d2
+
+
 base64.encodestring = lambda x: base64.b64encode(x)
 
 if __name__ == '__main__':

@@ -3,7 +3,7 @@ import hashlib
 import pkcs1.rsaes_oaep
 import pkcs1.keys
 
-message = "Good!".encode("utf8")
+message = "OK".encode("utf8")
 
 if False:
     # VALUES imported from a wacryptolib PEM file
@@ -25,10 +25,10 @@ public, private = pkcs1.keys.generate_key_pair(size=2048)
 
 print("MESSAGE", message)
 
-ciphertext = pkcs1.rsaes_oaep.encrypt(public, message=message, label=b'', hash_class=hashlib.sha512)
+ciphertext = pkcs1.rsaes_oaep.encrypt(public, message=message, label=b'', hash_class=hashlib.sha1)
                                     # TODO: mgf=mgf.mgf1, seed=None, rnd=default_crypto_random))
 print("ENCRYPTED MESSAGE:", repr(ciphertext))
 
-cleartext = pkcs1.rsaes_oaep.decrypt(private, message=message, label=b'', hash_class=hashlib.sha512)
+cleartext = pkcs1.rsaes_oaep.decrypt(private, message=ciphertext, label=b'', hash_class=hashlib.sha1)
                                     # TODO: mgf=mgf.mgf1, seed=None, rnd=default_crypto_random))
 print("DECRYPTED MESSAGE:", repr(cleartext))

@@ -101,6 +101,8 @@ but it will be faster as there is less recursion.
 """
 from __future__ import annotations
 
+import calendar
+
 import bsonjs
 
 import base64
@@ -129,9 +131,6 @@ from bson.codec_options import CodecOptions, DatetimeConversion
 from bson.datetime_ms import (
     _MAX_UTC_MS,
     EPOCH_AWARE,
-    DatetimeMS,
-    _datetime_to_millis,
-    _millis_to_datetime,
 )
 from bson.dbref import DBRef
 from bson.decimal128 import Decimal128
@@ -171,8 +170,8 @@ def dumps(obj: Any, *args: Any, **kwargs: Any) -> str:
 
     Recursive function that handles main ExtendedJSON types.
     """
-    _ext_obj = convert_to_extjson(obj)
-    return json.dumps(_ext_obj, *args, **kwargs)
+    ext_obj = convert_to_extjson(obj)
+    return json.dumps(ext_obj, *args, **kwargs)
 
 
 def loads(s: Union[str, bytes, bytearray], *args: Any, **kwargs: Any) -> Any:
@@ -180,17 +179,17 @@ def loads(s: Union[str, bytes, bytearray], *args: Any, **kwargs: Any) -> Any:
 
     Recursive function that handles main ExtendedJSON types.
     """
-    _ext_obj = json.loads(s, *args, **kwargs)
-    return convert_from_extjson(_ext_obj)
+    ext_obj = json.loads(s, *args, **kwargs)
+    return convert_from_extjson(ext_obj)
 
 
 def convert_to_extjson(obj: Any) -> Any:
     """Recursive helper method that converts BSON types so they can be
     converted into json.
     """
-    if hasattr(obj, "items"):
+    if isinstance(obj, dict):
         return {k: convert_to_extjson(v) for k, v in obj.items()}
-    elif hasattr(obj, "__iter__") and not isinstance(obj, (str, bytes)):
+    elif isinstance(obj, list):  # Tuples are not handled!
         return [convert_to_extjson(v) for v in obj]
 
     return _convert_primitive_to_extjson(obj)
@@ -218,39 +217,36 @@ def _convert_primitive_to_extjson(obj: Any) -> Any:
     return obj
 
 
-def convert_from_extjson(obj: Any) -> Any:
+def convert_from_extjson(ext_obj: Any) -> Any:
     """Recursive helper method that converts BSON types so they can be
     converted into json.
     """
 
-    return _convert_primitive_from_extjson(obj)
+    if isinstance(ext_obj, dict):
+        ext_obj = {k: convert_from_extjson(v) for k, v in ext_obj.items()}
+        return _convert_primitive_from_extjson_dict(ext_obj)
+    elif isinstance(ext_obj, list):  # Tuples are not handled!
+        return [convert_from_extjson(v) for v in ext_obj]
 
-    if hasattr(obj, "items"):
-        return {k: convert_from_extjson(v) for k, v in obj.items()}
-    elif hasattr(obj, "__iter__") and not isinstance(obj, (str, bytes)):
-        return [convert_from_extjson(v) for v in obj]
-    try:
-        return _convert_primitive_to_extjson(obj)
-    except TypeError:
-        return obj
+    return ext_obj
 
 
-def _convert_primitive_from_extjson(dct: Mapping[str, Any]) -> Any:
+def _convert_primitive_from_extjson_dict(ext_obj_dict: Mapping[str, Any]) -> Any:
     match = None
-    for k in dct:
+    for k in ext_obj_dict:
         if k in _PARSERS_SET:
             match = k
             break
     if match:
-        return _PARSERS[match](dct)
-    return dct
+        return _PARSERS[match](ext_obj_dict)
+    return ext_obj_dict
 
 
 def _encode_binary(data: bytes, subtype: int) -> Any:
     return {"$binary": {"base64": base64.b64encode(data).decode(), "subType": "%02x" % subtype}}
 
 
-def _encode_datetimems(obj: Any) -> dict:
+def _encode_datetimems(obj: Any) -> dict:  # FIXME remove ?
     return {"$date": {"$numberLong": str(int(obj))}}
 
 
@@ -262,7 +258,6 @@ def _encode_int(obj: int) -> Any:
 
 def _encode_noop(obj: Any) -> Any:
     return obj
-
 
 
 def _encode_float(obj: float) -> Any:
@@ -282,16 +277,11 @@ def _encode_datetime(obj: datetime.datetime) -> dict:
 
 
 def _encode_bytes(obj: bytes) -> dict:
-    return _encode_binary(obj, 0)
-
-
-def _encode_binary_obj(obj: Binary) -> dict:
-    return _encode_binary(obj, obj.subtype)
+    return _encode_binary(obj, BINARY_SUBTYPE)
 
 
 def _encode_uuid(obj: uuid.UUID) -> dict:
-    binval = Binary.from_uuid(obj, uuid_representation=json_options.uuid_representation)
-    return _encode_binary(binval, binval.subtype)
+    return _encode_binary(obj.bytes, UUID_SUBTYPE)
 
 
 
@@ -333,13 +323,13 @@ def _parse_canonical_binary(doc: Any) -> Union[bytes, uuid.UUID]:
 def _binary_or_uuid(data: Any, subtype: int) -> Union[Binary, uuid.UUID]:
     if subtype not in (BINARY_SUBTYPE, UUID_SUBTYPE):
         raise TypeError(f"Unsupported binary subtype: {subtype}")
-    if subtype == BINARY_SUBTYPE:
+    if subtype == UUID_SUBTYPE:
         return uuid.UUID(bytes=data)
     return data
 
 
 def _parse_canonical_datetime(
-    doc: Any, json_options: JSONOptions
+    doc: Any
 ) -> Union[datetime.datetime, DatetimeMS]:
     """Decode a JSON datetime to python datetime.datetime."""
     dtm = doc["$date"]
@@ -385,3 +375,27 @@ _PARSERS: dict[str, Callable[[Any, JSONOptions], Any]] = {
     "$numberDouble": _parse_canonical_double,
 }
 _PARSERS_SET = set(_PARSERS)
+
+
+EPOCH_AWARE = datetime.datetime.fromtimestamp(0, utc)
+
+
+def _datetime_to_millis(dtm: datetime.datetime) -> int:
+    """Convert datetime to milliseconds since epoch UTC."""
+    if dtm.utcoffset() is not None:
+        dtm = dtm - dtm.utcoffset()  # type: ignore
+    return int(calendar.timegm(dtm.timetuple()) * 1000 + dtm.microsecond // 1000)
+
+
+def _millis_to_datetime(
+    millis: int,
+) -> datetime.datetime:
+    """Convert milliseconds since epoch UTC to datetime."""
+
+    diff = ((millis % 1000) + 1000) % 1000
+    seconds = (millis - diff) // 1000
+    micros = diff * 1000
+
+    dt = EPOCH_AWARE + datetime.timedelta(seconds=seconds, microseconds=micros)
+
+    return dt  # UTC aware datetime

@@ -15,7 +15,7 @@ import multitimer
 import schema
 import uuid0
 from bson.binary import UuidRepresentation
-from bson.json_util import dumps, loads, JSONOptions, JSONMode
+from bson.json_util import dumps as baddumps, loads as badloads, JSONOptions, JSONMode
 from decorator import decorator
 from schema import SchemaError, Schema
 

@@ -171,7 +171,8 @@ def dumps(obj: Any, *args: Any, **kwargs: Any) -> str:
 
     Recursive function that handles main ExtendedJSON types.
     """
-    return json.dumps(convert_to_extjson(obj), *args, **kwargs)
+    _ext_obj = convert_to_extjson(obj)
+    return json.dumps(_ext_obj, *args, **kwargs)
 
 
 def loads(s: Union[str, bytes, bytearray], *args: Any, **kwargs: Any) -> Any:
@@ -179,7 +180,8 @@ def loads(s: Union[str, bytes, bytearray], *args: Any, **kwargs: Any) -> Any:
 
     Recursive function that handles main ExtendedJSON types.
     """
-    return convert_from_extjson(json.loads(s, *args, **kwargs))
+    _ext_obj = json.loads(s, *args, **kwargs)
+    return convert_from_extjson(_ext_obj)
 
 
 def convert_to_extjson(obj: Any) -> Any:
@@ -190,10 +192,8 @@ def convert_to_extjson(obj: Any) -> Any:
         return {k: convert_to_extjson(v) for k, v in obj.items()}
     elif hasattr(obj, "__iter__") and not isinstance(obj, (str, bytes)):
         return [convert_to_extjson(v) for v in obj]
-    try:
-        return _convert_primitive_to_extjson(obj)
-    except TypeError:
-        return obj
+
+    return _convert_primitive_to_extjson(obj)
 
 
 def _convert_primitive_to_extjson(obj: Any) -> Any:
@@ -213,29 +213,59 @@ def _convert_primitive_to_extjson(obj: Any) -> Any:
             _ENCODERS[type(obj)] = func
             return func(obj)
 
-    raise TypeError("%r is not JSON serializable" % obj)
+    # We give up and return the object unchanged
+    # The "default" handler of json.dumps() might save the day
+    return obj
 
 
-def _encode_binary(data: bytes, subtype: int, json_options: JSONOptions) -> Any:
+def convert_from_extjson(obj: Any) -> Any:
+    """Recursive helper method that converts BSON types so they can be
+    converted into json.
+    """
+
+    return _convert_primitive_from_extjson(obj)
+
+    if hasattr(obj, "items"):
+        return {k: convert_from_extjson(v) for k, v in obj.items()}
+    elif hasattr(obj, "__iter__") and not isinstance(obj, (str, bytes)):
+        return [convert_from_extjson(v) for v in obj]
+    try:
+        return _convert_primitive_to_extjson(obj)
+    except TypeError:
+        return obj
+
+
+def _convert_primitive_from_extjson(dct: Mapping[str, Any]) -> Any:
+    match = None
+    for k in dct:
+        if k in _PARSERS_SET:
+            match = k
+            break
+    if match:
+        return _PARSERS[match](dct)
+    return dct
+
+
+def _encode_binary(data: bytes, subtype: int) -> Any:
     return {"$binary": {"base64": base64.b64encode(data).decode(), "subType": "%02x" % subtype}}
 
 
-def _encode_datetimems(obj: Any, json_options: JSONOptions) -> dict:
+def _encode_datetimems(obj: Any) -> dict:
     return {"$date": {"$numberLong": str(int(obj))}}
 
 
-def _encode_int(obj: int, json_options: JSONOptions) -> Any:
+def _encode_int(obj: int) -> Any:
     if -_INT32_MAX <= obj < _INT32_MAX:
         return {"$numberInt": str(obj)}
     return {"$numberLong": str(obj)}
 
 
-def _encode_noop(obj: Any, dummy0: Any) -> Any:
+def _encode_noop(obj: Any) -> Any:
     return obj
 
 
 
-def _encode_float(obj: float, json_options: JSONOptions) -> Any:
+def _encode_float(obj: float) -> Any:
     if math.isnan(obj):
         return {"$numberDouble": "NaN"}
     elif math.isinf(obj):
@@ -246,22 +276,22 @@ def _encode_float(obj: float, json_options: JSONOptions) -> Any:
     return {"$numberDouble": str(repr(obj))}
 
 
-def _encode_datetime(obj: datetime.datetime, json_options: JSONOptions) -> dict:
+def _encode_datetime(obj: datetime.datetime) -> dict:
     millis = _datetime_to_millis(obj)
     return {"$date": {"$numberLong": str(millis)}}
 
 
-def _encode_bytes(obj: bytes, json_options: JSONOptions) -> dict:
-    return _encode_binary(obj, 0, json_options)
+def _encode_bytes(obj: bytes) -> dict:
+    return _encode_binary(obj, 0)
 
 
-def _encode_binary_obj(obj: Binary, json_options: JSONOptions) -> dict:
-    return _encode_binary(obj, obj.subtype, json_options)
+def _encode_binary_obj(obj: Binary) -> dict:
+    return _encode_binary(obj, obj.subtype)
 
 
-def _encode_uuid(obj: uuid.UUID, json_options: JSONOptions) -> dict:
+def _encode_uuid(obj: uuid.UUID) -> dict:
     binval = Binary.from_uuid(obj, uuid_representation=json_options.uuid_representation)
-    return _encode_binary(binval, binval.subtype, json_options)
+    return _encode_binary(binval, binval.subtype)
 
 
 
@@ -272,14 +302,13 @@ def _encode_uuid(obj: uuid.UUID, json_options: JSONOptions) -> dict:
 _ENCODERS: dict[Type, Callable[[Any, JSONOptions], Any]] = {
     bool: _encode_noop,
     bytes: _encode_bytes,
+    uuid.UUID: _encode_uuid,
     datetime.datetime: _encode_datetime,
     ##DatetimeMS: _encode_datetimems,
     float: _encode_float,
     int: _encode_int,
     str: _encode_noop,
     type(None): _encode_noop,
-    uuid.UUID: _encode_uuid,
-    Binary: _encode_binary_obj,
     ##Decimal128: _encode_decimal128,
 }
 
@@ -345,7 +374,6 @@ def _parse_canonical_double(doc: Any) -> float:
     if not isinstance(d_str, str):
         raise TypeError(f"$numberDouble must be string: {doc}")
     return float(d_str)
-
 
 
 _PARSERS: dict[str, Callable[[Any, JSONOptions], Any]] = {

@@ -183,23 +183,24 @@ def loads(s: Union[str, bytes, bytearray], *args: Any, **kwargs: Any) -> Any:
     return convert_from_extjson(ext_obj)
 
 
-def convert_to_extjson(obj: Any) -> Any:
+def convert_to_extjson(obj: Any, canonical=True) -> Any:
     """Recursive helper method that converts BSON types so they can be
     converted into json.
     """
     if isinstance(obj, dict):
-        return {k: convert_to_extjson(v) for k, v in obj.items()}
+        return {k: convert_to_extjson(v, canonical=canonical) for k, v in obj.items()}
     elif isinstance(obj, list):  # Tuples are not handled!
-        return [convert_to_extjson(v) for v in obj]
+        return [convert_to_extjson(v, canonical=canonical) for v in obj]
 
-    return _convert_primitive_to_extjson(obj)
+    return _convert_primitive_to_extjson(obj, canonical=canonical)
 
 
-def _convert_primitive_to_extjson(obj: Any) -> Any:
+def _convert_primitive_to_extjson(obj: Any, canonical) -> Any:
     # First see if the type is already cached. KeyError will only ever
     # happen once per subtype.
     try:
-        return _ENCODERS[type(obj)](obj)
+        encoder = _ENCODERS[type(obj)]
+        return encoder(obj, canonical=canonical)
     except KeyError:
         pass
 
@@ -210,7 +211,7 @@ def _convert_primitive_to_extjson(obj: Any) -> Any:
             func = _ENCODERS[base]
             # Cache this type for faster subsequent lookup.
             _ENCODERS[type(obj)] = func
-            return func(obj)
+            return func(obj, canonical=canonical)
 
     # We give up and return the object unchanged
     # The "default" handler of json.dumps() might save the day
@@ -242,25 +243,25 @@ def _convert_primitive_from_extjson_dict(ext_obj_dict: Mapping[str, Any]) -> Any
     return ext_obj_dict
 
 
-def _encode_binary(data: bytes, subtype: int) -> Any:
+def _encode_canonical_binary(data: bytes, subtype: int) -> Any:
     return {"$binary": {"base64": base64.b64encode(data).decode(), "subType": "%02x" % subtype}}
 
 
-def _encode_datetimems(obj: Any) -> dict:  # FIXME remove ?
+def _encode_datetimems(obj: Any, canonical: bool) -> dict:  # FIXME remove ?
     return {"$date": {"$numberLong": str(int(obj))}}
 
 
-def _encode_int(obj: int) -> Any:
+def _encode_int(obj: int, canonical: bool) -> Any:
     if -_INT32_MAX <= obj < _INT32_MAX:
         return {"$numberInt": str(obj)}
     return {"$numberLong": str(obj)}
 
 
-def _encode_noop(obj: Any) -> Any:
+def _encode_noop(obj: Any, canonical: bool) -> Any:
     return obj
 
 
-def _encode_float(obj: float) -> Any:
+def _encode_float(obj: float, canonical: bool) -> Any:
     if math.isnan(obj):
         return {"$numberDouble": "NaN"}
     elif math.isinf(obj):
@@ -271,17 +272,17 @@ def _encode_float(obj: float) -> Any:
     return {"$numberDouble": str(repr(obj))}
 
 
-def _encode_datetime(obj: datetime.datetime) -> dict:
+def _encode_datetime(obj: datetime.datetime, canonical: bool) -> dict:
     millis = _datetime_to_millis(obj)
     return {"$date": {"$numberLong": str(millis)}}
 
 
-def _encode_bytes(obj: bytes) -> dict:
-    return _encode_binary(obj, BINARY_SUBTYPE)
+def _encode_bytes(obj: bytes, canonical: bool) -> dict:
+    return _encode_canonical_binary(obj, BINARY_SUBTYPE)
 
 
-def _encode_uuid(obj: uuid.UUID) -> dict:
-    return _encode_binary(obj.bytes, UUID_SUBTYPE)
+def _encode_uuid(obj: uuid.UUID, canonical: bool) -> dict:
+    return _encode_canonical_binary(obj.bytes, UUID_SUBTYPE)
 
 
 
@@ -334,7 +335,7 @@ def _parse_canonical_datetime(
     """Decode a JSON datetime to python datetime.datetime."""
     dtm = doc["$date"]
     if len(doc) != 1:
-        raise TypeError(f"Bad $date, extra field(s): {doc}")
+        raise TypeError(f"Bad $date, extra field(s): {doc}")  # FIXME MUTUALIZE THIS
     return _millis_to_datetime(int(dtm))  # FIXME why "int()" conversion here?
 
 
@@ -342,7 +343,7 @@ def _parse_canonical_int32(doc: Any) -> int:
     """Decode a JSON int32 to python int."""
     i_str = doc["$numberInt"]
     if len(doc) != 1:
-        raise TypeError(f"Bad $numberInt, extra field(s): {doc}")
+        raise TypeError(f"Bad $numberInt, extra field(s): {doc}")  # FIXME MUTUALIZE THIS
     if not isinstance(i_str, str):
         raise TypeError(f"$numberInt must be string: {doc}")
     return int(i_str)
@@ -353,6 +354,8 @@ def _parse_canonical_int64(doc: Any) -> Int64:
     l_str = doc["$numberLong"]
     if len(doc) != 1:
         raise TypeError(f"Bad $numberLong, extra field(s): {doc}")
+    if not isinstance(l_str, str):
+        raise TypeError(f"$numberLong must be string: {doc}")  # FIXME MUTUALIZE
     return int(l_str)  # No need for Int64 type here
 
 
@@ -362,7 +365,7 @@ def _parse_canonical_double(doc: Any) -> float:
     if len(doc) != 1:
         raise TypeError(f"Bad $numberDouble, extra field(s): {doc}")
     if not isinstance(d_str, str):
-        raise TypeError(f"$numberDouble must be string: {doc}")
+        raise TypeError(f"$numberDouble must be string: {doc}")  # FIXME MUTUALIZE
     return float(d_str)
 
 
@@ -380,11 +383,12 @@ _PARSERS_SET = set(_PARSERS)
 EPOCH_AWARE = datetime.datetime.fromtimestamp(0, utc)
 
 
-def _datetime_to_millis(dtm: datetime.datetime) -> int:
+def _datetime_to_millis(dt: datetime.datetime) -> int:
     """Convert datetime to milliseconds since epoch UTC."""
-    if dtm.utcoffset() is not None:
-        dtm = dtm - dtm.utcoffset()  # type: ignore
-    return int(calendar.timegm(dtm.timetuple()) * 1000 + dtm.microsecond // 1000)
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+        raise TypeError(f"Unsupported naive datetime encountered: {dt}")
+    dt = dt - dt.utcoffset()  # type: ignore
+    return int(calendar.timegm(dt.timetuple()) * 1000 + dt.microsecond // 1000)
 
 
 def _millis_to_datetime(

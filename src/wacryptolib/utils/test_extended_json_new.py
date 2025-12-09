@@ -1,13 +1,66 @@
+from pprint import pprint
 import unittest, os, sys, pytz
 sys.path.append(os.path.dirname(__file__))
 
 from datetime import datetime, timedelta
 from json import JSONDecodeError
 
-from extended_json import loads, dumps
+from extended_json import loads, dumps, convert_to_extjson, convert_from_extjson
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.utilities import UTF8_ENCODING
 import uuid
+import math
+
+
+EXAMPLE_NATIVE_DATA_TREE = {
+    "my_none": None,
+    "my_bools": {"OK": True, "KO": False},
+    "my_strs": ["", "abc", "hêll@\nällz"],
+    "my_floats": [math.nan, -math.inf, -138262872.27267262, -20.001, -17.0, -0.0, 0.0, 2.0, 411.2, 2276372572.15, math.inf],
+    "my_ints": [-197282632562525242626256252625, -11, 0, 27627262727, 273262853882627266372772373772646252624542543],
+    "my_dates": [datetime(1, 1, 1, tzinfo=pytz.utc),
+                 datetime(2025, 10, 22, 2, 3, 4, 543000,
+                          tzinfo=pytz.timezone('Pacific/Johnston'))],
+    "my_uids": [uuid.UUID("29b91799-7249-4266-a853-80123d7fd684"), uuid.UUID("29b91799-7249-4266-a853-80123d7fd684")],
+    "my_bytes": [b"", b"hello world", b"\x00\x01\x02\x03\x04\x05\xfa\xfb\xfc\xfd\xfe\xff"],
+}
+
+
+def test_extended_json_tree_encoded_decode():
+
+    ext_json = convert_to_extjson(EXAMPLE_NATIVE_DATA_TREE, canonical=True)
+    print("EXTJSON DUMP:") ; pprint(ext_json)
+
+    expected_ext_json = {'my_bools': {'KO': False, 'OK': True},
+                         'my_bytes': [{'$binary': {'base64': '', 'subType': '00'}},
+                                      {'$binary': {'base64': 'aGVsbG8gd29ybGQ=', 'subType': '00'}},
+                                      {'$binary': {'base64': 'AAECAwQF+vv8/f7/', 'subType': '00'}}],
+                         'my_dates': [{'$date': {'$numberLong': '-62135596800000'}},
+                                      {'$date': {'$numberLong': '1761136444543'}}],
+                         'my_floats': [{'$numberDouble': 'NaN'},
+                                       {'$numberDouble': '-Infinity'},
+                                       {'$numberDouble': '-138262872.27267262'},
+                                       {'$numberDouble': '-20.001'},
+                                       {'$numberDouble': '-17.0'},
+                                       {'$numberDouble': '-0.0'},
+                                       {'$numberDouble': '0.0'},
+                                       {'$numberDouble': '2.0'},
+                                       {'$numberDouble': '411.2'},
+                                       {'$numberDouble': '2276372572.15'},
+                                       {'$numberDouble': 'Infinity'}],
+                         'my_ints': [{'$numberLong': '-197282632562525242626256252625'},
+                                     {'$numberInt': '-11'},
+                                     {'$numberInt': '0'},
+                                     {'$numberLong': '27627262727'},
+                                     {'$numberLong': '273262853882627266372772373772646252624542543'}],
+                         'my_none': None,
+                         'my_strs': ['', 'abc', 'hêll@\nällz'],
+                         'my_uids': [{'$binary': {'base64': 'KbkXmXJJQmaoU4ASPX/WhA==',
+                                                  'subType': '04'}},
+                                     {'$binary': {'base64': 'KbkXmXJJQmaoU4ASPX/WhA==',
+                                                  'subType': '04'}}]}
+
+    assert ext_json == expected_ext_json
 
 
 

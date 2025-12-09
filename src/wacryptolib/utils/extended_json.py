@@ -183,7 +183,7 @@ def loads(s: Union[str, bytes, bytearray], *args: Any, **kwargs: Any) -> Any:
     return convert_from_extjson(ext_obj)
 
 
-def convert_to_extjson(obj: Any, canonical=True) -> Any:
+def convert_to_extjson(obj: Any, canonical: bool=True) -> Any:
     """Recursive helper method that converts BSON types so they can be
     converted into json.
     """
@@ -195,7 +195,7 @@ def convert_to_extjson(obj: Any, canonical=True) -> Any:
     return _convert_primitive_to_extjson(obj, canonical=canonical)
 
 
-def _convert_primitive_to_extjson(obj: Any, canonical) -> Any:
+def _convert_primitive_to_extjson(obj: Any, canonical: bool) -> Any:
     # First see if the type is already cached. KeyError will only ever
     # happen once per subtype.
     try:
@@ -218,28 +218,29 @@ def _convert_primitive_to_extjson(obj: Any, canonical) -> Any:
     return obj
 
 
-def convert_from_extjson(ext_obj: Any) -> Any:
+def convert_from_extjson(ext_obj: Any, canonical: bool=True) -> Any:  # FIXME REMOVE CANONICAL!!!
     """Recursive helper method that converts BSON types so they can be
     converted into json.
     """
-
     if isinstance(ext_obj, dict):
-        ext_obj = {k: convert_from_extjson(v) for k, v in ext_obj.items()}
-        return _convert_primitive_from_extjson_dict(ext_obj)
+        ext_obj = {k: convert_from_extjson(v, canonical=canonical) for k, v in ext_obj.items()}
+        return _convert_primitive_from_extjson_dict(ext_obj, canonical=canonical)
     elif isinstance(ext_obj, list):  # Tuples are not handled!
-        return [convert_from_extjson(v) for v in ext_obj]
+        return [convert_from_extjson(v, canonical=canonical) for v in ext_obj]
+    return ext_obj  # Was already a proper native type
 
-    return ext_obj
 
-
-def _convert_primitive_from_extjson_dict(ext_obj_dict: Mapping[str, Any]) -> Any:
+def _convert_primitive_from_extjson_dict(ext_obj_dict: Mapping[str, Any], canonical: bool=True) -> Any:
+    assert isinstance(ext_obj_dict, dict), repr(ext_obj_dict)
     match = None
+    if len(ext_obj_dict) != 1:
+        return ext_obj_dict  # Not a {$type: ...} dict
     for k in ext_obj_dict:
         if k in _PARSERS_SET:
             match = k
             break
     if match:
-        return _PARSERS[match](ext_obj_dict)
+        return _PARSERS[match](ext_obj_dict, canonical=canonical)
     return ext_obj_dict
 
 
@@ -306,7 +307,7 @@ _ENCODERS: dict[Type, Callable[[Any, JSONOptions], Any]] = {
 _EXTENDED_JSON_BUILT_IN_TYPES = tuple(t for t in _ENCODERS)
 
 
-def _parse_canonical_binary(doc: Any) -> Union[bytes, uuid.UUID]:
+def _parse_canonical_binary(doc: Any, canonical: bool) -> Union[bytes, uuid.UUID]:
     binary = doc["$binary"]
     b64 = binary["base64"]
     subtype = binary["subType"]
@@ -330,7 +331,7 @@ def _binary_or_uuid(data: Any, subtype: int) -> Union[Binary, uuid.UUID]:
 
 
 def _parse_canonical_datetime(
-    doc: Any
+    doc: Any, canonical: bool
 ) -> Union[datetime.datetime, DatetimeMS]:
     """Decode a JSON datetime to python datetime.datetime."""
     dtm = doc["$date"]
@@ -339,7 +340,7 @@ def _parse_canonical_datetime(
     return _millis_to_datetime(int(dtm))  # FIXME why "int()" conversion here?
 
 
-def _parse_canonical_int32(doc: Any) -> int:
+def _parse_canonical_int32(doc: Any, canonical: bool) -> int:
     """Decode a JSON int32 to python int."""
     i_str = doc["$numberInt"]
     if len(doc) != 1:
@@ -349,7 +350,7 @@ def _parse_canonical_int32(doc: Any) -> int:
     return int(i_str)
 
 
-def _parse_canonical_int64(doc: Any) -> Int64:
+def _parse_canonical_int64(doc: Any, canonical: bool) -> Int64:
     """Decode a JSON int64 to bson.int64.Int64."""
     l_str = doc["$numberLong"]
     if len(doc) != 1:
@@ -359,7 +360,7 @@ def _parse_canonical_int64(doc: Any) -> Int64:
     return int(l_str)  # No need for Int64 type here
 
 
-def _parse_canonical_double(doc: Any) -> float:
+def _parse_canonical_double(doc: Any, canonical: bool) -> float:
     """Decode a JSON double to python float."""
     d_str = doc["$numberDouble"]
     if len(doc) != 1:

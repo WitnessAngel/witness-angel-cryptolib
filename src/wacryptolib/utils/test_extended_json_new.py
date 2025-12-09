@@ -1,3 +1,4 @@
+import copy
 from pprint import pprint
 import unittest, os, sys, pytz
 sys.path.append(os.path.dirname(__file__))
@@ -16,7 +17,8 @@ EXAMPLE_NATIVE_DATA_TREE = {
     "my_none": None,
     "my_bools": {"OK": True, "KO": False},
     "my_strs": ["", "abc", "hêll@\nällz"],
-    "my_floats": [math.nan, -math.inf, -138262872.27267262, -20.001, -17.0, -0.0, 0.0, 2.0, 411.2, 2276372572.15, math.inf],
+    "my_nan": math.nan,
+    "my_floats": [-math.inf, -138262872.27267262, -20.001, -17.0, -0.0, 0.0, 2.0, 411.2, 2276372572.15, math.inf],
     "my_ints": [-197282632562525242626256252625, -11, 0, 27627262727, 273262853882627266372772373772646252624542543],
     "my_dates": [datetime(1, 1, 1, tzinfo=pytz.utc),
                  datetime(2025, 10, 22, 2, 3, 4, 543000,
@@ -26,9 +28,11 @@ EXAMPLE_NATIVE_DATA_TREE = {
 }
 
 
-def test_extended_json_tree_encoded_decode():
+def test_extended_json_tree_encode_decode():
 
-    ext_json = convert_to_extjson(EXAMPLE_NATIVE_DATA_TREE, canonical=True)
+    example_native_data_tree = copy.deepcopy(EXAMPLE_NATIVE_DATA_TREE)
+
+    ext_json = convert_to_extjson(example_native_data_tree, canonical=True)
     print("EXTJSON DUMP:") ; pprint(ext_json)
 
     expected_ext_json = {'my_bools': {'KO': False, 'OK': True},
@@ -37,8 +41,8 @@ def test_extended_json_tree_encoded_decode():
                                       {'$binary': {'base64': 'AAECAwQF+vv8/f7/', 'subType': '00'}}],
                          'my_dates': [{'$date': {'$numberLong': '-62135596800000'}},
                                       {'$date': {'$numberLong': '1761136444543'}}],
-                         'my_floats': [{'$numberDouble': 'NaN'},
-                                       {'$numberDouble': '-Infinity'},
+                         'my_nan': {'$numberDouble': 'NaN'},  # Never equal to anything
+                         'my_floats': [{'$numberDouble': '-Infinity'},
                                        {'$numberDouble': '-138262872.27267262'},
                                        {'$numberDouble': '-20.001'},
                                        {'$numberDouble': '-17.0'},
@@ -62,6 +66,71 @@ def test_extended_json_tree_encoded_decode():
 
     assert ext_json == expected_ext_json
 
+    decoded_native_data_tree = convert_from_extjson(ext_json, canonical=True)
+    print("DECODED NATIVE DUMP:") ; pprint(decoded_native_data_tree)
+
+    assert decoded_native_data_tree != example_native_data_tree  # Some little incompatibilities exist
+    assert math.isnan(decoded_native_data_tree["my_nan"])
+
+    del decoded_native_data_tree["my_nan"]
+    del example_native_data_tree["my_nan"]
+
+    assert decoded_native_data_tree == {
+        'my_bools': {'KO': False, 'OK': True},
+         'my_bytes': [b'',
+                      b'hello world',
+                      b'\x00\x01\x02\x03\x04\x05\xfa\xfb\xfc\xfd\xfe\xff'],
+         'my_dates': [datetime(1, 1, 1, 0, 0, tzinfo=pytz.utc),
+                      datetime(2025, 10, 22, 12, 34, 4, 543000,
+                               tzinfo=pytz.utc)],  # Timezone was changed!
+         'my_floats': [-math.inf,
+                       -138262872.27267262,
+                       -20.001,
+                       -17.0,
+                       -0.0,
+                       0.0,
+                       2.0,
+                       411.2,
+                       2276372572.15,
+                       math.inf],
+         'my_ints': [-197282632562525242626256252625,
+                     -11,
+                     0,
+                     27627262727,
+                     273262853882627266372772373772646252624542543],
+         'my_none': None,
+         'my_strs': ['', 'abc', 'hêll@\nällz'],
+         'my_uids': [uuid.UUID('29b91799-7249-4266-a853-80123d7fd684'),
+                     uuid.UUID('29b91799-7249-4266-a853-80123d7fd684')]}
+
+    assert decoded_native_data_tree == example_native_data_tree  # ROUND-TRIP EQUALITY AFTER REMOVING NaN
+
+
+def test_extended_json_primitive_encode_decode():
+
+    operations = 0
+
+    def _test_primitive_encode_decode(_item):
+        nonlocal operations
+        operations += 1
+        ext_json = convert_to_extjson(_item, canonical=True)
+        decoded_item = convert_from_extjson(ext_json, canonical=True)
+        if isinstance(_item, float) and math.isnan(_item):
+            assert math.isnan(decoded_item)  # No equality between NaNs
+        else:
+            assert decoded_item == _item, (repr(_item), repr(decoded_item))
+
+    for value in EXAMPLE_NATIVE_DATA_TREE.values():
+        if isinstance(value, list):
+            for item in value:
+                _test_primitive_encode_decode(item)
+        elif isinstance(value, dict):
+            for item in value.values():
+                _test_primitive_encode_decode(item)
+        else:
+            _test_primitive_encode_decode(value)
+
+    assert operations > 20, operations
 
 
 def dump_to_json_str(data, **extra_options):

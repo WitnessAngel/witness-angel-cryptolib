@@ -66,7 +66,7 @@ def test_extended_json_tree_encode_decode():
 
     assert ext_json == expected_ext_json
 
-    decoded_native_data_tree = convert_from_extjson(ext_json, canonical=True)
+    decoded_native_data_tree = convert_from_extjson(ext_json)
     print("DECODED NATIVE DUMP:") ; pprint(decoded_native_data_tree)
 
     assert decoded_native_data_tree != example_native_data_tree  # Some little incompatibilities exist
@@ -114,7 +114,7 @@ def test_extended_json_primitive_encode_decode():
         nonlocal operations
         operations += 1
         ext_json = convert_to_extjson(_item, canonical=True)
-        decoded_item = convert_from_extjson(ext_json, canonical=True)
+        decoded_item = convert_from_extjson(ext_json)
         if isinstance(_item, float) and math.isnan(_item):
             assert math.isnan(decoded_item)  # No equality between NaNs
         else:

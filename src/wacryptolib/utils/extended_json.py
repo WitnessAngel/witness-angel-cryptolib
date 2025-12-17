@@ -102,6 +102,7 @@ but it will be faster as there is less recursion.
 from __future__ import annotations
 
 import calendar
+import decimal
 
 import bsonjs
 
@@ -248,10 +249,6 @@ def _encode_canonical_binary(data: bytes, subtype: int) -> Any:
     return {"$binary": {"base64": base64.b64encode(data).decode(), "subType": "%02x" % subtype}}
 
 
-def _encode_datetimems(obj: Any, canonical: bool) -> dict:  # FIXME remove ?
-    return {"$date": {"$numberLong": str(int(obj))}}
-
-
 def _encode_int(obj: int, canonical: bool) -> Any:
     if -_INT32_MAX <= obj < _INT32_MAX:
         return {"$numberInt": str(obj)}
@@ -272,6 +269,9 @@ def _encode_float(obj: float, canonical: bool) -> Any:
     # original value, when float() is called on it.
     return {"$numberDouble": str(repr(obj))}
 
+
+def _encode_decimal(obj: decimal.decimal, canonical: bool) -> dict:
+    return {"$numberDecimal": str(obj)}
 
 def _encode_datetime(obj: datetime.datetime, canonical: bool) -> dict:
     millis = _datetime_to_millis(obj)
@@ -296,12 +296,11 @@ _ENCODERS: dict[Type, Callable[[Any, JSONOptions], Any]] = {
     bytes: _encode_bytes,
     uuid.UUID: _encode_uuid,
     datetime.datetime: _encode_datetime,
-    ##DatetimeMS: _encode_datetimems,
     float: _encode_float,
+    decimal.Decimal: _encode_decimal,
     int: _encode_int,
     str: _encode_noop,
     type(None): _encode_noop,
-    ##Decimal128: _encode_decimal128,
 }
 
 _EXTENDED_JSON_BUILT_IN_TYPES = tuple(t for t in _ENCODERS)
@@ -332,7 +331,7 @@ def _binary_or_uuid(data: Any, subtype: int) -> Union[Binary, uuid.UUID]:
 
 def _parse_canonical_datetime(
     doc: Any
-) -> Union[datetime.datetime, DatetimeMS]:
+) -> datetime.datetime:
     """Decode a JSON datetime to python datetime.datetime."""
     dtm = doc["$date"]
     if len(doc) != 1:
@@ -370,6 +369,14 @@ def _parse_canonical_double(doc: Any) -> float:
     return float(d_str)
 
 
+def _parse_canonical_decimal(doc: Any) -> decimal.Decimal:
+    d_str = doc["$numberDecimal"]
+    if len(doc) != 1:
+        raise TypeError(f"Bad $numberDecimal, extra field(s): {doc}")
+    if not isinstance(d_str, str):
+        raise TypeError(f"$numberDecimal must be string: {doc}")  # FIXME MUTUALIZE
+    return decimal.Decimal(d_str)
+
 _PARSERS: dict[str, Callable[[Any, JSONOptions], Any]] = {
     "$date": _parse_canonical_datetime,
     "$binary": _parse_canonical_binary,
@@ -377,6 +384,7 @@ _PARSERS: dict[str, Callable[[Any, JSONOptions], Any]] = {
     "$numberInt": _parse_canonical_int32,
     "$numberLong": _parse_canonical_int64,
     "$numberDouble": _parse_canonical_double,
+    "$numberDecimal": _parse_canonical_decimal,
 }
 _PARSERS_SET = set(_PARSERS)
 

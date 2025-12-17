@@ -3,6 +3,7 @@ from pprint import pprint
 import unittest, os, sys, pytz
 sys.path.append(os.path.dirname(__file__))
 
+from decimal import Decimal
 from datetime import datetime, timedelta
 from json import JSONDecodeError
 
@@ -18,8 +19,10 @@ EXAMPLE_NATIVE_DATA_TREE = {
     "my_bools": {"OK": True, "KO": False},
     "my_strs": ["", "abc", "hêll@\nällz"],
     "my_nan": math.nan,
-    "my_floats": [-math.inf, -138262872.27267262, -20.001, -17.0, -0.0, 0.0, 2.0, 411.2, 2276372572.15, math.inf],
     "my_ints": [-197282632562525242626256252625, -11, 0, 27627262727, 273262853882627266372772373772646252624542543],
+    "my_floats": [-math.inf, -138262872.27267262123456, -20.001, -17.0, -0.0, 0.0, 2.0, 411.1234567890000002, 2276372572.15, math.inf],
+    "my_decimals": [Decimal("-Infinity"), Decimal("-138262872.272672622927825262262426245242524"), Decimal("-22.001"),
+                    Decimal("-3.0"), Decimal("-0.0"), Decimal("0.0"), Decimal("4.0"), Decimal("282872.2"), Decimal("2276372572.152926382527252762522265262"), Decimal("Infinity")],
     "my_dates": [datetime(1, 1, 1, tzinfo=pytz.utc),
                  datetime(2025, 10, 22, 2, 3, 4, 543000,
                           tzinfo=pytz.timezone('Pacific/Johnston'))],
@@ -43,15 +46,47 @@ def test_extended_json_tree_encode_decode():
                                       {'$date': {'$numberLong': '1761136444543'}}],
                          'my_nan': {'$numberDouble': 'NaN'},  # Never equal to anything
                          'my_floats': [{'$numberDouble': '-Infinity'},
-                                       {'$numberDouble': '-138262872.27267262'},
+                                       {'$numberDouble': '-138262872.27267262'},  # TRUNCATED by Python
                                        {'$numberDouble': '-20.001'},
                                        {'$numberDouble': '-17.0'},
                                        {'$numberDouble': '-0.0'},
                                        {'$numberDouble': '0.0'},
                                        {'$numberDouble': '2.0'},
-                                       {'$numberDouble': '411.2'},
-                                       {'$numberDouble': '2276372572.15'},
+                                       {'$numberDouble': '411.123456789'},
+                                       {'$numberDouble': '2276372572.15'},  # TRUNCATED by Python
                                        {'$numberDouble': 'Infinity'}],
+                         'my_decimals': [
+                             {
+                                 '$numberDecimal': '-Infinity',
+                             },
+                             {
+                                 '$numberDecimal': '-138262872.272672622927825262262426245242524',
+                             },
+                             {
+                                 '$numberDecimal': '-22.001',
+                             },
+                             {
+                                 '$numberDecimal': '-3.0',
+                             },
+                             {
+                                 '$numberDecimal': '-0.0',
+                             },
+                             {
+                                 '$numberDecimal': '0.0',
+                             },
+                             {
+                                 '$numberDecimal': '4.0',
+                             },
+                             {
+                                 '$numberDecimal': '282872.2',
+                             },
+                             {
+                                 '$numberDecimal': '2276372572.152926382527252762522265262',
+                             },
+                             {
+                                 '$numberDecimal': 'Infinity',
+                             }],
+
                          'my_ints': [{'$numberLong': '-197282632562525242626256252625'},
                                      {'$numberInt': '-11'},
                                      {'$numberInt': '0'},
@@ -76,29 +111,43 @@ def test_extended_json_tree_encode_decode():
     del example_native_data_tree["my_nan"]
 
     assert decoded_native_data_tree == {
-        'my_bools': {'KO': False, 'OK': True},
+         'my_bools': {'KO': False, 'OK': True},
          'my_bytes': [b'',
                       b'hello world',
                       b'\x00\x01\x02\x03\x04\x05\xfa\xfb\xfc\xfd\xfe\xff'],
          'my_dates': [datetime(1, 1, 1, 0, 0, tzinfo=pytz.utc),
                       datetime(2025, 10, 22, 12, 34, 4, 543000,
                                tzinfo=pytz.utc)],  # Timezone was changed!
-         'my_floats': [-math.inf,
-                       -138262872.27267262,
-                       -20.001,
-                       -17.0,
-                       -0.0,
-                       0.0,
-                       2.0,
-                       411.2,
-                       2276372572.15,
-                       math.inf],
+
          'my_ints': [-197282632562525242626256252625,
                      -11,
                      0,
                      27627262727,
                      273262853882627266372772373772646252624542543],
-         'my_none': None,
+        'my_floats': [-math.inf,
+                      -138262872.27267262,
+                      -20.001,
+                      -17.0,
+                      -0.0,
+                      0.0,
+                      2.0,
+                      411.123456789,
+                      2276372572.15,
+                      math.inf],
+        'my_decimals': [
+                Decimal('-Infinity'),
+                Decimal('-138262872.272672622927825262262426245242524'),
+                Decimal('-22.001'),
+                Decimal('-3.0'),
+                Decimal('-0.0'),
+                Decimal('0.0'),
+                Decimal('4.0'),
+                Decimal('282872.2'),
+                Decimal('2276372572.152926382527252762522265262'),
+                Decimal('Infinity')],
+
+
+            'my_none': None,
          'my_strs': ['', 'abc', 'hêll@\nällz'],
          'my_uids': [uuid.UUID('29b91799-7249-4266-a853-80123d7fd684'),
                      uuid.UUID('29b91799-7249-4266-a853-80123d7fd684')]}

@@ -295,6 +295,7 @@ def _encode_datetime(obj: datetime.datetime, canonical: bool) -> dict:
 
 
 def _encode_bytes(obj: bytes, canonical: bool) -> dict:
+    # Always use canonical representation for Bytes numbers
     return _encode_canonical_binary(obj, BINARY_SUBTYPE)
 
 

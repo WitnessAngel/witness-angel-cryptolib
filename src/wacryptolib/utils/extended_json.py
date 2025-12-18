@@ -188,6 +188,7 @@ def convert_to_extjson(obj: Any, canonical: bool=True) -> Any:
     """Recursive helper method that converts BSON types so they can be
     converted into json.
     """
+    assert canonical in (True, False), canonical
     if isinstance(obj, dict):
         return {k: convert_to_extjson(v, canonical=canonical) for k, v in obj.items()}
     elif isinstance(obj, list):  # Tuples are not handled!
@@ -398,7 +399,7 @@ def _parse_canonical_decimal(doc: Any) -> decimal.Decimal:
     return decimal.Decimal(d_str)
 
 
-def _parse_legacy_uuid(doc: Any, json_options: JSONOptions) -> Union[Binary, uuid.UUID]:
+def _parse_legacy_uuid(doc: Any) -> Union[Binary, uuid.UUID]:
     """Decode a JSON legacy $uuid to Python UUID."""
     if len(doc) != 1:
         raise TypeError(f"Bad $uuid, extra field(s): {doc}")
@@ -420,7 +421,7 @@ _PARSERS: dict[str, Callable[[Any, JSONOptions], Any]] = {
 _PARSERS_SET = set(_PARSERS)
 
 
-EPOCH_AWARE = datetime.datetime.fromtimestamp(0, utc)
+_EPOCH_AWARE = datetime.datetime.fromtimestamp(0, utc)
 
 
 def _is_aware_datetime(dt: datetime.datetime) -> bool:
@@ -448,6 +449,6 @@ def _millis_to_datetime(
     seconds = (millis - diff) // 1000
     micros = diff * 1000
 
-    dt = EPOCH_AWARE + datetime.timedelta(seconds=seconds, microseconds=micros)
+    dt = _EPOCH_AWARE + datetime.timedelta(seconds=seconds, microseconds=micros)
 
     return dt  # UTC aware datetime

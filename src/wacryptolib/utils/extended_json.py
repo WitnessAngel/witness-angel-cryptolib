@@ -395,9 +395,20 @@ def _parse_canonical_decimal(doc: Any) -> decimal.Decimal:
         raise TypeError(f"$numberDecimal must be string: {doc}")  # FIXME MUTUALIZE
     return decimal.Decimal(d_str)
 
+
+def _parse_legacy_uuid(doc: Any, json_options: JSONOptions) -> Union[Binary, uuid.UUID]:
+    """Decode a JSON legacy $uuid to Python UUID."""
+    if len(doc) != 1:
+        raise TypeError(f"Bad $uuid, extra field(s): {doc}")
+    if not isinstance(doc["$uuid"], str):
+        raise TypeError(f"$uuid must be a string: {doc}")
+    return uuid.UUID(doc["$uuid"])
+
+
 _PARSERS: dict[str, Callable[[Any, JSONOptions], Any]] = {
     "$date": _parse_canonical_datetime,
     "$binary": _parse_canonical_binary,
+    "$uuid": _parse_legacy_uuid,
     "$undefined": lambda _: None,
     "$numberInt": _parse_canonical_int32,
     "$numberLong": _parse_canonical_int64,

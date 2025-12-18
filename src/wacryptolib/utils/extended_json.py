@@ -250,9 +250,11 @@ def _encode_canonical_binary(data: bytes, subtype: int) -> Any:
 
 
 def _encode_int(obj: int, canonical: bool) -> Any:
-    if -_INT32_MAX <= obj < _INT32_MAX:
-        return {"$numberInt": str(obj)}
-    return {"$numberLong": str(obj)}
+    if canonical:
+        if -_INT32_MAX <= obj < _INT32_MAX:
+            return {"$numberInt": str(obj)}
+        return {"$numberLong": str(obj)}
+    return obj
 
 
 def _encode_noop(obj: Any, canonical: bool) -> Any:
@@ -265,17 +267,31 @@ def _encode_float(obj: float, canonical: bool) -> Any:
     elif math.isinf(obj):
         representation = "Infinity" if obj > 0 else "-Infinity"
         return {"$numberDouble": representation}
-    # repr() will return the shortest string guaranteed to produce the
-    # original value, when float() is called on it.
-    return {"$numberDouble": str(repr(obj))}
+    elif canonical:
+        # repr() will return the shortest string guaranteed to produce the
+        # original value, when float() is called on it.
+        return {"$numberDouble": str(repr(obj))}
+    return obj
 
 
 def _encode_decimal(obj: decimal.decimal, canonical: bool) -> dict:
+    # Always use canonical representation for Decimal numbers
     return {"$numberDecimal": str(obj)}
 
+
 def _encode_datetime(obj: datetime.datetime, canonical: bool) -> dict:
-    millis = _datetime_to_millis(obj)
-    return {"$date": {"$numberLong": str(millis)}}
+    if not _is_aware_datetime(obj):
+        raise TypeError(f"Unsupported naive datetime encountered: {dt}")
+    if canonical:
+        millis = _datetime_to_millis(obj)
+        return {"$date": {"$numberLong": str(millis)}}
+    offset: datetime.timedelta = obj.tzinfo.utcoffset(obj)
+    tz_string = obj.strftime("%z") if offset else"Z"
+    millis = int(obj.microsecond / 1000)
+    fracsecs = ".%03d" % (millis,) if millis else ""
+    return {
+        "$date": "{}{}{}".format(obj.strftime("%Y-%m-%dT%H:%M:%S"), fracsecs, tz_string)
+    }
 
 
 def _encode_bytes(obj: bytes, canonical: bool) -> dict:
@@ -283,8 +299,9 @@ def _encode_bytes(obj: bytes, canonical: bool) -> dict:
 
 
 def _encode_uuid(obj: uuid.UUID, canonical: bool) -> dict:
-    return _encode_canonical_binary(obj.bytes, UUID_SUBTYPE)
-
+    if canonical:
+        return _encode_canonical_binary(obj.bytes, UUID_SUBTYPE)
+    return {"$uuid": obj.hex}
 
 
 # Encoders for BSON types
@@ -392,10 +409,18 @@ _PARSERS_SET = set(_PARSERS)
 EPOCH_AWARE = datetime.datetime.fromtimestamp(0, utc)
 
 
+def _is_aware_datetime(dt: datetime.datetime) -> bool:
+    """Check if a datetime is timezone aware."""
+    return dt.tzinfo is not None and dt.tzinfo.utcoffset(dt) is not None
+
+
+def _assert_is_aware_datetime(dt: datetime.datetime):
+    assert _is_aware_datetime(dt), f"Unsupported naive datetime encountered: {dt}"
+
+
 def _datetime_to_millis(dt: datetime.datetime) -> int:
-    """Convert datetime to milliseconds since epoch UTC."""
-    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
-        raise TypeError(f"Unsupported naive datetime encountered: {dt}")
+    """Convert aware datetime to milliseconds since epoch UTC."""
+    _assert_is_aware_datetime(dt)
     dt = dt - dt.utcoffset()  # type: ignore
     return int(calendar.timegm(dt.timetuple()) * 1000 + dt.microsecond // 1000)
 
@@ -403,7 +428,7 @@ def _datetime_to_millis(dt: datetime.datetime) -> int:
 def _millis_to_datetime(
     millis: int,
 ) -> datetime.datetime:
-    """Convert milliseconds since epoch UTC to datetime."""
+    """Convert milliseconds since epoch UTC to aware datetime."""
 
     diff = ((millis % 1000) + 1000) % 1000
     seconds = (millis - diff) // 1000

@@ -154,29 +154,30 @@ def test_extended_json_tree_encode_decode_in_canonical_mode():
     assert decoded_native_data_tree == example_native_data_tree  # ROUND-TRIP EQUALITY AFTER REMOVING NaN
 
 
-def test_extended_json_primitive_encode_decode_in_canonical_mode():
+def test_extended_json_primitive_encode_decode_in_all_modes():
 
     operations = 0
 
-    def _test_primitive_encode_decode(_item):
+    def _test_primitive_encode_decode(_item, canonical):
         nonlocal operations
         operations += 1
-        ext_json = convert_to_extjson(_item, canonical=True)
+        ext_json = convert_to_extjson(_item, canonical=canonical)
         decoded_item = convert_from_extjson(ext_json)
         if isinstance(_item, (float, Decimal)) and math.isnan(_item):
             assert math.isnan(decoded_item)  # No equality between NaNs
         else:
             assert decoded_item == _item, (repr(_item), repr(decoded_item))
 
-    for value in EXAMPLE_NATIVE_DATA_TREE.values():
-        if isinstance(value, list):
-            for item in value:
-                _test_primitive_encode_decode(item)
-        elif isinstance(value, dict):
-            for item in value.values():
-                _test_primitive_encode_decode(item)
-        else:
-            _test_primitive_encode_decode(value)
+    for canonical_mode in [True, False]:
+        for value in EXAMPLE_NATIVE_DATA_TREE.values():
+            if isinstance(value, list):
+                for item in value:
+                    _test_primitive_encode_decode(item, canonical=canonical_mode)
+            elif isinstance(value, dict):
+                for item in value.values():
+                    _test_primitive_encode_decode(item, canonical=canonical_mode)
+            else:
+                _test_primitive_encode_decode(value, canonical=canonical_mode)
 
     assert operations > 20, operations
 
@@ -193,8 +194,8 @@ def test_extended_json_tree_encode_decode_in_relaxed_mode():
          'my_bytes': [{'$binary': {'base64': '', 'subType': '00'}},  # Always canonical for bytes
                       {'$binary': {'base64': 'aGVsbG8gd29ybGQ=', 'subType': '00'}},
                       {'$binary': {'base64': 'AAECAwQF+vv8/f7/', 'subType': '00'}}],
-         'my_dates': [{'$date': '1-01-01T00:00:00Z'},
-                      {'$date': '2025-10-22T02:03:04.543-1031'}],
+         'my_dates': [{'$date': '0001-01-01T00:00:00Z'},
+                      {'$date': '2025-10-22T02:03:04.543-10:31'}],
          'my_decimals': [{'$numberDecimal': '-Infinity'},
                          {'$numberDecimal': '-138262872.272672622927825262262426245242524'},
                          {'$numberDecimal': '-22.001'},
@@ -229,7 +230,6 @@ def test_extended_json_tree_encode_decode_in_relaxed_mode():
 
     assert ext_json == expected_ext_json
 
-    return  # TEMPORARY
     decoded_native_data_tree = convert_from_extjson(ext_json)
     print("DECODED NATIVE DUMP:") ; pprint(decoded_native_data_tree)
 
@@ -239,7 +239,65 @@ def test_extended_json_tree_encode_decode_in_relaxed_mode():
     del decoded_native_data_tree["my_nans"]
     del example_native_data_tree["my_nans"]
 
-    assert decoded_native_data_tree == {}
+    assert decoded_native_data_tree == {
+        'my_bools': {
+            'KO': False,
+            'OK': True,
+        },
+        'my_bytes': [
+            b'',
+            b'hello world',
+            b'\x00\x01\x02\x03\x04\x05\xfa\xfb\xfc\xfd\xfe\xff',
+        ],
+        'my_dates': [datetime(1, 1, 1, 0, 0, tzinfo=pytz.utc),
+                     datetime(2025, 10, 22, 12, 34, 4, 543000,
+                              tzinfo=pytz.utc)],  # Timezone was changed!
+        'my_decimals': [
+            Decimal('-Infinity'),
+            Decimal('-138262872.272672622927825262262426245242524'),
+            Decimal('-22.001'),
+            Decimal('-3.0'),
+            Decimal('-0.0'),
+            Decimal('0.0'),
+            Decimal('4.0'),
+            Decimal('282872.2'),
+            Decimal('2276372572.152926382527252762522265262'),
+            Decimal('Infinity'),
+        ],
+        'my_floats': [
+            -math.inf,
+            -138262872.27267262,
+            -20.001,
+            -17.0,
+            -0.0,
+            0.0,
+            2.0,
+            411.123456789,
+            2276372572.15,
+            math.inf,
+        ],
+        'my_ints': [
+            -197282632562525242626256252625,
+            -11,
+            0,
+            27627262727,
+            273262853882627266372772373772646252624542543,
+        ],
+        'my_none': None,
+        'my_strs': [
+            '',
+            'abc',
+            'hêll@\n'
+            'ällz',
+        ],
+        'my_uids': [
+            uuid.UUID('29b91799-7249-4266-a853-80123d7fd684'),
+            uuid.UUID('29b91799-7249-4266-a853-80123d7fd684'),
+        ],
+    }
+
+    assert decoded_native_data_tree == example_native_data_tree  # ROUND-TRIP EQUALITY AFTER REMOVING NaN
+
 
 
 def dump_to_json_str(data, **extra_options):

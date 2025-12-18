@@ -1,161 +1,23 @@
-# Copyright 2009-present MongoDB, Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# TODO ADD LICENSE HEADER
 
-"""Tools for using Python's :mod:`json` module with BSON documents.
 
-This module provides two helper methods `dumps` and `loads` that wrap the
-native :mod:`json` methods and provide explicit BSON conversion to and from
-JSON. :class:`~bson.json_util.JSONOptions` provides a way to control how JSON
-is emitted and parsed, with the default being the Relaxed Extended JSON format.
-:mod:`~bson.json_util` can also generate Canonical or legacy `Extended JSON`_
-when :const:`CANONICAL_JSON_OPTIONS` or :const:`LEGACY_JSON_OPTIONS` is
-provided, respectively.
-
-.. _Extended JSON: https://github.com/mongodb/specifications/blob/master/source/extended-json/extended-json.md
-
-Example usage (deserialization):
-
-.. doctest::
-
-   >>> from bson.json_util import loads
-   >>> loads(
-   ...     '[{"foo": [1, 2]}, {"bar": {"hello": "world"}}, {"code": {"$scope": {}, "$code": "function x() { return 1; }"}}, {"bin": {"$type": "80", "$binary": "AQIDBA=="}}]'
-   ... )
-   [{'foo': [1, 2]}, {'bar': {'hello': 'world'}}, {'code': Code('function x() { return 1; }', {})}, {'bin': Binary(b'...', 128)}]
-
-Example usage with :const:`RELAXED_JSON_OPTIONS` (the default):
-
-.. doctest::
-
-   >>> from bson import Binary, Code
-   >>> from bson.json_util import dumps
-   >>> dumps(
-   ...     [
-   ...         {"foo": [1, 2]},
-   ...         {"bar": {"hello": "world"}},
-   ...         {"code": Code("function x() { return 1; }")},
-   ...         {"bin": Binary(b"\x01\x02\x03\x04")},
-   ...     ]
-   ... )
-   '[{"foo": [1, 2]}, {"bar": {"hello": "world"}}, {"code": {"$code": "function x() { return 1; }"}}, {"bin": {"$binary": {"base64": "AQIDBA==", "subType": "00"}}}]'
-
-Example usage (with :const:`CANONICAL_JSON_OPTIONS`):
-
-.. doctest::
-
-   >>> from bson import Binary, Code
-   >>> from bson.json_util import dumps, CANONICAL_JSON_OPTIONS
-   >>> dumps(
-   ...     [
-   ...         {"foo": [1, 2]},
-   ...         {"bar": {"hello": "world"}},
-   ...         {"code": Code("function x() { return 1; }")},
-   ...         {"bin": Binary(b"\x01\x02\x03\x04")},
-   ...     ],
-   ...     json_options=CANONICAL_JSON_OPTIONS,
-   ... )
-   '[{"foo": [{"$numberInt": "1"}, {"$numberInt": "2"}]}, {"bar": {"hello": "world"}}, {"code": {"$code": "function x() { return 1; }"}}, {"bin": {"$binary": {"base64": "AQIDBA==", "subType": "00"}}}]'
-
-Example usage (with :const:`LEGACY_JSON_OPTIONS`):
-
-.. doctest::
-
-   >>> from bson import Binary, Code
-   >>> from bson.json_util import dumps, LEGACY_JSON_OPTIONS
-   >>> dumps(
-   ...     [
-   ...         {"foo": [1, 2]},
-   ...         {"bar": {"hello": "world"}},
-   ...         {"code": Code("function x() { return 1; }", {})},
-   ...         {"bin": Binary(b"\x01\x02\x03\x04")},
-   ...     ],
-   ...     json_options=LEGACY_JSON_OPTIONS,
-   ... )
-   '[{"foo": [1, 2]}, {"bar": {"hello": "world"}}, {"code": {"$code": "function x() { return 1; }", "$scope": {}}}, {"bin": {"$binary": "AQIDBA==", "$type": "00"}}]'
-
-Alternatively, you can manually pass the `default` to :func:`json.dumps`.
-It won't handle :class:`~bson.binary.Binary` and :class:`~bson.code.Code`
-instances (as they are extended strings you can't provide custom defaults),
-but it will be faster as there is less recursion.
-
-.. note::
-   If your application does not need the flexibility offered by
-   :class:`JSONOptions` and spends a large amount of time in the `json_util`
-   module, look to
-   `python-bsonjs <https://pypi.python.org/pypi/python-bsonjs>`_ for a nice
-   performance improvement. `python-bsonjs` is a fast BSON to MongoDB
-   Extended JSON converter for Python built on top of
-   `libbson <https://github.com/mongodb/libbson>`_. `python-bsonjs` works best
-   with PyMongo when using :class:`~bson.raw_bson.RawBSONDocument`.
-"""
 from __future__ import annotations
 
 import calendar
 import decimal
-
-import bsonjs
-
 import base64
 import datetime
 import json
 import math
-import re
 import uuid
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
     Type,
     Union,
-    cast,
 )
 
-from bson.binary import ALL_UUID_SUBTYPES, UUID_SUBTYPE, Binary, UuidRepresentation
-from bson.code import Code
-from bson.codec_options import CodecOptions, DatetimeConversion
-from bson.datetime_ms import (
-    _MAX_UTC_MS,
-    EPOCH_AWARE,
-)
-from bson.dbref import DBRef
-from bson.decimal128 import Decimal128
-from bson.int64 import Int64
-from bson.max_key import MaxKey
-from bson.min_key import MinKey
-from bson.objectid import ObjectId
-from bson.regex import Regex
-from bson.son import RE_TYPE
-from bson.timestamp import Timestamp
-from bson.tz_util import utc
-
-_RE_OPT_TABLE = {  # FIXME DELETE THIS
-    "i": re.I,
-    "l": re.L,
-    "m": re.M,
-    "s": re.S,
-    "u": re.U,
-    "x": re.X,
-}
-
-
-class JSONOptions:
-    pass  # TODO DELETE THIS ASAP
 
 
 _INT32_MAX = 2**31
@@ -282,7 +144,7 @@ def _encode_decimal(obj: decimal.decimal, canonical: bool) -> dict:
 
 def _encode_datetime(obj: datetime.datetime, canonical: bool) -> dict:
     if not _is_aware_datetime(obj):
-        raise TypeError(f"Unsupported naive datetime encountered: {dt}")
+        raise TypeError(f"Unsupported naive datetime encountered: {obj}")
     if canonical:
         millis = _datetime_to_millis(obj)
         return {"$date": {"$numberLong": str(millis)}}
@@ -309,8 +171,8 @@ def _encode_uuid(obj: uuid.UUID, canonical: bool) -> dict:
 # Encoders for BSON types
 # Each encoder function's signature is:
 #   - obj: a Python data type, e.g. a Python int for _encode_int
-#   - json_options: a JSONOptions
-_ENCODERS: dict[Type, Callable[[Any, JSONOptions], Any]] = {
+#   - canonical: whether to use canonical Extended JSON representation
+_ENCODERS: dict[Type, Callable[[Any, bool], Any]] = {
     bool: _encode_noop,
     bytes: _encode_bytes,
     uuid.UUID: _encode_uuid,
@@ -337,10 +199,10 @@ def _parse_canonical_binary(doc: Any) -> Union[bytes, uuid.UUID]:
         raise TypeError(f'$binary must include only "base64" and "subType" components: {doc}')
 
     data = base64.b64decode(b64.encode())
-    return _binary_or_uuid(data, int(subtype, 16))
+    return _get_as_binary_or_uuid(data, int(subtype, 16))
 
 
-def _binary_or_uuid(data: Any, subtype: int) -> Union[Binary, uuid.UUID]:
+def _get_as_binary_or_uuid(data: Any, subtype: int) -> Union[bytes, uuid.UUID]:
     if subtype not in (BINARY_SUBTYPE, UUID_SUBTYPE):
         raise TypeError(f"Unsupported binary subtype: {subtype}")
     if subtype == UUID_SUBTYPE:
@@ -370,7 +232,7 @@ def _parse_canonical_int32(doc: Any) -> int:
     return int(i_str)
 
 
-def _parse_canonical_int64(doc: Any) -> Int64:
+def _parse_canonical_int64(doc: Any) -> int:
     """Decode a JSON int64 to bson.int64.Int64."""
     l_str = doc["$numberLong"]
     if len(doc) != 1:
@@ -399,7 +261,7 @@ def _parse_canonical_decimal(doc: Any) -> decimal.Decimal:
     return decimal.Decimal(d_str)
 
 
-def _parse_legacy_uuid(doc: Any) -> Union[Binary, uuid.UUID]:
+def _parse_legacy_uuid(doc: Any) -> Union[bytes, uuid.UUID]:
     """Decode a JSON legacy $uuid to Python UUID."""
     if len(doc) != 1:
         raise TypeError(f"Bad $uuid, extra field(s): {doc}")
@@ -408,7 +270,7 @@ def _parse_legacy_uuid(doc: Any) -> Union[Binary, uuid.UUID]:
     return uuid.UUID(doc["$uuid"])
 
 
-_PARSERS: dict[str, Callable[[Any, JSONOptions], Any]] = {
+_PARSERS: dict[str, Callable[[Any], Any]] = {
     "$date": _parse_canonical_datetime,
     "$binary": _parse_canonical_binary,
     "$uuid": _parse_legacy_uuid,
@@ -421,7 +283,7 @@ _PARSERS: dict[str, Callable[[Any, JSONOptions], Any]] = {
 _PARSERS_SET = set(_PARSERS)
 
 
-_EPOCH_AWARE = datetime.datetime.fromtimestamp(0, utc)
+_EPOCH_AWARE = datetime.datetime.fromtimestamp(0, datetime.timezone.utc)
 
 
 def _is_aware_datetime(dt: datetime.datetime) -> bool:

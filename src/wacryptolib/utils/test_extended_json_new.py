@@ -351,9 +351,34 @@ def test_extended_json_specific_cases():
     assert convert_to_extjson(input, canonical=True) == input
     assert convert_to_extjson(input, canonical=False) == input
 
+    # Check that naive datetimes are rejected
     with pytest.raises(TypeError, match="naive"):
         convert_to_extjson(datetime(2024, 1, 16, 0, 0, 0, 0),
                            canonical=_random_bool())
+
+    # Check the handling of timezones in roundtrips
+
+    utc_date = datetime(1876, 12, 18, tzinfo=pytz.utc)
+    utc_date_2 = convert_from_extjson(convert_to_extjson(utc_date, canonical=_random_bool()))
+    assert utc_date_2 == utc_date
+    assert utc_date_2.tzinfo == timezone.utc
+
+    other_date = datetime(2022, 2, 1, 22, 23, 34, 26000,
+                          tzinfo=pytz.timezone('Pacific/Johnston'))
+    other_date_2 = convert_from_extjson(convert_to_extjson(other_date, canonical=True))
+    assert other_date_2 == other_date
+    assert other_date_2.tzinfo == timezone.utc  # CHANGED in canonical mode
+    other_date_3 = convert_from_extjson(convert_to_extjson(other_date, canonical=False))
+    assert other_date_3 == other_date
+    # UNCHANGED in relaxed mode, but under a different timezone format:
+    assert other_date_3.tzinfo == timezone(timedelta(days=-1, seconds=48540))
+
+    # Check that microseconds are not entirely preserved in roundtrips
+    precise_date = datetime(1876, 12, 18, microsecond=16543, tzinfo=pytz.utc)
+    precise_date_2 = convert_from_extjson(convert_to_extjson(precise_date, canonical=_random_bool()))
+    assert precise_date_2 != precise_date
+    assert precise_date_2.microsecond == 16000
+
 
 
 def test_extended_json_undecodable_payloads():

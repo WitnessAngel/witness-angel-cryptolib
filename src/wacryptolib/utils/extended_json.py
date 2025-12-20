@@ -98,7 +98,7 @@ def _convert_primitive_from_extjson_dict(ext_obj_dict: Mapping[str, Any]) -> Any
     assert isinstance(ext_obj_dict, dict), repr(ext_obj_dict)
     match = None
     if len(ext_obj_dict) != 1:
-        return ext_obj_dict  # Not a {$type: ...} dict
+        return ext_obj_dict  # We assume it's not a {$type: ...} dict
     for k in ext_obj_dict:
         if k in _PARSERS_SET:
             match = k
@@ -189,14 +189,14 @@ _EXTENDED_JSON_BUILT_IN_TYPES = tuple(t for t in _ENCODERS)
 
 def _parse_canonical_binary(doc: Any) -> Union[bytes, uuid.UUID]:
     binary = doc["$binary"]
+    if not isinstance(binary, dict) or set(binary.keys()) != {"base64", "subType"}:
+        raise TypeError(f"$binary must be a dict with keys 'base64' and 'subType' only: {doc}")
     b64 = binary["base64"]
     subtype = binary["subType"]
     if not isinstance(b64, str):
         raise TypeError(f"$binary base64 must be a string: {doc}")
     if not isinstance(subtype, str) or len(subtype) > 2:
-        raise TypeError(f"$binary subType must be a string at most 2 characters: {doc}")
-    if len(binary) != 2:
-        raise TypeError(f'$binary must include only "base64" and "subType" components: {doc}')
+        raise TypeError(f"$binary subType must be a string with at most 2 characters: {doc}")
 
     data = base64.b64decode(b64.encode())
     return _get_as_binary_or_uuid(data, int(subtype, 16))
@@ -215,8 +215,8 @@ def _parse_canonical_datetime(
 ) -> datetime.datetime:
     """Decode a JSON datetime to python datetime.datetime."""
     dtm = doc["$date"]
-    if len(doc) != 1:
-        raise TypeError(f"Bad $date, extra field(s): {doc}")  # FIXME MUTUALIZE THIS
+    if not isinstance(dtm, (str, int)):
+        raise TypeError(f"date must be iso string or millisecond int: {doc}")
     if isinstance(dtm, str):
         return datetime.datetime.fromisoformat(dtm)
     return _millis_to_datetime(dtm)
@@ -225,8 +225,6 @@ def _parse_canonical_datetime(
 def _parse_canonical_int32(doc: Any) -> int:
     """Decode a JSON int32 to python int."""
     i_str = doc["$numberInt"]
-    if len(doc) != 1:
-        raise TypeError(f"Bad $numberInt, extra field(s): {doc}")  # FIXME MUTUALIZE THIS
     if not isinstance(i_str, str):
         raise TypeError(f"$numberInt must be string: {doc}")
     return int(i_str)
@@ -235,36 +233,28 @@ def _parse_canonical_int32(doc: Any) -> int:
 def _parse_canonical_int64(doc: Any) -> int:
     """Decode a JSON int64 to bson.int64.Int64."""
     l_str = doc["$numberLong"]
-    if len(doc) != 1:
-        raise TypeError(f"Bad $numberLong, extra field(s): {doc}")
     if not isinstance(l_str, str):
-        raise TypeError(f"$numberLong must be string: {doc}")  # FIXME MUTUALIZE
+        raise TypeError(f"$numberLong must be string: {doc}")
     return int(l_str)  # No need for Int64 type here
 
 
 def _parse_canonical_double(doc: Any) -> float:
     """Decode a JSON double to python float."""
     d_str = doc["$numberDouble"]
-    if len(doc) != 1:
-        raise TypeError(f"Bad $numberDouble, extra field(s): {doc}")
     if not isinstance(d_str, str):
-        raise TypeError(f"$numberDouble must be string: {doc}")  # FIXME MUTUALIZE
+        raise TypeError(f"$numberDouble must be string: {doc}")
     return float(d_str)
 
 
 def _parse_canonical_decimal(doc: Any) -> decimal.Decimal:
     d_str = doc["$numberDecimal"]
-    if len(doc) != 1:
-        raise TypeError(f"Bad $numberDecimal, extra field(s): {doc}")
     if not isinstance(d_str, str):
-        raise TypeError(f"$numberDecimal must be string: {doc}")  # FIXME MUTUALIZE
+        raise TypeError(f"$numberDecimal must be string: {doc}")
     return decimal.Decimal(d_str)
 
 
 def _parse_legacy_uuid(doc: Any) -> Union[bytes, uuid.UUID]:
     """Decode a JSON legacy $uuid to Python UUID."""
-    if len(doc) != 1:
-        raise TypeError(f"Bad $uuid, extra field(s): {doc}")
     if not isinstance(doc["$uuid"], str):
         raise TypeError(f"$uuid must be a string: {doc}")
     return uuid.UUID(doc["$uuid"])

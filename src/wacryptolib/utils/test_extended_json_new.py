@@ -1,10 +1,13 @@
 import copy
+import decimal
 from pprint import pprint
 import unittest, os, sys, pytz
+from typing import Tuple, Type, Any
+
 sys.path.append(os.path.dirname(__file__))
 
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from json import JSONDecodeError
 
 from extended_json import loads, dumps, convert_to_extjson, convert_from_extjson
@@ -298,6 +301,36 @@ def test_extended_json_tree_encode_decode_in_relaxed_mode():
 
     assert decoded_native_data_tree == example_native_data_tree  # ROUND-TRIP EQUALITY AFTER REMOVING NaN
 
+
+def test_extended_json_subclass_encode():
+
+    test_cases: list[Tuple[Type, Any]] = [
+        (int, (1,)),
+        (int, (2 << 60,)),
+        (float, (1.1,)),
+        (decimal.Decimal, ("199.222",)),
+        (str, ("str",)),
+        (bytes, (b"bytes",)),
+        (datetime, (2024, 1, 16, 0, 0, 0, 0, timezone.utc)),
+        (uuid.UUID, ("f47ac10b-58cc-4372-a567-0e02b2c3d479",)),
+    ]
+
+    for cls, args in test_cases:
+        basic_obj = cls(*args)
+        my_cls = type(f"My{cls.__name__}", (cls,), {})
+        my_obj = my_cls(*args)
+        assert basic_obj == my_obj
+
+        for canonical_mode in [True, False]:
+            # Check equivalence of converted format
+            basic_converted = convert_to_extjson(basic_obj, canonical=canonical_mode)
+            subclass_converted = convert_to_extjson(my_obj, canonical=canonical_mode)
+            assert basic_converted == subclass_converted
+
+            # Check that subclass equality works fine here
+            roundtrip_obj = convert_from_extjson(subclass_converted)
+            assert roundtrip_obj == basic_obj
+            assert roundtrip_obj == my_obj
 
 
 def dump_to_json_str(data, **extra_options):

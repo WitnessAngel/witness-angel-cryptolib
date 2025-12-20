@@ -4,6 +4,8 @@ from pprint import pprint
 import unittest, os, sys, pytz
 from typing import Tuple, Type, Any
 
+import pytest
+
 sys.path.append(os.path.dirname(__file__))
 
 from decimal import Decimal
@@ -302,7 +304,7 @@ def test_extended_json_tree_encode_decode_in_relaxed_mode():
     assert decoded_native_data_tree == example_native_data_tree  # ROUND-TRIP EQUALITY AFTER REMOVING NaN
 
 
-def test_extended_json_subclass_encode():
+def test_extended_json_subclass_encode_decode():
 
     test_cases: list[Tuple[Type, Any]] = [
         (int, (1,)),
@@ -331,6 +333,40 @@ def test_extended_json_subclass_encode():
             roundtrip_obj = convert_from_extjson(subclass_converted)
             assert roundtrip_obj == basic_obj
             assert roundtrip_obj == my_obj
+
+
+def test_extended_json_specific_cases():
+
+    assert convert_from_extjson({"$undefined": True}) is None
+    assert convert_from_extjson({"$undefined": False}) is None
+
+
+def test_extended_json_decode_invalid_date():
+
+    for valid_extjson in [
+        {"dt": { "$date" : "1970-01-01T01:00"}},
+        {"dt": { "$date" : "1970-01-01T01"}},
+        {"dt": { "$date" : "1970-01-01"}},
+    ]:
+        res = convert_from_extjson(valid_extjson)
+        print("VALID DATE PARSED:", res)
+        assert res["dt"].year == 1970
+
+    # These cases should raise ValueError, not IndexError.
+    for invalid_extjson in [
+        {"dt": { "$date" : "1970-01-01T00:00:"}},
+        {"dt": { "$date" : "1970-01-01T01:"}},
+        {"dt": { "$date" : "1970-01-01T"}},
+        {"dt": { "$date" : "1970-01-01T"}},
+        {"dt": { "$date" : "1970-01-"}},
+        {"dt": { "$date" : "1970-"}},
+        {"dt": { "$date" : "1970-01"}},
+        {"dt": { "$date" : "1970"}},
+        {"dt": { "$date" : ""}},
+    ]:
+        with pytest.raises(ValueError, match="isoformat"):
+            res = convert_from_extjson(invalid_extjson)
+            print("INVALID DATE PARSED:", res)
 
 
 def dump_to_json_str(data, **extra_options):

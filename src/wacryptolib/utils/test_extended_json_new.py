@@ -1,5 +1,6 @@
 import copy
 import decimal
+import random
 from pprint import pprint
 import unittest, os, sys, pytz
 from typing import Tuple, Type, Any
@@ -17,6 +18,10 @@ from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.utilities import UTF8_ENCODING
 import uuid
 import math
+
+
+def _random_bool():
+    return bool(random.getrandbits(1))
 
 
 EXAMPLE_NATIVE_DATA_TREE = {
@@ -256,7 +261,7 @@ def test_extended_json_tree_encode_decode_in_relaxed_mode():
         ],
         'my_dates': [datetime(1, 1, 1, 0, 0, tzinfo=pytz.utc),
                      datetime(2025, 10, 22, 12, 34, 4, 543000,
-                              tzinfo=pytz.utc)],  # Timezone was changed!
+                              tzinfo=pytz.utc)],  # Equivalent
         'my_decimals': [
             Decimal('-Infinity'),
             Decimal('-138262872.272672622927825262262426245242524'),
@@ -335,10 +340,59 @@ def test_extended_json_subclass_encode_decode():
             assert roundtrip_obj == my_obj
 
 
+
 def test_extended_json_specific_cases():
 
     assert convert_from_extjson({"$undefined": True}) is None
     assert convert_from_extjson({"$undefined": False}) is None
+
+    # If conversion is impossible, we just let the object as is
+    input = {"unsupported": timedelta(days=3)}
+    assert convert_to_extjson(input, canonical=True) == input
+    assert convert_to_extjson(input, canonical=False) == input
+
+    with pytest.raises(TypeError, match="naive"):
+        convert_to_extjson(datetime(2024, 1, 16, 0, 0, 0, 0),
+                           canonical=_random_bool())
+
+
+def test_extended_json_undecodable_payloads():
+
+    # The presence of other keys blocks extjson decoding
+    skipped_payloads = [
+        {"$date": "something", "somekey": True},
+         {"$binary": "something","somekey": True},
+          {"$uuid":  "something","somekey": True},
+           {"$undefined": "something","somekey": True},
+            {"$numberInt": "something","somekey": True},
+             {"$numberLong": "something","somekey": True},
+              {"$numberDouble": "something","somekey": True},
+               {"$numberDecimal": "something","somekey": True},
+    ]
+    for skipped_payload in skipped_payloads:
+        assert convert_to_extjson(skipped_payload, canonical=_random_bool()) == skipped_payload
+
+    broken_payloads = [
+        {"$date": 3.12},
+         {"$binary": 42},
+         {"$binary": {"badkey": True}},
+         {"$binary": {"base64": "736", "subType": "00", "badkey": True}},
+         {"$binary": {"base64": 333, "subType": "00",}},
+         {"$binary": {"base64": "736", "subType": "002"}},
+         {"$binary": 42},
+          {"$uuid": 343},
+            {"$numberInt": 3343},
+             {"$numberLong": 272727},
+              {"$numberDouble": 1337.3},
+               {"$numberDecimal": 10.0},
+    ]
+    for broken_payload in broken_payloads:
+        with pytest.raises(TypeError, match="must be"):
+            convert_from_extjson(broken_payload)
+
+    # Ensure that subTypes of binary are handled properly
+    with pytest.raises(TypeError, match="subtype"):
+        convert_from_extjson({"$binary": {"base64": "QUI=", "subType": "01",}},)
 
 
 def test_extended_json_decode_invalid_date():

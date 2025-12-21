@@ -6,7 +6,6 @@ from __future__ import annotations
 import binascii
 import calendar
 import decimal
-import base64
 import datetime
 import json
 import math
@@ -110,7 +109,8 @@ def _convert_primitive_from_extjson_dict(ext_obj_dict: Mapping[str, Any]) -> Any
 
 
 def _encode_canonical_binary(data: bytes, subtype: int) -> Any:
-    return {"$binary": {"base64": base64.b64encode(data).decode(), "subType": "%02x" % subtype}}
+    return {"$binary": {"base64": _simple_b64encode(data).decode('ascii'),
+                        "subType": "%02x" % subtype}}
 
 
 def _encode_int(obj: int, canonical: bool) -> Any:
@@ -199,7 +199,7 @@ def _parse_canonical_binary(doc: Any) -> Union[bytes, uuid.UUID]:
     if not isinstance(subtype, str) or len(subtype) > 2:
         raise TypeError(f"$binary subType must be a string with at most 2 characters: {doc}")
 
-    data = base64.b64decode(b64.encode())
+    data = _simple_b64decode(b64.encode('ascii'))
     return _get_as_binary_or_uuid(data, int(subtype, 16))
 
 
@@ -312,33 +312,19 @@ def _millis_to_utc_datetime(
 
     return dt  # UTC aware datetime
 
-'''
-def _b64encode(s):
+
+def _simple_b64encode(s):
     """Encode the bytes-like object s using Base64 and return a bytes object.
     """
     encoded = binascii.b2a_base64(s, newline=False)
     return encoded
 
 
-def _b64decode(s, validate=False):
+def _simple_b64decode(s):
     """Decode the Base64 encoded bytes-like object or ASCII string s.
 
     The result is returned as a bytes object.  A binascii.Error is raised if
     s is incorrectly padded.
-
-    If validate is False (the default), characters that are neither in the
-    normal base-64 alphabet nor the alternative alphabet are discarded prior
-    to the padding check.  If validate is True, these non-alphabet characters
-    in the input result in a binascii.Error.
-    For more information about the strict base64 check, see:
-
-    https://docs.python.org/3.11/library/binascii.html#binascii.a2b_base64
     """
     assert isinstance(s, bytes)
-    s = _bytes_from_decode_data(s)
-    if altchars is not None:
-        altchars = _bytes_from_decode_data(altchars)
-        assert len(altchars) == 2, repr(altchars)
-        s = s.translate(bytes.maketrans(altchars, b'+/'))
-    return binascii.a2b_base64(s, strict_mode=validate)
-'''
+    return binascii.a2b_base64(s)

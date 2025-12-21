@@ -423,16 +423,15 @@ def test_extended_json_undecodable_payloads():
 def test_extended_json_decode_invalid_date():
 
     for valid_extjson in [
-        {"dt": { "$date" : "1970-01-01T01:00"}},
-        {"dt": { "$date" : "1970-01-01T01"}},
-        {"dt": { "$date" : "1970-01-01"}},
+        {"dt": { "$date" : "1970-01-01T01:00Z"}},
+        {"dt": { "$date" : "1970-01-01T01+02:00"}},
     ]:
         res = convert_from_extjson(valid_extjson)
         print("VALID DATE PARSED:", res)
         assert res["dt"].year == 1970
+        assert res["dt"].tzinfo  # AWARE datetime
 
-    # These cases should raise ValueError, not IndexError.
-    for invalid_extjson in [
+    for invalid_extjson_format in [
         {"dt": { "$date" : "1970-01-01T00:00:"}},
         {"dt": { "$date" : "1970-01-01T01:"}},
         {"dt": { "$date" : "1970-01-01T"}},
@@ -444,7 +443,16 @@ def test_extended_json_decode_invalid_date():
         {"dt": { "$date" : ""}},
     ]:
         with pytest.raises(ValueError, match="isoformat"):
-            res = convert_from_extjson(invalid_extjson)
+            res = convert_from_extjson(invalid_extjson_format)
+            print("INVALID DATE PARSED:", res)
+
+    for invalid_extjson_timezone in [
+        {"dt": { "$date" : "1970-01-01T01:00:22"}},
+        {"dt": { "$date" : "1970-01-01T01:00"}},
+        {"dt": { "$date" : "1970-01-01+01:00"}},  # Ignored TZ
+    ]:
+        with pytest.raises(TypeError, match="naive"):
+            res = convert_from_extjson(invalid_extjson_timezone)
             print("INVALID DATE PARSED:", res)
 
 

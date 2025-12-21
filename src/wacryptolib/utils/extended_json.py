@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import binascii
 import calendar
 import decimal
 import base64
@@ -146,7 +147,7 @@ def _encode_datetime(obj: datetime.datetime, canonical: bool) -> dict:
     if not _is_aware_datetime(obj):
         raise TypeError(f"Unsupported naive datetime encountered: {obj}")
     if canonical:
-        millis = _datetime_to_millis(obj)
+        millis = _aware_datetime_to_millis(obj)
         return {"$date": {"$numberLong": str(millis)}}
     # We output datetime as "YYYY-MM-DDTHH:MM:SS[.fff]<offset>" (not microseconds)
     timespec = "milliseconds" if obj.microsecond != 0 else "seconds"
@@ -213,13 +214,19 @@ def _get_as_binary_or_uuid(data: Any, subtype: int) -> Union[bytes, uuid.UUID]:
 def _parse_canonical_datetime(
     doc: Any
 ) -> datetime.datetime:
-    """Decode a JSON datetime to python datetime.datetime."""
+    """Decode a JSON datetime to python datetime.datetime.
+
+    Canonical dates are always returned as UTC, whereas isoformat strings are
+    returned with their indicated timezone (which MUST exist)."""
     dtm = doc["$date"]
     if not isinstance(dtm, (str, int)):
-        raise TypeError(f"date must be iso string or millisecond int: {doc}")
+        raise TypeError(f"Date must be iso string or millisecond int: {doc}")
     if isinstance(dtm, str):
-        return datetime.datetime.fromisoformat(dtm)
-    return _millis_to_datetime(dtm)
+        res = datetime.datetime.fromisoformat(dtm)
+        if not _is_aware_datetime(res):
+            raise TypeError(f"Unsupported naive datetime: {dtm}")
+        return res
+    return _millis_to_utc_datetime(dtm)
 
 
 def _parse_canonical_int32(doc: Any) -> int:
@@ -285,14 +292,14 @@ def _assert_is_aware_datetime(dt: datetime.datetime):
     assert _is_aware_datetime(dt), f"Unsupported naive datetime encountered: {dt}"
 
 
-def _datetime_to_millis(dt: datetime.datetime) -> int:
+def _aware_datetime_to_millis(dt: datetime.datetime) -> int:
     """Convert aware datetime to milliseconds since epoch UTC."""
     _assert_is_aware_datetime(dt)
     dt = dt - dt.utcoffset()  # type: ignore
     return int(calendar.timegm(dt.timetuple()) * 1000 + dt.microsecond // 1000)
 
 
-def _millis_to_datetime(
+def _millis_to_utc_datetime(
     millis: int,
 ) -> datetime.datetime:
     """Convert milliseconds since epoch UTC to aware datetime."""
@@ -304,3 +311,34 @@ def _millis_to_datetime(
     dt = _EPOCH_AWARE + datetime.timedelta(seconds=seconds, microseconds=micros)
 
     return dt  # UTC aware datetime
+
+'''
+def _b64encode(s):
+    """Encode the bytes-like object s using Base64 and return a bytes object.
+    """
+    encoded = binascii.b2a_base64(s, newline=False)
+    return encoded
+
+
+def _b64decode(s, validate=False):
+    """Decode the Base64 encoded bytes-like object or ASCII string s.
+
+    The result is returned as a bytes object.  A binascii.Error is raised if
+    s is incorrectly padded.
+
+    If validate is False (the default), characters that are neither in the
+    normal base-64 alphabet nor the alternative alphabet are discarded prior
+    to the padding check.  If validate is True, these non-alphabet characters
+    in the input result in a binascii.Error.
+    For more information about the strict base64 check, see:
+
+    https://docs.python.org/3.11/library/binascii.html#binascii.a2b_base64
+    """
+    assert isinstance(s, bytes)
+    s = _bytes_from_decode_data(s)
+    if altchars is not None:
+        altchars = _bytes_from_decode_data(altchars)
+        assert len(altchars) == 2, repr(altchars)
+        s = s.translate(bytes.maketrans(altchars, b'+/'))
+    return binascii.a2b_base64(s, strict_mode=validate)
+'''

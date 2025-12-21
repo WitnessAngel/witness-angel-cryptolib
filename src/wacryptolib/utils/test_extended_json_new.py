@@ -1,5 +1,6 @@
 import copy
 import decimal
+import json
 import random
 from pprint import pprint
 import unittest, os, sys, pytz
@@ -13,8 +14,7 @@ from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from json import JSONDecodeError
 
-from extended_json import loads, dumps, convert_to_extjson, convert_from_extjson, \
-    json_default_encoder_canonical, json_default_encoder_relaxed
+from extended_json import loads, dumps, convert_to_extjson, convert_from_extjson, extjson_decoder_object_hook
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.utilities import UTF8_ENCODING
 import uuid
@@ -41,15 +41,7 @@ EXAMPLE_NATIVE_DATA_TREE = {
     "my_bytes": [b"", b"hello world", b"\x00\x01\x02\x03\x04\x05\xfa\xfb\xfc\xfd\xfe\xff"],
 }
 
-
-def test_extended_json_tree_encode_decode_in_canonical_mode():
-
-    example_native_data_tree = copy.deepcopy(EXAMPLE_NATIVE_DATA_TREE)
-
-    ext_json = convert_to_extjson(example_native_data_tree, canonical=True)
-    print("EXTJSON DUMP CANONICAL:") ; pprint(ext_json)
-
-    expected_ext_json = {'my_bools': {'KO': False, 'OK': True},
+EXAMPLE_EXTJSON_DATA_TREE_CANONICAL = {'my_bools': {'KO': False, 'OK': True},
                          'my_bytes': [{'$binary': {'base64': '', 'subType': '00'}},
                                       {'$binary': {'base64': 'aGVsbG8gd29ybGQ=', 'subType': '00'}},
                                       {'$binary': {'base64': 'AAECAwQF+vv8/f7/', 'subType': '00'}}],
@@ -110,6 +102,53 @@ def test_extended_json_tree_encode_decode_in_canonical_mode():
                                      {'$binary': {'base64': 'KbkXmXJJQmaoU4ASPX/WhA==',
                                                   'subType': '04'}}]}
 
+
+EXAMPLE_EXTJSON_DATA_TREE_RELAXED = {
+         'my_bools': {'KO': False, 'OK': True},
+         'my_bytes': [{'$binary': {'base64': '', 'subType': '00'}},  # Always canonical for bytes
+                      {'$binary': {'base64': 'aGVsbG8gd29ybGQ=', 'subType': '00'}},
+                      {'$binary': {'base64': 'AAECAwQF+vv8/f7/', 'subType': '00'}}],
+         'my_dates': [{'$date': '0001-01-01T00:00:00Z'},
+                      {'$date': '2025-10-22T02:03:04.543-10:31'}],
+         'my_decimals': [{'$numberDecimal': '-Infinity'},
+                         {'$numberDecimal': '-138262872.272672622927825262262426245242524'},
+                         {'$numberDecimal': '-22.001'},
+                         {'$numberDecimal': '-3.0'},
+                         {'$numberDecimal': '-0.0'},
+                         {'$numberDecimal': '0.0'},
+                         {'$numberDecimal': '4.0'},
+                         {'$numberDecimal': '282872.2'},
+                         {'$numberDecimal': '2276372572.152926382527252762522265262'},
+                         {'$numberDecimal': 'Infinity'}],
+         'my_floats': [{'$numberDouble': '-Infinity'},
+                       -138262872.27267262,
+                       -20.001,
+                       -17.0,
+                       -0.0,
+                       0.0,
+                       2.0,
+                       411.123456789,
+                       2276372572.15,
+                       {'$numberDouble': 'Infinity'}],
+         'my_ints': [-197282632562525242626256252625,
+                     -11,
+                     0,
+                     27627262727,
+                     273262853882627266372772373772646252624542543],
+        'my_nans': [{'$numberDouble': 'NaN'}, {'$numberDecimal': 'NaN'}],  # Never equal to anything
+         'my_none': None,
+         'my_strs': ['', 'abc', 'hêll@\nällz'],
+         'my_uids': [{'$uuid': '29b9179972494266a85380123d7fd684'},
+                     {'$uuid': '29b9179972494266a85380123d7fd684'}]}
+
+def test_extended_json_tree_encode_decode_in_canonical_mode():
+
+    example_native_data_tree = copy.deepcopy(EXAMPLE_NATIVE_DATA_TREE)
+
+    ext_json = convert_to_extjson(example_native_data_tree, canonical=True)
+    print("EXTJSON DUMP CANONICAL:") ; pprint(ext_json)
+
+    expected_ext_json = EXAMPLE_EXTJSON_DATA_TREE_CANONICAL
     assert ext_json == expected_ext_json
 
     decoded_native_data_tree = convert_from_extjson(ext_json)
@@ -117,7 +156,6 @@ def test_extended_json_tree_encode_decode_in_canonical_mode():
 
     assert decoded_native_data_tree != example_native_data_tree  # Some little incompatibilities exist
     assert all(math.isnan(x) for x in decoded_native_data_tree["my_nans"])
-
     del decoded_native_data_tree["my_nans"]
     del example_native_data_tree["my_nans"]
 
@@ -172,44 +210,7 @@ def test_extended_json_tree_encode_decode_in_relaxed_mode():
     ext_json = convert_to_extjson(example_native_data_tree, canonical=False)
     print("EXTJSON DUMP RELAXED:") ; pprint(ext_json)
 
-    expected_ext_json = {
-         'my_bools': {'KO': False, 'OK': True},
-         'my_bytes': [{'$binary': {'base64': '', 'subType': '00'}},  # Always canonical for bytes
-                      {'$binary': {'base64': 'aGVsbG8gd29ybGQ=', 'subType': '00'}},
-                      {'$binary': {'base64': 'AAECAwQF+vv8/f7/', 'subType': '00'}}],
-         'my_dates': [{'$date': '0001-01-01T00:00:00Z'},
-                      {'$date': '2025-10-22T02:03:04.543-10:31'}],
-         'my_decimals': [{'$numberDecimal': '-Infinity'},
-                         {'$numberDecimal': '-138262872.272672622927825262262426245242524'},
-                         {'$numberDecimal': '-22.001'},
-                         {'$numberDecimal': '-3.0'},
-                         {'$numberDecimal': '-0.0'},
-                         {'$numberDecimal': '0.0'},
-                         {'$numberDecimal': '4.0'},
-                         {'$numberDecimal': '282872.2'},
-                         {'$numberDecimal': '2276372572.152926382527252762522265262'},
-                         {'$numberDecimal': 'Infinity'}],
-         'my_floats': [{'$numberDouble': '-Infinity'},
-                       -138262872.27267262,
-                       -20.001,
-                       -17.0,
-                       -0.0,
-                       0.0,
-                       2.0,
-                       411.123456789,
-                       2276372572.15,
-                       {'$numberDouble': 'Infinity'}],
-         'my_ints': [-197282632562525242626256252625,
-                     -11,
-                     0,
-                     27627262727,
-                     273262853882627266372772373772646252624542543],
-        'my_nans': [{'$numberDouble': 'NaN'}, {'$numberDecimal': 'NaN'}],  # Never equal to anything
-         'my_none': None,
-         'my_strs': ['', 'abc', 'hêll@\nällz'],
-         'my_uids': [{'$uuid': '29b9179972494266a85380123d7fd684'},
-                     {'$uuid': '29b9179972494266a85380123d7fd684'}]}
-
+    expected_ext_json = EXAMPLE_EXTJSON_DATA_TREE_RELAXED
     assert ext_json == expected_ext_json
 
     decoded_native_data_tree = convert_from_extjson(ext_json)
@@ -528,7 +529,7 @@ def load_from_json_file(filepath, **extra_options):
     return load_from_json_bytes(json_bytes, **extra_options)
 
 
-def test_serialization_utilities(tmp_path):
+def test_json_serialization_high_level_utilities(tmp_path):
     uid = uuid.UUID("7c0b18f5-f410-4e83-9263-b38c2328e516")
     payload = dict(b=b"xyz", a="hêllo", c=uid)
 
@@ -645,4 +646,23 @@ def test_serialization_utilities(tmp_path):
 
     utcoffset = deserialized["date"].utcoffset()
     assert utcoffset == timedelta(0)  # Date is returned as UTC in any case!
+
+
+def test_json_serialization_low_level_utilities():
+
+    from json import dumps as original_dumps, loads as original_loads
+
+    for extjson_tree in (EXAMPLE_EXTJSON_DATA_TREE_CANONICAL, EXAMPLE_EXTJSON_DATA_TREE_CANONICAL):
+
+        example_native_data_tree = copy.deepcopy(EXAMPLE_NATIVE_DATA_TREE)
+
+        json_str = original_dumps(extjson_tree)
+        decoded_native_data_tree = original_loads(json_str, object_hook=extjson_decoder_object_hook)
+
+        assert decoded_native_data_tree != example_native_data_tree  # Some little incompatibilities exist
+        assert all(math.isnan(x) for x in decoded_native_data_tree["my_nans"])
+        del decoded_native_data_tree["my_nans"]
+        del example_native_data_tree["my_nans"]
+
+        assert decoded_native_data_tree == example_native_data_tree  # Now equivalent
 

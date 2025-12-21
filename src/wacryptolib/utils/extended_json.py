@@ -45,12 +45,13 @@ def loads(s: Union[str, bytes, bytearray], *args: Any, **kwargs: Any) -> Any:
     return convert_from_extjson(ext_obj)
 
 
-def json_default_encoder_canonical(obj: Any) -> Any:
-    return _convert_primitive_to_extjson(obj, canonical=True)
+# NOTE: we can't provide a "default" handler to use with json.dumps(),
+# for non-canonical mode, because of the way NaN/-Inf/+Inf are handled
+# without resorting to default()...
 
 
-def json_default_encoder_relaxed(obj: Any) -> Any:
-    return _convert_primitive_to_extjson(obj, canonical=False)
+def extjson_decoder_object_hook(obj: dict) -> Any:
+    return _convert_primitive_from_extjson_dict(obj)
 
 
 def convert_to_extjson(obj: Any, canonical: bool=True) -> Any:
@@ -112,7 +113,7 @@ def _convert_primitive_from_extjson_dict(ext_obj_dict: Mapping[str, Any]) -> Any
             break
     if match:
         return _PARSERS[match](ext_obj_dict)
-    return ext_obj_dict
+    return ext_obj_dict  # Leave it untouched
 
 
 def _encode_canonical_binary(data: bytes, subtype: int) -> Any:
@@ -303,7 +304,6 @@ def _aware_datetime_to_millis(dt: datetime.datetime) -> int:
     """Convert aware datetime to milliseconds since epoch UTC."""
     _assert_is_aware_datetime(dt)
     timestamp_ms = dt.timestamp() * 1000
-    print("TIMESTAMP MS BEFORE ROUND,", timestamp_ms)
     return math.floor(timestamp_ms)
 
 

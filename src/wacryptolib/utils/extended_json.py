@@ -19,7 +19,6 @@ from typing import (
 )
 
 
-
 _INT32_MAX = 2**31
 
 
@@ -295,8 +294,9 @@ def _assert_is_aware_datetime(dt: datetime.datetime):
 def _aware_datetime_to_millis(dt: datetime.datetime) -> int:
     """Convert aware datetime to milliseconds since epoch UTC."""
     _assert_is_aware_datetime(dt)
-    dt = dt - dt.utcoffset()  # type: ignore
-    return int(calendar.timegm(dt.timetuple()) * 1000 + dt.microsecond // 1000)
+    timestamp_ms = dt.timestamp() * 1000
+    print("TIMESTAMP MS BEFORE ROUND,", timestamp_ms)
+    return math.floor(timestamp_ms)
 
 
 def _millis_to_utc_datetime(
@@ -304,12 +304,9 @@ def _millis_to_utc_datetime(
 ) -> datetime.datetime:
     """Convert milliseconds since epoch UTC to aware datetime."""
     assert isinstance(millis, int), repr(millis)
-    diff = ((millis % 1000) + 1000) % 1000
-    seconds = (millis - diff) // 1000
-    micros = diff * 1000
-
+    seconds = millis // 1000
+    micros = (millis % 1000) * 1000
     dt = _EPOCH_AWARE + datetime.timedelta(seconds=seconds, microseconds=micros)
-
     return dt  # UTC aware datetime
 
 

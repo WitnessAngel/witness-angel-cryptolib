@@ -358,7 +358,7 @@ def test_extended_json_specific_cases():
 
     # Check the handling of timezones in roundtrips
 
-    utc_date = datetime(1876, 12, 18, tzinfo=pytz.utc)
+    utc_date = datetime(1876, 12, 18, microsecond=11000, tzinfo=pytz.utc)
     utc_date_2 = convert_from_extjson(convert_to_extjson(utc_date, canonical=_random_bool()))
     assert utc_date_2 == utc_date
     assert utc_date_2.tzinfo == timezone.utc
@@ -374,11 +374,22 @@ def test_extended_json_specific_cases():
     assert other_date_3.tzinfo == timezone(timedelta(days=-1, seconds=48540))
 
     # Check that microseconds are not entirely preserved in roundtrips
-    precise_date = datetime(1876, 12, 18, microsecond=16543, tzinfo=pytz.utc)
-    precise_date_2 = convert_from_extjson(convert_to_extjson(precise_date, canonical=_random_bool()))
-    assert precise_date_2 != precise_date
-    assert precise_date_2.microsecond == 16000
 
+    for canonical_mode in [True, False]:
+
+        # Negative timestamp compared to EPOCH
+        precise_date = datetime(1876, 12, 18, microsecond=16843, tzinfo=pytz.utc)
+        _extjson = convert_to_extjson(precise_date, canonical=canonical_mode)
+        precise_date_2 = convert_from_extjson(_extjson)
+        assert precise_date_2 != precise_date
+        assert precise_date_2.microsecond == 16000  # Floored number
+
+        # Positive timestamp compared to EPOCH
+        precise_date = datetime(1876, 12, 18, microsecond=16343, tzinfo=pytz.utc)
+        _extjson = convert_to_extjson(precise_date, canonical=canonical_mode)
+        precise_date_2 = convert_from_extjson(_extjson)
+        assert precise_date_2 != precise_date
+        assert precise_date_2.microsecond == 16000  # Floored number
 
 
 def test_extended_json_undecodable_payloads():

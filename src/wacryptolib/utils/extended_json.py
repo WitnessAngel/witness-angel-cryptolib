@@ -27,12 +27,12 @@ BINARY_SUBTYPE = 0
 UUID_SUBTYPE = 4
 
 
-def dumps(obj: Any, *args: Any, **kwargs: Any) -> str:
+def dumps(obj: Any, *args: Any, canonical=False, **kwargs: Any) -> str:
     """Helper function that wraps :func:`json.dumps`.
 
     Recursive function that handles main ExtendedJSON types.
     """
-    ext_obj = convert_to_extjson(obj)
+    ext_obj = convert_to_extjson(obj, canonical=canonical)
     return json.dumps(ext_obj, *args, **kwargs)
 
 
@@ -43,6 +43,14 @@ def loads(s: Union[str, bytes, bytearray], *args: Any, **kwargs: Any) -> Any:
     """
     ext_obj = json.loads(s, *args, **kwargs)
     return convert_from_extjson(ext_obj)
+
+
+def json_default_encoder_canonical(obj: Any) -> Any:
+    return _convert_primitive_to_extjson(obj, canonical=True)
+
+
+def json_default_encoder_relaxed(obj: Any) -> Any:
+    return _convert_primitive_to_extjson(obj, canonical=False)
 
 
 def convert_to_extjson(obj: Any, canonical: bool=True) -> Any:

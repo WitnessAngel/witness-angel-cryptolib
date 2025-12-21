@@ -13,7 +13,8 @@ from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from json import JSONDecodeError
 
-from extended_json import loads, dumps, convert_to_extjson, convert_from_extjson
+from extended_json import loads, dumps, convert_to_extjson, convert_from_extjson, \
+    json_default_encoder_canonical, json_default_encoder_relaxed
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.utilities import UTF8_ENCODING
 import uuid
@@ -164,34 +165,6 @@ def test_extended_json_tree_encode_decode_in_canonical_mode():
     assert decoded_native_data_tree == example_native_data_tree  # ROUND-TRIP EQUALITY AFTER REMOVING NaN
 
 
-def test_extended_json_primitive_encode_decode_in_all_modes():
-
-    operations = 0
-
-    def _test_primitive_encode_decode(_item, canonical):
-        nonlocal operations
-        operations += 1
-        ext_json = convert_to_extjson(_item, canonical=canonical)
-        decoded_item = convert_from_extjson(ext_json)
-        if isinstance(_item, (float, Decimal)) and math.isnan(_item):
-            assert math.isnan(decoded_item)  # No equality between NaNs
-        else:
-            assert decoded_item == _item, (repr(_item), repr(decoded_item))
-
-    for canonical_mode in [True, False]:
-        for value in EXAMPLE_NATIVE_DATA_TREE.values():
-            if isinstance(value, list):
-                for item in value:
-                    _test_primitive_encode_decode(item, canonical=canonical_mode)
-            elif isinstance(value, dict):
-                for item in value.values():
-                    _test_primitive_encode_decode(item, canonical=canonical_mode)
-            else:
-                _test_primitive_encode_decode(value, canonical=canonical_mode)
-
-    assert operations > 20, operations
-
-
 def test_extended_json_tree_encode_decode_in_relaxed_mode():
 
     example_native_data_tree = copy.deepcopy(EXAMPLE_NATIVE_DATA_TREE)
@@ -236,7 +209,6 @@ def test_extended_json_tree_encode_decode_in_relaxed_mode():
          'my_strs': ['', 'abc', 'hêll@\nällz'],
          'my_uids': [{'$uuid': '29b9179972494266a85380123d7fd684'},
                      {'$uuid': '29b9179972494266a85380123d7fd684'}]}
-
 
     assert ext_json == expected_ext_json
 
@@ -309,6 +281,35 @@ def test_extended_json_tree_encode_decode_in_relaxed_mode():
     assert decoded_native_data_tree == example_native_data_tree  # ROUND-TRIP EQUALITY AFTER REMOVING NaN
 
 
+def test_extended_json_primitive_encode_decode_in_all_modes():
+
+    operations = 0
+
+    def _test_primitive_encode_decode(_item, canonical):
+        nonlocal operations
+        operations += 1
+        ext_json = convert_to_extjson(_item, canonical=canonical)
+        decoded_item = convert_from_extjson(ext_json)
+        if isinstance(_item, (float, Decimal)) and math.isnan(_item):
+            assert math.isnan(decoded_item)  # No equality between NaNs
+        else:
+            assert decoded_item == _item, (repr(_item), repr(decoded_item))
+
+    for canonical_mode in [True, False]:
+        for value in EXAMPLE_NATIVE_DATA_TREE.values():
+            if isinstance(value, list):
+                for item in value:
+                    _test_primitive_encode_decode(item, canonical=canonical_mode)
+            elif isinstance(value, dict):
+                for item in value.values():
+                    _test_primitive_encode_decode(item, canonical=canonical_mode)
+            else:
+                _test_primitive_encode_decode(value, canonical=canonical_mode)
+
+    assert operations > 20, operations
+
+
+
 def test_extended_json_subclass_encode_decode():
 
     test_cases: list[Tuple[Type, Any]] = [
@@ -346,6 +347,8 @@ def test_extended_json_specific_cases():
     assert convert_from_extjson({"$undefined": True}) is None
     assert convert_from_extjson({"$undefined": False}) is None
 
+    assert convert_from_extjson({"$unrecognized": 33}) == {"$unrecognized": 33}
+
     # If conversion is impossible, we just let the object as is
     input = {"unsupported": timedelta(days=3)}
     assert convert_to_extjson(input, canonical=True) == input
@@ -357,7 +360,6 @@ def test_extended_json_specific_cases():
                            canonical=_random_bool())
 
     # Check the handling of timezones in roundtrips
-
     utc_date = datetime(1876, 12, 18, microsecond=11000, tzinfo=pytz.utc)
     utc_date_2 = convert_from_extjson(convert_to_extjson(utc_date, canonical=_random_bool()))
     assert utc_date_2 == utc_date
@@ -374,7 +376,6 @@ def test_extended_json_specific_cases():
     assert other_date_3.tzinfo == timezone(timedelta(days=-1, seconds=48540))
 
     # Check that microseconds are not entirely preserved in roundtrips
-
     for canonical_mode in [True, False]:
 
         # Negative timestamp compared to EPOCH
@@ -527,22 +528,29 @@ def load_from_json_file(filepath, **extra_options):
     return load_from_json_bytes(json_bytes, **extra_options)
 
 
-
-
 def test_serialization_utilities(tmp_path):
     uid = uuid.UUID("7c0b18f5-f410-4e83-9263-b38c2328e516")
     payload = dict(b=b"xyz", a="hêllo", c=uid)
 
-    serialized_str = dump_to_json_str(payload)
-    # Keys are sorted
+    # STRING-level serialization utilities
+
+    serialized_str = dump_to_json_str(payload, canonical=True)
     assert (
-        serialized_str
+        serialized_str  # Keys are sorted
         == r'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "04"}}}'
     )
     deserialized = load_from_json_str(serialized_str)
     assert deserialized == payload
 
-    serialized_str = dump_to_json_str(payload, ensure_ascii=False)  # Json arguments well propagated
+    serialized_str = dump_to_json_str(payload, canonical=False)
+    assert (
+        serialized_str  # Keys are sorted
+        == r'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$uuid": "7c0b18f5f4104e839263b38c2328e516"}}'
+    )
+    deserialized = load_from_json_str(serialized_str)
+    assert deserialized == payload
+
+    serialized_str = dump_to_json_str(payload, canonical=True, ensure_ascii=False)  # Json arguments well propagated
     assert (
         serialized_str
         == r'{"a": "hêllo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "04"}}}'
@@ -550,16 +558,28 @@ def test_serialization_utilities(tmp_path):
     deserialized = load_from_json_str(serialized_str)
     assert deserialized == payload
 
-    serialized_str = dump_to_json_bytes(payload)
-    # Keys are sorted
+    serialized_str = dump_to_json_str(payload, canonical=False, ensure_ascii=False)  # Json arguments well propagated
     assert (
         serialized_str
+        == r'{"a": "hêllo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$uuid": "7c0b18f5f4104e839263b38c2328e516"}}'
+    )
+    deserialized = load_from_json_str(serialized_str)
+    assert deserialized == payload
+
+    with pytest.raises(TypeError, match="not JSON serializable"):
+        dump_to_json_str({"badtype": timedelta(days=3)}, canonical=_random_bool())
+
+    # BYTES-level serialization utilities
+
+    serialized_str = dump_to_json_bytes(payload, canonical=True)
+    assert (
+        serialized_str  # Keys are sorted
         == rb'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "04"}}}'
     )
     deserialized = load_from_json_bytes(serialized_str)
     assert deserialized == payload
 
-    serialized_str = dump_to_json_bytes(payload, ensure_ascii=False)  # Json arguments well propagated
+    serialized_str = dump_to_json_bytes(payload, canonical=True, ensure_ascii=False)  # Json arguments well propagated
     assert (
         serialized_str
         == b'{"a": "h\xc3\xaallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "04"}}}'
@@ -567,11 +587,41 @@ def test_serialization_utilities(tmp_path):
     deserialized = load_from_json_bytes(serialized_str)
     assert deserialized == payload
 
-    tmp_filepath = os.path.join(tmp_path, "dummy_temp_file.dat")
-    serialized_str = dump_to_json_file(tmp_filepath, data=payload, ensure_ascii=True)  # Json arguments well propagated
+    serialized_str = dump_to_json_bytes(payload, canonical=False)
+    assert (
+        serialized_str  # Keys are sorted
+        == (b'{"a": "h\\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}'
+            b'}, "c": {"$uuid": "7c0b18f5f4104e839263b38c2328e516"}}')
+    )
+    deserialized = load_from_json_bytes(serialized_str)
+    assert deserialized == payload
+
+    serialized_str = dump_to_json_bytes(payload, canonical=False, ensure_ascii=False)  # Json arguments well propagated
     assert (
         serialized_str
-        == rb'{"a": "h\u00eallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "04"}}}'
+        == (b'{"a": "h\xc3\xaallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}'
+            b'}, "c": {"$uuid": "7c0b18f5f4104e839263b38c2328e516"}}')
+    )
+    deserialized = load_from_json_bytes(serialized_str)
+    assert deserialized == payload
+
+    # FILE-level serialization utilities
+
+    tmp_filepath = os.path.join(tmp_path, "dummy_temp_file.dat")
+
+    serialized_str = dump_to_json_file(tmp_filepath, data=payload, canonical=True, ensure_ascii=False)  # Json arguments well propagated
+    assert (
+        serialized_str
+        == b'{"a": "h\xc3\xaallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}}, "c": {"$binary": {"base64": "fAsY9fQQToOSY7OMIyjlFg==", "subType": "04"}}}'
+    )
+    deserialized = load_from_json_file(tmp_filepath)
+    assert deserialized == payload
+
+    serialized_str = dump_to_json_file(tmp_filepath, data=payload, canonical=False, ensure_ascii=False)  # Json arguments well propagated
+    assert (
+        serialized_str
+        == (b'{"a": "h\xc3\xaallo", "b": {"$binary": {"base64": "eHl6", "subType": "00"}'
+            b'}, "c": {"$uuid": "7c0b18f5f4104e839263b38c2328e516"}}')
     )
     deserialized = load_from_json_file(tmp_filepath)
     assert deserialized == payload
@@ -582,9 +632,9 @@ def test_serialization_utilities(tmp_path):
     pst_date = utc_date.astimezone(pytz.timezone("America/Los_Angeles"))
 
     payload1 = {"date": utc_date}
-    serialized_str1 = dump_to_json_str(payload1)
+    serialized_str1 = dump_to_json_str(payload1, canonical=True)
     payload2 = {"date": pst_date}
-    serialized_str2 = dump_to_json_str(payload2)
+    serialized_str2 = dump_to_json_str(payload2, canonical=True)
 
     assert serialized_str1 == r'{"date": {"$date": {"$numberLong": "1665360000000"}}}'
     assert serialized_str1 == serialized_str2

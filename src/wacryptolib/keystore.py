@@ -102,7 +102,7 @@ def load_keystore_metadata(keystore_dir: Path) -> dict:
         metadata = load_from_json_file(metadata_file)
     except FileNotFoundError:
         try:
-            metadata = load_from_json_file(legacy_metadata_file)
+            metadata = load_from_json_file(legacy_metadata_file)  # FIXME remove this asap ??
         except FileNotFoundError as exc:
             raise KeystoreMetadataDoesNotExist("Keystore metadata file %s does not exist" % metadata_file) from exc
     validate_keystore_metadata(metadata)

@@ -7,17 +7,16 @@ import logging
 import os
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from json import JSONDecodeError
 from pathlib import Path
 from typing import List, Optional, Sequence, Union, BinaryIO
 
 import multitimer
 import schema
 import uuid0
-from bson.binary import UuidRepresentation
-from bson.json_util import dumps as baddumps, loads as badloads, JSONOptions, JSONMode
 from decorator import decorator
 from schema import SchemaError, Schema
+from extjson import (convert_to_extjson, convert_from_extjson, extjson_decoder_object_hook, load_from_json_bytes,
+                     load_from_json_str, load_from_json_file, dump_to_json_str, dump_to_json_bytes, dump_to_json_file)
 
 from wacryptolib import _crypto_backend
 from wacryptolib.exceptions import SchemaValidationError
@@ -25,12 +24,6 @@ from wacryptolib.exceptions import SchemaValidationError
 logger = logging.getLogger(__name__)
 
 UTF8_ENCODING = "utf8"
-
-WACRYPTOLIB_JSON_OPTIONS = JSONOptions(
-    json_mode=JSONMode.CANONICAL,  # Preserve all type information
-    uuid_representation=UuidRepresentation.STANDARD,  # Same as PythonLegacy
-    tz_aware=True,  # All our serialized dates are UTC, not NAIVE
-)
 
 
 ### Private utilities ###
@@ -172,66 +165,6 @@ def recombine_chunks(chunks: Sequence[bytes], *, chunk_size: int, must_unpad: bo
     if must_unpad:
         bytestring = _crypto_backend.unpad_bytes(bytestring, block_size=chunk_size)
     return bytestring
-
-
-def dump_to_json_str(data, **extra_options):
-    """
-    Dump a data tree to a json representation as string.
-    Supports advanced types like bytes, uuids, dates...
-    """
-    sort_keys = extra_options.pop("sort_keys", True)
-    json_str = dumps(data, sort_keys=sort_keys, json_options=WACRYPTOLIB_JSON_OPTIONS, **extra_options)
-    return json_str
-
-
-def load_from_json_str(data, **extra_options):
-    """
-    Load a data tree from a json representation as string.
-    Supports advanced types like bytes, uuids, dates...
-
-    Raises exceptions.ValidationError on loading error.
-    """
-    assert isinstance(data, str), data
-    try:
-        return loads(data, json_options=WACRYPTOLIB_JSON_OPTIONS, **extra_options)
-    except JSONDecodeError as exc:
-        raise SchemaValidationError("Invalid JSON string: %r" % exc) from exc
-
-
-def dump_to_json_bytes(data, **extra_options):
-    """
-    Same as `dump_to_json_str`, but returns UTF8-encoded bytes.
-    """
-    json_str = dump_to_json_str(data, **extra_options)
-    return json_str.encode(UTF8_ENCODING)
-
-
-def load_from_json_bytes(data, **extra_options):
-    """
-    Same as `load_from_json_str`, but takes UTF8-encoded bytes as input.
-    """
-
-    json_str = data.decode(UTF8_ENCODING)
-    return load_from_json_str(data=json_str, **extra_options)
-
-
-def dump_to_json_file(filepath, data, **extra_options):
-    """
-    Same as `dump_to_json_bytes`, but writes data to filesystem (and returns bytes too).
-    """
-    json_bytes = dump_to_json_bytes(data, **extra_options)
-    with open(filepath, "wb") as f:
-        f.write(json_bytes)
-    return json_bytes
-
-
-def load_from_json_file(filepath, **extra_options):
-    """
-    Same as `load_from_json_bytes`, but reads data from filesystem.
-    """
-    with open(filepath, "rb") as f:
-        json_bytes = f.read()
-    return load_from_json_bytes(json_bytes, **extra_options)
 
 
 def generate_uuid0(ts: Optional[float] = None):
@@ -376,22 +309,6 @@ def validate_data_against_schema(data_tree, schema: Schema):
         schema.validate(data_tree)
     except SchemaError as exc:
         raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
-
-
-def convert_native_tree_to_extended_json_tree(data):  # FIXME push to docs?
-    """
-    Turn a native python tree (including UUIDs, bytes etc.) into its representation
-    as Pymongo extended json (with nested $binary, $numberInt etc.)
-    """
-    import json
-
-    # Export to pymongo extended json format string
-    json_str = dump_to_json_str(data)
-
-    # Parse standard Json from string, without advanced type coercion
-    data_tree = json.loads(json_str)
-
-    return data_tree
 
 
 def get_validation_micro_schemas(extended_json_format=False):  # FIXME push to docs?

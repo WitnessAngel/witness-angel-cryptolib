@@ -4,13 +4,11 @@
 from __future__ import annotations
 
 import binascii
-import calendar
 import decimal
 import datetime
 import json
 import math
 import uuid
-from json import JSONDecodeError
 from typing import (
     Any,
     Callable,
@@ -86,7 +84,7 @@ def load_from_json_file(filepath, **extra_options):
     return load_from_json_bytes(json_bytes, **extra_options)
 
 
-def dumps(obj: Any, *args: Any, canonical=False, **kwargs: Any) -> str:
+def dumps(obj: Any, *args: Any, canonical=True, **kwargs: Any) -> str:
     """Helper function that wraps :func:`json.dumps`.
 
     Recursive function that handles main ExtendedJSON types.

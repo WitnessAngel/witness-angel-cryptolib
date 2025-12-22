@@ -6,7 +6,6 @@ from typing import Union
 
 import jsonschema
 import schema as pythonschema
-from bson import json_util
 from jsonschema import validate as jsonschema_validate
 from schema import Or, Optional as OptionalKey, And, Schema, Use
 
@@ -16,7 +15,7 @@ from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_T
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS, SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
-from wacryptolib.utilities import get_validation_micro_schemas, SUPPORTED_HASH_ALGOS
+from wacryptolib.utilities import get_validation_micro_schemas, SUPPORTED_HASH_ALGOS, convert_from_extjson
 
 
 def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, extended_json_format: bool):
@@ -107,7 +106,7 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
     def validate_shared_secret_threshold(shared_secret_struct):
         threshold = shared_secret_struct["key_shared_secret_threshold"]
         if not isinstance(threshold, int):  # It's an extended-json payload
-            threshold = json_util.object_hook()
+            threshold = convert_from_extjson(threshold)  # TODO TEST THIS??
         if threshold < 1:
             raise ValueError("Shared secret threshold must be strictly positive")
         if threshold > len(shared_secret_struct["key_shared_secret_shards"]):

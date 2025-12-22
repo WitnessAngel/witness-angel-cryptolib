@@ -85,7 +85,7 @@ from wacryptolib.utilities import (
     dump_to_json_bytes,
     generate_uuid0,
     get_utc_now_date,
-    convert_native_tree_to_extended_json_tree,
+    convert_to_extjson,
 )
 from wacryptolib.utilities import load_from_json_file
 
@@ -3159,7 +3159,7 @@ def test_create_cryptainer_encryption_stream(tmp_path):
 def test_cryptoconf_validation_success(cryptoconf):
     check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
 
-    conf_json = convert_native_tree_to_extended_json_tree(cryptoconf)
+    conf_json = convert_to_extjson(cryptoconf)
     check_cryptoconf_sanity(cryptoconf=conf_json, jsonschema_mode=True)
 
 
@@ -3239,7 +3239,7 @@ def test_cryptoconf_validation_error_via_python_schema(corrupted_conf):
 )
 def test_cryptoconf_validation_error_via_json_schema(corrupted_conf):
     with pytest.raises(ValidationError):
-        corrupted_conf_json = convert_native_tree_to_extended_json_tree(corrupted_conf)
+        corrupted_conf_json = convert_to_extjson(corrupted_conf)
         check_cryptoconf_sanity(cryptoconf=corrupted_conf_json, jsonschema_mode=True)
 
 
@@ -3250,7 +3250,7 @@ def test_cryptainer_validation_success(cryptoconf):
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None)
     check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 
-    cryptainer_json = convert_native_tree_to_extended_json_tree(cryptainer)
+    cryptainer_json = convert_to_extjson(cryptainer)
     check_cryptainer_sanity(cryptainer=cryptainer_json, jsonschema_mode=True)
 
 
@@ -3290,7 +3290,7 @@ def test_cryptainer_validation_error_via_json_schema():
 
     for corrupted_cryptainer in corrupted_cryptainers:
         with pytest.raises(ValidationError):
-            corrupted_cryptainer_json = convert_native_tree_to_extended_json_tree(corrupted_cryptainer)
+            corrupted_cryptainer_json = convert_to_extjson(corrupted_cryptainer)
             check_cryptainer_sanity(cryptainer=corrupted_cryptainer_json, jsonschema_mode=True)
 
 

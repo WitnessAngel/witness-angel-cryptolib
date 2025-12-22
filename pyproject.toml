@@ -42,6 +42,7 @@ schema = "^0.7.2"
 jsonschema = "^4.1.2"
 click = "^8.0"
 click-log = "^0.4.0"
+prettytable = "^3.6.0"
 jsonrpc-requests = "^0.4.0"
 decorator = "^5.1"
 multitimer = "^0.3"
@@ -51,7 +52,6 @@ psutil = { version = "^5.8.0" }  # Use on Win32 too for get_memory_rss_bytes()()
 wmi = { version = "^1.5.1 ", platform = 'win32' }
 pywin32 = { version = ">=300", platform = 'win32' }
 pyudev = { version = "^0.22.0 ", platform = 'linux' }
-prettytable = "^3.6.0"
 
 [tool.poetry.group.dev.dependencies]
 

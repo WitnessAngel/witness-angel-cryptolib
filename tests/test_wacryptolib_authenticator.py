@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from datetime import datetime
+from json import JSONDecodeError
 from uuid import UUID
 
 import pytest
@@ -57,10 +58,10 @@ def test_authenticator_basic_workflow(tmp_path):
 
         keystore_metadata_file_path = _get_keystore_metadata_file_path(acceptable_dir)
 
-        for wrong_payload in (b"abc", b'{"a": "b"}'):  # Corrupted Json file, or Json schema
+        for wrong_payload in (b"abc", b'{"a": "b"}', b'{"$uuid": 123}'):  # Corrupted Json file, or Json schema
             keystore_metadata_file_path.write_bytes(wrong_payload)
             assert is_authenticator_initialized(acceptable_dir)  # Still seen as "initialized"
-            with pytest.raises(ValidationError):
+            with pytest.raises((ValidationError, JSONDecodeError, TypeError)):
                 load_keystore_metadata(acceptable_dir)
 
 

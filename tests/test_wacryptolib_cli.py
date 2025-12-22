@@ -120,7 +120,7 @@ def test_cli_authenticator_management(tmp_path):
         assert not authenticator_path.exists()
 
         if use_env_var_for_passphrase:
-            env = dict(WA_PASSPHRASE=passphrase)
+            env = dict(WA_PASSPHRASE=passphrase, **os.environ)  # E.g. for PYTHONPATH etc.
             input = None
         else:
             env = None

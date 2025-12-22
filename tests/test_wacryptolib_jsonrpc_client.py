@@ -17,7 +17,8 @@ from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error
 def test_jsonrpc_extended_json_calls():
     uid = uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")
 
-    server = JsonRpcProxy("http://mock/xmlrpc", response_error_handler=None)
+    server = JsonRpcProxy("http://mock/xmlrpc", timeout=3.3, response_error_handler=None)
+    assert server.request.keywords["timeout"] == 3.3
 
     # rpc call with positional args
     def callback1(request):
@@ -84,6 +85,7 @@ def test_jsonrpc_extended_json_calls():
         raise RuntimeError(str(exc_to_handle))
 
     server = JsonRpcProxy("http://mock/xmlrpc", response_error_handler=_response_error_handler)
+    assert server.request.keywords["timeout"] == 10.0  # DEFAULT TIMEOUT
 
     with pytest.raises(RuntimeError, match="Error: -32700 Parse error"):
         server.foobar({"foo": "bar"})

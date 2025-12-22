@@ -41,10 +41,12 @@ pycryptodome = "^3.9.9"
 
 click = "^8.0"
 click-log = "^0.4.0"
-prettytable = "^3.6.0"
+prettytable = "^3.6.0"  # For CLI too
 
-multitimer = "^0.3"
-jsonrpc-requests = "^0.4.0"
+multitimer = "^0.3"  # Requires THREADS capability
+jsonrpc-requests = "^0.4.0"  # Requires REQUESTS package
+
+jsonschema = "^4.25.1"  # Actually optional
 
 psutil = { version = "^5.8.0" }  # Use on Win32 too for get_memory_rss_bytes()()
 wmi = { version = "^1.5.1 ", platform = 'win32' }
@@ -54,9 +56,7 @@ pyudev = { version = "^0.22.0 ", platform = 'linux' }
 # VENDORED DEPENDENCIES
 # uuid0 = "^0.2.7"
 # schema = "^0.7.7"
-# jsonschema = "^4.25.1"
 # decorator = "^5.1"
-
 
 [tool.poetry.group.dev.dependencies]
 

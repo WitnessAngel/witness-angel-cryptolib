@@ -5,7 +5,6 @@
 from typing import Union
 
 import schema as pythonschema
-from jsonschema import validate as jsonschema_validate, ValidationError as JsonschemaValidationError
 from schema import Or, Optional as OptionalKey, And, Schema, Use
 
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
@@ -202,15 +201,16 @@ def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema])
     :param valid_schema: validation scheme
     """
     if isinstance(validation_schema, Schema):
-        # we use the python schema module
+        # We use the python-schema module
         try:
             validation_schema.validate(data_tree)
         except pythonschema.SchemaError as exc:
             raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
 
     else:
-        # we use the json schema module
+        # We use the json-schema module, LAZILY LOADED
         assert isinstance(validation_schema, dict)
+        from jsonschema import validate as jsonschema_validate, ValidationError as JsonschemaValidationError
         try:
             jsonschema_validate(instance=data_tree, schema=validation_schema)
         except JsonschemaValidationError as exc:

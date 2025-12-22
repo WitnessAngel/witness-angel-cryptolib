@@ -101,6 +101,8 @@ ENFORCED_UID1 = UUID("0e8e861e-f0f7-e54b-18ea-34798d5daaaa")
 ENFORCED_UID2 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeebbbb")
 ENFORCED_UID3 = UUID("65dbbe4f-0bd5-4083-a274-3c76efeecccc")
 
+DUMMY_GATEWAY_URLS = ["http://unexisting.example.com:9898/jsonrpc"]
+
 VOID_CRYPTOCONF_REGARDING_PAYLOAD_CIPHER_LAYERS = dict(payload_cipher_layers=[])  # Forbidden
 
 VOID_CRYPTOCONF_REGARDING_KEY_CIPHER_LAYERS = dict(  # Forbidden
@@ -1043,6 +1045,7 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
 
 # Cryptoconf with 1 payload_cipher_layer containing 1 key_cipher_layer managed by an authenticator
 def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simplecryptoconf(tmp_path):
+
     keychain_uid_trustee = generate_uuid0()
     keystore_uid = generate_uuid0()
     passphrase = "tata"
@@ -1129,9 +1132,9 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
     )
 
-    gateway_urls = ["http://127.0.0.1:9898/jsonrpc"]  # FIXME what's this url ? CHANGE THEM ALL
+    gateway_urls = DUMMY_GATEWAY_URLS
 
-    # Network warning when no JSONRPC mockup s provided
+    # Network warning when no JSONRPC mockups provided
     result_payload, operation_report = decrypt_payload_from_cryptainer(
         cryptainer=cryptainer,
         keystore_pool=keystore_pool,
@@ -1378,7 +1381,7 @@ def test_cryptainer_decryption_with_one_authenticator_in_shared_secret(tmp_path)
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
     )
 
-    gateway_urls = ["http://127.0.0.1:9898/jsonrpc"]
+    gateway_urls = DUMMY_GATEWAY_URLS
 
     # Remote revelation request return right symkey_revelation_response_data
     with _patched_gateway_revelation_request_list(
@@ -1614,7 +1617,7 @@ def test_cryptainer_decryption_from_complex_cryptoconf(tmp_path):
         revelation_requestor_uid, cryptainers_with_names, keystore_pool, list_shard_trustee_id
     )
 
-    gateway_urls = ["http://127.0.0.1:9898/jsonrpc"]  # FIXME what's this url ?
+    gateway_urls = DUMMY_GATEWAY_URLS
 
     # No remote decryption request for this container and requestor
     with _patched_gateway_revelation_request_list(return_value=[]):
@@ -1796,7 +1799,8 @@ def test_key_loading_local_decryption_and_payload_signature(tmp_path):  # TODO C
     response_keypair = local_keystore._cached_keypairs[response_key]
     response_keypair["public_key"] = b"wrongsignaturepublickey"
 
-    gateway_urls = ["http://127.0.0.1:9898/jsonrpc"]
+    gateway_urls = DUMMY_GATEWAY_URLS
+
     with _patched_gateway_revelation_request_list(
         return_value=_build_fake_gateway_revelation_request_list(revelation_requests_info)
     ):

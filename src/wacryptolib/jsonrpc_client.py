@@ -14,6 +14,8 @@ from wacryptolib.utilities import dump_to_json_str, load_from_json_str
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_JSONRPC_REQUEST_TIMEOUT_S = 10.0
+
 _exception_classes = StatusSlugMapper.gather_exception_subclasses(builtins, parent_classes=[Exception])
 _exception_classes += StatusSlugMapper.gather_exception_subclasses(
     wacryptolib_exceptions, parent_classes=[wacryptolib_exceptions.FunctionalError]
@@ -53,8 +55,8 @@ class JsonRpcProxy(ServerBase):
 
     """
 
-    def __init__(self, url, *args, response_error_handler=status_slugs_response_error_handler, **kwargs):
-        super().__init__(url, *args, **kwargs)
+    def __init__(self, url, *args, response_error_handler=status_slugs_response_error_handler, timeout=DEFAULT_JSONRPC_REQUEST_TIMEOUT_S, **kwargs):
+        super().__init__(url, *args, timeout=timeout, **kwargs)
         self._url = url
         self._response_error_handler = response_error_handler
 

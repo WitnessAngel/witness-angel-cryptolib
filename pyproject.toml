@@ -90,6 +90,7 @@ sphinx-autodoc-typehints = ">=1.17.0"
 sphinx_rtd_theme = ">=1.0.0"
 sphinx-click = ">=4.4.0"
 sphinxcontrib-programoutput = ">=0.17"
+roman-numerals = "4.0.0"  # Downgraded for https://github.com/sphinx-doc/sphinx/issues/14186
 toml = ">=0.10.2"
 
 # Install these with pip for manual benchmarks

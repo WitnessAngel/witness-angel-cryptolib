@@ -4,9 +4,8 @@
 
 from typing import Union
 
-import jsonschema
 import schema as pythonschema
-from jsonschema import validate as jsonschema_validate
+from jsonschema import validate as jsonschema_validate, ValidationError as JsonschemaValidationError
 from schema import Or, Optional as OptionalKey, And, Schema, Use
 
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
@@ -214,7 +213,7 @@ def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema])
         assert isinstance(validation_schema, dict)
         try:
             jsonschema_validate(instance=data_tree, schema=validation_schema)
-        except jsonschema.exceptions.ValidationError as exc:
+        except JsonschemaValidationError as exc:
             raise SchemaValidationError("Error validating data tree with json-schema: {}".format(exc)) from exc
 
 

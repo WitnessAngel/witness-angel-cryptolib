@@ -118,7 +118,7 @@ def convert_to_extjson(obj: Any, canonical: bool=True) -> Any:
     assert canonical in (True, False), canonical
     if isinstance(obj, dict):
         return {k: convert_to_extjson(v, canonical=canonical) for k, v in obj.items()}
-    elif isinstance(obj, list):  # Tuples are not handled!
+    elif isinstance(obj, (list, tuple)):  # Tuples are treated like dicts!
         return [convert_to_extjson(v, canonical=canonical) for v in obj]
 
     return _convert_primitive_to_extjson(obj, canonical=canonical)

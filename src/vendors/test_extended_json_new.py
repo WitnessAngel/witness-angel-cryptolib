@@ -349,6 +349,11 @@ def test_extended_json_specific_cases():
 
     assert convert_from_extjson({"$unrecognized": 33}) == {"$unrecognized": 33}
 
+    _tuple_obj = (1, b'abc')
+    _tuple_obj_extjson = convert_to_extjson(_tuple_obj)
+    assert _tuple_obj_extjson == [{'$numberInt': '1'}, {'$binary': {'base64': 'YWJj', 'subType': '00'}}]
+    assert convert_from_extjson(_tuple_obj_extjson) == list(_tuple_obj)
+
     # If conversion is impossible, we just let the object as is
     input = {"unsupported": timedelta(days=3)}
     assert convert_to_extjson(input, canonical=True) == input

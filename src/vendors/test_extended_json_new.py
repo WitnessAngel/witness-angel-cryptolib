@@ -1,24 +1,24 @@
+
+import  os, sys, pytz
+import uuid
+import math
 import copy
 import decimal
-import json
 import random
 from pprint import pprint
-import unittest, os, sys, pytz
 from typing import Tuple, Type, Any
+from decimal import Decimal
+from datetime import datetime, timedelta, timezone
+from json import JSONDecodeError
 
 import pytest
 
 sys.path.append(os.path.dirname(__file__))
 
-from decimal import Decimal
-from datetime import datetime, timedelta, timezone
-from json import JSONDecodeError
-
-from extended_json import loads, dumps, convert_to_extjson, convert_from_extjson, extjson_decoder_object_hook
+from extjson import loads, dumps, convert_to_extjson, convert_from_extjson, extjson_decoder_object_hook
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.utilities import UTF8_ENCODING
-import uuid
-import math
+
 
 
 def _random_bool():

@@ -10,6 +10,7 @@ import datetime
 import json
 import math
 import uuid
+from json import JSONDecodeError
 from typing import (
     Any,
     Callable,
@@ -21,10 +22,68 @@ from typing import (
 
 _INT32_MAX = 2**31
 
+UTF8_ENCODING = "utf8"
 
 # Only these two binary subtypes are supported
 BINARY_SUBTYPE = 0
 UUID_SUBTYPE = 4
+
+
+def dump_to_json_str(data, **extra_options):
+    """
+    Dump a data tree to a json representation as string.
+    Supports advanced types like bytes, uuids, dates...
+    """
+    sort_keys = extra_options.pop("sort_keys", True)
+    json_str = dumps(data, sort_keys=sort_keys, **extra_options)
+    return json_str
+
+
+def load_from_json_str(data, **extra_options):
+    """
+    Load a data tree from a json representation as string.
+    Supports advanced types like bytes, uuids, dates...
+
+    Raises JSONDecodeError or TypeError on loading/coercion error.
+    """
+    assert isinstance(data, str), data
+    return loads(data, **extra_options)
+
+
+def dump_to_json_bytes(data, **extra_options):
+    """
+    Same as `dump_to_json_str`, but returns UTF8-encoded bytes.
+    """
+    json_str = dump_to_json_str(data, **extra_options)
+    return json_str.encode(UTF8_ENCODING)
+
+
+def load_from_json_bytes(data, **extra_options):
+    """
+    Same as `load_from_json_str`, but takes UTF8-encoded bytes as input.
+    """
+
+    json_str = data.decode(UTF8_ENCODING)
+    return load_from_json_str(data=json_str, **extra_options)
+
+
+def dump_to_json_file(filepath, data, **extra_options):
+    """
+    Same as `dump_to_json_bytes`, but writes data to filesystem (and returns bytes too).
+    """
+    json_bytes = dump_to_json_bytes(data, **extra_options)
+    with open(filepath, "wb") as f:
+        f.write(json_bytes)
+    return json_bytes
+
+
+def load_from_json_file(filepath, **extra_options):
+    """
+    Same as `load_from_json_bytes`, but reads data from filesystem.
+    """
+    with open(filepath, "rb") as f:
+        json_bytes = f.read()
+    return load_from_json_bytes(json_bytes, **extra_options)
 
 
 def dumps(obj: Any, *args: Any, canonical=False, **kwargs: Any) -> str:

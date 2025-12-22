@@ -15,9 +15,8 @@ import pytest
 
 sys.path.append(os.path.dirname(__file__))
 
-from extjson import loads, dumps, convert_to_extjson, convert_from_extjson, extjson_decoder_object_hook
-from wacryptolib.exceptions import SchemaValidationError
-from wacryptolib.utilities import UTF8_ENCODING
+from extjson import (convert_to_extjson, convert_from_extjson, extjson_decoder_object_hook, load_from_json_bytes, 
+                     load_from_json_str, load_from_json_file, dump_to_json_str, dump_to_json_bytes, dump_to_json_file)
 
 
 
@@ -468,65 +467,6 @@ def test_extended_json_decode_invalid_date():
             res = convert_from_extjson(invalid_extjson_timezone)
             print("INVALID DATE PARSED:", res)
 
-
-def dump_to_json_str(data, **extra_options):
-    """
-    Dump a data tree to a json representation as string.
-    Supports advanced types like bytes, uuids, dates...
-    """
-    sort_keys = extra_options.pop("sort_keys", True)
-    json_str = dumps(data, sort_keys=sort_keys, **extra_options)
-    return json_str
-
-
-def load_from_json_str(data, **extra_options):
-    """
-    Load a data tree from a json representation as string.
-    Supports advanced types like bytes, uuids, dates...
-
-    Raises exceptions.ValidationError on loading error.
-    """
-    assert isinstance(data, str), data
-    try:
-        return loads(data, **extra_options)
-    except JSONDecodeError as exc:
-        raise SchemaValidationError("Invalid JSON string: %r" % exc) from exc
-
-
-def dump_to_json_bytes(data, **extra_options):
-    """
-    Same as `dump_to_json_str`, but returns UTF8-encoded bytes.
-    """
-    json_str = dump_to_json_str(data, **extra_options)
-    return json_str.encode(UTF8_ENCODING)
-
-
-def load_from_json_bytes(data, **extra_options):
-    """
-    Same as `load_from_json_str`, but takes UTF8-encoded bytes as input.
-    """
-
-    json_str = data.decode(UTF8_ENCODING)
-    return load_from_json_str(data=json_str, **extra_options)
-
-
-def dump_to_json_file(filepath, data, **extra_options):
-    """
-    Same as `dump_to_json_bytes`, but writes data to filesystem (and returns bytes too).
-    """
-    json_bytes = dump_to_json_bytes(data, **extra_options)
-    with open(filepath, "wb") as f:
-        f.write(json_bytes)
-    return json_bytes
-
-
-def load_from_json_file(filepath, **extra_options):
-    """
-    Same as `load_from_json_bytes`, but reads data from filesystem.
-    """
-    with open(filepath, "rb") as f:
-        json_bytes = f.read()
-    return load_from_json_bytes(json_bytes, **extra_options)
 
 
 def test_json_serialization_high_level_utilities(tmp_path):

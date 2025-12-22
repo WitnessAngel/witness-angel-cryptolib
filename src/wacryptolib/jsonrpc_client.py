@@ -46,7 +46,7 @@ class JsonRpcProxy(ServerBase):
 
     The differences between our `JsonRpcProxy` and upstream's `Server` class are:
 
-    - we dump/load data using Pymongo's Extended Json format, able to transparently deal with bytes, uuids, dates etc.
+    - we dump/load data using Extjson format, able to transparently deal with bytes, uuids, dates etc.
     - we do not auto-unpack single dict arguments on call, e.g `proxy.foo({'fizz': 1, 'fuzz': 2})` will be treated as
       calling remote foo() with a single dict argument, not as passing it keyword arguments `fizz` and `fuzz`.
     - a `response_error_handler` callback can be provided to swallow or convert an error received in an RPC response.

@@ -11,7 +11,6 @@ from Crypto.Util.Padding import pad, unpad
 import Crypto.Random
 """
 
-
 AES_BLOCK_SIZE = 16
 
 
@@ -120,17 +119,6 @@ def build_rsa_oaep_cipher(key):
 
     rsa_oaep_hasher = Crypto.Hash.SHA512
     return PKCS1_OAEP.new(key=key, hashAlgo=rsa_oaep_hasher)
-
-
-# HASHER FACTORY #
-
-
-def get_hasher_instance(hash_algo):
-    import importlib
-
-    module = importlib.import_module("Crypto.Hash.%s" % hash_algo)
-    hasher_instance = module.new()
-    return hasher_instance
 
 
 # RSA KEY GENERATION, AND IMPORT/EXPORT #

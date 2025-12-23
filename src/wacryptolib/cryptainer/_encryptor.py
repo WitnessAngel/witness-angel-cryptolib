@@ -29,8 +29,8 @@ from wacryptolib.shared_secret import split_secret_into_shards
 from wacryptolib.utilities import (
     dump_to_json_bytes,
     generate_uuid0,
-    hash_message,
 )
+from wacryptolib.hash import hash_message
 
 
 class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):

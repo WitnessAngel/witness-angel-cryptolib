@@ -92,21 +92,6 @@ def is_file_basename(path):
 ### Public utilities ###
 
 
-#: Hash algorithms authorized for use with `hash_message()`
-SUPPORTED_HASH_ALGOS = ["SHA256", "SHA512", "SHA3_256", "SHA3_512"]
-
-
-def hash_message(message: bytes, hash_algo: str):
-    """Hash a message with the selected hash algorithm, and return the hash as bytes."""
-    if hash_algo not in SUPPORTED_HASH_ALGOS:
-        raise ValueError("Unsupported hash algorithm %r" % hash_algo)
-    hasher = _crypto_backend.get_hasher_instance(hash_algo)
-    hasher.update(message)
-    digest = hasher.digest()
-    assert 32 <= len(digest) <= 64, len(digest)
-    return digest
-
-
 def consume_bytes_as_chunks(
     data: Union[bytes, BinaryIO], chunk_size: int
 ):  # FIXME RENAME (consume_io_bytes..), DOCUMENT AND TEST ME

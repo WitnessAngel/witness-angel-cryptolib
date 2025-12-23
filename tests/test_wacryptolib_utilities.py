@@ -22,8 +22,6 @@ from wacryptolib.utilities import (
     dump_to_json_file,
     load_from_json_file,
     generate_uuid0,
-    SUPPORTED_HASH_ALGOS,
-    hash_message,
     get_utc_now_date,
     get_memory_rss_bytes,
     catch_and_log_exception,
@@ -35,21 +33,6 @@ def test_check_datetime_is_tz_aware():
     with pytest.raises(ValueError):
         check_datetime_is_tz_aware(datetime.now())
     check_datetime_is_tz_aware(get_utc_now_date())
-
-
-def test_hash_message():
-    bytestring = get_random_bytes(1000)
-
-    assert len(SUPPORTED_HASH_ALGOS) == 4  # For now
-
-    for hash_algo in SUPPORTED_HASH_ALGOS:
-        digest1 = hash_message(bytestring, hash_algo=hash_algo)
-        assert 32 <= len(digest1) <= 64, len(digest1)
-        digest2 = hash_message(bytestring, hash_algo=hash_algo)
-        assert digest1 == digest2
-
-    with pytest.raises(ValueError, match="Unsupported"):
-        hash_message(bytestring, hash_algo="XYZ")
 
 
 def test_split_as_chunks_and_recombine():

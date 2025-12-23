@@ -192,7 +192,7 @@ from .pycryptodome import (
     dsa_key_class_fetcher,
     ecc_key_class_fetcher,
 )
-from .pycryptodome import get_random_bytes, pad_bytes, unpad_bytes, get_hasher_instance
+from .pycryptodome import get_random_bytes, pad_bytes, unpad_bytes
 from .pycryptodome import sign_with_pss, verify_with_pss, sign_with_dss, verify_with_dss
 
 
@@ -207,3 +207,15 @@ def shamir_split(*args, **kwargs):
 
 def shamir_combine(*args, **kwargs):
     return Shamir.combine(*args, **kwargs)
+
+
+# HASHER FACTORY #
+
+import hashlib  # MUST exist, even in micropython
+_DESIRED_HASH_ALGOS =  ["SHA256", "SHA512", "SHA3_256", "SHA3_512"]
+_SUPPORTED_HASH_ALGOS = [_x for _x in _DESIRED_HASH_ALGOS if hasattr(hashlib, _x.lower())]
+
+
+def get_hasher_instance(hash_algo):
+    hasher_class =  getattr(hashlib, hash_algo.lower())
+    return hasher_class()

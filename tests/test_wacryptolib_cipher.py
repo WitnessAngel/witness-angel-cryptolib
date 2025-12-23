@@ -15,7 +15,7 @@ from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipe
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
 from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError, OperationNotSupported
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey
-from wacryptolib.utilities import SUPPORTED_HASH_ALGOS, hash_message
+from wacryptolib.hash import SUPPORTED_HASH_ALGOS, hash_message
 
 
 def _get_binary_content():

@@ -21,7 +21,8 @@ from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring, SUPPORTE
     SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.shared_secret import recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature
-from wacryptolib.utilities import load_from_json_bytes, hash_message
+from wacryptolib.utilities import load_from_json_bytes
+from wacryptolib.hash import hash_message
 
 
 class DecryptionErrorType:  # FIXME RENAME THIS

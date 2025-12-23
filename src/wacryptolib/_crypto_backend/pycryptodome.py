@@ -17,12 +17,6 @@ AES_BLOCK_SIZE = 16
 # Utilities #
 
 
-def get_random_bytes(nbytes):
-    import Crypto.Random
-
-    return Crypto.Random.get_random_bytes(nbytes)
-
-
 def pad_bytes(*args, **kwargs):
     from Crypto.Util.Padding import pad
 

@@ -192,7 +192,6 @@ from .pycryptodome import (
     dsa_key_class_fetcher,
     ecc_key_class_fetcher,
 )
-from .pycryptodome import pad_bytes, unpad_bytes
 from .pycryptodome import sign_with_pss, verify_with_pss, sign_with_dss, verify_with_dss
 
 
@@ -200,6 +199,10 @@ from .pycryptodome import sign_with_pss, verify_with_pss, sign_with_dss, verify_
 def get_random_bytes(nbytes):
     """Like pycryptodome, we rely on the randomness of the OS!"""
     return os.urandom(nbytes)
+
+
+# BYTE PADDING #
+from .vendor.Padding import pad as pad_bytes, unpad as unpad_bytes
 
 
 # SHAMIR SHARED SECRETS #

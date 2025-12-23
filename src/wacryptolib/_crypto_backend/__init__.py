@@ -193,5 +193,17 @@ from .pycryptodome import (
     ecc_key_class_fetcher,
 )
 from .pycryptodome import get_random_bytes, pad_bytes, unpad_bytes, get_hasher_instance
-from .pycryptodome import shamir_split, shamir_combine
 from .pycryptodome import sign_with_pss, verify_with_pss, sign_with_dss, verify_with_dss
+
+
+# SHAMIR SHARED SECRETS #
+# We always use the vendored version #
+from .vendor.SecretSharing import Shamir
+
+
+def shamir_split(*args, **kwargs):
+    return Shamir.split(*args, **kwargs)
+
+
+def shamir_combine(*args, **kwargs):
+    return Shamir.combine(*args, **kwargs)

@@ -219,21 +219,6 @@ def export_ecc_key_to_pem(private_key, passphrase=None):  # FIXME not always pri
     return private_key.export_key(format="PEM", **extra_params)
 
 
-# SHAMIR SHARED SECRETS #
-
-
-def shamir_split(*args, **kwargs):
-    from Crypto.Protocol.SecretSharing import Shamir
-
-    return Shamir.split(*args, **kwargs)
-
-
-def shamir_combine(*args, **kwargs):
-    from Crypto.Protocol.SecretSharing import Shamir
-
-    return Shamir.combine(*args, **kwargs)
-
-
 # MESSAGE SIGNATURES #
 
 

@@ -79,9 +79,9 @@ def decrypt(private_key, message, label=b'', hash_class=hashlib.sha1,
     y, masked_seed, masked_db = em[0], em[1:h_len+1], em[1+h_len:]
     if y != b'\x00' and y != 0:
         raise ValueError('decryption error')
-    seed_mask = mgf(masked_db, h_len)
+    seed_mask = mgf(masked_db, h_len, hash_class=hash_class)  # PATCHED
     seed = primitives.string_xor(masked_seed, seed_mask)
-    db_mask = mgf(seed, k - h_len - 1)
+    db_mask = mgf(seed, k - h_len - 1, hash_class=hash_class)  # PATCHED
     db = primitives.string_xor(masked_db, db_mask)
     label_hash_prime, rest = db[:h_len], db[h_len:]
     i = rest.find(b'\x01')

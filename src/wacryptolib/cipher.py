@@ -343,7 +343,7 @@ class AesCbcEncryptionNode(EncryptionNodeBase):
         super().__init__(ciphertext_hash_algos=ciphertext_hash_algos)
         self._key = key_dict["key"]
         self._iv = key_dict["iv"]
-        self._cipher = _crypto_backend.build_aes_cbc_cipher(self._key, iv=self._iv)
+        self._cipher = _crypto_backend.build_aes_cbc_encrypter(self._key, iv=self._iv)
 
 
 class AesEaxEncryptionNode(EncryptionNodeBase):

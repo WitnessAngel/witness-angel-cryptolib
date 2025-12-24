@@ -37,7 +37,7 @@ try:
 except:
 
     def to_bufferable(binary):
-        if isinstance(binary, bytes):
+        if isinstance(binary, (bytes, memoryview)):
             return binary
         return bytes(ord(b) for b in binary)
 

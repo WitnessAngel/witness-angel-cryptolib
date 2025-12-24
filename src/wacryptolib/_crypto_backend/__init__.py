@@ -166,14 +166,11 @@ if use_fallback_backend:
 
 
 from .pycryptodome import (
-    encrypt_via_aes_cbc,
-    decrypt_via_aes_cbc,
     encrypt_via_aes_eax,
     decrypt_via_aes_eax,
     encrypt_via_chacha20_poly1305,
     decrypt_via_chacha20_poly1305,
     build_rsa_oaep_cipher,
-    build_aes_cbc_cipher,
     build_aes_eax_cipher,
     build_chacha20_poly1305_cipher,
     AES_BLOCK_SIZE,
@@ -194,6 +191,8 @@ from .pycryptodome import (
 )
 from .pycryptodome import sign_with_pss, verify_with_pss, sign_with_dss, verify_with_dss
 
+from .fallback_adapter import build_aes_cbc_encrypter, encrypt_via_aes_cbc, decrypt_via_aes_cbc
+
 
 # RANDOMNESS #
 def get_random_bytes(nbytes):
@@ -201,7 +200,7 @@ def get_random_bytes(nbytes):
     return os.urandom(nbytes)
 
 
-# BYTE PADDING #
+# BYTE PADDING (PKCS7 by default) #
 from .vendor.Padding import pad as pad_bytes, unpad as unpad_bytes
 
 

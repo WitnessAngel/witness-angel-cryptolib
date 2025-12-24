@@ -32,6 +32,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 # ===================================================================
 
+# FROM PYCRYPTODOME v3.23.0 #
+
 __all__ = [ 'pad', 'unpad' ]
 
 

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 MAX_PAYLOAD_LENGTH_FOR_SIGNATURE = 128  # Max 2*SHA512 length
 
 
-class TrusteeApi:
+class TrusteeApi:  # TODO rename this?
     """
     This is the API meant to be exposed by trustee webservices, to allow end users to create safely encrypted cryptainers.
 
@@ -75,6 +75,7 @@ class TrusteeApi:
 
         private_key_pem = self._keystore.get_private_key(keychain_uid=keychain_uid, key_algo=signature_algo)
 
+        # This private key shall NOT be protected by a passphrase
         private_key = load_asymmetric_key_from_pem_bytestring(key_pem=private_key_pem, key_algo=signature_algo)
 
         signature_dict = sign_message(message=message, signature_algo=signature_algo, private_key=private_key)

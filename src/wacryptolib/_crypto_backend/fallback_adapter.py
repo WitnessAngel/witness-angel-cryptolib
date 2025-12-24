@@ -30,7 +30,11 @@ print("RESULT IS", repr(decrypted))
 
 class AESModeCBCCompatibilityLayer:
     def __init__(self, key, iv):
-        self._cipher = cipher = pyaes.Encrypter(pyaes.AESModeOfOperationCBC(key, iv=iv))
+        self._cipher = cipher = pyaes.Encrypter(
+            pyaes.AESModeOfOperationCBC(key, iv=iv),
+            # For compatibility with pycryptodome,
+            # we do not want any padding at this level
+            padding=pyaes.PADDING_NONE)
 
     def encrypt(self, plaintext):
         print(">>>>", bytes(plaintext))
@@ -40,6 +44,10 @@ class AESModeCBCCompatibilityLayer:
         # Normalized buffer (because plaintext was already padded):
         assert len(_buffer) in (0, 16), len(_buffer)
         return ciphertext
+
+    def finalize(self):
+        # Returns last bytes (with NO padding)
+        return self._cipher.feed(None)
 
 
 def build_aes_cbc_encrypter(key, iv):

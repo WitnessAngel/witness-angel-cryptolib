@@ -280,11 +280,17 @@ class EncryptionNodeBase:
         """
         self._hashers_dict = _create_hashers_dict(ciphertext_hash_algos)
 
-    def _encrypt_aligned_payload(self, plaintext):
+    def _encrypt_aligned_payload(self, plaintext, finalize=False):
         if not plaintext:
             return b""  # Shortcut
         ciphertext = self._cipher.encrypt(plaintext)
         assert isinstance(ciphertext, bytes), repr(ciphertext)
+
+        if finalize and hasattr(self._cipher, "finalize"):
+            assert self._is_finished
+            # Cipher with builtin (redundant) padding, alas...
+            ciphertext += self._cipher.finalize()
+
         _update_hashers_dict(self._hashers_dict, chunk=ciphertext)
         return ciphertext
 
@@ -318,7 +324,8 @@ class EncryptionNodeBase:
 
         if self.BLOCK_SIZE != 1:
             padded_remainder = _crypto_backend.pad_bytes(self._remainder, block_size=self.BLOCK_SIZE)
-            ciphertext = self._encrypt_aligned_payload(padded_remainder)
+            ciphertext = self._encrypt_aligned_payload(padded_remainder, finalize=True)
+
             self._remainder = b""
 
         return ciphertext

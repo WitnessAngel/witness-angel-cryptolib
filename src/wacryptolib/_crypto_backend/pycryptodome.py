@@ -32,22 +32,22 @@ def unpad_bytes(*args, **kwargs):
 # AES CBC CIPHER #
 
 
-def build_aes_cbc_cipher(key, iv):
+def build_aes_cbc_encrypter(key, iv):
     from Crypto.Cipher import AES
-
+    # Same construct works for both encryption and decryption, here
     cipher = AES.new(key, AES.MODE_CBC, iv=iv)
     return cipher
 
 
 def encrypt_via_aes_cbc(plaintext, key, iv):
-    cipher = build_aes_cbc_cipher(key=key, iv=iv)
+    cipher = build_aes_cbc_encrypter(key=key, iv=iv)
     plaintext_padded = pad_bytes(plaintext, block_size=AES_BLOCK_SIZE)
     ciphertext = cipher.encrypt(plaintext_padded)
     return ciphertext
 
 
 def decrypt_via_aes_cbc(ciphertext, key, iv):
-    cipher = build_aes_cbc_cipher(key=key, iv=iv)
+    cipher = build_aes_cbc_encrypter(key=key, iv=iv)  # Also for decryption
     plaintext_padded = cipher.decrypt(ciphertext)
     plaintext = unpad_bytes(plaintext_padded, block_size=AES_BLOCK_SIZE)
     return plaintext

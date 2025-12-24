@@ -31,6 +31,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 # ===================================================================
 
+# FROM PYCRYPTODOME v3.23.0 #
+
 # from Crypto.Util.py3compat import is_native_int BECOMES:
 def is_native_int(x):
     return isinstance(x, int)

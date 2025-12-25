@@ -133,7 +133,8 @@ def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
         public_key = load_asymmetric_key_from_pem_bytestring(
             key_pem=keypair["public_key"], key_algo=key_algo  # NOT encrypted
         )
-        assert public_key.export_key
+        # Different behaviors for pycroptodome vs pkcs1 packages
+        assert hasattr(public_key, "export_key") or hasattr(public_key, "save_pkcs1")
 
         if isinstance(passphrase, str):  # Different unicode représentations work fine
             passphrase = unicodedata.normalize("NFD", passphrase)
@@ -141,7 +142,8 @@ def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
         private_key = load_asymmetric_key_from_pem_bytestring(
             key_pem=keypair["private_key"], key_algo=key_algo, passphrase=passphrase  # Encrypted
         )
-        assert private_key.export_key
+        # Different behaviors for pycroptodome vs pkcs1 packages
+        assert hasattr(private_key, "export_key") or hasattr(private_key, "save_pkcs1")
 
         error_matcher = "key format is not supported|Invalid DER encoding"
 

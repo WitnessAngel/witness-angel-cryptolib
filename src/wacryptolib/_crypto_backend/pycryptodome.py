@@ -106,24 +106,23 @@ def decrypt_via_chacha20_poly1305(ciphertext, tag, key, nonce, verify_integrity_
 # RSA OAEP CIPHER #
 
 
-def build_rsa_oaep_cipher(key):
+def _build_rsa_oaep_cipher(key):
     # Returned object has encrypt() and decrypt() methods
     import Crypto.Hash.SHA512
     from Crypto.Cipher import PKCS1_OAEP
 
-    rsa_oaep_hasher = Crypto.Hash.SHA512
-    return PKCS1_OAEP.new(key=key, hashAlgo=rsa_oaep_hasher)
+    return PKCS1_OAEP.new(key=key, hashAlgo=Crypto.Hash.SHA512, label=b"")
 
 
 def encrypt_via_rsa_oaep(plaintext_chunks: list[bytes], public_key) -> list[bytes]:
     """We expect each plaintext chunk to be small enough for the RSA key size"""
-    encrypter = build_rsa_oaep_cipher(public_key).encrypt
+    encrypter = _build_rsa_oaep_cipher(public_key).encrypt
     ciphertext_chunks = [encrypter(chunk) for chunk in plaintext_chunks]
     return ciphertext_chunks
 
 
 def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[bytes]:
-    decrypter = build_rsa_oaep_cipher(private_key).decrypt
+    decrypter = _build_rsa_oaep_cipher(private_key).decrypt
     cleartext_chunks = [decrypter(chunk) for chunk in ciphertext_chunks]
     return cleartext_chunks
 

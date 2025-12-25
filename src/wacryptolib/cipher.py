@@ -200,12 +200,13 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
 
     :return: a dict with field `digest_list`, containing bytestring chunks of variable width."""
     key = key_dict["key"]
-    _check_asymmetric_key_length_bits(key.size_in_bits())
+    _key_length_bits = key.size_in_bits() if hasattr(key, "size_in_bits") else key.bit_size
+    _check_asymmetric_key_length_bits(_key_length_bits)
 
-    encrypter = _crypto_backend.build_rsa_oaep_cipher(key).encrypt
-    chunks = split_as_chunks(plaintext, chunk_size=RSA_OAEP_CHUNKS_SIZE, must_pad=False, accept_incomplete_chunk=True)
+    plaintext_chunks = split_as_chunks(plaintext, chunk_size=RSA_OAEP_CHUNKS_SIZE,
+                                       must_pad=False, accept_incomplete_chunk=True)
 
-    ciphertext_chunks = [encrypter(chunk) for chunk in chunks]
+    ciphertext_chunks = _crypto_backend.encrypt_via_rsa_oaep(plaintext_chunks, public_key=key)
     return dict(ciphertext_chunks=ciphertext_chunks)
 
 
@@ -219,19 +220,16 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify_integrity_tag
 
     :return: the decrypted bytestring"""
     key = key_dict["key"]
-    _check_asymmetric_key_length_bits(key.size_in_bits())
-
-    decrypter = _crypto_backend.build_rsa_oaep_cipher(key).decrypt
+    _key_length_bits = key.size_in_bits() if hasattr(key, "size_in_bits") else key.bit_size
+    _check_asymmetric_key_length_bits(_key_length_bits)
 
     # Retrocompatibility for previous (incorrect) "digest_list" naming
     field_name = "digest_list" if "digest_list" in cipherdict else "ciphertext_chunks"
-    encrypted_chunks = cipherdict[field_name]
+    ciphertext_chunks = cipherdict[field_name]
 
-    decrypted_chunks = []
-    for encrypted_chunk in encrypted_chunks:
-        decrypted_chunk = decrypter(encrypted_chunk)
-        decrypted_chunks.append(decrypted_chunk)
-    return b"".join(decrypted_chunks)
+    plaintext_chunks = _crypto_backend.decrypt_via_rsa_oaep(
+        ciphertext_chunks, private_key=key)
+    return b"".join(plaintext_chunks)
 
 
 def _create_hashers_dict(hash_algos):

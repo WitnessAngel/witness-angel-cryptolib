@@ -25,6 +25,11 @@ from wacryptolib.keygen import (
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
 
 
+def _check_is_asymmetric_key_object(key):
+    # Different behaviors for pycroptodome vs pkcs1 packages:
+    assert hasattr(key, "export_key") or hasattr(key, "save_pkcs1")
+
+
 def test_passphrase_encoding():
     assert _encode_passphrase(" hello  ") == b"hello"
     assert _encode_passphrase("ｱｲｳｴｵ ") == "アイウエオ".encode("utf8")
@@ -116,7 +121,7 @@ def test_load_asymmetric_key_from_pem_bytestring(key_algo):
 
     for field in ["private_key", "public_key"]:
         key = load_asymmetric_key_from_pem_bytestring(key_pem=keypair[field], key_algo=key_algo)
-        assert key.export_key  # Method of Key object
+        _check_is_asymmetric_key_object(key)
 
     with pytest.raises(ValueError, match="Unknown key type"):
         load_asymmetric_key_from_pem_bytestring(key_pem=keypair["private_key"], key_algo="ZHD")
@@ -133,8 +138,7 @@ def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
         public_key = load_asymmetric_key_from_pem_bytestring(
             key_pem=keypair["public_key"], key_algo=key_algo  # NOT encrypted
         )
-        # Different behaviors for pycroptodome vs pkcs1 packages
-        assert hasattr(public_key, "export_key") or hasattr(public_key, "save_pkcs1")
+        _check_is_asymmetric_key_object(public_key)
 
         if isinstance(passphrase, str):  # Different unicode représentations work fine
             passphrase = unicodedata.normalize("NFD", passphrase)
@@ -142,8 +146,7 @@ def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
         private_key = load_asymmetric_key_from_pem_bytestring(
             key_pem=keypair["private_key"], key_algo=key_algo, passphrase=passphrase  # Encrypted
         )
-        # Different behaviors for pycroptodome vs pkcs1 packages
-        assert hasattr(private_key, "export_key") or hasattr(private_key, "save_pkcs1")
+        _check_is_asymmetric_key_object(private_key)
 
         error_matcher = "key format is not supported|Invalid DER encoding"
 

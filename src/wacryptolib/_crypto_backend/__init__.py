@@ -171,6 +171,8 @@ from .pycryptodome import (
     encrypt_via_chacha20_poly1305,
     decrypt_via_chacha20_poly1305,
     build_rsa_oaep_cipher,
+    encrypt_via_rsa_oaep,
+    decrypt_via_rsa_oaep,
     build_aes_eax_cipher,
     build_chacha20_poly1305_cipher,
     AES_BLOCK_SIZE,

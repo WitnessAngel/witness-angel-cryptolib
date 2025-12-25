@@ -115,6 +115,19 @@ def build_rsa_oaep_cipher(key):
     return PKCS1_OAEP.new(key=key, hashAlgo=rsa_oaep_hasher)
 
 
+def encrypt_via_rsa_oaep(plaintext_chunks: list[bytes], public_key) -> list[bytes]:
+    """We expect each plaintext chunk to be small enough for the RSA key size"""
+    encrypter = build_rsa_oaep_cipher(public_key).encrypt
+    ciphertext_chunks = [encrypter(chunk) for chunk in plaintext_chunks]
+    return ciphertext_chunks
+
+
+def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[bytes]:
+    decrypter = build_rsa_oaep_cipher(private_key).decrypt
+    cleartext_chunks = [decrypter(chunk) for chunk in ciphertext_chunks]
+    return cleartext_chunks
+
+
 # RSA KEY GENERATION, AND IMPORT/EXPORT #
 
 

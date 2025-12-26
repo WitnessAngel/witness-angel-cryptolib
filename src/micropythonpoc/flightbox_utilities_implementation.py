@@ -5,14 +5,14 @@ import logging
 import uuid
 import uuid0
 from extjson import dump_to_json_bytes
-from Padding import pad as pad_bytes, unpad as unpad_bytes
-from SecretSharing import Shamir as _Shamir
+from PycryptodomeSecretSharing import Shamir as _Shamir
+from data_utils import do_split_secret_into_shards
 
 
 AES_BLOCK_SIZE = 16
 
 
-def shamir_split(*args, **kwargs):
+def shamir_128b_split_func(*args, **kwargs):
     return _Shamir.split(*args, **kwargs)
 
 
@@ -47,7 +47,8 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
         return uuid0.generate()
 
     def split_secret_into_shards(self, secret: bytes, *, shard_count: int, threshold_count: int) -> list:
-        return split_secret_into_shards(secret, shard_count=shard_count, threshold_count=threshold_count)  # FIXME
+        return do_split_secret_into_shards(secret, shard_count=shard_count, threshold_count=threshold_count,
+                                           shamir_128b_split_func=shamir_128b_split_func)
 
     def generate_symkey(self, cipher_algo: str):
         assert cipher_algo == "AES_CBC", cipher_algo
@@ -55,13 +56,6 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
             key=get_random_bytes(32),
             iv=get_random_bytes(AES_BLOCK_SIZE)
         )
-
-    def _fetch_asymmetric_key_pem_from_trustee(self, trustee, key_algo, keychain_uid):  # FIXME
-        """Method meant to be easily replaced by a mockup in tests"""
-        trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
-        self.logger.debug("Fetching asymmetric key %s %r", key_algo, keychain_uid)
-        public_key_pem = trustee_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
-        return public_key_pem
 
     def get_public_key(self, trustee: dict, key_algo: str, keychain_uid: uuid.UUID) -> dict:  # FIXME
         public_key_pem = self._fetch_asymmetric_key_pem_from_trustee(trustee, key_algo=key_algo, keychain_uid=keychain_uid)

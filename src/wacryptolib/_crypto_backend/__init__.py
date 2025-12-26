@@ -51,20 +51,16 @@ def get_random_bytes(nbytes):
     return os.urandom(nbytes)
 
 
-# BYTE PADDING (PKCS7 by default) #
-from .vendor.PycryptodomePadding import pad as pad_bytes, unpad as unpad_bytes
-
-
 # SHAMIR SHARED SECRETS #
 # We always use the vendored version #
 
 from .vendor.PycryptodomeSecretSharing import Shamir as _Shamir
 
 
-def shamir_split(*args, **kwargs):
+def shamir_128b_split_func(*args, **kwargs):
     return _Shamir.split(*args, **kwargs)
 
 
-def shamir_combine(*args, **kwargs):
+def shamir_128b_combine_func(*args, **kwargs):
     return _Shamir.combine(*args, **kwargs)
 

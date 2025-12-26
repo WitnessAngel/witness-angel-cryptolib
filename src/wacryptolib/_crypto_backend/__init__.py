@@ -58,13 +58,13 @@ from .vendor.Padding import pad as pad_bytes, unpad as unpad_bytes
 # SHAMIR SHARED SECRETS #
 # We always use the vendored version #
 
-from .vendor.SecretSharing import Shamir
+from .vendor.SecretSharing import Shamir as _Shamir
 
 
 def shamir_split(*args, **kwargs):
-    return Shamir.split(*args, **kwargs)
+    return _Shamir.split(*args, **kwargs)
 
 
 def shamir_combine(*args, **kwargs):
-    return Shamir.combine(*args, **kwargs)
+    return _Shamir.combine(*args, **kwargs)
 

@@ -172,13 +172,15 @@ if _patch_pycryptodome_internals:
 AES_BLOCK_SIZE = 16
 
 
-def pad_bytes(*args, **kwargs):
+def _pad_bytes_pkcs7_internal(*args, **kwargs):
+    # Direct pycrotodome version rather than our utilities
     from Crypto.Util.Padding import pad
 
     return pad(*args, **kwargs)
 
 
-def unpad_bytes(*args, **kwargs):
+def _unpad_bytes_pkcs7_internal(*args, **kwargs):
+    # Direct pycrotodome version rather than our utilities
     from Crypto.Util.Padding import unpad
 
     return unpad(*args, **kwargs)
@@ -209,7 +211,7 @@ def build_aes_cbc_encrypter(key, iv):
 
 def encrypt_via_aes_cbc(plaintext, key, iv):
     cipher = build_aes_cbc_encrypter(key=key, iv=iv)
-    plaintext_padded = pad_bytes(plaintext, block_size=AES_BLOCK_SIZE)
+    plaintext_padded = _pad_bytes_pkcs7_internal(plaintext, block_size=AES_BLOCK_SIZE)
     ciphertext = cipher.encrypt(plaintext_padded)
     return ciphertext
 
@@ -217,7 +219,7 @@ def encrypt_via_aes_cbc(plaintext, key, iv):
 def decrypt_via_aes_cbc(ciphertext, key, iv):
     cipher = build_aes_cbc_encrypter(key=key, iv=iv)  # Also for decryption
     plaintext_padded = cipher.decrypt(ciphertext)
-    plaintext = unpad_bytes(plaintext_padded, block_size=AES_BLOCK_SIZE)
+    plaintext = _unpad_bytes_pkcs7_internal(plaintext_padded, block_size=AES_BLOCK_SIZE)
     return plaintext
 
 

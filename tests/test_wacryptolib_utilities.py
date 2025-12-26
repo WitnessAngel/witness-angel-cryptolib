@@ -9,6 +9,7 @@ from threading import Lock
 
 import pytest
 import pytz
+from Crypto.Hash.MD5 import block_size
 
 from wacryptolib._crypto_backend import get_random_bytes
 from wacryptolib.utilities import (
@@ -26,6 +27,8 @@ from wacryptolib.utilities import (
     get_memory_rss_bytes,
     catch_and_log_exception,
     synchronized,
+    pad_bytes_pkcs7,
+    unpad_bytes_pkcs7
 )
 
 
@@ -33,6 +36,28 @@ def test_check_datetime_is_tz_aware():
     with pytest.raises(ValueError):
         check_datetime_is_tz_aware(datetime.now())
     check_datetime_is_tz_aware(get_utc_now_date())
+
+
+def test_pkcs7_padding():
+
+    assert pad_bytes_pkcs7(b"", 10) == b'\n\n\n\n\n\n\n\n\n\n'
+    assert unpad_bytes_pkcs7(b'\n\n\n\n\n\n\n\n\n\n', 10) == b""
+
+    assert pad_bytes_pkcs7(b"abcdefgh", 5) == b'abcdefgh\x02\x02'
+    assert unpad_bytes_pkcs7(b'abcdefgh\x02\x02', 10) == b"abcdefgh"
+
+    msg = get_random_bytes(56)
+    blk_size = 11
+    assert unpad_bytes_pkcs7(pad_bytes_pkcs7(msg, block_size=blk_size), block_size=blk_size) == msg
+
+    with pytest.raises(ValueError):
+        unpad_bytes_pkcs7(b'', block_size=5)
+    with pytest.raises(ValueError):
+        unpad_bytes_pkcs7(b'abc\0', block_size=10)
+    with pytest.raises(ValueError):
+        unpad_bytes_pkcs7(b'abcdefghijk\x04', block_size=2)
+    with pytest.raises(ValueError):
+        unpad_bytes_pkcs7(b'abcdefgh\x01\x02', block_size=10)
 
 
 def test_split_as_chunks_and_recombine():

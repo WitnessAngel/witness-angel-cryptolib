@@ -8,7 +8,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-
+from .pycryptodome import IMPLEMENTED_HASH_ALGOS, get_hasher_instance
 from .pycryptodome import (
     AES_BLOCK_SIZE,
     build_aes_cbc_encrypter,
@@ -68,39 +68,3 @@ def shamir_split(*args, **kwargs):
 def shamir_combine(*args, **kwargs):
     return Shamir.combine(*args, **kwargs)
 
-
-# HASHER FACTORY #
-
-
-import hashlib  # MUST exist, even in micropython
-_DESIRED_HASH_ALGOS =  ["SHA256", "SHA512", "SHA3_256", "SHA3_512"]
-_SUPPORTED_HASH_ALGOS = [_x for _x in _DESIRED_HASH_ALGOS if hasattr(hashlib, _x.lower())]
-
-_HASH_ALGO_TO_OID = {
-    # See Pycryptodome sources for OIDs
-    "SHA256": "2.16.840.1.101.3.4.2.1",
-    "SHA512": "2.16.840.1.101.3.4.2.3",
-    "SHA3_256": "2.16.840.1.101.3.4.2.8",
-    "SHA3_512": "2.16.840.1.101.3.4.2.10",
-}
-
-
-class HasherCompatibilityLayer():
-    def __init__(self, hasher):
-        self._hasher = hasher
-
-    def __getattr__(self, attr):
-        return getattr(self._hasher, attr)
-
-    @property
-    def oid(self):
-        return _HASH_ALGO_TO_OID[self._hasher.name.upper()]
-
-    def new(self, *args, **kwargs):
-        # HASH instances can't be normally instantiated when C-based...
-        return hashlib.new(self._hasher.name.lower())
-
-
-def get_hasher_instance(hash_algo: str) -> HasherCompatibilityLayer:
-    hasher_instance = hashlib.new(hash_algo.lower())
-    return HasherCompatibilityLayer(hasher_instance)

@@ -60,6 +60,7 @@ class FlightboxUtilitiesBase:
         raise NotImplementedError
 
     def encrypt_bytestring(self, plaintext: bytes, *, cipher_algo: str, key_dict: dict) -> dict:
+        # For both symmetric and asymmetric algos!
         raise NotImplementedError
 
 

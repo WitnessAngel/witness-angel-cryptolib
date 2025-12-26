@@ -5,6 +5,44 @@ import pkcs1
 import pyaes
 
 
+
+# HASHER FACTORY #
+
+
+_DESIRED_HASH_ALGOS =  ["SHA256", "SHA512", "SHA3_256", "SHA3_512"]
+IMPLEMENTED_HASH_ALGOS = [_x for _x in _DESIRED_HASH_ALGOS if hasattr(hashlib, _x.lower())]
+
+
+_HASH_ALGO_TO_OID = {
+    # See Pycryptodome sources for OIDs
+    "SHA256": "2.16.840.1.101.3.4.2.1",
+    "SHA512": "2.16.840.1.101.3.4.2.3",
+    "SHA3_256": "2.16.840.1.101.3.4.2.8",
+    "SHA3_512": "2.16.840.1.101.3.4.2.10",
+}
+
+
+class HasherCompatibilityLayer():
+    def __init__(self, hasher):
+        self._hasher = hasher
+
+    def __getattr__(self, attr):
+        return getattr(self._hasher, attr)
+
+    @property
+    def oid(self):
+        return _HASH_ALGO_TO_OID[self._hasher.name.upper()]
+
+    def new(self, *args, **kwargs):
+        # HASH instances can't be normally instantiated when C-based...
+        return hashlib.new(self._hasher.name.lower())
+
+
+def get_hasher_instance(hash_algo: str) -> HasherCompatibilityLayer:
+    hasher_instance = hashlib.new(hash_algo.lower())
+    return HasherCompatibilityLayer(hasher_instance)
+
+
 class AESModeCBCCompatibilityLayer:
     def __init__(self, key, iv):
         self._cipher = cipher = pyaes.Encrypter(
@@ -68,13 +106,11 @@ def import_rsa_key_from_pem(key_pem, passphrase=None):
         return _pkcs1_format_private_key
 
 
-'''
+''' NOT IMPLEMENTED YET,
 def export_rsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
     if passphrase:
         _prevent_passphrase_usage_for_rsa_key()
-
-
-    return private_key.export_key(format="PEM", **extra_params)
+    ...
 '''
 
 
@@ -105,3 +141,4 @@ def generate_rsa_keypair(key_length_bits):
         primality_algorithm="solovay-strassen",  # Or [gmpy-]miller-rabin
         size=key_length_bits, strict_size=True, e=65537)  # Same 'e' as pycryptodome
     return public_key, private_key
+

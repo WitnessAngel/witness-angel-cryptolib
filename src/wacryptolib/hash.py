@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 #: Hash algorithms authorized for use with `hash_message()`
-SUPPORTED_HASH_ALGOS = _crypto_backend._SUPPORTED_HASH_ALGOS
+SUPPORTED_HASH_ALGOS = _crypto_backend.IMPLEMENTED_HASH_ALGOS
 logger.debug(f"Supported hash algorithms: {SUPPORTED_HASH_ALGOS}")
 
 

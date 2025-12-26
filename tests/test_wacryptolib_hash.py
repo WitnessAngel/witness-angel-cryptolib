@@ -6,14 +6,15 @@ import random
 
 import pytest
 
-from wacryptolib._crypto_backend import get_random_bytes, _DESIRED_HASH_ALGOS
+from wacryptolib._crypto_backend import get_random_bytes, IMPLEMENTED_HASH_ALGOS
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS, hash_message
 
 
 def test_hash_message():
     bytestring = get_random_bytes(1000)
 
-    assert len(SUPPORTED_HASH_ALGOS) == 4  # For now
+    assert SUPPORTED_HASH_ALGOS == IMPLEMENTED_HASH_ALGOS  # On recent CPython
+    assert len(SUPPORTED_HASH_ALGOS) == 4  # For now on PC OS
 
     for hash_algo in SUPPORTED_HASH_ALGOS:
         digest1 = hash_message(bytestring, hash_algo=hash_algo)
@@ -27,7 +28,7 @@ def test_hash_message():
 
 def test_compatibility_with_pycryptodome_hashers():
 
-    assert SUPPORTED_HASH_ALGOS == _DESIRED_HASH_ALGOS  # On recent CPython
+    assert len(SUPPORTED_HASH_ALGOS) == 4  # For now on PC OS
 
     for i in range(3):  # Attempt several messages
 

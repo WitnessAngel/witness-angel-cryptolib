@@ -184,6 +184,19 @@ def unpad_bytes(*args, **kwargs):
     return unpad(*args, **kwargs)
 
 
+# HASHER FACTORY #
+
+IMPLEMENTED_HASH_ALGOS = ["SHA256", "SHA512", "SHA3_256", "SHA3_512"]
+
+
+def get_hasher_instance(hash_algo):
+    import importlib
+
+    module = importlib.import_module("Crypto.Hash.%s" % hash_algo)
+    hasher_instance = module.new()
+    return hasher_instance
+
+
 # AES CBC CIPHER #
 
 

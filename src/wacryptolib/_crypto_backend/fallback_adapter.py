@@ -1,34 +1,8 @@
 
 import hashlib
 import rsa
-from wacryptolib._crypto_backend.vendor import pkcs1
-from wacryptolib._crypto_backend.vendor import pyaes
-
-'''
-# Any mode of operation can be used; for this example CBC
-key = b"This_key_for_demo_purposes_only!"
-iv = b"InitializationVe"
-
-ciphertext = b''
-
-# We can encrypt one line at a time, regardles of length
-encrypter = pyaes.Encrypter(pyaes.AESModeOfOperationCBC(key, iv))
-ciphertext += encrypter.feed(b"hello ")
-ciphertext += encrypter.feed(b"kitty")
-# Make a final call to flush any remaining bytes and add paddin
-ciphertext += encrypter.feed()
-
-print("CIPHERTEXT IS", repr(ciphertext))
-
-# We can decrypt the cipher text in chunks (here we split it in half)
-decrypter = pyaes.Decrypter(pyaes.AESModeOfOperationCBC(key, iv))
-decrypted = decrypter.feed(ciphertext[:len(ciphertext) // 2])
-decrypted += decrypter.feed(ciphertext[len(ciphertext) // 2:])
-# Again, make a final call to flush any remaining bytes and strip padding
-decrypted += decrypter.feed()
-
-print("RESULT IS", repr(decrypted))
-'''
+import pkcs1
+import pyaes
 
 
 class AESModeCBCCompatibilityLayer:
@@ -40,7 +14,6 @@ class AESModeCBCCompatibilityLayer:
             padding=pyaes.PADDING_NONE)
 
     def encrypt(self, plaintext):
-        print(">>>>", bytes(plaintext))
         assert len(plaintext) % 16 == 0  # ALREADY PADDED TO BLOCK SIZE
         ciphertext = self._cipher.feed(plaintext)
         _buffer = self._cipher._buffer
@@ -73,10 +46,14 @@ def decrypt_via_aes_cbc(ciphertext, key, iv):
     return decrypted
 
 
+def _prevent_passphrase_usage_for_rsa_key():
+    raise NotImplementedError(
+        "RSA key with passphrase is not supported in fallback implementation")
+
+
 def import_rsa_key_from_pem(key_pem, passphrase=None):
     if passphrase:
-        raise NotImplementedError(
-            "RSA key with passphrase is not supported in fallback implementation")
+        _prevent_passphrase_usage_for_rsa_key()
 
     # We use python-rsa for parsing, but then pkcs1 package for encryption/decryption
     try:
@@ -91,13 +68,15 @@ def import_rsa_key_from_pem(key_pem, passphrase=None):
         return _pkcs1_format_private_key
 
 
-''' TODO
+'''
 def export_rsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
-    extra_params = (
-        dict(passphrase=passphrase, pkcs=8, protection="PBKDF2WithHMAC-SHA1AndAES256-CBC") if passphrase else {}
-    )
+    if passphrase:
+        _prevent_passphrase_usage_for_rsa_key()
+
+
     return private_key.export_key(format="PEM", **extra_params)
 '''
+
 
 def encrypt_via_rsa_oaep(plaintext_chunks: list[bytes], public_key) -> list[bytes]:
     """We expect each plaintext chunk to be small enough for the RSA key size"""
@@ -114,7 +93,6 @@ def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[by
                      # TODO: ARGUMENTS mgf=mgf.mgf1, seed=None, rnd=default_crypto_random))
     cleartext_chunks = [decrypter(chunk) for chunk in ciphertext_chunks]
     return cleartext_chunks
-
 
 
 def rsa_key_class_fetcher():

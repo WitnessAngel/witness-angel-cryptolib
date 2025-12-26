@@ -17,7 +17,7 @@ from wacryptolib.keygen import (
     _check_asymmetric_key_length_bits,
     SUPPORTED_ASYMMETRIC_KEY_ALGOS,
 )
-from wacryptolib.utilities import split_as_chunks
+from wacryptolib.utilities import split_as_chunks, pad_bytes_pkcs7
 
 logger = logging.getLogger(__name__)
 
@@ -337,7 +337,7 @@ class EncryptionNodeBase:
         ciphertext = b""
 
         if self.BLOCK_SIZE != 1:
-            padded_remainder = _crypto_backend.pad_bytes(self._remainder, block_size=self.BLOCK_SIZE)
+            padded_remainder = pad_bytes_pkcs7(self._remainder, block_size=self.BLOCK_SIZE)
             ciphertext = self._encrypt_aligned_payload(padded_remainder, finalize=True)
 
             self._remainder = b""

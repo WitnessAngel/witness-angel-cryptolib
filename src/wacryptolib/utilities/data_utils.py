@@ -34,7 +34,7 @@ def do_split_secret_into_shards(secret: bytes, *, shard_count: int, threshold_co
     # Separate each chunk into shard
     for chunk in chunks:
         assert len(chunk) == 16
-        shards = shamir_128b_split_func(k=threshold_count, n=shard_count, secret=secret)
+        shards = shamir_128b_split_func(k=threshold_count, n=shard_count, secret=chunk)
         assert len(shards) == shard_count, shards
         all_chunk_shards.append(shards)
         del shards
@@ -68,7 +68,7 @@ def do_recombine_secret_from_shards(shards: Sequence, shamir_128b_recombine_func
 
     for shard in shards:
         idx, secret = shard
-        chunks = split_as_chunks(secret, chunk_size=16, must_pad=False, byte_pad_func=None)
+        chunks = split_as_chunks(secret, chunk_size=16, must_pad=False)
         shards_per_secret.append([(idx, chunk) for chunk in chunks])
 
     if len(set(len(chunks) for chunks in shards_per_secret)) != 1:
@@ -78,7 +78,7 @@ def do_recombine_secret_from_shards(shards: Sequence, shamir_128b_recombine_func
 
     chunks = []
     for chunk_shards in all_chunk_shards:
-        chunk = shamir_128b_recombine_func(shards)
+        chunk = shamir_128b_recombine_func(chunk_shards)
         chunks.append(chunk)
 
     secret = recombine_chunks(chunks, chunk_size=SHAMIR_CHUNK_LENGTH, must_unpad=True)

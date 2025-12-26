@@ -90,7 +90,7 @@ def recombine_secret_from_shards(shards: Sequence) -> bytes:
 
 
 def _split_128b_bytestring_into_shards(secret: bytes, shard_count: int, threshold_count: int) -> list:
-    """Split a bytestring of exactly 128 bits into shards.
+    """Split a bytestring of exactly 128 bits (16 bytes) into shards.
 
     :param secret: bytestring to split
     :param shard_count: number of shards to create
@@ -105,7 +105,7 @@ def _split_128b_bytestring_into_shards(secret: bytes, shard_count: int, threshol
 
 
 def _recombine_128b_shards_into_bytestring(shards: Sequence[tuple]) -> bytes:
-    """Recombine shards of exactly 128 bits into a bytestring.
+    """Recombine shards of exactly 128 bits (16 bytes) into a bytestring.
 
     :param shards: list of (index, shard) tuples
 

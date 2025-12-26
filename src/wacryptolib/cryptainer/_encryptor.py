@@ -25,6 +25,7 @@ from wacryptolib.keygen import (
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
     SUPPORTED_ASYMMETRIC_KEY_ALGOS,
 )
+from wacryptolib.keystore import KeystorePoolBase
 from wacryptolib.shared_secret import split_secret_into_shards
 from wacryptolib.utilities import (
     dump_to_json_bytes,
@@ -44,7 +45,7 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
     SUPPORTED_SYMMETRIC_CIPHER_ALGOS = sorted(set(SUPPORTED_SYMMETRIC_KEY_ALGOS) & set(SUPPORTED_CIPHER_ALGOS))
     SUPPORTED_ASYMMETRIC_CIPHER_ALGOS = sorted(set(SUPPORTED_ASYMMETRIC_KEY_ALGOS) & set(SUPPORTED_CIPHER_ALGOS))
 
-    def __init__(self, logger: logging.Logger, keystore_pool: CryptainerBase) -> None:
+    def __init__(self, logger: logging.Logger, keystore_pool: KeystorePoolBase) -> None:
         self.logger = logger
         self._keystore_pool = keystore_pool
 

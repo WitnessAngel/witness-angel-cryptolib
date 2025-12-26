@@ -33,6 +33,22 @@ def _get_cipher_algo_conf(cipher_algo):
     return cipher_algo_conf
 
 
+def _gather_bytes_as_blocks(first_data: bytes, second_data: bytes, block_size: int):
+    """PRIVATE API
+
+    Split the sum of two bytestrings between a non-empty data payload with a size multiple of block_size,
+    and a remainder.
+
+    :return: memory view of formatted data, and bytestring of remainder
+    """
+    assert block_size > 0, block_size
+    full_data = first_data + second_data
+    formatted_length = (len(full_data) // block_size) * block_size
+    formatted_data = memoryview(full_data[0:formatted_length])
+    remainder = full_data[formatted_length:]
+    return formatted_data, remainder
+
+
 def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) -> dict:
     """Encrypt a bytestring with the selected algorithm for the given payload,
     using the provided key dict (which must contain keys/initializers of proper types and lengths).
@@ -300,7 +316,7 @@ class EncryptionNodeBase:
         assert not self._is_finished
         if self.BLOCK_SIZE != 1:
             ##print(">>>>>>>>>> CURRENT REMAINDER WAs", self._remainder)
-            formatted_plaintext, self._remainder = utilities.gather_data_as_blocks(
+            formatted_plaintext, self._remainder = _gather_bytes_as_blocks(
                 self._remainder, plaintext, block_size=self.BLOCK_SIZE
             )
             ##print(">>>>>>>>>> TRANSFORMED", plaintext, "INTO", bytes(formatted_plaintext))

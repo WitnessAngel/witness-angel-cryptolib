@@ -10,7 +10,23 @@ from wacryptolib.cryptainer import SHARED_SECRET_ALGO_MARKER, DEFAULT_DATA_CHUNK
     CryptainerEncryptor, CryptainerDecryptor, CRYPTAINER_TRUSTEE_TYPES
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import KeystorePoolBase
-from wacryptolib.utilities import consume_bytes_as_chunks
+
+
+def _consume_io_byte_chunks(
+    data: Union[bytes, BinaryIO], chunk_size: int
+):
+    if hasattr(data, "read"):
+        # File-like BinaryIO object
+        while True:
+            chunk = data.read(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+        # DO NOT close/delete the file, e.g. it might come from CLI!
+    else:
+        # Object with a len()
+        for i in range(0, len(data), chunk_size):
+            yield data[i : i + chunk_size]  # TODO use memoryview to optimize?
 
 
 def encrypt_payload_and_stream_cryptainer_to_filesystem(
@@ -38,7 +54,7 @@ def encrypt_payload_and_stream_cryptainer_to_filesystem(
         dump_initial_cryptainer=False,
     )
 
-    for chunk in consume_bytes_as_chunks(payload, chunk_size=DEFAULT_DATA_CHUNK_SIZE):
+    for chunk in _consume_io_byte_chunks(payload, chunk_size=DEFAULT_DATA_CHUNK_SIZE):
         encryptor.encrypt_chunk(chunk)
 
     encryptor.finalize()  # Handles the dumping to disk

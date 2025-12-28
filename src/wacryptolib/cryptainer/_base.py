@@ -110,7 +110,7 @@ def get_trustee_proxy(trustee: dict, keystore_pool: KeystorePoolBase):
     """
     assert isinstance(trustee, dict), trustee
 
-    trustee_type = trustee.get("trustee_type")  # Might be None
+    trustee_type = trustee.get("trustee_type")  # Might be None  # FIXME why would it be None ???
 
     if trustee_type == CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE:
         return TrusteeApi(keystore_pool.get_local_keyfactory())

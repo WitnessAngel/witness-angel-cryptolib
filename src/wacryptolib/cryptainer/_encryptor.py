@@ -73,7 +73,7 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
 
     def get_public_key(self, trustee: dict, key_algo: str, keychain_uid: uuid.UUID) -> dict:
         public_key_pem = self._fetch_asymmetric_key_pem_from_trustee(trustee, key_algo=key_algo, keychain_uid=keychain_uid)
-        self.logger.debug("Encrypting symmetric key struct with asymmetric keypair %s/%s", key_algo, keychain_uid)
+        self.logger.debug("Fetching asymmetric keypair %s/%s to encrypt symmetric key struct", key_algo, keychain_uid)
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=key_algo)
         return public_key
 

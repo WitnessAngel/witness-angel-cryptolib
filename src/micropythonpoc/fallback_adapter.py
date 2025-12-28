@@ -92,6 +92,8 @@ def _prevent_passphrase_usage_for_rsa_key():
 
 
 def import_rsa_key_from_pem(key_pem, passphrase=None):
+    import rsa  # Not well supported by micropython, due to pyasn1 code
+
     if passphrase:
         _prevent_passphrase_usage_for_rsa_key()
 
@@ -108,7 +110,7 @@ def import_rsa_key_from_pem(key_pem, passphrase=None):
         return _pkcs1_format_private_key
 
 
-''' NOT IMPLEMENTED YET,
+''' NOT IMPLEMENTED YET - ABORTED!
 def export_rsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
     if passphrase:
         _prevent_passphrase_usage_for_rsa_key()

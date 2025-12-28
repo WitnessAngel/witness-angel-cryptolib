@@ -76,3 +76,6 @@ def _overload_dummy(*args, **kwds):
 
 def overload(fun):
     return _overload_dummy
+
+
+TYPE_CHECKING = False  # Patched

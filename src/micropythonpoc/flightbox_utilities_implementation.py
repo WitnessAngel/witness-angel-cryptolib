@@ -2,12 +2,15 @@ from flightbox import FlightboxUtilitiesBase
 
 import os
 import logging
-import uuid
-import uuid0
 from extjson import dump_to_json_bytes
 from PycryptodomeSecretSharing import Shamir as _Shamir
 from data_utils import do_split_secret_into_shards, split_as_chunks
 from fallback_adapter import encrypt_via_rsa_oaep, encrypt_via_aes_cbc
+
+import time
+import struct
+from uuid import UUID
+
 
 
 AES_BLOCK_SIZE = 16
@@ -21,6 +24,18 @@ def _shamir_128b_split_func(*args, **kwargs):
 def _get_random_bytes(nbytes):
     """Like pycryptodome, we rely on the randomness of the OS!"""
     return os.urandom(nbytes)
+
+
+def _generate_uuid0() -> UUID:  # Adapted from "uuid0" MIT package
+    """Generate a new UUID. If the UNIX timestamp 'ts' is not given, the current time is used"""
+    ts = time.time()
+    tsi = int(ts * 10000)
+    # Pack as an 8-byte uint and drop the first 2 bytes:
+    t_bytes = struct.pack('>Q', tsi)[2:]
+    r_bytes = os.urandom(10)
+
+    return UUID(bytes=t_bytes + r_bytes)
+
 
 
 ## GRABBED FROM CIPHER.PY OF WACTYPTOLIB ##
@@ -75,8 +90,8 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
     def dump_to_json_bytes(self, data):
         return dump_to_json_bytes(data)
 
-    def generate_uuid0(self) -> uuid.UUID:
-        return uuid0.generate()
+    def generate_uuid0(self) -> UUID:
+        return _generate_uuid0()
 
     def split_secret_into_shards(self, secret: bytes, *, shard_count: int, threshold_count: int) -> list:
         return do_split_secret_into_shards(secret, shard_count=shard_count, threshold_count=threshold_count,

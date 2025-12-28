@@ -1,10 +1,12 @@
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger()
+import sys, logging
 
 from flightbox import SHARED_SECRET_ALGO_MARKER, FlightBox
 from flightbox_utilities_implementation import FlightboxUtilitiesImpl, AUTHENTICATOR_TRUSTEE
+
+print("SYSPATHS", sys.path)
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger()
 
 
 TRUSTEE_UID_1 = "5e840838-7532-4b32-ba72-ccd17f7c923a"
@@ -69,6 +71,8 @@ cryptainer, secrets = flightbox.generate_cryptainer_base_and_secrets(
             cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=dict(SOME_METADATA=2726562425242)
         )
 
-print("CRYPTAINER:\n", cryptainer)
+from pprint import pprint
+print("CRYPTAINER:\n")
+pprint(cryptainer, width=120)
 print()
 print("SECRETS:\n", secrets)

@@ -96,7 +96,7 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
 
         _keystore_uid = trustee["keystore_uid"]  # ID of authenticator is identical to that of its keystore
         trustee_data = self._keystore_data[_keystore_uid]
-        public_key_pem = trustee_data["keychain_uid"]
+        public_key_pem = trustee_data[keychain_uid]
         self.logger.debug("Fetching asymmetric public key %s/%s to encrypt symmetric key struct", key_algo, keychain_uid)
         public_key = import_rsa_key_from_pem(public_key_pem, passphrase=None)
         return public_key

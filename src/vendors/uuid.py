@@ -1,9 +1,9 @@
 import os
-import ubinascii
+import binascii
 
 
 class UUID:
-    def __init__(self, hex, bytes, bytes_le, fields, int, version):
+    def __init__(self, hex=None, bytes=None, bytes_le=None, fields=None, int=None, version=None):
         assert not any([hex, bytes_le, fields, int, version])  # Micropython limitation
         if len(bytes) != 16:
             raise ValueError('bytes arg must be 16 bytes long')
@@ -11,7 +11,7 @@ class UUID:
 
     @property
     def hex(self):
-        return ubinascii.hexlify(self._bytes).decode()
+        return binascii.hexlify(self._bytes).decode()
 
     def __str__(self):
         h = self.hex

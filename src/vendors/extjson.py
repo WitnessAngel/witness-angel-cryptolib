@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import binascii
-import decimal
 import datetime
 import json
 import math
+import sys
+
 import uuid
 from typing import (
     Any,
@@ -17,10 +18,19 @@ from typing import (
     Union,
 )
 
+try:
+    from decimal import Decimal
+except ImportError:
+    class _FakeDecimal: pass
+    Decimal = _FakeDecimal
+
 
 _INT32_MAX = 2**31
 
 UTF8_ENCODING = "utf8"
+
+IS_MICROPYTHON = (sys.implementation.name == "micropython")
+
 
 # Only these two binary subtypes are supported
 BINARY_SUBTYPE = 0
@@ -32,8 +42,9 @@ def dump_to_json_str(data, **extra_options):
     Dump a data tree to a json representation as string.
     Supports advanced types like bytes, uuids, dates...
     """
-    sort_keys = extra_options.pop("sort_keys", True)
-    json_str = dumps(data, sort_keys=sort_keys, **extra_options)
+    if not IS_MICROPYTHON:  # Unsupported by mypy for now
+        extra_options.setdefault("sort_keys", True)
+    json_str = dumps(data, **extra_options)
     return json_str
 
 
@@ -90,6 +101,7 @@ def dumps(obj: Any, *args: Any, canonical=True, **kwargs: Any) -> str:
     Recursive function that handles main ExtendedJSON types.
     """
     ext_obj = convert_to_extjson(obj, canonical=canonical)
+    print("CALLING JSON DUMPS", args, kwargs)
     return json.dumps(ext_obj, *args, **kwargs)
 
 
@@ -203,7 +215,7 @@ def _encode_float(obj: float, canonical: bool) -> Any:
     return obj
 
 
-def _encode_decimal(obj: decimal.decimal, canonical: bool) -> dict:
+def _encode_decimal(obj: Decimal, canonical: bool) -> dict:
     # Always use canonical representation for Decimal numbers
     return {"$numberDecimal": str(obj)}
 
@@ -244,7 +256,7 @@ _ENCODERS: dict[Type, Callable[[Any, bool], Any]] = {
     uuid.UUID: _encode_uuid,
     datetime.datetime: _encode_datetime,
     float: _encode_float,
-    decimal.Decimal: _encode_decimal,
+    Decimal: _encode_decimal,
     int: _encode_int,
     str: _encode_noop,
     type(None): _encode_noop,
@@ -318,11 +330,11 @@ def _parse_canonical_double(doc: Any) -> float:
     return float(d_str)
 
 
-def _parse_canonical_decimal(doc: Any) -> decimal.Decimal:
+def _parse_canonical_decimal(doc: Any) -> Decimal:
     d_str = doc["$numberDecimal"]
     if not isinstance(d_str, str):
         raise TypeError(f"$numberDecimal must be string: {doc}")
-    return decimal.Decimal(d_str)
+    return Decimal(d_str)
 
 
 def _parse_legacy_uuid(doc: Any) -> Union[bytes, uuid.UUID]:

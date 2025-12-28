@@ -55,15 +55,20 @@ class Asn1Type(Asn1Item):
 
         readOnly.update(kwargs)
 
-        self.__dict__.update(readOnly)
+        self._readOnly = {}
+
+        print(">>>DICT", self.__dict__, readOnly)
+        for k, v in readOnly.items():
+            setattr(self, k, v)
+            ## READONLY ! self.__dict__.update(readOnly)
 
         self._readOnly = readOnly
 
     def __setattr__(self, name, value):
         if name[0] != '_' and name in self._readOnly:
             raise error.PyAsn1Error('read-only instance attribute "%s"' % name)
-
-        self.__dict__[name] = value
+        super().__setattr__(name, value)
+        ## REDAONLY ! self.__dict__[name] = value
 
     def __str__(self):
         return self.prettyPrint()

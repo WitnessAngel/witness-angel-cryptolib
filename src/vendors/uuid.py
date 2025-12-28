@@ -3,7 +3,8 @@ import ubinascii
 
 
 class UUID:
-    def __init__(self, bytes):
+    def __init__(self, hex, bytes, bytes_le, fields, int, version):
+        assert not any([hex, bytes_le, fields, int, version])  # Micropython limitation
         if len(bytes) != 16:
             raise ValueError('bytes arg must be 16 bytes long')
         self._bytes = bytes

@@ -7,7 +7,7 @@ import uuid0
 from extjson import dump_to_json_bytes
 from PycryptodomeSecretSharing import Shamir as _Shamir
 from data_utils import do_split_secret_into_shards, split_as_chunks
-from fallback_adapter import encrypt_via_rsa_oaep, encrypt_via_aes_cbc, import_rsa_key_from_pem
+from fallback_adapter import encrypt_via_rsa_oaep, encrypt_via_aes_cbc
 
 
 AES_BLOCK_SIZE = 16
@@ -96,9 +96,13 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
 
         _keystore_uid = trustee["keystore_uid"]  # ID of authenticator is identical to that of its keystore
         trustee_data = self._keystore_data[_keystore_uid]
-        public_key_pem = trustee_data[keychain_uid]
+        public_key_parameters = trustee_data[keychain_uid]
         self.logger.debug("Fetching asymmetric public key %s/%s to encrypt symmetric key struct", key_algo, keychain_uid)
-        public_key = import_rsa_key_from_pem(public_key_pem, passphrase=None)
+        ### public_key = import_rsa_key_from_pem(public_key_pem, passphrase=None)
+
+        import pkcs1
+        public_key = pkcs1.keys.RsaPublicKey(public_key_parameters["n"], public_key_parameters['e'])
+
         return public_key
 
     def encrypt_bytestring(self, plaintext: bytes, *, cipher_algo: str, key_dict: dict) -> dict:  # FIXME

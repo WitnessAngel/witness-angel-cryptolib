@@ -75,7 +75,7 @@ class UnsupportedSubstrateError(PyAsn1Error):
     """Unsupported substrate type to parse as ASN.1 data."""
 
 
-class PyAsn1UnicodeError(PyAsn1Error, UnicodeError):
+class PyAsn1UnicodeError(PyAsn1Error, ):   ###"UnicodeError):
     """Unicode text processing error
 
     The `PyAsn1UnicodeError` exception is a base class for errors relating to
@@ -90,7 +90,7 @@ class PyAsn1UnicodeError(PyAsn1Error, UnicodeError):
         PyAsn1Error.__init__(self, message)
 
 
-class PyAsn1UnicodeDecodeError(PyAsn1UnicodeError, UnicodeDecodeError):
+class PyAsn1UnicodeDecodeError(PyAsn1UnicodeError, ):  ###UnicodeDecodeError):
     """Unicode text decoding error
 
     The `PyAsn1UnicodeDecodeError` exception represents a failure to
@@ -102,7 +102,7 @@ class PyAsn1UnicodeDecodeError(PyAsn1UnicodeError, UnicodeDecodeError):
     """
 
 
-class PyAsn1UnicodeEncodeError(PyAsn1UnicodeError, UnicodeEncodeError):
+class PyAsn1UnicodeEncodeError(PyAsn1UnicodeError, ):  ## UnicodeEncodeError):
     """Unicode text encoding error
 
     The `PyAsn1UnicodeEncodeError` exception represents a failure to

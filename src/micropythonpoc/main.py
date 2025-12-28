@@ -2,16 +2,28 @@ import sys, logging
 print("SYSPATHS", sys.path)
 
 ## MONKEY PATCHING
-import typing
-typing.TypeVar = lambda *args, **kwargs: None
-typing.TYPE_CHECKING = False
-import hmac
-def _compare_digest(a, b) : return a == b  # No timing-attack protection
-hmac.compare_digest = _compare_digest
-import random
-random.SystemRandom = lambda *args, **kwargs: random  # FIXME THIS IS PSEUDORANDOM!!
-random.Random = lambda *args, **kwargs: random
-sys.modules["textwrap"] = dict(_msg="WRONGMODULEFAKED")
+IS_MICROPYTHON = (sys.implementation.name == "micropython")
+
+if IS_MICROPYTHON:
+    import typing
+    typing.TypeVar = lambda *args, **kwargs: None
+    typing.TYPE_CHECKING = False
+
+    import hmac
+    def _compare_digest(a, b) : return a == b  # No timing-attack protection
+    hmac.compare_digest = _compare_digest
+
+    import random
+    random.SystemRandom = lambda *args, **kwargs: random  # FIXME THIS IS PSEUDORANDOM!!
+    random.Random = lambda *args, **kwargs: random
+
+    sys.modules["textwrap"] = dict(_msg="WRONGMODULEFAKED")
+
+    import threading
+    class _DummyLock:
+        # DUMMY LOCK, TO PLEASE RSA PACKAGE
+        pass
+    threading.Lock = _DummyLock
 ###########
 
 from flightbox import SHARED_SECRET_ALGO_MARKER, FlightBox
@@ -60,7 +72,7 @@ SIMPLE_CRYPTOCONF = dict(
 )
 
 
-_public_key_pem_from_wacryptolib = """-----BEGIN PUBLIC KEY-----
+____public_key_pem_from_wacryptolib = """-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkvHRJ3KYCiNsjFGBQOJT
 Rbx4W/WJ7f5N8Jn+yKW08y/9ERMkcM9imqRDVr5oYMTvKxyxVSsWj39ClhOojTGG
 ZdlT6vgwtKgi7yHniUED6yxaABs60kIMF6W2CfS0RCtZY5LjVQpPhxmX3fy1g6n+
@@ -70,9 +82,13 @@ dSnSbxX8IwJJ7kQEUi3O/kO7bGPTmcWbRAuYbH/6rFkMafVcgeaLBZG6h3CGR6nH
 IwIDAQAB
 -----END PUBLIC KEY-----"""
 
+
+n = 18550036936074777576745860692222929823309849339732419768654179699291152139495559922834976621735536311921517873134983260454935762117010713780022370715702782337501169317789855286485787891194144971453027165749472806656521816427794317257818177125547356250896811776665398428028265103962501107999670516354789549043186362295800968855400059275817415069429507150398646058973164280273097890283834820569305921523093272920020136655934918036481615681408018554452207478475696785278942743360661011323663161746160689975622147380453637216164274299383628735318891050050778834528526183812215083531500158856576001965730296948614878578467
+e = 65537
+
 KEYSTORE_DATA = {
     TRUSTEE_UID_1: {
-        KEYCHAIN_UID_1: _public_key_pem_from_wacryptolib
+        KEYCHAIN_UID_1: dict(n=n, e=e)
     }
 }
 
@@ -83,7 +99,12 @@ cryptainer, secrets = flightbox.generate_cryptainer_base_and_secrets(
             cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=dict(SOME_METADATA=2726562425242)
         )
 
-from pprint import pprint
+try:
+    from pprint import pprint
+except ImportError:
+    def pprint(x, *args, **kwargs):
+        print(x)
+
 print("CRYPTAINER:\n")
 pprint(cryptainer, width=120)
 print()

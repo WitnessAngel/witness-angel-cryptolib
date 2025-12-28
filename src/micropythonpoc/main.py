@@ -1,9 +1,21 @@
 import sys, logging
+print("SYSPATHS", sys.path)
+
+## MONKEY PATCHING
+import typing
+typing.TypeVar = lambda *args, **kwargs: None
+typing.TYPE_CHECKING = False
+import hmac
+def _compare_digest(a, b) : return a == b  # No timing-attack protection
+hmac.compare_digest = _compare_digest
+import random
+random.SystemRandom = lambda *args, **kwargs: random  # FIXME THIS IS PSEUDORANDOM!!
+random.Random = lambda *args, **kwargs: random
+sys.modules["textwrap"] = dict(_msg="WRONGMODULEFAKED")
+###########
 
 from flightbox import SHARED_SECRET_ALGO_MARKER, FlightBox
 from flightbox_utilities_implementation import FlightboxUtilitiesImpl, AUTHENTICATOR_TRUSTEE
-
-print("SYSPATHS", sys.path)
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()

@@ -24,14 +24,14 @@ def test_jsonrpc_extended_json_calls():
     def callback1(request):
         request_message = json.loads(request.body)
         assert request_message["params"] == [
-            {"$numberInt": "42"},
+            42,  # RELAXED format: plain integer instead of {"$numberInt": "42"}
             {"$binary": {"base64": b64encode(b"xyz").decode("ascii"), "subType": "00"}},
-            {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "04"}},
+            {"$uuid": "450fc293b70242d3ae65e9cc58e5a62a"},  # RELAXED format: UUID as hex string
         ]
         return (
             200,
             {},
-            '{"jsonrpc": "2.0", "result": {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "04"}}, "id": 1}',
+            '{"jsonrpc": "2.0", "result": {"$uuid": "450fc293b70242d3ae65e9cc58e5a62a"}, "id": 1}',
         )
 
     responses.add_callback(responses.POST, "http://mock/xmlrpc", content_type="application/json", callback=callback1)
@@ -42,9 +42,9 @@ def test_jsonrpc_extended_json_calls():
     def callback2(request):
         request_message = json.loads(request.body)
         assert request_message["params"] == {
-            "x": {"$numberInt": "42"},
+            "x": 42,  # RELAXED format: plain integer
             "y": {"$binary": {"base64": "eHl6", "subType": "00"}},
-            "z": {"$binary": {"base64": "RQ/Ck7cCQtOuZenMWOWmKg==", "subType": "04"}},
+            "z": {"$uuid": "450fc293b70242d3ae65e9cc58e5a62a"},  # RELAXED format: UUID as hex string
         }
         return (200, {}, '{"jsonrpc": "2.0", "result": {"$binary": {"base64": "eHl6", "subType": "00"}}, "id": 1}')
 

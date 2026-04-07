@@ -294,7 +294,8 @@ def test_json_aggregator(tmp_path):
             assert filename.endswith(".json")
 
         data = tar_file.extractfile(filenames[0]).read()
-        assert data == b'[{"pulse": {"$numberInt": "42"}}, {"timing": true}, {"abc": {"$numberDouble": "2.2"}}]'
+        # RELAXED format uses plain numbers instead of $numberInt/$numberDouble
+        assert data == b'[{"pulse": 42}, {"timing": true}, {"abc": 2.2}]'
 
         data = tar_file.extractfile(filenames[1]).read()
         assert data == b'[{"x": "abc"}]'

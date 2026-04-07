@@ -882,7 +882,8 @@ def test_cli_foreign_keystore_management(tmp_path):
     result = runner.invoke(cli, base_args + ["foreign-keystore", "list", "--format", "json"], catch_exceptions=False)
     assert result.exit_code == 0
     assert str(new_keystore_uid) not in result.stdout  # Output uses ExtendedJson encoding
-    assert ('"$numberInt": "%d"' % keypairs_count) in result.stdout
+    # RELAXED format uses plain integers instead of {"$numberInt": "N"}
+    assert (': %d' % keypairs_count) in result.stdout  # Plain integer in RELAXED format
     data_tree = load_from_json_str(result.stdout)  # Test loading of output
     assert isinstance(data_tree, list)
     assert len(data_tree) == 1

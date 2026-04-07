@@ -21,10 +21,14 @@ def validate_data_against_schema(data_tree, schema: Schema):
         raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
 
 
-def get_validation_micro_schemas(extended_json_format=False):  # FIXME push to docs?
+def get_validation_micro_schemas(extended_json_format=False):
     """
     Get python-schema compatible microschemas for basic types,
     for their python or extended-json representations.
+
+    :param extended_json_format: If True, schemas validate extended JSON format (RELAXED mode).
+                                  Both canonical ($binary) and relaxed ($uuid) formats are accepted
+                                  for compatibility, but RELAXED is the default and expected format.
     """
     import uuid
 
@@ -39,13 +43,25 @@ def get_validation_micro_schemas(extended_json_format=False):  # FIXME push to d
             str, schema.Regex(r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$")
         )
 
-        micro_schema_uid = {
-            "$binary": {"base64": _micro_schema_base64, "subType": schema.Or("03", "04")}
-        }  # Type 04 is the future!
+        # RELAXED mode (default) uses $uuid format with hex string (32 chars without dashes)
+        _micro_schema_uuid_hex = schema.And(str, schema.Regex(r"^[0-9a-fA-F]{32}$"))
+
+        # Support both RELAXED ($uuid) and CANONICAL ($binary) formats for UUIDs
+        # RELAXED is the default and expected format
+        micro_schema_uid = schema.Or(
+            {"$uuid": _micro_schema_uuid_hex},  # RELAXED format (default)
+            {"$binary": {"base64": _micro_schema_base64, "subType": schema.Or("03", "04")}},  # CANONICAL format
+        )
 
         micro_schema_binary = {"$binary": {"base64": _micro_schema_base64, "subType": "00"}}
 
-        micro_schema_int = schema.Or({"$numberInt": _micro_schema_integer}, {"$numberLong": _micro_schema_integer})
+        # Support both RELAXED (plain int) and CANONICAL (wrapped) formats for integers
+        # RELAXED is the default and expected format
+        micro_schema_int = schema.Or(
+            int,  # RELAXED format (default) - plain integers
+            {"$numberInt": _micro_schema_integer},  # CANONICAL format
+            {"$numberLong": _micro_schema_integer},  # CANONICAL format
+        )
 
     class MicroSchemas:
         schema_uid = micro_schema_uid

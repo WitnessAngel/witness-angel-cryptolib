@@ -22,7 +22,9 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
 
     :param for_cryptainer: true to add "after processing" fields of cryptainer/cryptosig
     :param for_cryptosig: true to limit fields to those of media signatures (no ciphers are configured)
-    :param extended_json_format: true if the schema is formatted as extended-json format (with $binary etc.)
+    :param extended_json_format: true if the schema validates extended-json format (with $binary, $uuid, etc.)
+                                 The expected format is RELAXED mode (default), but both RELAXED and CANONICAL
+                                 formats are accepted for compatibility.
 
     :return: a schema.
     """
@@ -254,8 +256,9 @@ def check_sigconf_sanity(cryptoconf: dict, jsonschema_mode=False):
 def check_sigainer_sanity(cryptoconf: dict, jsonschema_mode=False):
     """Validate the format of a plaintext signature file.
 
-    :param jsonschema_mode: If True, the sigainer must have been loaded as raw json
-           (with $binary, $numberInt and such) and will be checked using a jsonschema validator.
+    :param jsonschema_mode: If True, the sigainer must be in extended JSON format
+           (with $binary, $uuid, etc.) and will be checked using a jsonschema validator.
+           Expected format is RELAXED mode (the default), but CANONICAL is also supported.
     """
 
     schema = SIGAINER_SCHEMA_JSON if jsonschema_mode else SIGAINER_SCHEMA_PYTHON

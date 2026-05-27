@@ -2,6 +2,17 @@
 Development
 =============
 
+* **BREAKING**: Extended JSON format now defaults to RELAXED mode instead of CANONICAL mode
+  - UUIDs are now serialized as `{"$uuid": "hex"}` instead of `{"$binary": {"base64": "...", "subType": "04"}}`
+  - Integers are now plain JSON numbers instead of `{"$numberInt": "42"}`
+  - This makes JSON output more human-readable and compact
+  - Both formats are still accepted for backward compatibility
+  - See EXTJSON_RELAXED_FORMAT.md for details
+* Update validation schemas to accept both RELAXED and CANONICAL extjson formats
+* Add comprehensive tests for RELAXED format support
+* Update documentation to clarify RELAXED as the default format
+
+
 Version 0.12
 ==================
 

@@ -65,7 +65,10 @@ def run_git(repo: Path, *args: str) -> str:
 
 
 def find_repos(workspace: Path) -> list[Path]:
-    return sorted(d for d in workspace.iterdir() if d.is_dir() and (d / ".git").is_dir())
+    return sorted(
+        d for d in workspace.iterdir()
+        if d.is_dir() and d.name.startswith("witness-") and (d / ".git").is_dir()
+    )
 
 
 def pick_latest_branch(repo: Path) -> str | None:
@@ -207,22 +210,31 @@ def main() -> int:
 
             compute_hours(commits)
 
-            written = defaultdict(int)
+            per_year: dict = defaultdict(list)
             for c in commits:
-                year = c.timestamp.year
-                if year in sheets:
-                    sheets[year].append([
+                if c.timestamp.year in sheets:
+                    per_year[c.timestamp.year].append(c)
+
+            for year in YEARS:
+                year_commits = per_year.get(year, [])
+                if not year_commits:
+                    continue
+                sh = sheets[year]
+                if sh.max_row > 1:
+                    sh.append([])  # blank separator between repos
+                sh.append([f"=== {repo.name} ===", "", "", "", ""])
+                for c in year_commits:
+                    sh.append([
                         repo.name,
                         c.sha,
                         c.subject,
                         c.email,
                         round(c.hours, 3),
                     ])
-                    written[year] += 1
             log.info(
                 "[%s] wrote rows: %s",
                 repo.name,
-                ", ".join(f"{y}={written[y]}" for y in YEARS),
+                ", ".join(f"{y}={len(per_year.get(y, []))}" for y in YEARS),
             )
         except Exception as e:
             log.warning("[%s] failed: %s", repo.name, e)

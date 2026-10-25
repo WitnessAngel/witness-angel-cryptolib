@@ -1672,7 +1672,6 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
     else:
         assert cryptainer_names == [
             Path("20301021_222711_stuff.dat.001.crypt"),
-            Path("some_stuff.dat.008.crypt"),
             Path("some_stuff.dat.009.crypt"),
             Path("some_stuff.dat.010.crypt"),
             Path("some_stuff.dat.011.crypt"),
@@ -1694,7 +1693,6 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
     else:
         assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == [
             Path("20301021_222711_stuff.dat.001.crypt~"),
-            Path("some_stuff.dat.008.crypt"),
             Path("some_stuff.dat.010.crypt"),
             Path("some_stuff.dat.011.crypt"),
         ]

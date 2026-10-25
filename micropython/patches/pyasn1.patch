@@ -1,0 +1,55 @@
+--- a/pyasn1/error.py
++++ b/pyasn1/error.py
+@@ -75,7 +75,7 @@
+     """Unsupported substrate type to parse as ASN.1 data."""
+ 
+ 
+-class PyAsn1UnicodeError(PyAsn1Error, UnicodeError):
++class PyAsn1UnicodeError(PyAsn1Error, ):   ###"UnicodeError):
+     """Unicode text processing error
+ 
+     The `PyAsn1UnicodeError` exception is a base class for errors relating to
+@@ -90,7 +90,7 @@
+         PyAsn1Error.__init__(self, message)
+ 
+ 
+-class PyAsn1UnicodeDecodeError(PyAsn1UnicodeError, UnicodeDecodeError):
++class PyAsn1UnicodeDecodeError(PyAsn1UnicodeError, ):  ###UnicodeDecodeError):
+     """Unicode text decoding error
+ 
+     The `PyAsn1UnicodeDecodeError` exception represents a failure to
+@@ -102,7 +102,7 @@
+     """
+ 
+ 
+-class PyAsn1UnicodeEncodeError(PyAsn1UnicodeError, UnicodeEncodeError):
++class PyAsn1UnicodeEncodeError(PyAsn1UnicodeError, ):  ## UnicodeEncodeError):
+     """Unicode text encoding error
+ 
+     The `PyAsn1UnicodeEncodeError` exception represents a failure to
+--- a/pyasn1/type/base.py
++++ b/pyasn1/type/base.py
+@@ -55,15 +55,20 @@
+ 
+         readOnly.update(kwargs)
+ 
+-        self.__dict__.update(readOnly)
++        self._readOnly = {}
++
++        print(">>>DICT", self.__dict__, readOnly)
++        for k, v in readOnly.items():
++            setattr(self, k, v)
++            ## READONLY ! self.__dict__.update(readOnly)
+ 
+         self._readOnly = readOnly
+ 
+     def __setattr__(self, name, value):
+         if name[0] != '_' and name in self._readOnly:
+             raise error.PyAsn1Error('read-only instance attribute "%s"' % name)
+-
+-        self.__dict__[name] = value
++        super().__setattr__(name, value)
++        ## REDAONLY ! self.__dict__[name] = value
+ 
+     def __str__(self):
+         return self.prettyPrint()

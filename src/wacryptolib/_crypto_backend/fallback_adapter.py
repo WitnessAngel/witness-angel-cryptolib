@@ -126,8 +126,10 @@ def encrypt_via_rsa_oaep(plaintext_chunks: list[bytes], public_key) -> list[byte
 
 
 def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[bytes]:
+    # pkcs1's decrypt() forgets to forward hash_class to mgf (SHA1 is then used), so we bind it ourselves
+    mgf = lambda seed, length, hash_class=hashlib.sha512: pkcs1.mgf.mgf1(seed, length, hash_class=hash_class)
     decrypter = lambda chunk: pkcs1.rsaes_oaep.decrypt(private_key, message=chunk,
-                                         label=b'', hash_class=hashlib.sha512)
+                                         label=b'', hash_class=hashlib.sha512, mgf=mgf)
                      # TODO: ARGUMENTS mgf=mgf.mgf1, seed=None, rnd=default_crypto_random))
     cleartext_chunks = [decrypter(chunk) for chunk in ciphertext_chunks]
     return cleartext_chunks

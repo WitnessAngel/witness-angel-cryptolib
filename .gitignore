@@ -63,6 +63,8 @@ develop-eggs/
 downloads/
 eggs/
 lib/
+# Vendored micropython dependencies
+!micropython/lib/
 lib64/
 parts/
 sdist/

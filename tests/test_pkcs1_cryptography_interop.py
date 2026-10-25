@@ -2,13 +2,16 @@ import hashlib
 
 import pytest
 
-pkcs1 = pytest.importorskip("pkcs1")  # Vendored in src/vendors/, for the pure-python fallback backend
+pkcs1 = pytest.importorskip("pkcs1")  # For the pure-python fallback backend
 pytest.importorskip("cryptography")
 
 import pkcs1.keys
+import pkcs1.mgf
 import pkcs1.rsaes_oaep
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
+
+from wacryptolib._crypto_backend import fallback_adapter
 
 
 @pytest.mark.parametrize(
@@ -30,4 +33,9 @@ def test_pkcs1_oaep_interoperability_with_cryptography(hash_class, cryptography_
     assert private_key.decrypt(ciphertext, oaep_padding) == message
 
     ciphertext = private_key.public_key().encrypt(message, oaep_padding)
-    assert pkcs1.rsaes_oaep.decrypt(pkcs1_private_key, message=ciphertext, label=b"", hash_class=hash_class) == message
+    # pkcs1's decrypt() doesn't forward hash_class to mgf, so it must be bound explicitly
+    mgf = lambda seed, length: pkcs1.mgf.mgf1(seed, length, hash_class=hash_class)
+    assert pkcs1.rsaes_oaep.decrypt(pkcs1_private_key, message=ciphertext, label=b"", hash_class=hash_class, mgf=mgf) == message
+
+    if hash_class is hashlib.sha512:
+        assert fallback_adapter.decrypt_via_rsa_oaep([ciphertext], pkcs1_private_key) == [message]

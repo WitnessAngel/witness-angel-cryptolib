@@ -28,6 +28,8 @@ def main():
     subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-deps", "--no-compile",
                            "--target", str(LIB_DIR), *requirements])
     shutil.rmtree(LIB_DIR / "bin", ignore_errors=True)
+    for record in LIB_DIR.glob("*.dist-info/RECORD"):
+        record.unlink()  # Depends on the local interpreter path, and useless here
 
     for patch in sorted((MICROPYTHON_DIR / "patches").glob("*.patch")):
         # Fails loudly if a version bump in poetry.lock broke a patch

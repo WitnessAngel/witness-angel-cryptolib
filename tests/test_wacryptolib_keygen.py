@@ -148,7 +148,7 @@ def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
         )
         _check_is_asymmetric_key_object(private_key)
 
-        error_matcher = "key format is not supported|Invalid DER encoding"
+        error_matcher = "key format is not supported|Invalid DER encoding|Incorrect passphrase|passphrase is required"
 
         with pytest.raises(KeyLoadingError, match=error_matcher):
             load_asymmetric_key_from_pem_bytestring(
@@ -171,3 +171,32 @@ def test_key_algos_mapping_and_isolation():
     # Some encryption algos are symmetric, and use simple keys of random bytes
     asymmetric_key_algos = set(SUPPORTED_CIPHER_ALGOS) - set(SUPPORTED_SYMMETRIC_KEY_ALGOS)
     assert asymmetric_key_algos <= set(SUPPORTED_ASYMMETRIC_KEY_ALGOS)
+
+
+@pytest.mark.parametrize("key_algo", ["ML_KEM_768", "ML_DSA_65"])
+def test_post_quantum_keypair_generation_ignores_classical_parameters(key_algo):
+    # Parameter set is fixed by the algo name, so key_length_bits and curve are simply not forwarded
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, key_length_bits=1024, curve="unexisting_curve")
+    assert keypair["public_key"].startswith(b"-----BEGIN PUBLIC KEY-----")
+    assert keypair["private_key"].startswith(b"-----BEGIN PRIVATE KEY-----")
+    public_key = load_asymmetric_key_from_pem_bytestring(key_pem=keypair["public_key"], key_algo=key_algo)
+    private_key = load_asymmetric_key_from_pem_bytestring(key_pem=keypair["private_key"], key_algo=key_algo)
+    _check_is_asymmetric_key_object(public_key)
+    _check_is_asymmetric_key_object(private_key)
+    assert not public_key.has_private()
+    assert private_key.has_private()
+
+
+def test_post_quantum_key_loading_with_wrong_key_algo():
+    ml_kem_keypair = wacryptolib.keygen.generate_keypair(key_algo="ML_KEM_768")
+    ml_dsa_keypair = wacryptolib.keygen.generate_keypair(key_algo="ML_DSA_65")
+
+    for key_pem in (ml_kem_keypair["public_key"], ml_kem_keypair["private_key"]):
+        with pytest.raises(KeyLoadingError, match="Not an ML-DSA key"):
+            load_asymmetric_key_from_pem_bytestring(key_pem=key_pem, key_algo="ML_DSA_65")
+        with pytest.raises(KeyLoadingError):
+            load_asymmetric_key_from_pem_bytestring(key_pem=key_pem, key_algo="RSA_OAEP")
+
+    for key_pem in (ml_dsa_keypair["public_key"], ml_dsa_keypair["private_key"]):
+        with pytest.raises(KeyLoadingError, match="Not an ML-KEM key"):
+            load_asymmetric_key_from_pem_bytestring(key_pem=key_pem, key_algo="ML_KEM_768")

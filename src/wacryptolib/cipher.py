@@ -464,6 +464,42 @@ class PayloadEncryptionPipeline:
         return dict(plaintext_digests=plaintext_digests, ciphertext_integrity_tags=ciphertext_integrity_tags)
 
 
+def _check_ml_kem_key(key):
+    if not isinstance(key, _crypto_backend.ml_kem_key_class_fetcher()):
+        raise ValueError("Incompatible key type %s for ML-KEM cipher" % type(key))
+
+
+def _encrypt_via_ml_kem_768(plaintext: bytes, key_dict: dict) -> dict:
+    """Encrypt a bytestring with ML-KEM-768 (post-quantum asymmetric algo), as a KEM+DEM
+    construction (HPKE Base mode with AES-256-GCM).
+
+    :param plaintext: the bytes to cipher
+    :param key_dict: dict with PUBLIC ML-KEM key object
+
+    :return: a dict with fields `kem_ciphertext` (key encapsulation) and `ciphertext` (authenticated payload)"""
+    key = key_dict["key"]
+    _check_ml_kem_key(key)
+    kem_ciphertext, ciphertext = _crypto_backend.encrypt_via_ml_kem_768(plaintext, public_key=key)
+    return dict(kem_ciphertext=kem_ciphertext, ciphertext=ciphertext)
+
+
+def _decrypt_via_ml_kem_768(cipherdict: dict, key_dict: dict, verify_integrity_tags: bool = True) -> bytes:
+    """Decrypt a bytestring with ML-KEM-768 (post-quantum asymmetric algo).
+
+    :param cipherdict: dict with fields `kem_ciphertext` and `ciphertext`
+    :param key_dict: dict with PRIVATE ML-KEM key object
+    :param verify_integrity_tags: ignored, the AEAD tag is always verified
+
+    :return: the decrypted bytestring"""
+    key = key_dict["key"]
+    _check_ml_kem_key(key)
+    if not key.has_private():
+        raise ValueError("A private ML-KEM key is required for decryption")
+    return _crypto_backend.decrypt_via_ml_kem_768(
+        cipherdict["kem_ciphertext"], cipherdict["ciphertext"], private_key=key
+    )
+
+
 # This file is part of Witness Angel Cryptolib
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -495,6 +531,12 @@ CIPHER_ALGOS_REGISTRY = dict(
         "decryption_function": _decrypt_via_rsa_oaep,
         "encryption_node_class": None,
         "is_authenticated": False,
+    },
+    ML_KEM_768={
+        "encryption_function": _encrypt_via_ml_kem_768,
+        "decryption_function": _decrypt_via_ml_kem_768,
+        "encryption_node_class": None,
+        "is_authenticated": True,  # The DEM is an AEAD (AES-256-GCM)
     },
 )
 

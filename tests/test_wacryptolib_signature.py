@@ -105,3 +105,38 @@ def test_generic_signature_errors():
         wacryptolib.signature.verify_message_signature(
             public_key=keypair["public_key"], message=message, signature=signature, signature_algo="XPZH"
         )
+
+
+def test_sign_and_verify_with_ml_dsa_key():
+    message = b"Post-quantum hello"
+
+    keypair = wacryptolib.keygen.generate_keypair(key_algo="ML_DSA_65", serialize=False)
+    signature = wacryptolib.signature.sign_message(
+        private_key=keypair["private_key"], message=message, signature_algo="ML_DSA_65"
+    )
+    _common_signature_checks(keypair=keypair, message=message, signature=signature, signature_algo="ML_DSA_65")
+
+    assert len(signature["signature_value"]) == 3309  # ML-DSA-65 signature size
+
+    # Hedged (randomized) signing: same message and timestamp give different signatures
+    with mock.patch("wacryptolib.signature._get_utc_timestamp", return_value=signature["signature_timestamp_utc"]):
+        signature2 = wacryptolib.signature.sign_message(
+            private_key=keypair["private_key"], message=message, signature_algo="ML_DSA_65"
+        )
+    assert signature2["signature_timestamp_utc"] == signature["signature_timestamp_utc"]
+    assert signature2["signature_value"] != signature["signature_value"]
+    wacryptolib.signature.verify_message_signature(
+        public_key=keypair["public_key"], message=message, signature=signature2, signature_algo="ML_DSA_65"
+    )
+
+    # Incompatible key families are rejected
+    for other_key_algo in ("RSA_PSS", "ML_KEM_768"):
+        other_keypair = wacryptolib.keygen.generate_keypair(key_algo=other_key_algo, serialize=False)
+        with pytest.raises(ValueError, match="Incompatible key type"):
+            wacryptolib.signature.sign_message(
+                private_key=other_keypair["private_key"], message=message, signature_algo="ML_DSA_65"
+            )
+        with pytest.raises(ValueError, match="Incompatible key type"):
+            wacryptolib.signature.verify_message_signature(
+                public_key=other_keypair["public_key"], message=message, signature=signature, signature_algo="ML_DSA_65"
+            )

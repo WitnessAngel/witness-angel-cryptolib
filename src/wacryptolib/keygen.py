@@ -154,6 +154,16 @@ def _generate_dsa_keypair_as_objects(key_length_bits: int) -> dict:
     return keypair
 
 
+def _generate_ml_kem_768_keypair_as_objects():
+    public_key, private_key = _crypto_backend.generate_ml_kem_768_keypair()
+    return dict(public_key=public_key, private_key=private_key)
+
+
+def _generate_ml_dsa_65_keypair_as_objects():
+    public_key, private_key = _crypto_backend.generate_ml_dsa_65_keypair()
+    return dict(public_key=public_key, private_key=private_key)
+
+
 def _generate_ecc_keypair_as_objects(curve: str) -> dict:
     """Generate an ECC (public_key, private_key) pair.
 
@@ -209,6 +219,12 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
         "pem_import_function": _crypto_backend.import_rsa_key_from_pem,
         "pem_export_function": _crypto_backend.export_rsa_key_to_pem,
     },
+    ML_KEM_768={  # Post-quantum KEM (FIPS 203), fixed parameter set
+        "generation_function": _generate_ml_kem_768_keypair_as_objects,
+        "generation_extra_parameters": [],
+        "pem_import_function": _crypto_backend.import_ml_kem_key_from_pem,
+        "pem_export_function": _crypto_backend.export_ml_kem_key_to_pem,
+    },
     ## KEYS FOR SIGNATURE ##
     RSA_PSS={  # Same parameters as RSA_OAEP for now
         "generation_function": _generate_rsa_keypair_as_objects,
@@ -227,6 +243,12 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
         "generation_extra_parameters": ["curve"],
         "pem_import_function": _crypto_backend.import_ecc_key_from_pem,
         "pem_export_function": _crypto_backend.export_ecc_key_to_pem,
+    },
+    ML_DSA_65={  # Post-quantum signature (FIPS 204), fixed parameter set
+        "generation_function": _generate_ml_dsa_65_keypair_as_objects,
+        "generation_extra_parameters": [],
+        "pem_import_function": _crypto_backend.import_ml_dsa_key_from_pem,
+        "pem_export_function": _crypto_backend.export_ml_dsa_key_to_pem,
     },
 )
 

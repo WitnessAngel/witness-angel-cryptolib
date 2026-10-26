@@ -403,7 +403,7 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
 
     _private_key_suffix = "_private_key.pem"
     _public_key_suffix = "_public_key.pem"
-    PUBLIC_KEY_FILENAME_REGEX = r"^(?P<keychain_uid>[-0-9a-z]+)_(?P<key_algo>[_a-zA-Z]+)%s$" % _public_key_suffix
+    PUBLIC_KEY_FILENAME_REGEX = r"^(?P<keychain_uid>[-0-9a-z]+)_(?P<key_algo>[_a-zA-Z0-9]+)%s$" % _public_key_suffix
 
     def __init__(self, keys_dir: Path):
         keys_dir = Path(keys_dir).absolute()

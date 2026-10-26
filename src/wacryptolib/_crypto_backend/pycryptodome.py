@@ -506,7 +506,80 @@ def export_ecc_key_to_pem(private_key, passphrase=None):  # FIXME not always pri
     return _export_key_to_pem(private_key, passphrase, use_pkcs8=True)
 
 
+# POST-QUANTUM KEYS (ML-KEM FIPS 203, ML-DSA FIPS 204), IMPORT/EXPORT AND ENCRYPTION #
+
+
+def ml_kem_key_class_fetcher():
+    from Crypto.PublicKey import MLKEM
+
+    return MLKEM.MLKEMKey
+
+
+def ml_dsa_key_class_fetcher():
+    from Crypto.PublicKey import MLDSA
+
+    return MLDSA.MLDSAKey
+
+
+def generate_ml_kem_768_keypair():
+    from Crypto.PublicKey import MLKEM
+
+    private_key = MLKEM.generate(param_set=MLKEM.ParamSet.ML_KEM_768)
+    public_key = private_key.public_key()
+    return public_key, private_key
+
+
+def generate_ml_dsa_65_keypair():
+    from Crypto.PublicKey import MLDSA
+
+    private_key = MLDSA.generate(param_set=MLDSA.ParamSet.ML_DSA_65)
+    public_key = private_key.public_key()
+    return public_key, private_key
+
+
+def import_ml_kem_key_from_pem(*args, **kwargs):
+    from Crypto.PublicKey import MLKEM
+
+    return MLKEM.import_key(*args, **kwargs)
+
+
+def import_ml_dsa_key_from_pem(*args, **kwargs):
+    from Crypto.PublicKey import MLDSA
+
+    return MLDSA.import_key(*args, **kwargs)
+
+
+def _export_pq_key_to_pem(key, passphrase=None):
+    # Pycryptodome defaults to PKCS#8 with PBKDF2WithHMAC-SHA256AndAES256-CBC when a passphrase is given
+    extra_params = dict(passphrase=passphrase) if passphrase else {}
+    return key.export_key(format="PEM", **extra_params)
+
+
+export_ml_kem_key_to_pem = _export_pq_key_to_pem
+export_ml_dsa_key_to_pem = _export_pq_key_to_pem
+
+
+def encrypt_via_ml_kem_768(plaintext: bytes, public_key) -> tuple:
+    """KEM+DEM encryption via HPKE (RFC 9180) in Base mode with AES-256-GCM.
+
+    Returns (kem_ciphertext, ciphertext), the latter including its authentication tag."""
+    from Crypto.Protocol import HPKE
+
+    encryptor = HPKE.new(receiver_key=public_key, aead_id=HPKE.AEAD.AES256_GCM)
+    ciphertext = encryptor.seal(plaintext)
+    return encryptor.enc, ciphertext
+
+
+def decrypt_via_ml_kem_768(kem_ciphertext: bytes, ciphertext: bytes, private_key) -> bytes:
+    from Crypto.Protocol import HPKE
+
+    decryptor = HPKE.new(receiver_key=private_key, enc=kem_ciphertext, aead_id=HPKE.AEAD.AES256_GCM)
+    return decryptor.unseal(ciphertext)  # Raise ValueError if failure
+
+
 # MESSAGE SIGNATURES #
+
+ML_DSA_SIGNATURE_CONTEXT = b"wacryptolib-payload-signature-v1"  # Domain separation, NEVER change this value
 
 
 def sign_with_pss(message, private_key):
@@ -537,3 +610,19 @@ def verify_with_dss(message, signature, public_key):
 
     verifier = DSS.new(public_key, "fips-186-3")
     verifier.verify(message, signature)  # Raise ValueError if failure
+
+
+def sign_with_mldsa(message, private_key):
+    from Crypto.Signature import mldsa
+
+    # We sign the DIGEST bytes in "pure" mode; passing the hash object itself would select HashML-DSA
+    signer = mldsa.new(private_key, context=ML_DSA_SIGNATURE_CONTEXT)
+    signature = signer.sign(message.digest())
+    return signature
+
+
+def verify_with_mldsa(message, signature, public_key):
+    from Crypto.Signature import mldsa
+
+    verifier = mldsa.new(public_key, context=ML_DSA_SIGNATURE_CONTEXT)
+    verifier.verify(message.digest(), signature)  # Raise ValueError if failure

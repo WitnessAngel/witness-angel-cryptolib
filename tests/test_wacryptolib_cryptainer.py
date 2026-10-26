@@ -4,6 +4,7 @@
 
 import copy
 import os
+import shutil
 import random
 import tempfile
 import textwrap
@@ -375,6 +376,65 @@ def SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
     }
 
 
+# Hybrid classical + post-quantum protection: both ML-KEM-768 and RSA-OAEP keys are needed to decrypt
+PQ_HYBRID_CRYPTOCONF = dict(
+    payload_cipher_layers=[
+        dict(
+            payload_cipher_algo="AES_EAX",
+            key_cipher_layers=[
+                dict(key_cipher_algo="ML_KEM_768", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
+                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
+                dict(
+                    key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                    key_shared_secret_threshold=1,
+                    key_shared_secret_shards=[
+                        dict(
+                            key_cipher_layers=[
+                                dict(
+                                    key_cipher_algo="ML_KEM_768",
+                                    key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                                    keychain_uid=ENFORCED_UID1,
+                                )
+                            ]
+                        ),
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                    ],
+                ),
+            ],
+            payload_ciphertext_signatures=[
+                dict(
+                    payload_digest_algo="SHA512",
+                    payload_signature_algo="ML_DSA_65",
+                    payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                )
+            ],
+        )
+    ]
+)
+
+PQ_HYBRID_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
+    "encryption": {
+        "local_keyfactory": (
+            {"trustee_type": "local_keyfactory"},
+            [
+                {"key_algo": "ML_KEM_768", "keychain_uid": keychain_uid},
+                {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
+                {"key_algo": "ML_KEM_768", "keychain_uid": ENFORCED_UID1},
+            ],
+        )
+    },
+    "signature": {
+        "local_keyfactory": (
+            {"trustee_type": "local_keyfactory"},
+            [{"key_algo": "ML_DSA_65", "keychain_uid": keychain_uid}],
+        )
+    },
+}
+
 COMPLEX_SHAMIR_CRYPTOCONF = dict(
     payload_plaintext_signatures=[
         dict(
@@ -698,6 +758,7 @@ def test_is_cryptainer_cryptoconf_streamable():
         (SIGNATURELESS_CRYPTOCONF, SIGNATURELESS_CRYPTAINER_TRUSTEE_DEPENDENCIES),
         (SIMPLE_CRYPTOCONF, SIMPLE_CRYPTAINER_TRUSTEE_DEPENDENCIES),
         (COMPLEX_CRYPTOCONF, COMPLEX_CRYPTAINER_TRUSTEE_DEPENDENCIES),
+        (PQ_HYBRID_CRYPTOCONF, PQ_HYBRID_CRYPTAINER_TRUSTEE_DEPENDENCIES),
     ],
 )
 # with local keyfactory
@@ -2107,7 +2168,8 @@ def test_create_cryptainer_encryption_stream(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF]
+    "cryptoconf",
+    [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF, PQ_HYBRID_CRYPTOCONF],
 )
 def test_cryptoconf_validation_success(cryptoconf):
     check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
@@ -2197,7 +2259,8 @@ def test_cryptoconf_validation_error_via_json_schema(corrupted_conf):
 
 
 @pytest.mark.parametrize(
-    "cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF]
+    "cryptoconf",
+    [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF, PQ_HYBRID_CRYPTOCONF],
 )
 def test_cryptainer_validation_success(cryptoconf):
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None)
@@ -2543,3 +2606,72 @@ def test_save_and_load_relaxed_extjson_cryptainer(tmp_path):
     assert not operation_report.has_errors()
 
 
+PQ_FIXTURES_DIR = Path(__file__).parent / "fixtures" / "post_quantum"
+PQ_FIXTURE_KEYCHAIN_UID = UUID("7d1b9c2e-5a4f-4e3d-8b6a-1f2e3d4c5b6a")
+PQ_FIXTURE_PAYLOAD = b"Witness Angel post-quantum fixture payload"
+
+
+def _build_pq_hybrid_cryptainer(keystore_pool):
+    cryptoconf = _get_enriched_cryptoconf(PQ_HYBRID_CRYPTOCONF, keychain_uid=PQ_FIXTURE_KEYCHAIN_UID)
+    return encrypt_payload_into_cryptainer(
+        payload=PQ_FIXTURE_PAYLOAD, cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
+    )
+
+
+@pytest.mark.parametrize("removed_key_algo", ["ML_KEM_768", "RSA_OAEP"])
+def test_pq_hybrid_cryptainer_decryption_with_missing_private_key(removed_key_algo):
+    keystore_pool = InMemoryKeystorePool()
+    cryptainer = _build_pq_hybrid_cryptainer(keystore_pool)
+
+    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+    assert result_payload == PQ_FIXTURE_PAYLOAD
+    assert not operation_report.has_errors()
+
+    # Removing EITHER private key of the hybrid stack breaks decryption
+    local_keystore = keystore_pool.get_local_keyfactory()
+    del local_keystore._cached_keypairs[(PQ_FIXTURE_KEYCHAIN_UID, removed_key_algo)]["private_key"]
+
+    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+    assert result_payload is None
+    assert operation_report.has_errors()
+    error_entries = operation_report.get_error_entries()
+    assert any(entry["entry_type"] == DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR for entry in error_entries)
+    assert any(removed_key_algo in entry["entry_message"] for entry in error_entries)
+
+
+def test_pq_hybrid_cryptainer_with_corrupted_ml_dsa_signature():
+    keystore_pool = InMemoryKeystorePool()
+    cryptainer = _build_pq_hybrid_cryptainer(keystore_pool)
+
+    signature_conf = cryptainer["payload_cipher_layers"][0]["payload_ciphertext_signatures"][0]
+    assert signature_conf["payload_signature_algo"] == "ML_DSA_65"
+    assert len(signature_conf["payload_signature_struct"]["signature_value"]) == 3309
+    signature_conf["payload_signature_struct"]["signature_value"] = get_random_bytes(3309)
+
+    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+    assert result_payload == PQ_FIXTURE_PAYLOAD  # Payload still returned, signature failure is non-fatal
+
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.SIGNATURE_ERROR,
+        entry_criticity=DecryptionErrorCriticity.WARNING,  # Signature failures are non-fatal
+        entry_msg_match="Failed signature verification ML_DSA_65",
+        exception_class=SignatureVerificationError,
+    )
+    assert operation_report.get_error_count() == 1
+
+
+def test_pq_hybrid_fixture_cryptainer_decryption(tmp_path):
+    """Wire-format compatibility check: a cryptainer and keys committed in the repository must stay decryptable
+    (regenerate with scripts/generate_post_quantum_fixtures.py if the cryptainer format itself changes)."""
+    keystore_pool_dir = tmp_path / "keystore_pool"
+    shutil.copytree(PQ_FIXTURES_DIR / "keystore_pool", keystore_pool_dir)
+    keystore_pool = FilesystemKeystorePool(keystore_pool_dir)
+
+    cryptainer = load_cryptainer_from_filesystem(PQ_FIXTURES_DIR / "pq_hybrid_cryptainer.crypt")
+    check_cryptainer_sanity(cryptainer)
+    assert cryptainer["keychain_uid"] == PQ_FIXTURE_KEYCHAIN_UID
+
+    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+    assert not operation_report.get_error_entries()
+    assert result_payload == PQ_FIXTURE_PAYLOAD

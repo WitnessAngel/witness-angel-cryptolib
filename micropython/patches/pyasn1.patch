@@ -29,14 +29,13 @@
      The `PyAsn1UnicodeEncodeError` exception represents a failure to
 --- a/pyasn1/type/base.py
 +++ b/pyasn1/type/base.py
-@@ -55,15 +55,20 @@
+@@ -55,15 +55,19 @@
  
          readOnly.update(kwargs)
  
 -        self.__dict__.update(readOnly)
 +        self._readOnly = {}
 +
-+        print(">>>DICT", self.__dict__, readOnly)
 +        for k, v in readOnly.items():
 +            setattr(self, k, v)
 +            ## READONLY ! self.__dict__.update(readOnly)

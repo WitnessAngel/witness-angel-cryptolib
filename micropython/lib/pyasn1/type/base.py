@@ -57,7 +57,6 @@ class Asn1Type(Asn1Item):
 
         self._readOnly = {}
 
-        print(">>>DICT", self.__dict__, readOnly)
         for k, v in readOnly.items():
             setattr(self, k, v)
             ## READONLY ! self.__dict__.update(readOnly)

@@ -66,6 +66,18 @@ __all__ = [
     "verify_with_pss",
     "sign_with_dss",
     "verify_with_dss",
+    "ml_kem_key_class_fetcher",
+    "ml_dsa_key_class_fetcher",
+    "generate_ml_kem_768_keypair",
+    "generate_ml_dsa_65_keypair",
+    "import_ml_kem_key_from_pem",
+    "import_ml_dsa_key_from_pem",
+    "export_ml_kem_key_to_pem",
+    "export_ml_dsa_key_to_pem",
+    "encrypt_via_ml_kem_768",
+    "decrypt_via_ml_kem_768",
+    "sign_with_mldsa",
+    "verify_with_mldsa",
 ]
 
 
@@ -745,3 +757,28 @@ def export_ecc_key_to_pem(private_key, passphrase=None):
         encode_private_pkcs8=_encode_nist_ecc_private_key_to_pkcs8,
         encode_spki=lambda key: key.to_der(),
     )
+
+
+# POST-QUANTUM KEYS (ML-KEM FIPS 203, ML-DSA FIPS 204), ONLY IMPLEMENTED BY PYCRYPTODOME #
+
+
+def _build_post_quantum_stub(name, operation):
+    def _post_quantum_stub(*args, **kwargs):
+        raise _requires_pycryptodome(operation)
+
+    _post_quantum_stub.__name__ = name
+    return _post_quantum_stub
+
+
+ml_kem_key_class_fetcher = _build_post_quantum_stub("ml_kem_key_class_fetcher", "ML-KEM")
+ml_dsa_key_class_fetcher = _build_post_quantum_stub("ml_dsa_key_class_fetcher", "ML-DSA")
+generate_ml_kem_768_keypair = _build_post_quantum_stub("generate_ml_kem_768_keypair", "ML-KEM")
+generate_ml_dsa_65_keypair = _build_post_quantum_stub("generate_ml_dsa_65_keypair", "ML-DSA")
+import_ml_kem_key_from_pem = _build_post_quantum_stub("import_ml_kem_key_from_pem", "ML-KEM")
+import_ml_dsa_key_from_pem = _build_post_quantum_stub("import_ml_dsa_key_from_pem", "ML-DSA")
+export_ml_kem_key_to_pem = _build_post_quantum_stub("export_ml_kem_key_to_pem", "ML-KEM")
+export_ml_dsa_key_to_pem = _build_post_quantum_stub("export_ml_dsa_key_to_pem", "ML-DSA")
+encrypt_via_ml_kem_768 = _build_post_quantum_stub("encrypt_via_ml_kem_768", "ML-KEM")
+decrypt_via_ml_kem_768 = _build_post_quantum_stub("decrypt_via_ml_kem_768", "ML-KEM")
+sign_with_mldsa = _build_post_quantum_stub("sign_with_mldsa", "ML-DSA")
+verify_with_mldsa = _build_post_quantum_stub("verify_with_mldsa", "ML-DSA")

@@ -38,7 +38,7 @@ flightbox = 'wacryptolib.cli:main'
 python = ">=3.11, <4.0"  # extjson requires 3.11
 
 # Cryptography & utilities
-pycryptodome = "^3.23.0"  # Crypto.Protocol.HPKE
+pycryptodome = "^4.2"  # Crypto.Protocol.HPKE, and ML-KEM/ML-DSA support requires 4.2+
 
 click = "^8.0"
 click-log = "^0.4.0"

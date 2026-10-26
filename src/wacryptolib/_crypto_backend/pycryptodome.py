@@ -71,21 +71,21 @@ def __monkey_patch_pycryptodome_compiled_internals():
 
         return PatchedHasherClass
 
-    PATCHABLE_HASH_ALGOS = [
-        "SHA1",
-        "MD5",
-        "SHA512",
-        "SHA256",
-        "SHA512",
-        "SHA3_256",
-        "SHA3_512",
-    ]  # Must be bigger than SUPPORTED_HASH_ALGOS of wacryptolib
+    PATCHABLE_HASH_ALGOS = {  # With their OIDs, which pycryptodome only exposes on (unusable here) hasher instances
+        "SHA1": "1.3.14.3.2.26",
+        "MD5": "1.2.840.113549.2.5",
+        "SHA256": "2.16.840.1.101.3.4.2.1",
+        "SHA512": "2.16.840.1.101.3.4.2.3",
+        "SHA3_256": "2.16.840.1.101.3.4.2.8",
+        "SHA3_512": "2.16.840.1.101.3.4.2.10",
+    }  # Must be bigger than SUPPORTED_HASH_ALGOS of wacryptolib
 
     for patchable_hash_algo in PATCHABLE_HASH_ALGOS:
         patched_hash_class = _generate_patched_hasher(patchable_hash_algo)
         module = importlib.import_module("Crypto.Hash.%s" % patchable_hash_algo)
         class_name = patchable_hash_algo + ("_" if "_" in patchable_hash_algo else "") + "Hash"
         assert hasattr(module, class_name), (module, class_name)
+        patched_hash_class.oid = PATCHABLE_HASH_ALGOS[patchable_hash_algo]  # Needed e.g. by DSS signatures
         setattr(module, class_name, patched_hash_class)
         setattr(
             module,
@@ -95,37 +95,54 @@ def __monkey_patch_pycryptodome_compiled_internals():
         if hasattr(module, "_pbkdf2_hmac_assist"):
             del module._pbkdf2_hmac_assist  # Force slow code path, not requiring advanced hasher capabilities
 
+    import Crypto.Hash.BLAKE2s
+
+    def patched_blake2s_new(data=None, digest_bits=256, key=b""):
+        # Used by MAC verify() methods, to compare tags in constant time
+        return hashlib.blake2s(data or b"", digest_size=digest_bits // 8, key=key)
+
+    Crypto.Hash.BLAKE2s.new = patched_blake2s_new
+
     import Crypto.Cipher.AES
     import pyaes  # BEWARE - MUST BE INSTALLED!
 
-    def patched_aes_new(key, mode, iv, *args, **kwargs):
-        assert mode == Crypto.Cipher.AES.MODE_CBC, mode
-        cipher = pyaes.AESModeOfOperationCBC(key=key, iv=iv)
-        cipher.block_size = Crypto.Cipher.AES.block_size
-        original_cipher_encrypt = cipher.encrypt
-        original_cipher_decrypt = cipher.decrypt
+    class PyaesCipherAdapter:
+        """Pycryptodome-like cipher API, over a pyaes cipher (which handles one block per call, except for CTR)"""
 
-        def patched_encrypt(plaintext):
-            ciphertext = b""
-            while plaintext:
-                chunk = plaintext[: cipher.block_size]
-                plaintext = plaintext[cipher.block_size :]
-                ciphertext += original_cipher_encrypt(chunk)
-            return ciphertext
+        block_size = Crypto.Cipher.AES.block_size
 
-        cipher.encrypt = patched_encrypt
+        def __init__(self, pyaes_cipher, chunk_size):
+            self._pyaes_cipher = pyaes_cipher
+            self._chunk_size = chunk_size
 
-        def patched_decrypt(ciphertext):
-            plaintext = b""
-            while ciphertext:
-                chunk = ciphertext[: cipher.block_size]
-                ciphertext = ciphertext[cipher.block_size :]
-                plaintext += original_cipher_decrypt(chunk)
-            return plaintext
+        def _process(self, method, data, output):
+            assert output is None, "Unsupported output parameter"
+            data = bytes(data)  # pyaes doesn't support memoryviews
+            chunk_size = self._chunk_size or len(data) or 1
+            return b"".join(method(data[i : i + chunk_size]) for i in range(0, len(data), chunk_size))
 
-        cipher.decrypt = patched_decrypt
+        def encrypt(self, plaintext, output=None):
+            return self._process(self._pyaes_cipher.encrypt, plaintext, output)
 
-        return cipher
+        def decrypt(self, ciphertext, output=None):
+            return self._process(self._pyaes_cipher.decrypt, ciphertext, output)
+
+    original_aes_new = Crypto.Cipher.AES.new
+
+    def patched_aes_new(key, mode, *args, **kwargs):
+        AES = Crypto.Cipher.AES
+        if mode == AES.MODE_CBC:
+            (iv,) = args or (kwargs["iv"],)
+            return PyaesCipherAdapter(pyaes.AESModeOfOperationCBC(key, iv=iv), chunk_size=AES.block_size)
+        if mode == AES.MODE_ECB:
+            return PyaesCipherAdapter(pyaes.AESModeOfOperationECB(key), chunk_size=AES.block_size)
+        if mode == AES.MODE_CTR and kwargs.get("nonce") == b"":
+            # Full-block counter, as used by EAX mode
+            counter = pyaes.Counter(initial_value=kwargs["initial_value"])
+            return PyaesCipherAdapter(pyaes.AESModeOfOperationCTR(key, counter=counter), chunk_size=None)
+        if mode == AES.MODE_EAX:
+            return original_aes_new(key, mode, *args, **kwargs)  # Pure python, relying on modes above
+        raise NotImplementedError("AES mode %s is not supported by fallback backend" % mode)
 
     Crypto.Cipher.AES.new = patched_aes_new
 

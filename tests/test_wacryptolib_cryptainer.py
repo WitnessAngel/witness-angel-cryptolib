@@ -1373,7 +1373,7 @@ def test_cryptainer_storage_and_executor(tmp_path, capsys):
         try:
             animals_file_path.unlink()
         except PermissionError:
-            pass  # Win32 doesn't allow that
+            already_deleted_file_input = False  # Win32 doesn't allow that
 
     # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
     storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=cryptainer_dir)
@@ -1387,7 +1387,7 @@ def test_cryptainer_storage_and_executor(tmp_path, capsys):
 
     storage.wait_for_idle_state()
 
-    assert animals_file_path.is_file()  # NOT AUTO-DELETED after encryption!
+    assert animals_file_path.is_file() == (not already_deleted_file_input)  # NOT AUTO-DELETED after encryption!
 
     assert storage.get_cryptainer_count() == 2
     assert storage.list_cryptainer_names(as_sorted_list=True) == [Path("animals.dat.crypt"), Path("empty.txt.crypt")]

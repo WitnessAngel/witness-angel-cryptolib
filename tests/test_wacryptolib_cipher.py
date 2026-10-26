@@ -278,3 +278,66 @@ def test_symmetric_decryption_verify(cipher_algo):
             decryption_callable()
     else:
         decryption_callable()
+
+
+def test_ml_kem_768_asymmetric_encryption_and_decryption():
+    cipher_algo = "ML_KEM_768"
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=cipher_algo, serialize=False)
+    # Bypass the keypair cache of conftest.py, to really get a different keypair
+    _other_public_key, other_private_key = wacryptolib._crypto_backend.generate_ml_kem_768_keypair()
+    public_key_dict = dict(key=keypair["public_key"])
+    private_key_dict = dict(key=keypair["private_key"])
+
+    for binary_content in (b"", b"a", get_random_bytes(61), _get_binary_content()):
+        cipherdict = wacryptolib.cipher.encrypt_bytestring(
+            key_dict=public_key_dict, plaintext=binary_content, cipher_algo=cipher_algo
+        )
+        assert set(cipherdict.keys()) == {"kem_ciphertext", "ciphertext"}
+        assert len(cipherdict["kem_ciphertext"]) == 1088  # ML-KEM-768 encapsulation
+        assert len(cipherdict["ciphertext"]) == len(binary_content) + 16  # AES-256-GCM tag appended
+
+        for verify_integrity_tags in (True, False):
+            decrypted_content = wacryptolib.cipher.decrypt_bytestring(
+                key_dict=private_key_dict, cipherdict=cipherdict, cipher_algo=cipher_algo,
+                verify_integrity_tags=verify_integrity_tags,
+            )
+            assert decrypted_content == binary_content
+
+    decryption_func = functools.partial(
+        wacryptolib.cipher.decrypt_bytestring, key_dict=private_key_dict, cipher_algo=cipher_algo
+    )
+    _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
+
+    corrupted_cipherdict = copy.deepcopy(cipherdict)
+    corrupted_cipherdict["kem_ciphertext"] = b"\x00" + corrupted_cipherdict["kem_ciphertext"][1:]
+    with pytest.raises(DecryptionError):
+        decryption_func(cipherdict=corrupted_cipherdict)
+
+    corrupted_cipherdict = copy.deepcopy(cipherdict)
+    corrupted_cipherdict["ciphertext"] = corrupted_cipherdict["ciphertext"][:-1]  # Truncated tag
+    with pytest.raises(DecryptionError):
+        decryption_func(cipherdict=corrupted_cipherdict)
+
+    with pytest.raises(DecryptionError):  # Wrong private key
+        wacryptolib.cipher.decrypt_bytestring(
+            key_dict=dict(key=other_private_key), cipherdict=cipherdict, cipher_algo=cipher_algo
+        )
+
+    with pytest.raises(DecryptionError, match="private ML-KEM key"):  # Public key can't decrypt
+        wacryptolib.cipher.decrypt_bytestring(key_dict=public_key_dict, cipherdict=cipherdict, cipher_algo=cipher_algo)
+
+    # Incompatible key families (RSA, ECC and ML-DSA) are rejected on both sides
+    incompatible_keypairs = [
+        wacryptolib.keygen.generate_keypair(key_algo="RSA_OAEP", serialize=False, key_length_bits=2048),
+        wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", serialize=False, curve="p256"),
+        wacryptolib.keygen.generate_keypair(key_algo="ML_DSA_65", serialize=False),
+    ]
+    for incompatible_keypair in incompatible_keypairs:
+        with pytest.raises(EncryptionError, match="Incompatible key type"):
+            wacryptolib.cipher.encrypt_bytestring(
+                key_dict=dict(key=incompatible_keypair["public_key"]), plaintext=b"abc", cipher_algo=cipher_algo
+            )
+        with pytest.raises(DecryptionError, match="Incompatible key type"):
+            wacryptolib.cipher.decrypt_bytestring(
+                key_dict=dict(key=incompatible_keypair["private_key"]), cipherdict=cipherdict, cipher_algo=cipher_algo
+            )

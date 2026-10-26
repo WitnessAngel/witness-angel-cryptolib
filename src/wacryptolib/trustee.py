@@ -6,7 +6,7 @@ import logging
 import uuid
 from typing import Optional, Sequence
 
-from wacryptolib.cipher import decrypt_bytestring
+from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS
 from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, KeyLoadingError, ValidationError
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import KeystoreBase, generate_keypair_for_storage
@@ -204,7 +204,7 @@ class TrusteeApi:  # TODO rename this?
 
         Raises if key existence, authorization or passphrase errors occur.
         """
-        assert cipher_algo.upper() == "RSA_OAEP"  # Only supported asymmetric cipher for now
+        assert cipher_algo.upper() in SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, cipher_algo
 
         logger.debug(
             "Trustee proxy: decrypting cipherdict with private key %s/%s (%d passphrases submitted)",

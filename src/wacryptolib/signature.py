@@ -117,6 +117,11 @@ SIGNATURE_ALGOS_REGISTRY = dict(
         "verification_function": _crypto_backend.verify_with_dss,
         "compatible_key_class_fetcher": _crypto_backend.ecc_key_class_fetcher,
     },
+    ML_DSA_65={  # Post-quantum (FIPS 204), signs the SHA512 digest in pure mode with a fixed context
+        "signature_function": _crypto_backend.sign_with_mldsa,
+        "verification_function": _crypto_backend.verify_with_mldsa,
+        "compatible_key_class_fetcher": _crypto_backend.ml_dsa_key_class_fetcher,
+    },
 )
 
 #: These values can be used as 'payload_signature_algo' parameters.

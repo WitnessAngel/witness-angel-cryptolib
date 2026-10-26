@@ -64,4 +64,12 @@ RSA - PKCS#1 OAEP
 .. autofunction:: wacryptolib.cipher._decrypt_via_rsa_oaep
 
 
+ML-KEM-768 (post-quantum, KEM + DEM)
+---------------------------------------
+
+.. autofunction:: wacryptolib.cipher._encrypt_via_ml_kem_768
+
+.. autofunction:: wacryptolib.cipher._decrypt_via_ml_kem_768
+
+
 

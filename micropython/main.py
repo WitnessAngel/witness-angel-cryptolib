@@ -22,9 +22,22 @@ if IS_MICROPYTHON:
     def _compare_digest(a, b) : return a == b  # No timing-attack protection
     hmac.compare_digest = _compare_digest
 
-    import random
-    random.SystemRandom = lambda *args, **kwargs: random  # FIXME THIS IS PSEUDORANDOM!!
-    random.Random = lambda *args, **kwargs: random
+    import os, random as _builtin_random
+    class _SystemRandom:
+        # Builtin random is read-only and pseudo-random, so crypto randomness is taken from os.urandom()
+        def getrandbits(self, k):
+            return int.from_bytes(os.urandom((k + 7) // 8), "big") >> (-k % 8)
+        def randint(self, a, b):
+            span = b - a
+            while True:  # Rejection sampling, to avoid modulo bias
+                candidate = self.getrandbits(len(bin(span)) - 2)
+                if candidate <= span:
+                    return a + candidate
+    class _RandomModule:
+        SystemRandom = Random = _SystemRandom
+        def __getattr__(self, name):
+            return getattr(_builtin_random, name)
+    sys.modules["random"] = _RandomModule()
 
     sys.modules["textwrap"] = dict(_msg="WRONGMODULEFAKED")
 

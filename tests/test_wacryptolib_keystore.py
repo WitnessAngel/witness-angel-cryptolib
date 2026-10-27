@@ -12,7 +12,7 @@ from uuid import UUID
 
 import pytest
 
-from _test_mockups import get_fake_authdevice, random_bool
+from _test_mockups import get_fake_authdevice, random_bool, is_fallback_backend
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.exceptions import (
     KeystoreDoesNotExist,
@@ -134,12 +134,16 @@ def test_filesystem_keystore_list_keypair_identifiers(tmp_path: Path):
         assert key["key_algo"] in SUPPORTED_ASYMMETRIC_KEY_ALGOS
         assert isinstance(key["private_key_present"], bool)
 
+    key_algos = SUPPORTED_ASYMMETRIC_KEY_ALGOS
+    if is_fallback_backend():
+        key_algos = ["RSA_OAEP"]  # ECC, and DES3 for DSA key protection, require native pycryptodome
+
     keystore = FilesystemKeystore(tmp_path)
     assert keystore.list_keypair_identifiers() == []
 
     # CASE 1 : only one key in storage
 
-    key_algo = random.choice(SUPPORTED_ASYMMETRIC_KEY_ALGOS)
+    key_algo = random.choice(key_algos)
 
     keychain_uid = generate_uuid0()
     generate_keypair_for_storage(key_algo=key_algo, keystore=keystore, keychain_uid=keychain_uid)
@@ -157,7 +161,7 @@ def test_filesystem_keystore_list_keypair_identifiers(tmp_path: Path):
     # CASE 2 : multiple public keys, with or without private keys
 
     for i in range(3):
-        _key_algo = random.choice(SUPPORTED_ASYMMETRIC_KEY_ALGOS)
+        _key_algo = random.choice(key_algos)
         generate_keypair_for_storage(key_algo=_key_algo, keystore=keystore, passphrase="xzf".encode())
 
     for bad_filename in (

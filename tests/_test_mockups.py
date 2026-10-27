@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import random
+
+import pytest
 import secrets
 import sys
 from uuid import UUID
@@ -80,6 +82,17 @@ def get_fake_authdevice(device_path):
         "authenticator_dir": device_path / ".myauthenticator",
     }
     return authdevice
+
+
+def is_fallback_backend():
+    from wacryptolib._crypto_backend.pycryptodome import _patch_pycryptodome_internals
+
+    return _patch_pycryptodome_internals
+
+
+def skip_if_fallback_backend(feature):
+    if is_fallback_backend():
+        pytest.skip("%s requires native pycryptodome, unavailable in fallback backend" % feature)
 
 
 def random_bool():

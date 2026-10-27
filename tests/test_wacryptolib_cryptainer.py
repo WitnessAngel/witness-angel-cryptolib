@@ -21,7 +21,7 @@ import pytest
 from jsonrpc_requests import TransportError
 
 import wacryptolib.cryptainer
-from _test_mockups import FakeTestCryptainerStorage, random_bool
+from _test_mockups import FakeTestCryptainerStorage, random_bool, skip_if_fallback_backend
 from wacryptolib._crypto_backend import get_random_bytes
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS, AUTHENTICATED_CIPHER_ALGOS, encrypt_bytestring
 from wacryptolib.cryptainer import (
@@ -700,6 +700,8 @@ def test_is_cryptainer_cryptoconf_streamable():
 )
 # with local keyfactory
 def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, trustee_dependencies_builder):
+    if "ECC_DSS" in str(cryptoconf):
+        skip_if_fallback_backend("ECC")
     payload = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
@@ -1816,6 +1818,7 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
 
 
 def test_cryptainer_storage_decryption_with_authenticated_algo_and_verify_failure(tmp_path):
+    skip_if_fallback_backend("ECC")  # Else missing ECC signatures add errors to the operation report
     # Beware, here we use the REAL CryptainerStorage, not FakeTestCryptainerStorage!
     storage, cryptainer_name = _intialize_real_cryptainer_with_single_file(tmp_path, allow_readonly_storage=True)
 
@@ -2318,6 +2321,7 @@ def test_encryption_signature_policy_with_error_cases(cryptoconf):
 
 
 def test_encryption_signature_policy_with_success_cases():
+    skip_if_fallback_backend("ECC")  # Used by cryptoconfs below
     keystore_pool = InMemoryKeystorePool()
 
     cryptoconf = None  # Placeholder

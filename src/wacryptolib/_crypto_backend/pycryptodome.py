@@ -146,6 +146,11 @@ def __monkey_patch_pycryptodome_compiled_internals():
 
     Crypto.Cipher.AES.new = patched_aes_new
 
+    import Crypto.Cipher.ChaCha20_Poly1305
+    from .chacha20_poly1305 import ChaCha20Poly1305Cipher
+
+    Crypto.Cipher.ChaCha20_Poly1305.new = lambda key, nonce: ChaCha20Poly1305Cipher(key, nonce=nonce)
+
     from Crypto.Cipher import PKCS1_OAEP
 
     def patched_oaep_decode(em, lHash, db):

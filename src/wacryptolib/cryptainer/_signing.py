@@ -117,7 +117,7 @@ def __wip_sign_payload_into_sigainer(payload, *, sigconf):  # FIXME IMPLEMENT LA
     hashers_dict = _create_hashers_dict(payload_hash_algos)
 
     if hasattr(payload, "read"):  # File-like object
-        for chunk in payload.read(DEFAULT_DATA_CHUNK_SIZE):
+        for chunk in iter(lambda: payload.read(DEFAULT_DATA_CHUNK_SIZE), b""):
             _update_hashers_dict(hashers_dict, chunk=chunk)
     else:
         assert isinstance(payload, bytes), payload

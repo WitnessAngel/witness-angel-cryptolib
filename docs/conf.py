@@ -12,8 +12,14 @@ import shutil
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 import sys
+import warnings
 
 import toml
+from sphinx.deprecation import RemovedInSphinx10Warning
+
+# sphinx_autodoc_typehints still calls an API slated for removal in Sphinx 10;
+# ponytail: upstream issue, not ours to fix -- drop this filter once sphinx_autodoc_typehints updates
+warnings.filterwarnings("ignore", category=RemovedInSphinx10Warning)
 
 # -- Path setup --------------------------------------------------------------
 

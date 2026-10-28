@@ -15,9 +15,9 @@ Task handling
 Hashing
 +++++++++++++++++++++
 
-.. autodata:: wacryptolib.utilities.SUPPORTED_HASH_ALGOS
+.. autodata:: wacryptolib.hash.SUPPORTED_HASH_ALGOS
 
-.. autofunction:: wacryptolib.utilities.hash_message
+.. autofunction:: wacryptolib.hash.hash_message
 
 
 Serialization

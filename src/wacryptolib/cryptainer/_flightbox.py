@@ -113,6 +113,9 @@ class FlightBox:
         for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
             payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
 
+            if "payload_signatures" in payload_cipher_layer:  # Legacy naming in old cryptoconfs
+                payload_cipher_layer["payload_ciphertext_signatures"] = payload_cipher_layer.pop("payload_signatures")
+
             payload_cipher_layer["payload_macs"] = None  # Will be filled later with MAC tags etc.
 
             self._logger.debug("Generating symmetric key of type %r for payload encryption", payload_cipher_algo)

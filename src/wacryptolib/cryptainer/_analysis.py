@@ -5,7 +5,7 @@
 from typing import Sequence
 
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
-from wacryptolib.cryptainer import get_trustee_id, SHARED_SECRET_ALGO_MARKER
+from wacryptolib.cryptainer import get_trustee_id, SHARED_SECRET_ALGO_MARKER, get_payload_ciphertext_signatures
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.utilities import load_from_json_bytes
 
@@ -67,7 +67,7 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
     for cryptainer in cryptainers:
         keychain_uid = cryptainer["keychain_uid"]
         for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
-            _grab_signature_dependencies(payload_cipher_layer["payload_ciphertext_signatures"])
+            _grab_signature_dependencies(get_payload_ciphertext_signatures(payload_cipher_layer))
             _grab_key_cipher_layers_dependencies(payload_cipher_layer["key_cipher_layers"])
         _grab_signature_dependencies(cryptainer.get("payload_plaintext_signatures", ()))
 

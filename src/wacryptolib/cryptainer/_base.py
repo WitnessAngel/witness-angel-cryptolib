@@ -53,6 +53,14 @@ class SIGNATURE_POLICIES:
     REQUIRE_SIGNING = "REQUIRE_SIGNING"
 
 
+def get_payload_ciphertext_signatures(payload_cipher_layer: dict) -> list:
+    """Return ciphertext signatures of a payload cipher layer, also supporting the legacy "payload_signatures" key
+    of old cryptainers/cryptoconfs (never mutates the layer)."""
+    if "payload_ciphertext_signatures" in payload_cipher_layer:
+        return payload_cipher_layer["payload_ciphertext_signatures"]
+    return payload_cipher_layer["payload_signatures"]
+
+
 def get_trustee_id(trustee_conf: dict) -> str:
     """Build opaque identifier unique for a given trustee."""
     trustee_type = trustee_conf.get("trustee_type", None)

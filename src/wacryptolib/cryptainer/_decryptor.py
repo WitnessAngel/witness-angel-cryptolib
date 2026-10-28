@@ -13,7 +13,7 @@ from schema import Schema, Or, And
 
 from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_CIPHER_ALGOS
 from wacryptolib.cryptainer import CryptainerBase, logger, CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
-    get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value
+    get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value, get_payload_ciphertext_signatures
 from wacryptolib.exceptions import KeyDoesNotExist, KeyLoadingError, DecryptionError, DecryptionIntegrityError, \
     KeystoreDoesNotExist, SignatureVerificationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -396,7 +396,7 @@ class CryptainerDecryptor(CryptainerBase):
         assert isinstance(payload_ciphertext, bytes), repr(payload_ciphertext)
         payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
 
-        for signature_conf in payload_cipher_layer["payload_ciphertext_signatures"]:
+        for signature_conf in get_payload_ciphertext_signatures(payload_cipher_layer):
             self._verify_payload_signature(  # Should NOT raise for now, just report errors!
                 default_keychain_uid=default_keychain_uid,
                 payload=payload_ciphertext,

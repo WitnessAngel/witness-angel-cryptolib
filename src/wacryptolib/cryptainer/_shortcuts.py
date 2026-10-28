@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import uuid
 
 from wacryptolib.cryptainer import SHARED_SECRET_ALGO_MARKER, DEFAULT_DATA_CHUNK_SIZE, CryptainerEncryptionPipeline, \
-    CryptainerEncryptor, CryptainerDecryptor, CRYPTAINER_TRUSTEE_TYPES
+    CryptainerEncryptor, CryptainerDecryptor, CRYPTAINER_TRUSTEE_TYPES, get_payload_ciphertext_signatures
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import KeystorePoolBase
 
@@ -195,9 +195,9 @@ def get_cryptoconf_summary(cryptoconf_or_cryptainer):
         text_lines.append(
             indent
             + "Ciphertext signatures:"
-            + ("" if payload_cipher_layer["payload_ciphertext_signatures"] else " None")
+            + ("" if get_payload_ciphertext_signatures(payload_cipher_layer) else " None")
         )
-        for payload_signature in payload_cipher_layer["payload_ciphertext_signatures"]:
+        for payload_signature in get_payload_ciphertext_signatures(payload_cipher_layer):
             text_lines.append(2 * indent + _get_signature_description(payload_signature))
 
     result = "\n".join(text_lines) + "\n"

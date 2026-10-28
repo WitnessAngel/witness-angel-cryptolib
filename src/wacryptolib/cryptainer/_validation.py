@@ -5,7 +5,7 @@
 from typing import Union
 
 import schema as pythonschema
-from schema import Or, Optional as OptionalKey, And, Schema, Use
+from schema import Or, Optional as OptionalKey, And, Schema
 
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_TRUSTEE_TYPES, CRYPTAINER_STATES, \
@@ -128,25 +128,22 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
     )
     _ALL_POSSIBLE_CIPHER_LAYERS_LIST.append(SHARED_SECRET_CRYPTAINER_BLOCK)
 
-    def _handle_payload_signatures_retrocompatibility(layer_dict):
-        if "payload_signatures" in layer_dict and "payload_ciphertext_signatures" not in layer_dict:
-            layer_dict["payload_ciphertext_signatures"] = layer_dict.pop("payload_signatures")  # Old naming
-            ## print(">>>>>>>> WE convert legacy name 'payload_signatures' ->", layer_dict)
-        return layer_dict
+    def _build_payload_cipher_layer_schema(signatures_key):
+        return {
+            "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
+            signatures_key: [payload_signature],  # Signatures AFTER encryption
+            **extra_payload_cipher_layer,
+            "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,
+        }
 
     full_schema_dict = {
         **extra_cryptainer,
         OptionalKey("payload_plaintext_signatures"): [payload_signature],  # PLAIN data signatures
         "payload_cipher_layers": And(
             [
-                And(
-                    Use(_handle_payload_signatures_retrocompatibility),
-                    {
-                        "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
-                        "payload_ciphertext_signatures": [payload_signature],  # Signatures AFTER encryption
-                        **extra_payload_cipher_layer,
-                        "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,
-                    },
+                Or(
+                    _build_payload_cipher_layer_schema("payload_ciphertext_signatures"),
+                    _build_payload_cipher_layer_schema("payload_signatures"),  # Legacy naming, in old cryptainers
                 )
             ],
             len,

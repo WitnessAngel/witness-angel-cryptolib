@@ -2276,26 +2276,39 @@ def test_sigainer_sanity_and_plaintext_signature_dependencies():
 
 
 def test_retrocompatibility_for_payload_ciphertext_signatures_field():
+    keystore_pool = InMemoryKeystorePool()
+
+    def _to_legacy(cryptostruct):
+        for layer_dict in cryptostruct["payload_cipher_layers"]:
+            layer_dict["payload_signatures"] = layer_dict.pop("payload_ciphertext_signatures")  # OLD naming
+
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
-    layer_dict = cryptoconf["payload_cipher_layers"][0]
-    layer_dict["payload_signatures"] = _temp = layer_dict.pop("payload_ciphertext_signatures")  # OLD naming
-
+    _to_legacy(cryptoconf)
+    cryptoconf_before = copy.deepcopy(cryptoconf)
     check_cryptoconf_sanity(cryptoconf)
+    check_cryptoconf_sanity(convert_to_extjson(cryptoconf, canonical=False), jsonschema_mode=True)
+    assert cryptoconf == cryptoconf_before  # Validation must NOT mutate input
+    assert "Ciphertext signatures:\n" in get_cryptoconf_summary(cryptoconf)
 
-    assert layer_dict["payload_ciphertext_signatures"] == _temp
-    assert "payload_signatures" not in layer_dict
+    # Legacy cryptoconfs still work, and produce new-style cryptainers
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
+    )
+    assert cryptainer["payload_cipher_layers"][0]["payload_ciphertext_signatures"]
 
-    # ---
-
-    cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None)
-
-    layer_dict = cryptainer["payload_cipher_layers"][0]
-    layer_dict["payload_signatures"] = _temp = layer_dict.pop("payload_ciphertext_signatures")  # OLD naming
-
+    # Old cryptainers are still valid, analysable and decryptable, without needing validation first
+    _to_legacy(cryptainer)
+    cryptainer_before = copy.deepcopy(cryptainer)
+    assert gather_trustee_dependencies([cryptainer])["signature"]
+    assert get_cryptoconf_summary(cryptainer)
+    result_payload, error_report = decrypt_payload_from_cryptainer(
+        cryptainer=cryptainer, keystore_pool=keystore_pool
+    )
+    assert result_payload == b"stuffs"
+    assert not error_report.has_errors()  # Signatures were checked too
     check_cryptainer_sanity(cryptainer)
-
-    assert layer_dict["payload_ciphertext_signatures"] == _temp
-    assert "payload_signatures" not in layer_dict
+    check_cryptainer_sanity(convert_to_extjson(cryptainer, canonical=False), jsonschema_mode=True)
+    assert cryptainer == cryptainer_before
 
 
 @pytest.mark.parametrize(

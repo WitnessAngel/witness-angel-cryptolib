@@ -14,7 +14,7 @@ from ._base import (CRYPTAINER_SUFFIX, CRYPTAINER_DATETIME_FORMAT, CRYPTAINER_DA
                           OFFLOADED_PAYLOAD_FILENAME_SUFFIX, DEFAULT_DATA_CHUNK_SIZE, DECRYPTED_FILE_SUFFIX,
                           DUMMY_KEYSTORE_POOL, CRYPTAINER_TRUSTEE_TYPES,
                           LOCAL_KEYFACTORY_TRUSTEE_MARKER, SIGNATURE_POLICIES)
-from ._base import CryptainerBase, get_trustee_id, get_trustee_proxy, _get_cryptainer_inline_ciphertext_value
+from ._base import CryptainerBase, get_trustee_id, get_payload_ciphertext_signatures, get_trustee_proxy, _get_cryptainer_inline_ciphertext_value
 
 from ._flightbox import CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, CRYPTAINER_STATES, FlightboxUtilitiesBase, FlightBox
 

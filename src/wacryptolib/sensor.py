@@ -10,7 +10,7 @@ import threading
 from datetime import datetime
 from subprocess import TimeoutExpired
 
-from wacryptolib.cryptainer import CryptainerStorage, CRYPTAINER_DATETIME_FORMAT, SIGNATURE_POLICIES
+from wacryptolib.cryptainer import CryptainerStorage, CRYPTAINER_DATETIME_FORMAT
 from wacryptolib.utilities import (
     dump_to_json_bytes,
     synchronized,

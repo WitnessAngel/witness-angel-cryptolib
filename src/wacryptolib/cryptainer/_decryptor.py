@@ -784,7 +784,7 @@ class CryptainerDecryptor(CryptainerBase):
     def _verify_payload_signature(
         self, default_keychain_uid: uuid.UUID, payload: bytes, cryptoconf: dict, operation_report: OperationReport
     ):
-        """
+        r"""
         Verify a signature for a specific message.
 
         DOES NOT raise for now, just reports troubels in operation_report.

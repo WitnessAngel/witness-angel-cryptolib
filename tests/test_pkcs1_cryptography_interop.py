@@ -39,3 +39,10 @@ def test_pkcs1_oaep_interoperability_with_cryptography(hash_class, cryptography_
 
     if hash_class is hashlib.sha512:
         assert fallback_adapter.decrypt_via_rsa_oaep([ciphertext], pkcs1_private_key) == [message]
+
+
+def test_fallback_hasher_new_takes_data():
+    hasher = fallback_adapter.get_hasher_instance("SHA256")
+    assert hasher.new(b"abc").digest() == hashlib.sha256(b"abc").digest()
+    assert hasher.new().digest() == hashlib.sha256().digest()
+    assert hasher.new().oid == hasher.oid  # Still wrapped

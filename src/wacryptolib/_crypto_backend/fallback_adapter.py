@@ -35,9 +35,9 @@ class HasherCompatibilityLayer():
     def oid(self):
         return _HASH_ALGO_TO_OID[self._hasher.name.upper()]
 
-    def new(self, *args, **kwargs):
+    def new(self, data=b""):
         # HASH instances can't be normally instantiated when C-based...
-        return hashlib.new(self._hasher.name.lower())
+        return HasherCompatibilityLayer(hashlib.new(self._hasher.name.lower(), data))
 
 
 def get_hasher_instance(hash_algo: str) -> HasherCompatibilityLayer:

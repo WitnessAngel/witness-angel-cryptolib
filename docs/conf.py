@@ -54,9 +54,9 @@ release = version
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx_click",  # must load before sphinx_autodoc_typehints, else it clobbers sphinx.ext.autodoc.mock
     "sphinx_autodoc_typehints",
     "sphinx_rtd_theme",
-    "sphinx_click",
     "sphinxcontrib.programoutput",
 ]
 

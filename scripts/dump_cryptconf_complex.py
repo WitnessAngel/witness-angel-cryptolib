@@ -150,5 +150,5 @@ conf = {
 }
 
 check_cryptoconf_sanity(conf)
-dump_to_json_file("__example_complex_cryptoconf.conf", conf)
+dump_to_json_file("../_example_complex_cryptoconf.conf", conf)
 print("Success")

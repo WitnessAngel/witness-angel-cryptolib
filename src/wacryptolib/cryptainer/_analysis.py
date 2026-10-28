@@ -55,81 +55,21 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
                     key_algo=key_cipher_algo,
                 )
 
-    for cryptainer in cryptainers:
-        keychain_uid = cryptainer["keychain_uid"]
-        for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
-            for signature_conf in payload_cipher_layer["payload_ciphertext_signatures"]:
-                key_algo_signature = signature_conf["payload_signature_algo"]
-                keychain_uid_for_signature = signature_conf.get("keychain_uid") or keychain_uid
-                trustee_conf = signature_conf["payload_signature_trustee"]
-
-                _add_keypair_identifiers_for_trustee(
-                    mapper=signature_dependencies,
-                    trustee_conf=trustee_conf,
-                    keychain_uid=keychain_uid_for_signature,
-                    key_algo=key_algo_signature,
-                )
-
-            _grab_key_cipher_layers_dependencies(payload_cipher_layer["key_cipher_layers"])
-
-    trustee_dependencies = {"signature": signature_dependencies, "encryption": cipher_dependencies}
-    return trustee_dependencies
-
-
-def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
-    """Analyse a cryptainer and return the trustees (and their keypairs) used by it.
-
-    :return: dict with lists of keypair identifiers in fields "encryption" and "signature".
-    """
-
-    signature_dependencies = {}
-    cipher_dependencies = {}
-
-    def _add_keypair_identifiers_for_trustee(mapper, trustee_conf, keychain_uid, key_algo):
-        trustee_id = get_trustee_id(trustee_conf=trustee_conf)
-        keypair_identifiers = dict(keychain_uid=keychain_uid, key_algo=key_algo)
-        mapper.setdefault(trustee_id, (trustee_conf, []))
-        keypair_identifiers_list = mapper[trustee_id][1]
-        if keypair_identifiers not in keypair_identifiers_list:
-            keypair_identifiers_list.append(keypair_identifiers)
-
-    def _grab_key_cipher_layers_dependencies(key_cipher_layers):
-        for key_cipher_layer in key_cipher_layers:
-            key_cipher_algo = key_cipher_layer["key_cipher_algo"]
-
-            if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
-                shard_confs = key_cipher_layer["key_shared_secret_shards"]
-                for shard_conf in shard_confs:
-                    _grab_key_cipher_layers_dependencies(shard_conf["key_cipher_layers"])  # Recursive call
-            elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
-                _grab_key_cipher_layers_dependencies(key_cipher_layer["key_cipher_layers"])  # Recursive call
-            else:
-                assert key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS, key_cipher_algo
-                keychain_uid_for_encryption = key_cipher_layer.get("keychain_uid") or keychain_uid
-                trustee_conf = key_cipher_layer["key_cipher_trustee"]
-                _add_keypair_identifiers_for_trustee(
-                    mapper=cipher_dependencies,
-                    trustee_conf=trustee_conf,
-                    keychain_uid=keychain_uid_for_encryption,
-                    key_algo=key_cipher_algo,
-                )
+    def _grab_signature_dependencies(signature_confs):
+        for signature_conf in signature_confs:
+            _add_keypair_identifiers_for_trustee(
+                mapper=signature_dependencies,
+                trustee_conf=signature_conf["payload_signature_trustee"],
+                keychain_uid=signature_conf.get("keychain_uid") or keychain_uid,
+                key_algo=signature_conf["payload_signature_algo"],
+            )
 
     for cryptainer in cryptainers:
         keychain_uid = cryptainer["keychain_uid"]
         for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
-            for signature_conf in payload_cipher_layer["payload_ciphertext_signatures"]:
-                key_algo_signature = signature_conf["payload_signature_algo"]
-                keychain_uid_for_signature = signature_conf.get("keychain_uid") or keychain_uid
-                trustee_conf = signature_conf["payload_signature_trustee"]
-
-                _add_keypair_identifiers_for_trustee(
-                    mapper=signature_dependencies,
-                    trustee_conf=trustee_conf,
-                    keychain_uid=keychain_uid_for_signature,
-                    key_algo=key_algo_signature,
-                )
-
+            _grab_signature_dependencies(payload_cipher_layer["payload_ciphertext_signatures"])
             _grab_key_cipher_layers_dependencies(payload_cipher_layer["key_cipher_layers"])
+        _grab_signature_dependencies(cryptainer.get("payload_plaintext_signatures", ()))
 
     trustee_dependencies = {"signature": signature_dependencies, "encryption": cipher_dependencies}
     return trustee_dependencies

@@ -159,7 +159,7 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
         full_schema_dict = {"payload_plaintext_signatures": And([payload_signature], len)}  # MANDATORY HERE
         if for_cryptainer:
             _relevant_sig_fields = ["cryptainer_state", "cryptainer_format", "cryptainer_uid", "cryptainer_metadata"]
-            full_schema_dict.update({k: v for (k, v) in full_schema_dict.items() if k in _relevant_sig_fields})
+            full_schema_dict.update({k: v for (k, v) in extra_cryptainer.items() if k in _relevant_sig_fields})
 
     return Schema(full_schema_dict)
 

@@ -47,6 +47,7 @@ from wacryptolib.cryptainer import (
     is_cryptainer_cryptoconf_streamable,
     check_cryptoconf_sanity,
     check_cryptainer_sanity,
+    check_sigainer_sanity,
     CRYPTAINER_TEMP_SUFFIX,
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
     ReadonlyCryptainerStorage,
@@ -2244,6 +2245,34 @@ def test_cryptainer_validation_error_via_json_schema():
             # Use RELAXED format (the default) for extjson representation
             corrupted_cryptainer_json = convert_to_extjson(corrupted_cryptainer, canonical=False)
             check_cryptainer_sanity(cryptainer=corrupted_cryptainer_json, jsonschema_mode=True)
+
+
+def test_sigainer_sanity_and_plaintext_signature_dependencies():
+    skip_if_fallback_backend("ECC")  # Used by COMPLEX_CRYPTOCONF
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"stuffs", cryptoconf=COMPLEX_CRYPTOCONF, cryptainer_metadata=None, keystore_pool=InMemoryKeystorePool()
+    )
+
+    # Plaintext signature trustees are dependencies too
+    plaintext_signature_conf = cryptainer["payload_plaintext_signatures"][0]
+    plaintext_trustee_id = get_trustee_id(plaintext_signature_conf["payload_signature_trustee"])
+    signature_dependencies = gather_trustee_dependencies([cryptainer])["signature"]
+    assert dict(
+        keychain_uid=plaintext_signature_conf.get("keychain_uid") or cryptainer["keychain_uid"],
+        key_algo=plaintext_signature_conf["payload_signature_algo"],
+    ) in signature_dependencies[plaintext_trustee_id][1]
+
+    sigainer = {
+        k: cryptainer[k]
+        for k in ["cryptainer_state", "cryptainer_format", "cryptainer_uid", "cryptainer_metadata",
+                  "payload_plaintext_signatures"]
+    }
+    check_sigainer_sanity(sigainer)
+    check_sigainer_sanity(convert_to_extjson(sigainer, canonical=False), jsonschema_mode=True)
+
+    del sigainer["cryptainer_uid"]  # Mandatory field
+    with pytest.raises(SchemaValidationError):
+        check_sigainer_sanity(sigainer)
 
 
 def test_retrocompatibility_for_payload_ciphertext_signatures_field():

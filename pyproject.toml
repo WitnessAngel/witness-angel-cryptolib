@@ -100,3 +100,6 @@ toml = ">=0.10.2"
 #memory-profiler = "^0.58.0"
 #matplotlib = "^3.4.3"
 #pytest-profiling = "^1.7.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

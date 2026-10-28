@@ -104,3 +104,9 @@ tox-uv = "^1.37.2"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+timeout = 600
+norecursedirs = "*.egg .eggs dist build docs .tox .git __pycache__ scripts static media selenium src"
+addopts = "-vl -p no:logging --disable-warnings --strict --tb=long --doctest-modules -p no:faulthandler --cov-report=html"
+env = [
+    "D:_WA_RANDOMIZE_CLI_APP_DIR=1",
+]

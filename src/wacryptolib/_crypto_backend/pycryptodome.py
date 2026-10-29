@@ -405,7 +405,8 @@ def export_rsa_key_to_pem(private_key, passphrase=None):  # FIXME not always pri
 def export_dsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
     if not passphrase:
         return private_key.export_key(format="PEM")
-    # DsaKey.export_key() can't take prot_params, so we encrypt the PKCS8 DER ourselves
+    # DsaKey.export_key() can't take prot_params, so we encrypt the PKCS8 DER ourselves.
+    # ponytail: relies on private module Crypto.IO._PBES, covered by the DSA keygen tests - recheck on pycryptodome upgrades
     from Crypto.IO import PEM
     from Crypto.IO._PBES import PBES2
     from Crypto.Util.py3compat import tobytes

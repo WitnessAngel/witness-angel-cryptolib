@@ -213,5 +213,5 @@ def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
     pem = keypair["private_key"]
     assert pem.startswith(b"-----BEGIN ENCRYPTED PRIVATE KEY-----")
     der = base64.b64decode(b"".join(pem.splitlines()[1:-1]))
-    assert (600000).to_bytes(3, "big") in der  # PBKDF2 iteration count
+    assert b"\x02\x03\x09\x27\xc0" in der  # DER INTEGER 600000, the PBKDF2 iteration count
     assert b"\x2a\x86\x48\x86\xf7\x0d\x02\x09" in der  # OID of hmacWithSHA256

@@ -327,3 +327,14 @@ def test_crafted_pem_errors_do_not_reveal_padding_validity():
         messages.append(str(exc_info.value))
         assert exc_info.value.__cause__.__cause__ is None  # Original error isn't chained either
     assert messages[0] == messages[1]
+
+
+def test_backend_pem_functions_accept_str_passphrases():
+    skip_if_fallback_backend("passphrase-protected PEM export")
+    from wacryptolib._crypto_backend import export_ecc_key_to_pem
+
+    private_key = wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", serialize=False)["private_key"]
+    pem = export_ecc_key_to_pem(private_key, passphrase="abc")
+    loaded = import_ecc_key_from_pem(pem, passphrase="abc")
+    assert loaded.export_key(format="DER") == private_key.export_key(format="DER")
+    assert import_ecc_key_from_pem(pem, passphrase=b"abc")  # Same encoding as bytes

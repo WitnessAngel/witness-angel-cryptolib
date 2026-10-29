@@ -452,8 +452,10 @@ def _import_key_from_pem(key_module, key_pem, passphrase=None):
 
 
 def _export_key_to_pem(key, passphrase, **pkcs8_der_params):
-    if not passphrase or not key.has_private():  # Public keys are never encrypted
+    if not passphrase:
         return key.export_key(format="PEM")
+    if not key.has_private():
+        raise ValueError("Public keys can't be exported to PEM with a passphrase")
     return _encrypt_pkcs8_to_pem(key.export_key(format="DER", **pkcs8_der_params), passphrase)
 
 

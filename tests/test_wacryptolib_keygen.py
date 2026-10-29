@@ -236,12 +236,10 @@ def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
 
 
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
-def test_public_key_export_ignores_passphrase(key_algo):
+def test_public_key_export_with_passphrase_raises(key_algo):
     skip_if_fallback_backend("passphrase-protected PEM export")
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
-    pem = wacryptolib.keygen._serialize_key_object_to_pem_bytestring(
-        keypair["public_key"], key_algo=key_algo, passphrase=b"abc"
-    )
-    assert pem.startswith(b"-----BEGIN PUBLIC KEY-----")
-    loaded = load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo=key_algo)
-    assert loaded.export_key(format="DER") == keypair["public_key"].export_key(format="DER")
+    with pytest.raises(ValueError, match="Public keys"):
+        wacryptolib.keygen._serialize_key_object_to_pem_bytestring(
+            keypair["public_key"], key_algo=key_algo, passphrase=b"abc"
+        )

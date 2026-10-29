@@ -32,6 +32,7 @@ from wacryptolib.cryptainer import (
     extract_metadata_from_cryptainer,
     CryptainerBase,
     get_cryptoconf_summary,
+    get_payload_ciphertext_signatures,
     dump_cryptainer_to_filesystem,
     load_cryptainer_from_filesystem,
     SHARED_SECRET_ALGO_MARKER,
@@ -2309,6 +2310,33 @@ def test_retrocompatibility_for_payload_ciphertext_signatures_field():
     check_cryptainer_sanity(cryptainer)
     check_cryptainer_sanity(convert_to_extjson(cryptainer, canonical=False), jsonschema_mode=True)
     assert cryptainer == cryptainer_before
+
+
+def test_retrocompatibility_for_payload_ciphertext_signatures_field_with_both_namings():
+    keystore_pool = InMemoryKeystorePool()
+
+    cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    cryptoconf["payload_cipher_layers"][0]["payload_signatures"] = []  # Leftover legacy field
+
+    # Validation refuses such ambiguous layers
+    with pytest.raises(SchemaValidationError):
+        check_cryptoconf_sanity(cryptoconf)
+    with pytest.raises(SchemaValidationError):
+        check_cryptoconf_sanity(convert_to_extjson(cryptoconf, canonical=False), jsonschema_mode=True)
+
+    # But runtime helpers consistently give precedence to the new naming
+    payload_ciphertext_signatures = cryptoconf["payload_cipher_layers"][0]["payload_ciphertext_signatures"]
+    assert get_payload_ciphertext_signatures(cryptoconf["payload_cipher_layers"][0]) == payload_ciphertext_signatures
+    assert "Ciphertext signatures: None" not in get_cryptoconf_summary(cryptoconf)
+
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
+    )
+    payload_cipher_layer = cryptainer["payload_cipher_layers"][0]
+    assert "payload_signatures" not in payload_cipher_layer
+    assert len(payload_cipher_layer["payload_ciphertext_signatures"]) == len(payload_ciphertext_signatures)
+    assert payload_cipher_layer["payload_ciphertext_signatures"][0]["payload_signature_struct"]  # Really signed
+    check_cryptainer_sanity(cryptainer)
 
 
 @pytest.mark.parametrize(

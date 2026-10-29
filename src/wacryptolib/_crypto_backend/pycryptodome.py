@@ -364,7 +364,8 @@ def generate_ecc_keypair(curve):
     from Crypto.PublicKey import ECC
 
     if curve not in ECC._curves:
-        raise ValueError("Unexisting ECC curve '%s', must be one of '%s'" % (curve, sorted(ECC._curves.all_names)))
+        curve_names = getattr(ECC._curves, "all_names", ECC._curves)  # "all_names" since pycryptodome 3.21
+        raise ValueError("Unexisting ECC curve '%s', must be one of '%s'" % (curve, sorted(curve_names)))
     private_key = ECC.generate(curve=curve)
     public_key = private_key.public_key()
     return public_key, private_key

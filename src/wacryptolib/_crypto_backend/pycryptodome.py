@@ -375,6 +375,9 @@ def generate_ecc_keypair(curve):
 PEM_PBKDF2_ITERATIONS = 600000
 PEM_PBKDF2_MAX_ITERATIONS = 10_000_000  # Iteration count is read from untrusted PEMs, so it must be bounded (~2s at most)
 
+# Same error for bad padding and invalid decrypted key, so that callers can't be used as CBC padding oracles
+_PEM_DECRYPTION_ERROR = "Wrong passphrase or corrupted encrypted private key"
+
 _OID_PBES2 = "1.2.840.113549.1.5.13"
 _OID_PBKDF2 = "1.2.840.113549.1.5.12"
 _OID_HMAC_SHA256 = "1.2.840.113549.2.9"
@@ -445,15 +448,18 @@ def _decrypt_pkcs8_from_pem(key_pem, passphrase):
     key = hashlib.pbkdf2_hmac("sha256", passphrase, salt, iteration_count, dklen=32)
     try:
         return decrypt_via_aes_cbc(ciphertext, key=key, iv=iv)
-    except ValueError as exc:  # Bad padding
-        raise ValueError("Wrong passphrase or corrupted encrypted private key") from exc
+    except ValueError:  # Bad padding
+        raise ValueError(_PEM_DECRYPTION_ERROR) from None
 
 
 def _import_key_from_pem(key_module, key_pem, passphrase=None):
     if passphrase:
         clear_pkcs8_der = _decrypt_pkcs8_from_pem(key_pem, passphrase)
         if clear_pkcs8_der is not None:
-            return key_module.import_key(clear_pkcs8_der)
+            try:
+                return key_module.import_key(clear_pkcs8_der)
+            except (ValueError, IndexError, TypeError):
+                raise ValueError(_PEM_DECRYPTION_ERROR) from None
     return key_module.import_key(key_pem, passphrase=passphrase)
 
 

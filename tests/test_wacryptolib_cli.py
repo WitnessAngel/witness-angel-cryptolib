@@ -686,6 +686,31 @@ def test_cli_cryptoconf_generate_simple():
         assert result.exit_code != 0, (result.exit_code, result.output)  # UsageError, not crash
 
 
+def test_cli_cryptoconf_generate_simple_output_file(tmp_path):
+    runner = _get_cli_runner()
+    layers = """add-payload-cipher-layer --sym-cipher-algo aes_cbc
+                add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory""".split()
+
+    # Long option name, and the generated file is a valid cryptoconf
+    output_file = tmp_path / "long.json"
+    result = runner.invoke(cli, ["cryptoconf", "generate-simple", "--output-file", str(output_file)] + layers)
+    assert result.exit_code == 0, [result.stdout, result.stderr]
+    assert not result.stdout.strip()
+    result = runner.invoke(cli, ["cryptoconf", "validate", str(output_file)])
+    assert result.exit_code == 0, [result.stdout, result.stderr]
+
+    # "-" explicitly means STDOUT, same content as the file
+    result = runner.invoke(cli, ["cryptoconf", "generate-simple", "-o", "-"] + layers)
+    assert result.exit_code == 0, [result.stdout, result.stderr]
+    assert load_from_json_str(result.stdout) == load_from_json_str(output_file.read_text())
+
+    # An invalid cryptoconf produces an error and no output file content
+    wrong_output_file = tmp_path / "wrong.json"
+    result = runner.invoke(cli, ["cryptoconf", "generate-simple", "-o", str(wrong_output_file)])
+    assert result.exit_code != 0
+    assert not wrong_output_file.exists() or not wrong_output_file.read_text()
+
+
 def test_cli_cryptoconf_validate(tmp_path):
     cryptoconf_file = tmp_path / "good_cryptoconf.json"
     wrong_cryptoconf_file = tmp_path / "wrong_cryptoconf.json"

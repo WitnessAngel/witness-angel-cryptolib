@@ -381,7 +381,7 @@ _OID_AES256_CBC = "2.16.840.1.101.3.4.1.42"
 
 
 def _encrypt_pkcs8_to_pem(clear_pkcs8_der, passphrase):
-    """PBES2 (PBKDF2-HMAC-SHA256 + AES256-CBC) encryption, using hashlib since pycryptodome's PBES2 runs PBKDF2 in pure python."""
+    """PBES2 (PBKDF2-HMAC-SHA256 + AES256-CBC) encryption, using hashlib since pycryptodome's PBES2 runs PBKDF2 in pure (too slow) python."""
     import hashlib
     from Crypto.IO import PEM
     from Crypto.Random import get_random_bytes

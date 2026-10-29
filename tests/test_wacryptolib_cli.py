@@ -638,6 +638,27 @@ def test_cli_cryptoconf_generate_simple():
         ]
     }
 
+    # Output to a file instead of STDOUT
+    with runner.isolated_filesystem():
+        command = """cryptoconf generate-simple -o myconf.json add-payload-cipher-layer --sym-cipher-algo aes_cbc
+                  add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory""".split()
+        result = runner.invoke(cli, command)
+        assert result.exit_code == 0, [result.stdout, result.stderr]
+        assert not result.stdout.strip()
+        with open("myconf.json") as f:
+            cryptoconf = load_from_json_str(f.read())
+        assert cryptoconf == {
+            "payload_cipher_layers": [
+                {
+                    "key_cipher_layers": [
+                        {"key_cipher_algo": "RSA_OAEP", "key_cipher_trustee": {"trustee_type": "local_keyfactory"}}
+                    ],
+                    "payload_cipher_algo": "AES_CBC",
+                    "payload_ciphertext_signatures": [],
+                }
+            ]
+        }
+
     wrong_commands = [
         # Missing payload encryption
         "cryptoconf generate-simple".split(),

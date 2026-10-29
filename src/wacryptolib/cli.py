@@ -450,8 +450,9 @@ def cryptoconf_group():
 
 @cryptoconf_group.group("generate-simple", chain=True)
 @click.option("--keychain-uid", help="Default UID for asymmetric keys", required=False, type=click.UUID)
+@click.option("-o", "--output-file", default="-", help="Output file for the cryptoconf (default: STDOUT)", type=click.File("w"))
 @click.pass_context
-def generate_simple_cryptoconf(ctx, keychain_uid):
+def generate_simple_cryptoconf(ctx, keychain_uid, output_file):
     """
     Generate a simple cryptoconf using subcommands
     """
@@ -463,11 +464,11 @@ def generate_simple_cryptoconf(ctx, keychain_uid):
 
 @generate_simple_cryptoconf.result_callback()
 @click.pass_context
-def display_cryptoconf(ctx, processors, keychain_uid):
+def display_cryptoconf(ctx, processors, keychain_uid, output_file):
     """Format and print a cryptoconf"""
     cryptoconf = ctx.obj["cryptoconf"]
     check_cryptoconf_sanity(cryptoconf)  # Safety
-    click.echo(_dump_as_safe_formatted_json(cryptoconf))
+    click.echo(_dump_as_safe_formatted_json(cryptoconf), file=output_file)
 
 
 @generate_simple_cryptoconf.command("add-payload-cipher-layer")

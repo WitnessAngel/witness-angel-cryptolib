@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from wacryptolib._crypto_backend.chacha20_poly1305 import ChaCha20Poly1305Cipher
+from wacryptolib._crypto_backend.vendor.chacha20_poly1305 import ChaCha20Poly1305Cipher
 
 
 def test_chacha20_rfc8439_encryption_test_vector():

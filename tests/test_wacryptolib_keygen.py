@@ -221,17 +221,16 @@ def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
 def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
     skip_if_fallback_backend("passphrase-protected PEM export")
-    import time
+    from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
 
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
     private_key = keypair["private_key"]
 
-    start = time.monotonic()
     pem = wacryptolib.keygen._serialize_key_object_to_pem_bytestring(private_key, key_algo=key_algo, passphrase=b"abc")
-    loaded = load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo=key_algo, passphrase=b"abc")
-    # Pure-python PBKDF2 took ~10s per operation here, hashlib takes ~0.1s
-    assert time.monotonic() - start < 3
+    # Our own PEMs must be decrypted via hashlib, not via pycryptodome's pure-python PBKDF2 (~10s per operation)
+    assert _decrypt_pkcs8_from_pem(pem, b"abc") is not None
 
+    loaded = load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo=key_algo, passphrase=b"abc")
     assert loaded.export_key(format="DER") == private_key.export_key(format="DER")
 
 

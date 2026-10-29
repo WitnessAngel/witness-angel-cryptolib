@@ -396,14 +396,14 @@ PEM_PROT_PARAMS = {"iteration_count": 600000}
 def export_rsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
     extra_params = (
         dict(passphrase=passphrase, pkcs=8, protection=PEM_PROTECTION, prot_params=PEM_PROT_PARAMS)
-        if passphrase
+        if passphrase and private_key.has_private()  # Public keys are never encrypted
         else {}
     )
     return private_key.export_key(format="PEM", **extra_params)
 
 
 def export_dsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
-    if not passphrase:
+    if not passphrase or not private_key.has_private():  # Public keys are never encrypted
         return private_key.export_key(format="PEM")
     # DsaKey.export_key() can't take prot_params, so we encrypt the PKCS8 DER ourselves.
     # ponytail: relies on private module Crypto.IO._PBES, covered by the DSA keygen tests - recheck on pycryptodome upgrades
@@ -419,7 +419,7 @@ def export_dsa_key_to_pem(private_key, passphrase=None):  # FIXME not always pri
 def export_ecc_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
     extra_params = (
         dict(passphrase=passphrase, use_pkcs8=True, protection=PEM_PROTECTION, prot_params=PEM_PROT_PARAMS)
-        if passphrase
+        if passphrase and private_key.has_private()  # Public keys are never encrypted
         else {}
     )
     return private_key.export_key(format="PEM", **extra_params)

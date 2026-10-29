@@ -215,3 +215,15 @@ def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
     der = base64.b64decode(b"".join(pem.splitlines()[1:-1]))
     assert b"\x02\x03\x09\x27\xc0" in der  # DER INTEGER 600000, the PBKDF2 iteration count
     assert b"\x2a\x86\x48\x86\xf7\x0d\x02\x09" in der  # OID of hmacWithSHA256
+
+
+@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
+def test_public_key_export_ignores_passphrase(key_algo):
+    skip_if_fallback_backend("passphrase-protected PEM export")
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
+    pem = wacryptolib.keygen._serialize_key_object_to_pem_bytestring(
+        keypair["public_key"], key_algo=key_algo, passphrase=b"abc"
+    )
+    assert pem.startswith(b"-----BEGIN PUBLIC KEY-----")
+    loaded = load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo=key_algo)
+    assert loaded.export_key(format="DER") == keypair["public_key"].export_key(format="DER")

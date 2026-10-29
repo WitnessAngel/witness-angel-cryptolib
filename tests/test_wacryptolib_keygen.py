@@ -246,7 +246,13 @@ def test_public_key_export_with_passphrase_raises(key_algo):
 
 
 def _craft_pbes2_pem(
-    passphrase=b"abc", plaintext=b"garbage", iteration_count=1000, key_length=None, iv=b"\x00" * 16, ciphertext=None
+    passphrase=b"abc",
+    plaintext=b"garbage",
+    iteration_count=1000,
+    key_length=None,
+    prf=None,
+    iv=b"\x00" * 16,
+    ciphertext=None,
 ):
     """Build a PBES2 (PBKDF2-HMAC-SHA256 + AES256-CBC) encrypted PEM, with tamperable fields."""
     import hashlib
@@ -259,7 +265,7 @@ def _craft_pbes2_pem(
     if ciphertext is None:
         key = hashlib.pbkdf2_hmac("sha256", passphrase, salt, iteration_count, dklen=32)
         ciphertext = AES.new(key, AES.MODE_CBC, iv=iv).encrypt(pad(plaintext, 16))
-    prf = DerSequence([DerObjectId("1.2.840.113549.2.9"), DerNull()])
+    prf = DerSequence([DerObjectId("1.2.840.113549.2.9"), DerNull()]) if prf is None else prf
     pbkdf2_params = [DerOctetString(salt), iteration_count] + ([key_length] if key_length else []) + [prf]
     pbes2_params = DerSequence(
         [
@@ -279,3 +285,31 @@ def test_crafted_pem_iteration_count_is_bounded(iteration_count):
     pem = _craft_pbes2_pem(iteration_count=iteration_count, ciphertext=b"\x00" * 32)
     with pytest.raises(KeyLoadingError, match="Unsupported PBKDF2 iteration count"):
         load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo="ECC_DSS", passphrase=b"abc")
+
+
+def test_crafted_pem_with_optional_key_length_uses_fast_path():
+    skip_if_fallback_backend("passphrase-protected PEM import")
+    from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
+
+    pem = _craft_pbes2_pem(key_length=32, iteration_count=600000)
+    assert _decrypt_pkcs8_from_pem(pem, b"abc") == b"garbage"
+
+
+@pytest.mark.parametrize(
+    "crafting_params",
+    [dict(key_length=16), dict(iv=b"\x00" * 8, ciphertext=b"\x00" * 16), dict(ciphertext=b""), dict(ciphertext=b"\x00" * 17)],
+)
+def test_crafted_pem_with_malformed_cipher_params_is_rejected(crafting_params):
+    skip_if_fallback_backend("passphrase-protected PEM import")
+    pem = _craft_pbes2_pem(**crafting_params)
+    with pytest.raises(KeyLoadingError, match="Malformed encrypted private key"):
+        load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo="ECC_DSS", passphrase=b"abc")
+
+
+def test_crafted_pem_with_empty_prf_falls_back_to_pycryptodome():
+    skip_if_fallback_backend("passphrase-protected PEM import")
+    from Crypto.Util.asn1 import DerSequence
+    from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
+
+    pem = _craft_pbes2_pem(prf=DerSequence([]))
+    assert _decrypt_pkcs8_from_pem(pem, b"abc") is None

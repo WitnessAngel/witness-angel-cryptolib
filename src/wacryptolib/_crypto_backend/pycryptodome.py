@@ -423,8 +423,8 @@ def _decrypt_pkcs8_from_pem(key_pem, passphrase):
         pbes2_oid, pbes2_params = DerSequence().decode(algo, nr_elements=2)
         kdf, cipher = DerSequence().decode(pbes2_params, nr_elements=2)
         kdf_oid, kdf_params = DerSequence().decode(kdf, nr_elements=2)
-        salt, iteration_count, prf = DerSequence().decode(kdf_params, nr_elements=3)
-        prf_oid = DerSequence().decode(prf)[0]
+        salt, iteration_count, *key_length, prf = DerSequence().decode(kdf_params, nr_elements=(3, 4))
+        prf_oid = DerSequence().decode(prf, nr_elements=(1, 2))[0]
         cipher_oid, iv = DerSequence().decode(cipher, nr_elements=2)
         if (_oid(pbes2_oid), _oid(kdf_oid), _oid(prf_oid), _oid(cipher_oid)) != (
             _OID_PBES2,
@@ -434,11 +434,13 @@ def _decrypt_pkcs8_from_pem(key_pem, passphrase):
         ):
             return None
         salt, iv, ciphertext = (DerOctetString().decode(x).payload for x in (salt, iv, ciphertext))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, IndexError):
         return None  # Unexpected structure, e.g. legacy protection or unencrypted key
 
     if not isinstance(iteration_count, int) or not 0 < iteration_count <= PEM_PBKDF2_MAX_ITERATIONS:
         raise ValueError("Unsupported PBKDF2 iteration count in encrypted private key")
+    if key_length not in ([], [32]) or len(iv) != AES_BLOCK_SIZE or not ciphertext or len(ciphertext) % AES_BLOCK_SIZE:
+        raise ValueError("Malformed encrypted private key")
 
     key = hashlib.pbkdf2_hmac("sha256", passphrase, salt, iteration_count, dklen=32)
     try:

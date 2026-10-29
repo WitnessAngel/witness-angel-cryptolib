@@ -2276,40 +2276,93 @@ def test_sigainer_sanity_and_plaintext_signature_dependencies():
         check_sigainer_sanity(sigainer)
 
 
-def test_retrocompatibility_for_payload_ciphertext_signatures_field():
-    keystore_pool = InMemoryKeystorePool()
-
-    def _to_legacy(cryptostruct):
-        for layer_dict in cryptostruct["payload_cipher_layers"]:
+def _to_legacy_payload_signatures(cryptostruct, layer_indices=None):
+    for idx, layer_dict in enumerate(cryptostruct["payload_cipher_layers"]):
+        if layer_indices is None or idx in layer_indices:
             layer_dict["payload_signatures"] = layer_dict.pop("payload_ciphertext_signatures")  # OLD naming
 
-    cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
-    _to_legacy(cryptoconf)
-    cryptoconf_before = copy.deepcopy(cryptoconf)
-    check_cryptoconf_sanity(cryptoconf)
-    check_cryptoconf_sanity(convert_to_extjson(cryptoconf, canonical=False), jsonschema_mode=True)
-    assert cryptoconf == cryptoconf_before  # Validation must NOT mutate input
-    assert "Ciphertext signatures:\n" in get_cryptoconf_summary(cryptoconf)
+
+@pytest.mark.parametrize(
+    "cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF]
+)
+@pytest.mark.parametrize("legacy_layer_indices", [None, (0,)])  # All layers, or mixed namings
+def test_retrocompatibility_for_payload_ciphertext_signatures_field(cryptoconf, legacy_layer_indices):
+    if "ECC" in repr(cryptoconf):
+        skip_if_fallback_backend("ECC")
+
+    keystore_pool = InMemoryKeystorePool()
+
+    legacy_cryptoconf = copy.deepcopy(cryptoconf)
+    _to_legacy_payload_signatures(legacy_cryptoconf, layer_indices=legacy_layer_indices)
+    legacy_cryptoconf_before = copy.deepcopy(legacy_cryptoconf)
+    check_cryptoconf_sanity(legacy_cryptoconf)
+    check_cryptoconf_sanity(convert_to_extjson(legacy_cryptoconf, canonical=False), jsonschema_mode=True)
+    assert legacy_cryptoconf == legacy_cryptoconf_before  # Validation must NOT mutate input
+    assert get_cryptoconf_summary(legacy_cryptoconf) == get_cryptoconf_summary(cryptoconf)
 
     # Legacy cryptoconfs still work, and produce new-style cryptainers
     cryptainer = encrypt_payload_into_cryptainer(
-        payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
+        payload=b"stuffs", cryptoconf=legacy_cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
     )
-    assert cryptainer["payload_cipher_layers"][0]["payload_ciphertext_signatures"]
+    assert legacy_cryptoconf == legacy_cryptoconf_before  # Encryption must NOT mutate input
+    for payload_cipher_layer, payload_cipher_layer_conf in zip(
+        cryptainer["payload_cipher_layers"], cryptoconf["payload_cipher_layers"]
+    ):
+        assert "payload_signatures" not in payload_cipher_layer
+        assert len(payload_cipher_layer["payload_ciphertext_signatures"]) == len(
+            payload_cipher_layer_conf["payload_ciphertext_signatures"]
+        )
+    trustee_dependencies = gather_trustee_dependencies([cryptainer])
+    cryptainer_summary = get_cryptoconf_summary(cryptainer)
 
     # Old cryptainers are still valid, analysable and decryptable, without needing validation first
-    _to_legacy(cryptainer)
+    _to_legacy_payload_signatures(cryptainer, layer_indices=legacy_layer_indices)
     cryptainer_before = copy.deepcopy(cryptainer)
-    assert gather_trustee_dependencies([cryptainer])["signature"]
-    assert get_cryptoconf_summary(cryptainer)
+    assert gather_trustee_dependencies([cryptainer]) == trustee_dependencies
+    assert get_cryptoconf_summary(cryptainer) == cryptainer_summary
     result_payload, error_report = decrypt_payload_from_cryptainer(
         cryptainer=cryptainer, keystore_pool=keystore_pool
     )
     assert result_payload == b"stuffs"
-    assert not error_report.has_errors()  # Signatures were checked too
+    assert not error_report.has_errors()
     check_cryptainer_sanity(cryptainer)
     check_cryptainer_sanity(convert_to_extjson(cryptainer, canonical=False), jsonschema_mode=True)
     assert cryptainer == cryptainer_before
+
+    # Legacy ciphertext signatures are really verified
+    for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
+        for signature in get_payload_ciphertext_signatures(payload_cipher_layer):
+            signature_value = signature["payload_signature_struct"]["signature_value"]
+            signature["payload_signature_struct"]["signature_value"] = bytes([signature_value[0] ^ 1]) + signature_value[1:]
+    corrupted_signature_count = sum(
+        len(get_payload_ciphertext_signatures(layer)) for layer in cryptainer["payload_cipher_layers"]
+    )
+    result_payload, error_report = decrypt_payload_from_cryptainer(
+        cryptainer=cryptainer, keystore_pool=keystore_pool
+    )
+    assert result_payload == b"stuffs"  # Signature errors are only reported
+    signature_errors = [
+        entry for entry in error_report.get_error_entries()
+        if entry["entry_type"] == DecryptionErrorType.SIGNATURE_ERROR
+    ]
+    assert len(signature_errors) == corrupted_signature_count
+
+
+def test_retrocompatibility_for_payload_ciphertext_signatures_field_in_cryptainer_storage(tmp_path):
+    legacy_cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    _to_legacy_payload_signatures(legacy_cryptoconf)
+
+    # Streaming encryption pipeline handles legacy cryptoconfs too
+    storage = CryptainerStorage(default_cryptoconf=legacy_cryptoconf, cryptainer_dir=tmp_path)
+    storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", cryptainer_metadata=None)
+    storage.wait_for_idle_state()
+
+    cryptainer = storage.load_cryptainer_from_storage("animals.dat.crypt")
+    assert cryptainer["payload_cipher_layers"][0]["payload_ciphertext_signatures"][0]["payload_signature_struct"]
+
+    result_payload, error_report = storage.decrypt_cryptainer_from_storage("animals.dat.crypt")
+    assert result_payload == b"dogs\ncats\n"
+    assert not error_report.has_errors()
 
 
 def test_retrocompatibility_for_payload_ciphertext_signatures_field_with_both_namings():

@@ -26,7 +26,7 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
     signature_dependencies = {}
     cipher_dependencies = {}
 
-    def _add_keypair_identifiers_for_trustee(mapper, trustee_conf, keychain_uid, key_algo):
+    def _add_keypair_identifiers_to_mapper_for_trustee(mapper, trustee_conf, keychain_uid, key_algo):
         trustee_id = get_trustee_id(trustee_conf=trustee_conf)
         keypair_identifiers = dict(keychain_uid=keychain_uid, key_algo=key_algo)
         mapper.setdefault(trustee_id, (trustee_conf, []))
@@ -48,7 +48,7 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
                 assert key_cipher_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS, key_cipher_algo
                 keychain_uid_for_encryption = key_cipher_layer.get("keychain_uid") or keychain_uid
                 trustee_conf = key_cipher_layer["key_cipher_trustee"]
-                _add_keypair_identifiers_for_trustee(
+                _add_keypair_identifiers_to_mapper_for_trustee(
                     mapper=cipher_dependencies,
                     trustee_conf=trustee_conf,
                     keychain_uid=keychain_uid_for_encryption,
@@ -57,7 +57,7 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
 
     def _grab_signature_dependencies(signature_confs):
         for signature_conf in signature_confs:
-            _add_keypair_identifiers_for_trustee(
+            _add_keypair_identifiers_to_mapper_for_trustee(
                 mapper=signature_dependencies,
                 trustee_conf=signature_conf["payload_signature_trustee"],
                 keychain_uid=signature_conf.get("keychain_uid") or keychain_uid,

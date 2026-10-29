@@ -373,6 +373,7 @@ def generate_ecc_keypair(curve):
 
 # PBKDF2-HMAC-SHA256 count recommended by OWASP (2023); legacy PEMs stored their own count (default 1000) and stay loadable
 PEM_PBKDF2_ITERATIONS = 600000
+PEM_PBKDF2_MAX_ITERATIONS = 10_000_000  # Iteration count is read from untrusted PEMs, so it must be bounded (~2s at most)
 
 _OID_PBES2 = "1.2.840.113549.1.5.13"
 _OID_PBKDF2 = "1.2.840.113549.1.5.12"
@@ -435,6 +436,9 @@ def _decrypt_pkcs8_from_pem(key_pem, passphrase):
         salt, iv, ciphertext = (DerOctetString().decode(x).payload for x in (salt, iv, ciphertext))
     except (ValueError, TypeError):
         return None  # Unexpected structure, e.g. legacy protection or unencrypted key
+
+    if not isinstance(iteration_count, int) or not 0 < iteration_count <= PEM_PBKDF2_MAX_ITERATIONS:
+        raise ValueError("Unsupported PBKDF2 iteration count in encrypted private key")
 
     key = hashlib.pbkdf2_hmac("sha256", passphrase, salt, iteration_count, dklen=32)
     try:

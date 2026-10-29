@@ -388,23 +388,38 @@ def import_ecc_key_from_pem(*args, **kwargs):
     return ECC.import_key(*args, **kwargs)
 
 
+# PBKDF2-HMAC-SHA256 count recommended by OWASP (2023); legacy PEMs stored their own count (default 1000) and stay loadable
+PEM_PROTECTION = "PBKDF2WithHMAC-SHA256AndAES256-CBC"
+PEM_PROT_PARAMS = {"iteration_count": 600000}
+
+
 def export_rsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
     extra_params = (
-        dict(passphrase=passphrase, pkcs=8, protection="PBKDF2WithHMAC-SHA1AndAES256-CBC") if passphrase else {}
+        dict(passphrase=passphrase, pkcs=8, protection=PEM_PROTECTION, prot_params=PEM_PROT_PARAMS)
+        if passphrase
+        else {}
     )
     return private_key.export_key(format="PEM", **extra_params)
 
 
 def export_dsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
-    extra_params = (
-        dict(passphrase=passphrase, pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC") if passphrase else {}
-    )
-    return private_key.export_key(format="PEM", **extra_params)
+    if not passphrase:
+        return private_key.export_key(format="PEM")
+    # DsaKey.export_key() can't take prot_params, so we encrypt the PKCS8 DER ourselves
+    from Crypto.IO import PEM
+    from Crypto.IO._PBES import PBES2
+    from Crypto.Util.py3compat import tobytes
+
+    der = private_key.export_key(format="DER", pkcs8=True)
+    encrypted = PBES2.encrypt(der, tobytes(passphrase), PEM_PROTECTION, PEM_PROT_PARAMS)
+    return PEM.encode(encrypted, "ENCRYPTED PRIVATE KEY").encode("ascii")
 
 
 def export_ecc_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
     extra_params = (
-        dict(passphrase=passphrase, use_pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndAES128-CBC") if passphrase else {}
+        dict(passphrase=passphrase, use_pkcs8=True, protection=PEM_PROTECTION, prot_params=PEM_PROT_PARAMS)
+        if passphrase
+        else {}
     )
     return private_key.export_key(format="PEM", **extra_params)
 

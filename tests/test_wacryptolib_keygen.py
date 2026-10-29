@@ -180,3 +180,38 @@ def test_key_algos_mapping_and_isolation():
     # Some encryption algos are symmetric, and use simple keys of random bytes
     asymmetric_key_algos = set(SUPPORTED_CIPHER_ALGOS) - set(SUPPORTED_SYMMETRIC_KEY_ALGOS)
     assert asymmetric_key_algos <= set(SUPPORTED_ASYMMETRIC_KEY_ALGOS)
+
+
+# Protection settings used by previous versions of the lib (default PBKDF2 iteration count of 1000)
+LEGACY_PEM_EXPORT_PARAMS = {
+    "RSA_OAEP": dict(pkcs=8, protection="PBKDF2WithHMAC-SHA1AndAES256-CBC"),
+    "DSA_DSS": dict(pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC"),
+    "ECC_DSS": dict(use_pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndAES128-CBC"),
+}
+
+
+@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
+def test_legacy_passphrase_protected_pem_still_loadable(key_algo):
+    skip_if_fallback_backend("legacy PEM generation via pycryptodome")
+    passphrase = "Thïs is a passphrâse"
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo)
+    key = load_asymmetric_key_from_pem_bytestring(key_pem=keypair["private_key"], key_algo=key_algo)
+
+    legacy_pem = key.export_key(
+        format="PEM", passphrase=_encode_passphrase(passphrase), **LEGACY_PEM_EXPORT_PARAMS[key_algo]
+    )
+    loaded = load_asymmetric_key_from_pem_bytestring(key_pem=legacy_pem, key_algo=key_algo, passphrase=passphrase)
+    assert loaded.export_key(format="DER") == key.export_key(format="DER")
+
+
+@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
+def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
+    skip_if_fallback_backend("PBKDF2 parameters inspection")
+    import base64
+
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, passphrase="abc")
+    pem = keypair["private_key"]
+    assert pem.startswith(b"-----BEGIN ENCRYPTED PRIVATE KEY-----")
+    der = base64.b64decode(b"".join(pem.splitlines()[1:-1]))
+    assert (600000).to_bytes(3, "big") in der  # PBKDF2 iteration count
+    assert b"\x2a\x86\x48\x86\xf7\x0d\x02\x09" in der  # OID of hmacWithSHA256

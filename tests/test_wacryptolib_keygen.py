@@ -157,7 +157,7 @@ def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
         )
         _check_is_asymmetric_key_object(private_key)
 
-        error_matcher = "key format is not supported|Invalid DER encoding"
+        error_matcher = "key format is not supported|Invalid DER encoding|Wrong passphrase"
 
         with pytest.raises(KeyLoadingError, match=error_matcher):
             load_asymmetric_key_from_pem_bytestring(
@@ -215,6 +215,24 @@ def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
     der = base64.b64decode(b"".join(pem.splitlines()[1:-1]))
     assert b"\x02\x03\x09\x27\xc0" in der  # DER INTEGER 600000, the PBKDF2 iteration count
     assert b"\x2a\x86\x48\x86\xf7\x0d\x02\x09" in der  # OID of hmacWithSHA256
+    assert b"\x60\x86\x48\x01\x65\x03\x04\x01\x2a" in der  # OID of aes256-CBC
+
+
+@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
+def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
+    skip_if_fallback_backend("passphrase-protected PEM export")
+    import time
+
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
+    private_key = keypair["private_key"]
+
+    start = time.monotonic()
+    pem = wacryptolib.keygen._serialize_key_object_to_pem_bytestring(private_key, key_algo=key_algo, passphrase=b"abc")
+    loaded = load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo=key_algo, passphrase=b"abc")
+    # Pure-python PBKDF2 took ~10s per operation here, hashlib takes ~0.1s
+    assert time.monotonic() - start < 3
+
+    assert loaded.export_key(format="DER") == private_key.export_key(format="DER")
 
 
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])

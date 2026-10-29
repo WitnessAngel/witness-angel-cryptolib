@@ -370,59 +370,120 @@ def generate_ecc_keypair(curve):
     return public_key, private_key
 
 
-def import_rsa_key_from_pem(*args, **kwargs):
+# PBKDF2-HMAC-SHA256 count recommended by OWASP (2023); legacy PEMs stored their own count (default 1000) and stay loadable
+PEM_PBKDF2_ITERATIONS = 600000
+
+_OID_PBES2 = "1.2.840.113549.1.5.13"
+_OID_PBKDF2 = "1.2.840.113549.1.5.12"
+_OID_HMAC_SHA256 = "1.2.840.113549.2.9"
+_OID_AES256_CBC = "2.16.840.1.101.3.4.1.42"
+
+
+def _encrypt_pkcs8_to_pem(clear_pkcs8_der, passphrase):
+    """PBES2 (PBKDF2-HMAC-SHA256 + AES256-CBC) encryption, using hashlib since pycryptodome's PBES2 runs PBKDF2 in pure python."""
+    import hashlib
+    from Crypto.IO import PEM
+    from Crypto.Random import get_random_bytes
+    from Crypto.Util.asn1 import DerSequence, DerObjectId, DerOctetString, DerNull
+
+    salt, iv = get_random_bytes(16), get_random_bytes(AES_BLOCK_SIZE)
+    key = hashlib.pbkdf2_hmac("sha256", passphrase, salt, PEM_PBKDF2_ITERATIONS, dklen=32)
+    ciphertext = encrypt_via_aes_cbc(clear_pkcs8_der, key=key, iv=iv)
+    pbkdf2_params = DerSequence(
+        [DerOctetString(salt), PEM_PBKDF2_ITERATIONS, DerSequence([DerObjectId(_OID_HMAC_SHA256), DerNull()])]
+    )
+    pbes2_params = DerSequence(
+        [
+            DerSequence([DerObjectId(_OID_PBKDF2), pbkdf2_params]),
+            DerSequence([DerObjectId(_OID_AES256_CBC), DerOctetString(iv)]),
+        ]
+    )
+    encrypted_der = DerSequence(
+        [DerSequence([DerObjectId(_OID_PBES2), pbes2_params]), DerOctetString(ciphertext)]
+    ).encode()
+    return PEM.encode(encrypted_der, "ENCRYPTED PRIVATE KEY").encode("ascii")
+
+
+def _decrypt_pkcs8_from_pem(key_pem, passphrase):
+    """Return the clear PKCS8 DER of a PEM made by _encrypt_pkcs8_to_pem(), or None for other formats (left to pycryptodome)."""
+    import hashlib
+    from Crypto.IO import PEM
+    from Crypto.Util.asn1 import DerSequence, DerObjectId, DerOctetString
+
+    def _oid(der):
+        return DerObjectId().decode(der).value
+
+    try:
+        der, marker, _ = PEM.decode(key_pem.decode("ascii") if isinstance(key_pem, bytes) else key_pem)
+        if marker != "ENCRYPTED PRIVATE KEY":
+            return None
+        algo, ciphertext = DerSequence().decode(der, nr_elements=2)
+        pbes2_oid, pbes2_params = DerSequence().decode(algo, nr_elements=2)
+        kdf, cipher = DerSequence().decode(pbes2_params, nr_elements=2)
+        kdf_oid, kdf_params = DerSequence().decode(kdf, nr_elements=2)
+        salt, iteration_count, prf = DerSequence().decode(kdf_params, nr_elements=3)
+        prf_oid = DerSequence().decode(prf)[0]
+        cipher_oid, iv = DerSequence().decode(cipher, nr_elements=2)
+        if (_oid(pbes2_oid), _oid(kdf_oid), _oid(prf_oid), _oid(cipher_oid)) != (
+            _OID_PBES2,
+            _OID_PBKDF2,
+            _OID_HMAC_SHA256,
+            _OID_AES256_CBC,
+        ):
+            return None
+        salt, iv, ciphertext = (DerOctetString().decode(x).payload for x in (salt, iv, ciphertext))
+    except (ValueError, TypeError):
+        return None  # Unexpected structure, e.g. legacy protection or unencrypted key
+
+    key = hashlib.pbkdf2_hmac("sha256", passphrase, salt, iteration_count, dklen=32)
+    try:
+        return decrypt_via_aes_cbc(ciphertext, key=key, iv=iv)
+    except ValueError as exc:  # Bad padding
+        raise ValueError("Wrong passphrase or corrupted encrypted private key") from exc
+
+
+def _import_key_from_pem(key_module, key_pem, passphrase=None):
+    if passphrase:
+        clear_pkcs8_der = _decrypt_pkcs8_from_pem(key_pem, passphrase)
+        if clear_pkcs8_der is not None:
+            return key_module.import_key(clear_pkcs8_der)
+    return key_module.import_key(key_pem, passphrase=passphrase)
+
+
+def _export_key_to_pem(key, passphrase, **pkcs8_der_params):
+    if not passphrase or not key.has_private():  # Public keys are never encrypted
+        return key.export_key(format="PEM")
+    return _encrypt_pkcs8_to_pem(key.export_key(format="DER", **pkcs8_der_params), passphrase)
+
+
+def import_rsa_key_from_pem(key_pem, passphrase=None):
     from Crypto.PublicKey import RSA
 
-    return RSA.import_key(*args, **kwargs)
+    return _import_key_from_pem(RSA, key_pem, passphrase=passphrase)
 
 
-def import_dsa_key_from_pem(*args, **kwargs):
+def import_dsa_key_from_pem(key_pem, passphrase=None):
     from Crypto.PublicKey import DSA
 
-    return DSA.import_key(*args, **kwargs)
+    return _import_key_from_pem(DSA, key_pem, passphrase=passphrase)
 
 
-def import_ecc_key_from_pem(*args, **kwargs):
+def import_ecc_key_from_pem(key_pem, passphrase=None):
     from Crypto.PublicKey import ECC
 
-    return ECC.import_key(*args, **kwargs)
-
-
-# PBKDF2-HMAC-SHA256 count recommended by OWASP (2023); legacy PEMs stored their own count (default 1000) and stay loadable
-PEM_PROTECTION = "PBKDF2WithHMAC-SHA256AndAES256-CBC"
-PEM_PROT_PARAMS = {"iteration_count": 600000}
+    return _import_key_from_pem(ECC, key_pem, passphrase=passphrase)
 
 
 def export_rsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
-    extra_params = (
-        dict(passphrase=passphrase, pkcs=8, protection=PEM_PROTECTION, prot_params=PEM_PROT_PARAMS)
-        if passphrase and private_key.has_private()  # Public keys are never encrypted
-        else {}
-    )
-    return private_key.export_key(format="PEM", **extra_params)
+    return _export_key_to_pem(private_key, passphrase, pkcs=8)
 
 
 def export_dsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
-    if not passphrase or not private_key.has_private():  # Public keys are never encrypted
-        return private_key.export_key(format="PEM")
-    # DsaKey.export_key() can't take prot_params, so we encrypt the PKCS8 DER ourselves.
-    # ponytail: relies on private module Crypto.IO._PBES, covered by the DSA keygen tests - recheck on pycryptodome upgrades
-    from Crypto.IO import PEM
-    from Crypto.IO._PBES import PBES2
-    from Crypto.Util.py3compat import tobytes
-
-    der = private_key.export_key(format="DER", pkcs8=True)
-    encrypted = PBES2.encrypt(der, tobytes(passphrase), PEM_PROTECTION, PEM_PROT_PARAMS)
-    return PEM.encode(encrypted, "ENCRYPTED PRIVATE KEY").encode("ascii")
+    return _export_key_to_pem(private_key, passphrase, pkcs8=True)
 
 
 def export_ecc_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
-    extra_params = (
-        dict(passphrase=passphrase, use_pkcs8=True, protection=PEM_PROTECTION, prot_params=PEM_PROT_PARAMS)
-        if passphrase and private_key.has_private()  # Public keys are never encrypted
-        else {}
-    )
-    return private_key.export_key(format="PEM", **extra_params)
+    return _export_key_to_pem(private_key, passphrase, use_pkcs8=True)
 
 
 # MESSAGE SIGNATURES #

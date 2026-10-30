@@ -66,13 +66,10 @@ __all__ = [
     "verify_with_pss",
     "sign_with_dss",
     "verify_with_dss",
-    "ml_kem_key_class_fetcher",
-    "ml_dsa_key_class_fetcher",
+    "pq_key_class_fetcher",
     "generate_pq_keypair",
-    "import_ml_kem_key_from_pem",
-    "import_ml_dsa_key_from_pem",
-    "export_ml_kem_key_to_pem",
-    "export_ml_dsa_key_to_pem",
+    "import_pq_key_from_pem",
+    "export_pq_key_to_pem",
     "encrypt_via_ml_kem_768",
     "decrypt_via_ml_kem_768",
     "sign_with_mldsa",
@@ -770,13 +767,10 @@ def _build_post_quantum_stub(name, operation):
     return _post_quantum_stub
 
 
-ml_kem_key_class_fetcher = _build_post_quantum_stub("ml_kem_key_class_fetcher", "ML-KEM")
-ml_dsa_key_class_fetcher = _build_post_quantum_stub("ml_dsa_key_class_fetcher", "ML-DSA")
+pq_key_class_fetcher = _build_post_quantum_stub("pq_key_class_fetcher", "Post-quantum key class fetching")
 generate_pq_keypair = _build_post_quantum_stub("generate_pq_keypair", "Post-quantum key generation")
-import_ml_kem_key_from_pem = _build_post_quantum_stub("import_ml_kem_key_from_pem", "ML-KEM")
-import_ml_dsa_key_from_pem = _build_post_quantum_stub("import_ml_dsa_key_from_pem", "ML-DSA")
-export_ml_kem_key_to_pem = _build_post_quantum_stub("export_ml_kem_key_to_pem", "ML-KEM")
-export_ml_dsa_key_to_pem = _build_post_quantum_stub("export_ml_dsa_key_to_pem", "ML-DSA")
+import_pq_key_from_pem = _build_post_quantum_stub("import_pq_key_from_pem", "Post-quantum key import")
+export_pq_key_to_pem = _build_post_quantum_stub("export_pq_key_to_pem", "Post-quantum key export")
 encrypt_via_ml_kem_768 = _build_post_quantum_stub("encrypt_via_ml_kem_768", "ML-KEM")
 decrypt_via_ml_kem_768 = _build_post_quantum_stub("decrypt_via_ml_kem_768", "ML-KEM")
 sign_with_mldsa = _build_post_quantum_stub("sign_with_mldsa", "ML-DSA")

@@ -129,6 +129,10 @@ def seal(receiver_public_key: bytes, plaintext: bytes, ephemeral_private_key: by
     :return: tuple (enc, ciphertext), the latter including its 16-bytes MAC tag"""
     if len(receiver_public_key) != 32:
         raise ValueError("X25519 public key must be 32 bytes long")
+    # The receiver puts its canonically re-encoded public key in the HPKE context, so other encodings would
+    # yield undecryptable ciphertexts
+    if receiver_public_key[31] & 0x80 or int.from_bytes(receiver_public_key, "little") >= _P:
+        raise ValueError("Non-canonical X25519 public key")
     if ephemeral_private_key is None:
         ephemeral_private_key = os.urandom(32)
     enc, key, base_nonce = _derive_key_schedule(receiver_public_key, ephemeral_private_key)

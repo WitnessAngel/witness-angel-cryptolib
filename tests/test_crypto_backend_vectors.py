@@ -129,6 +129,14 @@ def test_chacha20_poly1305(backend, vector):
         decrypt(tag[:-1] + bytes([tag[-1] ^ 1]))
 
 
+
+def test_vendored_chacha20_counter_may_reach_but_not_exceed_32_bits():
+    cipher = ChaCha20Poly1305Cipher(bytes(32), bytes(12))
+    cipher._counter = 0xFFFFFFFF  # Last valid block counter
+    cipher.encrypt(bytes(64))
+    with pytest.raises(OverflowError):
+        cipher.encrypt(b"x")
+
 def test_x25519_rfc7748():
     # Section 5.2, scalar multiplication
     x25519 = hpke_x25519_seal.x25519
@@ -249,3 +257,19 @@ def test_vendored_dsa_signature_generation(section_name):
         signature = dsa.sign(key, hashlib.sha512(h(case["Msg"])).digest(), k=int(case["K"], 16))
         q_length = len(domain["Q"]) // 2
         assert signature == int(case["R"], 16).to_bytes(q_length, "big") + int(case["S"], 16).to_bytes(q_length, "big")
+
+
+def test_hpke_seal_rejects_invalid_public_keys():
+    # RFC 9180 section 7.1.4: an all-zero X25519 shared secret must be rejected
+    with pytest.raises(ValueError, match="low order"):
+        hpke_x25519_seal.seal(bytes(32), b"abc")
+    with pytest.raises(ValueError, match="32 bytes"):
+        hpke_x25519_seal.seal(b"abc", b"abc")
+
+    # Non-canonical encodings (RFC 7748 section 5) would yield ciphertexts that pycryptodome can't decrypt
+    public_key = h("8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a")  # RFC 7748 section 6.1
+    high_bit_public_key = public_key[:31] + bytes([public_key[31] | 0x80])
+    p_plus_one_public_key = (2**255 - 19 + 1).to_bytes(32, "little")  # Same point as u=1
+    for non_canonical_public_key in (high_bit_public_key, p_plus_one_public_key):
+        with pytest.raises(ValueError, match="Non-canonical"):
+            hpke_x25519_seal.seal(non_canonical_public_key, b"abc")

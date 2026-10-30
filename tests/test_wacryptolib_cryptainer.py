@@ -30,6 +30,8 @@ from wacryptolib.cryptainer import (
     decrypt_payload_from_cryptainer,
     CRYPTAINER_FORMAT,
     CRYPTAINER_STATES,
+    CryptainerDecryptor,
+    OperationReport,
     CryptainerStorage,
     extract_metadata_from_cryptainer,
     CryptainerBase,
@@ -2161,6 +2163,12 @@ def _generate_corrupted_cryptoconfs(cryptoconf, is_complex_conf, include_extende
         shared_secret["key_shared_secret_threshold"] = 0
         corrupted_confs.append(corrupted_conf6_quater)
 
+        # Empty the shards of shared secret, with a threshold that is valid on its own
+        corrupted_conf6_quater_bis = copy.deepcopy(cryptoconf)
+        corrupted_conf6_quater_bis["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_shards"] = []
+        corrupted_conf6_quater_bis["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_threshold"] = 1
+        corrupted_confs.append(corrupted_conf6_quater_bis)
+
         # Empty the ciphers of a shard
         corrupted_conf6_quinquies = copy.deepcopy(cryptoconf)
         del corrupted_conf6_quinquies["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_shards"][
@@ -2298,6 +2306,7 @@ def test_cryptainer_decryption_rejects_invalid_structures():
     for corrupt in [
         _corrupt_last_shard,
         _set_threshold_and_shards(0, shards=[]),
+        _set_threshold_and_shards(1, shards=[]),
         _set_threshold_and_shards(0),
         _set_threshold_and_shards(-1),
         _set_threshold_and_shards(shard_count + 1),  # Shards are left non-empty
@@ -2310,6 +2319,65 @@ def test_cryptainer_decryption_rejects_invalid_structures():
             decrypt_payload_from_cryptainer(corrupted_cryptainer)
         with pytest.raises(SchemaValidationError):
             gather_decryptable_symkeys([("corrupted", corrupted_cryptainer)])
+
+
+def test_cryptainer_decryption_rejects_invalid_algos_and_format():
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    assert decrypt_payload_from_cryptainer(cryptainer)[0] == b"stuffs"
+
+    corrupted_cryptainer = copy.deepcopy(cryptainer)
+    corrupted_cryptainer["payload_cipher_layers"][0]["payload_cipher_algo"] = "RSA_OAEP"  # Not symmetric
+    with pytest.raises(SchemaValidationError):
+        decrypt_payload_from_cryptainer(corrupted_cryptainer)
+
+    corrupted_cryptainer = copy.deepcopy(cryptainer)
+    corrupted_cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_cipher_algo"] = "DSA_DSS"  # Signature
+    with pytest.raises(SchemaValidationError):
+        decrypt_payload_from_cryptainer(corrupted_cryptainer)
+    with pytest.raises(SchemaValidationError):
+        gather_decryptable_symkeys([("corrupted", corrupted_cryptainer)])
+
+    corrupted_cryptainer = copy.deepcopy(cryptainer)
+    del corrupted_cryptainer["cryptainer_format"]
+    with pytest.raises(ValueError, match="Unknown cryptainer format"):
+        decrypt_payload_from_cryptainer(corrupted_cryptainer)
+
+    corrupted_cryptainer = copy.deepcopy(cryptainer)
+    corrupted_cryptainer["payload_ciphertext_struct"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Not loaded
+    with pytest.raises(SchemaValidationError, match="must be inline"):
+        decrypt_payload_from_cryptainer(corrupted_cryptainer)
+
+    # Defense in depth, even if upfront validation is bypassed
+    with pytest.raises(SchemaValidationError, match="Empty key_cipher_layers"):
+        CryptainerDecryptor(keystore_pool=InMemoryKeystorePool())._decrypt_key_through_multiple_layers(
+            default_keychain_uid=uuid.uuid4(),
+            key_ciphertext=b"xyz",
+            key_cipher_layers=[],
+            cryptainer_metadata=None,
+            operation_report=OperationReport(),
+        )
+
+
+def test_cryptainer_validation_errors_dont_include_payload_ciphertext():
+    payload = b"x" * 1_000_000
+    cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    cryptainer["unexpected_key"] = True
+    with pytest.raises(SchemaValidationError) as exc_info:
+        decrypt_payload_from_cryptainer(cryptainer)
+    assert len(str(exc_info.value)) < 100_000
+
+
+def test_gather_decryptable_symkeys_accepts_payloadless_cryptainers_and_iterators(tmp_path):
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    cryptainer_filepath = tmp_path.joinpath("my.crypt")
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=True)
+    payloadless_cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath, include_payload_ciphertext=False)
+    assert "payload_ciphertext_struct" not in payloadless_cryptainer
+
+    expected = gather_decryptable_symkeys([("my.crypt", cryptainer)])
+    assert expected
+    assert gather_decryptable_symkeys([("my.crypt", payloadless_cryptainer)]) == expected
+    assert gather_decryptable_symkeys((x for x in [("my.crypt", cryptainer)])) == expected  # One-shot iterable
 
 
 @pytest.mark.parametrize("canonical", [False, True])

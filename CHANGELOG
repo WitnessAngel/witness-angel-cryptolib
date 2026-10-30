@@ -13,8 +13,12 @@ Development
 * Update documentation to clarify RELAXED as the default format
 * **BREAKING**: Cryptainer decryption (decrypt_payload_from_cryptainer(), decrypt_cryptainer_from_storage(),
   gather_decryptable_symkeys()) now validates the whole cryptainer structure upfront, and raises SchemaValidationError
-  instead of returning data or (None, operation_report) for malformed cryptainers (e.g. empty payload_cipher_layers,
-  which previously returned the inline ciphertext as unauthenticated plaintext, or invalid shared-secret thresholds)
+  instead of returning data or (None, operation_report) for most malformed cryptainers (e.g. empty
+  payload_cipher_layers, which previously returned the inline ciphertext as unauthenticated plaintext, invalid
+  shared-secret thresholds, or wrong cipher algorithms); cryptainers loaded without their payload ciphertext are still
+  accepted by gather_decryptable_symkeys()
+* **BREAKING**: Cryptainer/cryptoconf schemas now only accept symmetric ciphers as payload_cipher_algo, and
+  asymmetric ciphers (not signature algorithms) as asymmetric key_cipher_algo
 * Generated JSON schemas now enforce non-empty payload/key cipher layers, shared-secret shards and sigconf/sigainer
   plaintext signatures, as well as a strictly positive shared-secret threshold
 

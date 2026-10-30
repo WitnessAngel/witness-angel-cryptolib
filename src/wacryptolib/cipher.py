@@ -490,9 +490,14 @@ def _decrypt_via_ml_kem_768(cipherdict: dict, key_dict: dict, verify_integrity_t
     _check_ml_kem_key(key)
     if not key.has_private():
         raise ValueError("A private ML-KEM key is required for decryption")
-    return _crypto_backend.decrypt_via_ml_kem_768(
-        cipherdict["kem_ciphertext"], cipherdict["ciphertext"], private_key=key
-    )
+    try:
+        return _crypto_backend.decrypt_via_ml_kem_768(
+            cipherdict["kem_ciphertext"], cipherdict["ciphertext"], private_key=key
+        )
+    except ValueError as exc:
+        # With a KEM + AEAD, a wrong private key and a tampered ciphertext can NOT be told apart: ML-KEM's implicit
+        # rejection then yields a random key, and the AEAD tag check fails (so both become integrity errors)
+        raise ValueError("Wrong ML-KEM private key or corrupted ciphertext (%s)" % exc) from exc
 
 
 # This file is part of Witness Angel Cryptolib

@@ -161,21 +161,46 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
     return Schema(full_schema_dict)
 
 
+_NON_EMPTY_LIST_FIELDS = ("payload_cipher_layers", "key_cipher_layers", "key_shared_secret_shards")
+
+
+def _add_json_schema_min_items(json_schema):
+    """Inject "minItems: 1" for cipher layer lists, since the json_schema() export drops the "len" callables.
+
+    Shared-secret threshold bounds can't be expressed in JSON Schema, only python-schema checks them.
+    """
+    if isinstance(json_schema, dict):
+        for key, value in json_schema.items():
+            if key == "properties":
+                for field_name, field_schema in value.items():
+                    if field_name in _NON_EMPTY_LIST_FIELDS and field_schema.get("type") == "array":
+                        field_schema["minItems"] = 1
+            _add_json_schema_min_items(value)
+    elif isinstance(json_schema, list):
+        for value in json_schema:
+            _add_json_schema_min_items(value)
+    return json_schema
+
+
 # CONFIGURATION IN ORDER TO ENCRYPT DATA
 CRYPTOCONF_SCHEMA_PYTHON = _create_cryptostructure_schema(
     for_cryptainer=False, for_cryptosig=False, extended_json_format=False
 )
-CRYPTOCONF_SCHEMA_JSON = _create_cryptostructure_schema(
-    for_cryptainer=False, for_cryptosig=False, extended_json_format=True
-).json_schema("cryptoconf_schema.json")
+CRYPTOCONF_SCHEMA_JSON = _add_json_schema_min_items(
+    _create_cryptostructure_schema(
+        for_cryptainer=False, for_cryptosig=False, extended_json_format=True
+    ).json_schema("cryptoconf_schema.json")
+)
 
 # CONTAINER OF ENCRYPTED DATA
 CRYPTAINER_SCHEMA_PYTHON = _create_cryptostructure_schema(
     for_cryptainer=True, for_cryptosig=False, extended_json_format=False
 )
-CRYPTAINER_SCHEMA_JSON = _create_cryptostructure_schema(
-    for_cryptainer=True, for_cryptosig=False, extended_json_format=True
-).json_schema("cryptainer_schema.json")
+CRYPTAINER_SCHEMA_JSON = _add_json_schema_min_items(
+    _create_cryptostructure_schema(
+        for_cryptainer=True, for_cryptosig=False, extended_json_format=True
+    ).json_schema("cryptainer_schema.json")
+)
 
 # CONFIGURATION IN ORDER TO ONLY SIGN DATA
 SIGCONF_SCHEMA_PYTHON = _create_cryptostructure_schema(

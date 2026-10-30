@@ -80,10 +80,12 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
 
     :return: dict with a tuple of the cipher key and the symkey/shard by trustee id.
     """
-    from wacryptolib.cryptainer import check_cryptainer_sanity  # LAZY import, _validation is loaded after us
+    from wacryptolib.cryptainer import _check_cryptainer_structure  # LAZY import, _validation is loaded after us
 
+    cryptainers_with_names = list(cryptainers_with_names)  # Might be a one-shot iterable, and we loop twice
     for _cryptainer_name, cryptainer in cryptainers_with_names:
-        check_cryptainer_sanity(cryptainer)  # Else e.g. empty key_cipher_layers would crash below
+        # Else e.g. empty key_cipher_layers would crash below; payload ciphertext is not needed here
+        _check_cryptainer_structure(cryptainer, require_inline_payload=False)
 
     decryptable_symkeys_per_trustee = {}
 

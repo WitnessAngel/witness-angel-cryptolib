@@ -14,9 +14,9 @@ from schema import Schema, Or, And
 from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_CIPHER_ALGOS
 from wacryptolib.cryptainer import CryptainerBase, logger, CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
     get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value, get_payload_ciphertext_signatures, \
-    check_cryptainer_sanity
+    _check_cryptainer_structure
 from wacryptolib.exceptions import KeyDoesNotExist, KeyLoadingError, DecryptionError, DecryptionIntegrityError, \
-    KeystoreDoesNotExist, SignatureVerificationError
+    KeystoreDoesNotExist, SignatureVerificationError, SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring, SUPPORTED_SYMMETRIC_KEY_ALGOS, \
     SUPPORTED_ASYMMETRIC_KEY_ALGOS
@@ -310,7 +310,7 @@ class CryptainerDecryptor(CryptainerBase):
         """
         assert isinstance(cryptainer, dict), cryptainer
 
-        cryptainer_format = cryptainer["cryptainer_format"]
+        cryptainer_format = cryptainer.get("cryptainer_format")
         if cryptainer_format != CRYPTAINER_FORMAT:
             raise ValueError("Unknown cryptainer format %s" % cryptainer_format)
 
@@ -318,7 +318,7 @@ class CryptainerDecryptor(CryptainerBase):
         # network or private key operation. E.g. without this, an empty payload_cipher_layers list would make the
         # inline "ciphertext" be returned as plaintext. Note that this checks structure, NOT authenticity: ciphertext
         # signatures are only reported, so anyone with trustee public keys can still build a valid-looking cryptainer.
-        check_cryptainer_sanity(cryptainer)
+        _check_cryptainer_structure(cryptainer, require_inline_payload=True)
 
         predecrypted_symkey_mapper = None
         operation_report = OperationReport()
@@ -482,7 +482,8 @@ class CryptainerDecryptor(CryptainerBase):
         operation_report: OperationReport,
         predecrypted_symkey_mapper: Optional[dict] = None,
     ) -> Optional[bytes]:
-        assert len(key_cipher_layers), key_cipher_layers  # Extra safety, validator already checked it
+        if not key_cipher_layers:  # Extra safety, validator already checked it, but asserts vanish under "python -O"
+            raise SchemaValidationError("Empty key_cipher_layers list is forbidden in cryptainer")
 
         key_bytes = None
 

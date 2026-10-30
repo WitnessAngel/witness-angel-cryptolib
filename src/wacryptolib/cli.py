@@ -888,8 +888,6 @@ def decrypt(ctx, cryptainer_name, output_file):
     cryptainer_storage = _get_cryptainer_storage(ctx)
     cryptainer = cryptainer_storage.load_cryptainer_from_storage(cryptainer_name, include_payload_ciphertext=True)
 
-    check_cryptainer_sanity(cryptainer)
-
     medium_content, operation_report = decrypt_payload_from_cryptainer(
         cryptainer, keystore_pool=keystore_pool, passphrase_mapper=None
     )

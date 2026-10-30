@@ -51,6 +51,7 @@ from wacryptolib.cryptainer import (
     check_cryptoconf_sanity,
     check_cryptainer_sanity,
     check_sigainer_sanity,
+    check_sigconf_sanity,
     CRYPTAINER_TEMP_SUFFIX,
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
     ReadonlyCryptainerStorage,
@@ -2225,12 +2226,12 @@ def test_cryptainer_validation_success(cryptoconf):
     check_cryptainer_sanity(cryptainer=cryptainer_json, jsonschema_mode=True)
 
 
-def _generate_corrupted_cryptainers(cryptoconf, include_extended_checks):
+def _generate_corrupted_cryptainers(cryptoconf, include_extended_checks, is_complex_conf=False):
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None)
 
     # We can treat cryptainer as a cryptoconf sructure too!
     corrupted_cryptainers = _generate_corrupted_cryptoconfs(
-        cryptainer, is_complex_conf=False, include_extended_checks=include_extended_checks
+        cryptainer, is_complex_conf=is_complex_conf, include_extended_checks=include_extended_checks
     )
 
     corrupted_cryptainer1 = copy.deepcopy(cryptainer)
@@ -2248,7 +2249,16 @@ def _generate_corrupted_cryptainers(cryptoconf, include_extended_checks):
     return corrupted_cryptainers
 
 
-def test_cryptainer_decryption_rejects_empty_cipher_layers():
+def _get_simple_shamir_cryptainer_and_shared_secret():
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"stuffs", cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
+    )
+    shared_secret = cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][1]
+    assert shared_secret["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER
+    return cryptainer, shared_secret
+
+
+def test_cryptainer_decryption_rejects_invalid_structures():
     forged_cryptainer = {
         "cryptainer_state": CRYPTAINER_STATES.FINISHED,
         "cryptainer_format": CRYPTAINER_FORMAT,
@@ -2258,26 +2268,59 @@ def test_cryptainer_decryption_rejects_empty_cipher_layers():
         "payload_ciphertext_struct": {"ciphertext_location": "inline", "ciphertext_value": b"FORGED PLAINTEXT"},
         "payload_cipher_layers": [],
     }
-    with pytest.raises(SchemaValidationError, match="Empty payload_cipher_layers"):
+    with pytest.raises(SchemaValidationError):
         decrypt_payload_from_cryptainer(forged_cryptainer)
+    with pytest.raises(SchemaValidationError):
+        gather_decryptable_symkeys([("forged", forged_cryptainer)])
 
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
     cryptainer["payload_cipher_layers"][0]["key_cipher_layers"] = []
-    with pytest.raises(SchemaValidationError, match="Empty key_cipher_layers"):
+    with pytest.raises(SchemaValidationError):
         decrypt_payload_from_cryptainer(cryptainer)
+    with pytest.raises(SchemaValidationError):
+        gather_decryptable_symkeys([("corrupted", cryptainer)])
 
-    cryptainer = encrypt_payload_into_cryptainer(
-        payload=b"stuffs", cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
-    )
-    shared_secret = cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][1]
-    assert shared_secret["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER
-    for threshold, shards in [(0, []), (0, shared_secret["key_shared_secret_shards"]), (99, [])]:
+    cryptainer, shared_secret = _get_simple_shamir_cryptainer_and_shared_secret()
+    assert decrypt_payload_from_cryptainer(cryptainer)[0] == b"stuffs"
+    shard_count = len(shared_secret["key_shared_secret_shards"])
+    assert shared_secret["key_shared_secret_threshold"] < shard_count  # Last shard is never walked by decryption
+
+    def _corrupt_last_shard(shared_secret):
+        shared_secret["key_shared_secret_shards"][-1]["key_cipher_layers"] = []
+
+    def _set_threshold_and_shards(threshold, shards=None):
+        def _corrupt(shared_secret):
+            shared_secret["key_shared_secret_threshold"] = threshold
+            if shards is not None:
+                shared_secret["key_shared_secret_shards"] = shards
+        return _corrupt
+
+    for corrupt in [
+        _corrupt_last_shard,
+        _set_threshold_and_shards(0, shards=[]),
+        _set_threshold_and_shards(0),
+        _set_threshold_and_shards(-1),
+        _set_threshold_and_shards(shard_count + 1),  # Shards are left non-empty
+        _set_threshold_and_shards("2"),
+        _set_threshold_and_shards(None),
+    ]:
         corrupted_cryptainer = copy.deepcopy(cryptainer)
-        corrupted_shared_secret = corrupted_cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][1]
-        corrupted_shared_secret["key_shared_secret_threshold"] = threshold
-        corrupted_shared_secret["key_shared_secret_shards"] = shards
-        with pytest.raises(SchemaValidationError, match="Invalid shared secret threshold"):
+        corrupt(corrupted_cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][1])
+        with pytest.raises(SchemaValidationError):
             decrypt_payload_from_cryptainer(corrupted_cryptainer)
+        with pytest.raises(SchemaValidationError):
+            gather_decryptable_symkeys([("corrupted", corrupted_cryptainer)])
+
+
+@pytest.mark.parametrize("canonical", [False, True])
+def test_shared_secret_threshold_lower_bound_via_json_schema(canonical):
+    cryptainer, shared_secret = _get_simple_shamir_cryptainer_and_shared_secret()
+    check_cryptainer_sanity(convert_to_extjson(cryptainer, canonical=canonical), jsonschema_mode=True)
+
+    for threshold in [0, -1]:
+        shared_secret["key_shared_secret_threshold"] = threshold
+        with pytest.raises(SchemaValidationError):
+            check_cryptainer_sanity(convert_to_extjson(cryptainer, canonical=canonical), jsonschema_mode=True)
 
 
 def test_cryptainer_validation_error_via_python_schema():
@@ -2288,8 +2331,13 @@ def test_cryptainer_validation_error_via_python_schema():
             check_cryptainer_sanity(cryptainer=corrupted_cryptainer, jsonschema_mode=False)
 
 
-def test_cryptainer_validation_error_via_json_schema():
-    corrupted_cryptainers = _generate_corrupted_cryptainers(SIMPLE_CRYPTOCONF, include_extended_checks=False)
+@pytest.mark.parametrize(
+    "cryptoconf, is_complex_conf", [(SIMPLE_CRYPTOCONF, False), (COMPLEX_SHAMIR_CRYPTOCONF, True)]
+)
+def test_cryptainer_validation_error_via_json_schema(cryptoconf, is_complex_conf):
+    corrupted_cryptainers = _generate_corrupted_cryptainers(
+        cryptoconf, include_extended_checks=False, is_complex_conf=is_complex_conf
+    )
 
     for corrupted_cryptainer in corrupted_cryptainers:
         with pytest.raises(ValidationError):
@@ -2320,6 +2368,16 @@ def test_sigainer_sanity_and_plaintext_signature_dependencies():
     }
     check_sigainer_sanity(sigainer)
     check_sigainer_sanity(convert_to_extjson(sigainer, canonical=False), jsonschema_mode=True)
+
+    for jsonschema_mode in (False, True):
+        empty_sigainer = dict(sigainer, payload_plaintext_signatures=[])
+        empty_sigconf = {"payload_plaintext_signatures": []}
+        if jsonschema_mode:
+            empty_sigainer = convert_to_extjson(empty_sigainer, canonical=False)
+        with pytest.raises(SchemaValidationError):
+            check_sigainer_sanity(empty_sigainer, jsonschema_mode=jsonschema_mode)
+        with pytest.raises(SchemaValidationError):
+            check_sigconf_sanity(empty_sigconf, jsonschema_mode=jsonschema_mode)
 
     del sigainer["cryptainer_uid"]  # Mandatory field
     with pytest.raises(SchemaValidationError):

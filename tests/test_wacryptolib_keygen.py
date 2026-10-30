@@ -206,7 +206,7 @@ def test_legacy_passphrase_protected_pem_still_loadable(key_algo):
     assert loaded.export_key(format="DER") == key.export_key(format="DER")
 
 
-@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
+@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS", "ML_KEM_768", "ML_DSA_65"])
 def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
     skip_if_fallback_backend("PBKDF2 parameters inspection")
     import base64
@@ -220,7 +220,7 @@ def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
     assert b"\x60\x86\x48\x01\x65\x03\x04\x01\x2a" in der  # OID of aes256-CBC
 
 
-@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
+@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS", "ML_KEM_768", "ML_DSA_65"])
 def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
     skip_if_fallback_backend("passphrase-protected PEM export")
     from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
@@ -236,7 +236,7 @@ def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
     assert loaded.export_key(format="DER") == private_key.export_key(format="DER")
 
 
-@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
+@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS", "ML_KEM_768", "ML_DSA_65"])
 def test_public_key_export_with_passphrase_raises(key_algo):
     skip_if_fallback_backend("passphrase-protected PEM export")
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
@@ -280,12 +280,13 @@ def _craft_pbes2_pem(
     return PEM.encode(der, "ENCRYPTED PRIVATE KEY").encode("ascii")
 
 
+@pytest.mark.parametrize("key_algo", ["ECC_DSS", "ML_KEM_768", "ML_DSA_65"])
 @pytest.mark.parametrize("iteration_count", [0, 10**8, 2**40])
-def test_crafted_pem_iteration_count_is_bounded(iteration_count):
+def test_crafted_pem_iteration_count_is_bounded(iteration_count, key_algo):
     skip_if_fallback_backend("passphrase-protected PEM import")
     pem = _craft_pbes2_pem(iteration_count=iteration_count, ciphertext=b"\x00" * 32)
     with pytest.raises(KeyLoadingError, match="Unsupported PBKDF2 iteration count"):
-        load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo="ECC_DSS", passphrase=b"abc")
+        load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo=key_algo, passphrase=b"abc")
 
 
 def test_crafted_pem_with_optional_key_length_uses_fast_path():

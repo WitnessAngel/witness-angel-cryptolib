@@ -20,7 +20,6 @@ from uuid import UUID
 
 from schema import Or, And, Optional as OptionalKey, Schema
 
-from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
 from wacryptolib.exceptions import (
     KeyAlreadyExists,
     KeyDoesNotExist,
@@ -28,7 +27,7 @@ from wacryptolib.exceptions import (
     ValidationError,
     KeystoreMetadataDoesNotExist,
 )
-from wacryptolib.keygen import generate_keypair
+from wacryptolib.keygen import generate_keypair, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.utilities import (
     synchronized,
     load_from_json_file,
@@ -69,7 +68,7 @@ KEYSTORE_TREE_SCHEMA = Schema(
         "keypairs": [
             {
                 "keychain_uid": UUID,
-                "key_algo": Or(*SUPPORTED_CIPHER_ALGOS),
+                "key_algo": Or(*SUPPORTED_ASYMMETRIC_KEY_ALGOS),  # Signature-only algos included
                 "public_key": bytes,  # MANDATORY
                 "private_key": Or(None, bytes),
             }

@@ -18,9 +18,9 @@ import hashlib
 import hmac
 import os
 
-try:
+if "." in __name__:  # Inside wacryptolib package
     from .vendor.chacha20_poly1305 import ChaCha20Poly1305Cipher
-except (ImportError, ValueError):  # Copied as a top-level module on micropython (older ones raise ValueError)
+else:  # Copied as a top-level module on micropython, where relative imports fail
     from chacha20_poly1305 import ChaCha20Poly1305Cipher
 
 _P = 2**255 - 19

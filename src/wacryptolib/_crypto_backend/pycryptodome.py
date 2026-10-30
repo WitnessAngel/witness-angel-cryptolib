@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import logging, os, sys
+import functools, logging, os, sys
 
 logger = logging.getLogger(__name__)
 
@@ -509,18 +509,6 @@ def export_ecc_key_to_pem(private_key, passphrase=None):  # FIXME not always pri
 # POST-QUANTUM KEYS (ML-KEM FIPS 203, ML-DSA FIPS 204), IMPORT/EXPORT AND ENCRYPTION #
 
 
-def ml_kem_key_class_fetcher():
-    from Crypto.PublicKey import MLKEM
-
-    return MLKEM.MLKEMKey
-
-
-def ml_dsa_key_class_fetcher():
-    from Crypto.PublicKey import MLDSA
-
-    return MLDSA.MLDSAKey
-
-
 # Our post-quantum key algos, with their pycryptodome module and (fixed) parameter set
 PQ_KEY_ALGOS = {
     "ML_KEM_768": ("MLKEM", "ML_KEM_768"),
@@ -528,6 +516,7 @@ PQ_KEY_ALGOS = {
 }
 
 
+@functools.lru_cache(maxsize=None)  # Called on each encryption/signature, through check_pq_key_algo()
 def _get_pq_key_module_and_param_set(key_algo):
     import importlib
 
@@ -543,6 +532,11 @@ def check_pq_key_algo(key, key_algo):
         raise ValueError("Incompatible key type %s (%s) for %s" % (type(key), getattr(key, "param_set", None), key_algo))
 
 
+def pq_key_class_fetcher(key_algo):
+    key_module, _param_set = _get_pq_key_module_and_param_set(key_algo)
+    return getattr(key_module, "%sKey" % PQ_KEY_ALGOS[key_algo][0])  # E.g. MLKEM.MLKEMKey
+
+
 def generate_pq_keypair(key_algo):
     key_module, param_set = _get_pq_key_module_and_param_set(key_algo)
     private_key = key_module.generate(param_set=param_set)
@@ -550,27 +544,15 @@ def generate_pq_keypair(key_algo):
     return public_key, private_key
 
 
-def import_ml_kem_key_from_pem(key_pem, passphrase=None):
-    from Crypto.PublicKey import MLKEM
-
-    key = _import_key_from_pem(MLKEM, key_pem, passphrase=passphrase)
-    check_pq_key_algo(key, "ML_KEM_768")  # Only parameter set supported for now
+def import_pq_key_from_pem(key_algo, key_pem, passphrase=None):
+    key_module, _param_set = _get_pq_key_module_and_param_set(key_algo)
+    key = _import_key_from_pem(key_module, key_pem, passphrase=passphrase)
+    check_pq_key_algo(key, key_algo)  # E.g. rejects an ML-KEM-512 key for ML_KEM_768
     return key
 
 
-def import_ml_dsa_key_from_pem(key_pem, passphrase=None):
-    from Crypto.PublicKey import MLDSA
-
-    key = _import_key_from_pem(MLDSA, key_pem, passphrase=passphrase)
-    check_pq_key_algo(key, "ML_DSA_65")  # Only parameter set supported for now
-    return key
-
-
-def export_ml_kem_key_to_pem(key, passphrase=None):  # Private keys are always exported as PKCS#8
+def export_pq_key_to_pem(key, passphrase=None):  # Private keys are always exported as PKCS#8
     return _export_key_to_pem(key, passphrase)
-
-
-export_ml_dsa_key_to_pem = export_ml_kem_key_to_pem
 
 
 def encrypt_via_ml_kem_768(plaintext: bytes, public_key) -> tuple:

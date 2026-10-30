@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import functools
 import logging
 from typing import Optional, AnyStr
 
@@ -218,8 +219,8 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
     ML_KEM_768={  # Post-quantum KEM (FIPS 203), fixed parameter set
         "generation_function": lambda: _generate_pq_keypair_as_objects("ML_KEM_768"),
         "generation_extra_parameters": [],
-        "pem_import_function": _crypto_backend.import_ml_kem_key_from_pem,
-        "pem_export_function": _crypto_backend.export_ml_kem_key_to_pem,
+        "pem_import_function": functools.partial(_crypto_backend.import_pq_key_from_pem, "ML_KEM_768"),
+        "pem_export_function": _crypto_backend.export_pq_key_to_pem,
     },
     ## KEYS FOR SIGNATURE ##
     RSA_PSS={  # Same parameters as RSA_OAEP for now
@@ -243,8 +244,8 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
     ML_DSA_65={  # Post-quantum signature (FIPS 204), fixed parameter set
         "generation_function": lambda: _generate_pq_keypair_as_objects("ML_DSA_65"),
         "generation_extra_parameters": [],
-        "pem_import_function": _crypto_backend.import_ml_dsa_key_from_pem,
-        "pem_export_function": _crypto_backend.export_ml_dsa_key_to_pem,
+        "pem_import_function": functools.partial(_crypto_backend.import_pq_key_from_pem, "ML_DSA_65"),
+        "pem_export_function": _crypto_backend.export_pq_key_to_pem,
     },
 )
 

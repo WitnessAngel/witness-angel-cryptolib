@@ -193,6 +193,9 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
     with pytest.raises(DecryptionError):
         decrypt(key_dict=dict(key=other_private_key), cipherdict=cipherdict)
 
+    with pytest.raises(EncryptionError, match="fallback backend"):  # E.g. a symmetric key mistaken for a public key
+        encrypt(key_dict=dict(key=get_random_bytes(32)), plaintext=binary_content)
+
     with pytest.raises(DecryptionError, match="X25519 key"):  # Raw keys are only public ones
         decrypt(key_dict=dict(key=keypair["public_key"].export_key(format="raw")), cipherdict=cipherdict)
 

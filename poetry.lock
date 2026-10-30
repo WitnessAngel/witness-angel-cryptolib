@@ -722,6 +722,26 @@ pipenv = ["pipenv"]
 poetry = ["poetry"]
 
 [[package]]
+name = "ecdsa"
+version = "0.19.2"
+description = "ECDSA cryptographic signature library (pure python)"
+optional = true
+python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,>=2.6"
+groups = ["main"]
+markers = "extra == \"fallbacks\""
+files = [
+    {file = "ecdsa-0.19.2-py2.py3-none-any.whl", hash = "sha256:840f5dc5e375c68f36c1a7a5b9caad28f95daa65185c9253c0c08dd952bb7399"},
+    {file = "ecdsa-0.19.2.tar.gz", hash = "sha256:62635b0ac1ca2e027f82122b5b81cb706edc38cd91c63dda28e4f3455a2bf930"},
+]
+
+[package.dependencies]
+six = ">=1.9.0"
+
+[package.extras]
+gmpy = ["gmpy"]
+gmpy2 = ["gmpy2"]
+
+[[package]]
 name = "execnet"
 version = "2.1.2"
 description = "execnet: rapid multi-Python deployment"
@@ -1378,9 +1398,10 @@ files = [
 name = "pkcs1"
 version = "0.9.7"
 description = "Python implementation of the RFC3447 or PKCS #1 version 2.0"
-optional = false
+optional = true
 python-versions = "*"
 groups = ["main"]
+markers = "extra == \"fallbacks\""
 files = [
     {file = "pkcs1-0.9.7-py3-none-any.whl", hash = "sha256:c943abd62f36ff565a6fe1c9e4df6155c0345aed0efb3ca8d62960457c5ea117"},
     {file = "pkcs1-0.9.7.tar.gz", hash = "sha256:699b2fe93ff7dc8893d45f0074a4e9f3a871395c1f12bea842dcce626621ce82"},
@@ -1469,23 +1490,12 @@ test = ["pytest", "pytest-instafail", "pytest-subtests", "pytest-xdist", "pywin3
 name = "pyaes"
 version = "1.6.1"
 description = "Pure-Python Implementation of the AES block-cipher and common modes of operation"
-optional = false
+optional = true
 python-versions = "*"
 groups = ["main"]
+markers = "extra == \"fallbacks\""
 files = [
     {file = "pyaes-1.6.1.tar.gz", hash = "sha256:02c1b1405c38d3c370b085fb952dd8bea3fadcee6411ad99f312cc129c536d8f"},
-]
-
-[[package]]
-name = "pyasn1"
-version = "0.6.4"
-description = "Pure-Python implementation of ASN.1 types and DER/BER/CER codecs (X.208)"
-optional = false
-python-versions = ">=3.8"
-groups = ["main"]
-files = [
-    {file = "pyasn1-0.6.4-py3-none-any.whl", hash = "sha256:deda9277cfd454080ec40b207fb6df82206a3a2688735233cdcd8d3d565f088b"},
-    {file = "pyasn1-0.6.4.tar.gz", hash = "sha256:9c447d8431c947fe4c8febc4ed9e760bc29011a5b01e5c74b67025bd9fb8ce81"},
 ]
 
 [[package]]
@@ -2482,21 +2492,6 @@ files = [
 ]
 
 [[package]]
-name = "rsa"
-version = "4.9.1"
-description = "Pure-Python RSA implementation"
-optional = false
-python-versions = "<4,>=3.6"
-groups = ["main"]
-files = [
-    {file = "rsa-4.9.1-py3-none-any.whl", hash = "sha256:68635866661c6836b8d39430f97a996acbd61bfa49406748ea243539fe239762"},
-    {file = "rsa-4.9.1.tar.gz", hash = "sha256:e7bdbfdb5497da4c07dfd35530e1a902659db6ff241e39d9953cad06ebd0ae75"},
-]
-
-[package.dependencies]
-pyasn1 = ">=0.1.3"
-
-[[package]]
 name = "ruamel-yaml"
 version = "0.18.17"
 description = "ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order"
@@ -2676,7 +2671,7 @@ files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
 ]
-markers = {main = "sys_platform == \"linux\""}
+markers = {main = "sys_platform == \"linux\" or extra == \"fallbacks\""}
 
 [[package]]
 name = "snowballstemmer"
@@ -3254,7 +3249,10 @@ PyYAML = ">=5.0,<7.0"
 radon = ">=4,<7"
 requests = ">=2.0,<3.0"
 
+[extras]
+fallbacks = ["ecdsa", "pkcs1", "pyaes"]
+
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11, <4.0"
-content-hash = "12f5a356503dd9a06cd75ee4323e3c11a96922a18068c2f7507e3664deca9cb7"
+content-hash = "9f91cf5c87ae786180b584aed15dbd0d577b019815c1a8fcce42d69a3b1294ef"

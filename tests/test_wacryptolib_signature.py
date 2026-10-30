@@ -10,7 +10,6 @@ import pytest
 import wacryptolib
 from wacryptolib.exceptions import SignatureVerificationError, SignatureCreationError
 
-from _test_mockups import skip_if_fallback_backend
 
 
 def _common_signature_checks(keypair, message, signature, signature_algo):
@@ -70,7 +69,6 @@ def test_sign_and_verify_with_dsa_key():
 
 
 def test_sign_and_verify_with_ecc_key():
-    skip_if_fallback_backend("ECC")
     message = "Msd sd 867_ss".encode("utf-8")
 
     keypair = wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", serialize=False, curve="p256")

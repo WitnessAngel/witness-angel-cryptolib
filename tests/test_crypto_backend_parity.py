@@ -33,19 +33,21 @@ def test_backends_share_pem_protection_constants(both_backends):
     assert native._PEM_DECRYPTION_ERROR == pem.PEM_DECRYPTION_ERROR
 
 
-def test_fallback_rejects_nist_curves_explicitly():
+def test_fallback_rejects_unsupported_parameters_explicitly():
     fallback = import_crypto_backend("fallback")
 
     with pytest.raises(NotImplementedError, match="ECC key generation.*requires pycryptodome"):
-        fallback.generate_ecc_keypair("p256")
-    with pytest.raises(NotImplementedError, match="NIST-curve ECC.*requires pycryptodome"):
-        fallback.import_ecc_key_from_pem(NIST_P256_PUBLIC_KEY_PEM)
+        fallback.generate_ecc_keypair("ed25519")
+    with pytest.raises(ValueError, match="Unexisting ECC curve"):
+        fallback.generate_ecc_keypair("p999")
+    with pytest.raises(ValueError, match="Expected an X25519 key"):
+        fallback.import_x25519_key_from_pem(NIST_P256_PUBLIC_KEY_PEM)
     with pytest.raises(NotImplementedError, match="HPKE.*requires pycryptodome"):
         fallback.encrypt_via_hpke(b"abc", fallback.generate_ecc_keypair("curve25519")[0], aead_id=0x0002)
 
     public_key, private_key = fallback.generate_ecc_keypair("curve25519")
     hasher = fallback.get_hasher_instance("SHA512")
-    with pytest.raises(ValueError, match="DSA keys"):  # Like pycryptodome, for non-NIST curves
+    with pytest.raises(ValueError, match="NIST-curve ECC keys"):  # Like pycryptodome, for non-NIST curves
         fallback.sign_with_dss(hasher, private_key)
 
 

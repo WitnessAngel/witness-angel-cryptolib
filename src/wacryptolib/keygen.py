@@ -213,7 +213,7 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
     ECIES_X25519={  # Curve is fixed by the algorithm name
         "generation_function": functools.partial(_generate_ecc_keypair_as_objects, curve="curve25519"),
         "generation_extra_parameters": [],
-        "pem_import_function": _crypto_backend.import_ecc_key_from_pem,
+        "pem_import_function": _crypto_backend.import_x25519_key_from_pem,
         "pem_export_function": _crypto_backend.export_ecc_key_to_pem,
     },
     ## KEYS FOR SIGNATURE ##

@@ -40,6 +40,7 @@ from .pycryptodome import (
     dsa_key_class_fetcher,
     ecc_key_class_fetcher,
     generate_pq_keypair,
+    PQ_KEY_ALGOS,
     check_pq_key_algo,
     import_ml_kem_key_from_pem,
     import_ml_dsa_key_from_pem,

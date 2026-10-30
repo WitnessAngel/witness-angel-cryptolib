@@ -168,6 +168,16 @@ def _generate_ecc_keypair_as_objects(curve: str) -> dict:
     return keypair
 
 
+def _generate_x25519_keypair_as_objects() -> dict:
+    """Generate an X25519 (public_key, private_key) pair, for ECIES_X25519 encryption/decryption.
+
+    :return: dictionary with "private_key" and "public_key" fields as objects."""
+
+    public_key, private_key = _crypto_backend.generate_ecc_keypair("curve25519")
+    keypair = {"public_key": public_key, "private_key": private_key}
+    return keypair
+
+
 def _serialize_key_object_to_pem_bytestring(key, key_algo: str, passphrase: Optional[AnyStr] = None) -> bytes:
     """Convert a private or public key to PEM-formatted bytestring.
 
@@ -208,6 +218,12 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
         "generation_extra_parameters": ["key_length_bits"],
         "pem_import_function": _crypto_backend.import_rsa_key_from_pem,
         "pem_export_function": _crypto_backend.export_rsa_key_to_pem,
+    },
+    ECIES_X25519={  # Curve is fixed by the algorithm name
+        "generation_function": _generate_x25519_keypair_as_objects,
+        "generation_extra_parameters": [],
+        "pem_import_function": _crypto_backend.import_ecc_key_from_pem,
+        "pem_export_function": _crypto_backend.export_ecc_key_to_pem,
     },
     ## KEYS FOR SIGNATURE ##
     RSA_PSS={  # Same parameters as RSA_OAEP for now

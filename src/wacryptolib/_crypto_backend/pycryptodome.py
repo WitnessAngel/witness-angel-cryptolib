@@ -323,6 +323,23 @@ def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[by
     return cleartext_chunks
 
 
+# HPKE (RFC 9180) KEY WRAPPING, BASE MODE, EMPTY INFO AND AAD #
+
+
+def encrypt_via_hpke(plaintext: bytes, public_key, aead_id) -> tuple[bytes, bytes]:
+    """Returns (enc, ciphertext), enc being the KEM encapsulation (ephemeral public key for DHKEM)."""
+    from Crypto.Protocol import HPKE
+
+    sender = HPKE.new(receiver_key=public_key, aead_id=HPKE.AEAD(aead_id))
+    return sender.enc, sender.seal(plaintext)
+
+
+def decrypt_via_hpke(enc: bytes, ciphertext: bytes, private_key, aead_id) -> bytes:
+    from Crypto.Protocol import HPKE
+
+    return HPKE.new(receiver_key=private_key, enc=enc, aead_id=HPKE.AEAD(aead_id)).unseal(ciphertext)
+
+
 # RSA KEY GENERATION, AND IMPORT/EXPORT #
 
 

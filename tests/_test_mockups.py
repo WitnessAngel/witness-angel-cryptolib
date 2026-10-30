@@ -85,9 +85,9 @@ def get_fake_authdevice(device_path):
 
 
 def is_fallback_backend():
-    from wacryptolib._crypto_backend.pycryptodome import _patch_pycryptodome_internals
+    from wacryptolib import _crypto_backend
 
-    return _patch_pycryptodome_internals
+    return _crypto_backend.BACKEND_NAME == "fallback"
 
 
 def skip_if_fallback_backend(feature):

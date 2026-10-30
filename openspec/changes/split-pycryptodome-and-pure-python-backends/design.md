@@ -22,11 +22,10 @@ So no wrapper classes are needed around pkcs1 keys, and no caller changes.
 
 **Goals:**
 - Two independent backends with the same public names. The fallback never imports `Crypto`.
-- The fallback covers every algorithm the library exposes except NIST-curve ECC: hashes, AES-CBC, AES-EAX, ChaCha20-Poly1305, RSA-OAEP-SHA512, RSA-PSS-SHA512, DSA-DSS, HPKE-X25519, RSA/DSA/X25519 keygen, and PEM import/export of RSA/DSA/X25519 keys including the library's own PBES2 passphrase format.
+- The fallback covers every algorithm the library exposes: hashes, AES-CBC, AES-EAX, ChaCha20-Poly1305, RSA-OAEP-SHA512, RSA-PSS-SHA512, DSA-DSS, ECDSA (ECC_DSS on NIST curves), HPKE-X25519, RSA/DSA/NIST-ECC/X25519 keygen, and PEM import/export of all these keys including the library's own PBES2 passphrase format (needed on iOS, which generates keys and exports them with a passphrase, like authenticators do).
 - Tests that pin both backends to official vectors and to each other.
 
 **Non-Goals:**
-- NIST-curve ECC (ECC_DSS keygen/import/sign) in the fallback: `NotImplementedError` (see open question on `ecdsa`).
 - Legacy PEM protections other than PBES2/PBKDF2 (HMAC-SHA1 or HMAC-SHA256) with AES-128/256-CBC. In particular DES-EDE3-CBC (written for DSA keys by versions before commit `f4992a1`) and OpenSSL `Proc-Type` headers raise `ValueError` in the fallback (see open question).
 - Running the whole existing test suite under the fallback backend.
 - Changing `micropython/` (its `fallback_adapter.py` stays a separate copy).
@@ -38,11 +37,12 @@ So no wrapper classes are needed around pkcs1 keys, and no caller changes.
 ```toml
 pkcs1 = { version = "^0.9.7", optional = true }
 pyaes = { version = "^1.6.1", optional = true }
+ecdsa = { version = "^0.19.2", optional = true }
 
 [tool.poetry.extras]
-fallbacks = ["pkcs1", "pyaes"]
+fallbacks = ["pkcs1", "pyaes", "ecdsa"]
 ```
-`[tool.poetry.extras]` is the right syntax here: `pyproject.toml` uses the legacy `[tool.poetry]` layout (no `[project]` table) with an unpinned `poetry-core`, and both poetry-core 1.x and 2.x read it there. `rsa` is removed from `pyproject.toml` (and with it `pyasn1` from `poetry.lock`): its only uses were PKCS#1/SPKI RSA PEM parsing/writing, now done by `fallback/pem.py`'s DER codec (D3). No DSA package is added (see D3). Constrained platforms install `wacryptolib --no-deps` plus an explicit list documented in the Readme (the extra's packages and the non-native runtime deps).
+`[tool.poetry.extras]` is the right syntax here: `pyproject.toml` uses the legacy `[tool.poetry]` layout (no `[project]` table) with an unpinned `poetry-core`, and both poetry-core 1.x and 2.x read it there. `rsa` is removed from `pyproject.toml` (and with it `pyasn1` from `poetry.lock`): its only uses were PKCS#1/SPKI RSA PEM parsing/writing, now done by `fallback/pem.py`'s DER codec (D3). No DSA package is added (see D3); `ecdsa` (MIT, pure Python, maintained, only depends on `six`) covers NIST-curve ECC. Constrained platforms install `wacryptolib --no-deps` plus an explicit list documented in the Readme (the extra's packages and the non-native runtime deps).
 
 `pip_requirements_export.txt` (used by `tox.ini` and `wacryptolib_installer.py`) is regenerated with `poetry export --with dev --all-extras`, so it keeps listing `pkcs1`/`pyaes` and the main tox envs run the interop tests instead of skipping them. `micropython/vendor_dependencies.py` keeps working for optional packages (they stay in `poetry.lock`), but `rsa`/`pyasn1` leave its `PACKAGES` list since they are no longer locked: `micropython/patches/pyasn1.patch` is deleted, and the dead `import_rsa_key_from_pem` of `micropython/fallback_adapter.py` (the flightbox only imports `encrypt_via_rsa_oaep`/`encrypt_via_aes_cbc`, with raw `n`/`e`) is removed.
 
@@ -93,7 +93,7 @@ _crypto_backend/hpke_x25519_seal.py    # + open()
   - X25519: PKCS#8 `PRIVATE KEY` (fixed 16-byte DER prefix `302e020100300506032b656e04220420`) and SPKI `PUBLIC KEY` (12-byte prefix `302a300506032b656e032100`), as pycryptodome writes them.
   - Passphrase: `ENCRYPTED PRIVATE KEY` PBES2 envelope, written exactly like `pycryptodome.py` (PBKDF2-HMAC-SHA256, 600 000 iterations, AES-256-CBC, same iteration bound and same single error message). On import, PRF HMAC-SHA1 (also when absent) or HMAC-SHA256 and AES-128/256-CBC are accepted, so RSA keys written by earlier versions (`PBKDF2WithHMAC-SHA1AndAES256-CBC`) still load. Any other protection, a wrong passphrase, a missing passphrase on an encrypted PEM, or malformed DER raise `ValueError` (never codec-internal or pkcs1 exception types).
   - `pycryptodome.py` keeps its own `Crypto.Util.asn1` code: the native backend stays a plain pycryptodome wrapper, and the interop tests plus a PEM fixture keep both byte-compatible.
-- **NIST ECC / ECDSA**: `generate_ecc_keypair`, `import_ecc_key_from_pem` and `sign_with_dss`/`verify_with_dss` on non-DSA keys raise `NotImplementedError("... requires pycryptodome")` for anything but X25519 (for DSS on an X25519 key: `ValueError`, like pycryptodome).
+- **NIST ECC / ECDSA** (`ecdsa` package): `generate_ecc_keypair` maps pycryptodome's curve names (`p256`/`P-256`/`secp256r1`/`prime256v1`, same for p192/p224/p384/p521) to `ecdsa` curves, other unknown names raise `ValueError("Unexisting ECC curve ...")` like pycryptodome. Keys are `ecdsa.SigningKey`/`VerifyingKey`; `ecc_key_class_fetcher()` returns `(X25519Key, SigningKey, VerifyingKey)` (an `ecdsa` key's `curve` is never `"Curve25519"`, so ECIES_X25519 still rejects them). PKCS#8/SPKI DER via `ecdsa`'s `to_der(format="pkcs8")`/`from_der()`, inside the shared PEM armor and PBES2 envelope. `sign_with_dss` signs the SHA-512 digest with `sign_digest_deterministic` (RFC 6979, `allow_truncate=True` for leftmost-bits truncation as FIPS 186-4 requires, `sigencode_string`, i.e. pycryptodome's `binary` r ‖ s); verify raises `ValueError`. DSS on an X25519 key raises `ValueError`, like pycryptodome.
 
 ### D4. Tests
 A `backend` fixture in `tests/conftest.py`, parametrised over `pycryptodome`/`fallback`, imports the backend module directly (bypassing the selector) and calls `pytest.skip` naming the missing package.
@@ -114,6 +114,7 @@ A `backend` fixture in `tests/conftest.py`, parametrised over `pycryptodome`/`fa
   | RSA-PSS-SHA512 (MGF1-SHA512, salt 64), verification | Wycheproof `testvectors_v1/rsa_pss_4096_sha512_mgf1_64_test.json` (no 2048-bit file exists for these parameters; the key size doesn't change the code path) |
   | DSA verification | NIST CAVP FIPS 186-4 DSA (`186-3dsatestvectors.zip`), `SigVer.rsp` sections `[mod = L=2048, N=224, SHA-512]` and `[mod = L=2048, N=256, SHA-512]`. The library always signs SHA-512 digests, so SHA-256 sections are not used |
   | DSA signing | same zip, `SigGen.txt` (includes `K`), same sections: `vendor/dsa.py` with injected `k` must give the published `R`, `S` (fallback only; pycryptodome's randomized mode can't take `k`) |
+  | ECDSA verification | NIST CAVP FIPS 186-4 ECDSA (`186-4ecdsatestvectors.zip`), `SigVer.rsp` sections `[P-256,SHA-512]`, `[P-384,SHA-512]`, `[P-521,SHA-512]` |
   | RSA/DSA/X25519 keygen, PEM | no published vector: interop only, plus a PEM fixture produced once by today's pycryptodome code (recorded with a comment) |
 - `tests/test_crypto_backend_interop.py`: requires both backends, skipped otherwise. Covers every interop scenario of the spec, both directions.
 - Absorb `test_chacha20_poly1305_fallback.py`, `test_hpke_x25519_seal.py` and `test_pkcs1_cryptography_interop.py` (keeping the `cryptography`-based OAEP check as an optional third reference via `importorskip`).
@@ -125,7 +126,8 @@ Remove the patch function (including its inner `PyaesCipherAdapter`), the `ios` 
 
 ## Risks / Trade-offs
 
-- [Fallback lacks NIST ECC and DES3/legacy-OpenSSL PEMs] → Explicit `NotImplementedError`/`ValueError`, Readme coverage table. Desktop unaffected.
+- [Fallback lacks DES3/legacy-OpenSSL PEMs] → Explicit `ValueError`, Readme coverage table. Desktop unaffected.
+- [`ecdsa` is not constant-time either (its README says so)] → same caveat as the rest of the fallback, documented.
 - [Users who imported `rsa`/`pyasn1`/`pkcs1`/`pyaes` transitively] → BREAKING entry in CHANGELOG.
 - [Hand-written DER parsing of untrusted PEMs] → strict TLV reader (definite lengths only, no trailing bytes, length bounds checked, non-negative minimal INTEGERs), malformed-DER cases from Wycheproof-style mutations in tests, single `ValueError`.
 - [Optional deps missing from a default `poetry install`] → tox/CI install via `pip_requirements_export.txt` exported with `--all-extras`; the interop module asserts in the main env that both backends loaded (fails rather than skips when `CI` is set).
@@ -146,8 +148,5 @@ Rollback: revert. No data format change: both backends read and write the same b
 
 Resolved in this design: probe module (D2), PSS/OAEP pkcs1 pitfalls (D3), Wycheproof file names (D4), DSA approach (D3), PBKDF2 vector dropped (both backends use `hashlib.pbkdf2_hmac`, testing it would test the stdlib).
 
-Need a user decision (defaults applied above):
-- Does iOS really need keygen and passphrase-protected PEM export (authenticator-style use)? Default: yes. If iOS only encrypts like the MicroPython flightbox, `fallback/pem.py` shrinks to public-key import.
-- Legacy DSA PEMs protected with DES-EDE3-CBC: support them (needs `pyDes`, public domain but unmaintained since 2016, or a vendored DES)? Default: no, `ValueError`.
-- Add `ecdsa` (MIT, pure Python, maintained, depends on `six`) to the extra to cover ECC_DSS on NIST curves? Default: no.
+Decided by the user (2026-10-30): iOS needs keygen and passphrase-protected PEM export; legacy DES3-protected DSA PEMs are not supported; `ecdsa` is added for NIST-curve ECC; `rsa`/`pyasn1` are dropped.
 - Later: replace `micropython/fallback_adapter.py` by vendored copies of `_crypto_backend/fallback/` (the DER codec makes it MicroPython-friendly, no `pyasn1` needed). Not part of this change.

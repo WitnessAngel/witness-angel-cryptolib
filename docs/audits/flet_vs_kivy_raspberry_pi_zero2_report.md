@@ -178,7 +178,10 @@ in `cage`'s README.
    (`flet-linux-{debian10,debian12,ubuntu20.04,22.04,24.04}[-light]-arm64.tar.gz`);
    the distro is picked by glibc version (Pi OS bookworm, glibc 2.36, gets
    `debian12`) and the flavor defaults to `light` on Linux (what `light`
-   leaves out is undocumented). So no build is needed, but the Pi needs
+   leaves out is undocumented). **This requires 64-bit Raspberry Pi OS:**
+   on a 32-bit OS, `platform.machine()` reports `armv7l`, which Flet maps
+   to `arm_7`, and the release has no `arm_7` Linux client, so the
+   download fails. So no build is needed, but the Pi needs
    network on first run, or pre-seed the cache (`FLET_VIEW_PATH` points at
    an unpacked client). `flet build linux` remains an option for a
    single-process package, on a bigger arm64 machine: the Flutter SDK

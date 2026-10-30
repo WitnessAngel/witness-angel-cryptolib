@@ -24,7 +24,7 @@ MIP_INDEX = "https://micropython.org/pi/v2"
 MICROPYTHON_LIB_PACKAGES = ["__future__", "copy", "datetime", "hashlib", "hmac", "logging", "threading", "operator", "functools"]
 
 SHARED_MODULES = [REPO_DIR / "src/wacryptolib/utilities/data_utils.py",
-                  REPO_DIR / "src/wacryptolib/_crypto_backend/chacha20_poly1305.py",
+                  REPO_DIR / "src/wacryptolib/_crypto_backend/vendor/chacha20_poly1305.py",
                   REPO_DIR / "src/wacryptolib/_crypto_backend/hpke_x25519_seal.py"]
 
 

@@ -50,8 +50,6 @@ def test_passphrase_encoding():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_keypair_unicity(key_algo):
-    if key_algo in ("ECC_DSS", "ECIES_X25519"):
-        skip_if_fallback_backend("ECC")
     # We must reuse test-specific caching of asymmetric keypairs, for this test
     wacryptolib.keygen.__original_do_generate_keypair_patcher.stop()
     assert wacryptolib.keygen._do_generate_keypair == wacryptolib.keygen.__original_do_generate_keypair
@@ -114,7 +112,6 @@ def test_dsa_keypair_generation():
 
 
 def test_ecc_keypair_generation():
-    skip_if_fallback_backend("ECC")
     with pytest.raises(ValueError, match="Unexisting ECC curve"):
         wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", curve="unexisting")
 
@@ -130,8 +127,6 @@ def test_ecc_keypair_generation():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_load_asymmetric_key_from_pem_bytestring(key_algo):
-    if key_algo in ("ECC_DSS", "ECIES_X25519"):
-        skip_if_fallback_backend("ECC")
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo)
 
     for field in ["private_key", "public_key"]:
@@ -143,7 +138,6 @@ def test_load_asymmetric_key_from_pem_bytestring(key_algo):
 
 
 def test_load_ecies_x25519_key_rejects_other_curves():
-    skip_if_fallback_backend("ECC")
     keypair = wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", curve="p256")
     for field in ["private_key", "public_key"]:
         with pytest.raises(KeyLoadingError, match="not a NIST P-256 one"):
@@ -152,8 +146,6 @@ def test_load_ecies_x25519_key_rejects_other_curves():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
-    if key_algo == "ECC_DSS":
-        skip_if_fallback_backend("ECC")
     # Both Unicode and Bytes are supported
     passphrases = ["Thïs is a passphrâse", b"aoh18726"]
 

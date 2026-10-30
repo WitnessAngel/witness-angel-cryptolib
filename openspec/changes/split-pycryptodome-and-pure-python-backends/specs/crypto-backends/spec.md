@@ -39,14 +39,14 @@ The library SHALL use the native backend when pycryptodome is importable and its
 - **THEN** import of the library fails with an error that names both installation options
 
 ### Requirement: Identical public surface
-Both backends SHALL expose the same set of public names. Where the fallback backend has no implementation for an operation or a parameter (NIST-curve ECC), calling it SHALL raise `NotImplementedError` with a message that names the operation and states that it requires pycryptodome. For every failure that the native backend reports as `ValueError` (bad padding, failed decryption, failed tag or signature verification, unparsable or wrongly-protected PEM), the fallback backend SHALL also raise `ValueError`, and SHALL NOT write anything to standard output or standard error.
+Both backends SHALL expose the same set of public names. Where the fallback backend has no implementation for an operation or a parameter (an HPKE AEAD other than ChaCha20-Poly1305), calling it SHALL raise `NotImplementedError` with a message that names the operation and states that it requires pycryptodome. For every failure that the native backend reports as `ValueError` (bad padding, failed decryption, failed tag or signature verification, unparsable or wrongly-protected PEM), the fallback backend SHALL also raise `ValueError`, and SHALL NOT write anything to standard output or standard error.
 
 #### Scenario: Name parity
 - **WHEN** the public names of both backends are compared
 - **THEN** they are identical
 
 #### Scenario: Unsupported operation in fallback
-- **WHEN** NIST-curve ECC key generation, PEM import or DSS signature is requested from the fallback backend
+- **WHEN** HPKE with an AEAD other than ChaCha20-Poly1305 is requested from the fallback backend
 - **THEN** `NotImplementedError` is raised, mentioning the operation and pycryptodome
 
 #### Scenario: Same error type on failure
@@ -54,7 +54,7 @@ Both backends SHALL expose the same set of public names. Where the fallback back
 - **THEN** both backends raise `ValueError`, and the fallback prints nothing
 
 ### Requirement: Cross-backend interoperability
-For every operation implemented by both backends, data produced by one backend SHALL be accepted by the other and give the same result. This covers symmetric ciphertexts and tags, RSA-OAEP ciphertexts, HPKE encapsulations, RSA-PSS and DSA signatures, and PEM-serialized RSA, DSA and X25519 keys, passphrase-protected or not.
+For every operation implemented by both backends, data produced by one backend SHALL be accepted by the other and give the same result. This covers symmetric ciphertexts and tags, RSA-OAEP ciphertexts, HPKE encapsulations, RSA-PSS, DSA and ECDSA signatures, and PEM-serialized RSA, DSA, NIST-curve ECC and X25519 keys, passphrase-protected or not.
 
 #### Scenario: Symmetric ciphers
 - **WHEN** a plaintext of length 0, 1, 15, 16, 17 or 1000 bytes is encrypted by one backend with AES-CBC, AES-EAX or ChaCha20-Poly1305
@@ -69,7 +69,7 @@ For every operation implemented by both backends, data produced by one backend S
 - **THEN** the other backend decrypts it with the matching private key
 
 #### Scenario: PEM keys
-- **WHEN** an RSA, DSA or X25519 keypair is generated and exported to PEM by one backend, with or without passphrase
+- **WHEN** an RSA, DSA, NIST-curve ECC or X25519 keypair is generated and exported to PEM by one backend, with or without passphrase
 - **THEN** the other backend imports both keys, and the imported keys work for that backend's encryption or signature operations
 
 #### Scenario: Legacy passphrase-protected PEM
@@ -77,7 +77,7 @@ For every operation implemented by both backends, data produced by one backend S
 - **THEN** the imported key equals the one the native backend imports from the same PEM
 
 #### Scenario: Signatures
-- **WHEN** a message is signed with RSA-PSS or DSA by one backend
+- **WHEN** a message is signed with RSA-PSS, DSA or ECDSA (P-256, P-384, P-521) by one backend
 - **THEN** the other backend verifies the signature, and rejects it after a single bit flip
 
 #### Scenario: Tamper detection is consistent
@@ -93,6 +93,10 @@ Every primitive of every available backend SHALL reproduce the official known-an
 
 #### Scenario: DSA vectors
 - **WHEN** the NIST CAVP FIPS 186-4 DSA signature verification vectors for L=2048 with SHA-512 are run on a backend
+- **THEN** every vector marked as passing verifies and every vector marked as failing is rejected
+
+#### Scenario: ECDSA vectors
+- **WHEN** the NIST CAVP FIPS 186-4 ECDSA signature verification vectors for P-256, P-384 and P-521 with SHA-512 are run on a backend
 - **THEN** every vector marked as passing verifies and every vector marked as failing is rejected
 
 #### Scenario: Backend unavailable

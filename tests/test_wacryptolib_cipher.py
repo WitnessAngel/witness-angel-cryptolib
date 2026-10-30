@@ -178,10 +178,10 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
     assert decrypt(key_dict=private_key_dict, cipherdict=cipherdict_from_private_key) == binary_content
 
     tampered_tag_cipherdict = dict(cipherdict, ciphertext=cipherdict["ciphertext"][:-1] + bytes([cipherdict["ciphertext"][-1] ^ 1]))
-    with pytest.raises(DecryptionIntegrityError, match="wrong MAC tag"):
-        decrypt(key_dict=private_key_dict, cipherdict=tampered_tag_cipherdict)
-    with pytest.raises(DecryptionIntegrityError, match="wrong MAC tag"):  # Flag is ignored
-        decrypt(key_dict=private_key_dict, cipherdict=tampered_tag_cipherdict, verify_integrity_tags=False)
+    for verify_integrity_tags in (True, False):  # Flag is ignored
+        with pytest.raises(DecryptionError, match="wrong MAC tag") as exc_info:
+            decrypt(key_dict=private_key_dict, cipherdict=tampered_tag_cipherdict, verify_integrity_tags=verify_integrity_tags)
+        assert not isinstance(exc_info.value, DecryptionIntegrityError)  # Indistinguishable from a wrong key
 
     decryption_func = functools.partial(decrypt, key_dict=private_key_dict)
     _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
@@ -191,8 +191,9 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
         decrypt(key_dict=private_key_dict, cipherdict=corrupted_cipherdict)
 
     _other_public_key, other_private_key = generate_ecc_keypair("curve25519")  # Bypasses keypair cache of tests
-    with pytest.raises(DecryptionError):
+    with pytest.raises(DecryptionError) as exc_info:
         decrypt(key_dict=dict(key=other_private_key), cipherdict=cipherdict)
+    assert not isinstance(exc_info.value, DecryptionIntegrityError)  # Not reported as tampering
 
     with pytest.raises(EncryptionError, match="fallback backend"):  # E.g. a symmetric key mistaken for a public key
         encrypt(key_dict=dict(key=get_random_bytes(32)), plaintext=binary_content)

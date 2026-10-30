@@ -87,7 +87,7 @@ def decrypt_bytestring(
             key_dict=key_dict, cipherdict=cipherdict, verify_integrity_tags=verify_integrity_tags
         )
     except ValueError as exc:
-        if "MAC check failed" in str(exc):  # Hackish check for pycryptodome
+        if "MAC check failed" in str(exc) or "wrong MAC tag" in str(exc):  # Hackish check for pycryptodome (HPKE for the latter)
             raise DecryptionIntegrityError("Failed %s decryption authentication (%s)" % (cipher_algo, exc)) from exc
         raise DecryptionError("Failed %s decryption (%s)" % (cipher_algo, exc)) from exc
     return plaintext

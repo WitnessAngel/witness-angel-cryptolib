@@ -51,6 +51,7 @@ __all__ = [
     "decrypt_via_ml_kem_768",
     "sign_with_mldsa",
     "verify_with_mldsa",
+    "check_pq_key_algo",
 ]
 
 
@@ -429,6 +430,13 @@ def _get_pq_key_module_and_param_set(key_algo):
     return key_module, getattr(key_module.ParamSet, param_set_name)
 
 
+def check_pq_key_algo(key, key_algo):
+    """Raise ValueError if key is not a post-quantum key of exactly this key algo (e.g. ML-KEM-512 for ML_KEM_768)."""
+    _key_module, param_set = _get_pq_key_module_and_param_set(key_algo)
+    if getattr(key, "param_set", None) != param_set:
+        raise ValueError("Incompatible key type %s (%s) for %s" % (type(key), getattr(key, "param_set", None), key_algo))
+
+
 def generate_pq_keypair(key_algo):
     key_module, param_set = _get_pq_key_module_and_param_set(key_algo)
     private_key = key_module.generate(param_set=param_set)
@@ -439,7 +447,9 @@ def generate_pq_keypair(key_algo):
 def import_ml_kem_key_from_pem(key_pem, passphrase=None):
     from Crypto.PublicKey import MLKEM
 
-    return _import_key_from_pem(MLKEM, key_pem, passphrase=passphrase)
+    key = _import_key_from_pem(MLKEM, key_pem, passphrase=passphrase)
+    check_pq_key_algo(key, "ML_KEM_768")  # Only parameter set supported for now
+    return key
 
 
 def import_ml_dsa_key_from_pem(key_pem, passphrase=None):

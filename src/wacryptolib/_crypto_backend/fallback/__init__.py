@@ -77,6 +77,7 @@ __all__ = [
     "decrypt_via_ml_kem_768",
     "sign_with_mldsa",
     "verify_with_mldsa",
+    "check_pq_key_algo",
 ]
 
 
@@ -780,3 +781,4 @@ encrypt_via_ml_kem_768 = _build_post_quantum_stub("encrypt_via_ml_kem_768", "ML-
 decrypt_via_ml_kem_768 = _build_post_quantum_stub("decrypt_via_ml_kem_768", "ML-KEM")
 sign_with_mldsa = _build_post_quantum_stub("sign_with_mldsa", "ML-DSA")
 verify_with_mldsa = _build_post_quantum_stub("verify_with_mldsa", "ML-DSA")
+check_pq_key_algo = _build_post_quantum_stub("check_pq_key_algo", "Post-quantum key check")

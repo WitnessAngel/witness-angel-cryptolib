@@ -199,7 +199,7 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
         (rsa_public_key, rsa_private_key),
         (p256_keypair["public_key"], p256_keypair["private_key"]),
     ]:
-        with pytest.raises(EncryptionError, match="X25519 key"):
+        with pytest.raises(EncryptionError, match="X25519 key, not (<class 'Crypto.PublicKey.RSA.RsaKey'>|a NIST P-256 one)"):
             encrypt(key_dict=dict(key=wrong_public_key), plaintext=binary_content)
         with pytest.raises(DecryptionError, match="X25519 key"):
             decrypt(key_dict=dict(key=wrong_private_key), cipherdict=cipherdict)

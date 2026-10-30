@@ -51,17 +51,18 @@ format on both sides rather than invent a custom KEM+AEAD framing.
 | ML-KEM-768 encapsulate | C, via HPKE | none | pure-Python port (e.g. from kyber-py), FIPS 203 vectors |
 | SHA3-256, SHA3-512, SHAKE128, SHAKE256 | yes | vendored micropython-lib `hashlib` has SHA-2 only; `fallback_adapter.py` already drops SHA3 when missing | pure-Python Keccak-f[1600] |
 | HKDF-SHA256 (HPKE key schedule) | yes | vendored `hmac` + `hashlib.sha256` | reuse what `hpke_x25519_seal.py` does |
-| AEAD | AES-256-GCM | ChaCha20-Poly1305 pure Python; `pyaes` has no GCM | see below |
+| AEAD | ChaCha20-Poly1305 (was AES-256-GCM before `e1f4461`) | ChaCha20-Poly1305 pure Python; `pyaes` has no GCM | none, see below |
 | Randomness | `get_random_bytes` | `os.urandom` (hardware RNG) | none |
 
-**AEAD choice.** The branch's `encrypt_via_ml_kem_768` uses HPKE with
-AES-256-GCM. For `ECIES_X25519`, ChaCha20-Poly1305 was chosen precisely
-because a pure-Python implementation already exists for constrained devices
-(see `docs/selected_protocols.rst`). A device-compatible ML-KEM option
-should use the HPKE suite **ML-KEM-768 + HKDF-SHA256 + ChaCha20-Poly1305**,
-otherwise the device would need a GCM implementation too. Decide this
-*before* the branch is merged: once cryptainers exist with the AES-GCM
-suite, changing it means keeping both forever.
+**AEAD choice: done.** The branch's `encrypt_via_ml_kem_768` first used
+HPKE with AES-256-GCM. For `ECIES_X25519`, ChaCha20-Poly1305 was chosen
+precisely because a pure-Python implementation already exists for
+constrained devices (see `docs/selected_protocols.rst`), while `pyaes` has
+no GCM mode. Commit `e1f4461` on `add-post-quantum-algorithms` switched
+`ML_KEM_768` to the HPKE suite **ML-KEM-768 + HKDF-SHA256 +
+ChaCha20-Poly1305** before any release, and regenerated the post-quantum
+test fixtures. The device can thus reuse the vendored ChaCha20-Poly1305 and
+HPKE key schedule; only the KEM part is new.
 
 **RNG.** ML-KEM encapsulation randomness must be unpredictable, otherwise it
 leaks the shared secret. The flightbox already uses `os.urandom`
@@ -184,9 +185,9 @@ decrypts with pycryptodome on desktop. The MicroPython Unix port with
 
 ## Recommendations
 
-1. Switch (or add) the branch's ML-KEM suite to **HPKE ML-KEM-768 +
+1. ~~Switch the branch's ML-KEM suite to **HPKE ML-KEM-768 +
    ChaCha20-Poly1305** before release, so desktop and flightbox share one
-   wire format.
+   wire format.~~ Done in `e1f4461` (section 2).
 2. Start with option 1, gated by cross-validation tests against pycryptodome,
    and only move to options 2/3 if measured timings on the ESP32-S3 are
    unacceptable.

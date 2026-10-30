@@ -28,7 +28,7 @@ from wacryptolib.exceptions import (
     ValidationError,
     KeystoreMetadataDoesNotExist,
 )
-from wacryptolib.keygen import generate_keypair, SUPPORTED_ASYMMETRIC_KEY_ALGOS
+from wacryptolib.keygen import generate_keypair
 from wacryptolib.utilities import (
     synchronized,
     load_from_json_file,
@@ -792,11 +792,15 @@ def generate_keypair_for_storage(  # FIXME document this, or integrate to class?
     return keypair
 
 
+# Explicit list, so that existing free keys pools don't silently start generating newly supported key algos
+DEFAULT_FREE_KEYPAIR_ALGOS = ["DSA_DSS", "ECC_DSS", "RSA_OAEP", "RSA_PSS"]
+
+
 def generate_free_keypair_for_least_provisioned_key_algo(
     keystore: KeystoreWriteBase,
     max_free_keys_per_algo: int,
     keygen_func=generate_keypair,
-    key_algos=SUPPORTED_ASYMMETRIC_KEY_ALGOS,
+    key_algos=DEFAULT_FREE_KEYPAIR_ALGOS,
 ):
     """
     Generate a single free keypair for the key type which is the least available in key storage, and

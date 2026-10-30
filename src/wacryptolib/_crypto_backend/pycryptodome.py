@@ -160,18 +160,17 @@ def __monkey_patch_pycryptodome_compiled_internals():
     def patched_oaep_decode(em, lHash, db):
         # Replace the 2023 C implementation by the old Python one
         from Crypto.Util.strxor import strxor
-        from Crypto.Util.py3compat import bord
 
         y = em[0]
         hLen = len(lHash)
         one_pos = hLen + db[hLen:].find(b"\x01")
         lHash1 = db[:hLen]
-        invalid = bord(y) | int(one_pos < hLen)
+        invalid = y | int(one_pos < hLen)
         hash_compare = strxor(lHash1, lHash)
         for x in hash_compare:
-            invalid |= bord(x)
+            invalid |= x
         for x in db[hLen:one_pos]:
-            invalid |= bord(x)
+            invalid |= x
         return -1 if invalid else (one_pos + 1)
 
     PKCS1_OAEP.oaep_decode = patched_oaep_decode

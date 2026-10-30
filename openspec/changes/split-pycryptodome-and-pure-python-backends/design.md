@@ -36,16 +36,15 @@ So no wrapper classes are needed around pkcs1 keys, and no caller changes.
 
 ### D1. Packaging: optional deps + `fallbacks` extra
 ```toml
-rsa = { version = "^4.9.1", optional = true }
 pkcs1 = { version = "^0.9.7", optional = true }
 pyaes = { version = "^1.6.1", optional = true }
 
 [tool.poetry.extras]
-fallbacks = ["rsa", "pkcs1", "pyaes"]
+fallbacks = ["pkcs1", "pyaes"]
 ```
-`[tool.poetry.extras]` is the right syntax here: `pyproject.toml` uses the legacy `[tool.poetry]` layout (no `[project]` table) with an unpinned `poetry-core`, and both poetry-core 1.x and 2.x read it there. `pyasn1` arrives transitively through `rsa`. No DSA package is added (see D3). Constrained platforms install `wacryptolib --no-deps` plus an explicit list documented in the Readme (the extra's packages, `pyasn1`, and the non-native runtime deps).
+`[tool.poetry.extras]` is the right syntax here: `pyproject.toml` uses the legacy `[tool.poetry]` layout (no `[project]` table) with an unpinned `poetry-core`, and both poetry-core 1.x and 2.x read it there. `rsa` is removed from `pyproject.toml` (and with it `pyasn1` from `poetry.lock`): its only uses were PKCS#1/SPKI RSA PEM parsing/writing, now done by `fallback/pem.py`'s DER codec (D3). No DSA package is added (see D3). Constrained platforms install `wacryptolib --no-deps` plus an explicit list documented in the Readme (the extra's packages and the non-native runtime deps).
 
-`pip_requirements_export.txt` (used by `tox.ini` and `wacryptolib_installer.py`) is regenerated with `poetry export --with dev --all-extras`, so it keeps listing `rsa`/`pkcs1`/`pyaes`/`pyasn1` and the main tox envs run the interop tests instead of skipping them. `micropython/vendor_dependencies.py` keeps working: optional packages stay in `poetry.lock`.
+`pip_requirements_export.txt` (used by `tox.ini` and `wacryptolib_installer.py`) is regenerated with `poetry export --with dev --all-extras`, so it keeps listing `pkcs1`/`pyaes` and the main tox envs run the interop tests instead of skipping them. `micropython/vendor_dependencies.py` keeps working for optional packages (they stay in `poetry.lock`), but `rsa`/`pyasn1` leave its `PACKAGES` list since they are no longer locked: `micropython/patches/pyasn1.patch` is deleted, and the dead `import_rsa_key_from_pem` of `micropython/fallback_adapter.py` (the flightbox only imports `encrypt_via_rsa_oaep`/`encrypt_via_aes_cbc`, with raw `n`/`e`) is removed.
 
 *Alternatives:* PEP 771 default extras (still Draft, unsupported); splitting the distribution (two packages to publish, deferred).
 
@@ -78,7 +77,7 @@ _crypto_backend/hpke_x25519_seal.py    # + open()
 - **AES-CBC**: a ~10-line object over `pyaes.AESModeOfOperationCBC`, feeding it 16 bytes at a time, with `encrypt()` and `decrypt()` like pycryptodome's, and **no `finalize` attribute** (otherwise `EncryptionNodeBase` would append its output). One-shot functions pad with `utilities.data_utils.pad_bytes_pkcs7`/`unpad_bytes_pkcs7` (import is safe: `wacryptolib.utilities` imports `_crypto_backend` but only uses it in dead code).
 - **AES-EAX**: `vendor/aes_eax.py`, about 60 lines, block cipher = `pyaes.AES(key).encrypt`. Cipher object with `encrypt`, `decrypt`, `digest`, `verify` (raises `ValueError`), `encrypt_and_digest`; 16-byte tag; nonce of any length.
 - **ChaCha20-Poly1305**: `vendor/chacha20_poly1305.py` as is (no AAD support, none needed).
-- **RSA keys**: pkcs1 objects unchanged: `RsaPublicKey(n, e)` and `MultiPrimeRsaPrivateKey(primes=[p, q], e)` (what `generate_key_pair` returns; CRT + blinding). `rsa_key_class_fetcher()` returns `(RsaPublicKey, MultiPrimeRsaPrivateKey)` (the current adapter returns `RsaPrivateKey`, which would no longer match). PEM import builds them from `rsa.PrivateKey`/`rsa.PublicKey`; export computes `d = e⁻¹ mod lcm(p-1, q-1)` and uses `rsa.PrivateKey(n, e, d, p, q).save_pkcs1()`.
+- **RSA keys**: pkcs1 objects unchanged: `RsaPublicKey(n, e)` and `MultiPrimeRsaPrivateKey(primes=[p, q], e)` (what `generate_key_pair` returns; CRT + blinding). `rsa_key_class_fetcher()` returns `(RsaPublicKey, MultiPrimeRsaPrivateKey)` (the current adapter returns `RsaPrivateKey`, which would no longer match). PEM import reads `n, e, p, q` with the DER codec and builds them directly; export computes `d = e⁻¹ mod lcm(p-1, q-1)` (pycryptodome uses the same λ-based `d`, so frozen fixtures match byte for byte; verify, else use φ) and the CRT values `dP, dQ, qInv`, then writes the PKCS#1 `RSAPrivateKey` SEQUENCE (version 0, n, e, d, p, q, dP, dQ, qInv) with the DER codec.
 - **RSA-OAEP-SHA512**: encrypt via `pkcs1.rsaes_oaep.encrypt(hash_class=sha512)` (it forwards the hash to MGF1). Decrypt is **not** `pkcs1.rsaes_oaep.decrypt`: besides not forwarding `hash_class` to MGF1, it `print()`s padding bytes and raises distinguishable exceptions (`ValueError` vs `DecryptionError`), i.e. a padding oracle. Instead, ~15 lines of EME-OAEP decoding (RFC 8017 §7.1.2) over `key.rsadp()` and `pkcs1.mgf.mgf1(hash_class=sha512)`, raising one `ValueError("Incorrect decryption.")` for every failure.
 - **RSA-PSS-SHA512**: `pkcs1.rsassa_pss.sign/verify` with `hash_class=hashlib.sha512`, and `mgf1=functools.partial(pkcs1.mgf.mgf1, hash_class=hashlib.sha512)`, because pkcs1's EMSA-PSS calls `mgf(h, len)` without the hash, i.e. MGF1-SHA1 (verified: such signatures fail pycryptodome's `pss.verify`, the bound version passes both ways). Salt length defaults to the digest length, as in pycryptodome's `pss.new`. pkcs1 hashes `message` itself, but `signature.py` passes an already-fed hasher, so pass that hasher as `message` with `hash_class=lambda data=b"": data if data is hasher else hashlib.sha512(data)` (EMSA-PSS only calls `hash_class(message).digest()` and `hash_class(m_prime).digest()`); a `ponytail:` comment names this coupling, and the Wycheproof/interop tests catch any pkcs1 change. `verify` returns `False` or raises pkcs1 exceptions: both become `ValueError`.
 - **DSA**: no acceptable PyPI package exists (checked 2026-10): `pydsa` 0.14 (2018, unmaintained, no keygen, Python 2 idioms, `random` module); `tlslite-ng`'s `Python_DSAKey` (LGPL-2.1, pulls the whole TLS stack plus `ecdsa`, and its `generate_qp` loop is inverted (`if (p-1) % q: break`), so it yields invalid domain parameters); `ecdsa` only does ECDSA/EdDSA. So `vendor/dsa.py`, about 70 lines, no dependency:
@@ -88,11 +87,11 @@ _crypto_backend/hpke_x25519_seal.py    # + open()
   - import checks the same domain conditions as pycryptodome, raising `ValueError`.
   - key class `DsaKey(p, q, g, y, x=None)`; `dsa_key_class_fetcher()` returns it.
 - **X25519 / HPKE**: `hpke_x25519_seal.seal` for encryption; add `open(receiver_private_key, enc, ciphertext)` reusing `_derive_key_schedule` (the DH is symmetric). Key class with `curve = "Curve25519"` and raw 32-byte keys; `ecc_key_class_fetcher()` returns it. `generate_ecc_keypair` accepts `"curve25519"` only. `encrypt_via_hpke`/`decrypt_via_hpke` raise `NotImplementedError` for an `aead_id` other than ChaCha20-Poly1305.
-- **PEM** (`fallback/pem.py`): every structure the library writes is fixed, so a ~40-line DER TLV reader/writer (INTEGER, OCTET STRING, BIT STRING, NULL, OID, SEQUENCE) is enough, without schema code in `pyasn1`. `rsa` still parses/writes PKCS#1 RSA keys and SPKI RSA public keys. Formats:
+- **PEM** (`fallback/pem.py`): every structure the library writes is fixed, so a ~40-line DER TLV reader/writer (INTEGER, OCTET STRING, BIT STRING, NULL, OID, SEQUENCE) is enough, without `pyasn1`/`rsa`. It handles all formats below, RSA included. Formats:
   - RSA: private PKCS#1 `RSA PRIVATE KEY` (what pycryptodome writes without passphrase), public SPKI `PUBLIC KEY`; unencrypted PKCS#8 `PRIVATE KEY` accepted on import.
   - DSA: PKCS#8 `PRIVATE KEY` and SPKI `PUBLIC KEY` with `Dss-Parms` (what pycryptodome writes).
   - X25519: PKCS#8 `PRIVATE KEY` (fixed 16-byte DER prefix `302e020100300506032b656e04220420`) and SPKI `PUBLIC KEY` (12-byte prefix `302a300506032b656e032100`), as pycryptodome writes them.
-  - Passphrase: `ENCRYPTED PRIVATE KEY` PBES2 envelope, written exactly like `pycryptodome.py` (PBKDF2-HMAC-SHA256, 600 000 iterations, AES-256-CBC, same iteration bound and same single error message). On import, PRF HMAC-SHA1 (also when absent) or HMAC-SHA256 and AES-128/256-CBC are accepted, so RSA keys written by earlier versions (`PBKDF2WithHMAC-SHA1AndAES256-CBC`) still load. Any other protection, a wrong passphrase, a missing passphrase on an encrypted PEM, or malformed DER raise `ValueError` (never `pyasn1`/`rsa`/pkcs1 exception types).
+  - Passphrase: `ENCRYPTED PRIVATE KEY` PBES2 envelope, written exactly like `pycryptodome.py` (PBKDF2-HMAC-SHA256, 600 000 iterations, AES-256-CBC, same iteration bound and same single error message). On import, PRF HMAC-SHA1 (also when absent) or HMAC-SHA256 and AES-128/256-CBC are accepted, so RSA keys written by earlier versions (`PBKDF2WithHMAC-SHA1AndAES256-CBC`) still load. Any other protection, a wrong passphrase, a missing passphrase on an encrypted PEM, or malformed DER raise `ValueError` (never codec-internal or pkcs1 exception types).
   - `pycryptodome.py` keeps its own `Crypto.Util.asn1` code: the native backend stays a plain pycryptodome wrapper, and the interop tests plus a PEM fixture keep both byte-compatible.
 - **NIST ECC / ECDSA**: `generate_ecc_keypair`, `import_ecc_key_from_pem` and `sign_with_dss`/`verify_with_dss` on non-DSA keys raise `NotImplementedError("... requires pycryptodome")` for anything but X25519 (for DSS on an X25519 key: `ValueError`, like pycryptodome).
 
@@ -127,7 +126,8 @@ Remove the patch function (including its inner `PyaesCipherAdapter`), the `ios` 
 ## Risks / Trade-offs
 
 - [Fallback lacks NIST ECC and DES3/legacy-OpenSSL PEMs] → Explicit `NotImplementedError`/`ValueError`, Readme coverage table. Desktop unaffected.
-- [Users who imported `rsa`/`pyaes` transitively] → BREAKING entry in CHANGELOG.
+- [Users who imported `rsa`/`pyasn1`/`pkcs1`/`pyaes` transitively] → BREAKING entry in CHANGELOG.
+- [Hand-written DER parsing of untrusted PEMs] → strict TLV reader (definite lengths only, no trailing bytes, length bounds checked, non-negative minimal INTEGERs), malformed-DER cases from Wycheproof-style mutations in tests, single `ValueError`.
 - [Optional deps missing from a default `poetry install`] → tox/CI install via `pip_requirements_export.txt` exported with `--all-extras`; the interop module asserts in the main env that both backends loaded (fails rather than skips when `CI` is set).
 - [Two PEM/DER code paths] → byte-level interop tests both ways, plus a frozen pycryptodome-made fixture.
 - [pkcs1 call-pattern coupling for PSS prehashing] → Wycheproof + interop tests; pkcs1 is pinned in `poetry.lock`.
@@ -150,5 +150,4 @@ Need a user decision (defaults applied above):
 - Does iOS really need keygen and passphrase-protected PEM export (authenticator-style use)? Default: yes. If iOS only encrypts like the MicroPython flightbox, `fallback/pem.py` shrinks to public-key import.
 - Legacy DSA PEMs protected with DES-EDE3-CBC: support them (needs `pyDes`, public domain but unmaintained since 2016, or a vendored DES)? Default: no, `ValueError`.
 - Add `ecdsa` (MIT, pure Python, maintained, depends on `six`) to the extra to cover ECC_DSS on NIST curves? Default: no.
-- `rsa` (and `pyasn1`) are only used for PKCS#1/SPKI RSA parsing, which `fallback/pem.py`'s DER codec could do too. Keep them as requested, or drop them from the extra? Default: keep.
-- Later: replace `micropython/fallback_adapter.py` by vendored copies of `_crypto_backend/fallback/` (would need lazy `rsa` imports there). Not part of this change.
+- Later: replace `micropython/fallback_adapter.py` by vendored copies of `_crypto_backend/fallback/` (the DER codec makes it MicroPython-friendly, no `pyasn1` needed). Not part of this change.

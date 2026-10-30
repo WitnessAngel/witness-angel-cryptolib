@@ -521,18 +521,24 @@ def ml_dsa_key_class_fetcher():
     return MLDSA.MLDSAKey
 
 
-def generate_ml_kem_768_keypair():
-    from Crypto.PublicKey import MLKEM
+# Our post-quantum key algos, with their pycryptodome module and (fixed) parameter set
+PQ_KEY_ALGOS = {
+    "ML_KEM_768": ("MLKEM", "ML_KEM_768"),
+    "ML_DSA_65": ("MLDSA", "ML_DSA_65"),
+}
 
-    private_key = MLKEM.generate(param_set=MLKEM.ParamSet.ML_KEM_768)
-    public_key = private_key.public_key()
-    return public_key, private_key
+
+def _get_pq_key_module_and_param_set(key_algo):
+    import importlib
+
+    module_name, param_set_name = PQ_KEY_ALGOS[key_algo]
+    key_module = importlib.import_module("Crypto.PublicKey.%s" % module_name)
+    return key_module, getattr(key_module.ParamSet, param_set_name)
 
 
-def generate_ml_dsa_65_keypair():
-    from Crypto.PublicKey import MLDSA
-
-    private_key = MLDSA.generate(param_set=MLDSA.ParamSet.ML_DSA_65)
+def generate_pq_keypair(key_algo):
+    key_module, param_set = _get_pq_key_module_and_param_set(key_algo)
+    private_key = key_module.generate(param_set=param_set)
     public_key = private_key.public_key()
     return public_key, private_key
 

@@ -154,13 +154,9 @@ def _generate_dsa_keypair_as_objects(key_length_bits: int) -> dict:
     return keypair
 
 
-def _generate_ml_kem_768_keypair_as_objects():
-    public_key, private_key = _crypto_backend.generate_ml_kem_768_keypair()
-    return dict(public_key=public_key, private_key=private_key)
-
-
-def _generate_ml_dsa_65_keypair_as_objects():
-    public_key, private_key = _crypto_backend.generate_ml_dsa_65_keypair()
+def _generate_pq_keypair_as_objects(key_algo: str) -> dict:
+    """Generate a post-quantum (public_key, private_key) pair, whose parameter set is fixed by the key algo."""
+    public_key, private_key = _crypto_backend.generate_pq_keypair(key_algo)
     return dict(public_key=public_key, private_key=private_key)
 
 
@@ -220,7 +216,7 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
         "pem_export_function": _crypto_backend.export_rsa_key_to_pem,
     },
     ML_KEM_768={  # Post-quantum KEM (FIPS 203), fixed parameter set
-        "generation_function": _generate_ml_kem_768_keypair_as_objects,
+        "generation_function": lambda: _generate_pq_keypair_as_objects("ML_KEM_768"),
         "generation_extra_parameters": [],
         "pem_import_function": _crypto_backend.import_ml_kem_key_from_pem,
         "pem_export_function": _crypto_backend.export_ml_kem_key_to_pem,
@@ -245,7 +241,7 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
         "pem_export_function": _crypto_backend.export_ecc_key_to_pem,
     },
     ML_DSA_65={  # Post-quantum signature (FIPS 204), fixed parameter set
-        "generation_function": _generate_ml_dsa_65_keypair_as_objects,
+        "generation_function": lambda: _generate_pq_keypair_as_objects("ML_DSA_65"),
         "generation_extra_parameters": [],
         "pem_import_function": _crypto_backend.import_ml_dsa_key_from_pem,
         "pem_export_function": _crypto_backend.export_ml_dsa_key_to_pem,

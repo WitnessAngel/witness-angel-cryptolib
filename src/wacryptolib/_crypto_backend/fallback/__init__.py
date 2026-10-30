@@ -72,7 +72,7 @@ def _requires_pycryptodome(operation):
 
 
 def _to_bytes(passphrase):
-    return passphrase.encode("utf-8") if isinstance(passphrase, str) else passphrase  # Like pycryptodome's tobytes()
+    return passphrase.encode("latin-1") if isinstance(passphrase, str) else passphrase  # Like pycryptodome's tobytes()
 
 
 # HASHER FACTORY #

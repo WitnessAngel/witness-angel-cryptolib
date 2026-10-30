@@ -249,3 +249,11 @@ def test_vendored_dsa_signature_generation(section_name):
         signature = dsa.sign(key, hashlib.sha512(h(case["Msg"])).digest(), k=int(case["K"], 16))
         q_length = len(domain["Q"]) // 2
         assert signature == int(case["R"], 16).to_bytes(q_length, "big") + int(case["S"], 16).to_bytes(q_length, "big")
+
+
+def test_hpke_seal_rejects_invalid_public_keys():
+    # RFC 9180 section 7.1.4: an all-zero X25519 shared secret must be rejected
+    with pytest.raises(ValueError, match="low order"):
+        hpke_x25519_seal.seal(bytes(32), b"abc")
+    with pytest.raises(ValueError, match="32 bytes"):
+        hpke_x25519_seal.seal(b"abc", b"abc")

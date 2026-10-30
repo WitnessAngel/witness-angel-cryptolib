@@ -463,7 +463,7 @@ def _check_ml_kem_key(key):
 
 def _encrypt_via_ml_kem_768(plaintext: bytes, key_dict: dict) -> dict:
     """Encrypt a bytestring with ML-KEM-768 (post-quantum asymmetric algo), as a KEM+DEM
-    construction (HPKE Base mode with AES-256-GCM).
+    construction (HPKE Base mode with ChaCha20-Poly1305).
 
     :param plaintext: the bytes to cipher
     :param key_dict: dict with PUBLIC ML-KEM key object
@@ -528,7 +528,7 @@ CIPHER_ALGOS_REGISTRY = dict(
         "encryption_function": _encrypt_via_ml_kem_768,
         "decryption_function": _decrypt_via_ml_kem_768,
         "encryption_node_class": None,
-        "is_authenticated": True,  # The DEM is an AEAD (AES-256-GCM)
+        "is_authenticated": True,  # The DEM is an AEAD (ChaCha20-Poly1305)
     },
 )
 

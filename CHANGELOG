@@ -4,7 +4,7 @@ Development
 
 * Add post-quantum algorithms (requires pycryptodome >= 4.2):
   - `ML_KEM_768` (FIPS 203) as asymmetric key algorithm and `key_cipher_algo`, using a KEM + DEM construction
-    (HPKE Base mode with AES-256-GCM); cipherdict fields are `kem_ciphertext` and `ciphertext`
+    (HPKE Base mode with ChaCha20-Poly1305); cipherdict fields are `kem_ciphertext` and `ciphertext`
   - `ML_DSA_65` (FIPS 204) as asymmetric key algorithm and `payload_signature_algo`, signing the SHA512 digest
     in pure mode with the fixed context `wacryptolib-payload-signature-v1`
   - Hybrid classical + post-quantum protection is obtained by stacking `ML_KEM_768` and `RSA_OAEP` key cipher layers

@@ -560,12 +560,14 @@ export_ml_dsa_key_to_pem = _export_pq_key_to_pem
 
 
 def encrypt_via_ml_kem_768(plaintext: bytes, public_key) -> tuple:
-    """KEM+DEM encryption via HPKE (RFC 9180) in Base mode with AES-256-GCM.
+    """KEM+DEM encryption via HPKE (RFC 9180) in Base mode with ChaCha20-Poly1305.
+
+    ChaCha20-Poly1305 rather than AES-GCM, so that MicroPython devices can produce the same format in pure python.
 
     Returns (kem_ciphertext, ciphertext), the latter including its authentication tag."""
     from Crypto.Protocol import HPKE
 
-    encryptor = HPKE.new(receiver_key=public_key, aead_id=HPKE.AEAD.AES256_GCM)
+    encryptor = HPKE.new(receiver_key=public_key, aead_id=HPKE.AEAD.CHACHA20_POLY1305)
     ciphertext = encryptor.seal(plaintext)
     return encryptor.enc, ciphertext
 
@@ -573,7 +575,7 @@ def encrypt_via_ml_kem_768(plaintext: bytes, public_key) -> tuple:
 def decrypt_via_ml_kem_768(kem_ciphertext: bytes, ciphertext: bytes, private_key) -> bytes:
     from Crypto.Protocol import HPKE
 
-    decryptor = HPKE.new(receiver_key=private_key, enc=kem_ciphertext, aead_id=HPKE.AEAD.AES256_GCM)
+    decryptor = HPKE.new(receiver_key=private_key, enc=kem_ciphertext, aead_id=HPKE.AEAD.CHACHA20_POLY1305)
     return decryptor.unseal(ciphertext)  # Raise ValueError if failure
 
 

@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 """
-Pure python, encryption-only ECIES_X25519: HPKE (RFC 9180) Base mode with DHKEM(X25519, HKDF-SHA256),
-HKDF-SHA256 and ChaCha20-Poly1305, empty info and AAD, a single seal() per context.
-Byte-compatible with pycryptodome's HPKE, only meant for platforms (micropython) where pycryptodome is unusable.
+Pure python ECIES_X25519: HPKE (RFC 9180) Base mode with DHKEM(X25519, HKDF-SHA256),
+HKDF-SHA256 and ChaCha20-Poly1305, empty info and AAD, a single seal() or open() per context.
+Byte-compatible with pycryptodome's HPKE, only meant for platforms (micropython, iOS) where pycryptodome is unusable.
 
 ChaCha20-Poly1305 was preferred to AES-256-GCM: it is already implemented in pure python here (GCM would need
 a new GHASH), add-rotate-xor is less prone to timing leaks than table-based AES, and RFC 9180 Appendix A.2
@@ -36,7 +36,7 @@ def x25519(scalar: bytes, u_coordinate: bytes) -> bytes:
     """RFC 7748 Montgomery ladder.
 
     ponytail: python bigints are not constant-time, so the (ephemeral) scalar may leak to local timing/power
-    observers; acceptable for a seal-only device, use a native implementation if private keys ever live there."""
+    observers; acceptable for sealing, and for open() only on devices without such observers (fallback backend)."""
     k = bytearray(scalar)
     k[0] &= 248
     k[31] &= 127
@@ -109,6 +109,11 @@ def _derive_key_schedule(receiver_public_key, ephemeral_private_key, info=b""):
     """Returns (enc, key, base_nonce) of HPKE Base mode with empty psk; info is only non-empty in RFC test vectors."""
     enc = x25519(ephemeral_private_key, _X25519_BASE_POINT)
     dh = x25519(ephemeral_private_key, receiver_public_key)
+    key, base_nonce = _derive_key_schedule_from_dh(dh, enc, receiver_public_key, info=info)
+    return enc, key, base_nonce
+
+
+def _derive_key_schedule_from_dh(dh, enc, receiver_public_key, info=b""):
     if dh == bytes(32):
         raise ValueError("Invalid X25519 public key (low order point)")
     eae_prk = _labeled_extract(_KEM_SUITE_ID, b"", b"eae_prk", dh)
@@ -118,7 +123,7 @@ def _derive_key_schedule(receiver_public_key, ephemeral_private_key, info=b""):
     secret = _labeled_extract(_HPKE_SUITE_ID, shared_secret, b"secret", b"")
     key = _labeled_expand(_HPKE_SUITE_ID, secret, b"key", key_schedule_context, 32)
     base_nonce = _labeled_expand(_HPKE_SUITE_ID, secret, b"base_nonce", key_schedule_context, 12)
-    return enc, key, base_nonce
+    return key, base_nonce
 
 
 def seal(receiver_public_key: bytes, plaintext: bytes, ephemeral_private_key: bytes = None) -> tuple:
@@ -139,3 +144,19 @@ def seal(receiver_public_key: bytes, plaintext: bytes, ephemeral_private_key: by
     # Sequence number 0, so the nonce is base_nonce itself
     ciphertext, tag = ChaCha20Poly1305Cipher(key, base_nonce).encrypt_and_digest(plaintext)
     return enc, ciphertext + tag
+
+
+def open(receiver_private_key: bytes, enc: bytes, ciphertext: bytes) -> bytes:
+    """Decrypt the output of seal() with the raw 32-bytes X25519 private key, raising ValueError on any failure."""
+    if len(receiver_private_key) != 32 or len(enc) != 32:
+        raise ValueError("X25519 private key and encapsulated key must be 32 bytes long")
+    if len(ciphertext) < 16:
+        raise ValueError("Ciphertext is too short to contain a MAC tag")
+    receiver_public_key = x25519(receiver_private_key, _X25519_BASE_POINT)
+    dh = x25519(receiver_private_key, enc)
+    key, base_nonce = _derive_key_schedule_from_dh(dh, enc, receiver_public_key)
+    try:
+        return ChaCha20Poly1305Cipher(key, base_nonce).decrypt_and_verify(ciphertext[:-16], ciphertext[-16:])
+    except ValueError:
+        # Same message as pycryptodome: on a first open(), tampering can't be told apart from a wrong key
+        raise ValueError("Incorrect decryption: wrong MAC tag") from None

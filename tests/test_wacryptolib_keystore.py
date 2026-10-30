@@ -350,6 +350,27 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
         remote_keystore.export_to_keystore_tree()
 
 
+def test_keystore_tree_export_and_import_with_all_asymmetric_key_algos(tmp_path: Path):
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    initialize_authenticator(source_dir, keystore_owner="Owner", keystore_passphrase_hint="hint")
+    source_keystore = FilesystemKeystore(source_dir)
+
+    keychain_uid = generate_uuid0()
+    for key_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS:  # Including signature-only algos like ML_DSA_65
+        source_keystore.set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"pub", private_key=b"priv")
+
+    keystore_tree = source_keystore.export_to_keystore_tree()
+    assert sorted(keypair["key_algo"] for keypair in keystore_tree["keypairs"]) == sorted(SUPPORTED_ASYMMETRIC_KEY_ALGOS)
+
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    target_keystore = FilesystemKeystore(target_dir)
+    assert not target_keystore.import_from_keystore_tree(keystore_tree)  # Created, not updated
+    for key_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
+        assert target_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"priv"
+
+
 def test_keystore_import_from_keystore_tree(tmp_path: Path):
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()

@@ -28,6 +28,9 @@ classifiers = [
 include = []
 exclude = []
 
+[tool.poetry.extras]
+fallbacks = ["pkcs1", "pyaes", "ecdsa"]
+
 [tool.poetry.scripts]
 flightbox = 'wacryptolib.cli:main'
 
@@ -56,10 +59,11 @@ schema = "^0.7.7"
 decorator = "^5.1"
 extjson = "^0.2.0"
 
-# Pure-python crypto, for fallback backend (also vendored by micropython/vendor_dependencies.py, at the same locked versions)
-rsa = "^4.9.1"
-pkcs1 = "^0.9.7"
-pyaes = "^1.6.1"
+# Pure-python crypto, for the fallback backend, used where pycryptodome's native code can't load (iOS, micropython...)
+# Also vendored by micropython/vendor_dependencies.py, at the same locked versions
+pkcs1 = { version = "^0.9.7", optional = true }
+pyaes = { version = "^1.6.1", optional = true }
+ecdsa = { version = "^0.19.2", optional = true }  # NIST-curve ECC
 
 [tool.poetry.group.dev.dependencies]
 

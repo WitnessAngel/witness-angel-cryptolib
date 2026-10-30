@@ -10,6 +10,7 @@ import random
 import pytest
 
 import wacryptolib
+from _test_mockups import is_fallback_backend
 from wacryptolib._crypto_backend import get_random_bytes, generate_rsa_keypair, generate_ecc_keypair
 from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipeline
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
@@ -195,11 +196,14 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
         decrypt(key_dict=dict(key=other_private_key), cipherdict=cipherdict)
     assert not isinstance(exc_info.value, DecryptionIntegrityError)  # Not reported as tampering
 
-    with pytest.raises(EncryptionError, match="fallback backend"):  # E.g. a symmetric key mistaken for a public key
+    with pytest.raises(EncryptionError, match="X25519 key"):  # E.g. a symmetric key mistaken for a public key
         encrypt(key_dict=dict(key=get_random_bytes(32)), plaintext=binary_content)
 
-    with pytest.raises(DecryptionError, match="X25519 key"):  # Raw keys are only public ones
-        decrypt(key_dict=dict(key=keypair["public_key"].export_key(format="raw")), cipherdict=cipherdict)
+    with pytest.raises(DecryptionError, match="X25519 key"):
+        decrypt(key_dict=dict(key=get_random_bytes(32)), cipherdict=cipherdict)
+
+    if is_fallback_backend():
+        return  # Remaining checks need RSA and NIST-curve keys
 
     rsa_public_key, rsa_private_key = generate_rsa_keypair(2048)
     p256_keypair = wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", serialize=False, curve="p256")

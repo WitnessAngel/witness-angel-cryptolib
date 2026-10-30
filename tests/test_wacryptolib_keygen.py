@@ -28,8 +28,16 @@ from _test_mockups import skip_if_fallback_backend
 
 
 def _check_is_asymmetric_key_object(key):
-    # Different behaviors for pycroptodome vs pkcs1 packages:
-    assert hasattr(key, "export_key") or hasattr(key, "save_pkcs1")
+    from wacryptolib import _crypto_backend
+
+    assert isinstance(  # isinstance() accepts nested tuples, as returned by some fetchers
+        key,
+        (
+            _crypto_backend.rsa_key_class_fetcher(),
+            _crypto_backend.dsa_key_class_fetcher(),
+            _crypto_backend.ecc_key_class_fetcher(),
+        ),
+    )
 
 
 def test_passphrase_encoding():
@@ -144,8 +152,8 @@ def test_load_ecies_x25519_key_rejects_other_curves():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
-    if key_algo in ("ECC_DSS", "DSA_DSS"):
-        skip_if_fallback_backend("ECC, and DES3 for DSA key protection,")
+    if key_algo == "ECC_DSS":
+        skip_if_fallback_backend("ECC")
     # Both Unicode and Bytes are supported
     passphrases = ["Thïs is a passphrâse", b"aoh18726"]
 
@@ -165,7 +173,7 @@ def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
         )
         _check_is_asymmetric_key_object(private_key)
 
-        error_matcher = "key format is not supported|Invalid DER encoding|Wrong passphrase"
+        error_matcher = "key format is not supported|Invalid DER encoding|Wrong passphrase|requires a passphrase"
 
         with pytest.raises(KeyLoadingError, match=error_matcher):
             load_asymmetric_key_from_pem_bytestring(

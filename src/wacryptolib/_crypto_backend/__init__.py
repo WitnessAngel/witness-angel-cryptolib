@@ -8,45 +8,34 @@ import os
 
 logger = logging.getLogger(__name__)
 
-from .pycryptodome import IMPLEMENTED_HASH_ALGOS, get_hasher_instance
-from .pycryptodome import (
-    AES_BLOCK_SIZE,
-    build_aes_cbc_encrypter,
-    encrypt_via_aes_cbc,
-    decrypt_via_aes_cbc,
-    build_aes_eax_cipher,
-    encrypt_via_aes_eax,
-    decrypt_via_aes_eax,
-    build_chacha20_poly1305_cipher,
-    encrypt_via_chacha20_poly1305,
-    decrypt_via_chacha20_poly1305,
-    # No cipher builder for (asymmetric) RSA
-    encrypt_via_rsa_oaep,
-    decrypt_via_rsa_oaep,
-    encrypt_via_hpke,
-    decrypt_via_hpke,
-    import_x25519_key_from_pem,
-    X25519RawPublicKey,
-)
-from .pycryptodome import (
-    generate_rsa_keypair,
-    generate_dsa_keypair,
-    generate_ecc_keypair,
-    import_rsa_key_from_pem,
-    import_dsa_key_from_pem,
-    import_ecc_key_from_pem,
-    export_rsa_key_to_pem,
-    export_dsa_key_to_pem,
-    export_ecc_key_to_pem,
-    rsa_key_class_fetcher,
-    dsa_key_class_fetcher,
-    ecc_key_class_fetcher,
-)
-from .pycryptodome import sign_with_pss, verify_with_pss, sign_with_dss, verify_with_dss
 
-#from .fallback_adapter import (build_aes_cbc_encrypter, encrypt_via_aes_cbc, decrypt_via_aes_cbc,)
-                                #import_rsa_key_from_pem, encrypt_via_rsa_oaep, decrypt_via_rsa_oaep,
-                                #generate_rsa_keypair, rsa_key_class_fetcher)
+def _is_native_backend_usable():
+    if os.getenv("FORCE_WACRYPTOLIB_FALLBACK_BACKEND"):
+        return False
+    try:
+        # Its module body loads a native library, and raises OSError when dlopen() is forbidden (e.g. iOS)
+        from Crypto.Cipher import AES
+    except (ImportError, OSError):
+        return False
+    return True
+
+
+if _is_native_backend_usable():
+    from .pycryptodome import *
+
+    BACKEND_NAME = "pycryptodome"
+else:
+    try:
+        from .fallback import *
+    except ImportError as exc:
+        raise ImportError(
+            "No usable crypto backend: install pycryptodome (default dependency of wacryptolib), or, on platforms "
+            "where it can't load, the pure-python packages of the 'fallbacks' extra (%s)" % exc
+        ) from exc
+
+    BACKEND_NAME = "fallback"
+
+logger.info("Using %s crypto backend", BACKEND_NAME)
 
 
 # RANDOMNESS #

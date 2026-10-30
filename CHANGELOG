@@ -14,6 +14,8 @@ Development
   cryptainers or cryptoconfs, and stop chaining them to the raw validator exceptions
 * Delete the offloaded payload file and the partial initial cryptainer dump when CryptainerEncryptionPipeline fails
   to start
+* Add ECIES_X25519 asymmetric cipher (HPKE RFC 9180, X25519 + HKDF-SHA256 + ChaCha20-Poly1305), with a pure python encryption-only implementation for MicroPython
+* Allow any registered asymmetric cipher in trustee decryption, and digits in keystore key_algo filenames
 * **BREAKING**: Extended JSON format now defaults to RELAXED mode instead of CANONICAL mode
   - UUIDs are now serialized as `{"$uuid": "hex"}` instead of `{"$binary": {"base64": "...", "subType": "04"}}`
   - Integers are now plain JSON numbers instead of `{"$numberInt": "42"}`

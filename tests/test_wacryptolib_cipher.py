@@ -10,7 +10,7 @@ import random
 import pytest
 
 import wacryptolib
-from wacryptolib._crypto_backend import get_random_bytes, generate_rsa_keypair
+from wacryptolib._crypto_backend import get_random_bytes, generate_rsa_keypair, generate_ecc_keypair
 from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipeline
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
 from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError, OperationNotSupported
@@ -150,6 +150,50 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
         wacryptolib.cipher.decrypt_bytestring(
             key_dict=dict(key=private_key_too_short), cipherdict=cipherdict, cipher_algo=cipher_algo
         )
+
+
+@pytest.mark.parametrize("plaintext_length", [0, 10, 61, 500])
+def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
+    cipher_algo = "ECIES_X25519"
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=cipher_algo, serialize=False)
+    encrypt = functools.partial(wacryptolib.cipher.encrypt_bytestring, cipher_algo=cipher_algo)
+    decrypt = functools.partial(wacryptolib.cipher.decrypt_bytestring, cipher_algo=cipher_algo)
+
+    binary_content = get_random_bytes(plaintext_length)
+
+    cipherdict = encrypt(key_dict=dict(key=keypair["public_key"]), plaintext=binary_content)
+    assert set(cipherdict) == {"kem_ciphertext", "ciphertext"}
+    assert len(cipherdict["kem_ciphertext"]) == 32
+    assert len(cipherdict["ciphertext"]) == plaintext_length + 16  # With MAC tag
+
+    other_cipherdict = encrypt(key_dict=dict(key=keypair["public_key"]), plaintext=binary_content)
+    assert other_cipherdict["kem_ciphertext"] != cipherdict["kem_ciphertext"]  # Randomized
+    assert other_cipherdict["ciphertext"] != cipherdict["ciphertext"]
+
+    private_key_dict = dict(key=keypair["private_key"])
+    assert decrypt(key_dict=private_key_dict, cipherdict=cipherdict) == binary_content
+
+    decryption_func = functools.partial(decrypt, key_dict=private_key_dict)
+    _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
+
+    corrupted_cipherdict = dict(cipherdict, kem_ciphertext=get_random_bytes(32))
+    with pytest.raises(DecryptionError):
+        decrypt(key_dict=private_key_dict, cipherdict=corrupted_cipherdict)
+
+    _other_public_key, other_private_key = generate_ecc_keypair("curve25519")  # Bypasses keypair cache of tests
+    with pytest.raises(DecryptionError):
+        decrypt(key_dict=dict(key=other_private_key), cipherdict=cipherdict)
+
+    rsa_public_key, rsa_private_key = generate_rsa_keypair(2048)
+    p256_keypair = wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", serialize=False, curve="p256")
+    for wrong_public_key, wrong_private_key in [
+        (rsa_public_key, rsa_private_key),
+        (p256_keypair["public_key"], p256_keypair["private_key"]),
+    ]:
+        with pytest.raises(EncryptionError, match="X25519 key"):
+            encrypt(key_dict=dict(key=wrong_public_key), plaintext=binary_content)
+        with pytest.raises(DecryptionError, match="X25519 key"):
+            decrypt(key_dict=dict(key=wrong_private_key), cipherdict=cipherdict)
 
 
 # Test each node separately, then a pipeline with all nodes

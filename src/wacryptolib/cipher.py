@@ -466,11 +466,13 @@ def _encrypt_via_ml_kem_768(plaintext: bytes, key_dict: dict) -> dict:
     construction (HPKE Base mode with ChaCha20-Poly1305).
 
     :param plaintext: the bytes to cipher
-    :param key_dict: dict with PUBLIC ML-KEM key object
+    :param key_dict: dict with ML-KEM key object (only its public part is used, like for RSA_OAEP)
 
     :return: a dict with fields `kem_ciphertext` (key encapsulation) and `ciphertext` (authenticated payload)"""
     key = key_dict["key"]
     _check_ml_kem_key(key)
+    if key.has_private():
+        key = key.public_key()  # Else HPKE would consider it as the receiver key of a decryption
     kem_ciphertext, ciphertext = _crypto_backend.encrypt_via_ml_kem_768(plaintext, public_key=key)
     return dict(kem_ciphertext=kem_ciphertext, ciphertext=ciphertext)
 

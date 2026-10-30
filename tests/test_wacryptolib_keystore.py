@@ -523,7 +523,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
 
     keystore = InMemoryKeystore()
 
-    for _ in range(4):
+    for _ in range(len(SUPPORTED_ASYMMETRIC_KEY_ALGOS)):
         res = generate_free_keypair_for_least_provisioned_key_algo(
             keystore=keystore,
             max_free_keys_per_algo=10,
@@ -532,11 +532,9 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
         )
         assert res
 
-    assert keystore.get_free_keypairs_count("DSA_DSS") == 1
-    assert keystore.get_free_keypairs_count("ECC_DSS") == 1
-    assert keystore.get_free_keypairs_count("RSA_OAEP") == 1
-    assert keystore.get_free_keypairs_count("RSA_PSS") == 1
-    assert generated_keys_count == 4
+    for key_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
+        assert keystore.get_free_keypairs_count(key_algo) == 1
+    assert generated_keys_count == len(SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 
     # Now test with a restricted set of key types
 
@@ -627,7 +625,7 @@ def test_get_free_keypair_generator_worker():
         worker.join()
 
         assert (
-            generated_keys_count == 120  # 4 key types for now
+            generated_keys_count == 30 * len(SUPPORTED_ASYMMETRIC_KEY_ALGOS)
         ), generated_keys_count  # All keys had the time to be generated
 
         print("NEW START")

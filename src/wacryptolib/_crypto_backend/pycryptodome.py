@@ -335,10 +335,14 @@ def encrypt_via_hpke(plaintext: bytes, public_key, aead_id) -> tuple[bytes, byte
     return sender.enc, sender.seal(plaintext)
 
 
-def decrypt_via_hpke(enc: bytes, ciphertext: bytes, private_key, aead_id) -> bytes:
+def decrypt_via_hpke(enc: bytes, ciphertext: bytes, private_key, aead_id, verify_integrity_tags=True) -> bytes:
     from Crypto.Protocol import HPKE
 
-    return HPKE.new(receiver_key=private_key, enc=enc, aead_id=HPKE.AEAD(aead_id)).unseal(ciphertext)
+    receiver = HPKE.new(receiver_key=private_key, enc=enc, aead_id=HPKE.AEAD(aead_id))
+    if verify_integrity_tags:
+        return receiver.unseal(ciphertext)
+    # ponytail: private HPKE_Cipher API (pycryptodome 3.23), no public way to skip the MAC check
+    return receiver._new_cipher().decrypt(ciphertext[: -receiver._Nt])
 
 
 # RSA KEY GENERATION, AND IMPORT/EXPORT #

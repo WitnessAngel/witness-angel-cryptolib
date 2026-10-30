@@ -134,6 +134,14 @@ def test_load_asymmetric_key_from_pem_bytestring(key_algo):
         load_asymmetric_key_from_pem_bytestring(key_pem=keypair["private_key"], key_algo="ZHD")
 
 
+def test_load_ecies_x25519_key_rejects_other_curves():
+    skip_if_fallback_backend("ECC")
+    keypair = wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", curve="p256")
+    for field in ["private_key", "public_key"]:
+        with pytest.raises(KeyLoadingError, match="not a NIST P-256 one"):
+            load_asymmetric_key_from_pem_bytestring(key_pem=keypair[field], key_algo="ECIES_X25519")
+
+
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
     if key_algo in ("ECC_DSS", "DSA_DSS"):

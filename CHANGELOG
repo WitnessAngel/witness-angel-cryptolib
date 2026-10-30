@@ -6,6 +6,12 @@ Development
 * Allow any registered asymmetric cipher in trustee decryption, and digits in keystore key_algo filenames
 * **BREAKING**: Cryptoconf validation now restricts authenticator trustees to RSA_OAEP, key_cipher_algo of asymmetric layers to cipher algos (not signature-only ones), and payload_cipher_algo to symmetric cipher algos
 * **BREAKING**: TrusteeApi and keystore public methods normalize algo names to uppercase (TrusteeApi also raises ValidationError on unsupported ones), so keypairs and free keypairs previously stored under lowercase algo names are not found anymore
+* **BREAKING**: pure-python crypto packages are no longer installed by default: `pkcs1`, `pyaes` and the new `ecdsa`
+  dependency are in the `fallbacks` extra, and `rsa` (with `pyasn1`) is not used anymore
+* Replace the monkey-patching of pycryptodome internals by a standalone pure-python fallback backend, selected
+  automatically when pycryptodome's native code can't load (e.g. iOS), or via FORCE_WACRYPTOLIB_FALLBACK_BACKEND;
+  it supports all algorithms and key formats of the pycryptodome backend, except legacy DES3-protected DSA keys
+* Test both crypto backends against official vectors (NIST, RFC, Wycheproof) and against each other
 * **BREAKING**: Extended JSON format now defaults to RELAXED mode instead of CANONICAL mode
   - UUIDs are now serialized as `{"$uuid": "hex"}` instead of `{"$binary": {"base64": "...", "subType": "04"}}`
   - Integers are now plain JSON numbers instead of `{"$numberInt": "42"}`

@@ -161,24 +161,50 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
     return Schema(full_schema_dict)
 
 
-_NON_EMPTY_LIST_FIELDS = ("payload_cipher_layers", "key_cipher_layers", "key_shared_secret_shards")
+_CIPHER_LAYERS_NON_EMPTY_FIELDS = ("payload_cipher_layers", "key_cipher_layers", "key_shared_secret_shards")
+_SIGNATURES_NON_EMPTY_FIELDS = ("payload_plaintext_signatures",)
+
+_POSITIVE_INTEGER_STRING_PATTERN = r"^\+?0*[1-9]\d*$"
 
 
-def _add_json_schema_min_items(json_schema):
-    """Inject "minItems: 1" for cipher layer lists, since the json_schema() export drops the "len" callables.
+def _restrict_json_schema_int_to_positive(int_schema):
+    """Make a micro_schemas.schema_int JSON export (plain int, $numberInt or $numberLong) only accept values >= 1."""
+    for branch in int_schema["anyOf"]:
+        if branch.get("type") == "integer":
+            branch["minimum"] = 1
+        else:
+            (int_string_schema,) = branch["properties"].values()
+            int_string_schema["allOf"].append({"type": "string", "pattern": _POSITIVE_INTEGER_STRING_PATTERN})
 
-    Shared-secret threshold bounds can't be expressed in JSON Schema, only python-schema checks them.
+
+def _add_json_schema_constraints(json_schema, non_empty_fields):
+    """Re-inject the constraints that the json_schema() export drops along with "len" and threshold callables.
+
+    Only the threshold lower bound is restored, "threshold <= number of shards" can't be expressed in JSON Schema,
+    only python-schema checks it.
     """
-    if isinstance(json_schema, dict):
-        for key, value in json_schema.items():
-            if key == "properties":
-                for field_name, field_schema in value.items():
-                    if field_name in _NON_EMPTY_LIST_FIELDS and field_schema.get("type") == "array":
-                        field_schema["minItems"] = 1
-            _add_json_schema_min_items(value)
-    elif isinstance(json_schema, list):
-        for value in json_schema:
-            _add_json_schema_min_items(value)
+    patched_fields = set()
+
+    def _walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "properties":
+                    for field_name, field_schema in value.items():
+                        if field_name in non_empty_fields:
+                            if field_schema.get("type") != "array":
+                                raise RuntimeError("Can't add minItems to JSON schema of %s" % field_name)
+                            field_schema["minItems"] = 1
+                            patched_fields.add(field_name)
+                        elif field_name == "key_shared_secret_threshold":
+                            _restrict_json_schema_int_to_positive(field_schema)
+                _walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                _walk(value)
+
+    _walk(json_schema)
+    if patched_fields != set(non_empty_fields):  # Fail loudly if the schema export format changes
+        raise RuntimeError("Fields missing from JSON schema: %s" % (set(non_empty_fields) - patched_fields))
     return json_schema
 
 
@@ -186,37 +212,45 @@ def _add_json_schema_min_items(json_schema):
 CRYPTOCONF_SCHEMA_PYTHON = _create_cryptostructure_schema(
     for_cryptainer=False, for_cryptosig=False, extended_json_format=False
 )
-CRYPTOCONF_SCHEMA_JSON = _add_json_schema_min_items(
+CRYPTOCONF_SCHEMA_JSON = _add_json_schema_constraints(
     _create_cryptostructure_schema(
         for_cryptainer=False, for_cryptosig=False, extended_json_format=True
-    ).json_schema("cryptoconf_schema.json")
+    ).json_schema("cryptoconf_schema.json"),
+    non_empty_fields=_CIPHER_LAYERS_NON_EMPTY_FIELDS,
 )
 
 # CONTAINER OF ENCRYPTED DATA
 CRYPTAINER_SCHEMA_PYTHON = _create_cryptostructure_schema(
     for_cryptainer=True, for_cryptosig=False, extended_json_format=False
 )
-CRYPTAINER_SCHEMA_JSON = _add_json_schema_min_items(
+CRYPTAINER_SCHEMA_JSON = _add_json_schema_constraints(
     _create_cryptostructure_schema(
         for_cryptainer=True, for_cryptosig=False, extended_json_format=True
-    ).json_schema("cryptainer_schema.json")
+    ).json_schema("cryptainer_schema.json"),
+    non_empty_fields=_CIPHER_LAYERS_NON_EMPTY_FIELDS,
 )
 
 # CONFIGURATION IN ORDER TO ONLY SIGN DATA
 SIGCONF_SCHEMA_PYTHON = _create_cryptostructure_schema(
     for_cryptainer=False, for_cryptosig=True, extended_json_format=False
 )
-SIGCONF_SCHEMA_JSON = _create_cryptostructure_schema(
-    for_cryptainer=False, for_cryptosig=True, extended_json_format=True
-).json_schema("sig_schema.json")
+SIGCONF_SCHEMA_JSON = _add_json_schema_constraints(
+    _create_cryptostructure_schema(
+        for_cryptainer=False, for_cryptosig=True, extended_json_format=True
+    ).json_schema("sig_schema.json"),
+    non_empty_fields=_SIGNATURES_NON_EMPTY_FIELDS,
+)
 
 # CONTAINER OF SIGNATURES FOR DATA
 SIGAINER_SCHEMA_PYTHON = _create_cryptostructure_schema(
     for_cryptainer=True, for_cryptosig=True, extended_json_format=False
 )
-SIGAINER_SCHEMA_JSON = _create_cryptostructure_schema(
-    for_cryptainer=True, for_cryptosig=True, extended_json_format=True
-).json_schema("sig_schema.json")
+SIGAINER_SCHEMA_JSON = _add_json_schema_constraints(
+    _create_cryptostructure_schema(
+        for_cryptainer=True, for_cryptosig=True, extended_json_format=True
+    ).json_schema("sig_schema.json"),
+    non_empty_fields=_SIGNATURES_NON_EMPTY_FIELDS,
+)
 
 
 def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema]):  # Fixme why call it "valid_schema"?

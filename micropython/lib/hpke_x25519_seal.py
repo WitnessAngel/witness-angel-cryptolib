@@ -19,7 +19,7 @@ import hmac
 import os
 
 try:
-    from .chacha20_poly1305 import ChaCha20Poly1305Cipher
+    from .vendor.chacha20_poly1305 import ChaCha20Poly1305Cipher
 except ImportError:  # Copied as a top-level module on micropython
     from chacha20_poly1305 import ChaCha20Poly1305Cipher
 
@@ -95,6 +95,15 @@ def _labeled_expand(suite_id, prk, label, info, length):
     return _hkdf_expand(prk, labeled_info, length)
 
 
+def _compute_key_schedule_context(info):
+    psk_id_hash = _labeled_extract(_HPKE_SUITE_ID, b"", b"psk_id_hash", b"")
+    info_hash = _labeled_extract(_HPKE_SUITE_ID, b"", b"info_hash", info)
+    return _MODE_BASE + psk_id_hash + info_hash
+
+
+_EMPTY_INFO_KEY_SCHEDULE_CONTEXT = _compute_key_schedule_context(b"")  # Constant, as psk is always empty too
+
+
 def _derive_key_schedule(receiver_public_key, ephemeral_private_key, info=b""):
     """Returns (enc, key, base_nonce) of HPKE Base mode with empty psk; info is only non-empty in RFC test vectors."""
     enc = x25519(ephemeral_private_key, _X25519_BASE_POINT)
@@ -104,9 +113,7 @@ def _derive_key_schedule(receiver_public_key, ephemeral_private_key, info=b""):
     eae_prk = _labeled_extract(_KEM_SUITE_ID, b"", b"eae_prk", dh)
     shared_secret = _labeled_expand(_KEM_SUITE_ID, eae_prk, b"shared_secret", enc + receiver_public_key, 32)
 
-    psk_id_hash = _labeled_extract(_HPKE_SUITE_ID, b"", b"psk_id_hash", b"")
-    info_hash = _labeled_extract(_HPKE_SUITE_ID, b"", b"info_hash", info)
-    key_schedule_context = _MODE_BASE + psk_id_hash + info_hash
+    key_schedule_context = _EMPTY_INFO_KEY_SCHEDULE_CONTEXT if not info else _compute_key_schedule_context(info)
     secret = _labeled_extract(_HPKE_SUITE_ID, shared_secret, b"secret", b"")
     key = _labeled_expand(_HPKE_SUITE_ID, secret, b"key", key_schedule_context, 32)
     base_nonce = _labeled_expand(_HPKE_SUITE_ID, secret, b"base_nonce", key_schedule_context, 12)

@@ -159,3 +159,16 @@ def test_fallback_der_codec_roundtrips():
         assert pem.decode_oid(pem.encode_oid(oid)) == oid
     long_sequence = pem.encode_sequence(*[pem.encode_octet_string(bytes(100))] * 3)
     assert [pem.decode_octet_string(item) for item in pem.decode_sequence(long_sequence, 3)] == [bytes(100)] * 3
+
+
+def test_rsa_private_keys_are_accepted_as_public_keys(backend):
+    # wacryptolib relies on this, e.g. for read-only trustees encrypting with their private key
+    public_key, private_key = backend.generate_rsa_keypair(2048)
+    (ciphertext,) = backend.encrypt_via_rsa_oaep([b"abc"], private_key)
+    assert backend.decrypt_via_rsa_oaep([ciphertext], private_key) == [b"abc"]
+    with pytest.raises(ValueError, match="Ciphertext with incorrect length"):
+        backend.decrypt_via_rsa_oaep([ciphertext + b"a"], private_key)
+
+    hasher = backend.get_hasher_instance("SHA512")
+    hasher.update(b"message")
+    backend.verify_with_pss(hasher, backend.sign_with_pss(hasher, private_key), private_key)

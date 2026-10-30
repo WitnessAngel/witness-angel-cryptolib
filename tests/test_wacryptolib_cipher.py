@@ -316,15 +316,15 @@ def test_ml_kem_768_asymmetric_encryption_and_decryption():
 
     corrupted_cipherdict = copy.deepcopy(cipherdict)
     corrupted_cipherdict["kem_ciphertext"] = b"\x00" + corrupted_cipherdict["kem_ciphertext"][1:]
-    with pytest.raises(DecryptionError):
+    with pytest.raises(DecryptionIntegrityError):  # Implicit rejection of ML-KEM gives a wrong key
         decryption_func(cipherdict=corrupted_cipherdict)
 
     corrupted_cipherdict = copy.deepcopy(cipherdict)
     corrupted_cipherdict["ciphertext"] = corrupted_cipherdict["ciphertext"][:-1]  # Truncated tag
-    with pytest.raises(DecryptionError):
+    with pytest.raises(DecryptionIntegrityError):
         decryption_func(cipherdict=corrupted_cipherdict)
 
-    with pytest.raises(DecryptionError):  # Wrong private key
+    with pytest.raises(DecryptionIntegrityError):  # Wrong private key
         wacryptolib.cipher.decrypt_bytestring(
             key_dict=dict(key=other_private_key), cipherdict=cipherdict, cipher_algo=cipher_algo
         )

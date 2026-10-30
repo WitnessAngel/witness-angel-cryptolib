@@ -28,6 +28,8 @@ from wacryptolib.cryptainer import (
     LOCAL_KEYFACTORY_TRUSTEE_MARKER,
     encrypt_payload_into_cryptainer,
     decrypt_payload_from_cryptainer,
+    CRYPTAINER_FORMAT,
+    CRYPTAINER_STATES,
     CryptainerStorage,
     extract_metadata_from_cryptainer,
     CryptainerBase,
@@ -2139,17 +2141,33 @@ def _generate_corrupted_cryptoconfs(cryptoconf, is_complex_conf, include_extende
     corrupted_conf4["payload_cipher_layers"][0]["key_cipher_layers"] = " "
     corrupted_confs.append(corrupted_conf4)
 
+    # Empty the ciphers of payload
+    corrupted_conf5 = copy.deepcopy(cryptoconf)
+    del corrupted_conf5["payload_cipher_layers"][:]
+    corrupted_confs.append(corrupted_conf5)
+
+    # Empty the ciphers of payload key
+    corrupted_conf6 = copy.deepcopy(cryptoconf)
+    del corrupted_conf6["payload_cipher_layers"][0]["key_cipher_layers"][:]
+    corrupted_confs.append(corrupted_conf6)
+
+    if is_complex_conf:
+        # Empty the shards of shared secret, along with a zero threshold
+        corrupted_conf6_quater = copy.deepcopy(cryptoconf)
+        shared_secret = corrupted_conf6_quater["payload_cipher_layers"][2]["key_cipher_layers"][0]
+        assert shared_secret["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER
+        shared_secret["key_shared_secret_shards"] = []
+        shared_secret["key_shared_secret_threshold"] = 0
+        corrupted_confs.append(corrupted_conf6_quater)
+
+        # Empty the ciphers of a shard
+        corrupted_conf6_quinquies = copy.deepcopy(cryptoconf)
+        del corrupted_conf6_quinquies["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_shards"][
+            0
+        ]["key_cipher_layers"][:]
+        corrupted_confs.append(corrupted_conf6_quinquies)
+
     if include_extended_checks:
-        # Empty the ciphers of payload
-        corrupted_conf5 = copy.deepcopy(cryptoconf)
-        del corrupted_conf5["payload_cipher_layers"][:]
-        corrupted_confs.append(corrupted_conf5)
-
-        # Empty the ciphers of payload key
-        corrupted_conf6 = copy.deepcopy(cryptoconf)
-        del corrupted_conf6["payload_cipher_layers"][0]["key_cipher_layers"][:]
-        corrupted_confs.append(corrupted_conf6)
-
         if is_complex_conf:
             # Empty the ciphers of shared secret key
             corrupted_conf6_bis = copy.deepcopy(cryptoconf)
@@ -2228,6 +2246,38 @@ def _generate_corrupted_cryptainers(cryptoconf, include_extended_checks):
     corrupted_cryptainers.append(corrupted_cryptainer3)
 
     return corrupted_cryptainers
+
+
+def test_cryptainer_decryption_rejects_empty_cipher_layers():
+    forged_cryptainer = {
+        "cryptainer_state": CRYPTAINER_STATES.FINISHED,
+        "cryptainer_format": CRYPTAINER_FORMAT,
+        "cryptainer_uid": uuid.uuid4(),
+        "keychain_uid": uuid.uuid4(),
+        "cryptainer_metadata": None,
+        "payload_ciphertext_struct": {"ciphertext_location": "inline", "ciphertext_value": b"FORGED PLAINTEXT"},
+        "payload_cipher_layers": [],
+    }
+    with pytest.raises(SchemaValidationError, match="Empty payload_cipher_layers"):
+        decrypt_payload_from_cryptainer(forged_cryptainer)
+
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    cryptainer["payload_cipher_layers"][0]["key_cipher_layers"] = []
+    with pytest.raises(SchemaValidationError, match="Empty key_cipher_layers"):
+        decrypt_payload_from_cryptainer(cryptainer)
+
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"stuffs", cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
+    )
+    shared_secret = cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][1]
+    assert shared_secret["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER
+    for threshold, shards in [(0, []), (0, shared_secret["key_shared_secret_shards"]), (99, [])]:
+        corrupted_cryptainer = copy.deepcopy(cryptainer)
+        corrupted_shared_secret = corrupted_cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][1]
+        corrupted_shared_secret["key_shared_secret_threshold"] = threshold
+        corrupted_shared_secret["key_shared_secret_shards"] = shards
+        with pytest.raises(SchemaValidationError, match="Invalid shared secret threshold"):
+            decrypt_payload_from_cryptainer(corrupted_cryptainer)
 
 
 def test_cryptainer_validation_error_via_python_schema():

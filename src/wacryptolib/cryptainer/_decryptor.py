@@ -15,7 +15,7 @@ from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_CIPHER_ALGOS
 from wacryptolib.cryptainer import CryptainerBase, logger, CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
     get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value, get_payload_ciphertext_signatures
 from wacryptolib.exceptions import KeyDoesNotExist, KeyLoadingError, DecryptionError, DecryptionIntegrityError, \
-    KeystoreDoesNotExist, SignatureVerificationError
+    KeystoreDoesNotExist, SignatureVerificationError, SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring, SUPPORTED_SYMMETRIC_KEY_ALGOS, \
     SUPPORTED_ASYMMETRIC_KEY_ALGOS
@@ -343,8 +343,9 @@ class CryptainerDecryptor(CryptainerBase):
 
         payload_current = _get_cryptainer_inline_ciphertext_value(cryptainer)
 
-        # Non-emptiness of this will be checked by validator
         payload_cipher_layer_count = len(cryptainer["payload_cipher_layers"])
+        if not payload_cipher_layer_count:  # Else the inline "ciphertext" would be returned as-is, unauthenticated
+            raise SchemaValidationError("Empty payload_cipher_layers list is forbidden in cryptainer")
 
         for payload_cipher_layer_idx, payload_cipher_layer in enumerate(
             reversed(cryptainer["payload_cipher_layers"]), start=1
@@ -474,7 +475,8 @@ class CryptainerDecryptor(CryptainerBase):
         operation_report: OperationReport,
         predecrypted_symkey_mapper: Optional[dict] = None,
     ) -> Optional[bytes]:
-        assert len(key_cipher_layers), key_cipher_layers  # Extra safety
+        if not key_cipher_layers:  # Not an assert, these vanish under "python -O"
+            raise SchemaValidationError("Empty key_cipher_layers list is forbidden in cryptainer")
 
         key_bytes = None
 
@@ -526,6 +528,11 @@ class CryptainerDecryptor(CryptainerBase):
             decrypted_shards = []
             key_shared_secret_shards = key_cipher_layer["key_shared_secret_shards"]
             key_shared_secret_threshold = key_cipher_layer["key_shared_secret_threshold"]
+            if not 0 < key_shared_secret_threshold <= len(key_shared_secret_shards):
+                raise SchemaValidationError(
+                    "Invalid shared secret threshold %r for %d shard(s) in cryptainer"
+                    % (key_shared_secret_threshold, len(key_shared_secret_shards))
+                )
 
             shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
 

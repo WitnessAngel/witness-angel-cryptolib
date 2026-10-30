@@ -330,7 +330,8 @@ def encrypt_via_hpke(plaintext: bytes, public_key, aead_id) -> tuple[bytes, byte
     """Returns (enc, ciphertext), enc being the KEM encapsulation (ephemeral public key for DHKEM)."""
     from Crypto.Protocol import HPKE
 
-    sender = HPKE.new(receiver_key=public_key, aead_id=HPKE.AEAD(aead_id))
+    # A private key would switch pycryptodome to unsealing mode
+    sender = HPKE.new(receiver_key=public_key.public_key(), aead_id=HPKE.AEAD(aead_id))
     return sender.enc, sender.seal(plaintext)
 
 

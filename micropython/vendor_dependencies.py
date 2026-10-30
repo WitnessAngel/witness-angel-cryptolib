@@ -18,7 +18,7 @@ MICROPYTHON_DIR = Path(__file__).resolve().parent
 REPO_DIR = MICROPYTHON_DIR.parent
 LIB_DIR = MICROPYTHON_DIR / "lib"
 
-PACKAGES = ["extjson", "pkcs1", "pyaes", "rsa", "pyasn1"]  # pyasn1 is required by rsa
+PACKAGES = ["extjson", "pkcs1", "pyaes"]
 
 MIP_INDEX = "https://micropython.org/pi/v2"
 MICROPYTHON_LIB_PACKAGES = ["__future__", "copy", "datetime", "hashlib", "hmac", "logging", "threading", "operator", "functools"]

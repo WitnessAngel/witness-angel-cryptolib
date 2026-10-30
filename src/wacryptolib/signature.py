@@ -50,7 +50,7 @@ def sign_message(message: bytes, *, signature_algo: str, private_key: object) ->
     try:
         hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=timestamp_utc)
         signature = signature_function(message=hash_payload, private_key=private_key)
-    except ValueError as exc:
+    except (ValueError, TypeError) as exc:  # Pycryptodome raises TypeError when given a public key
         raise SignatureCreationError("Failed %s signature creation (%s)" % (signature_algo, exc)) from exc
     return {"signature_timestamp_utc": timestamp_utc, "signature_value": signature}
 

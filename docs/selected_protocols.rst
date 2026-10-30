@@ -39,8 +39,10 @@ Asymmetric ciphers
   like for ECIES_X25519, ChaCha20-Poly1305 was preferred to AES-256-GCM since it is available in pure python for constrained devices.
   The resulting cipherdict has a `kem_ciphertext` field (the encapsulation) and a `ciphertext` field (authenticated
   payload), and public keys weigh 1184 bytes. Since the lattice assumptions behind ML-KEM are younger than those of RSA,
-  the recommended setup is a *hybrid* one, obtained by simply stacking an `ML_KEM_768` layer and an `RSA_OAEP` layer in
-  the `key_cipher_layers` of a cryptoconf: an attacker then has to break both algorithms to recover the key.
+  the recommended setup is a *hybrid* one, obtained by simply stacking an `RSA_OAEP` layer and then an `ML_KEM_768` layer
+  in the `key_cipher_layers` of a cryptoconf: an attacker then has to break both algorithms to recover the key.
+  This order matters for size and speed only: RSA-OAEP encrypts its input in small chunks, so it should get the small
+  key struct, not the bigger ML-KEM cipherdict (which would make the key ciphertext about 3 times larger).
 
 
 Signature algorithms

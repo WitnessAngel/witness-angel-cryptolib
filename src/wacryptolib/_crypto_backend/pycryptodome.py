@@ -452,11 +452,14 @@ def _decrypt_pkcs8_from_pem(key_pem, passphrase):
         raise ValueError(_PEM_DECRYPTION_ERROR) from None
 
 
-def _import_key_from_pem(key_module, key_pem, passphrase=None):
-    from Crypto.Util.py3compat import tobytes
+def _passphrase_to_bytes(passphrase):
+    # Like pycryptodome 3.x's tobytes() did for str passphrases (its py3compat module is gone in 4.x)
+    return passphrase.encode("latin-1") if isinstance(passphrase, str) else passphrase
 
+
+def _import_key_from_pem(key_module, key_pem, passphrase=None):
     if passphrase:
-        passphrase = tobytes(passphrase)  # Like pycryptodome does for str passphrases
+        passphrase = _passphrase_to_bytes(passphrase)
         clear_pkcs8_der = _decrypt_pkcs8_from_pem(key_pem, passphrase)
         if clear_pkcs8_der is not None:
             try:
@@ -471,9 +474,7 @@ def _export_key_to_pem(key, passphrase, **pkcs8_der_params):
         return key.export_key(format="PEM")
     if not key.has_private():
         raise ValueError("Public keys can't be exported to PEM with a passphrase")
-    from Crypto.Util.py3compat import tobytes
-
-    return _encrypt_pkcs8_to_pem(key.export_key(format="DER", **pkcs8_der_params), tobytes(passphrase))
+    return _encrypt_pkcs8_to_pem(key.export_key(format="DER", **pkcs8_der_params), _passphrase_to_bytes(passphrase))
 
 
 def import_rsa_key_from_pem(key_pem, passphrase=None):

@@ -6,7 +6,6 @@ from extjson import dump_to_json_bytes
 from PycryptodomeSecretSharing import Shamir as _Shamir
 from data_utils import do_split_secret_into_shards, split_as_chunks
 from fallback_adapter import encrypt_via_rsa_oaep, encrypt_via_aes_cbc
-import hpke_x25519_seal
 
 import time
 import struct
@@ -128,6 +127,7 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
         if cipher_algo == "RSA_OAEP":
             return _perform_chunked_encryption_via_rsa_oaep(plaintext=plaintext, key_dict=key_dict)
         elif cipher_algo == "ECIES_X25519":
+            import hpke_x25519_seal  # Lazy, to spare RAM on RSA-only deployments
             kem_ciphertext, ciphertext = hpke_x25519_seal.seal(key_dict["key"], plaintext)
             return dict(kem_ciphertext=kem_ciphertext, ciphertext=ciphertext)
         elif cipher_algo == "AES_CBC":

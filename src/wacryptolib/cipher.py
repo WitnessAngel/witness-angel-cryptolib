@@ -457,8 +457,7 @@ class PayloadEncryptionPipeline:
 
 
 def _check_ml_kem_key(key):
-    if not isinstance(key, _crypto_backend.ml_kem_key_class_fetcher()):
-        raise ValueError("Incompatible key type %s for ML-KEM cipher" % type(key))
+    _crypto_backend.check_pq_key_algo(key, "ML_KEM_768")  # Also rejects weaker ML-KEM-512 keys
 
 
 def _encrypt_via_ml_kem_768(plaintext: bytes, key_dict: dict) -> dict:

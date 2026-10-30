@@ -13,8 +13,14 @@ import wacryptolib
 from wacryptolib._crypto_backend import get_random_bytes, generate_rsa_keypair
 from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipeline
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
-from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError, OperationNotSupported
-from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey
+from wacryptolib.exceptions import (
+    DecryptionError,
+    EncryptionError,
+    DecryptionIntegrityError,
+    KeyLoadingError,
+    OperationNotSupported,
+)
+from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey, load_asymmetric_key_from_pem_bytestring
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS, hash_message
 
 
@@ -341,3 +347,22 @@ def test_ml_kem_768_asymmetric_encryption_and_decryption():
             wacryptolib.cipher.decrypt_bytestring(
                 key_dict=dict(key=incompatible_keypair["private_key"]), cipherdict=cipherdict, cipher_algo=cipher_algo
             )
+
+
+@pytest.mark.parametrize("param_set_name", ["ML_KEM_512", "ML_KEM_1024"])
+def test_ml_kem_768_rejects_other_ml_kem_parameter_sets(param_set_name):
+    from Crypto.PublicKey import MLKEM
+
+    private_key = MLKEM.generate(param_set=getattr(MLKEM.ParamSet, param_set_name))
+    public_key = private_key.public_key()
+
+    with pytest.raises(EncryptionError, match="Incompatible key type"):
+        wacryptolib.cipher.encrypt_bytestring(key_dict=dict(key=public_key), plaintext=b"abc", cipher_algo="ML_KEM_768")
+    with pytest.raises(DecryptionError, match="Incompatible key type"):
+        wacryptolib.cipher.decrypt_bytestring(
+            key_dict=dict(key=private_key), cipherdict=dict(kem_ciphertext=b"", ciphertext=b""), cipher_algo="ML_KEM_768"
+        )
+
+    for key in (public_key, private_key):
+        with pytest.raises(KeyLoadingError, match="Incompatible key type"):
+            load_asymmetric_key_from_pem_bytestring(key_pem=key.export_key(format="PEM"), key_algo="ML_KEM_768")

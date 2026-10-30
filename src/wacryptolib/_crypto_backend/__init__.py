@@ -23,6 +23,8 @@ from .pycryptodome import (
     # No cipher builder for (asymmetric) RSA
     encrypt_via_rsa_oaep,
     decrypt_via_rsa_oaep,
+    encrypt_via_hpke,
+    decrypt_via_hpke,
 )
 from .pycryptodome import (
     generate_rsa_keypair,

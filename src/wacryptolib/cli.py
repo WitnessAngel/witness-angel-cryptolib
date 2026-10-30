@@ -530,6 +530,8 @@ def _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_ci
     if trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
         if not keystore_uid:
             raise click.BadParameter("Authenticator trustee requires a --keystore-uid value")
+        if asym_cipher_algo != "RSA_OAEP":  # See operations.create_authenticator()
+            raise click.BadParameter("Authenticator trustee only has RSA_OAEP keys for now")
         key_cipher_trustee["keystore_uid"] = keystore_uid
 
     key_cipher_layer = {

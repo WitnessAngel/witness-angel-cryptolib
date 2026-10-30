@@ -329,7 +329,8 @@ def test_ml_kem_768_asymmetric_encryption_and_decryption():
             with pytest.raises(DecryptionIntegrityError):
                 decryption_func(cipherdict=corrupted_cipherdict)
 
-    with pytest.raises(DecryptionIntegrityError):  # Wrong private key
+    # Unlike RSA_OAEP, indistinguishable from a corrupted ciphertext, so it's reported as an integrity error too
+    with pytest.raises(DecryptionIntegrityError, match="Wrong ML-KEM private key or corrupted ciphertext"):
         wacryptolib.cipher.decrypt_bytestring(
             key_dict=dict(key=other_private_key), cipherdict=cipherdict, cipher_algo=cipher_algo
         )

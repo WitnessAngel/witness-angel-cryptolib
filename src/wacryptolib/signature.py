@@ -23,6 +23,9 @@ def _get_signature_conf(signature_algo, key):
             "Incompatible key type %s for signature algorithm %s (should be %s)"
             % (type(key), signature_algo, compatible_key_class)
         )
+    extra_key_checker = signature_conf.get("extra_key_checker")
+    if extra_key_checker:
+        extra_key_checker(key)
     return signature_conf
 
 
@@ -121,6 +124,7 @@ SIGNATURE_ALGOS_REGISTRY = dict(
         "signature_function": _crypto_backend.sign_with_mldsa,
         "verification_function": _crypto_backend.verify_with_mldsa,
         "compatible_key_class_fetcher": _crypto_backend.ml_dsa_key_class_fetcher,
+        "extra_key_checker": lambda key: _crypto_backend.check_pq_key_algo(key, "ML_DSA_65"),  # Rejects ML-DSA-44
     },
 )
 

@@ -88,7 +88,8 @@ def decrypt_bytestring(
         )
     except ValueError as exc:
         # Hackish check for pycryptodome, whose AEAD modes and HPKE only raise ValueError on bad tags
-        if "MAC check failed" in str(exc) or "wrong MAC tag" in str(exc):
+        # (HPKE checks the ciphertext length first, so a ciphertext shorter than its tag is "too small")
+        if any(marker in str(exc) for marker in ("MAC check failed", "wrong MAC tag", "Ciphertext is too small")):
             raise DecryptionIntegrityError("Failed %s decryption authentication (%s)" % (cipher_algo, exc)) from exc
         raise DecryptionError("Failed %s decryption (%s)" % (cipher_algo, exc)) from exc
     return plaintext

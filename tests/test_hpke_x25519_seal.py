@@ -2,12 +2,16 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import os
+import subprocess
+import sys
+
 import pytest
 
 from wacryptolib import _crypto_backend
 from wacryptolib._crypto_backend import hpke_x25519_seal
 from wacryptolib.cipher import ECIES_X25519_HPKE_AEAD_ID, decrypt_bytestring
-from wacryptolib.keygen import generate_keypair
+from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring
 
 h = bytes.fromhex
 
@@ -66,3 +70,31 @@ def test_pure_seal_rejects_invalid_public_keys():
         hpke_x25519_seal.seal(bytes(32), b"abc")  # All-zero point yields an all-zero shared secret
     with pytest.raises(ValueError, match="32 bytes"):
         hpke_x25519_seal.seal(b"abc", b"abc")
+
+
+def test_fallback_backend_seals_with_pure_python(tmp_path):
+    # Fallback mode is decided at import time, so it needs a fresh interpreter
+    keypair = generate_keypair(key_algo="ECIES_X25519", serialize=True)
+    (tmp_path / "public_key.pem").write_bytes(keypair["public_key"])
+    script = """if True:
+        import sys
+        from pathlib import Path
+        from wacryptolib import _crypto_backend
+        from wacryptolib.cipher import encrypt_bytestring
+        from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
+        assert _crypto_backend.pycryptodome._patch_pycryptodome_internals
+        tmp_path = Path(sys.argv[1])
+        public_key = load_asymmetric_key_from_pem_bytestring((tmp_path / "public_key.pem").read_bytes(), key_algo="ECIES_X25519")
+        assert isinstance(public_key, bytes) and len(public_key) == 32
+        cipherdict = encrypt_bytestring(b"hello", cipher_algo="ECIES_X25519", key_dict=dict(key=public_key))
+        (tmp_path / "kem_ciphertext").write_bytes(cipherdict["kem_ciphertext"])
+        (tmp_path / "ciphertext").write_bytes(cipherdict["ciphertext"])
+    """
+    env = dict(os.environ, FORCE_WACRYPTOLIB_FALLBACK_BACKEND="1", PYTHONPATH=os.pathsep.join(sys.path))
+    subprocess.run([sys.executable, "-c", script, str(tmp_path)], env=env, check=True)
+
+    cipherdict = dict(
+        kem_ciphertext=(tmp_path / "kem_ciphertext").read_bytes(), ciphertext=(tmp_path / "ciphertext").read_bytes()
+    )
+    private_key = load_asymmetric_key_from_pem_bytestring(keypair["private_key"], key_algo="ECIES_X25519")
+    assert decrypt_bytestring(cipherdict, cipher_algo="ECIES_X25519", key_dict=dict(key=private_key)) == b"hello"

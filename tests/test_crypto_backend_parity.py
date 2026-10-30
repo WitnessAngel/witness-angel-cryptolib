@@ -68,7 +68,8 @@ def test_failures_raise_value_error_silently(backend, capsys):
     public_key, private_key = backend.generate_rsa_keypair(2048)
 
     ciphertext = backend.encrypt_via_rsa_oaep([b"secret"], public_key)[0]
-    for tampered in (ciphertext[:-1] + bytes([ciphertext[-1] ^ 1]), b"\x00" + ciphertext[1:], b"abc", b"\xff" * 256):
+    first_byte_flipped = bytes([ciphertext[0] ^ 1]) + ciphertext[1:]
+    for tampered in (ciphertext[:-1] + bytes([ciphertext[-1] ^ 1]), first_byte_flipped, b"abc", b"\xff" * 256):
         with pytest.raises(ValueError):
             backend.decrypt_via_rsa_oaep([tampered], private_key)
 

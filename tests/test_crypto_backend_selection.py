@@ -112,3 +112,15 @@ def test_fallback_backend_works_through_the_high_level_api():
     """
     result = _run(BLOCK_PYCRYPTODOME, script)
     assert result.returncode == 0, result.stderr
+
+
+def test_backend_name_matches_environment():
+    from wacryptolib import _crypto_backend
+
+    try:
+        from Crypto.Cipher import AES  # noqa: F401
+    except (ImportError, OSError):
+        native_backend_usable = False
+    else:
+        native_backend_usable = not os.getenv("FORCE_WACRYPTOLIB_FALLBACK_BACKEND")
+    assert _crypto_backend.BACKEND_NAME == ("pycryptodome" if native_backend_usable else "fallback")

@@ -42,12 +42,9 @@ from .pycryptodome import (
     generate_pq_keypair,
     PQ_KEY_ALGOS,
     check_pq_key_algo,
-    import_ml_kem_key_from_pem,
-    import_ml_dsa_key_from_pem,
-    export_ml_kem_key_to_pem,
-    export_ml_dsa_key_to_pem,
-    ml_kem_key_class_fetcher,
-    ml_dsa_key_class_fetcher,
+    import_pq_key_from_pem,
+    export_pq_key_to_pem,
+    pq_key_class_fetcher,
 )
 from .pycryptodome import sign_with_pss, verify_with_pss, sign_with_dss, verify_with_dss
 from .pycryptodome import sign_with_mldsa, verify_with_mldsa

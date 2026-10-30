@@ -123,7 +123,7 @@ SIGNATURE_ALGOS_REGISTRY = dict(
     ML_DSA_65={  # Post-quantum (FIPS 204), signs the SHA512 digest in pure mode with a fixed context
         "signature_function": _crypto_backend.sign_with_mldsa,
         "verification_function": _crypto_backend.verify_with_mldsa,
-        "compatible_key_class_fetcher": _crypto_backend.ml_dsa_key_class_fetcher,
+        "compatible_key_class_fetcher": lambda: _crypto_backend.pq_key_class_fetcher("ML_DSA_65"),
         "extra_key_checker": lambda key: _crypto_backend.check_pq_key_algo(key, "ML_DSA_65"),  # Rejects ML-DSA-44
     },
 )

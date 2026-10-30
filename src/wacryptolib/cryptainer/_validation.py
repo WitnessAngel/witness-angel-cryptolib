@@ -7,12 +7,12 @@ from typing import Union
 import schema as pythonschema
 from schema import Or, Optional as OptionalKey, And, Schema
 
-from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
+from wacryptolib.cipher import SUPPORTED_SYMMETRIC_CIPHER_ALGOS, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_TRUSTEE_TYPES, CRYPTAINER_STATES, \
     CRYPTAINER_FORMAT, PAYLOAD_CIPHERTEXT_LOCATIONS, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, SHARED_SECRET_ALGO_MARKER
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS
-from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS, SUPPORTED_SYMMETRIC_KEY_ALGOS
+from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
 from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson
 
@@ -85,7 +85,7 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
         extra_asymmetric_cipher_algo_block = {"key_ciphertext": micro_schemas.schema_binary}
 
     ASYMMETRIC_CIPHER_ALGO_BLOCK = {
-        "key_cipher_algo": Or(*SUPPORTED_ASYMMETRIC_KEY_ALGOS),
+        "key_cipher_algo": Or(*SUPPORTED_ASYMMETRIC_CIPHER_ALGOS),  # Not signature-only algos
         "key_cipher_trustee": trustee_schemas,
         OptionalKey("keychain_uid"): micro_schemas.schema_uid,
     }
@@ -130,7 +130,7 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
 
     def _build_payload_cipher_layer_schema(signatures_key):
         return {
-            "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
+            "payload_cipher_algo": Or(*SUPPORTED_SYMMETRIC_CIPHER_ALGOS),
             signatures_key: [payload_signature],  # Signatures AFTER encryption
             **extra_payload_cipher_layer,
             "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,
@@ -184,6 +184,9 @@ def _add_json_schema_constraints(json_schema, non_empty_fields):
     only python-schema checks it.
     """
     patched_fields = set()
+    expected_patched_fields = set(non_empty_fields)
+    if "key_cipher_layers" in non_empty_fields:  # Shared secrets are only possible in cipher layers
+        expected_patched_fields.add("key_shared_secret_threshold")
 
     def _walk(node):
         if isinstance(node, dict):
@@ -197,14 +200,15 @@ def _add_json_schema_constraints(json_schema, non_empty_fields):
                             patched_fields.add(field_name)
                         elif field_name == "key_shared_secret_threshold":
                             _restrict_json_schema_int_to_positive(field_schema)
+                            patched_fields.add(field_name)
                 _walk(value)
         elif isinstance(node, list):
             for value in node:
                 _walk(value)
 
     _walk(json_schema)
-    if patched_fields != set(non_empty_fields):  # Fail loudly if the schema export format changes
-        raise RuntimeError("Fields missing from JSON schema: %s" % (set(non_empty_fields) - patched_fields))
+    if patched_fields != expected_patched_fields:  # Fail loudly if the schema export format changes
+        raise RuntimeError("Fields missing from JSON schema: %s" % (expected_patched_fields - patched_fields))
     return json_schema
 
 
@@ -296,6 +300,23 @@ def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False):
 
     schema = CRYPTAINER_SCHEMA_JSON if jsonschema_mode else CRYPTAINER_SCHEMA_PYTHON
     _validate_data_tree(data_tree=cryptainer, validation_schema=schema)
+
+
+def _check_cryptainer_structure(cryptainer: dict, require_inline_payload: bool):
+    """Validate a python cryptainer, but without its payload ciphertext, which may be absent
+    (include_payload_ciphertext=False), and must not end up in (huge) python-schema error messages.
+
+    :param require_inline_payload: if True, the payload ciphertext must be present, inline, as bytes
+    """
+    if require_inline_payload:
+        payload_ciphertext_struct = cryptainer.get("payload_ciphertext_struct")
+        if not (
+            isinstance(payload_ciphertext_struct, dict)
+            and payload_ciphertext_struct.get("ciphertext_location") == PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE
+            and isinstance(payload_ciphertext_struct.get("ciphertext_value"), bytes)
+        ):
+            raise SchemaValidationError("Cryptainer payload ciphertext must be inline bytes")
+    check_cryptainer_sanity(dict(cryptainer, payload_ciphertext_struct=OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER))
 
 
 def check_sigconf_sanity(cryptoconf: dict, jsonschema_mode=False):

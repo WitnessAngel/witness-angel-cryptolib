@@ -335,7 +335,7 @@ def encrypt_via_hpke(plaintext: bytes, public_key, aead_id) -> tuple[bytes, byte
             raise ValueError("Raw X25519 public keys are only accepted by the fallback backend")
         from . import hpke_x25519_seal
 
-        if aead_id != 0x0003:
+        if aead_id != hpke_x25519_seal.AEAD_ID:
             raise ValueError("Pure python HPKE only supports ChaCha20-Poly1305 AEAD")
         return hpke_x25519_seal.seal(public_key, plaintext)
 

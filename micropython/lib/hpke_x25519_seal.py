@@ -27,7 +27,8 @@ _P = 2**255 - 19
 _A24 = 121665
 
 _KEM_SUITE_ID = b"KEM\x00\x20"
-_HPKE_SUITE_ID = b"HPKE\x00\x20\x00\x01\x00\x03"
+AEAD_ID = 0x0003  # ChaCha20-Poly1305, the only AEAD implemented here
+_HPKE_SUITE_ID = b"HPKE\x00\x20\x00\x01" + AEAD_ID.to_bytes(2, "big")
 _MODE_BASE = b"\x00"
 
 

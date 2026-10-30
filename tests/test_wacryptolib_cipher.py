@@ -300,7 +300,7 @@ def test_ml_kem_768_asymmetric_encryption_and_decryption():
         )
         assert set(cipherdict.keys()) == {"kem_ciphertext", "ciphertext"}
         assert len(cipherdict["kem_ciphertext"]) == 1088  # ML-KEM-768 encapsulation
-        assert len(cipherdict["ciphertext"]) == len(binary_content) + 16  # AES-256-GCM tag appended
+        assert len(cipherdict["ciphertext"]) == len(binary_content) + 16  # Poly1305 tag appended
 
         for verify_integrity_tags in (True, False):
             decrypted_content = wacryptolib.cipher.decrypt_bytestring(

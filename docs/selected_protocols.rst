@@ -36,7 +36,7 @@ Asymmetric ciphers
   not expected to be broken by large quantum computers. A KEM can not encrypt a chosen plaintext, it only produces a random
   shared secret together with a 1088-bytes encapsulation of it, so the cryptolib uses a "KEM + DEM" construction: the
   shared secret is turned into a ChaCha20-Poly1305 key (HPKE Base mode, RFC 9180) which encrypts the actual data;
-  like for ECIES_X25519, ChaCha20-Poly1305 was preferred to AES-256-GCM since it is available in pure python for constrained devices.
+  ChaCha20-Poly1305 was preferred to AES-256-GCM since it is available in pure python for constrained devices (e.g. MicroPython).
   The resulting cipherdict has a `kem_ciphertext` field (the encapsulation) and a `ciphertext` field (authenticated
   payload), and public keys weigh 1184 bytes. Since the lattice assumptions behind ML-KEM are younger than those of RSA,
   the recommended setup is a *hybrid* one, obtained by simply stacking an `RSA_OAEP` layer and then an `ML_KEM_768` layer

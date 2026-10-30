@@ -5,7 +5,7 @@
 ## 2. Crypto backend wrappers
 
 - [x] 2.1 In `_crypto_backend/pycryptodome.py`, add `generate_ml_kem_768_keypair()`, `generate_ml_dsa_65_keypair()` (returning `(public_key, private_key)` like the RSA generator), `import_ml_kem_key_from_pem`, `export_ml_kem_key_to_pem`, `import_ml_dsa_key_from_pem`, `export_ml_dsa_key_to_pem` (`export_key(format="PEM", passphrase=...)` only when a passphrase is given, no explicit `protection`), plus `ml_kem_key_class_fetcher` and `ml_dsa_key_class_fetcher` returning the key classes; verify with a quick keypair PEM round-trip in a Python shell, with and without passphrase
-- [x] 2.2 Add `encrypt_via_ml_kem_768(plaintext, public_key) -> (enc, ciphertext)` and `decrypt_via_ml_kem_768(enc, ciphertext, private_key) -> bytes` using HPKE Base mode with `AEAD.AES256_GCM` and no `info`; verify a round-trip and that a flipped byte in either value raises `ValueError`
+- [x] 2.2 Add `encrypt_via_ml_kem_768(plaintext, public_key) -> (enc, ciphertext)` and `decrypt_via_ml_kem_768(enc, ciphertext, private_key) -> bytes` using HPKE Base mode with `AEAD.CHACHA20_POLY1305` and no `info`; verify a round-trip and that a flipped byte in either value raises `ValueError`
 - [x] 2.3 Add `sign_with_mldsa(message, private_key)` and `verify_with_mldsa(message, signature, public_key)` (`message` is the hasher object, as for `sign_with_pss`) signing `message.digest()` in pure mode via `mldsa.new(key, context=b"wacryptolib-payload-signature-v1")`; verify sign/verify round-trip and that verification raises `ValueError` on a corrupted or truncated signature
 - [x] 2.4 Re-export all new functions from `_crypto_backend/__init__.py`; verify `import wacryptolib` still works and `fallback_adapter.py` is unchanged
 

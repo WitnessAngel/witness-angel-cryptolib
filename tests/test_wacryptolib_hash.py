@@ -27,6 +27,7 @@ def test_hash_message():
 
 
 def test_compatibility_with_pycryptodome_hashers():
+    pytest.importorskip("Crypto.Hash")
 
     assert len(SUPPORTED_HASH_ALGOS) == 4  # For now on PC OS
 

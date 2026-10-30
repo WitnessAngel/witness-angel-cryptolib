@@ -155,4 +155,8 @@ def open(receiver_private_key: bytes, enc: bytes, ciphertext: bytes) -> bytes:
     receiver_public_key = x25519(receiver_private_key, _X25519_BASE_POINT)
     dh = x25519(receiver_private_key, enc)
     key, base_nonce = _derive_key_schedule_from_dh(dh, enc, receiver_public_key)
-    return ChaCha20Poly1305Cipher(key, base_nonce).decrypt_and_verify(ciphertext[:-16], ciphertext[-16:])
+    try:
+        return ChaCha20Poly1305Cipher(key, base_nonce).decrypt_and_verify(ciphertext[:-16], ciphertext[-16:])
+    except ValueError:
+        # Same message as pycryptodome: on a first open(), tampering can't be told apart from a wrong key
+        raise ValueError("Incorrect decryption: wrong MAC tag") from None

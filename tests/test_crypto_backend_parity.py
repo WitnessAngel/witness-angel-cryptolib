@@ -83,3 +83,76 @@ def test_failures_raise_value_error_silently(backend, capsys):
             backend.import_rsa_key_from_pem(key_pem, passphrase=passphrase)
 
     assert capsys.readouterr() == ("", "")
+
+
+def _malformed_rsa_public_key_pems():
+    import base64
+
+    import _crypto_test_vectors as vectors
+
+    pem = vectors.PYCRYPTODOME_PEM_FIXTURES["RSA"]["public_key"]
+    der = base64.b64decode(b"".join(pem.splitlines()[1:-1]))
+
+    def armor(der_bytes, marker=b"PUBLIC KEY", headers=b""):
+        body = base64.encodebytes(der_bytes)
+        return b"-----BEGIN %s-----\n%s%s-----END %s-----" % (marker, headers, body, marker)
+
+    spki_header_length = 4  # 30 82 xx xx
+    return {
+        "truncated": armor(der[:-1]),
+        "trailing bytes": armor(der + b"\x00"),
+        "indefinite length": armor(b"\x30\x80" + der[spki_header_length:] + b"\x00\x00"),
+        "non-minimal length": armor(b"\x30\x83\x00" + der[2:]),
+        "wrong marker": armor(der, marker=b"CERTIFICATE"),
+        "mismatched end marker": pem.replace(b"-----END PUBLIC KEY-----", b"-----END PRIVATE KEY-----"),
+        "invalid base64": pem.replace(pem.splitlines()[1][:4], b"!!!!"),
+        "legacy encryption headers": armor(der, headers=b"Proc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,00\n\n"),
+        "not a pem": b"hello",
+        "empty": b"",
+    }
+
+
+@pytest.mark.parametrize("case_name", sorted(_malformed_rsa_public_key_pems()))
+def test_malformed_pem_is_rejected(backend, case_name):
+    key_pem = _malformed_rsa_public_key_pems()[case_name]
+    is_fallback = backend.__name__.endswith(".fallback")
+    if case_name == "wrong marker" and not is_fallback:
+        pytest.skip("pycryptodome ignores PEM markers")
+    with pytest.raises(ValueError if is_fallback else (ValueError, IndexError, TypeError)):  # Like keygen's catch
+        backend.import_rsa_key_from_pem(key_pem)
+
+
+@pytest.mark.parametrize(
+    "der, tag",
+    [
+        (b"\x02\x01\x80", 0x02),  # Negative INTEGER
+        (b"\x02\x02\x00\x01", 0x02),  # Non-minimal INTEGER
+        (b"\x02\x00", 0x02),  # Empty INTEGER
+        (b"\x30\x80\x00\x00", 0x30),  # Indefinite length
+        (b"\x30\x81\x01\x00", 0x30),  # Non-minimal length
+        (b"\x30\x05\x02\x01\x01", 0x30),  # Truncated
+        (b"\x30\x00\x00", 0x30),  # Trailing bytes
+        (b"\x04\x00", 0x30),  # Wrong tag
+    ],
+)
+def test_fallback_der_codec_is_strict(der, tag):
+    import_crypto_backend("fallback")
+    from wacryptolib._crypto_backend.fallback import pem
+
+    with pytest.raises(ValueError):
+        if tag == 0x02:
+            pem.decode_integer(der)
+        else:
+            pem.decode_sequence(der, 0, 10)
+
+
+def test_fallback_der_codec_roundtrips():
+    import_crypto_backend("fallback")
+    from wacryptolib._crypto_backend.fallback import pem
+
+    for value in (0, 1, 127, 128, 255, 256, 2**2048 - 1):
+        assert pem.decode_integer(pem.encode_integer(value)) == value
+    for oid in (pem.OID_RSA, pem.OID_DSA, pem.OID_X25519, pem.OID_PBES2, pem.OID_AES256_CBC, "2.999.1"):
+        assert pem.decode_oid(pem.encode_oid(oid)) == oid
+    long_sequence = pem.encode_sequence(*[pem.encode_octet_string(bytes(100))] * 3)
+    assert [pem.decode_octet_string(item) for item in pem.decode_sequence(long_sequence, 3)] == [bytes(100)] * 3

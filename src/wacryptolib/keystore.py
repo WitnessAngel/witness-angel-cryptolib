@@ -817,7 +817,7 @@ def generate_free_keypair_for_least_provisioned_key_algo(
     :param keystore: the key storage to use
     :param max_free_keys_per_algo: how many free keys should exist per key type
     :param keygen_func: callable to use for keypair generation
-    :param key_algos: the different key types (strings) to consider
+    :param key_algos: the different key types (strings) to consider, by default DEFAULT_FREE_KEYPAIR_ALGOS
     :return: True iff a key was generated (i.e. the free keys pool was not full)
     """
     assert key_algos, key_algos

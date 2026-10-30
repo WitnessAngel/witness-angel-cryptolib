@@ -30,6 +30,7 @@ from wacryptolib.keystore import (
     FilesystemKeystorePool,
     generate_free_keypair_for_least_provisioned_key_algo,
     get_free_keypair_generator_worker,
+    DEFAULT_FREE_KEYPAIR_ALGOS,
     generate_keypair_for_storage,
     ReadonlyFilesystemKeystore,
     KEYSTORE_FORMAT,
@@ -536,11 +537,15 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
         generated_keys_count += 1
         return dict(private_key=b"someprivatekey", public_key=b"somepublickey")
 
-    # Check the fallback on "all types of keys" for key_algos parameter
+    # Check the fallback on "all classical types of keys" for key_algos parameter
+
+    assert "RSA_OAEP" in DEFAULT_FREE_KEYPAIR_ALGOS
+    assert "ML_KEM_768" not in DEFAULT_FREE_KEYPAIR_ALGOS  # Post-quantum keypairs are opt-in
+    assert "ML_DSA_65" not in DEFAULT_FREE_KEYPAIR_ALGOS
 
     keystore = InMemoryKeystore()
 
-    for _ in range(len(SUPPORTED_ASYMMETRIC_KEY_ALGOS)):
+    for _ in range(len(DEFAULT_FREE_KEYPAIR_ALGOS)):
         res = generate_free_keypair_for_least_provisioned_key_algo(
             keystore=keystore,
             max_free_keys_per_algo=10,
@@ -553,7 +558,8 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     assert keystore.get_free_keypairs_count("ECC_DSS") == 1
     assert keystore.get_free_keypairs_count("RSA_OAEP") == 1
     assert keystore.get_free_keypairs_count("RSA_PSS") == 1
-    assert keystore.get_free_keypairs_count("ECIES_X25519") == 0  # New key algos are opt-in
+    for opt_in_key_algo in ("ECIES_X25519", "ML_KEM_768", "ML_DSA_65"):  # New key algos are opt-in
+        assert keystore.get_free_keypairs_count(opt_in_key_algo) == 0
     assert generated_keys_count == 4
 
     keystore = InMemoryKeystore()

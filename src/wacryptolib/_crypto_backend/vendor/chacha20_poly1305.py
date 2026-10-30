@@ -24,7 +24,8 @@ def _rotate_left(value, shift):
 
 
 def _chacha20_block(key_words, counter, nonce_words):
-    state = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574, *key_words, counter, *nonce_words]
+    # No star-unpacking inside list displays on micropython
+    state = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574] + list(key_words) + [counter] + list(nonce_words)
     w = list(state)
     for _ in range(10):  # 20 rounds
         for a, b, c, d in _QUARTER_ROUND_INDICES:

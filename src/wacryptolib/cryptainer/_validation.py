@@ -35,16 +35,17 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
     extra_payload_cipher_layer = {}
     extra_asymmetric_cipher_algo_block = {}
 
-    trustee_schemas = Or(
+    authenticator_trustee_schema = {
+        "trustee_type": CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE,
+        "keystore_uid": micro_schemas.schema_uid,
+        OptionalKey("keystore_owner"): str,
+        # Optional for retrocompatibility only, may be left empty even if present!
+    }
+    non_authenticator_trustee_schemas = [
         LOCAL_KEYFACTORY_TRUSTEE_MARKER,
-        {
-            "trustee_type": CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE,
-            "keystore_uid": micro_schemas.schema_uid,
-            OptionalKey("keystore_owner"): str,
-            # Optional for retrocompatibility only, may be left empty even if present!
-        },
         {"trustee_type": CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE, "jsonrpc_url": str},
-    )
+    ]
+    trustee_schemas = Or(*non_authenticator_trustee_schemas, authenticator_trustee_schema)
 
     payload_signature = {
         "payload_digest_algo": Or(*SUPPORTED_HASH_ALGOS),
@@ -86,11 +87,17 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
 
     ASYMMETRIC_CIPHER_ALGO_BLOCK = {
         "key_cipher_algo": Or(*SUPPORTED_ASYMMETRIC_KEY_ALGOS),
-        "key_cipher_trustee": trustee_schemas,
+        "key_cipher_trustee": Or(*non_authenticator_trustee_schemas),
         OptionalKey("keychain_uid"): micro_schemas.schema_uid,
     }
+    AUTHENTICATOR_ASYMMETRIC_CIPHER_ALGO_BLOCK = {
+        **ASYMMETRIC_CIPHER_ALGO_BLOCK,
+        "key_cipher_algo": "RSA_OAEP",  # Authenticators only have such keys for now, see operations.create_authenticator()
+        "key_cipher_trustee": authenticator_trustee_schema,
+    }
 
-    _ALL_POSSIBLE_CIPHER_LAYERS_LIST = [ASYMMETRIC_CIPHER_ALGO_BLOCK]  # Built for recursive schema!
+    # Built for recursive schema!
+    _ALL_POSSIBLE_CIPHER_LAYERS_LIST = [ASYMMETRIC_CIPHER_ALGO_BLOCK, AUTHENTICATOR_ASYMMETRIC_CIPHER_ALGO_BLOCK]
     ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY = And(_ALL_POSSIBLE_CIPHER_LAYERS_LIST, len)
 
     SYMMETRIC_CIPHER_ALGO_BLOCK = Schema(

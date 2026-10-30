@@ -157,16 +157,13 @@ def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
         )
         _check_is_asymmetric_key_object(private_key)
 
-        error_matcher = (
-            "key format is not supported|Invalid DER encoding|Wrong passphrase|Incorrect passphrase|passphrase is required"
-        )
-
-        with pytest.raises(KeyLoadingError, match=error_matcher):
+        # Same uniform message for all key algos, which must not reveal why decryption failed (e.g. padding)
+        with pytest.raises(KeyLoadingError, match="Wrong passphrase or corrupted encrypted private key"):
             load_asymmetric_key_from_pem_bytestring(
                 key_pem=keypair["private_key"], key_algo=key_algo, passphrase=b"wrong passphrase"
             )
 
-        with pytest.raises(KeyLoadingError, match=error_matcher):
+        with pytest.raises(KeyLoadingError, match="passphrase is required"):  # Pycryptodome >= 4 message
             load_asymmetric_key_from_pem_bytestring(
                 key_pem=keypair["private_key"], key_algo=key_algo, passphrase=None  # Missing passphrase
             )

@@ -80,6 +80,11 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
 
     :return: dict with a tuple of the cipher key and the symkey/shard by trustee id.
     """
+    from wacryptolib.cryptainer import check_cryptainer_sanity  # LAZY import, _validation is loaded after us
+
+    for _cryptainer_name, cryptainer in cryptainers_with_names:
+        check_cryptainer_sanity(cryptainer)  # Else e.g. empty key_cipher_layers would crash below
+
     decryptable_symkeys_per_trustee = {}
 
     def _add_decryptable_symkeys_for_trustee(

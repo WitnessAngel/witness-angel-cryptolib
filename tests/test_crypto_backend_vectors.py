@@ -5,7 +5,7 @@
 """
 Known-answer tests of both crypto backends, with official vectors matching the exact parameters used by wacryptolib.
 
-Without published vectors for these parameters, RSA/DSA/X25519 key generation and PEM serialization,
+Without published vectors for these parameters, RSA/DSA/ECC/X25519 key generation and PEM serialization,
 as well as Shamir secret sharing (same vendored code for both backends), are only covered by interoperability tests.
 """
 
@@ -228,6 +228,42 @@ def test_dsa_signature_verification(backend, section_name, domain, case):
     public_key = _build_dsa_public_key(backend, domain, int(case["Y"], 16))
     q_length = len(domain["Q"]) // 2
     signature = int(case["R"], 16).to_bytes(q_length, "big") + int(case["S"], 16).to_bytes(q_length, "big")
+    hasher = _hash_sha512(backend, h(case["Msg"]))
+    if case["Result"] == "P":
+        backend.verify_with_dss(hasher, signature, public_key)
+    else:
+        with pytest.raises(ValueError):
+            backend.verify_with_dss(hasher, signature, public_key)
+
+
+ECDSA_SIGVER_CASES = [
+    (section_name, case) for section_name, cases in vectors.CAVP_ECDSA_SIGVER_SHA512.items() for case in cases
+]
+
+
+def _build_ecc_public_key(backend, curve_bits, x, y):
+    if backend.__name__.endswith(".fallback"):
+        import ecdsa
+
+        curve = {256: ecdsa.NIST256p, 384: ecdsa.NIST384p, 521: ecdsa.NIST521p}[curve_bits]
+        coordinate_length = (curve_bits + 7) // 8
+        point = b"\x04" + x.to_bytes(coordinate_length, "big") + y.to_bytes(coordinate_length, "big")
+        return ecdsa.VerifyingKey.from_string(point, curve=curve)
+    from Crypto.PublicKey import ECC
+
+    return ECC.construct(curve="p%d" % curve_bits, point_x=x, point_y=y)
+
+
+@pytest.mark.parametrize("section_name, case", ECDSA_SIGVER_CASES, ids=lambda x: "" if isinstance(x, dict) else x)
+def test_ecdsa_signature_verification(backend, section_name, case):
+    curve_bits = int(section_name[3:6])  # E.g. "[P-256,SHA-512]"
+    try:
+        public_key = _build_ecc_public_key(backend, curve_bits, int(case["Qx"], 16), int(case["Qy"], 16))
+    except Exception:  # Some failing vectors have an invalid public point
+        assert case["Result"] == "F"
+        return
+    order_length = (curve_bits + 7) // 8
+    signature = int(case["R"], 16).to_bytes(order_length, "big") + int(case["S"], 16).to_bytes(order_length, "big")
     hasher = _hash_sha512(backend, h(case["Msg"]))
     if case["Result"] == "P":
         backend.verify_with_dss(hasher, signature, public_key)

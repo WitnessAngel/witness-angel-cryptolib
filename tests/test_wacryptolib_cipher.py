@@ -173,6 +173,10 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
     private_key_dict = dict(key=keypair["private_key"])
     assert decrypt(key_dict=private_key_dict, cipherdict=cipherdict) == binary_content
 
+    # Like RSA_OAEP, encryption only uses the public part of a private key
+    cipherdict_from_private_key = encrypt(key_dict=private_key_dict, plaintext=binary_content)
+    assert decrypt(key_dict=private_key_dict, cipherdict=cipherdict_from_private_key) == binary_content
+
     decryption_func = functools.partial(decrypt, key_dict=private_key_dict)
     _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
 

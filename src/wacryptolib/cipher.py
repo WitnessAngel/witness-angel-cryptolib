@@ -7,6 +7,7 @@ from typing import BinaryIO
 
 
 from wacryptolib import _crypto_backend
+from wacryptolib._crypto_backend import hpke_x25519_seal
 from wacryptolib import utilities
 from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionIntegrityError, OperationNotSupported
 from wacryptolib.keygen import (
@@ -253,7 +254,8 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify_integrity_tag
 # table-based pure python AES; RFC 9180 Appendix A.2 has a test vector for exactly this suite (none for X25519 +
 # AES-256-GCM); security margins are equal and hardware AES speed is irrelevant for tiny key structs.
 # All these parameters are fixed by the algorithm name: changing any of them requires a new name.
-ECIES_X25519_HPKE_AEAD_ID = 0x0003  # = Crypto.Protocol.HPKE.AEAD.CHACHA20_POLY1305
+# Single definition, shared with the pure python sealing (= Crypto.Protocol.HPKE.AEAD.CHACHA20_POLY1305)
+ECIES_X25519_HPKE_AEAD_ID = hpke_x25519_seal.AEAD_ID
 
 
 def _check_x25519_key(key, accept_raw_public_key=False):

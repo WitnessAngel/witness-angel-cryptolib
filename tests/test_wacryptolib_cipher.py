@@ -329,6 +329,11 @@ def test_ml_kem_768_asymmetric_encryption_and_decryption():
             key_dict=dict(key=other_private_key), cipherdict=cipherdict, cipher_algo=cipher_algo
         )
 
+    cipherdict_from_private_key = wacryptolib.cipher.encrypt_bytestring(  # Like RSA_OAEP, uses the public part
+        key_dict=private_key_dict, plaintext=b"abc", cipher_algo=cipher_algo
+    )
+    assert decryption_func(cipherdict=cipherdict_from_private_key) == b"abc"
+
     with pytest.raises(DecryptionError, match="private ML-KEM key"):  # Public key can't decrypt
         wacryptolib.cipher.decrypt_bytestring(key_dict=public_key_dict, cipherdict=cipherdict, cipher_algo=cipher_algo)
 

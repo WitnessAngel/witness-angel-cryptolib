@@ -143,3 +143,30 @@ def test_sign_and_verify_with_ml_dsa_key():
             wacryptolib.signature.verify_message_signature(
                 public_key=other_keypair["public_key"], message=message, signature=signature, signature_algo="ML_DSA_65"
             )
+
+
+@pytest.mark.parametrize("param_set_name", ["ML_DSA_44", "ML_DSA_87"])
+def test_ml_dsa_65_rejects_other_ml_dsa_parameter_sets(param_set_name):
+    from Crypto.PublicKey import MLDSA
+    from wacryptolib.exceptions import KeyLoadingError
+    from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
+
+    message = b"Hello"
+    private_key = MLDSA.generate(param_set=getattr(MLDSA.ParamSet, param_set_name))
+    public_key = private_key.public_key()
+
+    with pytest.raises(ValueError, match="Incompatible key type"):
+        wacryptolib.signature.sign_message(private_key=private_key, message=message, signature_algo="ML_DSA_65")
+
+    keypair = wacryptolib.keygen.generate_keypair(key_algo="ML_DSA_65", serialize=False)
+    signature = wacryptolib.signature.sign_message(
+        private_key=keypair["private_key"], message=message, signature_algo="ML_DSA_65"
+    )
+    with pytest.raises(ValueError, match="Incompatible key type"):
+        wacryptolib.signature.verify_message_signature(
+            message=message, signature_algo="ML_DSA_65", signature=signature, public_key=public_key
+        )
+
+    for key in (public_key, private_key):
+        with pytest.raises(KeyLoadingError, match="Incompatible key type"):
+            load_asymmetric_key_from_pem_bytestring(key_pem=key.export_key(format="PEM"), key_algo="ML_DSA_65")

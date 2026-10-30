@@ -561,7 +561,9 @@ def import_ml_kem_key_from_pem(key_pem, passphrase=None):
 def import_ml_dsa_key_from_pem(key_pem, passphrase=None):
     from Crypto.PublicKey import MLDSA
 
-    return _import_key_from_pem(MLDSA, key_pem, passphrase=passphrase)
+    key = _import_key_from_pem(MLDSA, key_pem, passphrase=passphrase)
+    check_pq_key_algo(key, "ML_DSA_65")  # Only parameter set supported for now
+    return key
 
 
 def export_ml_kem_key_to_pem(key, passphrase=None):  # Private keys are always exported as PKCS#8

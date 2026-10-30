@@ -435,7 +435,8 @@ def test_ml_kem_768_asymmetric_encryption_and_decryption():
             with pytest.raises(DecryptionError):
                 decryption_func(cipherdict=corrupted_cipherdict)
 
-    with pytest.raises(DecryptionError):  # Wrong private key
+    # Like ECIES_X25519, indistinguishable from a corrupted ciphertext, so not reported as an integrity error
+    with pytest.raises(DecryptionError, match="Wrong ML-KEM private key or corrupted ciphertext"):
         wacryptolib.cipher.decrypt_bytestring(
             key_dict=dict(key=other_private_key), cipherdict=cipherdict, cipher_algo=cipher_algo
         )

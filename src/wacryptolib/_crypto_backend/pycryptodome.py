@@ -362,7 +362,10 @@ _X25519_PUBLIC_KEY_DER_PREFIX = bytes.fromhex("302a300506032b656e032100")
 
 def import_x25519_key_from_pem(key_pem, passphrase=None):
     if not _patch_pycryptodome_internals:
-        return import_ecc_key_from_pem(key_pem, passphrase=passphrase)
+        key = import_ecc_key_from_pem(key_pem, passphrase=passphrase)
+        if key.curve != "Curve25519":
+            raise ValueError("Expected an X25519 key, not a %s one" % key.curve)
+        return key
     # Native Curve25519 is unavailable in fallback backend: only public keys load, as raw bytes for encrypt_via_hpke()
     from Crypto.IO import PEM
 

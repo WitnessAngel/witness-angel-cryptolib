@@ -85,38 +85,6 @@ def decrypt_via_aes_cbc(ciphertext, key, iv):
     return decrypted
 
 
-def _prevent_passphrase_usage_for_rsa_key():
-    raise NotImplementedError(
-        "RSA key with passphrase is not supported in fallback implementation")
-
-
-def import_rsa_key_from_pem(key_pem, passphrase=None):
-    import rsa  # Not well supported by micropython, due to pyasn1 code
-
-    if passphrase:
-        _prevent_passphrase_usage_for_rsa_key()
-
-    # We use python-rsa for parsing, but then pkcs1 package for encryption/decryption
-    try:
-        _pyrsa_format_public_key = rsa.PublicKey.load_pkcs1_openssl_pem(key_pem)
-        _pkcs1_format_public_key = pkcs1.keys.RsaPublicKey(
-            _pyrsa_format_public_key.n, _pyrsa_format_public_key.e)
-        return _pkcs1_format_public_key
-    except ValueError:
-        _pyrsa_format_private_key = rsa.PrivateKey.load_pkcs1(key_pem)
-        _pkcs1_format_private_key = pkcs1.keys.RsaPrivateKey(
-            _pyrsa_format_private_key.n, _pyrsa_format_private_key.d)
-        return _pkcs1_format_private_key
-
-
-''' NOT IMPLEMENTED YET - ABORTED!
-def export_rsa_key_to_pem(private_key, passphrase=None):  # FIXME not always private key
-    if passphrase:
-        _prevent_passphrase_usage_for_rsa_key()
-    ...
-'''
-
-
 def encrypt_via_rsa_oaep(plaintext_chunks: list[bytes], public_key) -> list[bytes]:
     """We expect each plaintext chunk to be small enough for the RSA key size"""
     encrypter = lambda chunk: pkcs1.rsaes_oaep.encrypt(public_key, message=chunk, label=b'',

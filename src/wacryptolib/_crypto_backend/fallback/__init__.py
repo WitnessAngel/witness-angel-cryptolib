@@ -5,8 +5,8 @@
 """
 Pure python crypto backend, for platforms where pycryptodome's native code can't load (iOS, micropython...).
 
-Exposes the same names as the pycryptodome backend, built upon the "fallbacks" extra packages (pkcs1, pyaes)
-and vendored modules. It must never import pycryptodome. NIST-curve ECC is not supported.
+Exposes the same names as the pycryptodome backend, built upon the "fallbacks" extra packages (pkcs1, pyaes, ecdsa)
+and vendored modules. It must never import pycryptodome.
 
 ponytail: python bigints are not constant-time, so private key operations may leak to local timing observers.
 """
@@ -16,6 +16,8 @@ import hmac
 import math
 import os
 
+import ecdsa
+import ecdsa.util
 import pkcs1.exceptions
 import pkcs1.keys
 import pkcs1.mgf
@@ -332,15 +334,29 @@ def _decode_dsa_parameters(parameters):
 
 
 def sign_with_dss(message, private_key):
-    if not isinstance(private_key, _dsa.DsaKey):
-        raise ValueError("Only DSA keys can be used for DSS signatures in the fallback backend")
-    return _dsa.sign(private_key, message.digest())
+    """FIPS 186-4 DSA or ECDSA signature of an already-fed hasher, as r || s bytes (pycryptodome's "binary")."""
+    if isinstance(private_key, _dsa.DsaKey):
+        return _dsa.sign(private_key, message.digest())
+    if isinstance(private_key, ecdsa.SigningKey):
+        # RFC 6979 deterministic nonce; the digest is truncated to the curve order's bit length, as FIPS 186-4 requires
+        return private_key.sign_digest_deterministic(
+            message.digest(), hashfunc=_RSA_HASH, sigencode=ecdsa.util.sigencode_string, allow_truncate=True
+        )
+    raise ValueError("Only DSA and NIST-curve ECC keys can be used for DSS signatures")
 
 
 def verify_with_dss(message, signature, public_key):
-    if not isinstance(public_key, _dsa.DsaKey):
-        raise ValueError("Only DSA keys can be used for DSS signatures in the fallback backend")
-    _dsa.verify(public_key, message.digest(), signature)
+    """Raise ValueError if the signature is invalid."""
+    if isinstance(public_key, _dsa.DsaKey):
+        return _dsa.verify(public_key, message.digest(), signature)
+    if isinstance(public_key, ecdsa.SigningKey):
+        public_key = public_key.verifying_key
+    if not isinstance(public_key, ecdsa.VerifyingKey):
+        raise ValueError("Only DSA and NIST-curve ECC keys can be used for DSS signatures")
+    try:
+        public_key.verify_digest(signature, message.digest(), sigdecode=ecdsa.util.sigdecode_string, allow_truncate=True)
+    except (ecdsa.BadSignatureError, ecdsa.der.UnexpectedDER, AssertionError):
+        raise ValueError("The signature is not authentic") from None
 
 
 # X25519 KEYS AND HPKE (RFC 9180) KEY WRAPPING, BASE MODE, EMPTY INFO AND AAD #
@@ -377,15 +393,30 @@ def _build_x25519_private_key(private_bytes):
     return X25519Key(hpke_x25519_seal.x25519(private_bytes, hpke_x25519_seal._X25519_BASE_POINT), private_bytes)
 
 
+# NIST curves, with the names pycryptodome accepts for them
+_NIST_CURVES = {
+    name_template % bits: curve
+    for bits, curve in [(192, ecdsa.NIST192p), (224, ecdsa.NIST224p), (256, ecdsa.NIST256p), (384, ecdsa.NIST384p),
+                        (521, ecdsa.NIST521p)]
+    for name_template in ("p%d", "P-%d", "NIST P-%d", "secp%dr1", "prime%dv1")
+}
+
+
 def ecc_key_class_fetcher():
-    return X25519Key
+    return (X25519Key, ecdsa.SigningKey, ecdsa.VerifyingKey)
 
 
 def generate_ecc_keypair(curve):
-    if curve.lower() not in ("curve25519", "x25519"):
+    if curve.lower() in ("curve25519", "x25519"):
+        private_key = _build_x25519_private_key(os.urandom(32))
+        return private_key.public_key(), private_key
+    if curve in ("ed25519", "Ed25519", "ed448", "Ed448"):
         raise _requires_pycryptodome("ECC key generation on curve %r" % curve)
-    private_key = _build_x25519_private_key(os.urandom(32))
-    return private_key.public_key(), private_key
+    if curve not in _NIST_CURVES:
+        curve_names = sorted(_NIST_CURVES) + ["curve25519"]
+        raise ValueError("Unexisting ECC curve '%s', must be one of '%s'" % (curve, curve_names))
+    private_key = ecdsa.SigningKey.generate(curve=_NIST_CURVES[curve])
+    return private_key.verifying_key, private_key
 
 
 def _check_hpke_aead_id(aead_id):
@@ -438,8 +469,6 @@ def _decode_pkcs8_private_key(der, private_key_decoders):
 
 
 def _get_decoder(decoders, oid):
-    if oid == _pem.OID_EC_PUBLIC_KEY:
-        raise _requires_pycryptodome("Import of NIST-curve ECC keys")
     if oid not in decoders:
         raise ValueError("Unexpected key algorithm %s" % oid)
     return decoders[oid]
@@ -534,26 +563,70 @@ def _decode_x25519_public_key(public_key_bits, parameters):
     return X25519Key(public_key_bits)
 
 
+def _decode_nist_ecc_key(decode, der):
+    try:
+        key = decode(der)
+    except (ecdsa.der.UnexpectedDER, ecdsa.MalformedPointError, AssertionError) as exc:
+        raise ValueError("Invalid ECC key (%s)" % exc) from None
+    if key.curve not in _NIST_CURVES.values():
+        raise ValueError("Unsupported ECC curve %s" % key.curve.name)
+    return key
+
+
+def _decode_nist_ecc_private_key(private_key_octets, parameters):
+    # ecdsa parses the whole PKCS#8 structure itself, so we rebuild it
+    algorithm_identifier = _pem.encode_algorithm_identifier(_pem.OID_EC_PUBLIC_KEY, parameters)
+    return _decode_nist_ecc_key(ecdsa.SigningKey.from_der, _pem.encode_pkcs8(algorithm_identifier, private_key_octets))
+
+
+def _decode_nist_ecc_public_key(public_key_bits, parameters):
+    algorithm_identifier = _pem.encode_algorithm_identifier(_pem.OID_EC_PUBLIC_KEY, parameters)
+    return _decode_nist_ecc_key(ecdsa.VerifyingKey.from_der, _pem.encode_spki(algorithm_identifier, public_key_bits))
+
+
+def _encode_nist_ecc_private_key_to_pkcs8(key):
+    # ecdsa writes a PKCS#8 v2 (OneAsymmetricKey) version number, we rewrite it as v1 like pycryptodome
+    _version, algorithm_identifier, private_key_octets = _pem.decode_sequence(key.to_der(format="pkcs8"), 3)
+    return _pem.encode_sequence(_pem.encode_integer(0), algorithm_identifier, private_key_octets)
+
+
 def import_ecc_key_from_pem(key_pem, passphrase=None):
     return _import_key_from_pem(
         key_pem,
         passphrase,
-        private_key_decoders={_pem.OID_X25519: _decode_x25519_private_key},
-        public_key_decoders={_pem.OID_X25519: _decode_x25519_public_key},
+        private_key_decoders={
+            _pem.OID_X25519: _decode_x25519_private_key,
+            _pem.OID_EC_PUBLIC_KEY: _decode_nist_ecc_private_key,
+        },
+        public_key_decoders={
+            _pem.OID_X25519: _decode_x25519_public_key,
+            _pem.OID_EC_PUBLIC_KEY: _decode_nist_ecc_public_key,
+        },
     )
 
 
 def import_x25519_key_from_pem(key_pem, passphrase=None):
-    return import_ecc_key_from_pem(key_pem, passphrase=passphrase)  # Only X25519 keys are supported here anyway
+    key = import_ecc_key_from_pem(key_pem, passphrase=passphrase)
+    if not isinstance(key, X25519Key):
+        raise ValueError("Expected an X25519 key, not a NIST P-%s one" % key.curve.name[4:-1])  # Like pycryptodome
+    return key
 
 
 def export_ecc_key_to_pem(private_key, passphrase=None):
+    if isinstance(private_key, X25519Key):
+        return _export_key_to_pem(
+            private_key,
+            passphrase,
+            has_private=private_key.has_private(),
+            encode_private_pkcs8=lambda key: _pem.encode_pkcs8(
+                _X25519_ALGORITHM_IDENTIFIER, _pem.encode_octet_string(key.private_bytes)
+            ),
+            encode_spki=lambda key: _pem.encode_spki(_X25519_ALGORITHM_IDENTIFIER, key.public_bytes),
+        )
     return _export_key_to_pem(
         private_key,
         passphrase,
-        has_private=private_key.has_private(),
-        encode_private_pkcs8=lambda key: _pem.encode_pkcs8(
-            _X25519_ALGORITHM_IDENTIFIER, _pem.encode_octet_string(key.private_bytes)
-        ),
-        encode_spki=lambda key: _pem.encode_spki(_X25519_ALGORITHM_IDENTIFIER, key.public_bytes),
+        has_private=isinstance(private_key, ecdsa.SigningKey),
+        encode_private_pkcs8=_encode_nist_ecc_private_key_to_pkcs8,
+        encode_spki=lambda key: key.to_der(),
     )

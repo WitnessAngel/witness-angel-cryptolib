@@ -170,3 +170,10 @@ def test_ml_dsa_65_rejects_other_ml_dsa_parameter_sets(param_set_name):
     for key in (public_key, private_key):
         with pytest.raises(KeyLoadingError, match="Incompatible key type"):
             load_asymmetric_key_from_pem_bytestring(key_pem=key.export_key(format="PEM"), key_algo="ML_DSA_65")
+
+
+@pytest.mark.parametrize("key_algo", ["RSA_PSS", "ECC_DSS", "DSA_DSS", "ML_DSA_65"])
+def test_sign_message_with_public_key_raises_signature_creation_error(key_algo):
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
+    with pytest.raises(SignatureCreationError):
+        wacryptolib.signature.sign_message(private_key=keypair["public_key"], message=b"Hello", signature_algo=key_algo)

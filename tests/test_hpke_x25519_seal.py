@@ -71,6 +71,13 @@ def test_pure_seal_rejects_invalid_public_keys():
     with pytest.raises(ValueError, match="32 bytes"):
         hpke_x25519_seal.seal(b"abc", b"abc")
 
+    raw_public_key = generate_keypair(key_algo="ECIES_X25519", serialize=False)["public_key"].export_key(format="raw")
+    high_bit_public_key = raw_public_key[:31] + bytes([raw_public_key[31] | 0x80])
+    p_plus_one_public_key = (2**255 - 19 + 1).to_bytes(32, "little")  # Same point as u=1
+    for non_canonical_public_key in (high_bit_public_key, p_plus_one_public_key):
+        with pytest.raises(ValueError, match="Non-canonical"):
+            hpke_x25519_seal.seal(non_canonical_public_key, b"abc")
+
 
 def test_fallback_backend_seals_with_pure_python(tmp_path):
     # Fallback mode is decided at import time, so it needs a fresh interpreter

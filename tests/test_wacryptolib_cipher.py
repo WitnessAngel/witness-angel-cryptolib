@@ -284,7 +284,7 @@ def test_ml_kem_768_asymmetric_encryption_and_decryption():
     cipher_algo = "ML_KEM_768"
     keypair = wacryptolib.keygen.generate_keypair(key_algo=cipher_algo, serialize=False)
     # Bypass the keypair cache of conftest.py, to really get a different keypair
-    _other_public_key, other_private_key = wacryptolib._crypto_backend.generate_ml_kem_768_keypair()
+    _other_public_key, other_private_key = wacryptolib._crypto_backend.generate_pq_keypair("ML_KEM_768")
     public_key_dict = dict(key=keypair["public_key"])
     private_key_dict = dict(key=keypair["private_key"])
 

@@ -105,6 +105,14 @@ def test_trustee_api_workflow():
     )
     assert decrypted == secret
 
+    decrypted = trustee_api.decrypt_with_private_key(  # Case-insensitive algo name
+        keychain_uid=keychain_uid, cipher_algo="rsa_oaep", cipherdict=cipherdict
+    )
+    assert decrypted == secret
+
+    with pytest.raises(ValidationError, match="Unsupported asymmetric cipher"):
+        trustee_api.decrypt_with_private_key(keychain_uid=keychain_uid, cipher_algo="RSA_PSS", cipherdict=cipherdict)
+
     # NO auto-creation of keypair in decrypt_with_private_key()
     with pytest.raises(KeyDoesNotExist, match="not found"):
         trustee_api.decrypt_with_private_key(

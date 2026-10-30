@@ -31,3 +31,25 @@ def monkeypatch_generate_keypair_for_tests():
         yield
     finally:  # Just for safety
         patcher.stop()
+
+
+def import_crypto_backend(name):
+    """Import a crypto backend module directly (bypassing the backend selector), or skip the test."""
+    import importlib
+
+    try:
+        if name == "pycryptodome":
+            from Crypto.Cipher import AES  # Its import loads native code
+        return importlib.import_module("wacryptolib._crypto_backend." + name)
+    except (ImportError, OSError) as exc:
+        pytest.skip("%s crypto backend is unavailable (missing %s)" % (name, getattr(exc, "name", None) or exc))
+
+
+@pytest.fixture(params=["pycryptodome", "fallback"])
+def backend(request):
+    return import_crypto_backend(request.param)
+
+
+@pytest.fixture(scope="module")
+def both_backends():
+    return import_crypto_backend("pycryptodome"), import_crypto_backend("fallback")

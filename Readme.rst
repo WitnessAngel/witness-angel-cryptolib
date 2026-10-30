@@ -31,6 +31,20 @@ Just launch inside your python environment:
 
     **pip install wacryptolib**
 
+Cryptography relies on the native code of `pycryptodome`. On platforms where it can't be loaded (e.g. iOS, which forbids
+dlopen()), wacryptolib automatically switches to a pure-python "fallback" backend, made of the packages of the
+**fallbacks** extra (`pkcs1`, `pyaes`, `ecdsa`) and of vendored modules. Install it without pycryptodome, e.g.:
+
+    **pip install --no-deps wacryptolib pkcs1 pyaes ecdsa six** (plus the other dependencies of wacryptolib that
+    your platform supports)
+
+On a regular computer, **pip install wacryptolib[fallbacks]** installs these packages alongside pycryptodome, and the
+FORCE_WACRYPTOLIB_FALLBACK_BACKEND environment variable forces the fallback backend (for tests).
+
+The fallback backend supports all algorithms used by wacryptolib, and reads/writes the same key formats, except
+legacy DSA private keys protected with DES3 (written by wacryptolib 0.12 and earlier). Being pure-python, it is
+much slower, and not protected against timing side-channels.
+
 
 CLI interface
 +++++++++++++++++++++

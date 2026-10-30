@@ -19,7 +19,7 @@ import hmac
 import os
 
 try:
-    from .chacha20_poly1305 import ChaCha20Poly1305Cipher
+    from .vendor.chacha20_poly1305 import ChaCha20Poly1305Cipher
 except ImportError:  # Copied as a top-level module on micropython
     from chacha20_poly1305 import ChaCha20Poly1305Cipher
 

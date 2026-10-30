@@ -331,6 +331,8 @@ def encrypt_via_hpke(plaintext: bytes, public_key, aead_id) -> tuple[bytes, byte
 
     public_key may be a raw 32-bytes X25519 public key (fallback backend), then sealed in pure python."""
     if isinstance(public_key, bytes):
+        if not _patch_pycryptodome_internals:
+            raise ValueError("Raw X25519 public keys are only accepted by the fallback backend")
         from . import hpke_x25519_seal
 
         if aead_id != 0x0003:

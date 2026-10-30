@@ -1,11 +1,13 @@
-# MicroPython cryptography support: ML-KEM-768 on ESP32-S3
+# MicroPython cryptography support: ML-KEM-768 and ECIES_X25519 on ESP32-S3
 
 Date: 2026-10-30. Status: audit, no code changed.
 Scope: can the post-quantum `ML_KEM_768` key wrapping of the
 `add-post-quantum-algorithms` branch run on the MicroPython flightbox
 (`micropython/`), on an ESP32-S3, regarding Python compatibility and memory?
 Complements section 6 of `post_quantum_algorithms_report.md`, which holds the
-timing estimates.
+timing estimates. Section 6 below covers the same question for `ECIES_X25519`
+(branch `feature/ecies-x25519`), whose pure-Python seal the ML-KEM port would
+build on.
 
 ## Summary
 
@@ -20,6 +22,10 @@ timing estimates.
   data, but seconds per encapsulation because of Keccak in pure Python.
 - **Missing building block:** SHA3 / SHAKE, which the vendored `hashlib`
   lacks.
+- **`ECIES_X25519` should already fit** (section 6): a few KB of memory and
+  roughly 0.5-1 s per seal, but one list literal in the vendored
+  ChaCha20 code probably doesn't compile on MicroPython. Not yet run on a
+  device.
 
 ## 1. Only encryption is needed on the device
 
@@ -118,6 +124,64 @@ guaranteed constant-time. For encapsulation the only secrets are the
 ephemeral randomness and the shared secret, both single-use, which limits
 exposure to timing side channels compared with long-term private keys.
 
+## 6. ECIES_X25519 on ESP32-S3
+
+Same question for the `ECIES_X25519` key wrapping of `feature/ecies-x25519`,
+sealed on the device by the vendored `micropython/lib/hpke_x25519_seal.py`
+and `micropython/lib/chacha20_poly1305.py`. Based on reading the code only:
+building the MicroPython Unix port to run it was not possible in this audit.
+
+### Python compatibility
+
+- **Likely blocker:** `_chacha20_block()` builds its state with
+  `[0x61707865, ..., *key_words, counter, *nonce_words]`. As far as known,
+  MicroPython accepts `*` unpacking in function calls but not inside list
+  literals (PEP 448), so the module would fail to import with a
+  `SyntaxError`. One-line fix: `[...] + list(key_words) + [counter] +
+  list(nonce_words)`.
+- **Already fixed:** `bytes.ljust()` in Poly1305 padding, which MicroPython
+  lacks (commit `95ce17e`).
+- **Expected to work:** big ints (the ESP32 port has arbitrary-precision
+  ints), 3-argument `pow()` (enabled on the ESP32 port),
+  `struct` `"<QQ"` / `"<8I"`, `int.from_bytes()` / `to_bytes()` with a
+  positional byte order, `bytes(n)` zero padding, `os.urandom` (hardware
+  RNG), and the relative-import fallback of `hpke_x25519_seal.py` (MicroPython
+  raises `ImportError`, which is caught).
+- **Hashing is native:** the vendored `hashlib` package imports the built-in
+  `uhashlib` first, so SHA-256 (all that HKDF and HMAC need here) is native
+  and hardware-accelerated on the S3; only SHA-384/512 fall back to pure
+  Python.
+
+### Memory
+
+- The sealed plaintext is a small key struct, so the working set is a few
+  dozen 256-512-bit ints and a few 64-byte ChaCha20 blocks: **a few KB** at
+  peak. Garbage is heavy (about 255 ladder steps x ~20 temporary ints) but
+  short-lived.
+- The larger cost is compiling the two modules from source at import, about
+  **10-20 KB** of transient RAM. Precompiling them to `.mpy` with
+  `mpy-cross`, or freezing them into the firmware, removes most of it. The
+  import is lazy, so RSA-only deployments don't pay it.
+
+### Speed
+
+| Step | Estimate on ESP32-S3 (240 MHz) |
+|---|---|
+| One X25519 scalar multiplication (255-step ladder, ~18 big-int ops per step, plus a modular inverse) | 0.2-0.5 s |
+| Seal = 2 X25519 operations + ~10 HMAC-SHA256 (native) + a few ChaCha20 blocks | **~0.5-1 s** |
+
+ChaCha20's 32-bit words exceed MicroPython's 31-bit small ints, so each
+operation allocates, but only a few blocks are processed. The cost is paid
+once per `ECIES_X25519` key layer per cryptainer, not per payload byte: in
+the same range as the pure-Python `pkcs1` RSA-OAEP encryption already used.
+
+### Verification still needed
+
+Copy `micropython/lib/` to the board and time
+`hpke_x25519_seal.seal(bytes(range(32)), b"x" * 200)`, then check the result
+decrypts with pycryptodome on desktop. The MicroPython Unix port with
+`-X heapsize=` can confirm syntax and peak memory, but not S3 timings.
+
 ## Recommendations
 
 1. Switch (or add) the branch's ML-KEM suite to **HPKE ML-KEM-768 +
@@ -126,3 +190,6 @@ exposure to timing side channels compared with long-term private keys.
 2. Start with option 1, gated by cross-validation tests against pycryptodome,
    and only move to options 2/3 if measured timings on the ESP32-S3 are
    unacceptable.
+3. Before relying on `ECIES_X25519` on the flightbox, fix the list-literal
+   unpacking in `chacha20_poly1305.py` and time one seal on a real ESP32-S3
+   (section 6).

@@ -204,7 +204,9 @@ class TrusteeApi:  # TODO rename this?
 
         Raises if key existence, authorization or passphrase errors occur.
         """
-        assert cipher_algo.upper() in SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, cipher_algo
+        cipher_algo = cipher_algo.upper()  # Same normalization as decrypt_bytestring(), for keystore lookups too
+        if cipher_algo not in SUPPORTED_ASYMMETRIC_CIPHER_ALGOS:  # SECURITY, remotely called
+            raise ValidationError("Unsupported asymmetric cipher algorithm %r" % cipher_algo)
 
         logger.debug(
             "Trustee proxy: decrypting cipherdict with private key %s/%s (%d passphrases submitted)",

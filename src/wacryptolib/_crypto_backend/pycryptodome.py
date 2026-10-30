@@ -2,194 +2,45 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import logging, os, sys
+"""
+Native crypto backend: a plain wrapper over pycryptodome, which must be importable with its native code.
+"""
 
-logger = logging.getLogger(__name__)
-
-
-def __monkey_patch_pycryptodome_compiled_internals():
-
-    # WE MONKEY PATCH PYCRYPTODOME INTERNALS TO BYPASS SOME ".so" objects #
-
-    class FakePycryptodomeExtensionLib:
-        @staticmethod
-        def have_aes_ni():
-            return False
-
-        @staticmethod
-        def have_clmul():
-            return False
-
-        def __getattr__(self, name):
-            # Algorithms without pure python implementation (ECC, DES3...) end up here
-            raise AttributeError("Native function %r of pycryptodome is not available in fallback backend" % name)
-
-    def fake_load_pycryptodome_raw_lib(name, cdecl):
-        if name in ["Crypto.Math._modexp"]:  # We force automatic fallback for some libs, inside pycryptodome
-            raise ImportError("Fake ImportError to force failure on non-vital extension %s" % name)
-        return FakePycryptodomeExtensionLib()
-
-    assert not sys.modules.get("Crypto.Util._raw_api")  # Must NOT have been already imported by another submodule
-    import Crypto.Util._raw_api
-
-    assert Crypto.Util._raw_api.load_pycryptodome_raw_lib
-    Crypto.Util._raw_api.load_pycryptodome_raw_lib = fake_load_pycryptodome_raw_lib
-
-    def patched_strxor(term1, term2, output=None):
-        return bytes([_a ^ _b for (_a, _b) in zip(term1, term2)])
-
-    assert not sys.modules.get("Crypto.Util.strxor")
-    import Crypto.Util.strxor
-
-    assert Crypto.Util.strxor.strxor
-    Crypto.Util.strxor.strxor = patched_strxor
-
-    import hashlib, importlib
-
-    def _generate_patched_hasher(hash_algo):
-        hasher_factory = getattr(hashlib, hash_algo.lower())
-
-        class PatchedHasherClass:
-            def __init__(self, *args, **kwargs):
-                self._hasher = hasher_factory(*args, **kwargs)
-
-            def update(self, msg):
-                return self._hasher.update(msg)
-
-            def digest(self):
-                return self._hasher.digest()
-
-            def copy(self):
-                return self._hasher.copy()
-
-            def new(self, *args, **kwargs):
-                return hasher_factory(*args, **kwargs)
-
-            @property
-            def digest_size(self):
-                return self._hasher.digest_size
-
-            @property
-            def block_size(self):
-                return self._hasher.block_size
-
-        return PatchedHasherClass
-
-    PATCHABLE_HASH_ALGOS = {  # With their OIDs, which pycryptodome only exposes on (unusable here) hasher instances
-        "SHA1": "1.3.14.3.2.26",
-        "MD5": "1.2.840.113549.2.5",
-        "SHA256": "2.16.840.1.101.3.4.2.1",
-        "SHA512": "2.16.840.1.101.3.4.2.3",
-        "SHA3_256": "2.16.840.1.101.3.4.2.8",
-        "SHA3_512": "2.16.840.1.101.3.4.2.10",
-    }  # Must be bigger than SUPPORTED_HASH_ALGOS of wacryptolib
-
-    for patchable_hash_algo in PATCHABLE_HASH_ALGOS:
-        patched_hash_class = _generate_patched_hasher(patchable_hash_algo)
-        module = importlib.import_module("Crypto.Hash.%s" % patchable_hash_algo)
-        class_name = patchable_hash_algo + ("_" if "_" in patchable_hash_algo else "") + "Hash"
-        assert hasattr(module, class_name), (module, class_name)
-        patched_hash_class.oid = PATCHABLE_HASH_ALGOS[patchable_hash_algo]  # Needed e.g. by DSS signatures
-        setattr(module, class_name, patched_hash_class)
-        setattr(
-            module,
-            "new",
-            lambda *args, patched_hash_class=patched_hash_class, **kwargs: patched_hash_class(*args, **kwargs),
-        )
-        if hasattr(module, "_pbkdf2_hmac_assist"):
-            del module._pbkdf2_hmac_assist  # Force slow code path, not requiring advanced hasher capabilities
-
-    import Crypto.Hash.BLAKE2s
-
-    def patched_blake2s_new(data=None, digest_bits=256, key=b""):
-        # Used by MAC verify() methods, to compare tags in constant time
-        return hashlib.blake2s(data or b"", digest_size=digest_bits // 8, key=key)
-
-    Crypto.Hash.BLAKE2s.new = patched_blake2s_new
-
-    import Crypto.Cipher.AES
-    import pyaes  # BEWARE - MUST BE INSTALLED!
-
-    class PyaesCipherAdapter:
-        """Pycryptodome-like cipher API, over a pyaes cipher (which handles one block per call, except for CTR)"""
-
-        block_size = Crypto.Cipher.AES.block_size
-
-        def __init__(self, pyaes_cipher, chunk_size):
-            self._pyaes_cipher = pyaes_cipher
-            self._chunk_size = chunk_size
-
-        def _process(self, method, data, output):
-            assert output is None, "Unsupported output parameter"
-            data = bytes(data)  # pyaes doesn't support memoryviews
-            chunk_size = self._chunk_size or len(data) or 1
-            return b"".join(method(data[i : i + chunk_size]) for i in range(0, len(data), chunk_size))
-
-        def encrypt(self, plaintext, output=None):
-            return self._process(self._pyaes_cipher.encrypt, plaintext, output)
-
-        def decrypt(self, ciphertext, output=None):
-            return self._process(self._pyaes_cipher.decrypt, ciphertext, output)
-
-    original_aes_new = Crypto.Cipher.AES.new
-
-    def patched_aes_new(key, mode, *args, **kwargs):
-        AES = Crypto.Cipher.AES
-        if mode == AES.MODE_CBC:
-            (iv,) = args or (kwargs["iv"],)
-            return PyaesCipherAdapter(pyaes.AESModeOfOperationCBC(key, iv=iv), chunk_size=AES.block_size)
-        if mode == AES.MODE_ECB:
-            return PyaesCipherAdapter(pyaes.AESModeOfOperationECB(key), chunk_size=AES.block_size)
-        if mode == AES.MODE_CTR and kwargs.get("nonce") == b"":
-            # Full-block counter, as used by EAX mode
-            counter = pyaes.Counter(initial_value=kwargs["initial_value"])
-            return PyaesCipherAdapter(pyaes.AESModeOfOperationCTR(key, counter=counter), chunk_size=None)
-        if mode == AES.MODE_EAX:
-            return original_aes_new(key, mode, *args, **kwargs)  # Pure python, relying on modes above
-        raise NotImplementedError("AES mode %s is not supported by fallback backend" % mode)
-
-    Crypto.Cipher.AES.new = patched_aes_new
-
-    import Crypto.Cipher.ChaCha20_Poly1305
-    from wacryptolib._crypto_backend.vendor.chacha20_poly1305 import ChaCha20Poly1305Cipher
-
-    Crypto.Cipher.ChaCha20_Poly1305.new = lambda key, nonce: ChaCha20Poly1305Cipher(key, nonce=nonce)
-
-    from Crypto.Cipher import PKCS1_OAEP
-
-    def patched_oaep_decode(em, lHash, db):
-        # Replace the 2023 C implementation by the old Python one
-        from Crypto.Util.strxor import strxor
-        from Crypto.Util.py3compat import bord
-
-        y = em[0]
-        hLen = len(lHash)
-        one_pos = hLen + db[hLen:].find(b"\x01")
-        lHash1 = db[:hLen]
-        invalid = bord(y) | int(one_pos < hLen)
-        hash_compare = strxor(lHash1, lHash)
-        for x in hash_compare:
-            invalid |= bord(x)
-        for x in db[hLen:one_pos]:
-            invalid |= bord(x)
-        return -1 if invalid else (one_pos + 1)
-
-    PKCS1_OAEP.oaep_decode = patched_oaep_decode
-
-
-try:
-    # Impossible to use pycryptodome package on iOS due to forbidden dlopen()...
-    import ios
-
-    _patch_pycryptodome_internals = True
-except ImportError:
-    _patch_pycryptodome_internals = True if os.getenv("FORCE_WACRYPTOLIB_FALLBACK_BACKEND") else False
-
-
-if _patch_pycryptodome_internals:
-    # BEWARE - to test this fallback mode on a normal PC, erase all .so/.dll files of pycrptodome, and for use_fallback_backend to True #
-    logger.info("Full pycryptodome lib not available under this environment, injecting fake C extensions")
-    __monkey_patch_pycryptodome_compiled_internals()
+__all__ = [
+    "IMPLEMENTED_HASH_ALGOS",
+    "get_hasher_instance",
+    "AES_BLOCK_SIZE",
+    "build_aes_cbc_encrypter",
+    "encrypt_via_aes_cbc",
+    "decrypt_via_aes_cbc",
+    "build_aes_eax_cipher",
+    "encrypt_via_aes_eax",
+    "decrypt_via_aes_eax",
+    "build_chacha20_poly1305_cipher",
+    "encrypt_via_chacha20_poly1305",
+    "decrypt_via_chacha20_poly1305",
+    "encrypt_via_rsa_oaep",
+    "decrypt_via_rsa_oaep",
+    "encrypt_via_hpke",
+    "decrypt_via_hpke",
+    "import_x25519_key_from_pem",
+    "generate_rsa_keypair",
+    "generate_dsa_keypair",
+    "generate_ecc_keypair",
+    "import_rsa_key_from_pem",
+    "import_dsa_key_from_pem",
+    "import_ecc_key_from_pem",
+    "export_rsa_key_to_pem",
+    "export_dsa_key_to_pem",
+    "export_ecc_key_to_pem",
+    "rsa_key_class_fetcher",
+    "dsa_key_class_fetcher",
+    "ecc_key_class_fetcher",
+    "sign_with_pss",
+    "verify_with_pss",
+    "sign_with_dss",
+    "verify_with_dss",
+]
 
 
 # Utilities #
@@ -327,18 +178,7 @@ def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[by
 
 
 def encrypt_via_hpke(plaintext: bytes, public_key, aead_id) -> tuple[bytes, bytes]:
-    """Returns (enc, ciphertext), enc being the KEM encapsulation (ephemeral public key for DHKEM).
-
-    public_key may be an X25519RawPublicKey (fallback backend), then sealed in pure python."""
-    if isinstance(public_key, X25519RawPublicKey):
-        if not _patch_pycryptodome_internals:
-            raise ValueError("Raw X25519 public keys are only accepted by the fallback backend")
-        from . import hpke_x25519_seal
-
-        if aead_id != hpke_x25519_seal.AEAD_ID:
-            raise ValueError("Pure python HPKE only supports ChaCha20-Poly1305 AEAD")
-        return hpke_x25519_seal.seal(public_key, plaintext)
-
+    """Returns (enc, ciphertext), enc being the KEM encapsulation (ephemeral public key for DHKEM)."""
     from Crypto.Protocol import HPKE
 
     # A private key would switch pycryptodome to unsealing mode
@@ -352,31 +192,11 @@ def decrypt_via_hpke(enc: bytes, ciphertext: bytes, private_key, aead_id) -> byt
     return HPKE.new(receiver_key=private_key, enc=enc, aead_id=HPKE.AEAD(aead_id)).unseal(ciphertext)
 
 
-class X25519RawPublicKey(bytes):
-    """Raw 32-bytes X25519 public key, as loaded by the fallback backend, which lacks native Curve25519.
-
-    A distinct type, so that any other 32-bytes value (e.g. a symmetric key) can't be mistaken for a public key."""
-
-
-# Header of the DER SubjectPublicKeyInfo of an X25519 public key (RFC 8410), followed by the 32 raw bytes
-_X25519_PUBLIC_KEY_DER_PREFIX = bytes.fromhex("302a300506032b656e032100")
-
-
 def import_x25519_key_from_pem(key_pem, passphrase=None):
-    if not _patch_pycryptodome_internals:
-        key = import_ecc_key_from_pem(key_pem, passphrase=passphrase)
-        if key.curve != "Curve25519":
-            raise ValueError("Expected an X25519 key, not a %s one" % key.curve)
-        return key
-    # Native Curve25519 is unavailable in fallback backend: only public keys load, as raw bytes for encrypt_via_hpke()
-    from Crypto.IO import PEM
-
-    if isinstance(key_pem, bytes):
-        key_pem = key_pem.decode("ascii")
-    der, marker, _ = PEM.decode(key_pem)
-    if marker != "PUBLIC KEY" or len(der) != 44 or not der.startswith(_X25519_PUBLIC_KEY_DER_PREFIX):
-        raise ValueError("Only X25519 public keys can be loaded in fallback backend")
-    return X25519RawPublicKey(der[len(_X25519_PUBLIC_KEY_DER_PREFIX) :])
+    key = import_ecc_key_from_pem(key_pem, passphrase=passphrase)
+    if key.curve != "Curve25519":
+        raise ValueError("Expected an X25519 key, not a %s one" % key.curve)
+    return key
 
 
 # RSA KEY GENERATION, AND IMPORT/EXPORT #

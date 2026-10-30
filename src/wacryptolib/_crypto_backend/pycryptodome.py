@@ -327,7 +327,16 @@ def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[by
 
 
 def encrypt_via_hpke(plaintext: bytes, public_key, aead_id) -> tuple[bytes, bytes]:
-    """Returns (enc, ciphertext), enc being the KEM encapsulation (ephemeral public key for DHKEM)."""
+    """Returns (enc, ciphertext), enc being the KEM encapsulation (ephemeral public key for DHKEM).
+
+    public_key may be a raw 32-bytes X25519 public key (fallback backend), then sealed in pure python."""
+    if isinstance(public_key, bytes):
+        from . import hpke_x25519_seal
+
+        if aead_id != 0x0003:
+            raise ValueError("Pure python HPKE only supports ChaCha20-Poly1305 AEAD")
+        return hpke_x25519_seal.seal(public_key, plaintext)
+
     from Crypto.Protocol import HPKE
 
     # A private key would switch pycryptodome to unsealing mode
@@ -343,6 +352,24 @@ def decrypt_via_hpke(enc: bytes, ciphertext: bytes, private_key, aead_id, verify
         return receiver.unseal(ciphertext)
     # ponytail: private HPKE_Cipher API (pycryptodome 3.23), no public way to skip the MAC check
     return receiver._new_cipher().decrypt(ciphertext[: -receiver._Nt])
+
+
+# Header of the DER SubjectPublicKeyInfo of an X25519 public key (RFC 8410), followed by the 32 raw bytes
+_X25519_PUBLIC_KEY_DER_PREFIX = bytes.fromhex("302a300506032b656e032100")
+
+
+def import_x25519_key_from_pem(key_pem, passphrase=None):
+    if not _patch_pycryptodome_internals:
+        return import_ecc_key_from_pem(key_pem, passphrase=passphrase)
+    # Native Curve25519 is unavailable in fallback backend: only public keys load, as raw bytes for encrypt_via_hpke()
+    from Crypto.IO import PEM
+
+    if isinstance(key_pem, bytes):
+        key_pem = key_pem.decode("ascii")
+    der, marker, _ = PEM.decode(key_pem)
+    if marker != "PUBLIC KEY" or len(der) != 44 or not der.startswith(_X25519_PUBLIC_KEY_DER_PREFIX):
+        raise ValueError("Only X25519 public keys can be loaded in fallback backend")
+    return der[len(_X25519_PUBLIC_KEY_DER_PREFIX) :]
 
 
 # RSA KEY GENERATION, AND IMPORT/EXPORT #

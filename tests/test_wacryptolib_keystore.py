@@ -30,6 +30,7 @@ from wacryptolib.keystore import (
     FilesystemKeystorePool,
     generate_free_keypair_for_least_provisioned_key_algo,
     get_free_keypair_generator_worker,
+    DEFAULT_FREE_KEYPAIR_KEY_ALGOS,
     generate_keypair_for_storage,
     ReadonlyFilesystemKeystore,
     KEYSTORE_FORMAT,
@@ -519,11 +520,15 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
         generated_keys_count += 1
         return dict(private_key=b"someprivatekey", public_key=b"somepublickey")
 
-    # Check the fallback on "all types of keys" for key_algos parameter
+    # Check the fallback on "all classical types of keys" for key_algos parameter
+
+    assert "RSA_OAEP" in DEFAULT_FREE_KEYPAIR_KEY_ALGOS
+    assert "ML_KEM_768" not in DEFAULT_FREE_KEYPAIR_KEY_ALGOS  # Post-quantum keypairs are opt-in
+    assert "ML_DSA_65" not in DEFAULT_FREE_KEYPAIR_KEY_ALGOS
 
     keystore = InMemoryKeystore()
 
-    for _ in range(len(SUPPORTED_ASYMMETRIC_KEY_ALGOS)):
+    for _ in range(2 * len(DEFAULT_FREE_KEYPAIR_KEY_ALGOS)):
         res = generate_free_keypair_for_least_provisioned_key_algo(
             keystore=keystore,
             max_free_keys_per_algo=10,
@@ -533,8 +538,8 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
         assert res
 
     for key_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
-        assert keystore.get_free_keypairs_count(key_algo) == 1
-    assert generated_keys_count == len(SUPPORTED_ASYMMETRIC_KEY_ALGOS)
+        assert keystore.get_free_keypairs_count(key_algo) == (2 if key_algo in DEFAULT_FREE_KEYPAIR_KEY_ALGOS else 0)
+    assert generated_keys_count == 2 * len(DEFAULT_FREE_KEYPAIR_KEY_ALGOS)
 
     # Now test with a restricted set of key types
 
@@ -625,7 +630,7 @@ def test_get_free_keypair_generator_worker():
         worker.join()
 
         assert (
-            generated_keys_count == 30 * len(SUPPORTED_ASYMMETRIC_KEY_ALGOS)
+            generated_keys_count == 30 * len(DEFAULT_FREE_KEYPAIR_KEY_ALGOS)
         ), generated_keys_count  # All keys had the time to be generated
 
         print("NEW START")

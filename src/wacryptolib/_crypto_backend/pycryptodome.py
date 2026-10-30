@@ -543,26 +543,23 @@ def generate_pq_keypair(key_algo):
     return public_key, private_key
 
 
-def import_ml_kem_key_from_pem(*args, **kwargs):
+def import_ml_kem_key_from_pem(key_pem, passphrase=None):
     from Crypto.PublicKey import MLKEM
 
-    return MLKEM.import_key(*args, **kwargs)
+    return _import_key_from_pem(MLKEM, key_pem, passphrase=passphrase)
 
 
-def import_ml_dsa_key_from_pem(*args, **kwargs):
+def import_ml_dsa_key_from_pem(key_pem, passphrase=None):
     from Crypto.PublicKey import MLDSA
 
-    return MLDSA.import_key(*args, **kwargs)
+    return _import_key_from_pem(MLDSA, key_pem, passphrase=passphrase)
 
 
-def _export_pq_key_to_pem(key, passphrase=None):
-    # Pycryptodome defaults to PKCS#8 with PBKDF2WithHMAC-SHA256AndAES256-CBC when a passphrase is given
-    extra_params = dict(passphrase=passphrase) if passphrase else {}
-    return key.export_key(format="PEM", **extra_params)
+def export_ml_kem_key_to_pem(key, passphrase=None):  # Private keys are always exported as PKCS#8
+    return _export_key_to_pem(key, passphrase)
 
 
-export_ml_kem_key_to_pem = _export_pq_key_to_pem
-export_ml_dsa_key_to_pem = _export_pq_key_to_pem
+export_ml_dsa_key_to_pem = export_ml_kem_key_to_pem
 
 
 def encrypt_via_ml_kem_768(plaintext: bytes, public_key) -> tuple:

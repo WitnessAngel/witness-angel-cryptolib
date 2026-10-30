@@ -26,6 +26,7 @@ def keypairs(both_backends):
         keypairs[(index, "RSA")] = backend.generate_rsa_keypair(2048)
         keypairs[(index, "DSA")] = backend.generate_dsa_keypair(2048)
         keypairs[(index, "X25519")] = backend.generate_ecc_keypair("curve25519")
+        keypairs[(index, "ECC")] = backend.generate_ecc_keypair("p384")
     return keypairs
 
 
@@ -36,13 +37,15 @@ def _directions(both_backends):
 
 def _transfer_key(source, destination, key_type, key, passphrase=None):
     """Export a key from one backend, and import it into the other one."""
-    export = dict(RSA=source.export_rsa_key_to_pem, DSA=source.export_dsa_key_to_pem, X25519=source.export_ecc_key_to_pem)
-    import_ = dict(
-        RSA=destination.import_rsa_key_from_pem,
-        DSA=destination.import_dsa_key_from_pem,
-        X25519=destination.import_ecc_key_from_pem,
+    return _pem_functions(destination, key_type)[0](
+        _pem_functions(source, key_type)[1](key, passphrase=passphrase), passphrase=passphrase
     )
-    return import_[key_type](export[key_type](key, passphrase=passphrase), passphrase=passphrase)
+
+
+def _pem_functions(backend, key_type):
+    """Return (import_function, export_function) for this key type."""
+    family = dict(RSA="rsa", DSA="dsa", X25519="ecc", ECC="ecc", ECC_P256="ecc")[key_type]
+    return getattr(backend, "import_%s_key_from_pem" % family), getattr(backend, "export_%s_key_to_pem" % family)
 
 
 def _hash_sha512(backend, message):
@@ -156,7 +159,7 @@ def test_hpke(both_backends, keypairs):
 
 
 @pytest.mark.parametrize("passphrase", PASSPHRASES)
-@pytest.mark.parametrize("key_type", ["RSA", "DSA", "X25519"])
+@pytest.mark.parametrize("key_type", ["RSA", "DSA", "ECC", "X25519"])
 def test_pem_keys(both_backends, keypairs, key_type, passphrase):
     for index, (source, destination) in enumerate(_directions(both_backends)):
         public_key, private_key = keypairs[(index, key_type)]
@@ -166,15 +169,15 @@ def test_pem_keys(both_backends, keypairs, key_type, passphrase):
         # Clear PEM exports are byte-identical, whatever the backend
         roundtrip_public_key = _transfer_key(destination, source, key_type, transferred_public_key)
         roundtrip_private_key = _transfer_key(destination, source, key_type, transferred_private_key)
+        export = _pem_functions(source, key_type)[1]
         for original_key, roundtrip_key in [(public_key, roundtrip_public_key), (private_key, roundtrip_private_key)]:
-            export = dict(RSA=source.export_rsa_key_to_pem, DSA=source.export_dsa_key_to_pem, X25519=source.export_ecc_key_to_pem)[key_type]
             assert export(roundtrip_key) == export(original_key)
 
         # Transferred keys work with the destination backend
         if key_type == "RSA":
             (ciphertext,) = destination.encrypt_via_rsa_oaep([b"abc"], transferred_public_key)
             assert destination.decrypt_via_rsa_oaep([ciphertext], transferred_private_key) == [b"abc"]
-        elif key_type == "DSA":
+        elif key_type in ("DSA", "ECC"):
             hasher = _hash_sha512(destination, b"abc")
             signature = destination.sign_with_dss(hasher, transferred_private_key)
             destination.verify_with_dss(hasher, signature, transferred_public_key)
@@ -188,8 +191,7 @@ def test_pycryptodome_pem_fixtures(backend, key_type):
     """Also run without pycryptodome, to check the fallback backend against PEMs made by pycryptodome."""
     fixture = vectors.PYCRYPTODOME_PEM_FIXTURES[key_type]
     passphrase = vectors.PYCRYPTODOME_PEM_FIXTURES_PASSPHRASE
-    import_ = dict(RSA=backend.import_rsa_key_from_pem, DSA=backend.import_dsa_key_from_pem, X25519=backend.import_ecc_key_from_pem)[key_type]
-    export = dict(RSA=backend.export_rsa_key_to_pem, DSA=backend.export_dsa_key_to_pem, X25519=backend.export_ecc_key_to_pem)[key_type]
+    import_, export = _pem_functions(backend, key_type)
     _as_bytes = lambda pem: pem if isinstance(pem, bytes) else pem.encode("ascii")  # noqa: E731
 
     for field in ("public_key", "private_key"):
@@ -201,9 +203,9 @@ def test_pycryptodome_pem_fixtures(backend, key_type):
                 import_(fixture[field], passphrase=b"wrong passphrase")
 
 
-@pytest.mark.parametrize("key_type", ["RSA", "DSA"])
+@pytest.mark.parametrize("key_type", ["RSA", "DSA", "ECC"])
 def test_signatures(both_backends, keypairs, key_type):
-    sign_name, verify_name = dict(RSA=("sign_with_pss", "verify_with_pss"), DSA=("sign_with_dss", "verify_with_dss"))[key_type]
+    sign_name, verify_name = ("sign_with_pss", "verify_with_pss") if key_type == "RSA" else ("sign_with_dss", "verify_with_dss")
     for index, (source, destination) in enumerate(_directions(both_backends)):
         public_key, private_key = keypairs[(index, key_type)]
         signature = getattr(source, sign_name)(_hash_sha512(source, b"some message"), private_key)

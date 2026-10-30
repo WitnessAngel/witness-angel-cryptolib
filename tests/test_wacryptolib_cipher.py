@@ -193,6 +193,9 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
     with pytest.raises(DecryptionError):
         decrypt(key_dict=dict(key=other_private_key), cipherdict=cipherdict)
 
+    with pytest.raises(DecryptionError, match="X25519 key"):  # Raw keys are only public ones
+        decrypt(key_dict=dict(key=keypair["public_key"].export_key(format="raw")), cipherdict=cipherdict)
+
     rsa_public_key, rsa_private_key = generate_rsa_keypair(2048)
     p256_keypair = wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", serialize=False, curve="p256")
     for wrong_public_key, wrong_private_key in [

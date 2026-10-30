@@ -68,8 +68,7 @@ __all__ = [
     "verify_with_dss",
     "ml_kem_key_class_fetcher",
     "ml_dsa_key_class_fetcher",
-    "generate_ml_kem_768_keypair",
-    "generate_ml_dsa_65_keypair",
+    "generate_pq_keypair",
     "import_ml_kem_key_from_pem",
     "import_ml_dsa_key_from_pem",
     "export_ml_kem_key_to_pem",
@@ -772,8 +771,7 @@ def _build_post_quantum_stub(name, operation):
 
 ml_kem_key_class_fetcher = _build_post_quantum_stub("ml_kem_key_class_fetcher", "ML-KEM")
 ml_dsa_key_class_fetcher = _build_post_quantum_stub("ml_dsa_key_class_fetcher", "ML-DSA")
-generate_ml_kem_768_keypair = _build_post_quantum_stub("generate_ml_kem_768_keypair", "ML-KEM")
-generate_ml_dsa_65_keypair = _build_post_quantum_stub("generate_ml_dsa_65_keypair", "ML-DSA")
+generate_pq_keypair = _build_post_quantum_stub("generate_pq_keypair", "Post-quantum key generation")
 import_ml_kem_key_from_pem = _build_post_quantum_stub("import_ml_kem_key_from_pem", "ML-KEM")
 import_ml_dsa_key_from_pem = _build_post_quantum_stub("import_ml_dsa_key_from_pem", "ML-DSA")
 export_ml_kem_key_to_pem = _build_post_quantum_stub("export_ml_kem_key_to_pem", "ML-KEM")

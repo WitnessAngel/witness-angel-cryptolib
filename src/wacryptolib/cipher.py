@@ -283,14 +283,13 @@ def _decrypt_via_ecies_x25519(cipherdict: dict, key_dict: dict, verify_integrity
 
     :param cipherdict: dict with fields `kem_ciphertext` and `ciphertext` as bytestrings
     :param key_dict: dict with PRIVATE X25519 key object (ECC.EccKey)
-    :param verify_integrity_tags: whether to check MAC tag of the ciphertext
+    :param verify_integrity_tags: ignored, the MAC tag is always checked (like RSA_OAEP, as no key layer skips it)
 
     :return: the decrypted bytestring"""
     key = key_dict["key"]
     _check_x25519_key(key)
     return _crypto_backend.decrypt_via_hpke(
-        cipherdict["kem_ciphertext"], cipherdict["ciphertext"], private_key=key, aead_id=ECIES_X25519_HPKE_AEAD_ID,
-        verify_integrity_tags=verify_integrity_tags)
+        cipherdict["kem_ciphertext"], cipherdict["ciphertext"], private_key=key, aead_id=ECIES_X25519_HPKE_AEAD_ID)
 
 
 def _create_hashers_dict(hash_algos):

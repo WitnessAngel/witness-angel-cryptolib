@@ -22,6 +22,7 @@ from wacryptolib.exceptions import (
     KeystoreMetadataDoesNotExist,
     OperationNotSupported,
 )
+from wacryptolib._crypto_backend import PQ_KEY_ALGOS
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import (
     FilesystemKeystore,
@@ -544,8 +545,8 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     # Check the fallback on "all classical types of keys" for key_algos parameter
 
     assert "RSA_OAEP" in DEFAULT_FREE_KEYPAIR_KEY_ALGOS
-    assert "ML_KEM_768" not in DEFAULT_FREE_KEYPAIR_KEY_ALGOS  # Post-quantum keypairs are opt-in
-    assert "ML_DSA_65" not in DEFAULT_FREE_KEYPAIR_KEY_ALGOS
+    assert {"ML_KEM_768", "ML_DSA_65"} <= set(PQ_KEY_ALGOS)
+    assert not set(PQ_KEY_ALGOS) & set(DEFAULT_FREE_KEYPAIR_KEY_ALGOS)  # Post-quantum keypairs are opt-in
 
     keystore = InMemoryKeystore()
 

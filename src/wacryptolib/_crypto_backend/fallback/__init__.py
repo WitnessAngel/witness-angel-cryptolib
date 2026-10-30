@@ -177,8 +177,16 @@ def _mgf1(seed, length):
     return pkcs1.mgf.mgf1(seed, length, hash_class=_RSA_HASH)
 
 
+def _get_rsa_public_key(key):
+    """Like pycryptodome, accept private keys where public keys are needed."""
+    if isinstance(key, pkcs1.keys.MultiPrimeRsaPrivateKey):
+        return pkcs1.keys.RsaPublicKey(key.n, key.e)
+    return key
+
+
 def encrypt_via_rsa_oaep(plaintext_chunks: list[bytes], public_key) -> list[bytes]:
     """We expect each plaintext chunk to be small enough for the RSA key size"""
+    public_key = _get_rsa_public_key(public_key)
     ciphertext_chunks = []
     for chunk in plaintext_chunks:
         try:
@@ -192,7 +200,9 @@ def _decrypt_one_rsa_oaep_chunk(ciphertext, private_key):
     """RFC 8017 section 7.1.2, rather than pkcs1's decrypt() which uses MGF1-SHA1, prints padding bytes,
     and raises distinguishable exceptions (i.e. a padding oracle)."""
     k = private_key.byte_size
-    if len(ciphertext) != k or k < 2 * _RSA_HASH_LENGTH + 2:
+    if len(ciphertext) != k:
+        raise ValueError("Ciphertext with incorrect length.")  # Same messages as pycryptodome
+    if k < 2 * _RSA_HASH_LENGTH + 2:
         raise ValueError("Incorrect decryption.")
     c = int.from_bytes(ciphertext, "big")
     if c >= private_key.n:
@@ -239,6 +249,7 @@ def sign_with_pss(message, private_key):
 
 def verify_with_pss(message, signature, public_key):
     """Raise ValueError if the signature is invalid."""
+    public_key = _get_rsa_public_key(public_key)
     error = ValueError("Incorrect signature")
     em_bits = public_key.bit_size - 1
     em_length = (em_bits + 7) // 8

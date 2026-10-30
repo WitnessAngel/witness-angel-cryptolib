@@ -60,7 +60,7 @@ class _Poly1305ForAead:
 
     def finalize(self, ciphertext_length):
         if self._pending:
-            self._process_block(self._pending.ljust(16, b"\x00"))
+            self._process_block(self._pending + bytes(16 - len(self._pending)))  # No bytes.ljust() on micropython
         self._process_block(struct.pack("<QQ", 0, ciphertext_length))  # Lengths of associated data and ciphertext
         return ((self._accumulator + self._s) & ((1 << 128) - 1)).to_bytes(16, "little")
 

@@ -2252,6 +2252,25 @@ def test_cryptoconf_validation_error_via_json_schema(corrupted_conf):
         check_cryptoconf_sanity(cryptoconf=corrupted_conf_json, jsonschema_mode=True)
 
 
+@pytest.mark.parametrize("jsonschema_mode", [False, True])
+def test_cryptoconf_validation_restricts_authenticators_to_rsa_oaep(jsonschema_mode):
+    def _check_cryptoconf_with_authenticator(key_cipher_algo):
+        authenticator_trustee = dict(
+            trustee_type=CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE, keystore_uid=generate_uuid0()
+        )
+        cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+        cryptoconf["payload_cipher_layers"][0]["key_cipher_layers"] = [
+            dict(key_cipher_algo=key_cipher_algo, key_cipher_trustee=authenticator_trustee)
+        ]
+        if jsonschema_mode:
+            cryptoconf = convert_to_extjson(cryptoconf)
+        check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=jsonschema_mode)
+
+    _check_cryptoconf_with_authenticator("RSA_OAEP")
+    with pytest.raises(ValidationError):  # Authenticators only get RSA_OAEP keys
+        _check_cryptoconf_with_authenticator("ECIES_X25519")
+
+
 @pytest.mark.parametrize(
     "cryptoconf",
     [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF, ECIES_SHAMIR_CRYPTOCONF],

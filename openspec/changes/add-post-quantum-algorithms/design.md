@@ -50,7 +50,7 @@ Signature dispatch checks key types via `compatible_key_class_fetcher`; ML-DSA g
 `decrypt_with_private_key` replaces `assert cipher_algo.upper() == "RSA_OAEP"` with `assert cipher_algo.upper() in SUPPORTED_ASYMMETRIC_CIPHER_ALGOS`. The remote trustee JSON-RPC path transports the cipherdict opaquely, so it needs no change.
 
 **D8. Hybrid by layering, nothing in the lib.**
-Documented as a cryptoconf pattern (`ML_KEM_768` then `RSA_OAEP`) in `selected_protocols.rst` and exercised by a test. pycryptodome's X-Wing keys are not PEM-exportable and would not fit the keystore; a composite would also duplicate what layering already guarantees (both keys needed).
+Documented as a cryptoconf pattern (`RSA_OAEP` then `ML_KEM_768`, so that RSA-OAEP chunking only applies to the small key struct) in `selected_protocols.rst` and exercised by a test. pycryptodome's X-Wing keys are not PEM-exportable and would not fit the keystore; a composite would also duplicate what layering already guarantees (both keys needed).
 
 **D9. Fallback adapter (MicroPython) explicitly untouched.**
 `_crypto_backend/__init__.py` imports only from `pycryptodome.py`; the fallback adapter has no ML-KEM entry in this change. The algorithm name, cipherdict shape and HPKE parameters chosen here (Base mode, AES-256-GCM, empty info, HKDF-SHA256 as fixed by ML-KEM-768 in HPKE) are the contract the future MicroPython encapsulation-only port must honor.

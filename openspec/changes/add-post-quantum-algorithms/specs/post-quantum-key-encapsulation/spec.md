@@ -54,7 +54,7 @@ Cryptoconfs SHALL accept `ML_KEM_768` as `key_cipher_algo` in `key_cipher_layers
 - **THEN** the cryptoconf and the cryptainer validate, and decryption with the trustee's private key recovers the payload with no error entry in the operation report
 
 #### Scenario: Hybrid classical plus post-quantum wrapping
-- **WHEN** a payload is encrypted with a cryptoconf whose key cipher layers are `ML_KEM_768` followed by `RSA_OAEP`
+- **WHEN** a payload is encrypted with a cryptoconf whose key cipher layers are `RSA_OAEP` followed by `ML_KEM_768`
 - **THEN** decryption succeeds only when both private keys are available, and otherwise returns no payload and records an asymmetric decryption error entry in the operation report
 
 #### Scenario: ML-KEM inside a shared-secret shard

@@ -377,13 +377,14 @@ def SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
 
 
 # Hybrid classical + post-quantum protection: both ML-KEM-768 and RSA-OAEP keys are needed to decrypt
+# (RSA_OAEP layer first, since RSA-OAEP chunking of the bigger ML-KEM cipherdict would be ~3x larger and slower)
 PQ_HYBRID_CRYPTOCONF = dict(
     payload_cipher_layers=[
         dict(
             payload_cipher_algo="AES_EAX",
             key_cipher_layers=[
-                dict(key_cipher_algo="ML_KEM_768", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
                 dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
+                dict(key_cipher_algo="ML_KEM_768", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
                 dict(
                     key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
                     key_shared_secret_threshold=1,
@@ -421,8 +422,8 @@ PQ_HYBRID_CRYPTAINER_TRUSTEE_DEPENDENCIES = lambda keychain_uid: {
         "local_keyfactory": (
             {"trustee_type": "local_keyfactory"},
             [
-                {"key_algo": "ML_KEM_768", "keychain_uid": keychain_uid},
                 {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
+                {"key_algo": "ML_KEM_768", "keychain_uid": keychain_uid},
                 {"key_algo": "ML_KEM_768", "keychain_uid": ENFORCED_UID1},
             ],
         )

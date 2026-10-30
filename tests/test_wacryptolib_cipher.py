@@ -177,6 +177,11 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
     cipherdict_from_private_key = encrypt(key_dict=private_key_dict, plaintext=binary_content)
     assert decrypt(key_dict=private_key_dict, cipherdict=cipherdict_from_private_key) == binary_content
 
+    tampered_tag_cipherdict = dict(cipherdict, ciphertext=cipherdict["ciphertext"][:-1] + bytes([cipherdict["ciphertext"][-1] ^ 1]))
+    with pytest.raises(DecryptionError, match="wrong MAC tag"):
+        decrypt(key_dict=private_key_dict, cipherdict=tampered_tag_cipherdict)
+    assert decrypt(key_dict=private_key_dict, cipherdict=tampered_tag_cipherdict, verify_integrity_tags=False) == binary_content
+
     decryption_func = functools.partial(decrypt, key_dict=private_key_dict)
     _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
 

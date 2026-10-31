@@ -21,7 +21,7 @@ def _run(*script_parts, force_fallback=False):
     env = dict(os.environ, PYTHONPATH=os.pathsep.join(sys.path))
     env.pop("FORCE_WACRYPTOLIB_FALLBACK_BACKEND", None)
     if force_fallback:
-        env["FORCE_WACRYPTOLIB_FALLBACK_BACKEND"] = "1"
+        env["FORCE_WACRYPTOLIB_FALLBACK_BACKEND"] = force_fallback if isinstance(force_fallback, str) else "1"
     return subprocess.run(
         [sys.executable, "-c", "import sys\n" + "".join(textwrap.dedent(part) for part in script_parts)], env=env, capture_output=True, text=True
     )
@@ -66,6 +66,14 @@ def test_native_backend_leaves_pycryptodome_untouched():
 
 def test_fallback_backend_is_selected_when_forced():
     _assert_backend("", "fallback", force_fallback=True)
+
+
+@pytest.mark.parametrize("value", ["0", "false", "No", ""])
+def test_falsy_force_variable_does_not_force_fallback_backend(value):
+    pytest.importorskip("Crypto.Cipher.AES")
+    result = _run("from wacryptolib import _crypto_backend\nprint(_crypto_backend.BACKEND_NAME)\n", force_fallback=value)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "pycryptodome"
 
 
 def test_fallback_backend_is_selected_without_pycryptodome():
@@ -128,5 +136,5 @@ def test_backend_name_matches_environment():
     except (ImportError, OSError):
         native_backend_usable = False
     else:
-        native_backend_usable = not os.getenv("FORCE_WACRYPTOLIB_FALLBACK_BACKEND")
+        native_backend_usable = not _crypto_backend._is_fallback_backend_forced()
     assert _crypto_backend.BACKEND_NAME == ("pycryptodome" if native_backend_usable else "fallback")

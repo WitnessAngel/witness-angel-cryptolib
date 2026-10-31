@@ -418,3 +418,20 @@ def test_fallback_ecc_key_errors_do_not_embed_key_bytes():
     with pytest.raises(ValueError) as exc_info:
         fallback._decode_nist_ecc_key(ecdsa.VerifyingKey.from_der, der + b"\xaa" * 8)
     assert "aaaa" not in str(exc_info.value) and "UnexpectedDER" in str(exc_info.value)
+
+
+def test_pss_rejects_keys_too_short_for_the_salt(both_backends):
+    from Crypto.Hash import SHA512
+    from Crypto.Signature import pss
+
+    native, fallback = both_backends
+    _public_key, private_key = native.generate_rsa_keypair(1024)  # Too short for a 64-byte salt and SHA512
+    short_salt_signature = pss.new(private_key, salt_bytes=1).sign(SHA512.new(b"abc"))
+    for backend in both_backends:
+        key = backend.import_rsa_key_from_pem(native.export_rsa_key_to_pem(private_key))
+        with pytest.raises(ValueError):
+            backend.sign_with_pss(backend.get_hasher_instance("SHA512"), key)
+        hasher = backend.get_hasher_instance("SHA512")
+        hasher.update(b"abc")
+        with pytest.raises(ValueError):
+            backend.verify_with_pss(hasher, short_salt_signature, key)

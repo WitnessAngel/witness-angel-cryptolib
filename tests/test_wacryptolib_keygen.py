@@ -216,7 +216,6 @@ def test_legacy_passphrase_protected_pem_still_loadable(key_algo):
 
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
 def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
-    skip_if_fallback_backend("PBKDF2 parameters inspection")
     import base64
 
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, passphrase="abc")

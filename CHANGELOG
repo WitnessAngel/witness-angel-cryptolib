@@ -27,7 +27,7 @@ Development
   it supports all algorithms of the pycryptodome backend (except the Ed25519, Ed448 and curve448 ECC curves) and the PKCS#8/PKCS#1/SubjectPublicKeyInfo PEM formats it writes (not e.g. SEC1 or OpenSSH keys from other tools), except legacy DES3-protected private keys (DSA keys of wacryptolib <= 0.12, RSA keys of wacryptolib <= 0.8)
 * Test both crypto backends against official vectors (NIST, RFC, Wycheproof) and against each other
 * Stop vendoring rsa and pyasn1 for MicroPython, whose flightbox only encrypts with raw RSA public numbers
-* Accept ECC curve names and hash algorithm names case-insensitively, in both crypto backends
+* Accept ECC curve names case-insensitively, and hash algorithm names case-insensitively in the internal crypto backends (not in `hash_message()`)
 * **BREAKING**: Extended JSON format now defaults to RELAXED mode instead of CANONICAL mode
   - UUIDs are now serialized as `{"$uuid": "hex"}` instead of `{"$binary": {"base64": "...", "subType": "04"}}`
   - Integers are now plain JSON numbers instead of `{"$numberInt": "42"}`

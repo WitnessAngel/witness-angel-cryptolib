@@ -105,8 +105,14 @@ def test_trustee_api_workflow():
     )
     assert decrypted == secret
 
-    decrypted = trustee_api.decrypt_with_private_key(  # Cipher algo name is case-insensitive
-        keychain_uid=keychain_uid, cipher_algo="rsa_oaep", cipherdict=cipherdict
+    # Algo name casing must match that of fetch_public_key(), as keystores are case-sensitive
+    public_key_rsa_oaep_lowercase_pem = trustee_api.fetch_public_key(keychain_uid=keychain_uid_other, key_algo="rsa_oaep")
+    public_key_rsa_oaep_lowercase = load_asymmetric_key_from_pem_bytestring(
+        key_pem=public_key_rsa_oaep_lowercase_pem, key_algo="RSA_OAEP"
+    )
+    cipherdict_lowercase = _encrypt_via_rsa_oaep(plaintext=secret, key_dict=dict(key=public_key_rsa_oaep_lowercase))
+    decrypted = trustee_api.decrypt_with_private_key(
+        keychain_uid=keychain_uid_other, cipher_algo="rsa_oaep", cipherdict=cipherdict_lowercase
     )
     assert decrypted == secret
 

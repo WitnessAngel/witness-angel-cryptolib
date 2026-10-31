@@ -36,8 +36,9 @@ def test_backends_share_pem_protection_constants(both_backends):
 def test_fallback_rejects_unsupported_parameters_explicitly():
     fallback = import_crypto_backend("fallback")
 
-    with pytest.raises(NotImplementedError, match="ECC key generation.*requires pycryptodome"):
-        fallback.generate_ecc_keypair("ed25519")
+    for curve in ("ed25519", "curve448"):
+        with pytest.raises(NotImplementedError, match="ECC key generation.*requires pycryptodome"):
+            fallback.generate_ecc_keypair(curve)
     with pytest.raises(ValueError, match="Unexisting ECC curve"):
         fallback.generate_ecc_keypair("p999")
     with pytest.raises(ValueError, match="Expected an X25519 key"):

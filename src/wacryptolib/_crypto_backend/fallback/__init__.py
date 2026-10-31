@@ -647,7 +647,10 @@ def _decode_nist_ecc_key(decode, der):
 def _decode_nist_ecc_private_key(private_key_octets, parameters):
     # ecdsa parses the whole PKCS#8 structure itself, so we rebuild it
     algorithm_identifier = _pem.encode_algorithm_identifier(_pem.OID_EC_PUBLIC_KEY, parameters)
-    key = _decode_nist_ecc_key(ecdsa.SigningKey.from_der, _pem.encode_pkcs8(algorithm_identifier, private_key_octets))
+    key = _decode_nist_ecc_key(
+        lambda der: ecdsa.SigningKey.from_der(der, valid_curve_encodings=["named_curve"]),  # Like pycryptodome
+        _pem.encode_pkcs8(algorithm_identifier, private_key_octets),
+    )
     # ecdsa ignores the optional [1] publicKey of ECPrivateKey, which pycryptodome checks against the private scalar
     for item in _pem.decode_sequence(private_key_octets, 2, 4)[2:]:
         if item[0] == 0xA1:
@@ -660,7 +663,12 @@ def _decode_nist_ecc_private_key(private_key_octets, parameters):
 
 def _decode_nist_ecc_public_key(public_key_bits, parameters):
     algorithm_identifier = _pem.encode_algorithm_identifier(_pem.OID_EC_PUBLIC_KEY, parameters)
-    return _decode_nist_ecc_key(ecdsa.VerifyingKey.from_der, _pem.encode_spki(algorithm_identifier, public_key_bits))
+    return _decode_nist_ecc_key(
+        lambda der: ecdsa.VerifyingKey.from_der(  # Like pycryptodome, no explicit curve parameters nor hybrid points
+            der, valid_encodings=["uncompressed", "compressed"], valid_curve_encodings=["named_curve"]
+        ),
+        _pem.encode_spki(algorithm_identifier, public_key_bits),
+    )
 
 
 def _encode_nist_ecc_private_key_to_pkcs8(key):

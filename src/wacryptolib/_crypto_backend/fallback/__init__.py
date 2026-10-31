@@ -316,7 +316,13 @@ def generate_rsa_keypair(key_length_bits):
     return pkcs1.keys.RsaPublicKey(private_key.n, e), private_key
 
 
+def _check_rsa_public_numbers(n, e):
+    if n < 3 or not n & 1 or not 3 <= e < n or math.gcd(n, e) != 1:  # Like pycryptodome's construct()
+        raise ValueError("Invalid RSA public key components")
+
+
 def _build_rsa_private_key(n, e, d, p, q):
+    _check_rsa_public_numbers(n, e)  # Else e.g. e=1 would leave OAEP "ciphertexts" readable by anyone
     # Degenerate primes must give a ValueError, not a ZeroDivisionError or an assertion failure in pkcs1
     if p < 2 or q < 2 or math.gcd(p, q) != 1 or p * q != n or e * d % math.lcm(p - 1, q - 1) != 1:
         raise ValueError("Invalid RSA key components")
@@ -342,8 +348,7 @@ def _decode_rsa_pkcs1_private_key(der):
 
 def _decode_rsa_pkcs1_public_key(der):
     n, e = (_pem.decode_integer(x) for x in _pem.decode_sequence(der, 2))
-    if n < 3 or not n & 1 or not 3 <= e < n or math.gcd(n, e) != 1:  # Like pycryptodome's construct()
-        raise ValueError("Invalid RSA public key components")
+    _check_rsa_public_numbers(n, e)
     return pkcs1.keys.RsaPublicKey(n, e)
 
 

@@ -99,6 +99,18 @@ def test_passphrase_is_rejected_only_for_clear_pkcs8_private_keys(backend):
         backend.import_ecc_key_from_pem(backend.export_ecc_key_to_pem(ecc_private_key), passphrase=b"abc")
 
 
+def test_public_keys_used_as_private_ones_raise_type_error(backend):
+    rsa_public_key, _rsa_private_key = backend.generate_rsa_keypair(2048)
+    hasher = backend.get_hasher_instance("SHA512")
+    with pytest.raises(TypeError):
+        backend.decrypt_via_rsa_oaep([b"\x00" * 256], rsa_public_key)
+    with pytest.raises(TypeError):
+        backend.sign_with_pss(hasher, rsa_public_key)
+    for public_key in (backend.generate_ecc_keypair("p256")[0], backend.generate_dsa_keypair(2048)[0]):
+        with pytest.raises(TypeError):
+            backend.sign_with_dss(hasher, public_key)
+
+
 def _malformed_rsa_public_key_pems():
     import base64
 

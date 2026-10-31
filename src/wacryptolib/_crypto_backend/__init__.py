@@ -8,6 +8,8 @@ import os
 
 logger = logging.getLogger(__name__)
 
+_FALLBACK_EXTRA_PACKAGES = ("pkcs1", "pyaes", "ecdsa", "six")  # "six" is a dependency of ecdsa
+
 
 def _is_fallback_backend_forced():
     # Else e.g. "0" would silently force the slow and non-constant-time fallback backend
@@ -33,6 +35,8 @@ else:
     try:
         from .fallback import *
     except ImportError as exc:
+        if (exc.name or "").split(".")[0] not in _FALLBACK_EXTRA_PACKAGES:
+            raise  # E.g. another missing dependency of wacryptolib, which the 'fallbacks' extra wouldn't provide
         if _is_fallback_backend_forced():
             raise ImportError(
                 "FORCE_WACRYPTOLIB_FALLBACK_BACKEND is set, but the pure-python packages of the 'fallbacks' extra "

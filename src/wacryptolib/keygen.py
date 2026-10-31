@@ -116,7 +116,7 @@ def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_algo: str, pa
 
     key_algo = key_algo.upper()
     if key_algo not in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
-        raise ValueError("Unknown key type %s" % key_pem)
+        raise ValueError("Unknown key type %s" % key_algo)
     key_import_function = ASYMMETRIC_KEY_ALGOS_REGISTRY[key_algo]["pem_import_function"]
     try:
         return key_import_function(key_pem, passphrase=passphrase)

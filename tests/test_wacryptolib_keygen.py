@@ -130,7 +130,7 @@ def test_load_asymmetric_key_from_pem_bytestring(key_algo):
         key = load_asymmetric_key_from_pem_bytestring(key_pem=keypair[field], key_algo=key_algo)
         _check_is_asymmetric_key_object(key)
 
-    with pytest.raises(ValueError, match="Unknown key type"):
+    with pytest.raises(ValueError, match="^Unknown key type ZHD$"):  # Key PEM must not leak into the message
         load_asymmetric_key_from_pem_bytestring(key_pem=keypair["private_key"], key_algo="ZHD")
 
 

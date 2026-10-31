@@ -654,6 +654,16 @@ def test_encryption_rejects_cryptoconfs_that_decryption_would_refuse(tmp_path):
         )
     assert not list(tmp_path.iterdir())  # No orphan offloaded payload file
 
+    with patch.object(Path, "unlink", side_effect=PermissionError("locked")):  # Cleanup failure is ignored
+        with pytest.raises(SchemaValidationError):
+            encrypt_payload_and_stream_cryptainer_to_filesystem(
+                payload=b"stuffs",
+                cryptainer_filepath=tmp_path / "my.crypt",
+                cryptoconf=cryptoconf,
+                cryptainer_metadata=None,
+                keystore_pool=InMemoryKeystorePool(),
+            )
+
 
 def test_encrypt_payload_into_cryptainer_from_file_object(tmp_path):
     source = tmp_path / "source.media"

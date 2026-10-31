@@ -813,6 +813,7 @@ def generate_free_keypair_for_least_provisioned_key_algo(
     :return: True iff a key was generated (i.e. the free keys pool was not full)
     """
     assert key_algos, key_algos
+    key_algos = [key_algo.upper() for key_algo in key_algos]
     free_keys_counts = [(keystore.get_free_keypairs_count(key_algo), key_algo) for key_algo in key_algos]
     logger.debug("Count of current free keypairs: %s", str(free_keys_counts))
 

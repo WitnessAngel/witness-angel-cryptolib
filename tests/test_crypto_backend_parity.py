@@ -88,6 +88,17 @@ def test_failures_raise_value_error_silently(backend, capsys):
     assert capsys.readouterr() == ("", "")
 
 
+def test_passphrase_is_rejected_only_for_clear_pkcs8_private_keys(backend):
+    rsa_public_key, rsa_private_key = backend.generate_rsa_keypair(2048)
+    for key in (rsa_public_key, rsa_private_key):  # Clear RSA private keys are PKCS#1
+        backend.import_rsa_key_from_pem(backend.export_rsa_key_to_pem(key), passphrase=b"abc")
+
+    ecc_public_key, ecc_private_key = backend.generate_ecc_keypair("p256")
+    backend.import_ecc_key_from_pem(backend.export_ecc_key_to_pem(ecc_public_key), passphrase=b"abc")
+    with pytest.raises(ValueError):
+        backend.import_ecc_key_from_pem(backend.export_ecc_key_to_pem(ecc_private_key), passphrase=b"abc")
+
+
 def _malformed_rsa_public_key_pems():
     import base64
 

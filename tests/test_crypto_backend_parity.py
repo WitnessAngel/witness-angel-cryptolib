@@ -245,6 +245,14 @@ def test_x25519_public_key_high_bit_is_ignored(backend):
     assert key == backend.import_ecc_key_from_pem(_x25519_public_key_pem(9))
 
 
+def test_non_canonical_x25519_public_key_is_reduced(backend):
+    key = backend.import_ecc_key_from_pem(_x25519_public_key_pem(_P25519 + 5))
+    assert backend.export_ecc_key_to_pem(key) == backend.export_ecc_key_to_pem(
+        backend.import_ecc_key_from_pem(_x25519_public_key_pem(5))
+    )
+    backend.encrypt_via_hpke(b"abc", key, aead_id=0x0003)
+
+
 def test_rsa_keys_with_composite_factor_or_even_modulus_are_rejected(backend):
     import math
 

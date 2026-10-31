@@ -22,7 +22,8 @@ def summarize_validation_error_lines(lines, max_lines=10, max_line_length=120) -
         head_count = max_lines // 3
         tail_count = max_lines - head_count - 1  # One line is taken by the skip marker
         skipped_count = len(lines) - head_count - tail_count
-        lines = lines[:head_count] + ["[... %d lines skipped]" % skipped_count] + lines[-tail_count:]
+        # Not lines[-tail_count:], which returns ALL lines when tail_count is 0
+        lines = lines[:head_count] + ["[... %d lines skipped]" % skipped_count] + lines[len(lines) - tail_count:]
     return "\n".join(lines)
 
 

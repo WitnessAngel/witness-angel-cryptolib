@@ -2438,6 +2438,7 @@ def test_summarize_validation_error_lines_respects_max_lines():
     assert summary[:3] == lines[:3] and summary[-6:] == lines[-6:]
     assert summary[3] == "[... 3 lines skipped]"
     assert summarize_validation_error_lines(lines[:10], max_lines=10).splitlines() == lines[:10]
+    assert summarize_validation_error_lines(lines, max_lines=1) == "[... 12 lines skipped]"
 
 
 def test_cryptainer_validation_error_messages_keep_deep_causes():

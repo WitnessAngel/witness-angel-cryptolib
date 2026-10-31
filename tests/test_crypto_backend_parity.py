@@ -311,3 +311,16 @@ def test_fallback_rsa_private_operations_are_freshly_blinded_and_checked(monkeyp
     hasher = fallback.get_hasher_instance("SHA512")
     with pytest.raises(ValueError, match="Fault detected"):
         fallback.sign_with_pss(hasher, private_key)
+
+
+def test_fallback_rsa_oaep_checks_all_paddings_even_when_first_byte_is_wrong(monkeypatch):
+    fallback = import_crypto_backend("fallback")
+    public_key, private_key = fallback.generate_rsa_keypair(2048)
+    em = b"\x01" + bytes(255)  # Invalid first byte
+    ciphertext = pow(int.from_bytes(em, "big"), public_key.e, public_key.n).to_bytes(256, "big")
+
+    compared = []
+    monkeypatch.setattr(fallback.hmac, "compare_digest", lambda a, b: compared.append(a) or a == b)
+    with pytest.raises(ValueError, match="Incorrect decryption"):
+        fallback.decrypt_via_rsa_oaep([ciphertext], private_key)
+    assert compared  # No early exit revealing the first byte through timing

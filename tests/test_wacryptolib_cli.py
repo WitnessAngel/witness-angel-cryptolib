@@ -689,6 +689,9 @@ def test_cli_cryptoconf_generate_simple():
         result = runner.invoke(cli, wrong_command)
         assert result.exit_code != 0, (result.exit_code, result.output)  # UsageError, not crash
 
+    result = runner.invoke(cli, wrong_commands[3])  # Readable error, not a schema dump
+    assert "Authenticator trustee only has RSA_OAEP keys for now" in result.output, result.output
+
 
 def test_cli_cryptoconf_generate_simple_output_file(tmp_path):
     runner = _get_cli_runner()

@@ -357,3 +357,11 @@ def test_pkcs8_private_keys_with_attributes_or_public_key_are_accepted(backend, 
 def test_aes_eax_rejects_empty_nonce(backend):
     with pytest.raises(ValueError, match="Nonce cannot be empty"):
         backend.encrypt_via_aes_eax(b"abc", key=bytes(32), nonce=b"")
+
+
+def test_backends_accept_the_same_nist_curve_names(both_backends):
+    native, fallback = both_backends
+    for curve in fallback._NIST_CURVES:
+        native.generate_ecc_keypair(curve)  # Would raise ValueError if unknown
+    for bits in (256, 384, 521):
+        fallback.generate_ecc_keypair("nistp%d" % bits)

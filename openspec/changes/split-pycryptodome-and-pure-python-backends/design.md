@@ -26,7 +26,7 @@ So no wrapper classes are needed around pkcs1 keys. The only caller change is in
 - Tests that pin both backends to official vectors and to each other.
 
 **Non-Goals:**
-- Legacy PEM protections other than PBES2/PBKDF2 (HMAC-SHA1 or HMAC-SHA256) with AES-128/256-CBC. In particular DES-EDE3-CBC (written for DSA keys by versions before commit `f4992a1`) and OpenSSL `Proc-Type` headers raise `ValueError` in the fallback (see open question).
+- Legacy PEM protections other than PBES2/PBKDF2 (HMAC-SHA1 or HMAC-SHA256) with AES-128/256-CBC. In particular DES-EDE3-CBC (written for DSA keys by versions before commit `f4992a1`, and for RSA keys by versions up to 0.8) and OpenSSL `Proc-Type` headers raise `ValueError` in the fallback (see open question).
 - Running the whole existing test suite under the fallback backend.
 - Changing `micropython/` (its `fallback_adapter.py` stays a separate copy).
 - Constant-time guarantees for the fallback (impossible with Python bigints). Documented, not solved.

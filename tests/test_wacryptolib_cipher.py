@@ -202,16 +202,13 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
     with pytest.raises(DecryptionError, match="X25519 key"):
         decrypt(key_dict=dict(key=get_random_bytes(32)), cipherdict=cipherdict)
 
-    if is_fallback_backend():
-        return  # Remaining checks need RSA and NIST-curve keys
-
     rsa_public_key, rsa_private_key = generate_rsa_keypair(2048)
     p256_keypair = wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", serialize=False, curve="p256")
     for wrong_public_key, wrong_private_key in [
         (rsa_public_key, rsa_private_key),
         (p256_keypair["public_key"], p256_keypair["private_key"]),
     ]:
-        with pytest.raises(EncryptionError, match="X25519 key, not (<class 'Crypto.PublicKey.RSA.RsaKey'>|a NIST P-256 one)"):
+        with pytest.raises(EncryptionError, match="X25519 key, not (<class '.*Rsa.*Key'>|a NIST.*256.* one)"):
             encrypt(key_dict=dict(key=wrong_public_key), plaintext=binary_content)
         with pytest.raises(DecryptionError, match="X25519 key"):
             decrypt(key_dict=dict(key=wrong_private_key), cipherdict=cipherdict)

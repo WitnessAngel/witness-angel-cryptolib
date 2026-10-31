@@ -127,6 +127,8 @@ def decrypt_via_aes_cbc(ciphertext, key, iv):
 
 
 def build_aes_eax_cipher(key, nonce):
+    if not nonce:
+        raise ValueError("Nonce cannot be empty in EAX mode")  # Like pycryptodome
     block_cipher = pyaes.AES(bytes(key))
     return EaxCipher(lambda block: bytes(block_cipher.encrypt(block)), nonce=bytes(nonce))
 

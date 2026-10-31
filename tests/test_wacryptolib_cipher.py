@@ -200,6 +200,14 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
 
     with pytest.raises(EncryptionError, match="X25519 key, not <class 'bytes'>"):  # E.g. a symmetric key mistaken for a public key
         encrypt(key_dict=dict(key=get_random_bytes(32)), plaintext=binary_content)
+    with pytest.raises(EncryptionError, match="Failed ECIES_X25519 encryption"):  # Algo name normalized to uppercase
+        wacryptolib.cipher.encrypt_bytestring(
+            key_dict=dict(key=get_random_bytes(32)), plaintext=binary_content, cipher_algo="ecies_x25519"
+        )
+    with pytest.raises(DecryptionError, match="Failed ECIES_X25519 decryption"):
+        wacryptolib.cipher.decrypt_bytestring(
+            key_dict=dict(key=keypair["public_key"].export_key(format="raw")), cipherdict=cipherdict, cipher_algo="ecies_x25519"
+        )
 
     with pytest.raises(EncryptionError, match="fallback backend"):  # Raw public keys are a fallback backend thing
         encrypt(key_dict=dict(key=X25519RawPublicKey(keypair["public_key"].export_key(format="raw"))), plaintext=binary_content)

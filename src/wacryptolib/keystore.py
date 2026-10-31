@@ -227,7 +227,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param private_key: private key in PEM format (potentially encrypted)
         """
         key_algo = key_algo.upper()
-        assert public_key and private_key, (public_key, private_key)
+        assert public_key and private_key, (type(public_key), type(private_key))
         self._check_public_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=public_key, private_key=private_key)
 

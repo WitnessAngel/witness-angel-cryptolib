@@ -652,6 +652,7 @@ def test_encryption_rejects_cryptoconfs_that_decryption_would_refuse(tmp_path):
             cryptainer_metadata=None,
             keystore_pool=InMemoryKeystorePool(),
         )
+    assert not list(tmp_path.iterdir())  # No orphan offloaded payload file
 
 
 def test_encrypt_payload_into_cryptainer_from_file_object(tmp_path):

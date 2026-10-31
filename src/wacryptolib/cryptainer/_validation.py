@@ -280,7 +280,10 @@ def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema])
             summary = summarize_validation_error_lines(
                 ["Field '%s' failed '%s' check:" % (field_path, exc.validator), exc.message]
             )
-            raise SchemaValidationError("Error validating data tree with json-schema: {}".format(summary)) from None
+        else:
+            return
+        # Raised outside the except block, else the raw error (holding the whole data tree) would stay in __context__
+        raise SchemaValidationError("Error validating data tree with json-schema: {}".format(summary))
 
 
 def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):

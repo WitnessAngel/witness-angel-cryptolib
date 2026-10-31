@@ -43,10 +43,11 @@ def validate_data_against_schema(data_tree, schema: Schema):
     try:
         schema.validate(data_tree)
     except SchemaError as exc:
-        # Not chained, else tracebacks would still dump the whole data tree
-        raise SchemaValidationError(
-            "Error validating data tree with python-schema: {}".format(summarize_python_schema_error(exc))
-        ) from None
+        summary = summarize_python_schema_error(exc)
+    else:
+        return
+    # Raised outside the except block, else the raw error (dumping the whole data tree) would stay in __context__
+    raise SchemaValidationError("Error validating data tree with python-schema: {}".format(summary))
 
 
 def get_validation_micro_schemas(extended_json_format=False):

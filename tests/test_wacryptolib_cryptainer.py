@@ -2421,9 +2421,10 @@ def test_cryptainer_validation_error_messages_are_bounded():
         with pytest.raises(SchemaValidationError) as exc_info:
             func(*args, **kwargs)
         exc = exc_info.value
-        while exc is not None:  # Chained exceptions would show in tracebacks too
+        while exc is not None:  # Chained exceptions would show in tracebacks too, or stay alive in memory
             assert isinstance(exc, SchemaValidationError)
             assert len(str(exc)) < 2000, len(str(exc))
+            assert exc.__context__ is None or exc.__context__ is exc.__cause__
             exc = exc.__cause__
         return str(exc_info.value)
 

@@ -149,6 +149,24 @@ def test_malformed_pem_is_rejected(backend, case_name):
         backend.import_rsa_key_from_pem(key_pem)
 
 
+def test_fallback_rejects_oids_as_pem_markers():
+    import base64
+
+    fallback = import_crypto_backend("fallback")
+    from wacryptolib._crypto_backend.fallback import pem
+
+    def armor(der_bytes, marker):
+        return "-----BEGIN %s-----\n%s-----END %s-----" % (marker, base64.encodebytes(der_bytes).decode(), marker)
+
+    rsa_private_key = fallback.generate_rsa_keypair(2048)[1]
+    rsa_pkcs1_der, marker = pem.decode_pem(fallback.export_rsa_key_to_pem(rsa_private_key))
+    assert marker == "RSA PRIVATE KEY"
+    with pytest.raises(ValueError, match="Unsupported PEM type"):
+        fallback.import_rsa_key_from_pem(armor(rsa_pkcs1_der, pem.OID_RSA))
+    with pytest.raises(ValueError, match="Unsupported PEM type"):  # pycryptodome also rejects this one
+        fallback.import_ecc_key_from_pem(armor(b"\x04\x20" + os.urandom(32), "1.3.101.110"))
+
+
 def test_pem_with_stray_whitespace_is_accepted(backend):
     import _crypto_test_vectors as vectors
 

@@ -2,16 +2,21 @@
 Development
 =============
 
-* Add post-quantum algorithms (requires pycryptodome >= 4.2):
+* Add post-quantum algorithms:
   - `ML_KEM_768` (FIPS 203) as asymmetric key algorithm and `key_cipher_algo`, using a KEM + DEM construction
     (HPKE Base mode with ChaCha20-Poly1305); cipherdict fields are `kem_ciphertext` and `ciphertext`
   - `ML_DSA_65` (FIPS 204) as asymmetric key algorithm and `payload_signature_algo`, signing the SHA512 digest
     in pure mode with the fixed context `wacryptolib-payload-signature-v1`
   - Hybrid classical + post-quantum protection is obtained by stacking `RSA_OAEP` then `ML_KEM_768` key cipher layers
   - Cryptainers using these algorithms can not be read by previous versions of the library
-* Fix filesystem keystore filename regex, which rejected key algorithm names containing digits
-* Trustee API now accepts any supported asymmetric cipher algorithm for private key decryption, not only RSA_OAEP
+* Allow any registered asymmetric cipher in trustee decryption, and digits in keystore key_algo filenames
 
+* **BREAKING**: pycryptodome >= 4.2 is now required, for its ML-KEM/ML-DSA support
+* Post-quantum keypairs are not pre-generated in free keypair pools by default
+* **BREAKING**: TrusteeApi and keystore public methods normalize algo names to uppercase (TrusteeApi also raises ValidationError on unsupported ones), so keypairs and free keypairs previously stored under lowercase algo names are not found anymore
+* Remove key PEMs, passphrases and decrypted keys from error and assertion messages of key loading and trustee operations
+* Raise SignatureCreationError instead of TypeError when signing with a public key
+* Fix the pure-python fallback mode for pycryptodome 4.x (import crash, RSA_OAEP decryption)
 * **BREAKING**: Extended JSON format now defaults to RELAXED mode instead of CANONICAL mode
   - UUIDs are now serialized as `{"$uuid": "hex"}` instead of `{"$binary": {"base64": "...", "subType": "04"}}`
   - Integers are now plain JSON numbers instead of `{"$numberInt": "42"}`

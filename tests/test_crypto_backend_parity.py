@@ -243,3 +243,26 @@ def test_low_order_x25519_public_keys_are_rejected(backend, u):
 def test_x25519_public_key_high_bit_is_ignored(backend):
     key = backend.import_ecc_key_from_pem(_x25519_public_key_pem(2**255 + 9))
     assert key == backend.import_ecc_key_from_pem(_x25519_public_key_pem(9))
+
+
+def test_rsa_keys_with_composite_factor_or_even_modulus_are_rejected(backend):
+    import math
+
+    import_crypto_backend("fallback")
+    from wacryptolib._crypto_backend.fallback import pem
+    from wacryptolib._crypto_backend.vendor.primes import get_random_prime
+
+    e = 65537
+    while True:
+        p, q = get_random_prime(256) * get_random_prime(256), get_random_prime(512)  # p is composite
+        if math.gcd(e, math.lcm(p - 1, q - 1)) == 1:
+            break
+    d = pow(e, -1, math.lcm(p - 1, q - 1))
+    components = [0, p * q, e, d, p, q, d % (p - 1), d % (q - 1), pow(q, -1, p)]
+    der = pem.encode_sequence(*(pem.encode_integer(x) for x in components))
+    with pytest.raises(ValueError):
+        backend.import_rsa_key_from_pem(pem.encode_pem(der, "RSA PRIVATE KEY"))
+
+    der = pem.encode_sequence(pem.encode_integer(2**2048), pem.encode_integer(e))
+    with pytest.raises(ValueError):
+        backend.import_rsa_key_from_pem(pem.encode_pem(der, "RSA PUBLIC KEY"))

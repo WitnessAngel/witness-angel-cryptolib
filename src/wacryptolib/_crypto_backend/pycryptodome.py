@@ -329,8 +329,8 @@ def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[by
 def encrypt_via_hpke(plaintext: bytes, public_key, aead_id) -> tuple[bytes, bytes]:
     """Returns (enc, ciphertext), enc being the KEM encapsulation (ephemeral public key for DHKEM).
 
-    public_key may be a raw 32-bytes X25519 public key (fallback backend), then sealed in pure python."""
-    if isinstance(public_key, bytes):
+    public_key may be an X25519RawPublicKey (fallback backend), then sealed in pure python."""
+    if isinstance(public_key, X25519RawPublicKey):
         if not _patch_pycryptodome_internals:
             raise ValueError("Raw X25519 public keys are only accepted by the fallback backend")
         from . import hpke_x25519_seal
@@ -352,6 +352,12 @@ def decrypt_via_hpke(enc: bytes, ciphertext: bytes, private_key, aead_id) -> byt
     return HPKE.new(receiver_key=private_key, enc=enc, aead_id=HPKE.AEAD(aead_id)).unseal(ciphertext)
 
 
+class X25519RawPublicKey(bytes):
+    """Raw 32-bytes X25519 public key, as loaded by the fallback backend, which lacks native Curve25519.
+
+    A distinct type, so that any other 32-bytes value (e.g. a symmetric key) can't be mistaken for a public key."""
+
+
 # Header of the DER SubjectPublicKeyInfo of an X25519 public key (RFC 8410), followed by the 32 raw bytes
 _X25519_PUBLIC_KEY_DER_PREFIX = bytes.fromhex("302a300506032b656e032100")
 
@@ -370,7 +376,7 @@ def import_x25519_key_from_pem(key_pem, passphrase=None):
     der, marker, _ = PEM.decode(key_pem)
     if marker != "PUBLIC KEY" or len(der) != 44 or not der.startswith(_X25519_PUBLIC_KEY_DER_PREFIX):
         raise ValueError("Only X25519 public keys can be loaded in fallback backend")
-    return der[len(_X25519_PUBLIC_KEY_DER_PREFIX) :]
+    return X25519RawPublicKey(der[len(_X25519_PUBLIC_KEY_DER_PREFIX) :])
 
 
 # RSA KEY GENERATION, AND IMPORT/EXPORT #

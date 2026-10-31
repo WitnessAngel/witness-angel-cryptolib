@@ -98,6 +98,23 @@ def test_vendored_aes_eax_with_header():
     assert cipher.encrypt_and_digest(b"") == (b"", h("E037830E8389F27B025A2D6527E79D01"))
 
 
+
+def test_vendored_aes_eax_streaming_matches_one_shot():
+    # Any block function will do here, the point is keystream bookkeeping across unaligned chunks
+    import hashlib
+
+    encrypt_block = lambda block: hashlib.sha256(block).digest()[:16]  # noqa: E731
+    plaintext = bytes(range(256)) * 40
+    expected = EaxCipher(encrypt_block, nonce=b"n" * 16).encrypt_and_digest(plaintext)
+
+    cipher = EaxCipher(encrypt_block, nonce=b"n" * 16)
+    chunks, offset = [], 0
+    for size in [0, 1, 15, 16, 17, 33, 5000] * 3:
+        chunks.append(cipher.encrypt(plaintext[offset : offset + size]))
+        offset += size
+    chunks.append(cipher.encrypt(plaintext[offset:]))
+    assert (b"".join(chunks), cipher.digest()) == expected
+
 # RFC 8439 section 2.4.2, ChaCha20 keystream with block counter 1, as used for AEAD encryption
 RFC8439_KEY = bytes(range(32))
 RFC8439_NONCE = h("000000000000004a00000000")

@@ -7,7 +7,7 @@ from typing import Union
 import schema as pythonschema
 from schema import Or, Optional as OptionalKey, And, Schema
 
-from wacryptolib.cipher import SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, SUPPORTED_CIPHER_ALGOS
+from wacryptolib.cipher import SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, SUPPORTED_SYMMETRIC_CIPHER_ALGOS
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_TRUSTEE_TYPES, CRYPTAINER_STATES, \
     CRYPTAINER_FORMAT, PAYLOAD_CIPHERTEXT_LOCATIONS, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, SHARED_SECRET_ALGO_MARKER
 from wacryptolib.exceptions import SchemaValidationError
@@ -137,7 +137,7 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
 
     def _build_payload_cipher_layer_schema(signatures_key):
         return {
-            "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
+            "payload_cipher_algo": Or(*SUPPORTED_SYMMETRIC_CIPHER_ALGOS),
             signatures_key: [payload_signature],  # Signatures AFTER encryption
             **extra_payload_cipher_layer,
             "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,

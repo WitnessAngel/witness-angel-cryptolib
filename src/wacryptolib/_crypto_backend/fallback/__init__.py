@@ -546,13 +546,19 @@ def _export_key_to_pem(key, passphrase, has_private, encode_private_pkcs8, encod
     return _pem.encode_pem(encode_private_pkcs8(key), "PRIVATE KEY")
 
 
+def _decode_rsa_spki_public_key(public_key_bits, parameters):
+    if parameters is not None:  # Like pycryptodome, which only accepts absent or NULL parameters here
+        _pem.decode_null(parameters)
+    return _decode_rsa_pkcs1_public_key(public_key_bits)
+
+
 def import_rsa_key_from_pem(key_pem, passphrase=None):
     private_key_decoders = {
         _pem.OID_RSA: lambda octets, _parameters: _decode_rsa_pkcs1_private_key(octets),
         "RSA PRIVATE KEY": lambda der, _parameters: _decode_rsa_pkcs1_private_key(der),
     }
     public_key_decoders = {
-        _pem.OID_RSA: lambda bits, _parameters: _decode_rsa_pkcs1_public_key(bits),
+        _pem.OID_RSA: _decode_rsa_spki_public_key,
         "RSA PUBLIC KEY": lambda der, _parameters: _decode_rsa_pkcs1_public_key(der),
     }
     return _import_key_from_pem(key_pem, passphrase, private_key_decoders, public_key_decoders)

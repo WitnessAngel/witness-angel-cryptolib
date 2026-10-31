@@ -2284,6 +2284,17 @@ def test_cryptoconf_validation_rejects_signature_only_key_cipher_algos(key_ciphe
         check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=jsonschema_mode)
 
 
+@pytest.mark.parametrize("jsonschema_mode", [False, True])
+@pytest.mark.parametrize("payload_cipher_algo", ["RSA_OAEP", "ECIES_X25519"])
+def test_cryptoconf_validation_rejects_asymmetric_payload_cipher_algos(payload_cipher_algo, jsonschema_mode):
+    cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    cryptoconf["payload_cipher_layers"][0]["payload_cipher_algo"] = payload_cipher_algo
+    if jsonschema_mode:
+        cryptoconf = convert_to_extjson(cryptoconf)
+    with pytest.raises(ValidationError):
+        check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=jsonschema_mode)
+
+
 @pytest.mark.parametrize(
     "cryptoconf",
     [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF, ECIES_SHAMIR_CRYPTOCONF],

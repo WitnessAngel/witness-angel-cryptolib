@@ -292,7 +292,8 @@ def generate_rsa_keypair(key_length_bits):
 
 
 def _build_rsa_private_key(n, e, d, p, q):
-    if p * q != n or e * d % math.lcm(p - 1, q - 1) != 1:
+    # Degenerate primes must give a ValueError, not a ZeroDivisionError or an assertion failure in pkcs1
+    if p < 2 or q < 2 or math.gcd(p, q) != 1 or p * q != n or e * d % math.lcm(p - 1, q - 1) != 1:
         raise ValueError("Invalid RSA key components")
     return pkcs1.keys.MultiPrimeRsaPrivateKey([p, q], e)
 

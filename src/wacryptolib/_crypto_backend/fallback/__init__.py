@@ -431,7 +431,7 @@ def generate_ecc_keypair(curve):
     if curve.lower() in ("curve25519", "x25519"):
         private_key = _build_x25519_private_key(os.urandom(32))
         return private_key.public_key(), private_key
-    if curve in ("ed25519", "Ed25519", "ed448", "Ed448"):
+    if curve in ("ed25519", "Ed25519", "ed448", "Ed448", "curve448", "Curve448"):
         raise _requires_pycryptodome("ECC key generation on curve %r" % curve)
     if curve not in _NIST_CURVES:
         curve_names = sorted(_NIST_CURVES) + ["curve25519"]

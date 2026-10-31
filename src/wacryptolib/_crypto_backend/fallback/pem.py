@@ -273,7 +273,8 @@ def encrypt_pkcs8_to_pem(clear_pkcs8_der, passphrase, encrypt_via_aes_cbc, rando
 
 def decrypt_pkcs8(encrypted_der, passphrase, decrypt_via_aes_cbc):
     """Return the clear PKCS#8 DER; accepts PBKDF2 with HMAC-SHA1 (also when implicit) or HMAC-SHA256,
-    and AES-CBC, i.e. what this library wrote with any of its versions (except DES3-protected DSA keys)."""
+    and AES-CBC, i.e. what this library wrote with any of its versions (except DES3-protected keys: DSA ones
+    until 0.12, RSA ones until 0.8)."""
     algorithm_identifier, ciphertext = decode_sequence(encrypted_der, 2)
     pbes2_oid, pbes2_parameters = decode_algorithm_identifier(algorithm_identifier)
     if pbes2_oid != OID_PBES2 or pbes2_parameters is None:

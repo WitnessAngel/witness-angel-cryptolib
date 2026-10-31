@@ -158,7 +158,7 @@ def _generate_dsa_keypair_as_objects(key_length_bits: int) -> dict:
 def _generate_ecc_keypair_as_objects(curve: str) -> dict:
     """Generate an ECC (public_key, private_key) pair.
 
-    ECC keypair is not used for encryption/decryption, only for signing.
+    Used for signing (ECC_DSS), and for encryption/decryption with curve25519 (ECIES_X25519).
 
     :param curve: curve chosen among p256, p384, p521 and maybe others.
 

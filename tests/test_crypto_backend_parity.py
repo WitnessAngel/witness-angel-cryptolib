@@ -310,6 +310,21 @@ def test_x25519_public_key_high_bit_is_ignored(backend):
     assert key == backend.import_ecc_key_from_pem(_x25519_public_key_pem(9))
 
 
+def test_x25519_private_keys_clamping_to_the_same_scalar_are_equal(backend):
+    import base64
+
+    def private_key_pem(private_bytes):
+        pkcs8 = bytes.fromhex("302e020100300506032b656e04220420") + private_bytes
+        return b"-----BEGIN PRIVATE KEY-----\n%s-----END PRIVATE KEY-----" % base64.encodebytes(pkcs8)
+
+    private_bytes = bytes(range(8, 40))
+    key = backend.import_ecc_key_from_pem(private_key_pem(private_bytes))
+    clamped_twin = backend.import_ecc_key_from_pem(private_key_pem(bytes([private_bytes[0] ^ 1]) + private_bytes[1:]))
+    assert key == clamped_twin
+    assert key != key.public_key()
+    assert key != backend.import_ecc_key_from_pem(private_key_pem(bytes(range(9, 41))))
+
+
 def test_non_canonical_x25519_public_key_is_reduced(backend):
     key = backend.import_ecc_key_from_pem(_x25519_public_key_pem(_P25519 + 5))
     assert backend.export_ecc_key_to_pem(key) == backend.export_ecc_key_to_pem(

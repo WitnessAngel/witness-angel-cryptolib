@@ -2437,7 +2437,15 @@ def test_cryptainer_validation_error_messages_keep_deep_causes():
         decrypt_payload_from_cryptainer(cryptainer)
     message = str(exc_info.value)
     assert "Wrong key 'junk_field'" in message  # Innermost cause comes LAST in python-schema errors
-    assert "lines skipped" in message
+    assert len(message.splitlines()) <= 11
+
+    # Cause in a NON-last alternative of a key cipher layer Or(), followed by the failures of other alternatives
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["comment"] = "x"
+    with pytest.raises(SchemaValidationError) as exc_info:
+        decrypt_payload_from_cryptainer(cryptainer)
+    message = str(exc_info.value)
+    assert "Wrong key 'comment'" in message
     assert len(message.splitlines()) <= 11
 
 

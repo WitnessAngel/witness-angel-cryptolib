@@ -26,8 +26,13 @@ def summarize_validation_error_lines(lines, max_lines=10, max_line_length=120) -
     return "\n".join(lines)
 
 
-def summarize_python_schema_error(exc: SchemaError) -> str:
-    return summarize_validation_error_lines(exc.code.splitlines())
+def summarize_python_schema_error(exc: SchemaError, max_lines=10) -> str:
+    lines = exc.code.splitlines()
+    if len(lines) > max_lines:
+        # "Or(<schema>) did not validate <data>" lines only introduce the per-alternative causes that follow them,
+        # and would push these causes (e.g. a "Wrong key" of a non-last alternative) out of the summary
+        lines = [line for line in lines if not (line.startswith("Or(") and " did not validate " in line)] or lines
+    return summarize_validation_error_lines(lines, max_lines=max_lines)
 
 
 def validate_data_against_schema(data_tree, schema: Schema):

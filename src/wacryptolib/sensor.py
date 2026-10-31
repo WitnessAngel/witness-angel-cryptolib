@@ -249,8 +249,8 @@ class JsonDataAggregator(TimeLimitedAggregatorMixin):
         Flush current data to the tarfile if needed, and append `data_dict` to the queue.
         """
         assert self._current_dataset or not self._current_start_time  # INVARIANT of our system!
-        assert isinstance(data_dict, dict), data_dict
-        logger.debug("New data added to %s json builder: %s", self._sensor_name, data_dict)
+        assert isinstance(data_dict, dict), type(data_dict)
+        logger.debug("New data added to %s json builder (%d fields)", self._sensor_name, len(data_dict))
         self._notify_aggregation_operation()
         self._current_dataset.append(data_dict)
 

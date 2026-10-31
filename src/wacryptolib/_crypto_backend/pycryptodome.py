@@ -239,10 +239,12 @@ def generate_dsa_keypair(key_length_bits):
 def generate_ecc_keypair(curve):
     from Crypto.PublicKey import ECC
 
-    if curve not in ECC._curves:
-        curve_names = getattr(ECC._curves, "all_names", ECC._curves)  # "all_names" since pycryptodome 3.21
-        raise ValueError("Unexisting ECC curve '%s', must be one of '%s'" % (curve, sorted(curve_names)))
-    private_key = ECC.generate(curve=curve)
+    curve = curve.upper()
+    curve_names = getattr(ECC._curves, "all_names", ECC._curves)  # "all_names" since pycryptodome 3.21
+    pycryptodome_curve_names = {name.upper(): name for name in curve_names}  # These are case-sensitive
+    if curve not in pycryptodome_curve_names:
+        raise ValueError("Unexisting ECC curve '%s', must be one of '%s'" % (curve, sorted(pycryptodome_curve_names)))
+    private_key = ECC.generate(curve=pycryptodome_curve_names[curve])
     public_key = private_key.public_key()
     return public_key, private_key
 

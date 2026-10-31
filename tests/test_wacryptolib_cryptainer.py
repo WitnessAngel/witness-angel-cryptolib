@@ -2563,8 +2563,13 @@ def test_shared_secret_threshold_lower_bound_via_json_schema(canonical):
             check_cryptainer_sanity(convert_to_extjson(cryptainer, canonical=canonical), jsonschema_mode=True)
 
 
-def test_cryptainer_validation_error_via_python_schema():
-    corrupted_cryptainers = _generate_corrupted_cryptainers(SIMPLE_CRYPTOCONF, include_extended_checks=True)
+@pytest.mark.parametrize(
+    "cryptoconf, is_complex_conf", [(SIMPLE_CRYPTOCONF, False), (COMPLEX_SHAMIR_CRYPTOCONF, True)]
+)
+def test_cryptainer_validation_error_via_python_schema(cryptoconf, is_complex_conf):
+    corrupted_cryptainers = _generate_corrupted_cryptainers(
+        cryptoconf, include_extended_checks=True, is_complex_conf=is_complex_conf
+    )
 
     for corrupted_cryptainer in corrupted_cryptainers:
         with pytest.raises(ValidationError):

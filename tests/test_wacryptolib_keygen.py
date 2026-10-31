@@ -260,34 +260,32 @@ def _craft_pbes2_pem(
     iv=b"\x00" * 16,
     ciphertext=None,
 ):
-    """Build a PBES2 (PBKDF2-HMAC-SHA256 + AES256-CBC) encrypted PEM, with tamperable fields."""
+    """Build a PBES2 (PBKDF2-HMAC-SHA256 + AES256-CBC) encrypted PEM, with tamperable fields.
+
+    Uses the pure-python DER codec, so that crafted PEMs can be tested without pycryptodome too."""
     import hashlib
-    from Crypto.Cipher import AES
-    from Crypto.IO import PEM
-    from Crypto.Util.Padding import pad
-    from Crypto.Util.asn1 import DerSequence, DerObjectId, DerOctetString, DerNull
+    from wacryptolib._crypto_backend import encrypt_via_aes_cbc
+    from wacryptolib._crypto_backend.fallback import pem
 
     salt = b"\x01" * 16
     if ciphertext is None:
         key = hashlib.pbkdf2_hmac("sha256", passphrase, salt, iteration_count, dklen=32)
-        ciphertext = AES.new(key, AES.MODE_CBC, iv=iv).encrypt(pad(plaintext, 16))
-    prf = DerSequence([DerObjectId("1.2.840.113549.2.9"), DerNull()]) if prf is None else prf
-    pbkdf2_params = [DerOctetString(salt), iteration_count] + ([key_length] if key_length else []) + [prf]
-    pbes2_params = DerSequence(
-        [
-            DerSequence([DerObjectId("1.2.840.113549.1.5.12"), DerSequence(pbkdf2_params)]),
-            DerSequence([DerObjectId("2.16.840.1.101.3.4.1.42"), DerOctetString(iv)]),
-        ]
+        ciphertext = encrypt_via_aes_cbc(plaintext, key=key, iv=iv)
+    prf = pem.encode_algorithm_identifier(pem.OID_HMAC_SHA256, pem.encode_null()) if prf is None else prf
+    pbkdf2_params = [pem.encode_octet_string(salt), pem.encode_integer(iteration_count)]
+    pbkdf2_params += ([pem.encode_integer(key_length)] if key_length else []) + [prf]
+    pbes2_params = pem.encode_sequence(
+        pem.encode_algorithm_identifier(pem.OID_PBKDF2, pem.encode_sequence(*pbkdf2_params)),
+        pem.encode_algorithm_identifier(pem.OID_AES256_CBC, pem.encode_octet_string(iv)),
     )
-    der = DerSequence(
-        [DerSequence([DerObjectId("1.2.840.113549.1.5.13"), pbes2_params]), DerOctetString(ciphertext)]
-    ).encode()
-    return PEM.encode(der, "ENCRYPTED PRIVATE KEY").encode("ascii")
+    der = pem.encode_sequence(
+        pem.encode_algorithm_identifier(pem.OID_PBES2, pbes2_params), pem.encode_octet_string(ciphertext)
+    )
+    return pem.encode_pem(der, "ENCRYPTED PRIVATE KEY")
 
 
 @pytest.mark.parametrize("iteration_count", [0, 10**8, 2**40])
 def test_crafted_pem_iteration_count_is_bounded(iteration_count):
-    pytest.importorskip("Crypto")  # Only to craft the PEM, which is then loaded by whichever backend is active
     pem = _craft_pbes2_pem(iteration_count=iteration_count, ciphertext=b"\x00" * 32)
     with pytest.raises(KeyLoadingError, match="Unsupported PBKDF2 iteration count"):
         load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo="ECC_DSS", passphrase=b"abc")
@@ -306,7 +304,6 @@ def test_crafted_pem_with_optional_key_length_uses_fast_path():
     [dict(key_length=16), dict(iv=b"\x00" * 8, ciphertext=b"\x00" * 16), dict(ciphertext=b""), dict(ciphertext=b"\x00" * 17)],
 )
 def test_crafted_pem_with_malformed_cipher_params_is_rejected(crafting_params):
-    pytest.importorskip("Crypto")  # Only to craft the PEM, which is then loaded by whichever backend is active
     pem = _craft_pbes2_pem(**crafting_params)
     with pytest.raises(KeyLoadingError, match="Malformed encrypted private key"):
         load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo="ECC_DSS", passphrase=b"abc")
@@ -314,10 +311,9 @@ def test_crafted_pem_with_malformed_cipher_params_is_rejected(crafting_params):
 
 def test_crafted_pem_with_empty_prf_falls_back_to_pycryptodome():
     skip_if_fallback_backend("passphrase-protected PEM import")
-    from Crypto.Util.asn1 import DerSequence
     from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
 
-    pem = _craft_pbes2_pem(prf=DerSequence([]))
+    pem = _craft_pbes2_pem(prf=b"\x30\x00")  # Empty SEQUENCE
     assert _decrypt_pkcs8_from_pem(pem, b"abc") is None
 
 

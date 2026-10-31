@@ -2360,6 +2360,9 @@ def test_cryptainer_decryption_rejects_invalid_algos_and_format():
     del corrupted_cryptainer["cryptainer_format"]
     with pytest.raises(ValueError, match="Unknown cryptainer format"):
         decrypt_payload_from_cryptainer(corrupted_cryptainer)
+    corrupted_cryptainer["cryptainer_format"] = ("x", "y")  # Must not break "%" formatting
+    with pytest.raises(ValueError, match="Unknown cryptainer format"):
+        decrypt_payload_from_cryptainer(corrupted_cryptainer)
 
     corrupted_cryptainer = copy.deepcopy(cryptainer)
     corrupted_cryptainer["payload_ciphertext_struct"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Not loaded

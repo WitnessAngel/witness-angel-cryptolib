@@ -2393,6 +2393,39 @@ def test_cryptainer_validation_errors_dont_include_payload_ciphertext():
     assert len(str(exc_info.value)) < 100_000
 
 
+def test_cryptainer_validation_error_messages_are_bounded():
+    big_value = "y" * 1_000_000  # Validators would dump it in their raw error messages
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"x" * 1_000_000, cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata={"big": big_value}
+    )
+    cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_cipher_algo"] = "BAD_ALGO"
+
+    def _check_error(func, *args, **kwargs):
+        with pytest.raises(SchemaValidationError) as exc_info:
+            func(*args, **kwargs)
+        exc = exc_info.value
+        while exc is not None:  # Chained exceptions would show in tracebacks too
+            assert isinstance(exc, SchemaValidationError)
+            assert len(str(exc)) < 2000, len(str(exc))
+            exc = exc.__cause__
+        return str(exc_info.value)
+
+    message = _check_error(check_cryptainer_sanity, cryptainer)
+    assert "key_cipher_algo" in message and "BAD_ALGO" in message
+
+    message = _check_error(check_cryptainer_sanity, convert_to_extjson(cryptainer), jsonschema_mode=True)
+    assert "payload_cipher_layers/0" in message
+
+    message = _check_error(decrypt_payload_from_cryptainer, cryptainer)
+    assert "key_cipher_algo" in message
+
+    message = _check_error(gather_decryptable_symkeys, [("my.crypt", cryptainer)])
+    assert "my.crypt" in message and "key_cipher_algo" in message
+
+    message = _check_error(check_cryptoconf_sanity, dict(SIMPLE_CRYPTOCONF, keychain_uid=big_value))
+    assert "keychain_uid" in message
+
+
 def test_gather_decryptable_symkeys_accepts_payloadless_cryptainers_and_iterators(tmp_path):
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
     cryptainer_filepath = tmp_path.joinpath("my.crypt")

@@ -43,6 +43,10 @@ def test_generic_encryption_and_decryption_errors():
     with pytest.raises(ValueError, match="Unknown cipher type"):
         wacryptolib.cipher.decrypt_bytestring(key_dict=key_dict, cipherdict={}, cipher_algo="EXHD")
 
+    # Algo names are normalized to uppercase, also in error messages
+    with pytest.raises(EncryptionError, match="Failed AES_EAX encryption"):
+        wacryptolib.cipher.encrypt_bytestring(key_dict={"key": b"x", "nonce": b"y"}, plaintext=binary_content, cipher_algo="aes_eax")
+
 
 def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_content):
     initial_cipherdict = copy.deepcopy(cipherdict)

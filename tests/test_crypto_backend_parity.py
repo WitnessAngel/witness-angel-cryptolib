@@ -268,6 +268,25 @@ def test_rsa_keys_with_composite_factor_or_even_modulus_are_rejected(backend):
         backend.import_rsa_key_from_pem(pem.encode_pem(der, "RSA PUBLIC KEY"))
 
 
+@pytest.mark.parametrize("e, p", [(1, None), (65537, 2)])
+def test_rsa_private_keys_with_bad_exponent_or_even_modulus_are_rejected(backend, e, p):
+    import math
+
+    import_crypto_backend("fallback")
+    from wacryptolib._crypto_backend.fallback import pem
+    from wacryptolib._crypto_backend.vendor.primes import get_random_prime
+
+    while True:
+        p, q = p or get_random_prime(512), get_random_prime(512)
+        if math.gcd(e, math.lcm(p - 1, q - 1)) == 1:
+            break
+    d = pow(e, -1, math.lcm(p - 1, q - 1))
+    components = [0, p * q, e, d, p, q, d % (p - 1), d % (q - 1), pow(q, -1, p)]
+    der = pem.encode_sequence(*(pem.encode_integer(x) for x in components))
+    with pytest.raises(ValueError):
+        backend.import_rsa_key_from_pem(pem.encode_pem(der, "RSA PRIVATE KEY"))
+
+
 def test_ecc_private_key_with_mismatched_public_point_is_rejected(backend):
     import ecdsa
 

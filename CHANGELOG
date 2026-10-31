@@ -2,6 +2,8 @@
 Development
 =============
 
+* Report types instead of values in assertion messages, so that payloads, ciphertexts, keys and passphrases
+  don't leak into error messages and logs
 * **BREAKING**: Extended JSON format now defaults to RELAXED mode instead of CANONICAL mode
   - UUIDs are now serialized as `{"$uuid": "hex"}` instead of `{"$binary": {"base64": "...", "subType": "04"}}`
   - Integers are now plain JSON numbers instead of `{"$numberInt": "42"}`

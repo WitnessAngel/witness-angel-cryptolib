@@ -42,3 +42,9 @@ ECC
 -------------
 
 .. autofunction:: wacryptolib.keygen._generate_ecc_keypair_as_objects
+
+
+ML-KEM and ML-DSA (post-quantum)
+----------------------------------
+
+.. autofunction:: wacryptolib.keygen._generate_pq_keypair_as_objects

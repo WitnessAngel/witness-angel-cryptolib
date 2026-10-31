@@ -12,7 +12,7 @@ from uuid import UUID
 
 import pytest
 
-from _test_mockups import get_fake_authdevice, random_bool, is_fallback_backend
+from _test_mockups import get_fake_authdevice, random_bool, is_fallback_backend, skip_if_fallback_backend
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.exceptions import (
     KeystoreDoesNotExist,
@@ -22,6 +22,7 @@ from wacryptolib.exceptions import (
     KeystoreMetadataDoesNotExist,
     OperationNotSupported,
 )
+from wacryptolib._crypto_backend import PQ_KEY_ALGOS
 from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import (
     FilesystemKeystore,
@@ -30,6 +31,7 @@ from wacryptolib.keystore import (
     FilesystemKeystorePool,
     generate_free_keypair_for_least_provisioned_key_algo,
     get_free_keypair_generator_worker,
+    DEFAULT_FREE_KEYPAIR_KEY_ALGOS,
     generate_keypair_for_storage,
     ReadonlyFilesystemKeystore,
     KEYSTORE_FORMAT,
@@ -80,7 +82,7 @@ def test_keystore_basic_get_set_api(tmp_path):
     keychain_uid = filesystem_keystore_test_locals["keychain_uid"]
 
     is_public = random_bool()
-    filepath = filesystem_keystore._get_filepath(keychain_uid, key_algo="abxz", is_public=is_public)
+    filepath = filesystem_keystore._get_filepath(keychain_uid, key_algo="ABXZ", is_public=is_public)  # Normalized
     with open(filepath, "rb") as f:
         key_data = f.read()
         assert key_data == (b"public_data" if is_public else b"private_data")  # IMPORTANT no exchange of keys in files!
@@ -349,6 +351,29 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
         remote_keystore.export_to_keystore_tree()
 
 
+def test_keystore_tree_export_and_import_with_all_asymmetric_key_algos(tmp_path: Path):
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    initialize_authenticator(source_dir, keystore_owner="Owner", keystore_passphrase_hint="hint")
+    source_keystore = FilesystemKeystore(source_dir)
+
+    keychain_uid = generate_uuid0()
+    for key_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS:  # Including signature-only algos like ML_DSA_65
+        source_keystore.set_keypair(  # Lowercase algo names are normalized, so they don't break exports
+            keychain_uid=keychain_uid, key_algo=key_algo.lower(), public_key=b"pub", private_key=b"priv"
+        )
+
+    keystore_tree = source_keystore.export_to_keystore_tree()
+    assert sorted(keypair["key_algo"] for keypair in keystore_tree["keypairs"]) == sorted(SUPPORTED_ASYMMETRIC_KEY_ALGOS)
+
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    target_keystore = FilesystemKeystore(target_dir)
+    assert not target_keystore.import_from_keystore_tree(keystore_tree)  # Created, not updated
+    for key_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
+        assert target_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"priv"
+
+
 def test_keystore_import_from_keystore_tree(tmp_path: Path):
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()
@@ -519,11 +544,16 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
         generated_keys_count += 1
         return dict(private_key=b"someprivatekey", public_key=b"somepublickey")
 
-    # Check the fallback on "all types of keys" for key_algos parameter
+    # Check the fallback on "all classical types of keys" for key_algos parameter
+
+    assert "RSA_OAEP" in DEFAULT_FREE_KEYPAIR_KEY_ALGOS
+    assert isinstance(DEFAULT_FREE_KEYPAIR_KEY_ALGOS, tuple)  # Not mutable by accident
+    assert {"ML_KEM_768", "ML_DSA_65"} <= set(PQ_KEY_ALGOS)
+    assert not set(PQ_KEY_ALGOS) & set(DEFAULT_FREE_KEYPAIR_KEY_ALGOS)  # Post-quantum keypairs are opt-in
 
     keystore = InMemoryKeystore()
 
-    for _ in range(4):
+    for _ in range(2 * len(DEFAULT_FREE_KEYPAIR_KEY_ALGOS)):
         res = generate_free_keypair_for_least_provisioned_key_algo(
             keystore=keystore,
             max_free_keys_per_algo=10,
@@ -532,11 +562,9 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
         )
         assert res
 
-    assert keystore.get_free_keypairs_count("DSA_DSS") == 1
-    assert keystore.get_free_keypairs_count("ECC_DSS") == 1
-    assert keystore.get_free_keypairs_count("RSA_OAEP") == 1
-    assert keystore.get_free_keypairs_count("RSA_PSS") == 1
-    assert generated_keys_count == 4
+    for key_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
+        assert keystore.get_free_keypairs_count(key_algo) == (2 if key_algo in DEFAULT_FREE_KEYPAIR_KEY_ALGOS else 0)
+    assert generated_keys_count == 2 * len(DEFAULT_FREE_KEYPAIR_KEY_ALGOS)
 
     # Now test with a restricted set of key types
 
@@ -627,7 +655,7 @@ def test_get_free_keypair_generator_worker():
         worker.join()
 
         assert (
-            generated_keys_count == 120  # 4 key types for now
+            generated_keys_count == 30 * len(DEFAULT_FREE_KEYPAIR_KEY_ALGOS)
         ), generated_keys_count  # All keys had the time to be generated
 
         print("NEW START")
@@ -644,3 +672,23 @@ def test_get_free_keypair_generator_worker():
     finally:
         if worker.is_running:
             worker.stop()
+
+
+def test_filesystem_keystore_lists_post_quantum_keypairs(tmp_path: Path):
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
+    # Key algo names with digits (ML_KEM_768, ML_DSA_65) must be accepted by the filename regex
+    keystore = FilesystemKeystore(tmp_path)
+    keychain_uid_1 = generate_uuid0()
+    keychain_uid_2 = generate_uuid0()
+    generate_keypair_for_storage(key_algo="ML_KEM_768", keystore=keystore, keychain_uid=keychain_uid_1)
+    generate_keypair_for_storage(key_algo="ML_DSA_65", keystore=keystore, keychain_uid=keychain_uid_2, passphrase=b"xyz")
+    tmp_path.joinpath("%s_ML_DSA_65_private_key.pem" % keychain_uid_2).unlink()  # Only public key remains
+
+    keys_list = keystore.list_keypair_identifiers()
+    assert keys_list == sorted(
+        [
+            dict(keychain_uid=keychain_uid_1, key_algo="ML_KEM_768", private_key_present=True),
+            dict(keychain_uid=keychain_uid_2, key_algo="ML_DSA_65", private_key_present=False),
+        ],
+        key=lambda x: (x["keychain_uid"], x["key_algo"]),
+    )

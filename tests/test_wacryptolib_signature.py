@@ -88,8 +88,16 @@ def test_generic_signature_errors():
         private_key=keypair["private_key"], message=message, signature_algo="RSA_PSS"
     )
 
-    with pytest.raises(ValueError, match="Unknown signature algorithm"):
-        wacryptolib.signature.sign_message(private_key=keypair["private_key"], message=message, signature_algo="EIXH")
+    # Algo names are normalized to uppercase
+    signature_lowercase = wacryptolib.signature.sign_message(
+        private_key=keypair["private_key"], message=message, signature_algo="rsa_pss"
+    )
+    wacryptolib.signature.verify_message_signature(
+        public_key=keypair["public_key"], message=message, signature=signature_lowercase, signature_algo="rsa_pss"
+    )
+
+    with pytest.raises(ValueError, match="Unknown signature algorithm 'EIXH'"):
+        wacryptolib.signature.sign_message(private_key=keypair["private_key"], message=message, signature_algo="eixh")
 
     with pytest.raises(ValueError, match="Incompatible key type"):
         wacryptolib.signature.sign_message(
@@ -108,3 +116,76 @@ def test_generic_signature_errors():
         wacryptolib.signature.verify_message_signature(
             public_key=keypair["public_key"], message=message, signature=signature, signature_algo="XPZH"
         )
+
+
+def test_sign_and_verify_with_ml_dsa_key():
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
+    message = b"Post-quantum hello"
+
+    keypair = wacryptolib.keygen.generate_keypair(key_algo="ML_DSA_65", serialize=False)
+    signature = wacryptolib.signature.sign_message(
+        private_key=keypair["private_key"], message=message, signature_algo="ML_DSA_65"
+    )
+    _common_signature_checks(keypair=keypair, message=message, signature=signature, signature_algo="ML_DSA_65")
+
+    assert len(signature["signature_value"]) == 3309  # ML-DSA-65 signature size
+
+    # Hedged (randomized) signing: same message and timestamp give different signatures
+    with mock.patch("wacryptolib.signature._get_utc_timestamp", return_value=signature["signature_timestamp_utc"]):
+        signature2 = wacryptolib.signature.sign_message(
+            private_key=keypair["private_key"], message=message, signature_algo="ML_DSA_65"
+        )
+    assert signature2["signature_timestamp_utc"] == signature["signature_timestamp_utc"]
+    assert signature2["signature_value"] != signature["signature_value"]
+    wacryptolib.signature.verify_message_signature(
+        public_key=keypair["public_key"], message=message, signature=signature2, signature_algo="ML_DSA_65"
+    )
+
+    # Incompatible key families are rejected
+    for other_key_algo in ("RSA_PSS", "ML_KEM_768"):
+        other_keypair = wacryptolib.keygen.generate_keypair(key_algo=other_key_algo, serialize=False)
+        with pytest.raises(ValueError, match="Incompatible key type"):
+            wacryptolib.signature.sign_message(
+                private_key=other_keypair["private_key"], message=message, signature_algo="ML_DSA_65"
+            )
+        with pytest.raises(ValueError, match="Incompatible key type"):
+            wacryptolib.signature.verify_message_signature(
+                public_key=other_keypair["public_key"], message=message, signature=signature, signature_algo="ML_DSA_65"
+            )
+
+
+@pytest.mark.parametrize("param_set_name", ["ML_DSA_44", "ML_DSA_87"])
+def test_ml_dsa_65_rejects_other_ml_dsa_parameter_sets(param_set_name):
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
+    from Crypto.PublicKey import MLDSA
+    from wacryptolib.exceptions import KeyLoadingError
+    from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
+
+    message = b"Hello"
+    private_key = MLDSA.generate(param_set=getattr(MLDSA.ParamSet, param_set_name))
+    public_key = private_key.public_key()
+
+    with pytest.raises(ValueError, match="Incompatible key type"):
+        wacryptolib.signature.sign_message(private_key=private_key, message=message, signature_algo="ML_DSA_65")
+
+    keypair = wacryptolib.keygen.generate_keypair(key_algo="ML_DSA_65", serialize=False)
+    signature = wacryptolib.signature.sign_message(
+        private_key=keypair["private_key"], message=message, signature_algo="ML_DSA_65"
+    )
+    with pytest.raises(ValueError, match="Incompatible key type"):
+        wacryptolib.signature.verify_message_signature(
+            message=message, signature_algo="ML_DSA_65", signature=signature, public_key=public_key
+        )
+
+    for key in (public_key, private_key):
+        with pytest.raises(KeyLoadingError, match="Incompatible key type"):
+            load_asymmetric_key_from_pem_bytestring(key_pem=key.export_key(format="PEM"), key_algo="ML_DSA_65")
+
+
+@pytest.mark.parametrize("key_algo", ["RSA_PSS", "ECC_DSS", "DSA_DSS", "ML_DSA_65"])
+def test_sign_message_with_public_key_raises_signature_creation_error(key_algo):
+    if key_algo in ("ECC_DSS", "ML_DSA_65"):
+        skip_if_fallback_backend(key_algo)
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
+    with pytest.raises(SignatureCreationError):
+        wacryptolib.signature.sign_message(private_key=keypair["public_key"], message=b"Hello", signature_algo=key_algo)

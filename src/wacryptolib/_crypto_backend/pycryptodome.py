@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import logging, os, sys
+import functools, logging, os, sys
 
 logger = logging.getLogger(__name__)
 
@@ -12,20 +12,15 @@ def __monkey_patch_pycryptodome_compiled_internals():
     # WE MONKEY PATCH PYCRYPTODOME INTERNALS TO BYPASS SOME ".so" objects #
 
     class FakePycryptodomeExtensionLib:
-        @staticmethod
-        def have_aes_ni():
-            return False
-
-        @staticmethod
-        def have_clmul():
-            return False
-
         def __getattr__(self, name):
+            if name.startswith("have_"):  # CPU feature probes (have_aes_ni, have_sha_ni, have_bmi2...)
+                return lambda: False
             # Algorithms without pure python implementation (ECC, DES3...) end up here
             raise AttributeError("Native function %r of pycryptodome is not available in fallback backend" % name)
 
     def fake_load_pycryptodome_raw_lib(name, cdecl):
-        if name in ["Crypto.Math._modexp"]:  # We force automatic fallback for some libs, inside pycryptodome
+        # Crypto.Math._nat is the constant-time Integer of pycryptodome 4.x, which falls back to pure python too
+        if name in ["Crypto.Math._modexp", "Crypto.Math._nat"]:  # We force automatic fallback for some libs, inside pycryptodome
             raise ImportError("Fake ImportError to force failure on non-vital extension %s" % name)
         return FakePycryptodomeExtensionLib()
 
@@ -155,26 +150,25 @@ def __monkey_patch_pycryptodome_compiled_internals():
 
     Crypto.Cipher.ChaCha20_Poly1305.new = lambda key, nonce: ChaCha20Poly1305Cipher(key, nonce=nonce)
 
-    from Crypto.Cipher import PKCS1_OAEP
+    import Crypto.Cipher.oaep
 
     def patched_oaep_decode(em, lHash, db):
         # Replace the 2023 C implementation by the old Python one
         from Crypto.Util.strxor import strxor
-        from Crypto.Util.py3compat import bord
 
         y = em[0]
         hLen = len(lHash)
         one_pos = hLen + db[hLen:].find(b"\x01")
         lHash1 = db[:hLen]
-        invalid = bord(y) | int(one_pos < hLen)
+        invalid = y | int(one_pos < hLen)
         hash_compare = strxor(lHash1, lHash)
         for x in hash_compare:
-            invalid |= bord(x)
+            invalid |= x
         for x in db[hLen:one_pos]:
-            invalid |= bord(x)
+            invalid |= x
         return -1 if invalid else (one_pos + 1)
 
-    PKCS1_OAEP.oaep_decode = patched_oaep_decode
+    Crypto.Cipher.oaep.oaep_decode = patched_oaep_decode  # In pycryptodome 4.x, PKCS1_OAEP delegates to this module
 
 
 try:
@@ -452,11 +446,14 @@ def _decrypt_pkcs8_from_pem(key_pem, passphrase):
         raise ValueError(_PEM_DECRYPTION_ERROR) from None
 
 
-def _import_key_from_pem(key_module, key_pem, passphrase=None):
-    from Crypto.Util.py3compat import tobytes
+def _passphrase_to_bytes(passphrase):
+    # Like pycryptodome 3.x's tobytes() did for str passphrases (its py3compat module is gone in 4.x)
+    return passphrase.encode("latin-1") if isinstance(passphrase, str) else passphrase
 
+
+def _import_key_from_pem(key_module, key_pem, passphrase=None):
     if passphrase:
-        passphrase = tobytes(passphrase)  # Like pycryptodome does for str passphrases
+        passphrase = _passphrase_to_bytes(passphrase)
         clear_pkcs8_der = _decrypt_pkcs8_from_pem(key_pem, passphrase)
         if clear_pkcs8_der is not None:
             try:
@@ -471,9 +468,7 @@ def _export_key_to_pem(key, passphrase, **pkcs8_der_params):
         return key.export_key(format="PEM")
     if not key.has_private():
         raise ValueError("Public keys can't be exported to PEM with a passphrase")
-    from Crypto.Util.py3compat import tobytes
-
-    return _encrypt_pkcs8_to_pem(key.export_key(format="DER", **pkcs8_der_params), tobytes(passphrase))
+    return _encrypt_pkcs8_to_pem(key.export_key(format="DER", **pkcs8_der_params), _passphrase_to_bytes(passphrase))
 
 
 def import_rsa_key_from_pem(key_pem, passphrase=None):
@@ -506,7 +501,78 @@ def export_ecc_key_to_pem(private_key, passphrase=None):  # FIXME not always pri
     return _export_key_to_pem(private_key, passphrase, use_pkcs8=True)
 
 
+# POST-QUANTUM KEYS (ML-KEM FIPS 203, ML-DSA FIPS 204), IMPORT/EXPORT AND ENCRYPTION #
+
+
+# Our post-quantum key algos, with their pycryptodome module and (fixed) parameter set
+PQ_KEY_ALGOS = {
+    "ML_KEM_768": ("MLKEM", "ML_KEM_768"),
+    "ML_DSA_65": ("MLDSA", "ML_DSA_65"),
+}
+
+
+@functools.lru_cache(maxsize=None)  # Called on each encryption/signature, through check_pq_key_algo()
+def _get_pq_key_module_and_param_set(key_algo):
+    import importlib
+
+    module_name, param_set_name = PQ_KEY_ALGOS[key_algo]
+    key_module = importlib.import_module("Crypto.PublicKey.%s" % module_name)
+    return key_module, getattr(key_module.ParamSet, param_set_name)
+
+
+def check_pq_key_algo(key, key_algo):
+    """Raise ValueError if key is not a post-quantum key of exactly this key algo (e.g. ML-KEM-512 for ML_KEM_768)."""
+    _key_module, param_set = _get_pq_key_module_and_param_set(key_algo)
+    if getattr(key, "param_set", None) != param_set:
+        raise ValueError("Incompatible key type %s (%s) for %s" % (type(key), getattr(key, "param_set", None), key_algo))
+
+
+def pq_key_class_fetcher(key_algo):
+    key_module, _param_set = _get_pq_key_module_and_param_set(key_algo)
+    return getattr(key_module, "%sKey" % PQ_KEY_ALGOS[key_algo][0])  # E.g. MLKEM.MLKEMKey
+
+
+def generate_pq_keypair(key_algo):
+    key_module, param_set = _get_pq_key_module_and_param_set(key_algo)
+    private_key = key_module.generate(param_set=param_set)
+    public_key = private_key.public_key()
+    return public_key, private_key
+
+
+def import_pq_key_from_pem(key_algo, key_pem, passphrase=None):
+    key_module, _param_set = _get_pq_key_module_and_param_set(key_algo)
+    key = _import_key_from_pem(key_module, key_pem, passphrase=passphrase)
+    check_pq_key_algo(key, key_algo)  # E.g. rejects an ML-KEM-512 key for ML_KEM_768
+    return key
+
+
+def export_pq_key_to_pem(key, passphrase=None):  # Private keys are always exported as PKCS#8
+    return _export_key_to_pem(key, passphrase)
+
+
+def encrypt_via_ml_kem_768(plaintext: bytes, public_key) -> tuple:
+    """KEM+DEM encryption via HPKE (RFC 9180) in Base mode with ChaCha20-Poly1305.
+
+    ChaCha20-Poly1305 rather than AES-GCM, so that MicroPython devices can produce the same format in pure python.
+
+    Returns (kem_ciphertext, ciphertext), the latter including its authentication tag."""
+    from Crypto.Protocol import HPKE
+
+    encryptor = HPKE.new(receiver_key=public_key, aead_id=HPKE.AEAD.CHACHA20_POLY1305)
+    ciphertext = encryptor.seal(plaintext)
+    return encryptor.enc, ciphertext
+
+
+def decrypt_via_ml_kem_768(kem_ciphertext: bytes, ciphertext: bytes, private_key) -> bytes:
+    from Crypto.Protocol import HPKE
+
+    decryptor = HPKE.new(receiver_key=private_key, enc=kem_ciphertext, aead_id=HPKE.AEAD.CHACHA20_POLY1305)
+    return decryptor.unseal(ciphertext)  # Raise ValueError if failure
+
+
 # MESSAGE SIGNATURES #
+
+ML_DSA_SIGNATURE_CONTEXT = b"wacryptolib-payload-signature-v1"  # Domain separation, NEVER change this value
 
 
 def sign_with_pss(message, private_key):
@@ -537,3 +603,19 @@ def verify_with_dss(message, signature, public_key):
 
     verifier = DSS.new(public_key, "fips-186-3")
     verifier.verify(message, signature)  # Raise ValueError if failure
+
+
+def sign_with_mldsa(message, private_key):
+    from Crypto.Signature import mldsa
+
+    # We sign the DIGEST bytes in "pure" mode; passing the hash object itself would select HashML-DSA
+    signer = mldsa.new(private_key, context=ML_DSA_SIGNATURE_CONTEXT)
+    signature = signer.sign(message.digest())
+    return signature
+
+
+def verify_with_mldsa(message, signature, public_key):
+    from Crypto.Signature import mldsa
+
+    verifier = mldsa.new(public_key, context=ML_DSA_SIGNATURE_CONTEXT)
+    verifier.verify(message.digest(), signature)  # Raise ValueError if failure

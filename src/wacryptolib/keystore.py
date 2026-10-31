@@ -20,7 +20,6 @@ from uuid import UUID
 
 from schema import Or, And, Optional as OptionalKey, Schema
 
-from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
 from wacryptolib.exceptions import (
     KeyAlreadyExists,
     KeyDoesNotExist,
@@ -28,6 +27,7 @@ from wacryptolib.exceptions import (
     ValidationError,
     KeystoreMetadataDoesNotExist,
 )
+from wacryptolib import _crypto_backend
 from wacryptolib.keygen import generate_keypair, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.utilities import (
     synchronized,
@@ -69,7 +69,7 @@ KEYSTORE_TREE_SCHEMA = Schema(
         "keypairs": [
             {
                 "keychain_uid": UUID,
-                "key_algo": Or(*SUPPORTED_CIPHER_ALGOS),
+                "key_algo": Or(*SUPPORTED_ASYMMETRIC_KEY_ALGOS),  # Signature-only algos included
                 "public_key": bytes,  # MANDATORY
                 "private_key": Or(None, bytes),
             }
@@ -160,6 +160,7 @@ class KeystoreReadBase(KeystoreBase):
 
         :return: public key in clear PEM format, or raise KeyDoesNotExist
         """
+        key_algo = key_algo.upper()
         if not self._public_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
             raise KeyDoesNotExist("Public key %s/%s not found" % (key_algo, keychain_uid))
         return self._get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
@@ -174,6 +175,7 @@ class KeystoreReadBase(KeystoreBase):
 
         :return: private key in PEM format (potentially passphrase-protected), or raise KeyDoesNotExist
         """
+        key_algo = key_algo.upper()
         if not self._private_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
             raise KeyDoesNotExist("Private key %s/%s not found" % (key_algo, keychain_uid))
         return self._get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
@@ -224,7 +226,8 @@ class KeystoreWriteBase(KeystoreBase):
         :param public_key: public key in clear PEM format
         :param private_key: private key in PEM format (potentially encrypted)
         """
-        assert public_key and private_key, (public_key, private_key)
+        key_algo = key_algo.upper()
+        assert public_key and private_key, (type(public_key), type(private_key))
         self._check_public_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=public_key, private_key=private_key)
 
@@ -241,6 +244,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :param public_key: public key in clear PEM format
         """
+        key_algo = key_algo.upper()
         self._check_public_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_public_key(keychain_uid=keychain_uid, key_algo=key_algo, public_key=public_key)
 
@@ -256,6 +260,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :param private_key: private key in PEM format (potentially encrypted)
         """
+        key_algo = key_algo.upper()
         if not self._public_key_exists(
             keychain_uid=keychain_uid, key_algo=key_algo
         ):  # We don't want lonely private keys
@@ -273,6 +278,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :return: count of free keypairs of said type
         """
+        key_algo = key_algo.upper()
         return self._get_free_keypairs_count(key_algo=key_algo)
 
     @synchronized
@@ -284,6 +290,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param public_key: public key in clear PEM format
         :param private_key: private key in PEM format (potentially encrypted)
         """
+        key_algo = key_algo.upper()
         return self._add_free_keypair(key_algo=key_algo, public_key=public_key, private_key=private_key)
 
     @synchronized
@@ -297,6 +304,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :return: public key of the keypair, in clear PEM format
         """
+        key_algo = key_algo.upper()
         self._check_public_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         return self._attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo=key_algo)
 
@@ -403,7 +411,7 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
 
     _private_key_suffix = "_private_key.pem"
     _public_key_suffix = "_public_key.pem"
-    PUBLIC_KEY_FILENAME_REGEX = r"^(?P<keychain_uid>[-0-9a-z]+)_(?P<key_algo>[_a-zA-Z]+)%s$" % _public_key_suffix
+    PUBLIC_KEY_FILENAME_REGEX = r"^(?P<keychain_uid>[-0-9a-z]+)_(?P<key_algo>[_a-zA-Z0-9]+)%s$" % _public_key_suffix
 
     def __init__(self, keys_dir: Path):
         keys_dir = Path(keys_dir).absolute()
@@ -792,11 +800,18 @@ def generate_keypair_for_storage(  # FIXME document this, or integrate to class?
     return keypair
 
 
+#: Key algos pre-generated by default in free keypair pools; post-quantum ones are opt-in via the `key_algos` parameter,
+#: so that existing deployments don't silently start generating and storing them
+DEFAULT_FREE_KEYPAIR_KEY_ALGOS = tuple(
+    key_algo for key_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS if key_algo not in _crypto_backend.PQ_KEY_ALGOS
+)  # Immutable, since used as a default argument
+
+
 def generate_free_keypair_for_least_provisioned_key_algo(
     keystore: KeystoreWriteBase,
     max_free_keys_per_algo: int,
     keygen_func=generate_keypair,
-    key_algos=SUPPORTED_ASYMMETRIC_KEY_ALGOS,
+    key_algos=DEFAULT_FREE_KEYPAIR_KEY_ALGOS,
 ):
     """
     Generate a single free keypair for the key type which is the least available in key storage, and
@@ -805,7 +820,7 @@ def generate_free_keypair_for_least_provisioned_key_algo(
     :param keystore: the key storage to use
     :param max_free_keys_per_algo: how many free keys should exist per key type
     :param keygen_func: callable to use for keypair generation
-    :param key_algos: the different key types (strings) to consider
+    :param key_algos: the different key types (strings) to consider, by default DEFAULT_FREE_KEYPAIR_KEY_ALGOS
     :return: True iff a key was generated (i.e. the free keys pool was not full)
     """
     assert key_algos, key_algos

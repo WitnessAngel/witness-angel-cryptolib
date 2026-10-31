@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import functools
 import logging
 from typing import Optional, AnyStr
 
@@ -115,7 +116,7 @@ def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_algo: str, pa
 
     key_algo = key_algo.upper()
     if key_algo not in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
-        raise ValueError("Unknown key type %s" % key_pem)
+        raise ValueError("Unknown key type %s" % key_algo)
     key_import_function = ASYMMETRIC_KEY_ALGOS_REGISTRY[key_algo]["pem_import_function"]
     try:
         return key_import_function(key_pem, passphrase=passphrase)
@@ -154,6 +155,12 @@ def _generate_dsa_keypair_as_objects(key_length_bits: int) -> dict:
     return keypair
 
 
+def _generate_pq_keypair_as_objects(key_algo: str) -> dict:
+    """Generate a post-quantum (public_key, private_key) pair, whose parameter set is fixed by the key algo."""
+    public_key, private_key = _crypto_backend.generate_pq_keypair(key_algo)
+    return dict(public_key=public_key, private_key=private_key)
+
+
 def _generate_ecc_keypair_as_objects(curve: str) -> dict:
     """Generate an ECC (public_key, private_key) pair.
 
@@ -173,7 +180,7 @@ def _serialize_key_object_to_pem_bytestring(key, key_algo: str, passphrase: Opti
 
     If a passphrase is provided, the key (which must be PRIVATE) is encrypted with it.
     The exact encryption of the key depends on its key_algo."""
-    assert passphrase is None or (isinstance(passphrase, bytes) and passphrase), repr(
+    assert passphrase is None or (isinstance(passphrase, bytes) and passphrase), type(
         passphrase
     )  # No implicit encoding here
     pem_export_function = ASYMMETRIC_KEY_ALGOS_REGISTRY[key_algo]["pem_export_function"]
@@ -209,6 +216,12 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
         "pem_import_function": _crypto_backend.import_rsa_key_from_pem,
         "pem_export_function": _crypto_backend.export_rsa_key_to_pem,
     },
+    ML_KEM_768={  # Post-quantum KEM (FIPS 203), fixed parameter set
+        "generation_function": lambda: _generate_pq_keypair_as_objects("ML_KEM_768"),
+        "generation_extra_parameters": [],
+        "pem_import_function": functools.partial(_crypto_backend.import_pq_key_from_pem, "ML_KEM_768"),
+        "pem_export_function": _crypto_backend.export_pq_key_to_pem,
+    },
     ## KEYS FOR SIGNATURE ##
     RSA_PSS={  # Same parameters as RSA_OAEP for now
         "generation_function": _generate_rsa_keypair_as_objects,
@@ -227,6 +240,12 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
         "generation_extra_parameters": ["curve"],
         "pem_import_function": _crypto_backend.import_ecc_key_from_pem,
         "pem_export_function": _crypto_backend.export_ecc_key_to_pem,
+    },
+    ML_DSA_65={  # Post-quantum signature (FIPS 204), fixed parameter set
+        "generation_function": lambda: _generate_pq_keypair_as_objects("ML_DSA_65"),
+        "generation_extra_parameters": [],
+        "pem_import_function": functools.partial(_crypto_backend.import_pq_key_from_pem, "ML_DSA_65"),
+        "pem_export_function": _crypto_backend.export_pq_key_to_pem,
     },
 )
 

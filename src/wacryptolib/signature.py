@@ -12,8 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 def _get_signature_conf(signature_algo, key):
-    assert signature_algo, signature_algo
-    signature_algo = signature_algo.upper()
     signature_conf = SIGNATURE_ALGOS_REGISTRY.get(signature_algo)
     if signature_conf is None:
         raise ValueError("Unknown signature algorithm '%s'" % signature_algo)
@@ -23,6 +21,9 @@ def _get_signature_conf(signature_algo, key):
             "Incompatible key type %s for signature algorithm %s (should be %s)"
             % (type(key), signature_algo, compatible_key_class)
         )
+    extra_key_checker = signature_conf.get("extra_key_checker")
+    if extra_key_checker:
+        extra_key_checker(key)
     return signature_conf
 
 
@@ -39,6 +40,7 @@ def sign_message(message: bytes, *, signature_algo: str, private_key: object) ->
 
     :return: dictionary with signature data"""
 
+    signature_algo = signature_algo.upper()
     logger.debug("Signing message of length %d with signature algo %s", len(message), signature_algo)
     signature_conf = _get_signature_conf(signature_algo=signature_algo, key=private_key)
     signature_function = signature_conf["signature_function"]
@@ -47,7 +49,7 @@ def sign_message(message: bytes, *, signature_algo: str, private_key: object) ->
     try:
         hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=timestamp_utc)
         signature = signature_function(message=hash_payload, private_key=private_key)
-    except ValueError as exc:
+    except (ValueError, TypeError) as exc:  # Pycryptodome raises TypeError when given a public key
         raise SignatureCreationError("Failed %s signature creation (%s)" % (signature_algo, exc)) from exc
     return {"signature_timestamp_utc": timestamp_utc, "signature_value": signature}
 
@@ -63,6 +65,7 @@ def verify_message_signature(*, message: bytes, signature_algo: str, signature: 
     :param public_key: the cryptographic key used to verify the signature
     """
 
+    signature_algo = signature_algo.upper()
     logger.debug("Verifying signature of message of length %d with signature algo %s", len(message), signature_algo)
 
     signature_conf = _get_signature_conf(signature_algo=signature_algo, key=public_key)
@@ -116,6 +119,12 @@ SIGNATURE_ALGOS_REGISTRY = dict(
         "signature_function": _crypto_backend.sign_with_dss,
         "verification_function": _crypto_backend.verify_with_dss,
         "compatible_key_class_fetcher": _crypto_backend.ecc_key_class_fetcher,
+    },
+    ML_DSA_65={  # Post-quantum (FIPS 204), signs the SHA512 digest in pure mode with a fixed context
+        "signature_function": _crypto_backend.sign_with_mldsa,
+        "verification_function": _crypto_backend.verify_with_mldsa,
+        "compatible_key_class_fetcher": lambda: _crypto_backend.pq_key_class_fetcher("ML_DSA_65"),
+        "extra_key_checker": lambda key: _crypto_backend.check_pq_key_algo(key, "ML_DSA_65"),  # Rejects ML-DSA-44
     },
 )
 

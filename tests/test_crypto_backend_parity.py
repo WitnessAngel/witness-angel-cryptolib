@@ -221,3 +221,25 @@ def test_rsa_private_keys_are_accepted_as_public_keys(backend):
     hasher = backend.get_hasher_instance("SHA512")
     hasher.update(b"message")
     backend.verify_with_pss(hasher, backend.sign_with_pss(hasher, private_key), private_key)
+
+
+_P25519 = 2**255 - 19
+_X25519_LOW_ORDER_U = 325606250916557431795983626356110631294008115727848805560023387167927233504
+
+
+def _x25519_public_key_pem(u):
+    import base64
+
+    spki = bytes.fromhex("302a300506032b656e032100") + u.to_bytes(32, "little")
+    return b"-----BEGIN PUBLIC KEY-----\n%s-----END PUBLIC KEY-----" % base64.encodebytes(spki)
+
+
+@pytest.mark.parametrize("u", [0, 1, _X25519_LOW_ORDER_U, _P25519 - 1, _P25519, _P25519 + 1, 2**255 + 1])
+def test_low_order_x25519_public_keys_are_rejected(backend, u):
+    with pytest.raises(ValueError):
+        backend.import_ecc_key_from_pem(_x25519_public_key_pem(u))
+
+
+def test_x25519_public_key_high_bit_is_ignored(backend):
+    key = backend.import_ecc_key_from_pem(_x25519_public_key_pem(2**255 + 9))
+    assert key == backend.import_ecc_key_from_pem(_x25519_public_key_pem(9))

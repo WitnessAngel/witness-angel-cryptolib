@@ -174,7 +174,7 @@ class TrusteeApi:  # TODO rename this?
                     key_algo=key_algo,
                     passphrases=passphrases,
                 )
-                assert res, repr(res)
+                assert res
             except KeyLoadingError:
                 missing_passphrase.append(keypair_identifier)
                 continue

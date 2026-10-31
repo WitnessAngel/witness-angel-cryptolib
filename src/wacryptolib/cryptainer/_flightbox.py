@@ -90,7 +90,7 @@ class FlightBox:
         keys 'cipher_algo', 'symmetric_key' and 'payload_hash_algos'.
         """
 
-        assert cryptainer_metadata is None or isinstance(cryptainer_metadata, dict), cryptainer_metadata
+        assert cryptainer_metadata is None or isinstance(cryptainer_metadata, dict), type(cryptainer_metadata)
         cryptainer_format = CRYPTAINER_FORMAT
         cryptainer_uid = self._fbu.generate_uuid0()  # ALWAYS UNIQUE!
 

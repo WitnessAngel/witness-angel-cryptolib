@@ -203,6 +203,23 @@ def test_ecc_key_on_unknown_curve_oid_is_rejected_with_value_error(backend):
     with pytest.raises(ValueError):
         backend.import_ecc_key_from_pem(key_pem)
 
+
+def test_ecc_keys_with_explicit_curve_parameters_or_hybrid_points_are_rejected(backend):
+    import_crypto_backend("fallback")  # Skips the test when ecdsa is missing
+    import ecdsa
+
+    private_key = ecdsa.SigningKey.generate(ecdsa.NIST256p)
+    public_key = private_key.verifying_key
+    assert backend.import_ecc_key_from_pem(public_key.to_pem(point_encoding="compressed"))  # Sanity check
+    for key_pem in [
+        public_key.to_pem(curve_parameters_encoding="explicit"),
+        public_key.to_pem(point_encoding="hybrid"),
+        private_key.to_pem(format="pkcs8", curve_parameters_encoding="explicit"),
+    ]:
+        with pytest.raises(ValueError):
+            backend.import_ecc_key_from_pem(key_pem)
+
+
 @pytest.mark.parametrize(
     "der, tag",
     [

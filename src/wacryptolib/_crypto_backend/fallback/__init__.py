@@ -440,9 +440,9 @@ def _build_x25519_private_key(private_bytes):
     return X25519Key(hpke_x25519_seal.x25519(private_bytes, hpke_x25519_seal._X25519_BASE_POINT), private_bytes)
 
 
-# NIST curves, with the names pycryptodome accepts for them
+# NIST curves, with the (uppercased) names pycryptodome accepts for them
 _NIST_CURVES = {
-    name_template % bits: curve
+    (name_template % bits).upper(): curve
     for bits, curve in [(192, ecdsa.NIST192p), (224, ecdsa.NIST224p), (256, ecdsa.NIST256p), (384, ecdsa.NIST384p),
                         (521, ecdsa.NIST521p)]
     for name_template in ("p%d", "P-%d", "NIST P-%d", "nistp%d", "secp%dr1", "prime%dv1")
@@ -454,13 +454,14 @@ def ecc_key_class_fetcher():
 
 
 def generate_ecc_keypair(curve):
-    if curve.lower() in ("curve25519", "x25519"):
+    curve = curve.upper()
+    if curve in ("CURVE25519", "X25519"):
         private_key = _build_x25519_private_key(os.urandom(32))
         return private_key.public_key(), private_key
-    if curve in ("ed25519", "Ed25519", "ed448", "Ed448", "curve448", "Curve448"):
+    if curve in ("ED25519", "ED448", "CURVE448", "X448"):
         raise _requires_pycryptodome("ECC key generation on curve %r" % curve)
     if curve not in _NIST_CURVES:
-        curve_names = sorted(_NIST_CURVES) + ["curve25519"]
+        curve_names = sorted(_NIST_CURVES) + ["CURVE25519", "X25519"]
         raise ValueError("Unexisting ECC curve '%s', must be one of '%s'" % (curve, curve_names))
     private_key = ecdsa.SigningKey.generate(curve=_NIST_CURVES[curve])
     return private_key.verifying_key, private_key

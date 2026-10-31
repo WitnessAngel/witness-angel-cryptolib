@@ -352,3 +352,8 @@ def test_pkcs8_private_keys_with_attributes_or_public_key_are_accepted(backend, 
         der = pem.encode_sequence(pem.encode_integer(bad_version), algorithm_identifier, private_key_octets, *bad_optional_items)
         with pytest.raises(ValueError):
             backend.import_ecc_key_from_pem(pem.encode_pem(der, "PRIVATE KEY"))
+
+
+def test_aes_eax_rejects_empty_nonce(backend):
+    with pytest.raises(ValueError, match="Nonce cannot be empty"):
+        backend.encrypt_via_aes_eax(b"abc", key=bytes(32), nonce=b"")

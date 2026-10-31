@@ -137,6 +137,19 @@ def test_fallback_rejects_degenerate_rsa_primes_with_value_error(p, q):
     with pytest.raises(ValueError):
         fallback.import_rsa_key_from_pem(pem.encode_pem(der, "RSA PRIVATE KEY"))
 
+
+def test_ecc_key_on_unknown_curve_oid_is_rejected_with_value_error(backend):
+    import base64
+
+    der = base64.b64decode(b"".join(NIST_P256_PUBLIC_KEY_PEM.splitlines()[1:-1]))
+    p256_oid = bytes.fromhex("06082a8648ce3d030107")
+    unknown_oid = bytes.fromhex("06042a030405")  # 1.2.3.4.5
+    tampered = der.replace(p256_oid, unknown_oid)
+    tampered = bytes([0x30, len(tampered) - 2, 0x30, der[3] - 4]) + tampered[4:]  # Shrunk outer lengths
+    key_pem = b"-----BEGIN PUBLIC KEY-----\n%s-----END PUBLIC KEY-----" % base64.encodebytes(tampered)
+    with pytest.raises(ValueError):
+        backend.import_ecc_key_from_pem(key_pem)
+
 @pytest.mark.parametrize(
     "der, tag",
     [

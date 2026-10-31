@@ -324,3 +324,9 @@ def test_fallback_rsa_oaep_checks_all_paddings_even_when_first_byte_is_wrong(mon
     with pytest.raises(ValueError, match="Incorrect decryption"):
         fallback.decrypt_via_rsa_oaep([ciphertext], private_key)
     assert compared  # No early exit revealing the first byte through timing
+
+
+@pytest.mark.parametrize("key_length_bits", [1024, 1025])
+def test_rsa_keypair_has_the_requested_length(backend, key_length_bits):
+    _public_key, private_key = backend.generate_rsa_keypair(key_length_bits)
+    assert private_key.n.bit_length() == key_length_bits

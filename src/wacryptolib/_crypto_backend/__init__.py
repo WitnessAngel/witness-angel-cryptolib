@@ -28,6 +28,11 @@ else:
     try:
         from .fallback import *
     except ImportError as exc:
+        if os.getenv("FORCE_WACRYPTOLIB_FALLBACK_BACKEND"):
+            raise ImportError(
+                "FORCE_WACRYPTOLIB_FALLBACK_BACKEND is set, but the pure-python packages of the 'fallbacks' extra "
+                "are missing (%s)" % exc
+            ) from exc
         raise ImportError(
             "No usable crypto backend: install pycryptodome (default dependency of wacryptolib), or, on platforms "
             "where it can't load, the pure-python packages of the 'fallbacks' extra (%s)" % exc

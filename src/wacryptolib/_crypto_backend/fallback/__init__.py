@@ -28,7 +28,7 @@ from .. import hpke_x25519_seal
 from ..vendor import dsa as _dsa
 from ..vendor.aes_eax import EaxCipher
 from ..vendor.chacha20_poly1305 import ChaCha20Poly1305Cipher
-from ..vendor.primes import get_random_prime
+from ..vendor.primes import get_random_prime, is_probable_prime
 from . import pem as _pem
 from ...utilities.data_utils import pad_bytes_pkcs7, unpad_bytes_pkcs7
 
@@ -302,6 +302,9 @@ def _build_rsa_private_key(n, e, d, p, q):
     # Degenerate primes must give a ValueError, not a ZeroDivisionError or an assertion failure in pkcs1
     if p < 2 or q < 2 or math.gcd(p, q) != 1 or p * q != n or e * d % math.lcm(p - 1, q - 1) != 1:
         raise ValueError("Invalid RSA key components")
+    # Like pycryptodome's construct(); ponytail: 10 rounds only catch corrupted keys, not adversarially crafted ones
+    if not (is_probable_prime(p, rounds=10) and is_probable_prime(q, rounds=10)):
+        raise ValueError("Invalid RSA key components (composite factor)")
     return pkcs1.keys.MultiPrimeRsaPrivateKey([p, q], e)
 
 
@@ -321,7 +324,7 @@ def _decode_rsa_pkcs1_private_key(der):
 
 def _decode_rsa_pkcs1_public_key(der):
     n, e = (_pem.decode_integer(x) for x in _pem.decode_sequence(der, 2))
-    if n < 3 or not 3 <= e < n:
+    if n < 3 or not n & 1 or not 3 <= e < n or math.gcd(n, e) != 1:  # Like pycryptodome's construct()
         raise ValueError("Invalid RSA public key components")
     return pkcs1.keys.RsaPublicKey(n, e)
 

@@ -308,7 +308,8 @@ class CryptainerDecryptor(CryptainerBase):
         :return: deciphered plaintext and operation report
         :raises SchemaValidationError: if the cryptainer structure is invalid (e.g. empty cipher layers)
         """
-        assert isinstance(cryptainer, dict), cryptainer
+        if not isinstance(cryptainer, dict):  # Not an assert, which vanishes under "python -O"
+            raise SchemaValidationError("Cryptainer must be a dict, not %s" % type(cryptainer).__name__)
 
         cryptainer_format = cryptainer.get("cryptainer_format")
         if cryptainer_format != CRYPTAINER_FORMAT:

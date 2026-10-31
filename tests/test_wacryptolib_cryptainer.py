@@ -2440,6 +2440,12 @@ def test_cryptainer_without_keychain_uid_is_refused_upfront():
     assert "keychain_uid" not in SIMPLE_CRYPTOCONF
 
 
+def test_decrypt_non_dict_cryptainer_raises_schema_validation_error():
+    for wrong_cryptainer in (None, 42, [{}]):
+        with pytest.raises(SchemaValidationError, match="must be a dict"):
+            decrypt_payload_from_cryptainer(wrong_cryptainer)
+
+
 def test_gather_decryptable_symkeys_accepts_payloadless_cryptainers_and_iterators(tmp_path):
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
     cryptainer_filepath = tmp_path.joinpath("my.crypt")

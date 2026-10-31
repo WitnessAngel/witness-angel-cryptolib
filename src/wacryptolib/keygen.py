@@ -115,7 +115,7 @@ def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_algo: str, pa
 
     key_algo = key_algo.upper()
     if key_algo not in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
-        raise ValueError("Unknown key type %s" % key_pem)
+        raise ValueError("Unknown key type %s" % key_algo)
     key_import_function = ASYMMETRIC_KEY_ALGOS_REGISTRY[key_algo]["pem_import_function"]
     try:
         return key_import_function(key_pem, passphrase=passphrase)
@@ -173,7 +173,7 @@ def _serialize_key_object_to_pem_bytestring(key, key_algo: str, passphrase: Opti
 
     If a passphrase is provided, the key (which must be PRIVATE) is encrypted with it.
     The exact encryption of the key depends on its key_algo."""
-    assert passphrase is None or (isinstance(passphrase, bytes) and passphrase), repr(
+    assert passphrase is None or (isinstance(passphrase, bytes) and passphrase), type(
         passphrase
     )  # No implicit encoding here
     pem_export_function = ASYMMETRIC_KEY_ALGOS_REGISTRY[key_algo]["pem_export_function"]

@@ -91,7 +91,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
         keychain_uid_for_encryption,
         key_algo_for_encryption,
     ):
-        assert isinstance(key_ciphertext, bytes), key_ciphertext
+        assert isinstance(key_ciphertext, bytes), type(key_ciphertext)
 
         trustee_id = get_trustee_id(trustee_conf=key_cipher_trustee)
         symkey_decryption_request = {
@@ -110,7 +110,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
     def _gather_decryptable_symkeys(
         cryptainer_name, cryptainer_uid, cryptainer_metadata, key_cipher_layers: list, key_ciphertext
     ):
-        assert isinstance(key_ciphertext, bytes), key_ciphertext
+        assert isinstance(key_ciphertext, bytes), type(key_ciphertext)
 
         # Only the LAST layer of symkey ciphering allows for a remote symkey decryption request
         last_key_cipher_layer = key_cipher_layers[-1]

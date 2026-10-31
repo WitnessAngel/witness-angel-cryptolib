@@ -176,7 +176,7 @@ class CryptainerEncryptor(CryptainerBase):
             payload_stream = payload
             payload = payload_stream.read()
             # DO NOT delete the file, e.g. it might come from CLI!
-        assert isinstance(payload, bytes), payload
+        assert isinstance(payload, bytes), type(payload)
         ## FIXME LATER ADD THIS - assert payload, payload  # No encryption must be launched if we have no payload to process!
         return payload
 
@@ -197,12 +197,12 @@ class CryptainerEncryptor(CryptainerBase):
             )
             assert isinstance(
                 payload_cipherdict, dict
-            ), payload_cipherdict  # Might contain integrity/authentication data too
+            ), type(payload_cipherdict)  # Might contain integrity/authentication data too
 
             payload_ciphertext = payload_cipherdict.pop("ciphertext")  # Mandatory field
             assert isinstance(
                 payload_ciphertext, bytes
-            ), payload_ciphertext  # Same raw content as would be in offloaded payload file
+            ), type(payload_ciphertext)  # Same raw content as would be in offloaded payload file
 
             payload_digests = {
                 payload_hash_algo: hash_message(payload_ciphertext, hash_algo=payload_hash_algo)

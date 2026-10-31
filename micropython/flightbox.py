@@ -161,7 +161,7 @@ class FlightBox:
             payload_stream = payload
             payload = payload_stream.read()
             # DO NOT delete the file, e.g. it might come from CLI!
-        assert isinstance(payload, bytes), payload
+        assert isinstance(payload, bytes), type(payload)
         ## FIXME LATER ADD THIS - assert payload, payload  # No encryption must be launched if we have no payload to process!
         return payload
 
@@ -182,12 +182,12 @@ class FlightBox:
             )
             assert isinstance(
                 payload_cipherdict, dict
-            ), payload_cipherdict  # Might contain integrity/authentication data too
+            ), type(payload_cipherdict)  # Might contain integrity/authentication data too
 
             payload_ciphertext = payload_cipherdict.pop("ciphertext")  # Mandatory field
             assert isinstance(
                 payload_ciphertext, bytes
-            ), payload_ciphertext  # Same raw content as would be in offloaded payload file
+            ), type(payload_ciphertext)  # Same raw content as would be in offloaded payload file
 
             payload_digests = {
                 payload_hash_algo: hash_message(payload_ciphertext, hash_algo=payload_hash_algo)
@@ -253,7 +253,7 @@ class FlightBox:
                 key_cipher_layers=key_cipher_layers,
                 cryptainer_metadata=cryptainer_metadata,
             )
-            assert isinstance(key_ciphertext, bytes), key_ciphertext
+            assert isinstance(key_ciphertext, bytes), type(key_ciphertext)
             payload_cipher_layer["key_ciphertext"] = key_ciphertext
 
             payload_cipher_layer_extract = dict(
@@ -330,7 +330,7 @@ class FlightBox:
                  If an asymmetric algorithm has been used, a dictionary with all the information
                  needed to decipher the symmetric key is returned.
         """
-        assert isinstance(key_bytes, bytes), key_bytes
+        assert isinstance(key_bytes, bytes), type(key_bytes)
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
 
         if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
@@ -361,7 +361,7 @@ class FlightBox:
                     key_cipher_layers=key_shared_secret_shard_conf["key_cipher_layers"],
                     cryptainer_metadata=cryptainer_metadata,
                 )  # Recursive structure
-                assert isinstance(shard_ciphertext, bytes), shard_ciphertext
+                assert isinstance(shard_ciphertext, bytes), type(shard_ciphertext)
                 shard_ciphertexts.append(shard_ciphertext)
 
             key_cipherdict = {"shard_ciphertexts": shard_ciphertexts}  # A dict is more future-proof than list
@@ -378,7 +378,7 @@ class FlightBox:
                 key_cipher_layers=key_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
             )  # Recursive structure
-            assert isinstance(sub_symkey_ciphertext, bytes), sub_symkey_ciphertext
+            assert isinstance(sub_symkey_ciphertext, bytes), type(sub_symkey_ciphertext)
 
             key_cipher_layer["key_ciphertext"] = sub_symkey_ciphertext
 
@@ -397,7 +397,7 @@ class FlightBox:
                 cryptainer_metadata=cryptainer_metadata,
             )
 
-        assert isinstance(key_cipherdict, dict), key_cipherdict
+        assert isinstance(key_cipherdict, dict), type(key_cipherdict)
         return key_cipherdict
 
     '''

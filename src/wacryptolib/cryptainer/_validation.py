@@ -308,6 +308,8 @@ def _check_cryptainer_structure(cryptainer: dict, require_inline_payload: bool):
 
     :param require_inline_payload: if True, the payload ciphertext must be present, inline, as bytes
     """
+    if not isinstance(cryptainer, dict):
+        raise SchemaValidationError("Cryptainer must be a dict, not %s" % type(cryptainer).__name__)
     payload_ciphertext_struct = cryptainer.get("payload_ciphertext_struct")
     if require_inline_payload:
         if not (

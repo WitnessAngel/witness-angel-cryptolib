@@ -547,6 +547,7 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     # Check the fallback on "all classical types of keys" for key_algos parameter
 
     assert "RSA_OAEP" in DEFAULT_FREE_KEYPAIR_KEY_ALGOS
+    assert isinstance(DEFAULT_FREE_KEYPAIR_KEY_ALGOS, tuple)  # Not mutable by accident
     assert {"ML_KEM_768", "ML_DSA_65"} <= set(PQ_KEY_ALGOS)
     assert not set(PQ_KEY_ALGOS) & set(DEFAULT_FREE_KEYPAIR_KEY_ALGOS)  # Post-quantum keypairs are opt-in
 

@@ -764,6 +764,8 @@ def test_is_cryptainer_cryptoconf_streamable():
 )
 # with local keyfactory
 def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, trustee_dependencies_builder):
+    if "ML_" in str(cryptoconf):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     if "ECC_DSS" in str(cryptoconf):
         skip_if_fallback_backend("ECC")
     payload = _get_binary_or_empty_content()
@@ -2264,6 +2266,8 @@ def test_cryptoconf_validation_error_via_json_schema(corrupted_conf):
     [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF, PQ_HYBRID_CRYPTOCONF],
 )
 def test_cryptainer_validation_success(cryptoconf):
+    if "ML_" in str(cryptoconf):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None)
     check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 
@@ -2621,6 +2625,7 @@ def _build_pq_hybrid_cryptainer(keystore_pool):
 
 @pytest.mark.parametrize("removed_key_algo", ["ML_KEM_768", "RSA_OAEP"])
 def test_pq_hybrid_cryptainer_decryption_with_missing_private_key(removed_key_algo):
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     keystore_pool = InMemoryKeystorePool()
     cryptainer = _build_pq_hybrid_cryptainer(keystore_pool)
 
@@ -2641,6 +2646,7 @@ def test_pq_hybrid_cryptainer_decryption_with_missing_private_key(removed_key_al
 
 
 def test_pq_hybrid_cryptainer_with_corrupted_ml_dsa_signature():
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     keystore_pool = InMemoryKeystorePool()
     cryptainer = _build_pq_hybrid_cryptainer(keystore_pool)
 
@@ -2665,6 +2671,7 @@ def test_pq_hybrid_cryptainer_with_corrupted_ml_dsa_signature():
 def test_pq_hybrid_fixture_cryptainer_decryption(tmp_path):
     """Wire-format compatibility check: a cryptainer and keys committed in the repository must stay decryptable
     (regenerate with scripts/generate_post_quantum_fixtures.py if the cryptainer format itself changes)."""
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     keystore_pool_dir = tmp_path / "keystore_pool"
     shutil.copytree(PQ_FIXTURES_DIR / "keystore_pool", keystore_pool_dir)
     keystore_pool = FilesystemKeystorePool(keystore_pool_dir)

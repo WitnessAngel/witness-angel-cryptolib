@@ -13,6 +13,7 @@ import sys
 import pytest
 
 import wacryptolib
+from _test_mockups import skip_if_fallback_backend
 from wacryptolib._crypto_backend import get_random_bytes, generate_rsa_keypair
 from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipeline
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
@@ -302,6 +303,7 @@ def test_symmetric_decryption_verify(cipher_algo):
 
 
 def test_ml_kem_768_asymmetric_encryption_and_decryption():
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     cipher_algo = "ML_KEM_768"
     keypair = wacryptolib.keygen.generate_keypair(key_algo=cipher_algo, serialize=False)
     # Bypass the keypair cache of conftest.py, to really get a different keypair
@@ -382,6 +384,7 @@ def test_ml_kem_768_asymmetric_encryption_and_decryption():
 
 @pytest.mark.parametrize("param_set_name", ["ML_KEM_512", "ML_KEM_1024"])
 def test_ml_kem_768_rejects_other_ml_kem_parameter_sets(param_set_name):
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     from Crypto.PublicKey import MLKEM
 
     private_key = MLKEM.generate(param_set=getattr(MLKEM.ParamSet, param_set_name))

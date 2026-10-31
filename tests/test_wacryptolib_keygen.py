@@ -42,6 +42,8 @@ def test_passphrase_encoding():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_keypair_unicity(key_algo):
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     if key_algo == "ECC_DSS":
         skip_if_fallback_backend("ECC")
     # We must reuse test-specific caching of asymmetric keypairs, for this test
@@ -122,6 +124,8 @@ def test_ecc_keypair_generation():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_load_asymmetric_key_from_pem_bytestring(key_algo):
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     if key_algo == "ECC_DSS":
         skip_if_fallback_backend("ECC")
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo)
@@ -136,6 +140,8 @@ def test_load_asymmetric_key_from_pem_bytestring(key_algo):
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     if key_algo in ("ECC_DSS", "DSA_DSS"):
         skip_if_fallback_backend("ECC, and DES3 for DSA key protection,")
     # Both Unicode and Bytes are supported
@@ -341,6 +347,7 @@ def test_backend_pem_functions_accept_str_passphrases():
 
 @pytest.mark.parametrize("key_algo", ["ML_KEM_768", "ML_DSA_65"])
 def test_post_quantum_keypair_generation_ignores_classical_parameters(key_algo):
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     # Parameter set is fixed by the algo name, so key_length_bits and curve are simply not forwarded
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, key_length_bits=1024, curve="unexisting_curve")
     assert keypair["public_key"].startswith(b"-----BEGIN PUBLIC KEY-----")
@@ -354,6 +361,7 @@ def test_post_quantum_keypair_generation_ignores_classical_parameters(key_algo):
 
 
 def test_post_quantum_key_loading_with_wrong_key_algo():
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     ml_kem_keypair = wacryptolib.keygen.generate_keypair(key_algo="ML_KEM_768")
     ml_dsa_keypair = wacryptolib.keygen.generate_keypair(key_algo="ML_DSA_65")
 

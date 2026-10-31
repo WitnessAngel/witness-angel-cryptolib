@@ -80,7 +80,7 @@ def test_keystore_basic_get_set_api(tmp_path):
     keychain_uid = filesystem_keystore_test_locals["keychain_uid"]
 
     is_public = random_bool()
-    filepath = filesystem_keystore._get_filepath(keychain_uid, key_algo="abxz", is_public=is_public)
+    filepath = filesystem_keystore._get_filepath(keychain_uid, key_algo="ABXZ", is_public=is_public)  # Normalized
     with open(filepath, "rb") as f:
         key_data = f.read()
         assert key_data == (b"public_data" if is_public else b"private_data")  # IMPORTANT no exchange of keys in files!
@@ -347,6 +347,16 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
     remote_keystore = FilesystemKeystore(remote_keystore_dir)
     with pytest.raises(KeystoreDoesNotExist):
         remote_keystore.export_to_keystore_tree()
+
+
+def test_keystore_tree_export_with_lowercase_key_algo(tmp_path: Path):
+    initialize_authenticator(tmp_path, keystore_owner="Owner", keystore_passphrase_hint="hint")
+    keystore = FilesystemKeystore(tmp_path)
+    keystore.set_keypair(  # Lowercase algo names are normalized, so they don't break exports
+        keychain_uid=generate_uuid0(), key_algo="rsa_oaep", public_key=b"pub", private_key=b"priv"
+    )
+    keystore_tree = keystore.export_to_keystore_tree()
+    assert [keypair["key_algo"] for keypair in keystore_tree["keypairs"]] == ["RSA_OAEP"]
 
 
 def test_keystore_import_from_keystore_tree(tmp_path: Path):

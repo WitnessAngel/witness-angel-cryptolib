@@ -61,7 +61,7 @@ def _encode_tlv(tag, value):
 
 
 def encode_integer(value):
-    assert value >= 0, value
+    assert value >= 0, "Negative DER integer"
     return _encode_tlv(TAG_INTEGER, value.to_bytes(value.bit_length() // 8 + 1, "big"))  # Minimal, with sign bit 0
 
 

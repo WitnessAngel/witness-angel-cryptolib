@@ -227,7 +227,7 @@ def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
 
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
 def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
-    skip_if_fallback_backend("passphrase-protected PEM export")
+    skip_if_fallback_backend("PEM decryption helper of the pycryptodome backend")
     from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
 
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
@@ -291,7 +291,7 @@ def test_crafted_pem_iteration_count_is_bounded(iteration_count):
 
 
 def test_crafted_pem_with_optional_key_length_uses_fast_path():
-    skip_if_fallback_backend("passphrase-protected PEM import")
+    skip_if_fallback_backend("PEM decryption helper of the pycryptodome backend")
     from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
 
     pem = _craft_pbes2_pem(key_length=32, iteration_count=600000)
@@ -309,7 +309,7 @@ def test_crafted_pem_with_malformed_cipher_params_is_rejected(crafting_params):
 
 
 def test_crafted_pem_with_empty_prf_falls_back_to_pycryptodome():
-    skip_if_fallback_backend("passphrase-protected PEM import")
+    skip_if_fallback_backend("PEM decryption helper of the pycryptodome backend")
     from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
 
     pem = _craft_pbes2_pem(prf=b"\x30\x00")  # Empty SEQUENCE
@@ -330,11 +330,10 @@ def test_crafted_pem_errors_do_not_reveal_padding_validity():
 
 
 def test_backend_pem_functions_accept_str_passphrases():
-    skip_if_fallback_backend("passphrase-protected PEM export")
     from wacryptolib._crypto_backend import export_ecc_key_to_pem
 
     private_key = wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", serialize=False)["private_key"]
     pem = export_ecc_key_to_pem(private_key, passphrase="abc")
     loaded = import_ecc_key_from_pem(pem, passphrase="abc")
-    assert loaded.export_key(format="DER") == private_key.export_key(format="DER")
+    assert export_ecc_key_to_pem(loaded) == export_ecc_key_to_pem(private_key)  # Works with both backends
     assert import_ecc_key_from_pem(pem, passphrase=b"abc")  # Same encoding as bytes

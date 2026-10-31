@@ -104,6 +104,12 @@ def test_forced_fallback_import_failure_names_the_forcing_variable():
     assert "FORCE_WACRYPTOLIB_FALLBACK_BACKEND is set" in result.stderr and "'fallbacks' extra" in result.stderr
 
 
+def test_fallback_import_failure_of_another_dependency_is_not_blamed_on_fallbacks_extra():
+    result = _run('sys.modules["multitimer"] = None\n', "import wacryptolib.cipher\n", force_fallback=True)
+    assert result.returncode != 0
+    assert "multitimer" in result.stderr and "'fallbacks' extra" not in result.stderr
+
+
 def test_fallback_backend_works_through_the_high_level_api():
     script = """
         from wacryptolib import _crypto_backend

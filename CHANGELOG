@@ -2,6 +2,9 @@
 Development
 =============
 
+* Summarize schema validation errors (failing field and reason, bounded size) instead of embedding whole
+  cryptainers or cryptoconfs, and stop chaining them to the raw validator exceptions
+* Delete the offloaded payload file when CryptainerEncryptionPipeline fails to start
 * **BREAKING**: Extended JSON format now defaults to RELAXED mode instead of CANONICAL mode
   - UUIDs are now serialized as `{"$uuid": "hex"}` instead of `{"$binary": {"base64": "...", "subType": "04"}}`
   - Integers are now plain JSON numbers instead of `{"$numberInt": "42"}`
@@ -15,10 +18,12 @@ Development
   gather_decryptable_symkeys()) now validates the whole cryptainer structure upfront, and raises SchemaValidationError
   instead of returning data or (None, operation_report) for most malformed cryptainers (e.g. empty
   payload_cipher_layers, which previously returned the inline ciphertext as unauthenticated plaintext, invalid
-  shared-secret thresholds, or wrong cipher algorithms); cryptainers loaded without their payload ciphertext are still
-  accepted by gather_decryptable_symkeys()
+  shared-secret thresholds, wrong cipher algorithms, or missing keychain_uid, now mandatory in cryptainers);
+  cryptainers loaded without their payload ciphertext, or still unfinished, are still accepted by
+  gather_decryptable_symkeys()
 * **BREAKING**: Encryption now validates the generated cryptainer structure before encrypting the payload, so that
-  cryptoconfs with e.g. unexpected fields are refused instead of producing cryptainers that decryption would reject
+  cryptoconfs with e.g. unexpected fields, lowercase algorithm names or a None keychain_uid are refused instead of
+  producing cryptainers that decryption would reject
 * **BREAKING**: Cryptainer/cryptoconf schemas now only accept symmetric ciphers as payload_cipher_algo, and
   asymmetric ciphers (not signature algorithms) as asymmetric key_cipher_algo
 * Generated JSON schemas now enforce non-empty payload/key cipher layers, shared-secret shards and sigconf/sigainer

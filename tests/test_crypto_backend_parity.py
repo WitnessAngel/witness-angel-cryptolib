@@ -149,6 +149,17 @@ def test_malformed_pem_is_rejected(backend, case_name):
         backend.import_rsa_key_from_pem(key_pem)
 
 
+def test_pem_with_stray_whitespace_is_accepted(backend):
+    import _crypto_test_vectors as vectors
+
+    pem = vectors.PYCRYPTODOME_PEM_FIXTURES["RSA"]["public_key"]
+    lines = pem.splitlines()
+    lines[0] += b"  "
+    lines[1] = lines[1][:10] + b" \t" + lines[1][10:]
+    key = backend.import_rsa_key_from_pem(b"  \r\n".join(lines) + b"\n")
+    assert backend.export_rsa_key_to_pem(key) == pem
+
+
 
 @pytest.mark.parametrize("p, q", [(1, 3233), (61, 61), (0, 0)])
 def test_fallback_rejects_degenerate_rsa_primes_with_value_error(p, q):

@@ -2426,6 +2426,17 @@ def test_cryptainer_validation_error_messages_are_bounded():
     assert "keychain_uid" in message
 
 
+def test_summarize_validation_error_lines_respects_max_lines():
+    from wacryptolib.utilities.validation_utils import summarize_validation_error_lines
+
+    lines = ["line%d" % i for i in range(12)]
+    summary = summarize_validation_error_lines(lines, max_lines=10).splitlines()
+    assert len(summary) == 10
+    assert summary[:3] == lines[:3] and summary[-6:] == lines[-6:]
+    assert summary[3] == "[... 3 lines skipped]"
+    assert summarize_validation_error_lines(lines[:10], max_lines=10).splitlines() == lines[:10]
+
+
 def test_cryptainer_validation_error_messages_keep_deep_causes():
     cryptainer = encrypt_payload_into_cryptainer(
         payload=b"abc", cryptoconf=COMPLEX_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
@@ -2437,7 +2448,7 @@ def test_cryptainer_validation_error_messages_keep_deep_causes():
         decrypt_payload_from_cryptainer(cryptainer)
     message = str(exc_info.value)
     assert "Wrong key 'junk_field'" in message  # Innermost cause comes LAST in python-schema errors
-    assert len(message.splitlines()) <= 11
+    assert len(message.splitlines()) <= 10
 
     # Cause in a NON-last alternative of a key cipher layer Or(), followed by the failures of other alternatives
     cryptainer = encrypt_payload_into_cryptainer(payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
@@ -2446,7 +2457,7 @@ def test_cryptainer_validation_error_messages_keep_deep_causes():
         decrypt_payload_from_cryptainer(cryptainer)
     message = str(exc_info.value)
     assert "Wrong key 'comment'" in message
-    assert len(message.splitlines()) <= 11
+    assert len(message.splitlines()) <= 10
 
 
 def test_cryptainer_without_keychain_uid_is_refused_upfront():

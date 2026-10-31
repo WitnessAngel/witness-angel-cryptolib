@@ -490,6 +490,8 @@ def _export_key_to_pem(key, passphrase, has_private, encode_private_pkcs8, encod
     """Same formats as the pycryptodome backend: public keys are never encrypted, and clear private keys
     are PKCS#8 unless `encode_private_pem` is given."""
     if not has_private:
+        if passphrase:
+            raise ValueError("Public keys can't be exported to PEM with a passphrase")  # Like pycryptodome
         return _pem.encode_pem(encode_spki(key), "PUBLIC KEY")
     if passphrase:
         return _pem.encrypt_pkcs8_to_pem(

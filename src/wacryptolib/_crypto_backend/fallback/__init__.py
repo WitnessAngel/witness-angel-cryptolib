@@ -622,10 +622,10 @@ _X25519_DENIED_U = {offset + u for offset in (0, _P25519, 2 * _P25519) for u in 
 def _decode_x25519_public_key(public_key_bits, parameters):
     if parameters is not None or len(public_key_bits) != 32:
         raise ValueError("Invalid X25519 public key")
-    public_key_bits = public_key_bits[:31] + bytes([public_key_bits[31] & 0x7F])  # RFC 7748, like pycryptodome
-    if int.from_bytes(public_key_bits, "little") in _X25519_DENIED_U:
+    u = int.from_bytes(public_key_bits, "little") & ~(1 << 255)  # RFC 7748, like pycryptodome
+    if u in _X25519_DENIED_U:
         raise ValueError("Invalid X25519 public key (low order point)")
-    return X25519Key(public_key_bits)
+    return X25519Key((u % _P25519).to_bytes(32, "little"))  # Non-canonical u is reduced, like pycryptodome
 
 
 def _decode_nist_ecc_key(decode, der):

@@ -451,3 +451,24 @@ def test_dss_rejects_dsa_keys_with_non_fips_186_3_sizes(backend):
         backend.sign_with_dss(backend.get_hasher_instance("SHA512"), key)
     with pytest.raises(ValueError, match="FIPS 186-3"):
         backend.verify_with_dss(backend.get_hasher_instance("SHA512"), bytes(40), key)
+
+
+@pytest.mark.parametrize("optional_items", [["prf", "prf"], ["prf", "key_length"], ["key_length", "key_length"]])
+def test_fallback_rejects_misordered_or_repeated_pbkdf2_parameters(optional_items):
+    fallback = import_crypto_backend("fallback")
+    from wacryptolib._crypto_backend.fallback import pem
+
+    encoded_items = {
+        "prf": pem.encode_algorithm_identifier(pem.OID_HMAC_SHA256, pem.encode_null()),
+        "key_length": pem.encode_integer(32),
+    }
+    pbkdf2_params = pem.encode_sequence(
+        pem.encode_octet_string(bytes(16)), pem.encode_integer(1000), *(encoded_items[item] for item in optional_items)
+    )
+    pbes2_params = pem.encode_sequence(
+        pem.encode_algorithm_identifier(pem.OID_PBKDF2, pbkdf2_params),
+        pem.encode_algorithm_identifier(pem.OID_AES256_CBC, pem.encode_octet_string(bytes(16))),
+    )
+    der = pem.encode_sequence(pem.encode_algorithm_identifier(pem.OID_PBES2, pbes2_params), pem.encode_octet_string(bytes(16)))
+    with pytest.raises(ValueError, match="Malformed encrypted private key"):
+        pem.decrypt_pkcs8(der, b"abc", decrypt_via_aes_cbc=fallback.decrypt_via_aes_cbc)

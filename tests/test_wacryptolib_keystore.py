@@ -539,6 +539,12 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     assert keystore.get_free_keypairs_count("ECIES_X25519") == 0  # New key algos are opt-in
     assert generated_keys_count == 4
 
+    keystore = InMemoryKeystore()
+    generate_free_keypair_for_least_provisioned_key_algo(
+        keystore=keystore, max_free_keys_per_algo=1, keygen_func=keygen_func, key_algos=["rsa_oaep"]
+    )
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 1  # Algo names are normalized to uppercase
+
     # Now test with a restricted set of key types
 
     keystore = InMemoryKeystore()

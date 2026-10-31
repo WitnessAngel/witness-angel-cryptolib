@@ -10,7 +10,6 @@ import random
 import pytest
 
 import wacryptolib
-from _test_mockups import is_fallback_backend
 from wacryptolib._crypto_backend import get_random_bytes, generate_rsa_keypair, generate_ecc_keypair
 from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipeline
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
@@ -18,7 +17,6 @@ from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionI
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS, hash_message
 
-from _test_mockups import skip_if_fallback_backend
 
 
 def _get_binary_content():
@@ -157,7 +155,6 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
 
 @pytest.mark.parametrize("plaintext_length", [0, 10, 61, 500])
 def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
-    skip_if_fallback_backend("ECC")
     cipher_algo = "ECIES_X25519"
     keypair = wacryptolib.keygen.generate_keypair(key_algo=cipher_algo, serialize=False)
     encrypt = functools.partial(wacryptolib.cipher.encrypt_bytestring, cipher_algo=cipher_algo)

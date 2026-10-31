@@ -289,3 +289,25 @@ def test_ecc_private_key_with_mismatched_public_point_is_rejected(backend):
     assert backend.import_ecc_key_from_pem(backend.export_ecc_key_to_pem(imported_key))  # Sanity check
     with pytest.raises(ValueError):
         backend.import_ecc_key_from_pem(pkcs8_pem(ec_private_key_items(other_key)[3]))
+
+
+def test_fallback_rsa_private_operations_are_freshly_blinded_and_checked(monkeypatch):
+    import pkcs1.keys
+
+    fallback = import_crypto_backend("fallback")
+    public_key, private_key = fallback.generate_rsa_keypair(2048)
+    (ciphertext,) = fallback.encrypt_via_rsa_oaep([b"abc"], public_key)
+
+    original_rsadp = pkcs1.keys.MultiPrimeRsaPrivateKey.rsadp
+    rsadp_inputs = []
+    monkeypatch.setattr(
+        pkcs1.keys.MultiPrimeRsaPrivateKey, "rsadp", lambda key, c: rsadp_inputs.append(c) or original_rsadp(key, c)
+    )
+    for _ in range(2):
+        assert fallback.decrypt_via_rsa_oaep([ciphertext], private_key) == [b"abc"]
+    assert rsadp_inputs[0] != rsadp_inputs[1]
+
+    monkeypatch.setattr(pkcs1.keys.MultiPrimeRsaPrivateKey, "rsadp", lambda key, c: original_rsadp(key, c) ^ 1)
+    hasher = fallback.get_hasher_instance("SHA512")
+    with pytest.raises(ValueError, match="Fault detected"):
+        fallback.sign_with_pss(hasher, private_key)

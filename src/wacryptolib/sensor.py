@@ -89,7 +89,7 @@ class TarfileRecordAggregator(TimeLimitedAggregatorMixin):
         if not self._current_tarfile:
             assert not self._current_bytesio, type(self._current_bytesio)
             assert not self._current_metadata, type(self._current_metadata)
-            assert not self._current_records_count, self._current_bytesio
+            assert not self._current_records_count, self._current_records_count
             self._current_bytesio = io.BytesIO()
             self._current_tarfile = tarfile.open(
                 mode=self.tarfile_writing_mode, fileobj=self._current_bytesio  # TODO - add tarfile compression?

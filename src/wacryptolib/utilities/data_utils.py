@@ -35,7 +35,7 @@ def do_split_secret_into_shards(secret: bytes, *, shard_count: int, threshold_co
     for chunk in chunks:
         assert len(chunk) == 16
         shards = shamir_128b_split_func(k=threshold_count, n=shard_count, secret=chunk)
-        assert len(shards) == shard_count, shards
+        assert len(shards) == shard_count, len(shards)
         all_chunk_shards.append(shards)
         del shards
 

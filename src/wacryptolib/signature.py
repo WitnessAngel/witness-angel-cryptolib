@@ -12,8 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 def _get_signature_conf(signature_algo, key):
-    assert signature_algo, signature_algo
-    signature_algo = signature_algo.upper()
     signature_conf = SIGNATURE_ALGOS_REGISTRY.get(signature_algo)
     if signature_conf is None:
         raise ValueError("Unknown signature algorithm '%s'" % signature_algo)
@@ -42,6 +40,7 @@ def sign_message(message: bytes, *, signature_algo: str, private_key: object) ->
 
     :return: dictionary with signature data"""
 
+    signature_algo = signature_algo.upper()
     logger.debug("Signing message of length %d with signature algo %s", len(message), signature_algo)
     signature_conf = _get_signature_conf(signature_algo=signature_algo, key=private_key)
     signature_function = signature_conf["signature_function"]
@@ -66,6 +65,7 @@ def verify_message_signature(*, message: bytes, signature_algo: str, signature: 
     :param public_key: the cryptographic key used to verify the signature
     """
 
+    signature_algo = signature_algo.upper()
     logger.debug("Verifying signature of message of length %d with signature algo %s", len(message), signature_algo)
 
     signature_conf = _get_signature_conf(signature_algo=signature_algo, key=public_key)

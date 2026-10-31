@@ -25,7 +25,6 @@ RSA_OAEP_CHUNKS_SIZE = 60
 
 
 def _get_cipher_algo_conf(cipher_algo):
-    cipher_algo = cipher_algo.upper()
     if cipher_algo not in CIPHER_ALGOS_REGISTRY:
         raise ValueError("Unknown cipher type '%s'" % cipher_algo)
 
@@ -108,6 +107,7 @@ def check_cipherdict_sanity(cipherdict: dict, *, cipher_algo: str):
     Unknown fields are tolerated, since they are not used for decryption.
 
     :raises SchemaValidationError: if the cipherdict is malformed"""
+    cipher_algo = cipher_algo.upper()
     cipher_algo_conf = _get_cipher_algo_conf(cipher_algo)
     validate_data_against_schema(cipherdict, schema=cipher_algo_conf["cipherdict_schema"])
 

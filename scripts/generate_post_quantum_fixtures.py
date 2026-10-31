@@ -8,7 +8,8 @@ import shutil
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests"))
+_ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path[:0] = [str(_ROOT_DIR / "src"), str(_ROOT_DIR / "tests")]  # Use the wacryptolib under test, not an installed one
 
 from test_wacryptolib_cryptainer import PQ_FIXTURES_DIR, _build_pq_hybrid_cryptainer  # noqa: E402
 from wacryptolib.cryptainer import dump_cryptainer_to_filesystem  # noqa: E402

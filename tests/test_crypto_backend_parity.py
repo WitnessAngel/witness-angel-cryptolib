@@ -408,3 +408,13 @@ def test_hash_algo_names_are_case_insensitive(both_backends):
         for hasher in hashers:
             hasher.update(b"abc")
         assert len({hasher.digest() for hasher in hashers}) == 1
+
+
+def test_fallback_ecc_key_errors_do_not_embed_key_bytes():
+    fallback = import_crypto_backend("fallback")
+    import ecdsa
+
+    der = ecdsa.SigningKey.generate(ecdsa.NIST256p).verifying_key.to_der()
+    with pytest.raises(ValueError) as exc_info:
+        fallback._decode_nist_ecc_key(ecdsa.VerifyingKey.from_der, der + b"\xaa" * 8)
+    assert "aaaa" not in str(exc_info.value) and "UnexpectedDER" in str(exc_info.value)

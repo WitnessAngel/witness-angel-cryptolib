@@ -71,7 +71,7 @@ ruamel-yaml-clib==0.2.8 ; platform_python_implementation == "CPython" and python
 ruamel-yaml==0.18.5 ; python_version >= "3.7" and python_version < "4.0"
 safety==2.3.4 ; python_version >= "3.7" and python_version < "4.0"
 schema==0.7.5 ; python_version >= "3.7" and python_version < "4.0"
-setuptools==68.0.0 ; python_version >= "3.7" and python_version < "4.0"
+setuptools==84.1.0 ; python_version >= "3.7" and python_version < "4.0"
 six==1.16.0 ; python_version >= "3.7" and python_version < "4.0"
 snowballstemmer==2.2.0 ; python_version >= "3.7" and python_version < "4.0"
 sphinx-autodoc-typehints==1.23.0 ; python_version >= "3.7" and python_version < "4.0"

@@ -97,7 +97,14 @@ def test_fallback_backend_seals_with_pure_python(tmp_path):
         assert _crypto_backend.pycryptodome._patch_pycryptodome_internals
         tmp_path = Path(sys.argv[1])
         public_key = load_asymmetric_key_from_pem_bytestring((tmp_path / "public_key.pem").read_bytes(), key_algo="ECIES_X25519")
-        assert isinstance(public_key, bytes) and len(public_key) == 32
+        assert isinstance(public_key, _crypto_backend.X25519RawPublicKey) and len(public_key) == 32
+        for not_a_public_key in (bytes(public_key), bytes(32)):  # E.g. a symmetric key mistaken for a public key
+            try:
+                encrypt_bytestring(b"hello", cipher_algo="ECIES_X25519", key_dict=dict(key=not_a_public_key))
+            except Exception as exc:
+                assert "X25519 key, not <class 'bytes'>" in str(exc), exc
+            else:
+                raise AssertionError("Plain bytes accepted as X25519 public key")
         cipherdict = encrypt_bytestring(b"hello", cipher_algo="ECIES_X25519", key_dict=dict(key=public_key))
         (tmp_path / "kem_ciphertext").write_bytes(cipherdict["kem_ciphertext"])
         (tmp_path / "ciphertext").write_bytes(cipherdict["ciphertext"])

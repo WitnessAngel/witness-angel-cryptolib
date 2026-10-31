@@ -722,7 +722,7 @@ class CryptainerDecryptor(CryptainerBase):
         passphrases = self._passphrase_mapper.get(trustee_id) or []
         assert isinstance(passphrases, list), type(passphrases)  # No SINGLE passphrase here
 
-        passphrases = passphrases + (self._passphrase_mapper.get(None) or [])  # Add COMMON passphrases, in a NEW list
+        passphrases = passphrases + list(self._passphrase_mapper.get(None) or [])  # Add COMMON passphrases, in a NEW list
 
         operation_report.add_information(
             "Attempting actual decryption of key using asymmetric algorithm %s (via trustee)" % cipher_algo

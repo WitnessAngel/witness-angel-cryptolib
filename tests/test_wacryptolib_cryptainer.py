@@ -2426,6 +2426,21 @@ def test_cryptainer_validation_error_messages_are_bounded():
     assert "keychain_uid" in message
 
 
+def test_cryptainer_validation_error_messages_keep_deep_causes():
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"abc", cryptoconf=COMPLEX_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
+    )
+    shared_secret_layer = cryptainer["payload_cipher_layers"][2]["key_cipher_layers"][0]
+    shared_secret_layer["key_shared_secret_shards"][1]["key_cipher_layers"][0]["junk_field"] = 1
+
+    with pytest.raises(SchemaValidationError) as exc_info:
+        decrypt_payload_from_cryptainer(cryptainer)
+    message = str(exc_info.value)
+    assert "Wrong key 'junk_field'" in message  # Innermost cause comes LAST in python-schema errors
+    assert "lines skipped" in message
+    assert len(message.splitlines()) <= 11
+
+
 def test_cryptainer_without_keychain_uid_is_refused_upfront():
     cryptainer = encrypt_payload_into_cryptainer(payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
     del cryptainer["keychain_uid"]

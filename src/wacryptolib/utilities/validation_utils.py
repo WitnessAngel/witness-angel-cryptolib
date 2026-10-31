@@ -13,11 +13,16 @@ from wacryptolib.exceptions import SchemaValidationError
 
 def summarize_validation_error_lines(lines, max_lines=10, max_line_length=120) -> str:
     """Build a bounded error message from validator lines, which may embed huge reprs of the validated data
-    (payloads, ciphertexts...). Each line keeps its head (usually a field name) and its tail (usually the reason)."""
+    (payloads, ciphertexts...). Each line keeps its head (usually a field name) and its tail (usually the reason).
+
+    Same for the lines list: python-schema puts the outer context first and the innermost cause LAST."""
     half = max_line_length // 2
     lines = [(line if len(line) <= max_line_length else line[:half] + " [...] " + line[-half:]) for line in lines]
     if len(lines) > max_lines:
-        lines = lines[:max_lines] + ["[... %d more lines]" % (len(lines) - max_lines)]
+        head_count = max_lines // 3
+        tail_count = max_lines - head_count
+        skipped_count = len(lines) - max_lines
+        lines = lines[:head_count] + ["[... %d lines skipped]" % skipped_count] + lines[-tail_count:]
     return "\n".join(lines)
 
 

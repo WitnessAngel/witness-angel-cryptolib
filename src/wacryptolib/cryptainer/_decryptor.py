@@ -312,7 +312,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         cryptainer_format = cryptainer.get("cryptainer_format")
         if cryptainer_format != CRYPTAINER_FORMAT:
-            raise ValueError("Unknown cryptainer format %s" % cryptainer_format)
+            raise ValueError("Unknown cryptainer format %.100r" % cryptainer_format)
 
         # Validate the WHOLE structure upfront (including shards that decryption might never walk), before any
         # network or private key operation. E.g. without this, an empty payload_cipher_layers list would make the

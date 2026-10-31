@@ -4,7 +4,6 @@
 
 from typing import Union
 
-import schema as pythonschema
 from schema import Or, Optional as OptionalKey, And, Schema
 
 from wacryptolib.cipher import SUPPORTED_SYMMETRIC_CIPHER_ALGOS, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS
@@ -14,7 +13,8 @@ from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
-from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson
+from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema
+from wacryptolib.utilities.validation_utils import summarize_validation_error_lines
 
 
 def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, extended_json_format: bool):
@@ -263,12 +263,10 @@ def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema])
     :param data_tree: cryptainer or cryptoconf to validate
     :param valid_schema: validation scheme
     """
+    # Error messages are summarized and NOT chained, since validator errors embed the (maybe huge) data tree
     if isinstance(validation_schema, Schema):
         # We use the python-schema module
-        try:
-            validation_schema.validate(data_tree)
-        except pythonschema.SchemaError as exc:
-            raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
+        validate_data_against_schema(data_tree, schema=validation_schema)
 
     else:
         # We use the json-schema module, LAZILY LOADED
@@ -277,7 +275,11 @@ def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema])
         try:
             jsonschema_validate(instance=data_tree, schema=validation_schema)
         except JsonschemaValidationError as exc:
-            raise SchemaValidationError("Error validating data tree with json-schema: {}".format(exc)) from exc
+            field_path = "/".join(str(x) for x in exc.absolute_path) or "<root>"
+            summary = summarize_validation_error_lines(
+                ["Field '%s' failed '%s' check:" % (field_path, exc.validator), exc.message]
+            )
+            raise SchemaValidationError("Error validating data tree with json-schema: {}".format(summary)) from None
 
 
 def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):

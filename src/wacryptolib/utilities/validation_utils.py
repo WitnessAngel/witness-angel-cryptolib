@@ -11,6 +11,20 @@ from schema import SchemaError, Schema
 from wacryptolib.exceptions import SchemaValidationError
 
 
+def summarize_validation_error_lines(lines, max_lines=10, max_line_length=120) -> str:
+    """Build a bounded error message from validator lines, which may embed huge reprs of the validated data
+    (payloads, ciphertexts...). Each line keeps its head (usually a field name) and its tail (usually the reason)."""
+    half = max_line_length // 2
+    lines = [(line if len(line) <= max_line_length else line[:half] + " [...] " + line[-half:]) for line in lines]
+    if len(lines) > max_lines:
+        lines = lines[:max_lines] + ["[... %d more lines]" % (len(lines) - max_lines)]
+    return "\n".join(lines)
+
+
+def summarize_python_schema_error(exc: SchemaError) -> str:
+    return summarize_validation_error_lines(exc.code.splitlines())
+
+
 def validate_data_against_schema(data_tree, schema: Schema):
     """
     Validate data against provided PYTHON-schema, and raise SchemaValidationError if problems occur.
@@ -18,7 +32,10 @@ def validate_data_against_schema(data_tree, schema: Schema):
     try:
         schema.validate(data_tree)
     except SchemaError as exc:
-        raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
+        # Not chained, else tracebacks would still dump the whole data tree
+        raise SchemaValidationError(
+            "Error validating data tree with python-schema: {}".format(summarize_python_schema_error(exc))
+        ) from None
 
 
 def get_validation_micro_schemas(extended_json_format=False):

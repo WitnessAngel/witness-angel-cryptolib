@@ -262,6 +262,8 @@ def sign_with_pss(message, private_key):
     message_hash = message.digest()
     em_bits = private_key.bit_size - 1
     em_length = (em_bits + 7) // 8
+    if em_length < 2 * _RSA_HASH_LENGTH + 2:
+        raise ValueError("Digest or salt length are too long for given key size.")  # Like pycryptodome
     salt = os.urandom(_RSA_HASH_LENGTH)
     h = _emsa_pss_hash(message_hash, salt)
     db = bytes(em_length - 2 * _RSA_HASH_LENGTH - 2) + b"\x01" + salt
@@ -277,7 +279,8 @@ def verify_with_pss(message, signature, public_key):
     error = ValueError("Incorrect signature")
     em_bits = public_key.bit_size - 1
     em_length = (em_bits + 7) // 8
-    if len(signature) != public_key.byte_size:
+    # Else padding_length below goes negative, and accepts salts shorter than pycryptodome's default
+    if len(signature) != public_key.byte_size or em_length < 2 * _RSA_HASH_LENGTH + 2:
         raise error
     s = int.from_bytes(signature, "big")
     if s >= public_key.n:

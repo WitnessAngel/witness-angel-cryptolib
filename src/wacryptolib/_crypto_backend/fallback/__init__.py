@@ -1,0 +1,709 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+"""
+Pure python crypto backend, for platforms where pycryptodome's native code can't load (iOS, micropython...).
+
+Exposes the same names as the pycryptodome backend, built upon the "fallbacks" extra packages (pkcs1, pyaes, ecdsa)
+and vendored modules. It must never import pycryptodome.
+
+ponytail: python bigints are not constant-time, so private key operations may leak to local timing observers.
+"""
+
+import hashlib
+import hmac
+import math
+import os
+
+import ecdsa
+import ecdsa.util
+import pkcs1.exceptions
+import pkcs1.keys
+import pkcs1.mgf
+import pkcs1.rsaes_oaep
+import pyaes
+
+from .. import hpke_x25519_seal
+from ..vendor import dsa as _dsa
+from ..vendor.aes_eax import EaxCipher
+from ..vendor.chacha20_poly1305 import ChaCha20Poly1305Cipher
+from ..vendor.primes import get_random_prime, is_probable_prime
+from . import pem as _pem
+from ...utilities.data_utils import pad_bytes_pkcs7, unpad_bytes_pkcs7
+
+__all__ = [
+    "IMPLEMENTED_HASH_ALGOS",
+    "get_hasher_instance",
+    "AES_BLOCK_SIZE",
+    "build_aes_cbc_encrypter",
+    "encrypt_via_aes_cbc",
+    "decrypt_via_aes_cbc",
+    "build_aes_eax_cipher",
+    "encrypt_via_aes_eax",
+    "decrypt_via_aes_eax",
+    "build_chacha20_poly1305_cipher",
+    "encrypt_via_chacha20_poly1305",
+    "decrypt_via_chacha20_poly1305",
+    "encrypt_via_rsa_oaep",
+    "decrypt_via_rsa_oaep",
+    "encrypt_via_hpke",
+    "decrypt_via_hpke",
+    "import_x25519_key_from_pem",
+    "generate_rsa_keypair",
+    "generate_dsa_keypair",
+    "generate_ecc_keypair",
+    "import_rsa_key_from_pem",
+    "import_dsa_key_from_pem",
+    "import_ecc_key_from_pem",
+    "export_rsa_key_to_pem",
+    "export_dsa_key_to_pem",
+    "export_ecc_key_to_pem",
+    "rsa_key_class_fetcher",
+    "dsa_key_class_fetcher",
+    "ecc_key_class_fetcher",
+    "sign_with_pss",
+    "verify_with_pss",
+    "sign_with_dss",
+    "verify_with_dss",
+]
+
+
+def _requires_pycryptodome(operation):
+    return NotImplementedError("%s requires pycryptodome, unavailable in the fallback backend" % operation)
+
+
+def _to_bytes(passphrase):
+    return passphrase.encode("latin-1") if isinstance(passphrase, str) else passphrase  # Like pycryptodome's tobytes()
+
+
+# HASHER FACTORY #
+
+IMPLEMENTED_HASH_ALGOS = ["SHA256", "SHA512", "SHA3_256", "SHA3_512"]
+
+
+def get_hasher_instance(hash_algo):
+    return hashlib.new(hash_algo.lower())
+
+
+# AES CBC CIPHER #
+
+AES_BLOCK_SIZE = 16
+
+
+class _AesCbcCipher:
+    """Pycryptodome-like CBC cipher over pyaes, for block-aligned data (no finalize(), unlike pyaes' Encrypter)."""
+
+    def __init__(self, key, iv):
+        self._mode = pyaes.AESModeOfOperationCBC(bytes(key), iv=bytes(iv))
+
+    def _process(self, method, data):
+        data = bytes(data)
+        if len(data) % AES_BLOCK_SIZE:
+            raise ValueError("Data must be padded to 16 byte boundary in CBC mode")
+        return b"".join(method(data[i : i + AES_BLOCK_SIZE]) for i in range(0, len(data), AES_BLOCK_SIZE))
+
+    def encrypt(self, plaintext):
+        return self._process(self._mode.encrypt, plaintext)
+
+    def decrypt(self, ciphertext):
+        return self._process(self._mode.decrypt, ciphertext)
+
+
+def build_aes_cbc_encrypter(key, iv):
+    return _AesCbcCipher(key, iv=iv)
+
+
+def encrypt_via_aes_cbc(plaintext, key, iv):
+    return build_aes_cbc_encrypter(key, iv=iv).encrypt(pad_bytes_pkcs7(plaintext, block_size=AES_BLOCK_SIZE))
+
+
+def decrypt_via_aes_cbc(ciphertext, key, iv):
+    plaintext_padded = build_aes_cbc_encrypter(key, iv=iv).decrypt(ciphertext)
+    return unpad_bytes_pkcs7(plaintext_padded, block_size=AES_BLOCK_SIZE)
+
+
+# AES EAX CIPHER #
+
+
+def build_aes_eax_cipher(key, nonce):
+    if not nonce:
+        raise ValueError("Nonce cannot be empty in EAX mode")  # Like pycryptodome
+    block_cipher = pyaes.AES(bytes(key))
+    return EaxCipher(lambda block: bytes(block_cipher.encrypt(block)), nonce=bytes(nonce))
+
+
+def encrypt_via_aes_eax(plaintext, key, nonce):
+    return build_aes_eax_cipher(key=key, nonce=nonce).encrypt_and_digest(plaintext)
+
+
+def decrypt_via_aes_eax(ciphertext, tag, key, nonce, verify_integrity_tags):
+    cipher = build_aes_eax_cipher(key=key, nonce=nonce)
+    plaintext = cipher.decrypt(ciphertext)
+    if verify_integrity_tags:
+        cipher.verify(tag)
+    return plaintext
+
+
+# CHACHA20 POLY1305 CIPHER #
+
+
+def build_chacha20_poly1305_cipher(key, nonce):
+    return ChaCha20Poly1305Cipher(key, nonce=nonce)
+
+
+def encrypt_via_chacha20_poly1305(plaintext, key, nonce):
+    return build_chacha20_poly1305_cipher(key=key, nonce=nonce).encrypt_and_digest(plaintext)
+
+
+def decrypt_via_chacha20_poly1305(ciphertext, tag, key, nonce, verify_integrity_tags):
+    cipher = build_chacha20_poly1305_cipher(key=key, nonce=nonce)
+    if verify_integrity_tags:
+        return cipher.decrypt_and_verify(ciphertext, tag)
+    return cipher.decrypt(ciphertext)
+
+
+# RSA OAEP CIPHER, AND RSA PSS SIGNATURES (both with SHA512 and MGF1-SHA512) #
+
+_RSA_PUBLIC_EXPONENT = 65537
+_RSA_HASH = hashlib.sha512
+_RSA_HASH_LENGTH = 64
+
+
+def _xor(a, b):
+    return (int.from_bytes(a, "big") ^ int.from_bytes(b, "big")).to_bytes(len(a), "big")
+
+
+def _mgf1(seed, length):
+    # pkcs1 must be given the hash explicitly, its own callers forget to do so in several places
+    return pkcs1.mgf.mgf1(seed, length, hash_class=_RSA_HASH)
+
+
+def _get_rsa_public_key(key):
+    """Like pycryptodome, accept private keys where public keys are needed."""
+    if isinstance(key, pkcs1.keys.MultiPrimeRsaPrivateKey):
+        return pkcs1.keys.RsaPublicKey(key.n, key.e)
+    return key
+
+
+def encrypt_via_rsa_oaep(plaintext_chunks: list[bytes], public_key) -> list[bytes]:
+    """We expect each plaintext chunk to be small enough for the RSA key size"""
+    public_key = _get_rsa_public_key(public_key)
+    ciphertext_chunks = []
+    for chunk in plaintext_chunks:
+        try:
+            ciphertext_chunks.append(pkcs1.rsaes_oaep.encrypt(public_key, message=chunk, hash_class=_RSA_HASH))
+        except pkcs1.exceptions.PKCS1BaseException as exc:
+            raise ValueError("Plaintext is too long for RSA OAEP") from exc
+    return ciphertext_chunks
+
+
+def _rsa_private_operation(private_key, x):
+    """Like pycryptodome: fresh blinding for each operation (pkcs1 reuses one factor per key), and a check
+    of the CRT result, whose faults would else reveal a prime factor (Bellcore attack)."""
+    n, e = private_key.n, private_key.e
+    while True:
+        r = int.from_bytes(os.urandom(private_key.byte_size), "big") % n
+        if r > 1 and math.gcd(r, n) == 1:
+            break
+    y = private_key.rsadp(x * pow(r, e, n) % n) * pow(r, -1, n) % n
+    if pow(y, e, n) != x:
+        raise ValueError("Fault detected in RSA private operation")
+    return y
+
+
+def _decrypt_one_rsa_oaep_chunk(ciphertext, private_key):
+    """RFC 8017 section 7.1.2, rather than pkcs1's decrypt() which uses MGF1-SHA1, prints padding bytes,
+    and raises distinguishable exceptions (i.e. a padding oracle)."""
+    k = private_key.byte_size
+    if len(ciphertext) != k:
+        raise ValueError("Ciphertext with incorrect length.")  # Same messages as pycryptodome
+    if k < 2 * _RSA_HASH_LENGTH + 2:
+        raise ValueError("Incorrect decryption.")
+    c = int.from_bytes(ciphertext, "big")
+    if c >= private_key.n:
+        raise ValueError("Incorrect decryption.")
+    em = _rsa_private_operation(private_key, c).to_bytes(k, "big")
+    masked_seed, masked_db = em[1 : 1 + _RSA_HASH_LENGTH], em[1 + _RSA_HASH_LENGTH :]
+    seed = _xor(masked_seed, _mgf1(masked_db, _RSA_HASH_LENGTH))
+    db = _xor(masked_db, _mgf1(seed, k - _RSA_HASH_LENGTH - 1))
+    separator_position = db.find(b"\x01", _RSA_HASH_LENGTH)
+    # Non-short-circuiting "&", so that timings don't tell which check failed (e.g. em[0], for Manger's attack)
+    valid = (
+        (em[0] == 0)
+        & hmac.compare_digest(db[:_RSA_HASH_LENGTH], _RSA_HASH(b"").digest())  # Empty label
+        & (separator_position >= 0)
+        & (not any(db[_RSA_HASH_LENGTH:separator_position]))
+    )
+    if not valid:
+        raise ValueError("Incorrect decryption.")
+    return db[separator_position + 1 :]
+
+
+def _check_rsa_private_key(key):
+    if not isinstance(key, pkcs1.keys.MultiPrimeRsaPrivateKey):
+        raise TypeError("This is not a private key")  # Like pycryptodome
+
+
+def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[bytes]:
+    _check_rsa_private_key(private_key)
+    return [_decrypt_one_rsa_oaep_chunk(chunk, private_key) for chunk in ciphertext_chunks]
+
+
+def _emsa_pss_hash(message_hash, salt):
+    return _RSA_HASH(bytes(8) + message_hash + salt).digest()
+
+
+def sign_with_pss(message, private_key):
+    """RFC 8017 section 8.1, with a salt as long as the hash, like pycryptodome's pss.new() default.
+
+    :param message: already-fed SHA512 hasher object"""
+    _check_rsa_private_key(private_key)
+    message_hash = message.digest()
+    em_bits = private_key.bit_size - 1
+    em_length = (em_bits + 7) // 8
+    if em_length < 2 * _RSA_HASH_LENGTH + 2:
+        raise ValueError("Digest or salt length are too long for given key size.")  # Like pycryptodome
+    salt = os.urandom(_RSA_HASH_LENGTH)
+    h = _emsa_pss_hash(message_hash, salt)
+    db = bytes(em_length - 2 * _RSA_HASH_LENGTH - 2) + b"\x01" + salt
+    masked_db = bytearray(_xor(db, _mgf1(h, em_length - _RSA_HASH_LENGTH - 1)))
+    masked_db[0] &= 0xFF >> (8 * em_length - em_bits)
+    em = bytes(masked_db) + h + b"\xbc"
+    return _rsa_private_operation(private_key, int.from_bytes(em, "big")).to_bytes(private_key.byte_size, "big")
+
+
+def verify_with_pss(message, signature, public_key):
+    """Raise ValueError if the signature is invalid."""
+    public_key = _get_rsa_public_key(public_key)
+    error = ValueError("Incorrect signature")
+    em_bits = public_key.bit_size - 1
+    em_length = (em_bits + 7) // 8
+    # Else padding_length below goes negative, and accepts salts shorter than pycryptodome's default
+    if len(signature) != public_key.byte_size or em_length < 2 * _RSA_HASH_LENGTH + 2:
+        raise error
+    s = int.from_bytes(signature, "big")
+    if s >= public_key.n:
+        raise error
+    m = public_key.rsavp1(s)
+    if m.bit_length() > em_bits:
+        raise error
+    em = m.to_bytes(em_length, "big")
+    masked_db, h = em[: em_length - _RSA_HASH_LENGTH - 1], em[em_length - _RSA_HASH_LENGTH - 1 : -1]
+    unused_bits_mask = 0xFF & ~(0xFF >> (8 * em_length - em_bits))
+    if em[-1] != 0xBC or masked_db[0] & unused_bits_mask:
+        raise error
+    db = bytearray(_xor(masked_db, _mgf1(h, len(masked_db))))
+    db[0] &= ~unused_bits_mask & 0xFF
+    padding_length = em_length - 2 * _RSA_HASH_LENGTH - 2
+    if any(db[:padding_length]) or db[padding_length] != 0x01:
+        raise error
+    salt = bytes(db[padding_length + 1 :])
+    if not hmac.compare_digest(h, _emsa_pss_hash(message.digest(), salt)):
+        raise error
+
+
+def rsa_key_class_fetcher():
+    return (pkcs1.keys.RsaPublicKey, pkcs1.keys.MultiPrimeRsaPrivateKey)
+
+
+def generate_rsa_keypair(key_length_bits):
+    # Own prime generation, since pkcs1's generate_key_pair() doesn't check gcd(e, q-1) for the last prime
+    e = _RSA_PUBLIC_EXPONENT
+    while True:
+        # Prime sizes add up to key_length_bits, also when it's odd
+        p, q = sorted(get_random_prime(bits, top_bits_mask=0b11) for bits in (key_length_bits // 2, (key_length_bits + 1) // 2))
+        if p != q and math.gcd(e, (p - 1) * (q - 1)) == 1:
+            break
+    private_key = pkcs1.keys.MultiPrimeRsaPrivateKey([p, q], e, blind=False)  # _rsa_private_operation() blinds itself
+    return pkcs1.keys.RsaPublicKey(private_key.n, e), private_key
+
+
+def _check_rsa_public_numbers(n, e):
+    if n < 3 or not n & 1 or not 3 <= e < n or math.gcd(n, e) != 1:  # Like pycryptodome's construct()
+        raise ValueError("Invalid RSA public key components")
+
+
+def _build_rsa_private_key(n, e, d, p, q):
+    _check_rsa_public_numbers(n, e)  # Else e.g. e=1 would leave OAEP "ciphertexts" readable by anyone
+    # Degenerate primes must give a ValueError, not a ZeroDivisionError or an assertion failure in pkcs1
+    if p < 2 or q < 2 or math.gcd(p, q) != 1 or p * q != n or e * d % math.lcm(p - 1, q - 1) != 1:
+        raise ValueError("Invalid RSA key components")
+    # Like pycryptodome's construct(); ponytail: 10 rounds only catch corrupted keys, not adversarially crafted ones
+    if not (is_probable_prime(p, rounds=10) and is_probable_prime(q, rounds=10)):
+        raise ValueError("Invalid RSA key components (composite factor)")
+    return pkcs1.keys.MultiPrimeRsaPrivateKey([p, q], e, blind=False)  # _rsa_private_operation() blinds itself
+
+
+def _encode_rsa_pkcs1_private_key(private_key):
+    (p, q), e = private_key.primes, private_key.e
+    d = pow(e, -1, math.lcm(p - 1, q - 1))  # Like pycryptodome's RSA.generate()
+    components = [0, private_key.n, e, d, p, q, d % (p - 1), d % (q - 1), pow(q, -1, p)]
+    return _pem.encode_sequence(*(_pem.encode_integer(x) for x in components))
+
+
+def _decode_rsa_pkcs1_private_key(der):
+    version, n, e, d, p, q, *_crt_values = (_pem.decode_integer(x) for x in _pem.decode_sequence(der, 9))
+    if version != 0:
+        raise ValueError("Unsupported RSA private key version")
+    return _build_rsa_private_key(n, e, d, p, q)
+
+
+def _decode_rsa_pkcs1_public_key(der):
+    n, e = (_pem.decode_integer(x) for x in _pem.decode_sequence(der, 2))
+    _check_rsa_public_numbers(n, e)
+    return pkcs1.keys.RsaPublicKey(n, e)
+
+
+_RSA_ALGORITHM_IDENTIFIER = _pem.encode_algorithm_identifier(_pem.OID_RSA, _pem.encode_null())
+
+
+# DSA KEYS AND SIGNATURES #
+
+
+def dsa_key_class_fetcher():
+    return _dsa.DsaKey
+
+
+def generate_dsa_keypair(key_length_bits):
+    private_key = _dsa.generate_dsa_key(key_length_bits)
+    return private_key.public_key(), private_key
+
+
+def _dsa_algorithm_identifier(key):
+    parameters = _pem.encode_sequence(*(_pem.encode_integer(x) for x in (key.p, key.q, key.g)))
+    return _pem.encode_algorithm_identifier(_pem.OID_DSA, parameters)
+
+
+def _decode_dsa_parameters(parameters):
+    if parameters is None:
+        raise ValueError("Missing DSA domain parameters")
+    return [_pem.decode_integer(x) for x in _pem.decode_sequence(parameters, 3)]
+
+
+def sign_with_dss(message, private_key):
+    """FIPS 186-4 DSA or ECDSA signature of an already-fed hasher, as r || s bytes (pycryptodome's "binary")."""
+    if isinstance(private_key, _dsa.DsaKey):
+        return _dsa.sign(private_key, message.digest())
+    if isinstance(private_key, ecdsa.SigningKey):
+        # RFC 6979 deterministic nonce; the digest is truncated to the curve order's bit length, as FIPS 186-4 requires
+        return private_key.sign_digest_deterministic(
+            message.digest(), hashfunc=_RSA_HASH, sigencode=ecdsa.util.sigencode_string, allow_truncate=True
+        )
+    if isinstance(private_key, ecdsa.VerifyingKey):
+        raise TypeError("Private key is needed to sign")  # Like pycryptodome, and like our DSA keys
+    raise ValueError("Only DSA and NIST-curve ECC keys can be used for DSS signatures")
+
+
+def verify_with_dss(message, signature, public_key):
+    """Raise ValueError if the signature is invalid."""
+    if isinstance(public_key, _dsa.DsaKey):
+        return _dsa.verify(public_key, message.digest(), signature)
+    if isinstance(public_key, ecdsa.SigningKey):
+        public_key = public_key.verifying_key
+    if not isinstance(public_key, ecdsa.VerifyingKey):
+        raise ValueError("Only DSA and NIST-curve ECC keys can be used for DSS signatures")
+    try:
+        public_key.verify_digest(signature, message.digest(), sigdecode=ecdsa.util.sigdecode_string, allow_truncate=True)
+    except (ecdsa.BadSignatureError, ecdsa.der.UnexpectedDER, AssertionError):
+        raise ValueError("The signature is not authentic") from None
+
+
+# X25519 KEYS AND HPKE (RFC 9180) KEY WRAPPING, BASE MODE, EMPTY INFO AND AAD #
+
+
+class X25519Key:
+    """Raw X25519 keys, with the few EccKey attributes that wacryptolib uses."""
+
+    __slots__ = ("public_bytes", "private_bytes")
+    curve = "Curve25519"
+
+    def __init__(self, public_bytes, private_bytes=None):
+        self.public_bytes, self.private_bytes = public_bytes, private_bytes
+
+    def has_private(self):
+        return self.private_bytes is not None
+
+    def public_key(self):
+        return X25519Key(self.public_bytes)
+
+    def __eq__(self, other):
+        return isinstance(other, X25519Key) and (self.public_bytes, self.private_bytes) == (
+            other.public_bytes,
+            other.private_bytes,
+        )
+
+    def __repr__(self):
+        return "<X25519Key%s>" % (" (private)" if self.has_private() else "")
+
+
+def _build_x25519_private_key(private_bytes):
+    if len(private_bytes) != 32:
+        raise ValueError("X25519 private key must be 32 bytes long")
+    return X25519Key(hpke_x25519_seal.x25519(private_bytes, hpke_x25519_seal._X25519_BASE_POINT), private_bytes)
+
+
+# NIST curves, with the (uppercased) names pycryptodome accepts for them
+_NIST_CURVES = {
+    (name_template % bits).upper(): curve
+    for bits, curve in [(192, ecdsa.NIST192p), (224, ecdsa.NIST224p), (256, ecdsa.NIST256p), (384, ecdsa.NIST384p),
+                        (521, ecdsa.NIST521p)]
+    for name_template in ("p%d", "P-%d", "NIST P-%d", "nistp%d", "secp%dr1", "prime%dv1")
+}
+
+
+def ecc_key_class_fetcher():
+    return (X25519Key, ecdsa.SigningKey, ecdsa.VerifyingKey)
+
+
+def generate_ecc_keypair(curve):
+    curve = curve.upper()
+    if curve in ("CURVE25519", "X25519"):
+        private_key = _build_x25519_private_key(os.urandom(32))
+        return private_key.public_key(), private_key
+    if curve in ("ED25519", "ED448", "CURVE448", "X448"):
+        raise _requires_pycryptodome("ECC key generation on curve %r" % curve)
+    if curve not in _NIST_CURVES:
+        curve_names = sorted(_NIST_CURVES) + ["CURVE25519", "X25519"]
+        raise ValueError("Unexisting ECC curve '%s', must be one of '%s'" % (curve, curve_names))
+    private_key = ecdsa.SigningKey.generate(curve=_NIST_CURVES[curve])
+    return private_key.verifying_key, private_key
+
+
+def _check_hpke_aead_id(aead_id):
+    if aead_id != hpke_x25519_seal.AEAD_ID:
+        raise _requires_pycryptodome("HPKE with AEAD %#06x" % aead_id)
+
+
+def encrypt_via_hpke(plaintext: bytes, public_key, aead_id) -> tuple[bytes, bytes]:
+    """Returns (enc, ciphertext), enc being the KEM encapsulation (ephemeral public key for DHKEM)."""
+    _check_hpke_aead_id(aead_id)
+    return hpke_x25519_seal.seal(public_key.public_bytes, plaintext)
+
+
+def decrypt_via_hpke(enc: bytes, ciphertext: bytes, private_key, aead_id) -> bytes:
+    _check_hpke_aead_id(aead_id)
+    if not private_key.has_private():
+        raise ValueError("HPKE decryption requires a private key")
+    return hpke_x25519_seal.open(private_key.private_bytes, enc, ciphertext)
+
+
+# PEM IMPORT/EXPORT #
+
+
+def _import_key_from_pem(key_pem, passphrase, private_key_decoders, public_key_decoders):
+    """Decoders are dicts {marker or OID: callable}, OIDs being used for PKCS#8 and SubjectPublicKeyInfo."""
+    der, marker = _pem.decode_pem(key_pem)
+    if marker == "ENCRYPTED PRIVATE KEY":
+        if not passphrase:
+            raise ValueError("Encrypted private key requires a passphrase")
+        clear_pkcs8_der = _pem.decrypt_pkcs8(der, _to_bytes(passphrase), decrypt_via_aes_cbc=decrypt_via_aes_cbc)
+        try:
+            return _decode_pkcs8_private_key(clear_pkcs8_der, private_key_decoders)
+        except (ValueError, IndexError, TypeError):
+            raise ValueError(_pem.PEM_DECRYPTION_ERROR) from None  # Same error as for a bad padding
+    if marker == "PRIVATE KEY":
+        if passphrase:  # Like pycryptodome, which then expects an encrypted PKCS#8 structure
+            raise ValueError("Unencrypted PKCS#8 private key can't be loaded with a passphrase")
+        return _decode_pkcs8_private_key(der, private_key_decoders)
+    if marker == "PUBLIC KEY":
+        oid, parameters, public_key_bits = _pem.decode_spki(der)
+        return _get_decoder(public_key_decoders, oid)(public_key_bits, parameters)
+    if marker in private_key_decoders:
+        return private_key_decoders[marker](der, None)
+    if marker in public_key_decoders:
+        return public_key_decoders[marker](der, None)
+    raise ValueError("Unsupported PEM type %r" % marker)
+
+
+def _decode_pkcs8_private_key(der, private_key_decoders):
+    oid, parameters, private_key_octets = _pem.decode_pkcs8(der)
+    return _get_decoder(private_key_decoders, oid)(private_key_octets, parameters)
+
+
+def _get_decoder(decoders, oid):
+    if oid not in decoders:
+        raise ValueError("Unexpected key algorithm %s" % oid)
+    return decoders[oid]
+
+
+def _export_key_to_pem(key, passphrase, has_private, encode_private_pkcs8, encode_spki, encode_private_pem=None):
+    """Same formats as the pycryptodome backend: public keys are never encrypted, and clear private keys
+    are PKCS#8 unless `encode_private_pem` is given."""
+    if not has_private:
+        if passphrase:
+            raise ValueError("Public keys can't be exported to PEM with a passphrase")  # Like pycryptodome
+        return _pem.encode_pem(encode_spki(key), "PUBLIC KEY")
+    if passphrase:
+        return _pem.encrypt_pkcs8_to_pem(
+            encode_private_pkcs8(key), _to_bytes(passphrase), encrypt_via_aes_cbc=encrypt_via_aes_cbc,
+            random_bytes=os.urandom,
+        )
+    if encode_private_pem:
+        return encode_private_pem(key)
+    return _pem.encode_pem(encode_private_pkcs8(key), "PRIVATE KEY")
+
+
+def import_rsa_key_from_pem(key_pem, passphrase=None):
+    private_key_decoders = {
+        _pem.OID_RSA: lambda octets, _parameters: _decode_rsa_pkcs1_private_key(octets),
+        "RSA PRIVATE KEY": lambda der, _parameters: _decode_rsa_pkcs1_private_key(der),
+    }
+    public_key_decoders = {
+        _pem.OID_RSA: lambda bits, _parameters: _decode_rsa_pkcs1_public_key(bits),
+        "RSA PUBLIC KEY": lambda der, _parameters: _decode_rsa_pkcs1_public_key(der),
+    }
+    return _import_key_from_pem(key_pem, passphrase, private_key_decoders, public_key_decoders)
+
+
+def export_rsa_key_to_pem(private_key, passphrase=None):
+    return _export_key_to_pem(
+        private_key,
+        passphrase,
+        has_private=isinstance(private_key, pkcs1.keys.MultiPrimeRsaPrivateKey),
+        encode_private_pkcs8=lambda key: _pem.encode_pkcs8(_RSA_ALGORITHM_IDENTIFIER, _encode_rsa_pkcs1_private_key(key)),
+        encode_spki=lambda key: _pem.encode_spki(
+            _RSA_ALGORITHM_IDENTIFIER, _pem.encode_sequence(_pem.encode_integer(key.n), _pem.encode_integer(key.e))
+        ),
+        encode_private_pem=lambda key: _pem.encode_pem(_encode_rsa_pkcs1_private_key(key), "RSA PRIVATE KEY"),
+    )
+
+
+def _decode_dsa_private_key(private_key_octets, parameters):
+    p, q, g = _decode_dsa_parameters(parameters)
+    x = _pem.decode_integer(private_key_octets)
+    key = _dsa.DsaKey(p, q, g, pow(g, x, p), x)
+    _dsa.check_dsa_key(key)
+    return key
+
+
+def _decode_dsa_public_key(public_key_bits, parameters):
+    p, q, g = _decode_dsa_parameters(parameters)
+    key = _dsa.DsaKey(p, q, g, _pem.decode_integer(public_key_bits))
+    _dsa.check_dsa_key(key)
+    return key
+
+
+def import_dsa_key_from_pem(key_pem, passphrase=None):
+    return _import_key_from_pem(
+        key_pem,
+        passphrase,
+        private_key_decoders={_pem.OID_DSA: _decode_dsa_private_key},
+        public_key_decoders={_pem.OID_DSA: _decode_dsa_public_key},
+    )
+
+
+def export_dsa_key_to_pem(private_key, passphrase=None):
+    return _export_key_to_pem(
+        private_key,
+        passphrase,
+        has_private=private_key.has_private(),
+        encode_private_pkcs8=lambda key: _pem.encode_pkcs8(_dsa_algorithm_identifier(key), _pem.encode_integer(key.x)),
+        encode_spki=lambda key: _pem.encode_spki(_dsa_algorithm_identifier(key), _pem.encode_integer(key.y)),
+    )
+
+
+_X25519_ALGORITHM_IDENTIFIER = _pem.encode_algorithm_identifier(_pem.OID_X25519)
+
+
+def _decode_x25519_private_key(private_key_octets, parameters):
+    if parameters is not None:
+        raise ValueError("Unexpected parameters for X25519 key")
+    return _build_x25519_private_key(_pem.decode_octet_string(private_key_octets))
+
+
+_P25519 = 2**255 - 19
+_X25519_LOW_ORDER_U = (
+    325606250916557431795983626356110631294008115727848805560023387167927233504,
+    39382357235489614581723060781553021112529911719440698176882885853963445705823,
+)
+# Like pycryptodome: low-order points (http://cr.yp.to/ecdh.html#validate), also when non-canonically encoded
+_X25519_DENIED_U = {offset + u for offset in (0, _P25519, 2 * _P25519) for u in (0, 1, *_X25519_LOW_ORDER_U)} | {
+    _P25519 - 1, 2 * _P25519 - 1
+}
+
+
+def _decode_x25519_public_key(public_key_bits, parameters):
+    if parameters is not None or len(public_key_bits) != 32:
+        raise ValueError("Invalid X25519 public key")
+    u = int.from_bytes(public_key_bits, "little") & ~(1 << 255)  # RFC 7748, like pycryptodome
+    if u in _X25519_DENIED_U:
+        raise ValueError("Invalid X25519 public key (low order point)")
+    return X25519Key((u % _P25519).to_bytes(32, "little"))  # Non-canonical u is reduced, like pycryptodome
+
+
+def _decode_nist_ecc_key(decode, der):
+    try:
+        key = decode(der)
+    except (ecdsa.der.UnexpectedDER, ecdsa.MalformedPointError, ecdsa.curves.UnknownCurveError, AssertionError) as exc:
+        raise ValueError("Invalid ECC key (%s)" % type(exc).__name__) from None  # Messages of ecdsa may embed key bytes
+    if key.curve not in _NIST_CURVES.values():
+        raise ValueError("Unsupported ECC curve %s" % key.curve.name)
+    return key
+
+
+def _decode_nist_ecc_private_key(private_key_octets, parameters):
+    # ecdsa parses the whole PKCS#8 structure itself, so we rebuild it
+    algorithm_identifier = _pem.encode_algorithm_identifier(_pem.OID_EC_PUBLIC_KEY, parameters)
+    key = _decode_nist_ecc_key(ecdsa.SigningKey.from_der, _pem.encode_pkcs8(algorithm_identifier, private_key_octets))
+    # ecdsa ignores the optional [1] publicKey of ECPrivateKey, which pycryptodome checks against the private scalar
+    for item in _pem.decode_sequence(private_key_octets, 2, 4)[2:]:
+        if item[0] == 0xA1:
+            public_point = _pem.decode_bit_string(_pem.decode(item, 0xA1))
+            embedded_key = _decode_nist_ecc_key(lambda point: ecdsa.VerifyingKey.from_string(point, key.curve), public_point)
+            if embedded_key.pubkey.point != key.verifying_key.pubkey.point:
+                raise ValueError("Invalid ECC private key (public point doesn't match)")
+    return key
+
+
+def _decode_nist_ecc_public_key(public_key_bits, parameters):
+    algorithm_identifier = _pem.encode_algorithm_identifier(_pem.OID_EC_PUBLIC_KEY, parameters)
+    return _decode_nist_ecc_key(ecdsa.VerifyingKey.from_der, _pem.encode_spki(algorithm_identifier, public_key_bits))
+
+
+def _encode_nist_ecc_private_key_to_pkcs8(key):
+    # ecdsa writes a PKCS#8 v2 (OneAsymmetricKey) version number, we rewrite it as v1 like pycryptodome
+    _version, algorithm_identifier, private_key_octets = _pem.decode_sequence(key.to_der(format="pkcs8"), 3)
+    return _pem.encode_sequence(_pem.encode_integer(0), algorithm_identifier, private_key_octets)
+
+
+def import_ecc_key_from_pem(key_pem, passphrase=None):
+    return _import_key_from_pem(
+        key_pem,
+        passphrase,
+        private_key_decoders={
+            _pem.OID_X25519: _decode_x25519_private_key,
+            _pem.OID_EC_PUBLIC_KEY: _decode_nist_ecc_private_key,
+        },
+        public_key_decoders={
+            _pem.OID_X25519: _decode_x25519_public_key,
+            _pem.OID_EC_PUBLIC_KEY: _decode_nist_ecc_public_key,
+        },
+    )
+
+
+def import_x25519_key_from_pem(key_pem, passphrase=None):
+    key = import_ecc_key_from_pem(key_pem, passphrase=passphrase)
+    if not isinstance(key, X25519Key):
+        raise ValueError("Expected an X25519 key, not a NIST P-%s one" % key.curve.name[4:-1])  # Like pycryptodome
+    return key
+
+
+def export_ecc_key_to_pem(private_key, passphrase=None):
+    if isinstance(private_key, X25519Key):
+        return _export_key_to_pem(
+            private_key,
+            passphrase,
+            has_private=private_key.has_private(),
+            encode_private_pkcs8=lambda key: _pem.encode_pkcs8(
+                _X25519_ALGORITHM_IDENTIFIER, _pem.encode_octet_string(key.private_bytes)
+            ),
+            encode_spki=lambda key: _pem.encode_spki(_X25519_ALGORITHM_IDENTIFIER, key.public_bytes),
+        )
+    return _export_key_to_pem(
+        private_key,
+        passphrase,
+        has_private=isinstance(private_key, ecdsa.SigningKey),
+        encode_private_pkcs8=_encode_nist_ecc_private_key_to_pkcs8,
+        encode_spki=lambda key: key.to_der(),
+    )

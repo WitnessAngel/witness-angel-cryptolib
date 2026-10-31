@@ -636,6 +636,24 @@ def test_misconfigured_cryptoconfs(cryptoconf):
         )
 
 
+def test_encryption_rejects_cryptoconfs_that_decryption_would_refuse(tmp_path):
+    cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    cryptoconf["payload_cipher_layers"][0]["key_cipher_layers"][0]["comment"] = "unexpected"
+
+    with pytest.raises(SchemaValidationError):
+        encrypt_payload_into_cryptainer(
+            payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=InMemoryKeystorePool()
+        )
+    with pytest.raises(SchemaValidationError):
+        encrypt_payload_and_stream_cryptainer_to_filesystem(
+            payload=b"stuffs",
+            cryptainer_filepath=tmp_path / "my.crypt",
+            cryptoconf=cryptoconf,
+            cryptainer_metadata=None,
+            keystore_pool=InMemoryKeystorePool(),
+        )
+
+
 def test_encrypt_payload_into_cryptainer_from_file_object(tmp_path):
     source = tmp_path / "source.media"
     source.write_bytes(b"12345")

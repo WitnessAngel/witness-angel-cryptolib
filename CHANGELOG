@@ -17,6 +17,8 @@ Development
   payload_cipher_layers, which previously returned the inline ciphertext as unauthenticated plaintext, invalid
   shared-secret thresholds, or wrong cipher algorithms); cryptainers loaded without their payload ciphertext are still
   accepted by gather_decryptable_symkeys()
+* **BREAKING**: Encryption now validates the generated cryptainer structure before encrypting the payload, so that
+  cryptoconfs with e.g. unexpected fields are refused instead of producing cryptainers that decryption would reject
 * **BREAKING**: Cryptainer/cryptoconf schemas now only accept symmetric ciphers as payload_cipher_algo, and
   asymmetric ciphers (not signature algorithms) as asymmetric key_cipher_algo
 * Generated JSON schemas now enforce non-empty payload/key cipher layers, shared-secret shards and sigconf/sigainer

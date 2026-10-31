@@ -274,6 +274,18 @@ def test_invalid_payload_encryption_pipeline():
         PayloadEncryptionPipeline(output_stream=output_stream, secrets=secrets)
 
 
+def test_payload_encryption_pipeline_lowercase_cipher_algo():
+    secrets = dict(
+        payload_plaintext_hash_algos=[],
+        payload_cipher_layer_extracts=[
+            {"cipher_algo": "aes_eax", "symkey": generate_symkey("AES_EAX"), "hash_algos": []}
+        ],
+    )
+    encryption_pipeline = PayloadEncryptionPipeline(output_stream=io.BytesIO(), secrets=secrets)
+    encryption_pipeline.encrypt_chunk(b"abc")
+    encryption_pipeline.finalize()
+
+
 @pytest.mark.parametrize("cipher_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
 def test_symmetric_decryption_verify(cipher_algo):
     attribute_to_corrupt = "tag"  # For now it's the only kind of authentication marker

@@ -406,7 +406,7 @@ class PayloadEncryptionPipeline:
         payload_cipher_layer_extracts = secrets["payload_cipher_layer_extracts"]
 
         for payload_cipher_layer_extract in payload_cipher_layer_extracts:
-            payload_cipher_algo = payload_cipher_layer_extract["cipher_algo"]
+            payload_cipher_algo = payload_cipher_layer_extract["cipher_algo"].upper()
             symkey = payload_cipher_layer_extract["symkey"]
             payload_hash_algos = payload_cipher_layer_extract["hash_algos"]
 

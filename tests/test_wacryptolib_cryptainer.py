@@ -2457,7 +2457,12 @@ def test_gather_decryptable_symkeys_accepts_payloadless_cryptainers_and_iterator
             gather_decryptable_symkeys([("my.crypt", cryptainer), ("bad.crypt", wrong_cryptainer)])
 
     # Only an absent payload ciphertext is tolerated, not a malformed one
-    for wrong_payload_ciphertext_struct in (42, {"ciphertext_location": "offloaded", "junk": 1}):
+    for wrong_payload_ciphertext_struct in (
+        42,
+        None,  # Explicit None is only tolerated in unfinished cryptainers
+        {"ciphertext_location": "offloaded", "junk": 1},
+        {"ciphertext_location": "inline", "ciphertext_value": None},
+    ):
         corrupted_cryptainer = dict(payloadless_cryptainer, payload_ciphertext_struct=wrong_payload_ciphertext_struct)
         with pytest.raises(SchemaValidationError):
             gather_decryptable_symkeys([("my.crypt", corrupted_cryptainer)])

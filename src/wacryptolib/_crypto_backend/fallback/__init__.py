@@ -464,6 +464,8 @@ def _import_key_from_pem(key_pem, passphrase, private_key_decoders, public_key_d
         except (ValueError, IndexError, TypeError):
             raise ValueError(_pem.PEM_DECRYPTION_ERROR) from None  # Same error as for a bad padding
     if marker == "PRIVATE KEY":
+        if passphrase:  # Like pycryptodome, which then expects an encrypted PKCS#8 structure
+            raise ValueError("Unencrypted PKCS#8 private key can't be loaded with a passphrase")
         return _decode_pkcs8_private_key(der, private_key_decoders)
     if marker == "PUBLIC KEY":
         oid, parameters, public_key_bits = _pem.decode_spki(der)

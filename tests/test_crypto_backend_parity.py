@@ -36,7 +36,7 @@ def test_backends_share_pem_protection_constants(both_backends):
 def test_fallback_rejects_unsupported_parameters_explicitly():
     fallback = import_crypto_backend("fallback")
 
-    for curve in ("ed25519", "curve448"):
+    for curve in ("ed25519", "curve448", "X448"):
         with pytest.raises(NotImplementedError, match="ECC key generation.*requires pycryptodome"):
             fallback.generate_ecc_keypair(curve)
     with pytest.raises(ValueError, match="Unexisting ECC curve"):
@@ -392,3 +392,9 @@ def test_backends_accept_the_same_nist_curve_names(both_backends):
         native.generate_ecc_keypair(curve)  # Would raise ValueError if unknown
     for bits in (256, 384, 521):
         fallback.generate_ecc_keypair("nistp%d" % bits)
+
+
+@pytest.mark.parametrize("curve", ["p256", "P256", "nist p-256", "x25519", "X25519", "CURVE25519", "curve25519"])
+def test_ecc_curve_names_are_case_insensitive(backend, curve):
+    public_key, _private_key = backend.generate_ecc_keypair(curve)
+    assert backend.export_ecc_key_to_pem(public_key)

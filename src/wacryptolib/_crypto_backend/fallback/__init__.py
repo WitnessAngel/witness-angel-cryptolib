@@ -226,11 +226,12 @@ def _decrypt_one_rsa_oaep_chunk(ciphertext, private_key):
     seed = _xor(masked_seed, _mgf1(masked_db, _RSA_HASH_LENGTH))
     db = _xor(masked_db, _mgf1(seed, k - _RSA_HASH_LENGTH - 1))
     separator_position = db.find(b"\x01", _RSA_HASH_LENGTH)
+    # Non-short-circuiting "&", so that timings don't tell which check failed (e.g. em[0], for Manger's attack)
     valid = (
-        em[0] == 0
-        and hmac.compare_digest(db[:_RSA_HASH_LENGTH], _RSA_HASH(b"").digest())  # Empty label
-        and separator_position >= 0
-        and not any(db[_RSA_HASH_LENGTH:separator_position])
+        (em[0] == 0)
+        & hmac.compare_digest(db[:_RSA_HASH_LENGTH], _RSA_HASH(b"").digest())  # Empty label
+        & (separator_position >= 0)
+        & (not any(db[_RSA_HASH_LENGTH:separator_position]))
     )
     if not valid:
         raise ValueError("Incorrect decryption.")

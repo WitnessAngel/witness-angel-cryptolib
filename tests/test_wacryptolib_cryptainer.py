@@ -2271,6 +2271,19 @@ def test_cryptoconf_validation_restricts_authenticators_to_rsa_oaep(jsonschema_m
         _check_cryptoconf_with_authenticator("ECIES_X25519")
 
 
+@pytest.mark.parametrize("jsonschema_mode", [False, True])
+@pytest.mark.parametrize("key_cipher_algo", ["RSA_PSS", "DSA_DSS", "ECC_DSS"])
+def test_cryptoconf_validation_rejects_signature_only_key_cipher_algos(key_cipher_algo, jsonschema_mode):
+    cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    cryptoconf["payload_cipher_layers"][0]["key_cipher_layers"] = [
+        dict(key_cipher_algo=key_cipher_algo, key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+    ]
+    if jsonschema_mode:
+        cryptoconf = convert_to_extjson(cryptoconf)
+    with pytest.raises(ValidationError):
+        check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=jsonschema_mode)
+
+
 @pytest.mark.parametrize(
     "cryptoconf",
     [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF, ECIES_SHAMIR_CRYPTOCONF],

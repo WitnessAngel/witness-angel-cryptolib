@@ -7,12 +7,12 @@ from typing import Union
 import schema as pythonschema
 from schema import Or, Optional as OptionalKey, And, Schema
 
-from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
+from wacryptolib.cipher import SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, SUPPORTED_CIPHER_ALGOS
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_TRUSTEE_TYPES, CRYPTAINER_STATES, \
     CRYPTAINER_FORMAT, PAYLOAD_CIPHERTEXT_LOCATIONS, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, SHARED_SECRET_ALGO_MARKER
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS
-from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS, SUPPORTED_SYMMETRIC_KEY_ALGOS
+from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
 from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson
 
@@ -86,7 +86,7 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
         extra_asymmetric_cipher_algo_block = {"key_ciphertext": micro_schemas.schema_binary}
 
     ASYMMETRIC_CIPHER_ALGO_BLOCK = {
-        "key_cipher_algo": Or(*SUPPORTED_ASYMMETRIC_KEY_ALGOS),
+        "key_cipher_algo": Or(*SUPPORTED_ASYMMETRIC_CIPHER_ALGOS),  # Not signature-only key algos
         "key_cipher_trustee": Or(*non_authenticator_trustee_schemas),
         OptionalKey("keychain_uid"): micro_schemas.schema_uid,
     }

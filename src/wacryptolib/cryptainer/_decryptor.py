@@ -141,7 +141,7 @@ class CryptainerDecryptor(CryptainerBase):
     """
 
     def extract_cryptainer_metadata(self, cryptainer: dict) -> Optional[dict]:
-        assert isinstance(cryptainer, dict), cryptainer
+        assert isinstance(cryptainer, dict), type(cryptainer)
         return cryptainer["cryptainer_metadata"]
 
     def _decrypt_with_local_private_key(
@@ -518,7 +518,7 @@ class CryptainerDecryptor(CryptainerBase):
         assert isinstance(key_ciphertext, bytes), type(key_ciphertext)
 
         key_cipherdict = load_from_json_bytes(key_ciphertext)
-        assert isinstance(key_cipherdict, dict), key_cipherdict
+        assert isinstance(key_cipherdict, dict), type(key_cipherdict)
 
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
 

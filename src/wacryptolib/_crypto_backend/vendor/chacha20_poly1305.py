@@ -83,7 +83,7 @@ class ChaCha20Poly1305Cipher:
         missing_length = len(data) - len(self._keystream)
         if missing_length > 0:
             block_count = -(-missing_length // 64)
-            if self._counter + block_count > _MASK32:
+            if self._counter + block_count - 1 > _MASK32:  # Last block used is counter + block_count - 1
                 raise OverflowError("Too much data for a single ChaCha20 nonce")
             self._keystream += b"".join(
                 _chacha20_block(self._key_words, self._counter + i, self._nonce_words) for i in range(block_count)

@@ -160,6 +160,7 @@ class KeystoreReadBase(KeystoreBase):
 
         :return: public key in clear PEM format, or raise KeyDoesNotExist
         """
+        key_algo = key_algo.upper()
         if not self._public_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
             raise KeyDoesNotExist("Public key %s/%s not found" % (key_algo, keychain_uid))
         return self._get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
@@ -174,6 +175,7 @@ class KeystoreReadBase(KeystoreBase):
 
         :return: private key in PEM format (potentially passphrase-protected), or raise KeyDoesNotExist
         """
+        key_algo = key_algo.upper()
         if not self._private_key_exists(keychain_uid=keychain_uid, key_algo=key_algo):
             raise KeyDoesNotExist("Private key %s/%s not found" % (key_algo, keychain_uid))
         return self._get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
@@ -224,6 +226,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param public_key: public key in clear PEM format
         :param private_key: private key in PEM format (potentially encrypted)
         """
+        key_algo = key_algo.upper()
         assert public_key and private_key, (public_key, private_key)
         self._check_public_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=public_key, private_key=private_key)
@@ -241,6 +244,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :param public_key: public key in clear PEM format
         """
+        key_algo = key_algo.upper()
         self._check_public_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         self._set_public_key(keychain_uid=keychain_uid, key_algo=key_algo, public_key=public_key)
 
@@ -256,6 +260,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :param private_key: private key in PEM format (potentially encrypted)
         """
+        key_algo = key_algo.upper()
         if not self._public_key_exists(
             keychain_uid=keychain_uid, key_algo=key_algo
         ):  # We don't want lonely private keys
@@ -273,6 +278,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :return: count of free keypairs of said type
         """
+        key_algo = key_algo.upper()
         return self._get_free_keypairs_count(key_algo=key_algo)
 
     @synchronized
@@ -284,6 +290,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param public_key: public key in clear PEM format
         :param private_key: private key in PEM format (potentially encrypted)
         """
+        key_algo = key_algo.upper()
         return self._add_free_keypair(key_algo=key_algo, public_key=public_key, private_key=private_key)
 
     @synchronized
@@ -297,6 +304,7 @@ class KeystoreWriteBase(KeystoreBase):
         :param key_algo: one of SUPPORTED_ASYMMETRIC_KEY_ALGOS
         :return: public key of the keypair, in clear PEM format
         """
+        key_algo = key_algo.upper()
         self._check_public_key_does_not_exist(keychain_uid=keychain_uid, key_algo=key_algo)
         return self._attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo=key_algo)
 

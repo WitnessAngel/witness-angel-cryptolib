@@ -24,7 +24,7 @@ def check_keystore_basic_get_set_api(keystore, readonly_keystore=None):
     keychain_uid_separated_keys = generate_uuid0()
     assert keychain_uid_separated_keys > keychain_uid
     keychain_uid_unused = generate_uuid0()
-    key_algo = "abxz"
+    key_algo = "ABXZ"
 
     all_keystores = [keystore, readonly_keystore] if readonly_keystore else [keystore]
 
@@ -118,6 +118,7 @@ def check_keystore_basic_get_set_api(keystore, readonly_keystore=None):
     for _keystore in all_keystores:
         # Sanity check
         assert _keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"public_data"
+        assert _keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo.lower()) == b"public_data"
         assert _keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo) == b"private_data"
 
         with pytest.raises(KeyDoesNotExist, match="not found"):

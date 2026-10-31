@@ -393,7 +393,7 @@ class CryptainerDecryptor(CryptainerBase):
         operation_report: OperationReport,
         predecrypted_symkey_mapper: Optional[dict],
     ) -> Optional[bytes]:
-        assert isinstance(payload_ciphertext, bytes), repr(payload_ciphertext)
+        assert isinstance(payload_ciphertext, bytes), type(payload_ciphertext)
         payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
 
         for signature_conf in get_payload_ciphertext_signatures(payload_cipher_layer):
@@ -420,7 +420,7 @@ class CryptainerDecryptor(CryptainerBase):
         )
 
         if key_bytes is not None:
-            assert isinstance(key_bytes, bytes), key_bytes
+            assert isinstance(key_bytes, bytes), type(key_bytes)
             symkey = load_from_json_bytes(key_bytes)
 
             payload_macs = payload_cipher_layer[
@@ -434,7 +434,7 @@ class CryptainerDecryptor(CryptainerBase):
                     cipher_algo=payload_cipher_algo,
                     verify_integrity_tags=verify_integrity_tags,
                 )
-                assert isinstance(payload_cleartext, bytes), payload_cleartext  # Now decrypted
+                assert isinstance(payload_cleartext, bytes), type(payload_cleartext)  # Now decrypted
 
             except DecryptionIntegrityError as exc:
                 operation_report.add_entry(
@@ -515,7 +515,7 @@ class CryptainerDecryptor(CryptainerBase):
         """
         key_bytes = None
 
-        assert isinstance(key_ciphertext, bytes), key_ciphertext
+        assert isinstance(key_ciphertext, bytes), type(key_ciphertext)
 
         key_cipherdict = load_from_json_bytes(key_ciphertext)
         assert isinstance(key_cipherdict, dict), key_cipherdict
@@ -720,7 +720,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         trustee_id = get_trustee_id(trustee)
         passphrases = self._passphrase_mapper.get(trustee_id) or []
-        assert isinstance(passphrases, list), repr(passphrases)  # No SINGLE passphrase here
+        assert isinstance(passphrases, list), type(passphrases)  # No SINGLE passphrase here
 
         passphrases += self._passphrase_mapper.get(None) or []  # Add COMMON passphrases
 
@@ -749,7 +749,7 @@ class CryptainerDecryptor(CryptainerBase):
                 )
                 key_struct = load_from_json_bytes(key_struct_bytes)
                 key_bytes = key_struct["key_bytes"]
-                assert isinstance(key_bytes, bytes), key_bytes
+                assert isinstance(key_bytes, bytes), type(key_bytes)
 
                 actual_cryptainer_metadata = key_struct[
                     "cryptainer_metadata"

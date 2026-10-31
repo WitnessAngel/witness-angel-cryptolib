@@ -120,7 +120,7 @@ def __wip_sign_payload_into_sigainer(payload, *, sigconf):  # FIXME IMPLEMENT LA
         for chunk in iter(lambda: payload.read(DEFAULT_DATA_CHUNK_SIZE), b""):
             _update_hashers_dict(hashers_dict, chunk=chunk)
     else:
-        assert isinstance(payload, bytes), payload
+        assert isinstance(payload, bytes), type(payload)
         _update_hashers_dict(hashers_dict, chunk=payload)  # All at once
 
     payload_digests = _get_hashers_dict_digests(hashers_dict)

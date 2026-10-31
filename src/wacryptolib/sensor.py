@@ -87,8 +87,8 @@ class TarfileRecordAggregator(TimeLimitedAggregatorMixin):
     def _notify_aggregation_operation(self):
         super()._notify_aggregation_operation()
         if not self._current_tarfile:
-            assert not self._current_bytesio, repr(self._current_bytesio)
-            assert not self._current_metadata, repr(self._current_metadata)
+            assert not self._current_bytesio, type(self._current_bytesio)
+            assert not self._current_metadata, type(self._current_metadata)
             assert not self._current_records_count, self._current_bytesio
             self._current_bytesio = io.BytesIO()
             self._current_tarfile = tarfile.open(
@@ -150,7 +150,7 @@ class TarfileRecordAggregator(TimeLimitedAggregatorMixin):
         :param payload: bytestring of audio/video/other data
         """
         assert self._current_records_count or not self._current_start_time  # INVARIANT of our system!
-        assert isinstance(payload, bytes), repr(payload)  # For now, only format supported
+        assert isinstance(payload, bytes), type(payload)  # For now, only format supported
         assert extension.startswith("."), extension
         assert from_datetime <= to_datetime, (from_datetime, to_datetime)
         check_datetime_is_tz_aware(from_datetime)

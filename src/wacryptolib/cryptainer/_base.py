@@ -108,7 +108,7 @@ def _get_cryptainer_inline_ciphertext_value(cryptainer):
         payload_ciphertext_struct["ciphertext_location"] == PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE
     ), payload_ciphertext_struct["ciphertext_location"]
     ciphertext_value = payload_ciphertext_struct["ciphertext_value"]
-    assert isinstance(ciphertext_value, bytes), repr(ciphertext_value)  # Always (no more "special markers")
+    assert isinstance(ciphertext_value, bytes), type(ciphertext_value)  # Always (no more "special markers")
     return ciphertext_value
 
 

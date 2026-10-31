@@ -176,7 +176,7 @@ class CryptainerEncryptor(CryptainerBase):
             payload_stream = payload
             payload = payload_stream.read()
             # DO NOT delete the file, e.g. it might come from CLI!
-        assert isinstance(payload, bytes), payload
+        assert isinstance(payload, bytes), type(payload)
         ## FIXME LATER ADD THIS - assert payload, payload  # No encryption must be launched if we have no payload to process!
         return payload
 

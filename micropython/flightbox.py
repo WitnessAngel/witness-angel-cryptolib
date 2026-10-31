@@ -161,7 +161,7 @@ class FlightBox:
             payload_stream = payload
             payload = payload_stream.read()
             # DO NOT delete the file, e.g. it might come from CLI!
-        assert isinstance(payload, bytes), payload
+        assert isinstance(payload, bytes), type(payload)
         ## FIXME LATER ADD THIS - assert payload, payload  # No encryption must be launched if we have no payload to process!
         return payload
 
@@ -253,7 +253,7 @@ class FlightBox:
                 key_cipher_layers=key_cipher_layers,
                 cryptainer_metadata=cryptainer_metadata,
             )
-            assert isinstance(key_ciphertext, bytes), key_ciphertext
+            assert isinstance(key_ciphertext, bytes), type(key_ciphertext)
             payload_cipher_layer["key_ciphertext"] = key_ciphertext
 
             payload_cipher_layer_extract = dict(
@@ -330,7 +330,7 @@ class FlightBox:
                  If an asymmetric algorithm has been used, a dictionary with all the information
                  needed to decipher the symmetric key is returned.
         """
-        assert isinstance(key_bytes, bytes), key_bytes
+        assert isinstance(key_bytes, bytes), type(key_bytes)
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
 
         if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:

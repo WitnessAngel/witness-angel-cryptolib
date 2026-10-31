@@ -42,7 +42,8 @@ On a regular computer, **pip install wacryptolib[fallbacks]** installs these pac
 FORCE_WACRYPTOLIB_FALLBACK_BACKEND environment variable forces the fallback backend (for tests).
 
 The fallback backend supports all algorithms used by wacryptolib, and reads/writes the same key formats, except
-legacy DSA private keys protected with DES3 (written by wacryptolib 0.12 and earlier). Being pure-python, it is
+legacy private keys protected with DES3 (DSA keys written by wacryptolib 0.12 and earlier, and RSA keys written by
+wacryptolib 0.8 and earlier). Being pure-python, it is
 much slower, and not protected against timing side-channels.
 
 

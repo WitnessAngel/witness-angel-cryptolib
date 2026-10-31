@@ -17,6 +17,7 @@ import secrets
 from .primes import get_random_prime, is_probable_prime
 
 L_TO_N = {2048: 224, 3072: 256}  # Same (L, N) pairs as pycryptodome's DSA.generate()
+FIPS_186_3_L_N = {(1024, 160), (2048, 224), (2048, 256), (3072, 256)}  # Those pycryptodome's DSS signs and verifies with
 
 
 class DsaKey:
@@ -70,6 +71,12 @@ def generate_dsa_key(key_length_bits):
     return DsaKey(p, q, g, pow(g, x, p), x)
 
 
+def _check_fips_186_3_sizes(key):
+    l_n = (key.p.bit_length(), key.q.bit_length())
+    if l_n not in FIPS_186_3_L_N:
+        raise ValueError("L/N %s is not compliant to FIPS 186-3" % (l_n,))  # Like pycryptodome
+
+
 def _digest_to_integer(digest, q):
     return int.from_bytes(digest, "big") >> max(0, len(digest) * 8 - q.bit_length())  # Leftmost N bits
 
@@ -78,6 +85,7 @@ def sign(key, digest, k=None):
     """Sign a message digest; `k` must only be given for known-answer tests."""
     if not key.has_private():
         raise TypeError("Private key is needed to sign")
+    _check_fips_186_3_sizes(key)
     p, q, g, x = key.p, key.q, key.g, key.x
     z = _digest_to_integer(digest, q)
     while True:
@@ -94,6 +102,7 @@ def sign(key, digest, k=None):
 
 def verify(key, digest, signature):
     """Raise ValueError if the signature is invalid."""
+    _check_fips_186_3_sizes(key)
     p, q, g, y = key.p, key.q, key.g, key.y
     q_length = (q.bit_length() + 7) // 8
     if len(signature) != 2 * q_length:

@@ -223,7 +223,13 @@ def _decrypt_one_rsa_oaep_chunk(ciphertext, private_key):
     return db[separator_position + 1 :]
 
 
+def _check_rsa_private_key(key):
+    if not isinstance(key, pkcs1.keys.MultiPrimeRsaPrivateKey):
+        raise TypeError("This is not a private key")  # Like pycryptodome
+
+
 def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[bytes]:
+    _check_rsa_private_key(private_key)
     return [_decrypt_one_rsa_oaep_chunk(chunk, private_key) for chunk in ciphertext_chunks]
 
 
@@ -235,6 +241,7 @@ def sign_with_pss(message, private_key):
     """RFC 8017 section 8.1, with a salt as long as the hash, like pycryptodome's pss.new() default.
 
     :param message: already-fed SHA512 hasher object"""
+    _check_rsa_private_key(private_key)
     message_hash = message.digest()
     em_bits = private_key.bit_size - 1
     em_length = (em_bits + 7) // 8
@@ -354,6 +361,8 @@ def sign_with_dss(message, private_key):
         return private_key.sign_digest_deterministic(
             message.digest(), hashfunc=_RSA_HASH, sigencode=ecdsa.util.sigencode_string, allow_truncate=True
         )
+    if isinstance(private_key, ecdsa.VerifyingKey):
+        raise TypeError("Private key is needed to sign")  # Like pycryptodome, and like our DSA keys
     raise ValueError("Only DSA and NIST-curve ECC keys can be used for DSS signatures")
 
 

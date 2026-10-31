@@ -2347,6 +2347,13 @@ def test_cryptainer_decryption_rejects_invalid_algos_and_format():
     with pytest.raises(SchemaValidationError, match="must be inline"):
         decrypt_payload_from_cryptainer(corrupted_cryptainer)
 
+    corrupted_cryptainer = copy.deepcopy(cryptainer)
+    corrupted_cryptainer["payload_ciphertext_struct"]["unexpected_key"] = 1
+    with pytest.raises(SchemaValidationError):
+        decrypt_payload_from_cryptainer(corrupted_cryptainer)
+    with pytest.raises(SchemaValidationError):
+        gather_decryptable_symkeys([("corrupted", corrupted_cryptainer)])
+
     # Defense in depth, even if upfront validation is bypassed
     with pytest.raises(SchemaValidationError, match="Empty key_cipher_layers"):
         CryptainerDecryptor(keystore_pool=InMemoryKeystorePool())._decrypt_key_through_multiple_layers(

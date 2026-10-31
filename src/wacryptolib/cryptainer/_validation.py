@@ -308,15 +308,20 @@ def _check_cryptainer_structure(cryptainer: dict, require_inline_payload: bool):
 
     :param require_inline_payload: if True, the payload ciphertext must be present, inline, as bytes
     """
+    payload_ciphertext_struct = cryptainer.get("payload_ciphertext_struct")
     if require_inline_payload:
-        payload_ciphertext_struct = cryptainer.get("payload_ciphertext_struct")
         if not (
             isinstance(payload_ciphertext_struct, dict)
             and payload_ciphertext_struct.get("ciphertext_location") == PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE
             and isinstance(payload_ciphertext_struct.get("ciphertext_value"), bytes)
         ):
             raise SchemaValidationError("Cryptainer payload ciphertext must be inline bytes")
-    check_cryptainer_sanity(dict(cryptainer, payload_ciphertext_struct=OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER))
+    if isinstance(payload_ciphertext_struct, dict) and "ciphertext_value" in payload_ciphertext_struct:
+        # Blank only the value, so that the rest of the struct (e.g. unexpected keys) still gets validated
+        payload_ciphertext_struct = dict(payload_ciphertext_struct, ciphertext_value=b"")
+    elif not require_inline_payload:
+        payload_ciphertext_struct = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Might be absent, or a placeholder
+    check_cryptainer_sanity(dict(cryptainer, payload_ciphertext_struct=payload_ciphertext_struct))
 
 
 def check_sigconf_sanity(cryptoconf: dict, jsonschema_mode=False):

@@ -321,11 +321,20 @@ def _check_cryptainer_structure(cryptainer: dict, require_inline_payload: bool):
             and isinstance(payload_ciphertext_struct.get("ciphertext_value"), bytes)
         ):
             raise SchemaValidationError("Cryptainer payload ciphertext must be inline bytes")
-    if isinstance(payload_ciphertext_struct, dict) and "ciphertext_value" in payload_ciphertext_struct:
+    if isinstance(payload_ciphertext_struct, dict) and isinstance(
+        payload_ciphertext_struct.get("ciphertext_value"), bytes
+    ):
         # Blank only the value, so that the rest of the struct (e.g. unexpected keys) still gets validated
         payload_ciphertext_struct = dict(payload_ciphertext_struct, ciphertext_value=b"")
-    elif not require_inline_payload and payload_ciphertext_struct is None:
-        payload_ciphertext_struct = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Absent, or not yet filled by encryptor
+    elif (
+        not require_inline_payload
+        and payload_ciphertext_struct is None
+        and (
+            "payload_ciphertext_struct" not in cryptainer  # Loaded with include_payload_ciphertext=False
+            or cryptainer.get("cryptainer_state") == CRYPTAINER_STATES.STARTED  # Not yet filled by encryptor
+        )
+    ):
+        payload_ciphertext_struct = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
     cryptainer = dict(cryptainer, payload_ciphertext_struct=payload_ciphertext_struct)
 
     payload_cipher_layers = cryptainer.get("payload_cipher_layers")

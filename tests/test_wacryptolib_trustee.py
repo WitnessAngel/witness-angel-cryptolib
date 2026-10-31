@@ -119,21 +119,29 @@ def test_trustee_api_workflow():
     )
     assert decrypted == secret
 
-    with pytest.raises(ValidationError, match="Unsupported asymmetric cipher"):
+    with pytest.raises(ValidationError, match="Unsupported algorithm"):
         trustee_api.decrypt_with_private_key(keychain_uid=keychain_uid, cipher_algo="RSA_PSS", cipherdict=cipherdict)
-    with pytest.raises(ValidationError, match="Unsupported asymmetric key"):
+    with pytest.raises(ValidationError, match="Unsupported algorithm"):
         trustee_api.fetch_public_key(keychain_uid=keychain_uid, key_algo="AES_CBC")
-    with pytest.raises(ValidationError, match="Unsupported signature"):
+    with pytest.raises(ValidationError, match="Unsupported algorithm"):
         trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret, signature_algo="RSA_OAEP")
     assert trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret, signature_algo="dsa_dss")
     result = trustee_api.request_decryption_authorization(
         keypair_identifiers=[dict(keychain_uid=keychain_uid_other, key_algo="rsa_oaep")], request_message="Need it"
     )
     assert not result["has_errors"]
-    with pytest.raises(ValidationError, match="Unsupported asymmetric key"):
+    with pytest.raises(ValidationError, match="Unsupported algorithm"):
         trustee_api.request_decryption_authorization(
             keypair_identifiers=[dict(keychain_uid=keychain_uid_other, key_algo="AES_CBC")], request_message="Need it"
         )
+
+    for wrong_cipher_algo in (None, 42):  # Non-strings are rejected too, not crashing on .upper()
+        with pytest.raises(ValidationError, match="Unsupported algorithm"):
+            trustee_api.decrypt_with_private_key(
+                keychain_uid=keychain_uid, cipher_algo=wrong_cipher_algo, cipherdict=cipherdict
+            )
+    with pytest.raises(ValidationError, match=r"Unsupported algorithm 'XXXXX+'$"):  # Huge values are truncated
+        trustee_api.fetch_public_key(keychain_uid=keychain_uid, key_algo="X" * 10000)
 
     # NO auto-creation of keypair in decrypt_with_private_key()
     with pytest.raises(KeyDoesNotExist, match="not found"):

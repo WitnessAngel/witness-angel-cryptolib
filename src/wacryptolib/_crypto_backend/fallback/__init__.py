@@ -618,7 +618,15 @@ def _decode_nist_ecc_key(decode, der):
 def _decode_nist_ecc_private_key(private_key_octets, parameters):
     # ecdsa parses the whole PKCS#8 structure itself, so we rebuild it
     algorithm_identifier = _pem.encode_algorithm_identifier(_pem.OID_EC_PUBLIC_KEY, parameters)
-    return _decode_nist_ecc_key(ecdsa.SigningKey.from_der, _pem.encode_pkcs8(algorithm_identifier, private_key_octets))
+    key = _decode_nist_ecc_key(ecdsa.SigningKey.from_der, _pem.encode_pkcs8(algorithm_identifier, private_key_octets))
+    # ecdsa ignores the optional [1] publicKey of ECPrivateKey, which pycryptodome checks against the private scalar
+    for item in _pem.decode_sequence(private_key_octets, 2, 4)[2:]:
+        if item[0] == 0xA1:
+            public_point = _pem.decode_bit_string(_pem.decode(item, 0xA1))
+            embedded_key = _decode_nist_ecc_key(lambda point: ecdsa.VerifyingKey.from_string(point, key.curve), public_point)
+            if embedded_key.pubkey.point != key.verifying_key.pubkey.point:
+                raise ValueError("Invalid ECC private key (public point doesn't match)")
+    return key
 
 
 def _decode_nist_ecc_public_key(public_key_bits, parameters):

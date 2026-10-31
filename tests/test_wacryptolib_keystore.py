@@ -359,6 +359,15 @@ def test_keystore_tree_export_with_lowercase_key_algo(tmp_path: Path):
     assert [keypair["key_algo"] for keypair in keystore_tree["keypairs"]] == ["RSA_OAEP"]
 
 
+def test_keystore_set_keypair_assertion_does_not_leak_keys(tmp_path: Path):
+    keystore = FilesystemKeystore(tmp_path)
+    with pytest.raises(AssertionError) as exc_info:
+        keystore.set_keypair(
+            keychain_uid=generate_uuid0(), key_algo="RSA_OAEP", public_key=b"", private_key=b"SECRETPRIVATEKEY"
+        )
+    assert b"SECRETPRIVATEKEY" not in str(exc_info.value).encode()
+
+
 def test_keystore_import_from_keystore_tree(tmp_path: Path):
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()

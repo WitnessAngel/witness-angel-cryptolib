@@ -12,7 +12,7 @@ from uuid import UUID
 
 import pytest
 
-from _test_mockups import get_fake_authdevice, random_bool, is_fallback_backend
+from _test_mockups import get_fake_authdevice, random_bool, is_fallback_backend, skip_if_fallback_backend
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.exceptions import (
     KeystoreDoesNotExist,
@@ -672,6 +672,7 @@ def test_get_free_keypair_generator_worker():
 
 
 def test_filesystem_keystore_lists_post_quantum_keypairs(tmp_path: Path):
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     # Key algo names with digits (ML_KEM_768, ML_DSA_65) must be accepted by the filename regex
     keystore = FilesystemKeystore(tmp_path)
     keychain_uid_1 = generate_uuid0()

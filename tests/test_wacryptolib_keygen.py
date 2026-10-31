@@ -42,7 +42,7 @@ def test_passphrase_encoding():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_keypair_unicity(key_algo):
-    if key_algo == "ECC_DSS":
+    if key_algo in ("ECC_DSS", "ECIES_X25519"):
         skip_if_fallback_backend("ECC")
     # We must reuse test-specific caching of asymmetric keypairs, for this test
     wacryptolib.keygen.__original_do_generate_keypair_patcher.stop()
@@ -122,7 +122,7 @@ def test_ecc_keypair_generation():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_load_asymmetric_key_from_pem_bytestring(key_algo):
-    if key_algo == "ECC_DSS":
+    if key_algo in ("ECC_DSS", "ECIES_X25519"):
         skip_if_fallback_backend("ECC")
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo)
 
@@ -144,7 +144,7 @@ def test_load_ecies_x25519_key_rejects_other_curves():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
-    if key_algo in ("ECC_DSS", "DSA_DSS"):
+    if key_algo in ("ECC_DSS", "ECIES_X25519", "DSA_DSS"):
         skip_if_fallback_backend("ECC, and DES3 for DSA key protection,")
     # Both Unicode and Bytes are supported
     passphrases = ["Thïs is a passphrâse", b"aoh18726"]

@@ -2386,6 +2386,16 @@ def test_gather_decryptable_symkeys_accepts_payloadless_cryptainers_and_iterator
     assert gather_decryptable_symkeys([("my.crypt", payloadless_cryptainer)]) == expected
     assert gather_decryptable_symkeys((x for x in [("my.crypt", cryptainer)])) == expected  # One-shot iterable
 
+    # Unfinished cryptainers (e.g. left by a crashed recording) have no payload MACs yet
+    unfinished_cryptainer = copy.deepcopy(payloadless_cryptainer)
+    unfinished_cryptainer["cryptainer_state"] = CRYPTAINER_STATES.STARTED
+    unfinished_cryptainer["payload_cipher_layers"][0]["payload_macs"] = None
+    assert gather_decryptable_symkeys([("my.crypt", unfinished_cryptainer)]) == expected
+
+    unfinished_cryptainer["cryptainer_state"] = CRYPTAINER_STATES.FINISHED
+    with pytest.raises(SchemaValidationError):
+        gather_decryptable_symkeys([("my.crypt", unfinished_cryptainer)])
+
 
 @pytest.mark.parametrize("canonical", [False, True])
 def test_shared_secret_threshold_lower_bound_via_json_schema(canonical):

@@ -321,7 +321,21 @@ def _check_cryptainer_structure(cryptainer: dict, require_inline_payload: bool):
         payload_ciphertext_struct = dict(payload_ciphertext_struct, ciphertext_value=b"")
     elif not require_inline_payload:
         payload_ciphertext_struct = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Might be absent, or a placeholder
-    check_cryptainer_sanity(dict(cryptainer, payload_ciphertext_struct=payload_ciphertext_struct))
+    cryptainer = dict(cryptainer, payload_ciphertext_struct=payload_ciphertext_struct)
+
+    payload_cipher_layers = cryptainer.get("payload_cipher_layers")
+    if (
+        not require_inline_payload
+        and cryptainer.get("cryptainer_state") == CRYPTAINER_STATES.STARTED
+        and isinstance(payload_cipher_layers, list)
+    ):
+        # Unfinished cryptainers only get their payload MACs at finalization, but their keys are already usable
+        cryptainer["payload_cipher_layers"] = [
+            dict(layer, payload_macs={}) if isinstance(layer, dict) and layer.get("payload_macs") is None else layer
+            for layer in payload_cipher_layers
+        ]
+
+    check_cryptainer_sanity(cryptainer)
 
 
 def check_sigconf_sanity(cryptoconf: dict, jsonschema_mode=False):

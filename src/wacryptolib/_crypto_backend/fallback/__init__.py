@@ -427,10 +427,10 @@ class X25519Key:
     def public_key(self):
         return X25519Key(self.public_bytes)
 
-    def __eq__(self, other):
-        return isinstance(other, X25519Key) and (self.public_bytes, self.private_bytes) == (
+    def __eq__(self, other):  # Like pycryptodome, private keys clamping to the same scalar are equal
+        return isinstance(other, X25519Key) and (self.public_bytes, self.has_private()) == (
             other.public_bytes,
-            other.private_bytes,
+            other.has_private(),
         )
 
     def __repr__(self):

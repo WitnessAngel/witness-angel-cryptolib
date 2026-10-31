@@ -195,13 +195,13 @@ def decode_pem(key_pem):
             key_pem = key_pem.decode("ascii")
         except UnicodeDecodeError:
             raise ValueError("PEM data must be ASCII") from None
-    lines = key_pem.strip().splitlines()
+    lines = [line.strip() for line in key_pem.strip().splitlines()]  # Like pycryptodome, ignore stray spaces
     if len(lines) < 2 or not lines[0].startswith("-----BEGIN ") or not lines[0].endswith("-----"):
         raise ValueError("Not a PEM-encoded key")
     marker = lines[0][len("-----BEGIN ") : -len("-----")]
-    if lines[-1].strip() != "-----END %s-----" % marker:
+    if lines[-1] != "-----END %s-----" % marker:
         raise ValueError("Missing PEM end marker for %s" % marker)
-    body = [line.strip() for line in lines[1:-1]]
+    body = ["".join(line.split()) for line in lines[1:-1]]
     if any(":" in line for line in body):
         raise ValueError("PEM encapsulated headers (legacy encryption) are not supported by the fallback backend")
     try:

@@ -429,7 +429,13 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         raise NotImplementedError("%s -> _handle_post_stop_data" % self.sensor_name)
 
     def _launch_and_consume_subprocess(self, command_line, cryptainer_encryption_stream):
-        logger.info("Calling {} sensor subprocess command: {}".format(self.sensor_name, " ".join(command_line)))
+        # Only the executable is logged, since arguments may contain secrets (e.g. credentials in RTSP stream urls)
+        logger.info(
+            "Calling %s sensor subprocess command: %s (%d arguments)",
+            self.sensor_name,
+            command_line[0],
+            len(command_line) - 1,
+        )
 
         try:
             self._subprocess = subprocess.Popen(

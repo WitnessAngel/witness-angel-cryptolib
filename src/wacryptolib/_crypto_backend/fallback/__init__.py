@@ -440,7 +440,7 @@ _NIST_CURVES = {
     name_template % bits: curve
     for bits, curve in [(192, ecdsa.NIST192p), (224, ecdsa.NIST224p), (256, ecdsa.NIST256p), (384, ecdsa.NIST384p),
                         (521, ecdsa.NIST521p)]
-    for name_template in ("p%d", "P-%d", "NIST P-%d", "secp%dr1", "prime%dv1")
+    for name_template in ("p%d", "P-%d", "NIST P-%d", "nistp%d", "secp%dr1", "prime%dv1")
 }
 
 

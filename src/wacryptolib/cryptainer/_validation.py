@@ -148,7 +148,8 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
             ],
             len,
         ),  # Must be non-empty!
-        OptionalKey("keychain_uid"): micro_schemas.schema_uid,
+        # Cryptainers always get a default keychain_uid, which decryption needs
+        ("keychain_uid" if for_cryptainer else OptionalKey("keychain_uid")): micro_schemas.schema_uid,
     }
 
     if for_cryptosig:

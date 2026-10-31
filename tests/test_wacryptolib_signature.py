@@ -88,8 +88,16 @@ def test_generic_signature_errors():
         private_key=keypair["private_key"], message=message, signature_algo="RSA_PSS"
     )
 
-    with pytest.raises(ValueError, match="Unknown signature algorithm"):
-        wacryptolib.signature.sign_message(private_key=keypair["private_key"], message=message, signature_algo="EIXH")
+    # Algo names are normalized to uppercase
+    signature_lowercase = wacryptolib.signature.sign_message(
+        private_key=keypair["private_key"], message=message, signature_algo="rsa_pss"
+    )
+    wacryptolib.signature.verify_message_signature(
+        public_key=keypair["public_key"], message=message, signature=signature_lowercase, signature_algo="rsa_pss"
+    )
+
+    with pytest.raises(ValueError, match="Unknown signature algorithm 'EIXH'"):
+        wacryptolib.signature.sign_message(private_key=keypair["private_key"], message=message, signature_algo="eixh")
 
     with pytest.raises(ValueError, match="Incompatible key type"):
         wacryptolib.signature.sign_message(

@@ -23,7 +23,6 @@ RSA_OAEP_CHUNKS_SIZE = 60
 
 
 def _get_cipher_algo_conf(cipher_algo):
-    cipher_algo = cipher_algo.upper()
     if cipher_algo not in CIPHER_ALGOS_REGISTRY:
         raise ValueError("Unknown cipher type '%s'" % cipher_algo)
 
@@ -53,6 +52,7 @@ def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) ->
 
     :return: dictionary with encryption data"""
     assert isinstance(plaintext, bytes), repr(plaintext)
+    cipher_algo = cipher_algo.upper()
     logger.debug("Encrypting %d bytes of plaintext with cipher algo %s", len(plaintext), cipher_algo)
     cipher_algo_conf = _get_cipher_algo_conf(cipher_algo=cipher_algo)
     encryption_function = cipher_algo_conf["encryption_function"]
@@ -77,6 +77,7 @@ def decrypt_bytestring(
     :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
     :return: dictionary with encryption data."""
+    cipher_algo = cipher_algo.upper()
     logger.debug(
         "Decrypting cipherdict with cipher algo %s, and verify_integrity_tags=%s", cipher_algo, verify_integrity_tags
     )

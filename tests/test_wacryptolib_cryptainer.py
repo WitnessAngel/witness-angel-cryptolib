@@ -2416,6 +2416,11 @@ def test_gather_decryptable_symkeys_accepts_payloadless_cryptainers_and_iterator
     unfinished_cryptainer["payload_cipher_layers"][0]["payload_macs"] = None
     assert gather_decryptable_symkeys([("my.crypt", unfinished_cryptainer)]) == expected
 
+    macless_cryptainer = copy.deepcopy(unfinished_cryptainer)
+    del macless_cryptainer["payload_cipher_layers"][0]["payload_macs"]  # Mandatory field, even if None
+    with pytest.raises(SchemaValidationError):
+        gather_decryptable_symkeys([("my.crypt", macless_cryptainer)])
+
     unfinished_cryptainer["cryptainer_state"] = CRYPTAINER_STATES.FINISHED
     with pytest.raises(SchemaValidationError):
         gather_decryptable_symkeys([("my.crypt", unfinished_cryptainer)])

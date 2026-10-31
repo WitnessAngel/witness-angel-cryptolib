@@ -331,7 +331,7 @@ def _check_cryptainer_structure(cryptainer: dict, require_inline_payload: bool):
     ):
         # Unfinished cryptainers only get their payload MACs at finalization, but their keys are already usable
         cryptainer["payload_cipher_layers"] = [
-            dict(layer, payload_macs={}) if isinstance(layer, dict) and layer.get("payload_macs") is None else layer
+            dict(layer, payload_macs={}) if isinstance(layer, dict) and layer.get("payload_macs", {}) is None else layer
             for layer in payload_cipher_layers
         ]
 

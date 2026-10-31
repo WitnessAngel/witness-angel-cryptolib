@@ -296,9 +296,9 @@ def test_rsa_private_keys_with_bad_exponent_or_even_modulus_are_rejected(backend
 
 
 def test_ecc_private_key_with_mismatched_public_point_is_rejected(backend):
+    import_crypto_backend("fallback")  # Skips the test when ecdsa is missing
     import ecdsa
 
-    import_crypto_backend("fallback")
     from wacryptolib._crypto_backend.fallback import pem
 
     def ec_private_key_items(key):  # SEC1 ECPrivateKey: version, private key, [0] curve, [1] public point

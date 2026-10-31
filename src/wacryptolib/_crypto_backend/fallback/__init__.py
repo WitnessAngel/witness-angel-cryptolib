@@ -509,6 +509,8 @@ def _import_key_from_pem(key_pem, passphrase, private_key_decoders, public_key_d
     if marker == "PUBLIC KEY":
         oid, parameters, public_key_bits = _pem.decode_spki(der)
         return _get_decoder(public_key_decoders, oid)(public_key_bits, parameters)
+    if marker[:1].isdigit():  # Decoders dicts also hold OIDs, which are not PEM markers
+        raise ValueError("Unsupported PEM type %r" % marker)
     if marker in private_key_decoders:
         return private_key_decoders[marker](der, None)
     if marker in public_key_decoders:

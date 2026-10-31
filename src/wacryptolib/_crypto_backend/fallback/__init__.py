@@ -196,6 +196,20 @@ def encrypt_via_rsa_oaep(plaintext_chunks: list[bytes], public_key) -> list[byte
     return ciphertext_chunks
 
 
+def _rsa_private_operation(private_key, x):
+    """Like pycryptodome: fresh blinding for each operation (pkcs1 reuses one factor per key), and a check
+    of the CRT result, whose faults would else reveal a prime factor (Bellcore attack)."""
+    n, e = private_key.n, private_key.e
+    while True:
+        r = int.from_bytes(os.urandom(private_key.byte_size), "big") % n
+        if r > 1 and math.gcd(r, n) == 1:
+            break
+    y = private_key.rsadp(x * pow(r, e, n) % n) * pow(r, -1, n) % n
+    if pow(y, e, n) != x:
+        raise ValueError("Fault detected in RSA private operation")
+    return y
+
+
 def _decrypt_one_rsa_oaep_chunk(ciphertext, private_key):
     """RFC 8017 section 7.1.2, rather than pkcs1's decrypt() which uses MGF1-SHA1, prints padding bytes,
     and raises distinguishable exceptions (i.e. a padding oracle)."""
@@ -207,7 +221,7 @@ def _decrypt_one_rsa_oaep_chunk(ciphertext, private_key):
     c = int.from_bytes(ciphertext, "big")
     if c >= private_key.n:
         raise ValueError("Incorrect decryption.")
-    em = private_key.rsadp(c).to_bytes(k, "big")
+    em = _rsa_private_operation(private_key, c).to_bytes(k, "big")
     masked_seed, masked_db = em[1 : 1 + _RSA_HASH_LENGTH], em[1 + _RSA_HASH_LENGTH :]
     seed = _xor(masked_seed, _mgf1(masked_db, _RSA_HASH_LENGTH))
     db = _xor(masked_db, _mgf1(seed, k - _RSA_HASH_LENGTH - 1))
@@ -251,7 +265,7 @@ def sign_with_pss(message, private_key):
     masked_db = bytearray(_xor(db, _mgf1(h, em_length - _RSA_HASH_LENGTH - 1)))
     masked_db[0] &= 0xFF >> (8 * em_length - em_bits)
     em = bytes(masked_db) + h + b"\xbc"
-    return private_key.rsasp1(int.from_bytes(em, "big")).to_bytes(private_key.byte_size, "big")
+    return _rsa_private_operation(private_key, int.from_bytes(em, "big")).to_bytes(private_key.byte_size, "big")
 
 
 def verify_with_pss(message, signature, public_key):

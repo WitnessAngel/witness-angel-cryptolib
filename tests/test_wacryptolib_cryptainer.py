@@ -2426,6 +2426,20 @@ def test_cryptainer_validation_error_messages_are_bounded():
     assert "keychain_uid" in message
 
 
+def test_cryptainer_without_keychain_uid_is_refused_upfront():
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    del cryptainer["keychain_uid"]
+    for func in (check_cryptainer_sanity, decrypt_payload_from_cryptainer):
+        with pytest.raises(SchemaValidationError, match="keychain_uid"):
+            func(cryptainer)
+    with pytest.raises(SchemaValidationError, match="keychain_uid"):
+        gather_decryptable_symkeys([("my.crypt", cryptainer)])
+    with pytest.raises(SchemaValidationError, match="keychain_uid"):
+        check_cryptainer_sanity(convert_to_extjson(cryptainer), jsonschema_mode=True)
+    check_cryptoconf_sanity(SIMPLE_CRYPTOCONF)  # Still optional in cryptoconfs
+    assert "keychain_uid" not in SIMPLE_CRYPTOCONF
+
+
 def test_gather_decryptable_symkeys_accepts_payloadless_cryptainers_and_iterators(tmp_path):
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
     cryptainer_filepath = tmp_path.joinpath("my.crypt")

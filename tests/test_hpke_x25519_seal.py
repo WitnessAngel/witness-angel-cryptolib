@@ -13,6 +13,8 @@ from wacryptolib._crypto_backend import hpke_x25519_seal
 from wacryptolib.cipher import ECIES_X25519_HPKE_AEAD_ID, decrypt_bytestring
 from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring
 
+from _test_mockups import skip_if_fallback_backend
+
 h = bytes.fromhex
 
 
@@ -52,6 +54,7 @@ def test_hpke_key_schedule_rfc9180_vector():
 
 @pytest.mark.parametrize("plaintext", [b"", b"abc", b"x" * 300])
 def test_pure_seal_is_decryptable_by_pycryptodome(plaintext):
+    skip_if_fallback_backend("ECC")
     keypair = generate_keypair(key_algo="ECIES_X25519", serialize=False)
     raw_public_key = keypair["public_key"].export_key(format="raw")
 
@@ -66,6 +69,7 @@ def test_pure_seal_is_decryptable_by_pycryptodome(plaintext):
 
 
 def test_pure_seal_rejects_invalid_public_keys():
+    skip_if_fallback_backend("ECC")
     with pytest.raises(ValueError, match="low order"):
         hpke_x25519_seal.seal(bytes(32), b"abc")  # All-zero point yields an all-zero shared secret
     with pytest.raises(ValueError, match="32 bytes"):
@@ -80,6 +84,7 @@ def test_pure_seal_rejects_invalid_public_keys():
 
 
 def test_fallback_backend_seals_with_pure_python(tmp_path):
+    skip_if_fallback_backend("ECC")  # The keypair is generated and used natively, around the fallback subprocess
     # Fallback mode is decided at import time, so it needs a fresh interpreter
     keypair = generate_keypair(key_algo="ECIES_X25519", serialize=True)
     (tmp_path / "public_key.pem").write_bytes(keypair["public_key"])

@@ -17,6 +17,8 @@ from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionI
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS, hash_message
 
+from _test_mockups import skip_if_fallback_backend
+
 
 def _get_binary_content():
     bytes_length = random.randint(1, 1000)
@@ -154,6 +156,7 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
 
 @pytest.mark.parametrize("plaintext_length", [0, 10, 61, 500])
 def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
+    skip_if_fallback_backend("ECC")
     cipher_algo = "ECIES_X25519"
     keypair = wacryptolib.keygen.generate_keypair(key_algo=cipher_algo, serialize=False)
     encrypt = functools.partial(wacryptolib.cipher.encrypt_bytestring, cipher_algo=cipher_algo)

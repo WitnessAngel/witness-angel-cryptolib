@@ -12,20 +12,15 @@ def __monkey_patch_pycryptodome_compiled_internals():
     # WE MONKEY PATCH PYCRYPTODOME INTERNALS TO BYPASS SOME ".so" objects #
 
     class FakePycryptodomeExtensionLib:
-        @staticmethod
-        def have_aes_ni():
-            return False
-
-        @staticmethod
-        def have_clmul():
-            return False
-
         def __getattr__(self, name):
+            if name.startswith("have_"):  # CPU feature probes (have_aes_ni, have_sha_ni, have_bmi2...)
+                return lambda: False
             # Algorithms without pure python implementation (ECC, DES3...) end up here
             raise AttributeError("Native function %r of pycryptodome is not available in fallback backend" % name)
 
     def fake_load_pycryptodome_raw_lib(name, cdecl):
-        if name in ["Crypto.Math._modexp"]:  # We force automatic fallback for some libs, inside pycryptodome
+        # Crypto.Math._nat is the constant-time Integer of pycryptodome 4.x, which falls back to pure python too
+        if name in ["Crypto.Math._modexp", "Crypto.Math._nat"]:  # We force automatic fallback for some libs, inside pycryptodome
             raise ImportError("Fake ImportError to force failure on non-vital extension %s" % name)
         return FakePycryptodomeExtensionLib()
 

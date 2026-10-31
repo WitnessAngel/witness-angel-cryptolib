@@ -182,12 +182,12 @@ class FlightBox:
             )
             assert isinstance(
                 payload_cipherdict, dict
-            ), payload_cipherdict  # Might contain integrity/authentication data too
+            ), type(payload_cipherdict)  # Might contain integrity/authentication data too
 
             payload_ciphertext = payload_cipherdict.pop("ciphertext")  # Mandatory field
             assert isinstance(
                 payload_ciphertext, bytes
-            ), payload_ciphertext  # Same raw content as would be in offloaded payload file
+            ), type(payload_ciphertext)  # Same raw content as would be in offloaded payload file
 
             payload_digests = {
                 payload_hash_algo: hash_message(payload_ciphertext, hash_algo=payload_hash_algo)

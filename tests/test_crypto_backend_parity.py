@@ -435,3 +435,19 @@ def test_pss_rejects_keys_too_short_for_the_salt(both_backends):
         hasher.update(b"abc")
         with pytest.raises(ValueError):
             backend.verify_with_pss(hasher, short_salt_signature, key)
+
+
+def test_dss_rejects_dsa_keys_with_non_fips_186_3_sizes(backend):
+    p, q, g, y, x = (1 << 2047) + 1, (1 << 159) + 1, 2, 2, 1  # (L, N) = (2048, 160), only sizes are checked
+    if backend.__name__.endswith(".fallback"):
+        from wacryptolib._crypto_backend.vendor.dsa import DsaKey
+
+        key = DsaKey(p, q, g, y, x)
+    else:
+        from Crypto.PublicKey import DSA
+
+        key = DSA.construct((y, g, p, q, x), consistency_check=False)
+    with pytest.raises(ValueError, match="FIPS 186-3"):
+        backend.sign_with_dss(backend.get_hasher_instance("SHA512"), key)
+    with pytest.raises(ValueError, match="FIPS 186-3"):
+        backend.verify_with_dss(backend.get_hasher_instance("SHA512"), bytes(40), key)

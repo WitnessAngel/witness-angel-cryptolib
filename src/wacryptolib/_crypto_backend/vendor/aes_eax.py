@@ -72,9 +72,12 @@ class EaxCipher:
         self._tag = None
 
     def _apply_keystream(self, data):
-        while len(self._keystream) < len(data):
-            self._keystream += self._encrypt_block(self._counter.to_bytes(_BLOCK_SIZE, "big"))
+        missing_blocks = -(-(len(data) - len(self._keystream)) // _BLOCK_SIZE)
+        blocks = [self._keystream]
+        for _ in range(missing_blocks):  # Joined once, since repeated bytes concatenation is quadratic
+            blocks.append(self._encrypt_block(self._counter.to_bytes(_BLOCK_SIZE, "big")))
             self._counter = (self._counter + 1) & ((1 << 128) - 1)
+        self._keystream = b"".join(blocks)
         keystream, self._keystream = self._keystream[: len(data)], self._keystream[len(data) :]
         return _xor(data, keystream)
 

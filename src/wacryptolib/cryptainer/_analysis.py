@@ -7,6 +7,7 @@ from typing import Sequence
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
 from wacryptolib.cryptainer import get_trustee_id, SHARED_SECRET_ALGO_MARKER, get_payload_ciphertext_signatures
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, SUPPORTED_ASYMMETRIC_KEY_ALGOS
+from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.utilities import load_from_json_bytes
 
 
@@ -80,6 +81,16 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
 
     :return: dict with a tuple of the cipher key and the symkey/shard by trustee id.
     """
+    from wacryptolib.cryptainer import _check_cryptainer_structure  # LAZY import, _validation is loaded after us
+
+    cryptainers_with_names = list(cryptainers_with_names)  # Might be a one-shot iterable, and we loop twice
+    for cryptainer_name, cryptainer in cryptainers_with_names:
+        # Else e.g. empty key_cipher_layers would crash below; payload ciphertext is not needed here
+        try:
+            _check_cryptainer_structure(cryptainer, require_inline_payload=False)
+        except SchemaValidationError as exc:  # Tell which cryptainer of the batch is faulty
+            raise SchemaValidationError("Invalid cryptainer %s: %s" % (cryptainer_name, exc)) from exc
+
     decryptable_symkeys_per_trustee = {}
 
     def _add_decryptable_symkeys_for_trustee(

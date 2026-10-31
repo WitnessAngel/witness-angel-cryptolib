@@ -23,7 +23,7 @@ from ._authorization import request_decryption_authorizations
 from ._analysis import gather_trustee_dependencies, gather_decryptable_symkeys, is_cryptainer_cryptoconf_streamable
 
 from ._validation import (_validate_data_tree, check_cryptoconf_sanity, check_cryptainer_sanity,
-                          check_sigconf_sanity, check_sigainer_sanity)
+                          check_sigconf_sanity, check_sigainer_sanity, _check_cryptainer_structure)
 
 from ._signing import _do_get_message_signature, _inject_payload_digests_and_signatures
 

@@ -28,6 +28,10 @@ from wacryptolib.cryptainer import (
     LOCAL_KEYFACTORY_TRUSTEE_MARKER,
     encrypt_payload_into_cryptainer,
     decrypt_payload_from_cryptainer,
+    CRYPTAINER_FORMAT,
+    CRYPTAINER_STATES,
+    CryptainerDecryptor,
+    OperationReport,
     CryptainerStorage,
     extract_metadata_from_cryptainer,
     CryptainerBase,
@@ -49,6 +53,7 @@ from wacryptolib.cryptainer import (
     check_cryptoconf_sanity,
     check_cryptainer_sanity,
     check_sigainer_sanity,
+    check_sigconf_sanity,
     CRYPTAINER_TEMP_SUFFIX,
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
     ReadonlyCryptainerStorage,
@@ -629,6 +634,25 @@ def test_misconfigured_cryptoconfs(cryptoconf):
             cryptainer_metadata=None,
             keystore_pool=keystore_pool,
         )
+
+
+def test_encryption_rejects_cryptoconfs_that_decryption_would_refuse(tmp_path):
+    cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    cryptoconf["payload_cipher_layers"][0]["key_cipher_layers"][0]["comment"] = "unexpected"
+
+    with pytest.raises(SchemaValidationError):
+        encrypt_payload_into_cryptainer(
+            payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=InMemoryKeystorePool()
+        )
+    with pytest.raises(SchemaValidationError):
+        encrypt_payload_and_stream_cryptainer_to_filesystem(
+            payload=b"stuffs",
+            cryptainer_filepath=tmp_path / "my.crypt",
+            cryptoconf=cryptoconf,
+            cryptainer_metadata=None,
+            keystore_pool=InMemoryKeystorePool(),
+        )
+    assert not list(tmp_path.iterdir())  # No orphan offloaded payload file
 
 
 def test_encrypt_payload_into_cryptainer_from_file_object(tmp_path):
@@ -2139,17 +2163,39 @@ def _generate_corrupted_cryptoconfs(cryptoconf, is_complex_conf, include_extende
     corrupted_conf4["payload_cipher_layers"][0]["key_cipher_layers"] = " "
     corrupted_confs.append(corrupted_conf4)
 
+    # Empty the ciphers of payload
+    corrupted_conf5 = copy.deepcopy(cryptoconf)
+    del corrupted_conf5["payload_cipher_layers"][:]
+    corrupted_confs.append(corrupted_conf5)
+
+    # Empty the ciphers of payload key
+    corrupted_conf6 = copy.deepcopy(cryptoconf)
+    del corrupted_conf6["payload_cipher_layers"][0]["key_cipher_layers"][:]
+    corrupted_confs.append(corrupted_conf6)
+
+    if is_complex_conf:
+        # Empty the shards of shared secret, along with a zero threshold
+        corrupted_conf6_quater = copy.deepcopy(cryptoconf)
+        shared_secret = corrupted_conf6_quater["payload_cipher_layers"][2]["key_cipher_layers"][0]
+        assert shared_secret["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER
+        shared_secret["key_shared_secret_shards"] = []
+        shared_secret["key_shared_secret_threshold"] = 0
+        corrupted_confs.append(corrupted_conf6_quater)
+
+        # Empty the shards of shared secret, with a threshold that is valid on its own
+        corrupted_conf6_quater_bis = copy.deepcopy(cryptoconf)
+        corrupted_conf6_quater_bis["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_shards"] = []
+        corrupted_conf6_quater_bis["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_threshold"] = 1
+        corrupted_confs.append(corrupted_conf6_quater_bis)
+
+        # Empty the ciphers of a shard
+        corrupted_conf6_quinquies = copy.deepcopy(cryptoconf)
+        del corrupted_conf6_quinquies["payload_cipher_layers"][2]["key_cipher_layers"][0]["key_shared_secret_shards"][
+            0
+        ]["key_cipher_layers"][:]
+        corrupted_confs.append(corrupted_conf6_quinquies)
+
     if include_extended_checks:
-        # Empty the ciphers of payload
-        corrupted_conf5 = copy.deepcopy(cryptoconf)
-        del corrupted_conf5["payload_cipher_layers"][:]
-        corrupted_confs.append(corrupted_conf5)
-
-        # Empty the ciphers of payload key
-        corrupted_conf6 = copy.deepcopy(cryptoconf)
-        del corrupted_conf6["payload_cipher_layers"][0]["key_cipher_layers"][:]
-        corrupted_confs.append(corrupted_conf6)
-
         if is_complex_conf:
             # Empty the ciphers of shared secret key
             corrupted_conf6_bis = copy.deepcopy(cryptoconf)
@@ -2207,12 +2253,12 @@ def test_cryptainer_validation_success(cryptoconf):
     check_cryptainer_sanity(cryptainer=cryptainer_json, jsonschema_mode=True)
 
 
-def _generate_corrupted_cryptainers(cryptoconf, include_extended_checks):
+def _generate_corrupted_cryptainers(cryptoconf, include_extended_checks, is_complex_conf=False):
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None)
 
     # We can treat cryptainer as a cryptoconf sructure too!
     corrupted_cryptainers = _generate_corrupted_cryptoconfs(
-        cryptainer, is_complex_conf=False, include_extended_checks=include_extended_checks
+        cryptainer, is_complex_conf=is_complex_conf, include_extended_checks=include_extended_checks
     )
 
     corrupted_cryptainer1 = copy.deepcopy(cryptainer)
@@ -2230,6 +2276,264 @@ def _generate_corrupted_cryptainers(cryptoconf, include_extended_checks):
     return corrupted_cryptainers
 
 
+def _get_simple_shamir_cryptainer_and_shared_secret():
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"stuffs", cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
+    )
+    shared_secret = cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][1]
+    assert shared_secret["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER
+    return cryptainer, shared_secret
+
+
+def test_cryptainer_decryption_rejects_invalid_structures():
+    forged_cryptainer = {
+        "cryptainer_state": CRYPTAINER_STATES.FINISHED,
+        "cryptainer_format": CRYPTAINER_FORMAT,
+        "cryptainer_uid": uuid.uuid4(),
+        "keychain_uid": uuid.uuid4(),
+        "cryptainer_metadata": None,
+        "payload_ciphertext_struct": {"ciphertext_location": "inline", "ciphertext_value": b"FORGED PLAINTEXT"},
+        "payload_cipher_layers": [],
+    }
+    with pytest.raises(SchemaValidationError):
+        decrypt_payload_from_cryptainer(forged_cryptainer)
+    with pytest.raises(SchemaValidationError):
+        gather_decryptable_symkeys([("forged", forged_cryptainer)])
+
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    cryptainer["payload_cipher_layers"][0]["key_cipher_layers"] = []
+    with pytest.raises(SchemaValidationError):
+        decrypt_payload_from_cryptainer(cryptainer)
+    with pytest.raises(SchemaValidationError):
+        gather_decryptable_symkeys([("corrupted", cryptainer)])
+
+    cryptainer, shared_secret = _get_simple_shamir_cryptainer_and_shared_secret()
+    assert decrypt_payload_from_cryptainer(cryptainer)[0] == b"stuffs"
+    shard_count = len(shared_secret["key_shared_secret_shards"])
+    assert shared_secret["key_shared_secret_threshold"] < shard_count  # Last shard is never walked by decryption
+
+    def _corrupt_last_shard(shared_secret):
+        shared_secret["key_shared_secret_shards"][-1]["key_cipher_layers"] = []
+
+    def _set_threshold_and_shards(threshold, shards=None):
+        def _corrupt(shared_secret):
+            shared_secret["key_shared_secret_threshold"] = threshold
+            if shards is not None:
+                shared_secret["key_shared_secret_shards"] = shards
+        return _corrupt
+
+    for corrupt in [
+        _corrupt_last_shard,
+        _set_threshold_and_shards(0, shards=[]),
+        _set_threshold_and_shards(1, shards=[]),
+        _set_threshold_and_shards(0),
+        _set_threshold_and_shards(-1),
+        _set_threshold_and_shards(shard_count + 1),  # Shards are left non-empty
+        _set_threshold_and_shards("2"),
+        _set_threshold_and_shards(None),
+    ]:
+        corrupted_cryptainer = copy.deepcopy(cryptainer)
+        corrupt(corrupted_cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][1])
+        with pytest.raises(SchemaValidationError):
+            decrypt_payload_from_cryptainer(corrupted_cryptainer)
+        with pytest.raises(SchemaValidationError):
+            gather_decryptable_symkeys([("corrupted", corrupted_cryptainer)])
+
+
+def test_cryptainer_decryption_rejects_invalid_algos_and_format():
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    assert decrypt_payload_from_cryptainer(cryptainer)[0] == b"stuffs"
+
+    corrupted_cryptainer = copy.deepcopy(cryptainer)
+    corrupted_cryptainer["payload_cipher_layers"][0]["payload_cipher_algo"] = "RSA_OAEP"  # Not symmetric
+    with pytest.raises(SchemaValidationError):
+        decrypt_payload_from_cryptainer(corrupted_cryptainer)
+
+    corrupted_cryptainer = copy.deepcopy(cryptainer)
+    corrupted_cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_cipher_algo"] = "DSA_DSS"  # Signature
+    with pytest.raises(SchemaValidationError):
+        decrypt_payload_from_cryptainer(corrupted_cryptainer)
+    with pytest.raises(SchemaValidationError):
+        gather_decryptable_symkeys([("corrupted", corrupted_cryptainer)])
+
+    corrupted_cryptainer = copy.deepcopy(cryptainer)
+    del corrupted_cryptainer["cryptainer_format"]
+    with pytest.raises(ValueError, match="Unknown cryptainer format"):
+        decrypt_payload_from_cryptainer(corrupted_cryptainer)
+
+    corrupted_cryptainer = copy.deepcopy(cryptainer)
+    corrupted_cryptainer["payload_ciphertext_struct"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER  # Not loaded
+    with pytest.raises(SchemaValidationError, match="must be inline"):
+        decrypt_payload_from_cryptainer(corrupted_cryptainer)
+
+    corrupted_cryptainer = copy.deepcopy(cryptainer)
+    corrupted_cryptainer["payload_ciphertext_struct"]["unexpected_key"] = 1
+    with pytest.raises(SchemaValidationError):
+        decrypt_payload_from_cryptainer(corrupted_cryptainer)
+    with pytest.raises(SchemaValidationError):
+        gather_decryptable_symkeys([("corrupted", corrupted_cryptainer)])
+
+    # Defense in depth, even if upfront validation is bypassed
+    with pytest.raises(SchemaValidationError, match="Empty key_cipher_layers"):
+        CryptainerDecryptor(keystore_pool=InMemoryKeystorePool())._decrypt_key_through_multiple_layers(
+            default_keychain_uid=uuid.uuid4(),
+            key_ciphertext=b"xyz",
+            key_cipher_layers=[],
+            cryptainer_metadata=None,
+            operation_report=OperationReport(),
+        )
+
+
+def test_cryptainer_validation_errors_dont_include_payload_ciphertext():
+    payload = b"x" * 1_000_000
+    cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    cryptainer["unexpected_key"] = True
+    with pytest.raises(SchemaValidationError) as exc_info:
+        decrypt_payload_from_cryptainer(cryptainer)
+    assert len(str(exc_info.value)) < 100_000
+
+
+def test_cryptainer_validation_error_messages_are_bounded():
+    big_value = "y" * 1_000_000  # Validators would dump it in their raw error messages
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"x" * 1_000_000, cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata={"big": big_value}
+    )
+    cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_cipher_algo"] = "BAD_ALGO"
+
+    def _check_error(func, *args, **kwargs):
+        with pytest.raises(SchemaValidationError) as exc_info:
+            func(*args, **kwargs)
+        exc = exc_info.value
+        while exc is not None:  # Chained exceptions would show in tracebacks too
+            assert isinstance(exc, SchemaValidationError)
+            assert len(str(exc)) < 2000, len(str(exc))
+            exc = exc.__cause__
+        return str(exc_info.value)
+
+    message = _check_error(check_cryptainer_sanity, cryptainer)
+    assert "key_cipher_algo" in message and "BAD_ALGO" in message
+
+    message = _check_error(check_cryptainer_sanity, convert_to_extjson(cryptainer), jsonschema_mode=True)
+    assert "payload_cipher_layers/0" in message
+
+    message = _check_error(decrypt_payload_from_cryptainer, cryptainer)
+    assert "key_cipher_algo" in message
+
+    message = _check_error(gather_decryptable_symkeys, [("my.crypt", cryptainer)])
+    assert "my.crypt" in message and "key_cipher_algo" in message
+
+    message = _check_error(check_cryptoconf_sanity, dict(SIMPLE_CRYPTOCONF, keychain_uid=big_value))
+    assert "keychain_uid" in message
+
+
+def test_summarize_validation_error_lines_respects_max_lines():
+    from wacryptolib.utilities.validation_utils import summarize_validation_error_lines
+
+    lines = ["line%d" % i for i in range(12)]
+    summary = summarize_validation_error_lines(lines, max_lines=10).splitlines()
+    assert len(summary) == 10
+    assert summary[:3] == lines[:3] and summary[-6:] == lines[-6:]
+    assert summary[3] == "[... 3 lines skipped]"
+    assert summarize_validation_error_lines(lines[:10], max_lines=10).splitlines() == lines[:10]
+
+
+def test_cryptainer_validation_error_messages_keep_deep_causes():
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"abc", cryptoconf=COMPLEX_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
+    )
+    shared_secret_layer = cryptainer["payload_cipher_layers"][2]["key_cipher_layers"][0]
+    shared_secret_layer["key_shared_secret_shards"][1]["key_cipher_layers"][0]["junk_field"] = 1
+
+    with pytest.raises(SchemaValidationError) as exc_info:
+        decrypt_payload_from_cryptainer(cryptainer)
+    message = str(exc_info.value)
+    assert "Wrong key 'junk_field'" in message  # Innermost cause comes LAST in python-schema errors
+    assert len(message.splitlines()) <= 10
+
+    # Cause in a NON-last alternative of a key cipher layer Or(), followed by the failures of other alternatives
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["comment"] = "x"
+    with pytest.raises(SchemaValidationError) as exc_info:
+        decrypt_payload_from_cryptainer(cryptainer)
+    message = str(exc_info.value)
+    assert "Wrong key 'comment'" in message
+    assert len(message.splitlines()) <= 10
+
+
+def test_cryptainer_without_keychain_uid_is_refused_upfront():
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    del cryptainer["keychain_uid"]
+    for func in (check_cryptainer_sanity, decrypt_payload_from_cryptainer):
+        with pytest.raises(SchemaValidationError, match="keychain_uid"):
+            func(cryptainer)
+    with pytest.raises(SchemaValidationError, match="keychain_uid"):
+        gather_decryptable_symkeys([("my.crypt", cryptainer)])
+    with pytest.raises(SchemaValidationError, match="keychain_uid"):
+        check_cryptainer_sanity(convert_to_extjson(cryptainer), jsonschema_mode=True)
+    check_cryptoconf_sanity(SIMPLE_CRYPTOCONF)  # Still optional in cryptoconfs
+    assert "keychain_uid" not in SIMPLE_CRYPTOCONF
+
+
+def test_decrypt_non_dict_cryptainer_raises_schema_validation_error():
+    for wrong_cryptainer in (None, 42, [{}]):
+        with pytest.raises(SchemaValidationError, match="must be a dict"):
+            decrypt_payload_from_cryptainer(wrong_cryptainer)
+
+
+def test_gather_decryptable_symkeys_accepts_payloadless_cryptainers_and_iterators(tmp_path):
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    cryptainer_filepath = tmp_path.joinpath("my.crypt")
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=True)
+    payloadless_cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath, include_payload_ciphertext=False)
+    assert "payload_ciphertext_struct" not in payloadless_cryptainer
+
+    expected = gather_decryptable_symkeys([("my.crypt", cryptainer)])
+    assert expected
+    assert gather_decryptable_symkeys([("my.crypt", payloadless_cryptainer)]) == expected
+    assert gather_decryptable_symkeys((x for x in [("my.crypt", cryptainer)])) == expected  # One-shot iterable
+
+    for wrong_cryptainer in (None, 42, [cryptainer]):
+        with pytest.raises(SchemaValidationError, match="Invalid cryptainer bad.crypt"):
+            gather_decryptable_symkeys([("my.crypt", cryptainer), ("bad.crypt", wrong_cryptainer)])
+
+    # Only an absent payload ciphertext is tolerated, not a malformed one
+    for wrong_payload_ciphertext_struct in (
+        42,
+        None,  # Explicit None is only tolerated in unfinished cryptainers
+        {"ciphertext_location": "offloaded", "junk": 1},
+        {"ciphertext_location": "inline", "ciphertext_value": None},
+    ):
+        corrupted_cryptainer = dict(payloadless_cryptainer, payload_ciphertext_struct=wrong_payload_ciphertext_struct)
+        with pytest.raises(SchemaValidationError):
+            gather_decryptable_symkeys([("my.crypt", corrupted_cryptainer)])
+
+    # Unfinished cryptainers (e.g. left by a crashed recording) have no payload MACs yet
+    unfinished_cryptainer = copy.deepcopy(payloadless_cryptainer)
+    unfinished_cryptainer["cryptainer_state"] = CRYPTAINER_STATES.STARTED
+    unfinished_cryptainer["payload_cipher_layers"][0]["payload_macs"] = None
+    assert gather_decryptable_symkeys([("my.crypt", unfinished_cryptainer)]) == expected
+
+    macless_cryptainer = copy.deepcopy(unfinished_cryptainer)
+    del macless_cryptainer["payload_cipher_layers"][0]["payload_macs"]  # Mandatory field, even if None
+    with pytest.raises(SchemaValidationError):
+        gather_decryptable_symkeys([("my.crypt", macless_cryptainer)])
+
+    unfinished_cryptainer["cryptainer_state"] = CRYPTAINER_STATES.FINISHED
+    with pytest.raises(SchemaValidationError):
+        gather_decryptable_symkeys([("my.crypt", unfinished_cryptainer)])
+
+
+@pytest.mark.parametrize("canonical", [False, True])
+def test_shared_secret_threshold_lower_bound_via_json_schema(canonical):
+    cryptainer, shared_secret = _get_simple_shamir_cryptainer_and_shared_secret()
+    check_cryptainer_sanity(convert_to_extjson(cryptainer, canonical=canonical), jsonschema_mode=True)
+
+    for threshold in [0, -1]:
+        shared_secret["key_shared_secret_threshold"] = threshold
+        with pytest.raises(SchemaValidationError):
+            check_cryptainer_sanity(convert_to_extjson(cryptainer, canonical=canonical), jsonschema_mode=True)
+
+
 def test_cryptainer_validation_error_via_python_schema():
     corrupted_cryptainers = _generate_corrupted_cryptainers(SIMPLE_CRYPTOCONF, include_extended_checks=True)
 
@@ -2238,8 +2542,13 @@ def test_cryptainer_validation_error_via_python_schema():
             check_cryptainer_sanity(cryptainer=corrupted_cryptainer, jsonschema_mode=False)
 
 
-def test_cryptainer_validation_error_via_json_schema():
-    corrupted_cryptainers = _generate_corrupted_cryptainers(SIMPLE_CRYPTOCONF, include_extended_checks=False)
+@pytest.mark.parametrize(
+    "cryptoconf, is_complex_conf", [(SIMPLE_CRYPTOCONF, False), (COMPLEX_SHAMIR_CRYPTOCONF, True)]
+)
+def test_cryptainer_validation_error_via_json_schema(cryptoconf, is_complex_conf):
+    corrupted_cryptainers = _generate_corrupted_cryptainers(
+        cryptoconf, include_extended_checks=False, is_complex_conf=is_complex_conf
+    )
 
     for corrupted_cryptainer in corrupted_cryptainers:
         with pytest.raises(ValidationError):
@@ -2270,6 +2579,16 @@ def test_sigainer_sanity_and_plaintext_signature_dependencies():
     }
     check_sigainer_sanity(sigainer)
     check_sigainer_sanity(convert_to_extjson(sigainer, canonical=False), jsonschema_mode=True)
+
+    for jsonschema_mode in (False, True):
+        empty_sigainer = dict(sigainer, payload_plaintext_signatures=[])
+        empty_sigconf = {"payload_plaintext_signatures": []}
+        if jsonschema_mode:
+            empty_sigainer = convert_to_extjson(empty_sigainer, canonical=False)
+        with pytest.raises(SchemaValidationError):
+            check_sigainer_sanity(empty_sigainer, jsonschema_mode=jsonschema_mode)
+        with pytest.raises(SchemaValidationError):
+            check_sigconf_sanity(empty_sigconf, jsonschema_mode=jsonschema_mode)
 
     del sigainer["cryptainer_uid"]  # Mandatory field
     with pytest.raises(SchemaValidationError):

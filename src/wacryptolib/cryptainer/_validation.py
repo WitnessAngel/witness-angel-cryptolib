@@ -4,17 +4,17 @@
 
 from typing import Union
 
-import schema as pythonschema
 from schema import Or, Optional as OptionalKey, And, Schema
 
-from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
+from wacryptolib.cipher import SUPPORTED_SYMMETRIC_CIPHER_ALGOS, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_TRUSTEE_TYPES, CRYPTAINER_STATES, \
     CRYPTAINER_FORMAT, PAYLOAD_CIPHERTEXT_LOCATIONS, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, SHARED_SECRET_ALGO_MARKER
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS
-from wacryptolib.keygen import SUPPORTED_ASYMMETRIC_KEY_ALGOS, SUPPORTED_SYMMETRIC_KEY_ALGOS
+from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
-from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson
+from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema
+from wacryptolib.utilities.validation_utils import summarize_validation_error_lines
 
 
 def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, extended_json_format: bool):
@@ -85,7 +85,7 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
         extra_asymmetric_cipher_algo_block = {"key_ciphertext": micro_schemas.schema_binary}
 
     ASYMMETRIC_CIPHER_ALGO_BLOCK = {
-        "key_cipher_algo": Or(*SUPPORTED_ASYMMETRIC_KEY_ALGOS),
+        "key_cipher_algo": Or(*SUPPORTED_ASYMMETRIC_CIPHER_ALGOS),  # Not signature-only algos
         "key_cipher_trustee": trustee_schemas,
         OptionalKey("keychain_uid"): micro_schemas.schema_uid,
     }
@@ -130,7 +130,7 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
 
     def _build_payload_cipher_layer_schema(signatures_key):
         return {
-            "payload_cipher_algo": Or(*SUPPORTED_CIPHER_ALGOS),
+            "payload_cipher_algo": Or(*SUPPORTED_SYMMETRIC_CIPHER_ALGOS),
             signatures_key: [payload_signature],  # Signatures AFTER encryption
             **extra_payload_cipher_layer,
             "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,
@@ -148,7 +148,8 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
             ],
             len,
         ),  # Must be non-empty!
-        OptionalKey("keychain_uid"): micro_schemas.schema_uid,
+        # Cryptainers always get a default keychain_uid, which decryption needs
+        ("keychain_uid" if for_cryptainer else OptionalKey("keychain_uid")): micro_schemas.schema_uid,
     }
 
     if for_cryptosig:
@@ -161,37 +162,100 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
     return Schema(full_schema_dict)
 
 
+_CIPHER_LAYERS_NON_EMPTY_FIELDS = ("payload_cipher_layers", "key_cipher_layers", "key_shared_secret_shards")
+_SIGNATURES_NON_EMPTY_FIELDS = ("payload_plaintext_signatures",)
+
+_POSITIVE_INTEGER_STRING_PATTERN = r"^\+?0*[1-9]\d*$"
+
+
+def _restrict_json_schema_int_to_positive(int_schema):
+    """Make a micro_schemas.schema_int JSON export (plain int, $numberInt or $numberLong) only accept values >= 1."""
+    for branch in int_schema["anyOf"]:
+        if branch.get("type") == "integer":
+            branch["minimum"] = 1
+        else:
+            (int_string_schema,) = branch["properties"].values()
+            int_string_schema["allOf"].append({"type": "string", "pattern": _POSITIVE_INTEGER_STRING_PATTERN})
+
+
+def _add_json_schema_constraints(json_schema, non_empty_fields):
+    """Re-inject the constraints that the json_schema() export drops along with "len" and threshold callables.
+
+    Only the threshold lower bound is restored, "threshold <= number of shards" can't be expressed in JSON Schema,
+    only python-schema checks it.
+    """
+    patched_fields = set()
+    expected_patched_fields = set(non_empty_fields)
+    if "key_cipher_layers" in non_empty_fields:  # Shared secrets are only possible in cipher layers
+        expected_patched_fields.add("key_shared_secret_threshold")
+
+    def _walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "properties":
+                    for field_name, field_schema in value.items():
+                        if field_name in non_empty_fields:
+                            if field_schema.get("type") != "array":
+                                raise RuntimeError("Can't add minItems to JSON schema of %s" % field_name)
+                            field_schema["minItems"] = 1
+                            patched_fields.add(field_name)
+                        elif field_name == "key_shared_secret_threshold":
+                            _restrict_json_schema_int_to_positive(field_schema)
+                            patched_fields.add(field_name)
+                _walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                _walk(value)
+
+    _walk(json_schema)
+    if patched_fields != expected_patched_fields:  # Fail loudly if the schema export format changes
+        raise RuntimeError("Fields missing from JSON schema: %s" % (expected_patched_fields - patched_fields))
+    return json_schema
+
+
 # CONFIGURATION IN ORDER TO ENCRYPT DATA
 CRYPTOCONF_SCHEMA_PYTHON = _create_cryptostructure_schema(
     for_cryptainer=False, for_cryptosig=False, extended_json_format=False
 )
-CRYPTOCONF_SCHEMA_JSON = _create_cryptostructure_schema(
-    for_cryptainer=False, for_cryptosig=False, extended_json_format=True
-).json_schema("cryptoconf_schema.json")
+CRYPTOCONF_SCHEMA_JSON = _add_json_schema_constraints(
+    _create_cryptostructure_schema(
+        for_cryptainer=False, for_cryptosig=False, extended_json_format=True
+    ).json_schema("cryptoconf_schema.json"),
+    non_empty_fields=_CIPHER_LAYERS_NON_EMPTY_FIELDS,
+)
 
 # CONTAINER OF ENCRYPTED DATA
 CRYPTAINER_SCHEMA_PYTHON = _create_cryptostructure_schema(
     for_cryptainer=True, for_cryptosig=False, extended_json_format=False
 )
-CRYPTAINER_SCHEMA_JSON = _create_cryptostructure_schema(
-    for_cryptainer=True, for_cryptosig=False, extended_json_format=True
-).json_schema("cryptainer_schema.json")
+CRYPTAINER_SCHEMA_JSON = _add_json_schema_constraints(
+    _create_cryptostructure_schema(
+        for_cryptainer=True, for_cryptosig=False, extended_json_format=True
+    ).json_schema("cryptainer_schema.json"),
+    non_empty_fields=_CIPHER_LAYERS_NON_EMPTY_FIELDS,
+)
 
 # CONFIGURATION IN ORDER TO ONLY SIGN DATA
 SIGCONF_SCHEMA_PYTHON = _create_cryptostructure_schema(
     for_cryptainer=False, for_cryptosig=True, extended_json_format=False
 )
-SIGCONF_SCHEMA_JSON = _create_cryptostructure_schema(
-    for_cryptainer=False, for_cryptosig=True, extended_json_format=True
-).json_schema("sig_schema.json")
+SIGCONF_SCHEMA_JSON = _add_json_schema_constraints(
+    _create_cryptostructure_schema(
+        for_cryptainer=False, for_cryptosig=True, extended_json_format=True
+    ).json_schema("sig_schema.json"),
+    non_empty_fields=_SIGNATURES_NON_EMPTY_FIELDS,
+)
 
 # CONTAINER OF SIGNATURES FOR DATA
 SIGAINER_SCHEMA_PYTHON = _create_cryptostructure_schema(
     for_cryptainer=True, for_cryptosig=True, extended_json_format=False
 )
-SIGAINER_SCHEMA_JSON = _create_cryptostructure_schema(
-    for_cryptainer=True, for_cryptosig=True, extended_json_format=True
-).json_schema("sig_schema.json")
+SIGAINER_SCHEMA_JSON = _add_json_schema_constraints(
+    _create_cryptostructure_schema(
+        for_cryptainer=True, for_cryptosig=True, extended_json_format=True
+    ).json_schema("sig_schema.json"),
+    non_empty_fields=_SIGNATURES_NON_EMPTY_FIELDS,
+)
 
 
 def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema]):  # Fixme why call it "valid_schema"?
@@ -200,12 +264,10 @@ def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema])
     :param data_tree: cryptainer or cryptoconf to validate
     :param valid_schema: validation scheme
     """
+    # Error messages are summarized and NOT chained, since validator errors embed the (maybe huge) data tree
     if isinstance(validation_schema, Schema):
         # We use the python-schema module
-        try:
-            validation_schema.validate(data_tree)
-        except pythonschema.SchemaError as exc:
-            raise SchemaValidationError("Error validating data tree with python-schema: {}".format(exc)) from exc
+        validate_data_against_schema(data_tree, schema=validation_schema)
 
     else:
         # We use the json-schema module, LAZILY LOADED
@@ -214,7 +276,11 @@ def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema])
         try:
             jsonschema_validate(instance=data_tree, schema=validation_schema)
         except JsonschemaValidationError as exc:
-            raise SchemaValidationError("Error validating data tree with json-schema: {}".format(exc)) from exc
+            field_path = "/".join(str(x) for x in exc.absolute_path) or "<root>"
+            summary = summarize_validation_error_lines(
+                ["Field '%s' failed '%s' check:" % (field_path, exc.validator), exc.message]
+            )
+            raise SchemaValidationError("Error validating data tree with json-schema: {}".format(summary)) from None
 
 
 def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
@@ -237,6 +303,53 @@ def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False):
 
     schema = CRYPTAINER_SCHEMA_JSON if jsonschema_mode else CRYPTAINER_SCHEMA_PYTHON
     _validate_data_tree(data_tree=cryptainer, validation_schema=schema)
+
+
+def _check_cryptainer_structure(cryptainer: dict, require_inline_payload: bool):
+    """Validate a python cryptainer, but without its payload ciphertext, which may be absent
+    (include_payload_ciphertext=False), and must not end up in (huge) python-schema error messages.
+
+    :param require_inline_payload: if True, the payload ciphertext must be present, inline, as bytes
+    """
+    if not isinstance(cryptainer, dict):
+        raise SchemaValidationError("Cryptainer must be a dict, not %s" % type(cryptainer).__name__)
+    payload_ciphertext_struct = cryptainer.get("payload_ciphertext_struct")
+    if require_inline_payload:
+        if not (
+            isinstance(payload_ciphertext_struct, dict)
+            and payload_ciphertext_struct.get("ciphertext_location") == PAYLOAD_CIPHERTEXT_LOCATIONS.INLINE
+            and isinstance(payload_ciphertext_struct.get("ciphertext_value"), bytes)
+        ):
+            raise SchemaValidationError("Cryptainer payload ciphertext must be inline bytes")
+    if isinstance(payload_ciphertext_struct, dict) and isinstance(
+        payload_ciphertext_struct.get("ciphertext_value"), bytes
+    ):
+        # Blank only the value, so that the rest of the struct (e.g. unexpected keys) still gets validated
+        payload_ciphertext_struct = dict(payload_ciphertext_struct, ciphertext_value=b"")
+    elif (
+        not require_inline_payload
+        and payload_ciphertext_struct is None
+        and (
+            "payload_ciphertext_struct" not in cryptainer  # Loaded with include_payload_ciphertext=False
+            or cryptainer.get("cryptainer_state") == CRYPTAINER_STATES.STARTED  # Not yet filled by encryptor
+        )
+    ):
+        payload_ciphertext_struct = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
+    cryptainer = dict(cryptainer, payload_ciphertext_struct=payload_ciphertext_struct)
+
+    payload_cipher_layers = cryptainer.get("payload_cipher_layers")
+    if (
+        not require_inline_payload
+        and cryptainer.get("cryptainer_state") == CRYPTAINER_STATES.STARTED
+        and isinstance(payload_cipher_layers, list)
+    ):
+        # Unfinished cryptainers only get their payload MACs at finalization, but their keys are already usable
+        cryptainer["payload_cipher_layers"] = [
+            dict(layer, payload_macs={}) if isinstance(layer, dict) and layer.get("payload_macs", {}) is None else layer
+            for layer in payload_cipher_layers
+        ]
+
+    check_cryptainer_sanity(cryptainer)
 
 
 def check_sigconf_sanity(cryptoconf: dict, jsonschema_mode=False):

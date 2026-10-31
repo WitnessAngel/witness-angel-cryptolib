@@ -13,9 +13,10 @@ from schema import Schema, Or, And
 
 from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_CIPHER_ALGOS
 from wacryptolib.cryptainer import CryptainerBase, logger, CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
-    get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value, get_payload_ciphertext_signatures
+    get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value, get_payload_ciphertext_signatures, \
+    _check_cryptainer_structure
 from wacryptolib.exceptions import KeyDoesNotExist, KeyLoadingError, DecryptionError, DecryptionIntegrityError, \
-    KeystoreDoesNotExist, SignatureVerificationError
+    KeystoreDoesNotExist, SignatureVerificationError, SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring, SUPPORTED_SYMMETRIC_KEY_ALGOS, \
     SUPPORTED_ASYMMETRIC_KEY_ALGOS
@@ -305,7 +306,21 @@ class CryptainerDecryptor(CryptainerBase):
         :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
         :return: deciphered plaintext and operation report
+        :raises SchemaValidationError: if the cryptainer structure is invalid (e.g. empty cipher layers)
         """
+        if not isinstance(cryptainer, dict):  # Not an assert, which vanishes under "python -O"
+            raise SchemaValidationError("Cryptainer must be a dict, not %s" % type(cryptainer).__name__)
+
+        cryptainer_format = cryptainer.get("cryptainer_format")
+        if cryptainer_format != CRYPTAINER_FORMAT:
+            raise ValueError("Unknown cryptainer format %.100r" % cryptainer_format)
+
+        # Validate the WHOLE structure upfront (including shards that decryption might never walk), before any
+        # network or private key operation. E.g. without this, an empty payload_cipher_layers list would make the
+        # inline "ciphertext" be returned as plaintext. Note that this checks structure, NOT authenticity: ciphertext
+        # signatures are only reported, so anyone with trustee public keys can still build a valid-looking cryptainer.
+        _check_cryptainer_structure(cryptainer, require_inline_payload=True)
+
         predecrypted_symkey_mapper = None
         operation_report = OperationReport()
 
@@ -328,12 +343,6 @@ class CryptainerDecryptor(CryptainerBase):
                 "Skipping retrieval of remotely predecrypted symkeys (requires requestor-uid and gateway urls)"
             )
 
-        assert isinstance(cryptainer, dict), cryptainer
-
-        cryptainer_format = cryptainer["cryptainer_format"]
-        if cryptainer_format != CRYPTAINER_FORMAT:
-            raise ValueError("Unknown cryptainer format %s" % cryptainer_format)
-
         cryptainer_uid = cryptainer["cryptainer_uid"]
         del cryptainer_uid  # Might be used for logging etc, later...
 
@@ -343,7 +352,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         payload_current = _get_cryptainer_inline_ciphertext_value(cryptainer)
 
-        # Non-emptiness of this will be checked by validator
+        # Non-emptiness of this was checked by validator
         payload_cipher_layer_count = len(cryptainer["payload_cipher_layers"])
 
         for payload_cipher_layer_idx, payload_cipher_layer in enumerate(
@@ -474,7 +483,8 @@ class CryptainerDecryptor(CryptainerBase):
         operation_report: OperationReport,
         predecrypted_symkey_mapper: Optional[dict] = None,
     ) -> Optional[bytes]:
-        assert len(key_cipher_layers), key_cipher_layers  # Extra safety
+        if not key_cipher_layers:  # Extra safety, validator already checked it, but asserts vanish under "python -O"
+            raise SchemaValidationError("Empty key_cipher_layers list is forbidden in cryptainer")
 
         key_bytes = None
 

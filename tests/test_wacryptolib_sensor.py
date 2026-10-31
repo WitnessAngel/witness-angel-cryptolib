@@ -5,6 +5,7 @@
 import os
 import random
 import time
+from unittest import mock
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from datetime import timedelta
@@ -572,6 +573,23 @@ def test_periodic_subprocess_stream_recorder_broken_executable(tmp_path):
     cryptainer_names = cryptainer_storage.list_cryptainer_names()
     assert len(cryptainer_names) == 2  # Cryptainers are EMPTY but still exist
     _check_stream_recorder_cryptainer_name(cryptainer_names[0])
+
+
+def test_periodic_subprocess_stream_recorder_doesnt_log_command_arguments(tmp_path):
+    cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=True)
+
+    recorder = TestStreamRecorderForTesting(
+        executable_command_line=["ABCDE", "rtsp://admin:secretpwd@camera/stream"],  # WRONG executable
+        interval_s=5,
+        cryptainer_storage=cryptainer_storage,
+    )
+    with mock.patch("wacryptolib.sensor.logger") as logger_mock:
+        recorder.start()
+        recorder.stop()
+        recorder.join()
+    log_calls = str(logger_mock.mock_calls)
+    assert "'ABCDE', 1)" in log_calls
+    assert "secretpwd" not in log_calls
 
 
 def test_periodic_subprocess_stream_recorder_autoexiting_executable(tmp_path):

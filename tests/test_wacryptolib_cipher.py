@@ -170,7 +170,10 @@ def test_rsa_oaep_round_trip_in_forced_fallback_backend():
         "cd = c.encrypt_bytestring(b'abc', cipher_algo='RSA_OAEP', key_dict=dict(key=kp['public_key']))\n"
         "assert c.decrypt_bytestring(cd, cipher_algo='RSA_OAEP', key_dict=dict(key=kp['private_key'])) == b'abc'\n"
     )
-    env = dict(os.environ, FORCE_WACRYPTOLIB_FALLBACK_BACKEND="1")
+    # Pin the subprocess to the wacryptolib under test, not whatever copy is installed in the interpreter
+    src_dir = os.path.dirname(os.path.dirname(wacryptolib.__file__))
+    pythonpath = os.pathsep.join(filter(None, [src_dir, os.environ.get("PYTHONPATH")]))
+    env = dict(os.environ, FORCE_WACRYPTOLIB_FALLBACK_BACKEND="1", PYTHONPATH=pythonpath)
     subprocess.run([sys.executable, "-c", code], env=env, check=True, timeout=300)
 
 

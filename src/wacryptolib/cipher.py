@@ -87,9 +87,7 @@ def decrypt_bytestring(
             key_dict=key_dict, cipherdict=cipherdict, verify_integrity_tags=verify_integrity_tags
         )
     except ValueError as exc:
-        # Hackish check for pycryptodome, whose AEAD modes and HPKE only raise ValueError on bad tags
-        # (HPKE checks the ciphertext length first, so a ciphertext shorter than its tag is "too small")
-        if any(marker in str(exc) for marker in ("MAC check failed", "wrong MAC tag", "Ciphertext is too small")):
+        if "MAC check failed" in str(exc):  # Hackish check for pycryptodome (ML_KEM_768 raises integrity errors itself)
             raise DecryptionIntegrityError("Failed %s decryption authentication (%s)" % (cipher_algo, exc)) from exc
         raise DecryptionError("Failed %s decryption (%s)" % (cipher_algo, exc)) from exc
     return plaintext
@@ -496,8 +494,11 @@ def _decrypt_via_ml_kem_768(cipherdict: dict, key_dict: dict, verify_integrity_t
         )
     except ValueError as exc:
         # With a KEM + AEAD, a wrong private key and a tampered ciphertext can NOT be told apart: ML-KEM's implicit
-        # rejection then yields a random key, and the AEAD tag check fails (so both become integrity errors)
-        raise ValueError("Wrong ML-KEM private key or corrupted ciphertext (%s)" % exc) from exc
+        # rejection then yields a random key, and the AEAD tag check fails. So every HPKE failure (bad tag, too short
+        # ciphertext, malformed encapsulation...) is an integrity error, whatever pycryptodome's message
+        raise DecryptionIntegrityError(
+            "Failed ML_KEM_768 decryption authentication: wrong ML-KEM private key or corrupted ciphertext (%s)" % exc
+        ) from exc
 
 
 # This file is part of Witness Angel Cryptolib

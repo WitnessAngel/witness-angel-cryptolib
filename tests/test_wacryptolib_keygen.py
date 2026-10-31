@@ -244,7 +244,6 @@ def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
 
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
 def test_public_key_export_with_passphrase_raises(key_algo):
-    skip_if_fallback_backend("passphrase-protected PEM export")
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
     with pytest.raises(ValueError, match="Public keys"):
         wacryptolib.keygen._serialize_key_object_to_pem_bytestring(

@@ -290,6 +290,9 @@ def decrypt_pkcs8(encrypted_der, passphrase, decrypt_via_aes_cbc):
     salt, iteration_count, *optional_items = decode_sequence(kdf_parameters, 2, 4)
     salt, iteration_count, iv = decode_octet_string(salt), decode_integer(iteration_count), decode_octet_string(iv)
     hash_name = "sha1"
+    # PBKDF2-params order (RFC 8018): at most one keyLength INTEGER, then at most one prf AlgorithmIdentifier
+    if [item[0] == TAG_INTEGER for item in optional_items] not in ([], [True], [False], [True, False]):
+        raise ValueError("Malformed encrypted private key")
     for item in optional_items:
         if item[0] == TAG_INTEGER:
             if decode_integer(item) != key_length:

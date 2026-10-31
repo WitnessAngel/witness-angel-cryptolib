@@ -375,6 +375,60 @@ def SIMPLE_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
     }
 
 
+ECIES_SHAMIR_CRYPTOCONF = dict(
+    payload_cipher_layers=[
+        dict(
+            payload_cipher_algo="CHACHA20_POLY1305",
+            key_cipher_layers=[
+                dict(key_cipher_algo="ECIES_X25519", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
+                dict(
+                    key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                    key_shared_secret_threshold=2,
+                    key_shared_secret_shards=[
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="ECIES_X25519", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                        dict(
+                            key_cipher_layers=[
+                                dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                            ]
+                        ),
+                        dict(
+                            key_cipher_layers=[
+                                dict(
+                                    key_cipher_algo="ECIES_X25519",
+                                    key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                                    keychain_uid=ENFORCED_UID1,
+                                )
+                            ]
+                        ),
+                    ],
+                ),
+            ],
+            payload_ciphertext_signatures=[],
+        )
+    ]
+)
+
+
+def ECIES_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES(keychain_uid):
+    return {
+        "encryption": {
+            "local_keyfactory": (
+                {"trustee_type": "local_keyfactory"},
+                [
+                    {"key_algo": "ECIES_X25519", "keychain_uid": keychain_uid},
+                    {"key_algo": "RSA_OAEP", "keychain_uid": keychain_uid},
+                    {"key_algo": "ECIES_X25519", "keychain_uid": ENFORCED_UID1},
+                ],
+            )
+        },
+        "signature": {},
+    }
+
+
 COMPLEX_SHAMIR_CRYPTOCONF = dict(
     payload_plaintext_signatures=[
         dict(
@@ -698,11 +752,12 @@ def test_is_cryptainer_cryptoconf_streamable():
         (SIGNATURELESS_CRYPTOCONF, SIGNATURELESS_CRYPTAINER_TRUSTEE_DEPENDENCIES),
         (SIMPLE_CRYPTOCONF, SIMPLE_CRYPTAINER_TRUSTEE_DEPENDENCIES),
         (COMPLEX_CRYPTOCONF, COMPLEX_CRYPTAINER_TRUSTEE_DEPENDENCIES),
+        (ECIES_SHAMIR_CRYPTOCONF, ECIES_SHAMIR_CRYPTAINER_TRUSTEE_DEPENDENCIES),
     ],
 )
 # with local keyfactory
 def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, trustee_dependencies_builder):
-    if "ECC_DSS" in str(cryptoconf):
+    if "ECC_DSS" in str(cryptoconf) or "ECIES_X25519" in str(cryptoconf):
         skip_if_fallback_backend("ECC")
     payload = _get_binary_or_empty_content()
 
@@ -2107,7 +2162,8 @@ def test_create_cryptainer_encryption_stream(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF]
+    "cryptoconf",
+    [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF, ECIES_SHAMIR_CRYPTOCONF],
 )
 def test_cryptoconf_validation_success(cryptoconf):
     check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=False)
@@ -2196,10 +2252,56 @@ def test_cryptoconf_validation_error_via_json_schema(corrupted_conf):
         check_cryptoconf_sanity(cryptoconf=corrupted_conf_json, jsonschema_mode=True)
 
 
+@pytest.mark.parametrize("jsonschema_mode", [False, True])
+def test_cryptoconf_validation_restricts_authenticators_to_rsa_oaep(jsonschema_mode):
+    def _check_cryptoconf_with_authenticator(key_cipher_algo):
+        authenticator_trustee = dict(
+            trustee_type=CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE, keystore_uid=generate_uuid0()
+        )
+        cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+        cryptoconf["payload_cipher_layers"][0]["key_cipher_layers"] = [
+            dict(key_cipher_algo=key_cipher_algo, key_cipher_trustee=authenticator_trustee)
+        ]
+        if jsonschema_mode:
+            cryptoconf = convert_to_extjson(cryptoconf)
+        check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=jsonschema_mode)
+
+    _check_cryptoconf_with_authenticator("RSA_OAEP")
+    with pytest.raises(ValidationError):  # Authenticators only get RSA_OAEP keys
+        _check_cryptoconf_with_authenticator("ECIES_X25519")
+
+
+@pytest.mark.parametrize("jsonschema_mode", [False, True])
+@pytest.mark.parametrize("key_cipher_algo", ["RSA_PSS", "DSA_DSS", "ECC_DSS"])
+def test_cryptoconf_validation_rejects_signature_only_key_cipher_algos(key_cipher_algo, jsonschema_mode):
+    cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    cryptoconf["payload_cipher_layers"][0]["key_cipher_layers"] = [
+        dict(key_cipher_algo=key_cipher_algo, key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+    ]
+    if jsonschema_mode:
+        cryptoconf = convert_to_extjson(cryptoconf)
+    with pytest.raises(ValidationError):
+        check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=jsonschema_mode)
+
+
+@pytest.mark.parametrize("jsonschema_mode", [False, True])
+@pytest.mark.parametrize("payload_cipher_algo", ["RSA_OAEP", "ECIES_X25519"])
+def test_cryptoconf_validation_rejects_asymmetric_payload_cipher_algos(payload_cipher_algo, jsonschema_mode):
+    cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    cryptoconf["payload_cipher_layers"][0]["payload_cipher_algo"] = payload_cipher_algo
+    if jsonschema_mode:
+        cryptoconf = convert_to_extjson(cryptoconf)
+    with pytest.raises(ValidationError):
+        check_cryptoconf_sanity(cryptoconf=cryptoconf, jsonschema_mode=jsonschema_mode)
+
+
 @pytest.mark.parametrize(
-    "cryptoconf", [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF]
+    "cryptoconf",
+    [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF, ECIES_SHAMIR_CRYPTOCONF],
 )
 def test_cryptainer_validation_success(cryptoconf):
+    if "ECIES_X25519" in str(cryptoconf):
+        skip_if_fallback_backend("ECC")
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None)
     check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 

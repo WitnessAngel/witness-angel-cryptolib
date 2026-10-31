@@ -77,7 +77,7 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
 
     SUPPORTED_SYMMETRIC_CIPHER_ALGOS = ["AES_CBC"]
 
-    SUPPORTED_ASYMMETRIC_CIPHER_ALGOS = ["RSA_OAEP"]
+    SUPPORTED_ASYMMETRIC_CIPHER_ALGOS = ["RSA_OAEP", "ECIES_X25519"]
 
     def __init__(self, logger: logging.Logger, keystore_data: dict) -> None:
         self.logger = logger
@@ -115,6 +115,9 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
         self.logger.debug("Fetching asymmetric public key %s/%s to encrypt symmetric key struct", key_algo, keychain_uid)
         ### public_key = import_rsa_key_from_pem(public_key_pem, passphrase=None)
 
+        if key_algo == "ECIES_X25519":
+            return public_key_parameters["x25519"]  # Raw 32-bytes public key
+
         import pkcs1
         public_key = pkcs1.keys.RsaPublicKey(public_key_parameters["n"], public_key_parameters['e'])
 
@@ -123,6 +126,10 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
     def encrypt_bytestring(self, plaintext: bytes, *, cipher_algo: str, key_dict: dict) -> dict:  # FIXME
         if cipher_algo == "RSA_OAEP":
             return _perform_chunked_encryption_via_rsa_oaep(plaintext=plaintext, key_dict=key_dict)
+        elif cipher_algo == "ECIES_X25519":
+            import hpke_x25519_seal  # Lazy, to spare RAM on RSA-only deployments
+            kem_ciphertext, ciphertext = hpke_x25519_seal.seal(key_dict["key"], plaintext)
+            return dict(kem_ciphertext=kem_ciphertext, ciphertext=ciphertext)
         elif cipher_algo == "AES_CBC":
             key = key_dict["key"]
             iv = key_dict["iv"]

@@ -7,6 +7,7 @@ from typing import BinaryIO
 
 
 from wacryptolib import _crypto_backend
+from wacryptolib._crypto_backend import hpke_x25519_seal
 from wacryptolib import utilities
 from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionIntegrityError, OperationNotSupported
 from wacryptolib.keygen import (
@@ -52,7 +53,8 @@ def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) ->
     using the provided key dict (which must contain keys/initializers of proper types and lengths).
 
     :return: dictionary with encryption data"""
-    assert isinstance(plaintext, bytes), repr(plaintext)
+    assert isinstance(plaintext, bytes), type(plaintext)
+    cipher_algo = cipher_algo.upper()
     logger.debug("Encrypting %d bytes of plaintext with cipher algo %s", len(plaintext), cipher_algo)
     cipher_algo_conf = _get_cipher_algo_conf(cipher_algo=cipher_algo)
     encryption_function = cipher_algo_conf["encryption_function"]
@@ -77,6 +79,7 @@ def decrypt_bytestring(
     :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
     :return: dictionary with encryption data."""
+    cipher_algo = cipher_algo.upper()
     logger.debug(
         "Decrypting cipherdict with cipher algo %s, and verify_integrity_tags=%s", cipher_algo, verify_integrity_tags
     )
@@ -87,6 +90,7 @@ def decrypt_bytestring(
             key_dict=key_dict, cipherdict=cipherdict, verify_integrity_tags=verify_integrity_tags
         )
     except ValueError as exc:
+        # HPKE's "wrong MAC tag" is NOT matched: on a first unseal, it can't be told apart from a wrong key
         if "MAC check failed" in str(exc):  # Hackish check for pycryptodome
             raise DecryptionIntegrityError("Failed %s decryption authentication (%s)" % (cipher_algo, exc)) from exc
         raise DecryptionError("Failed %s decryption (%s)" % (cipher_algo, exc)) from exc
@@ -244,6 +248,53 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify_integrity_tag
     plaintext_chunks = _crypto_backend.decrypt_via_rsa_oaep(
         ciphertext_chunks, private_key=key)
     return b"".join(plaintext_chunks)
+
+
+# ECIES_X25519 is HPKE (RFC 9180) Base mode with DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and ChaCha20-Poly1305,
+# empty info and AAD. ChaCha20-Poly1305 rather than AES-256-GCM, because: the pure python fallback (micropython)
+# already has it while GCM would need a new GHASH implementation; add-rotate-xor is less prone to timing leaks than
+# table-based pure python AES; RFC 9180 Appendix A.2 has a test vector for exactly this suite (none for X25519 +
+# AES-256-GCM); security margins are equal and hardware AES speed is irrelevant for tiny key structs.
+# All these parameters are fixed by the algorithm name: changing any of them requires a new name.
+# Single definition, shared with the pure python sealing (= Crypto.Protocol.HPKE.AEAD.CHACHA20_POLY1305)
+ECIES_X25519_HPKE_AEAD_ID = hpke_x25519_seal.AEAD_ID
+
+
+def _check_x25519_key(key, accept_raw_public_key=False):
+    if accept_raw_public_key and isinstance(key, _crypto_backend.X25519RawPublicKey):
+        return  # Raw public key, as loaded by the fallback backend
+    if not isinstance(key, _crypto_backend.ecc_key_class_fetcher()):
+        raise ValueError("ECIES_X25519 requires an X25519 key, not %r" % type(key))
+    if key.curve != "Curve25519":
+        raise ValueError("ECIES_X25519 requires an X25519 key, not a %s one" % key.curve)
+
+
+def _encrypt_via_ecies_x25519(plaintext: bytes, key_dict: dict) -> dict:
+    """Encrypt a bytestring with ECIES over X25519 (asymmetric algo, see ECIES_X25519_HPKE_AEAD_ID).
+
+    :param plaintext: the bytes to cipher
+    :param key_dict: dict with PUBLIC X25519 key object (ECC.EccKey)
+
+    :return: a dict with fields `kem_ciphertext` (ephemeral public key) and `ciphertext` (with its MAC tag)."""
+    key = key_dict["key"]
+    _check_x25519_key(key, accept_raw_public_key=True)
+    kem_ciphertext, ciphertext = _crypto_backend.encrypt_via_hpke(
+        plaintext, public_key=key, aead_id=ECIES_X25519_HPKE_AEAD_ID)
+    return dict(kem_ciphertext=kem_ciphertext, ciphertext=ciphertext)
+
+
+def _decrypt_via_ecies_x25519(cipherdict: dict, key_dict: dict, verify_integrity_tags: bool = True) -> bytes:
+    """Decrypt a bytestring with ECIES over X25519 (asymmetric algo).
+
+    :param cipherdict: dict with fields `kem_ciphertext` and `ciphertext` as bytestrings
+    :param key_dict: dict with PRIVATE X25519 key object (ECC.EccKey)
+    :param verify_integrity_tags: ignored, the MAC tag is always checked (like RSA_OAEP, as no key layer skips it)
+
+    :return: the decrypted bytestring"""
+    key = key_dict["key"]
+    _check_x25519_key(key)
+    return _crypto_backend.decrypt_via_hpke(
+        cipherdict["kem_ciphertext"], cipherdict["ciphertext"], private_key=key, aead_id=ECIES_X25519_HPKE_AEAD_ID)
 
 
 def _create_hashers_dict(hash_algos):
@@ -487,6 +538,12 @@ CIPHER_ALGOS_REGISTRY = dict(
         "decryption_function": _decrypt_via_rsa_oaep,
         "encryption_node_class": None,
         "is_authenticated": False,
+    },
+    ECIES_X25519={
+        "encryption_function": _encrypt_via_ecies_x25519,
+        "decryption_function": _decrypt_via_ecies_x25519,
+        "encryption_node_class": None,
+        "is_authenticated": True,
     },
 )
 

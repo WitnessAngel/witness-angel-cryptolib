@@ -23,7 +23,9 @@ PACKAGES = ["extjson", "pkcs1", "pyaes", "rsa", "pyasn1"]  # pyasn1 is required 
 MIP_INDEX = "https://micropython.org/pi/v2"
 MICROPYTHON_LIB_PACKAGES = ["__future__", "copy", "datetime", "hashlib", "hmac", "logging", "threading", "operator", "functools"]
 
-SHARED_MODULES = [REPO_DIR / "src/wacryptolib/utilities/data_utils.py"]
+SHARED_MODULES = [REPO_DIR / "src/wacryptolib/utilities/data_utils.py",
+                  REPO_DIR / "src/wacryptolib/_crypto_backend/vendor/chacha20_poly1305.py",
+                  REPO_DIR / "src/wacryptolib/_crypto_backend/hpke_x25519_seal.py"]
 
 
 def install_from_mip_index(name):

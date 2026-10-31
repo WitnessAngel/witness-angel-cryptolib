@@ -323,6 +323,62 @@ def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[by
     return cleartext_chunks
 
 
+# HPKE (RFC 9180) KEY WRAPPING, BASE MODE, EMPTY INFO AND AAD #
+
+
+def encrypt_via_hpke(plaintext: bytes, public_key, aead_id) -> tuple[bytes, bytes]:
+    """Returns (enc, ciphertext), enc being the KEM encapsulation (ephemeral public key for DHKEM).
+
+    public_key may be an X25519RawPublicKey (fallback backend), then sealed in pure python."""
+    if isinstance(public_key, X25519RawPublicKey):
+        if not _patch_pycryptodome_internals:
+            raise ValueError("Raw X25519 public keys are only accepted by the fallback backend")
+        from . import hpke_x25519_seal
+
+        if aead_id != hpke_x25519_seal.AEAD_ID:
+            raise ValueError("Pure python HPKE only supports ChaCha20-Poly1305 AEAD")
+        return hpke_x25519_seal.seal(public_key, plaintext)
+
+    from Crypto.Protocol import HPKE
+
+    # A private key would switch pycryptodome to unsealing mode
+    sender = HPKE.new(receiver_key=public_key.public_key(), aead_id=HPKE.AEAD(aead_id))
+    return sender.enc, sender.seal(plaintext)
+
+
+def decrypt_via_hpke(enc: bytes, ciphertext: bytes, private_key, aead_id) -> bytes:
+    from Crypto.Protocol import HPKE
+
+    return HPKE.new(receiver_key=private_key, enc=enc, aead_id=HPKE.AEAD(aead_id)).unseal(ciphertext)
+
+
+class X25519RawPublicKey(bytes):
+    """Raw 32-bytes X25519 public key, as loaded by the fallback backend, which lacks native Curve25519.
+
+    A distinct type, so that any other 32-bytes value (e.g. a symmetric key) can't be mistaken for a public key."""
+
+
+# Header of the DER SubjectPublicKeyInfo of an X25519 public key (RFC 8410), followed by the 32 raw bytes
+_X25519_PUBLIC_KEY_DER_PREFIX = bytes.fromhex("302a300506032b656e032100")
+
+
+def import_x25519_key_from_pem(key_pem, passphrase=None):
+    if not _patch_pycryptodome_internals:
+        key = import_ecc_key_from_pem(key_pem, passphrase=passphrase)
+        if key.curve != "Curve25519":
+            raise ValueError("Expected an X25519 key, not a %s one" % key.curve)
+        return key
+    # Native Curve25519 is unavailable in fallback backend: only public keys load, as raw bytes for encrypt_via_hpke()
+    from Crypto.IO import PEM
+
+    if isinstance(key_pem, bytes):
+        key_pem = key_pem.decode("ascii")
+    der, marker, _ = PEM.decode(key_pem)
+    if marker != "PUBLIC KEY" or len(der) != 44 or not der.startswith(_X25519_PUBLIC_KEY_DER_PREFIX):
+        raise ValueError("Only X25519 public keys can be loaded in fallback backend")
+    return X25519RawPublicKey(der[len(_X25519_PUBLIC_KEY_DER_PREFIX) :])
+
+
 # RSA KEY GENERATION, AND IMPORT/EXPORT #
 
 

@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import functools
 import logging
 from typing import Optional, AnyStr
 
@@ -115,7 +116,7 @@ def load_asymmetric_key_from_pem_bytestring(key_pem: bytes, *, key_algo: str, pa
 
     key_algo = key_algo.upper()
     if key_algo not in SUPPORTED_ASYMMETRIC_KEY_ALGOS:
-        raise ValueError("Unknown key type %s" % key_pem)
+        raise ValueError("Unknown key type %s" % key_algo)
     key_import_function = ASYMMETRIC_KEY_ALGOS_REGISTRY[key_algo]["pem_import_function"]
     try:
         return key_import_function(key_pem, passphrase=passphrase)
@@ -157,7 +158,7 @@ def _generate_dsa_keypair_as_objects(key_length_bits: int) -> dict:
 def _generate_ecc_keypair_as_objects(curve: str) -> dict:
     """Generate an ECC (public_key, private_key) pair.
 
-    ECC keypair is not used for encryption/decryption, only for signing.
+    Used for signing (ECC_DSS), and for encryption/decryption with curve25519 (ECIES_X25519).
 
     :param curve: curve chosen among p256, p384, p521 and maybe others.
 
@@ -208,6 +209,12 @@ ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(
         "generation_extra_parameters": ["key_length_bits"],
         "pem_import_function": _crypto_backend.import_rsa_key_from_pem,
         "pem_export_function": _crypto_backend.export_rsa_key_to_pem,
+    },
+    ECIES_X25519={  # Curve is fixed by the algorithm name
+        "generation_function": functools.partial(_generate_ecc_keypair_as_objects, curve="curve25519"),
+        "generation_extra_parameters": [],
+        "pem_import_function": _crypto_backend.import_x25519_key_from_pem,
+        "pem_export_function": _crypto_backend.export_ecc_key_to_pem,
     },
     ## KEYS FOR SIGNATURE ##
     RSA_PSS={  # Same parameters as RSA_OAEP for now

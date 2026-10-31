@@ -2,6 +2,15 @@
 Development
 =============
 
+* Add ECIES_X25519 asymmetric cipher (HPKE RFC 9180, X25519 + HKDF-SHA256 + ChaCha20-Poly1305), with a pure python encryption-only implementation for MicroPython
+* Allow any registered asymmetric cipher in trustee decryption, and digits in keystore key_algo filenames
+* **BREAKING**: Cryptoconf validation now restricts authenticator trustees to RSA_OAEP
+* **BREAKING**: Cryptainer/cryptoconf schemas now only accept symmetric ciphers as payload_cipher_algo, and
+  asymmetric ciphers (not signature algorithms) as asymmetric key_cipher_algo
+* **BREAKING**: TrusteeApi and keystore public methods normalize algo names to uppercase (TrusteeApi also raises ValidationError on unsupported ones), so keypairs and free keypairs previously stored under lowercase algo names are not found anymore
+* **BREAKING**: pycryptodome >= 3.23 is now required, for its Crypto.Protocol.HPKE module
+* ECIES_X25519 keypairs are not pre-generated in free keypair pools by default
+* Remove key PEMs, passphrases and decrypted keys from error and assertion messages of key loading and trustee operations
 * **BREAKING**: Extended JSON format now defaults to RELAXED mode instead of CANONICAL mode
   - UUIDs are now serialized as `{"$uuid": "hex"}` instead of `{"$binary": {"base64": "...", "subType": "04"}}`
   - Integers are now plain JSON numbers instead of `{"$numberInt": "42"}`

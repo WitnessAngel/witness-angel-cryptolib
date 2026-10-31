@@ -42,3 +42,11 @@ def test_chacha20_poly1305_fallback_matches_pycryptodome(size):
     assert ChaCha20Poly1305Cipher(key, nonce).decrypt_and_verify(ciphertext, tag) == plaintext
     with pytest.raises(ValueError, match="MAC check failed"):
         ChaCha20Poly1305Cipher(key, nonce).decrypt_and_verify(ciphertext, bytes([tag[0] ^ 1]) + tag[1:])
+
+
+def test_chacha20_counter_may_reach_but_not_exceed_32_bits():
+    cipher = ChaCha20Poly1305Cipher(bytes(32), bytes(12))
+    cipher._counter = 0xFFFFFFFF  # Last valid block counter
+    cipher.encrypt(bytes(64))
+    with pytest.raises(OverflowError):
+        cipher.encrypt(b"x")

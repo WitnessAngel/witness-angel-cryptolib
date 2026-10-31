@@ -306,7 +306,8 @@ def generate_rsa_keypair(key_length_bits):
     # Own prime generation, since pkcs1's generate_key_pair() doesn't check gcd(e, q-1) for the last prime
     e = _RSA_PUBLIC_EXPONENT
     while True:
-        p, q = sorted(get_random_prime(key_length_bits // 2, top_bits_mask=0b11) for _ in range(2))
+        # Prime sizes add up to key_length_bits, also when it's odd
+        p, q = sorted(get_random_prime(bits, top_bits_mask=0b11) for bits in (key_length_bits // 2, (key_length_bits + 1) // 2))
         if p != q and math.gcd(e, (p - 1) * (q - 1)) == 1:
             break
     private_key = pkcs1.keys.MultiPrimeRsaPrivateKey([p, q], e)

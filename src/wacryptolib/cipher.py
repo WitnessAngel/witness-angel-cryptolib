@@ -259,7 +259,7 @@ ECIES_X25519_HPKE_AEAD_ID = hpke_x25519_seal.AEAD_ID
 
 
 def _check_x25519_key(key, accept_raw_public_key=False):
-    if accept_raw_public_key and isinstance(key, bytes) and len(key) == 32:
+    if accept_raw_public_key and isinstance(key, _crypto_backend.X25519RawPublicKey):
         return  # Raw public key, as loaded by the fallback backend
     if not isinstance(key, _crypto_backend.ecc_key_class_fetcher()):
         raise ValueError("ECIES_X25519 requires an X25519 key, not %r" % type(key))

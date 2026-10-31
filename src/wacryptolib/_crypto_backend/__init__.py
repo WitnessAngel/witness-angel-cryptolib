@@ -26,6 +26,7 @@ from .pycryptodome import (
     encrypt_via_hpke,
     decrypt_via_hpke,
     import_x25519_key_from_pem,
+    X25519RawPublicKey,
 )
 from .pycryptodome import (
     generate_rsa_keypair,

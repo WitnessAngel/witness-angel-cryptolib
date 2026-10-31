@@ -125,6 +125,18 @@ def test_malformed_pem_is_rejected(backend, case_name):
         backend.import_rsa_key_from_pem(key_pem)
 
 
+
+@pytest.mark.parametrize("p, q", [(1, 3233), (61, 61), (0, 0)])
+def test_fallback_rejects_degenerate_rsa_primes_with_value_error(p, q):
+    from wacryptolib._crypto_backend.fallback import pem
+
+    fallback = import_crypto_backend("fallback")
+    n, e, d = p * q, 17, 2753
+    components = [0, n, e, d, p, q, 0, 0, 0]
+    der = pem.encode_sequence(*(pem.encode_integer(x) for x in components))
+    with pytest.raises(ValueError):
+        fallback.import_rsa_key_from_pem(pem.encode_pem(der, "RSA PRIVATE KEY"))
+
 @pytest.mark.parametrize(
     "der, tag",
     [

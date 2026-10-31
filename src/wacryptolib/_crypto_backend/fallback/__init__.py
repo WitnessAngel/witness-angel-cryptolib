@@ -312,7 +312,7 @@ def generate_rsa_keypair(key_length_bits):
         p, q = sorted(get_random_prime(bits, top_bits_mask=0b11) for bits in (key_length_bits // 2, (key_length_bits + 1) // 2))
         if p != q and math.gcd(e, (p - 1) * (q - 1)) == 1:
             break
-    private_key = pkcs1.keys.MultiPrimeRsaPrivateKey([p, q], e)
+    private_key = pkcs1.keys.MultiPrimeRsaPrivateKey([p, q], e, blind=False)  # _rsa_private_operation() blinds itself
     return pkcs1.keys.RsaPublicKey(private_key.n, e), private_key
 
 
@@ -329,7 +329,7 @@ def _build_rsa_private_key(n, e, d, p, q):
     # Like pycryptodome's construct(); ponytail: 10 rounds only catch corrupted keys, not adversarially crafted ones
     if not (is_probable_prime(p, rounds=10) and is_probable_prime(q, rounds=10)):
         raise ValueError("Invalid RSA key components (composite factor)")
-    return pkcs1.keys.MultiPrimeRsaPrivateKey([p, q], e)
+    return pkcs1.keys.MultiPrimeRsaPrivateKey([p, q], e, blind=False)  # _rsa_private_operation() blinds itself
 
 
 def _encode_rsa_pkcs1_private_key(private_key):

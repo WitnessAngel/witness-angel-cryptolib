@@ -333,6 +333,7 @@ def test_fallback_rsa_private_operations_are_freshly_blinded_and_checked(monkeyp
     for _ in range(2):
         assert fallback.decrypt_via_rsa_oaep([ciphertext], private_key) == [b"abc"]
     assert rsadp_inputs[0] != rsadp_inputs[1]
+    assert private_key.blind is None  # Redundant with our own blinding
 
     monkeypatch.setattr(pkcs1.keys.MultiPrimeRsaPrivateKey, "rsadp", lambda key, c: original_rsadp(key, c) ^ 1)
     hasher = fallback.get_hasher_instance("SHA512")

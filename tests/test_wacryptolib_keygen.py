@@ -287,7 +287,7 @@ def _craft_pbes2_pem(
 
 @pytest.mark.parametrize("iteration_count", [0, 10**8, 2**40])
 def test_crafted_pem_iteration_count_is_bounded(iteration_count):
-    skip_if_fallback_backend("passphrase-protected PEM import")
+    pytest.importorskip("Crypto")  # Only to craft the PEM, which is then loaded by whichever backend is active
     pem = _craft_pbes2_pem(iteration_count=iteration_count, ciphertext=b"\x00" * 32)
     with pytest.raises(KeyLoadingError, match="Unsupported PBKDF2 iteration count"):
         load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo="ECC_DSS", passphrase=b"abc")
@@ -306,7 +306,7 @@ def test_crafted_pem_with_optional_key_length_uses_fast_path():
     [dict(key_length=16), dict(iv=b"\x00" * 8, ciphertext=b"\x00" * 16), dict(ciphertext=b""), dict(ciphertext=b"\x00" * 17)],
 )
 def test_crafted_pem_with_malformed_cipher_params_is_rejected(crafting_params):
-    skip_if_fallback_backend("passphrase-protected PEM import")
+    pytest.importorskip("Crypto")  # Only to craft the PEM, which is then loaded by whichever backend is active
     pem = _craft_pbes2_pem(**crafting_params)
     with pytest.raises(KeyLoadingError, match="Malformed encrypted private key"):
         load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo="ECC_DSS", passphrase=b"abc")

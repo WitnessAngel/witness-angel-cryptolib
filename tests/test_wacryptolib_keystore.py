@@ -375,7 +375,9 @@ def test_keystore_tree_export_and_import_with_all_asymmetric_key_algos(tmp_path:
 
     keychain_uid = generate_uuid0()
     for key_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS:  # Including signature-only algos like ML_DSA_65
-        source_keystore.set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"pub", private_key=b"priv")
+        source_keystore.set_keypair(  # Lowercase algo names are normalized, so they don't break exports
+            keychain_uid=keychain_uid, key_algo=key_algo.lower(), public_key=b"pub", private_key=b"priv"
+        )
 
     keystore_tree = source_keystore.export_to_keystore_tree()
     assert sorted(keypair["key_algo"] for keypair in keystore_tree["keypairs"]) == sorted(SUPPORTED_ASYMMETRIC_KEY_ALGOS)

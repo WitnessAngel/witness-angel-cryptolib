@@ -9,8 +9,13 @@ import os
 logger = logging.getLogger(__name__)
 
 
+def _is_fallback_backend_forced():
+    # Else e.g. "0" would silently force the slow and non-constant-time fallback backend
+    return os.getenv("FORCE_WACRYPTOLIB_FALLBACK_BACKEND", "").strip().lower() not in ("", "0", "false", "no", "off")
+
+
 def _is_native_backend_usable():
-    if os.getenv("FORCE_WACRYPTOLIB_FALLBACK_BACKEND"):
+    if _is_fallback_backend_forced():
         return False
     try:
         # Its module body loads a native library, and raises OSError when dlopen() is forbidden (e.g. iOS)
@@ -28,7 +33,7 @@ else:
     try:
         from .fallback import *
     except ImportError as exc:
-        if os.getenv("FORCE_WACRYPTOLIB_FALLBACK_BACKEND"):
+        if _is_fallback_backend_forced():
             raise ImportError(
                 "FORCE_WACRYPTOLIB_FALLBACK_BACKEND is set, but the pure-python packages of the 'fallbacks' extra "
                 "are missing (%s)" % exc

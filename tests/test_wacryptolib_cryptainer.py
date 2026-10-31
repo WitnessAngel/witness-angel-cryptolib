@@ -1106,6 +1106,14 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     )
     assert result_payload == payload
 
+    # Common passphrases must not be appended in-place to the caller's trustee passphrases
+    mutable_passphrase_mapper = {shard_trustee_id: [passphrase], None: ["commonpassphrase"]}
+    result_payload, operation_report = decrypt_payload_from_cryptainer(
+        cryptainer, keystore_pool=keystore_pool, passphrase_mapper=mutable_passphrase_mapper
+    )
+    assert result_payload == payload
+    assert mutable_passphrase_mapper == {shard_trustee_id: [passphrase], None: ["commonpassphrase"]}
+
     # Wrong passphrase
     result_payload, operation_report = decrypt_payload_from_cryptainer(
         cryptainer, keystore_pool=keystore_pool, passphrase_mapper={shard_trustee_id: ["fakepassphrase"]}

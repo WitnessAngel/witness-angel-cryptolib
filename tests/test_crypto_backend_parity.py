@@ -266,3 +266,26 @@ def test_rsa_keys_with_composite_factor_or_even_modulus_are_rejected(backend):
     der = pem.encode_sequence(pem.encode_integer(2**2048), pem.encode_integer(e))
     with pytest.raises(ValueError):
         backend.import_rsa_key_from_pem(pem.encode_pem(der, "RSA PUBLIC KEY"))
+
+
+def test_ecc_private_key_with_mismatched_public_point_is_rejected(backend):
+    import ecdsa
+
+    import_crypto_backend("fallback")
+    from wacryptolib._crypto_backend.fallback import pem
+
+    def ec_private_key_items(key):  # SEC1 ECPrivateKey: version, private key, [0] curve, [1] public point
+        return pem.decode_sequence(key.to_der(), 4)
+
+    key, other_key = ecdsa.SigningKey.generate(ecdsa.NIST256p), ecdsa.SigningKey.generate(ecdsa.NIST256p)
+    version, private_key, curve, _public_point = ec_private_key_items(key)
+    algorithm_identifier = pem.encode_algorithm_identifier(pem.OID_EC_PUBLIC_KEY, pem.decode(curve, 0xA0))
+
+    def pkcs8_pem(public_point):
+        ec_private_key = pem.encode_sequence(version, private_key, public_point)
+        return pem.encode_pem(pem.encode_pkcs8(algorithm_identifier, ec_private_key), "PRIVATE KEY")
+
+    imported_key = backend.import_ecc_key_from_pem(pkcs8_pem(ec_private_key_items(key)[3]))
+    assert backend.import_ecc_key_from_pem(backend.export_ecc_key_to_pem(imported_key))  # Sanity check
+    with pytest.raises(ValueError):
+        backend.import_ecc_key_from_pem(pkcs8_pem(ec_private_key_items(other_key)[3]))

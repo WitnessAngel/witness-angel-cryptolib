@@ -150,7 +150,7 @@ def __monkey_patch_pycryptodome_compiled_internals():
 
     Crypto.Cipher.ChaCha20_Poly1305.new = lambda key, nonce: ChaCha20Poly1305Cipher(key, nonce=nonce)
 
-    from Crypto.Cipher import PKCS1_OAEP
+    import Crypto.Cipher.oaep
 
     def patched_oaep_decode(em, lHash, db):
         # Replace the 2023 C implementation by the old Python one
@@ -168,7 +168,7 @@ def __monkey_patch_pycryptodome_compiled_internals():
             invalid |= x
         return -1 if invalid else (one_pos + 1)
 
-    PKCS1_OAEP.oaep_decode = patched_oaep_decode
+    Crypto.Cipher.oaep.oaep_decode = patched_oaep_decode  # In pycryptodome 4.x, PKCS1_OAEP delegates to this module
 
 
 try:

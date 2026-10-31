@@ -757,7 +757,7 @@ def test_is_cryptainer_cryptoconf_streamable():
 )
 # with local keyfactory
 def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, trustee_dependencies_builder):
-    if "ECC_DSS" in str(cryptoconf):
+    if "ECC_DSS" in str(cryptoconf) or "ECIES_X25519" in str(cryptoconf):
         skip_if_fallback_backend("ECC")
     payload = _get_binary_or_empty_content()
 
@@ -2276,6 +2276,8 @@ def test_cryptoconf_validation_restricts_authenticators_to_rsa_oaep(jsonschema_m
     [SIMPLE_CRYPTOCONF, COMPLEX_CRYPTOCONF, SIMPLE_SHAMIR_CRYPTOCONF, COMPLEX_SHAMIR_CRYPTOCONF, ECIES_SHAMIR_CRYPTOCONF],
 )
 def test_cryptainer_validation_success(cryptoconf):
+    if "ECIES_X25519" in str(cryptoconf):
+        skip_if_fallback_backend("ECC")
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None)
     check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 

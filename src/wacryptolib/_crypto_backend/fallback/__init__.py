@@ -582,9 +582,23 @@ def _decode_x25519_private_key(private_key_octets, parameters):
     return _build_x25519_private_key(_pem.decode_octet_string(private_key_octets))
 
 
+_P25519 = 2**255 - 19
+_X25519_LOW_ORDER_U = (
+    325606250916557431795983626356110631294008115727848805560023387167927233504,
+    39382357235489614581723060781553021112529911719440698176882885853963445705823,
+)
+# Like pycryptodome: low-order points (http://cr.yp.to/ecdh.html#validate), also when non-canonically encoded
+_X25519_DENIED_U = {offset + u for offset in (0, _P25519, 2 * _P25519) for u in (0, 1, *_X25519_LOW_ORDER_U)} | {
+    _P25519 - 1, 2 * _P25519 - 1
+}
+
+
 def _decode_x25519_public_key(public_key_bits, parameters):
     if parameters is not None or len(public_key_bits) != 32:
         raise ValueError("Invalid X25519 public key")
+    public_key_bits = public_key_bits[:31] + bytes([public_key_bits[31] & 0x7F])  # RFC 7748, like pycryptodome
+    if int.from_bytes(public_key_bits, "little") in _X25519_DENIED_U:
+        raise ValueError("Invalid X25519 public key (low order point)")
     return X25519Key(public_key_bits)
 
 

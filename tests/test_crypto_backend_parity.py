@@ -398,3 +398,12 @@ def test_backends_accept_the_same_nist_curve_names(both_backends):
 def test_ecc_curve_names_are_case_insensitive(backend, curve):
     public_key, _private_key = backend.generate_ecc_keypair(curve)
     assert backend.export_ecc_key_to_pem(public_key)
+
+
+def test_hash_algo_names_are_case_insensitive(both_backends):
+    native, fallback = both_backends
+    for hash_algo in native.IMPLEMENTED_HASH_ALGOS:
+        hashers = [backend.get_hasher_instance(name) for backend in both_backends for name in (hash_algo, hash_algo.lower())]
+        for hasher in hashers:
+            hasher.update(b"abc")
+        assert len({hasher.digest() for hasher in hashers}) == 1

@@ -22,7 +22,7 @@ import pytest
 from jsonrpc_requests import TransportError
 
 import wacryptolib.cryptainer
-from _test_mockups import FakeTestCryptainerStorage, random_bool
+from _test_mockups import FakeTestCryptainerStorage, random_bool, skip_if_fallback_backend
 from wacryptolib._crypto_backend import get_random_bytes
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS, AUTHENTICATED_CIPHER_ALGOS, encrypt_bytestring
 from wacryptolib.cryptainer import (
@@ -866,6 +866,8 @@ def test_is_cryptainer_cryptoconf_streamable():
 )
 # with local keyfactory
 def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, trustee_dependencies_builder):
+    if "ML_" in str(cryptoconf):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     payload = _get_binary_or_empty_content()
 
     keychain_uid = random.choice([None, uuid.UUID("450fc293-b702-42d3-ae65-e9cc58e5a62a")])
@@ -2940,6 +2942,8 @@ def test_cryptoconf_validation_rejects_asymmetric_payload_cipher_algos(payload_c
      PQ_HYBRID_CRYPTOCONF],
 )
 def test_cryptainer_validation_success(cryptoconf):
+    if "ML_" in str(cryptoconf):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None)
     check_cryptainer_sanity(cryptainer=cryptainer, jsonschema_mode=False)
 
@@ -3591,6 +3595,7 @@ def _build_pq_hybrid_cryptainer(keystore_pool):
 
 @pytest.mark.parametrize("removed_key_algo", ["ML_KEM_768", "RSA_OAEP"])
 def test_pq_hybrid_cryptainer_decryption_with_missing_private_key(removed_key_algo):
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     keystore_pool = InMemoryKeystorePool()
     cryptainer = _build_pq_hybrid_cryptainer(keystore_pool)
 
@@ -3611,6 +3616,7 @@ def test_pq_hybrid_cryptainer_decryption_with_missing_private_key(removed_key_al
 
 
 def test_pq_hybrid_cryptainer_with_corrupted_ml_dsa_signature():
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     keystore_pool = InMemoryKeystorePool()
     cryptainer = _build_pq_hybrid_cryptainer(keystore_pool)
 
@@ -3635,6 +3641,7 @@ def test_pq_hybrid_cryptainer_with_corrupted_ml_dsa_signature():
 def test_pq_hybrid_fixture_cryptainer_decryption(tmp_path):
     """Wire-format compatibility check: a cryptainer and keys committed in the repository must stay decryptable
     (regenerate with scripts/generate_post_quantum_fixtures.py if the cryptainer format itself changes)."""
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     keystore_pool_dir = tmp_path / "keystore_pool"
     shutil.copytree(PQ_FIXTURES_DIR / "keystore_pool", keystore_pool_dir)
     keystore_pool = FilesystemKeystorePool(keystore_pool_dir)

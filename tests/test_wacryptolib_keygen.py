@@ -52,6 +52,8 @@ def test_passphrase_encoding():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_keypair_unicity(key_algo):
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     # We must reuse test-specific caching of asymmetric keypairs, for this test
     wacryptolib.keygen.__original_do_generate_keypair_patcher.stop()
     assert wacryptolib.keygen._do_generate_keypair == wacryptolib.keygen.__original_do_generate_keypair
@@ -129,6 +131,8 @@ def test_ecc_keypair_generation():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_load_asymmetric_key_from_pem_bytestring(key_algo):
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo)
 
     for field in ["private_key", "public_key"]:
@@ -148,6 +152,8 @@ def test_load_ecies_x25519_key_rejects_other_curves():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     # Both Unicode and Bytes are supported
     passphrases = ["Thïs is a passphrâse", b"aoh18726"]
 
@@ -216,6 +222,8 @@ def test_legacy_passphrase_protected_pem_still_loadable(key_algo):
 
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS", "ML_KEM_768", "ML_DSA_65"])
 def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     import base64
 
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, passphrase="abc")
@@ -246,6 +254,8 @@ def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
 
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS", "ML_KEM_768", "ML_DSA_65"])
 def test_public_key_export_with_passphrase_raises(key_algo):
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
     with pytest.raises(ValueError, match="Public keys"):
         wacryptolib.keygen._serialize_key_object_to_pem_bytestring(
@@ -289,6 +299,8 @@ def _craft_pbes2_pem(
 @pytest.mark.parametrize("key_algo", ["ECC_DSS", "ML_KEM_768", "ML_DSA_65"])
 @pytest.mark.parametrize("iteration_count", [0, 10**8, 2**40])
 def test_crafted_pem_iteration_count_is_bounded(iteration_count, key_algo):
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     pem = _craft_pbes2_pem(iteration_count=iteration_count, ciphertext=b"\x00" * 32)
     with pytest.raises(KeyLoadingError, match="Unsupported PBKDF2 iteration count"):
         load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo=key_algo, passphrase=b"abc")
@@ -366,6 +378,7 @@ def test_symkey_dict_sanity_checks(cipher_algo):
 
 @pytest.mark.parametrize("key_algo", ["ML_KEM_768", "ML_DSA_65"])
 def test_post_quantum_keypair_generation_ignores_classical_parameters(key_algo):
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     # Parameter set is fixed by the algo name, so key_length_bits and curve are simply not forwarded
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, key_length_bits=1024, curve="unexisting_curve")
     assert keypair["public_key"].startswith(b"-----BEGIN PUBLIC KEY-----")
@@ -379,6 +392,7 @@ def test_post_quantum_keypair_generation_ignores_classical_parameters(key_algo):
 
 
 def test_post_quantum_key_loading_with_wrong_key_algo():
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
     ml_kem_keypair = wacryptolib.keygen.generate_keypair(key_algo="ML_KEM_768")
     ml_dsa_keypair = wacryptolib.keygen.generate_keypair(key_algo="ML_DSA_65")
 

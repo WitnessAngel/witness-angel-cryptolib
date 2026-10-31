@@ -318,7 +318,6 @@ def test_crafted_pem_with_empty_prf_falls_back_to_pycryptodome():
 
 
 def test_crafted_pem_errors_do_not_reveal_padding_validity():
-    skip_if_fallback_backend("passphrase-protected PEM import")
     good_padding_pem = _craft_pbes2_pem(plaintext=b"not a DER key")  # Decrypts fine, but to garbage
     bad_padding_pem = _craft_pbes2_pem(ciphertext=b"\x00" * 16)  # Padding check fails
 

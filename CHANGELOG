@@ -15,7 +15,7 @@ Development
   dependency are in the `fallbacks` extra, and `rsa` (with `pyasn1`) is not used anymore
 * Replace the monkey-patching of pycryptodome internals by a standalone pure-python fallback backend, selected
   automatically when pycryptodome's native code can't load (e.g. iOS), or via FORCE_WACRYPTOLIB_FALLBACK_BACKEND;
-  it supports all algorithms and key formats of the pycryptodome backend, except legacy DES3-protected private keys (DSA keys of wacryptolib <= 0.12, RSA keys of wacryptolib <= 0.8)
+  it supports all algorithms of the pycryptodome backend and the PKCS#8/PKCS#1/SubjectPublicKeyInfo PEM formats it writes (not e.g. SEC1 or OpenSSH keys from other tools), except legacy DES3-protected private keys (DSA keys of wacryptolib <= 0.12, RSA keys of wacryptolib <= 0.8)
 * Test both crypto backends against official vectors (NIST, RFC, Wycheproof) and against each other
 * **BREAKING**: Extended JSON format now defaults to RELAXED mode instead of CANONICAL mode
   - UUIDs are now serialized as `{"$uuid": "hex"}` instead of `{"$binary": {"base64": "...", "subType": "04"}}`

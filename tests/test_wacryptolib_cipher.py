@@ -5,7 +5,10 @@
 import copy
 import functools
 import io
+import os
 import random
+import subprocess
+import sys
 
 import pytest
 
@@ -156,6 +159,18 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
         wacryptolib.cipher.decrypt_bytestring(
             key_dict=dict(key=private_key_too_short), cipherdict=cipherdict, cipher_algo=cipher_algo
         )
+
+
+def test_rsa_oaep_round_trip_in_forced_fallback_backend():
+    # Monkey-patching must happen before any pycryptodome import, hence a fresh interpreter
+    code = (
+        "import wacryptolib.cipher as c, wacryptolib.keygen as k\n"
+        "kp = k.generate_keypair(key_algo='RSA_OAEP', serialize=False)\n"
+        "cd = c.encrypt_bytestring(b'abc', cipher_algo='RSA_OAEP', key_dict=dict(key=kp['public_key']))\n"
+        "assert c.decrypt_bytestring(cd, cipher_algo='RSA_OAEP', key_dict=dict(key=kp['private_key'])) == b'abc'\n"
+    )
+    env = dict(os.environ, FORCE_WACRYPTOLIB_FALLBACK_BACKEND="1")
+    subprocess.run([sys.executable, "-c", code], env=env, check=True, timeout=300)
 
 
 # Test each node separately, then a pipeline with all nodes

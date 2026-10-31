@@ -330,3 +330,25 @@ def test_fallback_rsa_oaep_checks_all_paddings_even_when_first_byte_is_wrong(mon
 def test_rsa_keypair_has_the_requested_length(backend, key_length_bits):
     _public_key, private_key = backend.generate_rsa_keypair(key_length_bits)
     assert private_key.n.bit_length() == key_length_bits
+
+
+@pytest.mark.parametrize(
+    "version, optional_items",
+    [(0, [b"\xa0\x00"]), (1, [b"\x81\x21\x00" + bytes(32)]), (1, [b"\xa0\x00", b"\x81\x21\x00" + bytes(32)])],
+)
+def test_pkcs8_private_keys_with_attributes_or_public_key_are_accepted(backend, version, optional_items):
+    import_crypto_backend("fallback")
+    from wacryptolib._crypto_backend.fallback import pem
+
+    _public_key, private_key = backend.generate_ecc_keypair("curve25519")
+    clear_version, algorithm_identifier, private_key_octets = pem.decode_sequence(
+        pem.decode_pem(backend.export_ecc_key_to_pem(private_key))[0], 3
+    )
+    der = pem.encode_sequence(pem.encode_integer(version), algorithm_identifier, private_key_octets, *optional_items)
+    key = backend.import_ecc_key_from_pem(pem.encode_pem(der, "PRIVATE KEY"))
+    assert backend.export_ecc_key_to_pem(key) == backend.export_ecc_key_to_pem(private_key)
+
+    for bad_version, bad_optional_items in [(0, optional_items * 2), (2, optional_items)]:
+        der = pem.encode_sequence(pem.encode_integer(bad_version), algorithm_identifier, private_key_octets, *bad_optional_items)
+        with pytest.raises(ValueError):
+            backend.import_ecc_key_from_pem(pem.encode_pem(der, "PRIVATE KEY"))

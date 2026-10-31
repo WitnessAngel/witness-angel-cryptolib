@@ -229,9 +229,10 @@ def encode_pkcs8(algorithm_identifier, private_key_octets):
 
 
 def decode_pkcs8(der):
-    """Return (oid, encoded parameters or None, private key octets)."""
-    version, algorithm_identifier, private_key = decode_sequence(der, 3)
-    if decode_integer(version) != 0:
+    """Return (oid, encoded parameters or None, private key octets); like pycryptodome, the optional attributes
+    and (for PKCS#8 v2, i.e. OneAsymmetricKey) public key are ignored."""
+    version, algorithm_identifier, private_key, *optional_items = decode_sequence(der, 3, 5)
+    if len(optional_items) > {0: 1, 1: 2}.get(decode_integer(version), -1):
         raise ValueError("Unsupported PKCS#8 version")
     oid, parameters = decode_algorithm_identifier(algorithm_identifier)
     return oid, parameters, decode_octet_string(private_key)

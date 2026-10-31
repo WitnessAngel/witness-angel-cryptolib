@@ -55,6 +55,7 @@ class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionSt
                 self._dump_current_cryptainer_to_filesystem(is_temporary=True)
         except Exception:  # FIXME TEST THIS CASE OF SELF-CLEANUP
             self._output_data_stream.close()  # Avoid leak of open file
+            offloaded_file_path.unlink(missing_ok=True)  # Else orphan, since storage only lists cryptainer files
             raise
 
     def _dump_current_cryptainer_to_filesystem(self, is_temporary):

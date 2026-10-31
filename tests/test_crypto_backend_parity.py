@@ -149,6 +149,25 @@ def test_malformed_pem_is_rejected(backend, case_name):
         backend.import_rsa_key_from_pem(key_pem)
 
 
+def test_rsa_public_key_with_non_null_algorithm_parameters_is_rejected(backend):
+    import_crypto_backend("fallback")
+    from wacryptolib._crypto_backend.fallback import pem
+
+    import _crypto_test_vectors as vectors
+
+    der, _marker = pem.decode_pem(vectors.PYCRYPTODOME_PEM_FIXTURES["RSA"]["public_key"])
+    _algorithm_identifier, public_key_bits = pem.decode_sequence(der, 2)
+
+    def spki_pem(parameters):
+        algorithm_identifier = pem.encode_algorithm_identifier(pem.OID_RSA, parameters)
+        return pem.encode_pem(pem.encode_spki(algorithm_identifier, pem.decode_bit_string(public_key_bits)), "PUBLIC KEY")
+
+    assert backend.import_rsa_key_from_pem(spki_pem(None))  # Absent parameters are tolerated by both backends
+    assert backend.import_rsa_key_from_pem(spki_pem(pem.encode_null()))
+    with pytest.raises(ValueError):
+        backend.import_rsa_key_from_pem(spki_pem(pem.encode_integer(5)))
+
+
 def test_fallback_rejects_oids_as_pem_markers():
     import base64
 

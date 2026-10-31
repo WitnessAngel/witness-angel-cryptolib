@@ -17,18 +17,19 @@ Development
 * Add ECIES_X25519 asymmetric cipher (HPKE RFC 9180, X25519 + HKDF-SHA256 + ChaCha20-Poly1305), with a pure python encryption-only implementation for MicroPython
 * Allow any registered asymmetric cipher in trustee decryption, and digits in keystore key_algo filenames
 * **BREAKING**: TrusteeApi and keystore public methods normalize algo names to uppercase (TrusteeApi also raises AlgorithmNotSupported, a ValidationError, on unsupported ones, but reports them as missing keys in fetch_public_key(must_exist=True) and request_decryption_authorization(), and decryption only gives up the cryptainer branches concerned, for compatibility with newer peers), so keypairs and free keypairs previously stored under lowercase algo names are not found anymore
-* **BREAKING**: pycryptodome >= 3.23 is now required, for its Crypto.Protocol.HPKE module
-* ECIES_X25519 keypairs are not pre-generated in free keypair pools by default
+* **BREAKING**: pycryptodome >= 4.2 is now required, for its Crypto.Protocol.HPKE module and ML-KEM/ML-DSA support
+* ECIES_X25519 and post-quantum keypairs are not pre-generated in free keypair pools by default
 * Remove key PEMs, passphrases and decrypted keys from error and assertion messages of key loading and trustee operations
+* Raise SignatureCreationError instead of TypeError when signing with a public key
 * **BREAKING**: pure-python crypto packages are no longer installed by default: `pkcs1`, `pyaes` and the new `ecdsa`
   dependency are in the `fallbacks` extra, and `rsa` (with `pyasn1`) is not used anymore
 * Replace the monkey-patching of pycryptodome internals by a standalone pure-python fallback backend, selected
   automatically when pycryptodome's native code can't load (e.g. iOS), or via FORCE_WACRYPTOLIB_FALLBACK_BACKEND;
-  it supports all algorithms of the pycryptodome backend (except the Ed25519, Ed448 and curve448 ECC curves) and the PKCS#8/PKCS#1/SubjectPublicKeyInfo PEM formats it writes (not e.g. SEC1 or OpenSSH keys from other tools), except legacy DES3-protected private keys (DSA keys of wacryptolib <= 0.12, RSA keys of wacryptolib <= 0.8)
+  it supports all algorithms of the pycryptodome backend (except ML_KEM_768, ML_DSA_65 and the Ed25519, Ed448 and curve448 ECC curves) and the PKCS#8/PKCS#1/SubjectPublicKeyInfo PEM formats it writes (not e.g. SEC1 or OpenSSH keys from other tools), except legacy DES3-protected private keys (DSA keys of wacryptolib <= 0.12, RSA keys of wacryptolib <= 0.8)
 * Test both crypto backends against official vectors (NIST, RFC, Wycheproof) and against each other
 * Stop vendoring rsa and pyasn1 for MicroPython, whose flightbox only encrypts with raw RSA public numbers
 * Accept ECC curve names case-insensitively, and hash algorithm names case-insensitively in the internal crypto backends (not in `hash_message()`), which now both reject hash algorithms other than SHA256, SHA512, SHA3_256 and SHA3_512 with a ValueError
-* Add post-quantum algorithms (requires pycryptodome >= 4.2):
+* Add post-quantum algorithms:
   - `ML_KEM_768` (FIPS 203) as asymmetric key algorithm and `key_cipher_algo`, using a KEM + DEM construction
     (HPKE Base mode with ChaCha20-Poly1305); cipherdict fields are `kem_ciphertext` and `ciphertext`
   - `ML_DSA_65` (FIPS 204) as asymmetric key algorithm and `payload_signature_algo`, signing the SHA512 digest

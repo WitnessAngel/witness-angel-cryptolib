@@ -633,7 +633,7 @@ def _decode_nist_ecc_key(decode, der):
     try:
         key = decode(der)
     except (ecdsa.der.UnexpectedDER, ecdsa.MalformedPointError, ecdsa.curves.UnknownCurveError, AssertionError) as exc:
-        raise ValueError("Invalid ECC key (%s)" % exc) from None
+        raise ValueError("Invalid ECC key (%s)" % type(exc).__name__) from None  # Messages of ecdsa may embed key bytes
     if key.curve not in _NIST_CURVES.values():
         raise ValueError("Unsupported ECC curve %s" % key.curve.name)
     return key

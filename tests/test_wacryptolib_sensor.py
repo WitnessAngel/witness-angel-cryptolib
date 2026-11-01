@@ -615,6 +615,27 @@ def test_periodic_subprocess_stream_recorder_masks_credentials_in_stderr(tmp_pat
     assert "secretpwd" not in log_calls
 
 
+def test_periodic_subprocess_stream_recorder_doesnt_log_command_line_on_termination_timeout(tmp_path):
+    import subprocess
+    import traceback
+
+    command_line = ["ffmpeg", "-i", "rtsp://admin:secretpwd@camera/stream"]
+    recorder = TestStreamRecorderForTesting(
+        executable_command_line=command_line,
+        interval_s=5,
+        cryptainer_storage=_build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=True),
+    )
+    recorder._subprocess = mock.Mock()
+    recorder._subprocess.poll.return_value = None
+    recorder._subprocess.wait.side_effect = subprocess.TimeoutExpired(command_line, 10)
+
+    with mock.patch("wacryptolib.sensor.logger") as logger_mock:
+        with pytest.raises(RuntimeError) as exc_info:
+            recorder._do_stop_recording()
+    assert "secretpwd" not in str(logger_mock.mock_calls)
+    assert "secretpwd" not in "".join(traceback.format_exception(exc_info.value))
+
+
 def test_periodic_subprocess_stream_recorder_autoexiting_executable(tmp_path):
     cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path)
 

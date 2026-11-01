@@ -397,6 +397,26 @@ def test_rsa_private_keys_with_bad_exponent_or_even_modulus_are_rejected(backend
         backend.import_rsa_key_from_pem(pem.encode_pem(der, "RSA PRIVATE KEY"))
 
 
+def test_rsa_private_key_with_out_of_range_exponent_is_rejected(backend):
+    import math
+
+    import_crypto_backend("fallback")
+    from wacryptolib._crypto_backend.fallback import pem
+    from wacryptolib._crypto_backend.vendor.primes import get_random_prime
+
+    e = 65537
+    while True:
+        p, q = get_random_prime(512), get_random_prime(512)
+        if math.gcd(e, math.lcm(p - 1, q - 1)) == 1:
+            break
+    lcm = math.lcm(p - 1, q - 1)
+    d = pow(e, -1, lcm) + lcm * (p * q // lcm + 1)  # Still a valid inverse of e, but >= n
+    components = [0, p * q, e, d, p, q, d % (p - 1), d % (q - 1), pow(q, -1, p)]
+    der = pem.encode_sequence(*(pem.encode_integer(x) for x in components))
+    with pytest.raises(ValueError):
+        backend.import_rsa_key_from_pem(pem.encode_pem(der, "RSA PRIVATE KEY"))
+
+
 def test_ecc_private_key_with_mismatched_public_point_is_rejected(backend):
     import_crypto_backend("fallback")  # Skips the test when ecdsa is missing
     import ecdsa

@@ -4,6 +4,7 @@
 
 import io
 import logging
+import re
 import subprocess
 import tarfile
 import threading
@@ -483,7 +484,9 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         def _sytderr_reader_thread(fh):
             for line in fh:
                 line_str = line.decode("ascii", "ignore")
-                logger.info("Subprocess stderr: %s" % line_str.rstrip("\n"))
+                # Programs like ffmpeg echo their input urls, so we mask the credentials they contain
+                line_str = re.sub(r"://[^/@\s]+@", "://***@", line_str)
+                logger.info("Subprocess stderr: %s", line_str.rstrip("\n"))
                 ##print(">>>>>>>>>>>>>_sytderr_reader_thread output done")
             fh.close()
 

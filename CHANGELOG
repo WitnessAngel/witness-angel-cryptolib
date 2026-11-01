@@ -12,7 +12,7 @@ Development
   `load_asymmetric_key_from_pem_bytestring()` and the JSON sensor aggregator's debug log), so that payloads,
   ciphertexts, keys, shards and passphrases don't leak into error messages and logs
 * Log only the executable of subprocess sensors' command lines, so that credentials in their arguments
-  (e.g. RTSP stream urls) don't leak into logs
+  (e.g. RTSP stream urls) don't leak into logs, and mask url credentials in the stderr lines they relay
 * Fix decryption appending common passphrases in-place to the caller's `passphrase_mapper` lists
 * Update validation schemas to accept both RELAXED and CANONICAL extjson formats
 * Add comprehensive tests for RELAXED format support

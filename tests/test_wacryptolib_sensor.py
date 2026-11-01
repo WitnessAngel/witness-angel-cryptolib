@@ -607,7 +607,10 @@ def test_periodic_subprocess_stream_recorder_masks_credentials_in_stderr(tmp_pat
     )
     with mock.patch("wacryptolib.sensor.logger") as logger_mock:
         recorder.start()
-        time.sleep(1)
+        for _ in range(100):  # Beware of python launch time, on slow systems
+            if "rtsp://" in str(logger_mock.mock_calls):
+                break
+            time.sleep(0.1)
         recorder.stop()
         recorder.join()
     log_calls = str(logger_mock.mock_calls)

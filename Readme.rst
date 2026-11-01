@@ -41,7 +41,8 @@ dlopen()), wacryptolib automatically switches to a pure-python "fallback" backen
 On a regular computer, **pip install wacryptolib[fallbacks]** installs these packages alongside pycryptodome, and the
 FORCE_WACRYPTOLIB_FALLBACK_BACKEND environment variable forces the fallback backend (for tests).
 
-The fallback backend supports all algorithms used by wacryptolib, and reads/writes the same key formats, except
+The fallback backend supports all algorithms used by wacryptolib, and reads/writes the PKCS#8/PKCS#1/SubjectPublicKeyInfo
+PEM formats that wacryptolib writes (not e.g. SEC1 or OpenSSH keys from other tools, nor Ed25519/Ed448/curve448 keys), except
 legacy private keys protected with DES3 (DSA keys written by wacryptolib 0.12 and earlier, and RSA keys written by
 wacryptolib 0.8 and earlier). Being pure-python, it is
 much slower, and not protected against timing side-channels.

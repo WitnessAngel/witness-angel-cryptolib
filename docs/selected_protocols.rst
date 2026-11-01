@@ -32,6 +32,19 @@ Asymmetric ciphers
   A user of RSA creates and then publishes a public key based on two large prime numbers, along with an auxiliary value. The prime numbers must be kept secret. Anyone can use the public key to encrypt a message, but with currently published methods, and if the public key is large enough, only someone with knowledge of the prime numbers can decode the message feasibly. We use OAEP (Optimal Asymmetric Encryption Padding) as padding scheme to strengthen RSA encryption.
 
 
+- ML-KEM-768 (Module-Lattice-Based Key-Encapsulation Mechanism, FIPS 203) is a post-quantum algorithm: unlike RSA, it is
+  not expected to be broken by large quantum computers. A KEM can not encrypt a chosen plaintext, it only produces a random
+  shared secret together with a 1088-bytes encapsulation of it, so the cryptolib uses a "KEM + DEM" construction: the
+  shared secret is turned into a ChaCha20-Poly1305 key (HPKE Base mode, RFC 9180) which encrypts the actual data;
+  ChaCha20-Poly1305 was preferred to AES-256-GCM since it is available in pure python for constrained devices (e.g. MicroPython).
+  The resulting cipherdict has a `kem_ciphertext` field (the encapsulation) and a `ciphertext` field (authenticated
+  payload), and public keys weigh 1184 bytes. Since the lattice assumptions behind ML-KEM are younger than those of RSA,
+  the recommended setup is a *hybrid* one, obtained by simply stacking an `RSA_OAEP` layer and then an `ML_KEM_768` layer
+  in the `key_cipher_layers` of a cryptoconf: an attacker then has to break both algorithms to recover the key.
+  This order matters for size and speed only: RSA-OAEP encrypts its input in small chunks, so it should get the small
+  key struct, not the bigger ML-KEM cipherdict (which would make the key ciphertext about 3 times larger).
+
+
 Signature algorithms
 +++++++++++++++++++++++++
 
@@ -42,6 +55,13 @@ The cryptolib actually signs a hash of the message data concatenated with a time
 - PSS (Probabilistic Signature Scheme) : The algorithm used to sign a plaintext is almost the same as the one used to cipher a plaintext in RSA; except that the private key is used to sign, and the public key to check if the signature is authentic.
 
 - DSS (Digital Signature Standard): This algorithm works in the framework of DSA public-key cryptosystems and is based on the algebraic properties of modular exponentiation, together with the discrete logarithm problem, which is considered to be computationally intractable. The algorithm uses a key pair consisting of a public key and a private key. The private key is used to generate a digital signature for a message, and such a signature can be verified by using the signer's corresponding public key. The digital signature provides message authentication (the receiver can verify the origin of the message), integrity (the receiver can verify that the message has not been modified since it was signed) and non-repudiation (the sender cannot falsely claim that they have not signed the message). Also works with ECC keys, based on elliptic curves.
+
+
+- ML-DSA-65 (Module-Lattice-Based Digital Signature Algorithm, FIPS 204) is the post-quantum counterpart of PSS/DSS.
+  The cryptolib signs the usual SHA512 digest of the message and timestamp, in "pure" mode and with a fixed context
+  string (`wacryptolib-payload-signature-v1`) which prevents signatures from being reused in another protocol with the
+  same key. Signatures are randomized ("hedged"), so signing the same data twice gives different 3309-bytes signatures
+  which both verify. Public keys weigh 1952 bytes.
 
 
 Hashing functions

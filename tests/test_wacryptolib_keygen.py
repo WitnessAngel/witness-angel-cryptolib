@@ -42,6 +42,8 @@ def test_passphrase_encoding():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_keypair_unicity(key_algo):
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     if key_algo == "ECC_DSS":
         skip_if_fallback_backend("ECC")
     # We must reuse test-specific caching of asymmetric keypairs, for this test
@@ -122,6 +124,8 @@ def test_ecc_keypair_generation():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_load_asymmetric_key_from_pem_bytestring(key_algo):
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     if key_algo == "ECC_DSS":
         skip_if_fallback_backend("ECC")
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo)
@@ -130,12 +134,14 @@ def test_load_asymmetric_key_from_pem_bytestring(key_algo):
         key = load_asymmetric_key_from_pem_bytestring(key_pem=keypair[field], key_algo=key_algo)
         _check_is_asymmetric_key_object(key)
 
-    with pytest.raises(ValueError, match="Unknown key type"):
+    with pytest.raises(ValueError, match="^Unknown key type ZHD$"):
         load_asymmetric_key_from_pem_bytestring(key_pem=keypair["private_key"], key_algo="ZHD")
 
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
     if key_algo in ("ECC_DSS", "DSA_DSS"):
         skip_if_fallback_backend("ECC, and DES3 for DSA key protection,")
     # Both Unicode and Bytes are supported
@@ -157,14 +163,13 @@ def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
         )
         _check_is_asymmetric_key_object(private_key)
 
-        error_matcher = "key format is not supported|Invalid DER encoding|Wrong passphrase"
-
-        with pytest.raises(KeyLoadingError, match=error_matcher):
+        # Same uniform message for all key algos, which must not reveal why decryption failed (e.g. padding)
+        with pytest.raises(KeyLoadingError, match="Wrong passphrase or corrupted encrypted private key"):
             load_asymmetric_key_from_pem_bytestring(
                 key_pem=keypair["private_key"], key_algo=key_algo, passphrase=b"wrong passphrase"
             )
 
-        with pytest.raises(KeyLoadingError, match=error_matcher):
+        with pytest.raises(KeyLoadingError, match="passphrase is required"):  # Pycryptodome >= 4 message
             load_asymmetric_key_from_pem_bytestring(
                 key_pem=keypair["private_key"], key_algo=key_algo, passphrase=None  # Missing passphrase
             )
@@ -204,7 +209,7 @@ def test_legacy_passphrase_protected_pem_still_loadable(key_algo):
     assert loaded.export_key(format="DER") == key.export_key(format="DER")
 
 
-@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
+@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS", "ML_KEM_768", "ML_DSA_65"])
 def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
     skip_if_fallback_backend("PBKDF2 parameters inspection")
     import base64
@@ -218,7 +223,7 @@ def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
     assert b"\x60\x86\x48\x01\x65\x03\x04\x01\x2a" in der  # OID of aes256-CBC
 
 
-@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
+@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS", "ML_KEM_768", "ML_DSA_65"])
 def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
     skip_if_fallback_backend("passphrase-protected PEM export")
     from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
@@ -234,7 +239,7 @@ def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
     assert loaded.export_key(format="DER") == private_key.export_key(format="DER")
 
 
-@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
+@pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS", "ML_KEM_768", "ML_DSA_65"])
 def test_public_key_export_with_passphrase_raises(key_algo):
     skip_if_fallback_backend("passphrase-protected PEM export")
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
@@ -278,12 +283,13 @@ def _craft_pbes2_pem(
     return PEM.encode(der, "ENCRYPTED PRIVATE KEY").encode("ascii")
 
 
+@pytest.mark.parametrize("key_algo", ["ECC_DSS", "ML_KEM_768", "ML_DSA_65"])
 @pytest.mark.parametrize("iteration_count", [0, 10**8, 2**40])
-def test_crafted_pem_iteration_count_is_bounded(iteration_count):
+def test_crafted_pem_iteration_count_is_bounded(iteration_count, key_algo):
     skip_if_fallback_backend("passphrase-protected PEM import")
     pem = _craft_pbes2_pem(iteration_count=iteration_count, ciphertext=b"\x00" * 32)
     with pytest.raises(KeyLoadingError, match="Unsupported PBKDF2 iteration count"):
-        load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo="ECC_DSS", passphrase=b"abc")
+        load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo=key_algo, passphrase=b"abc")
 
 
 def test_crafted_pem_with_optional_key_length_uses_fast_path():
@@ -337,3 +343,34 @@ def test_backend_pem_functions_accept_str_passphrases():
     loaded = import_ecc_key_from_pem(pem, passphrase="abc")
     assert loaded.export_key(format="DER") == private_key.export_key(format="DER")
     assert import_ecc_key_from_pem(pem, passphrase=b"abc")  # Same encoding as bytes
+
+
+@pytest.mark.parametrize("key_algo", ["ML_KEM_768", "ML_DSA_65"])
+def test_post_quantum_keypair_generation_ignores_classical_parameters(key_algo):
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
+    # Parameter set is fixed by the algo name, so key_length_bits and curve are simply not forwarded
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, key_length_bits=1024, curve="unexisting_curve")
+    assert keypair["public_key"].startswith(b"-----BEGIN PUBLIC KEY-----")
+    assert keypair["private_key"].startswith(b"-----BEGIN PRIVATE KEY-----")
+    public_key = load_asymmetric_key_from_pem_bytestring(key_pem=keypair["public_key"], key_algo=key_algo)
+    private_key = load_asymmetric_key_from_pem_bytestring(key_pem=keypair["private_key"], key_algo=key_algo)
+    _check_is_asymmetric_key_object(public_key)
+    _check_is_asymmetric_key_object(private_key)
+    assert not public_key.has_private()
+    assert private_key.has_private()
+
+
+def test_post_quantum_key_loading_with_wrong_key_algo():
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
+    ml_kem_keypair = wacryptolib.keygen.generate_keypair(key_algo="ML_KEM_768")
+    ml_dsa_keypair = wacryptolib.keygen.generate_keypair(key_algo="ML_DSA_65")
+
+    for key_pem in (ml_kem_keypair["public_key"], ml_kem_keypair["private_key"]):
+        with pytest.raises(KeyLoadingError, match="Not an ML-DSA key"):
+            load_asymmetric_key_from_pem_bytestring(key_pem=key_pem, key_algo="ML_DSA_65")
+        with pytest.raises(KeyLoadingError):
+            load_asymmetric_key_from_pem_bytestring(key_pem=key_pem, key_algo="RSA_OAEP")
+
+    for key_pem in (ml_dsa_keypair["public_key"], ml_dsa_keypair["private_key"]):
+        with pytest.raises(KeyLoadingError, match="Not an ML-KEM key"):
+            load_asymmetric_key_from_pem_bytestring(key_pem=key_pem, key_algo="ML_KEM_768")

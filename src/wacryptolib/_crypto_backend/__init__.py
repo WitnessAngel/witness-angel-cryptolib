@@ -23,6 +23,8 @@ from .pycryptodome import (
     # No cipher builder for (asymmetric) RSA
     encrypt_via_rsa_oaep,
     decrypt_via_rsa_oaep,
+    encrypt_via_ml_kem_768,
+    decrypt_via_ml_kem_768,
 )
 from .pycryptodome import (
     generate_rsa_keypair,
@@ -37,8 +39,15 @@ from .pycryptodome import (
     rsa_key_class_fetcher,
     dsa_key_class_fetcher,
     ecc_key_class_fetcher,
+    generate_pq_keypair,
+    PQ_KEY_ALGOS,
+    check_pq_key_algo,
+    import_pq_key_from_pem,
+    export_pq_key_to_pem,
+    pq_key_class_fetcher,
 )
 from .pycryptodome import sign_with_pss, verify_with_pss, sign_with_dss, verify_with_dss
+from .pycryptodome import sign_with_mldsa, verify_with_mldsa
 
 #from .fallback_adapter import (build_aes_cbc_encrypter, encrypt_via_aes_cbc, decrypt_via_aes_cbc,)
                                 #import_rsa_key_from_pem, encrypt_via_rsa_oaep, decrypt_via_rsa_oaep,

@@ -5,16 +5,26 @@
 import copy
 import functools
 import io
+import os
 import random
+import subprocess
+import sys
 
 import pytest
 
 import wacryptolib
+from _test_mockups import skip_if_fallback_backend
 from wacryptolib._crypto_backend import get_random_bytes, generate_rsa_keypair
 from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipeline
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
-from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError, OperationNotSupported
-from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey
+from wacryptolib.exceptions import (
+    DecryptionError,
+    EncryptionError,
+    DecryptionIntegrityError,
+    KeyLoadingError,
+    OperationNotSupported,
+)
+from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey, load_asymmetric_key_from_pem_bytestring
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS, hash_message
 
 
@@ -32,6 +42,10 @@ def test_generic_encryption_and_decryption_errors():
 
     with pytest.raises(ValueError, match="Unknown cipher type"):
         wacryptolib.cipher.decrypt_bytestring(key_dict=key_dict, cipherdict={}, cipher_algo="EXHD")
+
+    # Algo names are normalized to uppercase, also in error messages
+    with pytest.raises(EncryptionError, match="Failed AES_EAX encryption"):
+        wacryptolib.cipher.encrypt_bytestring(key_dict={"key": b"x", "nonce": b"y"}, plaintext=binary_content, cipher_algo="aes_eax")
 
 
 def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_content):
@@ -152,6 +166,21 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
         )
 
 
+def test_rsa_oaep_round_trip_in_forced_fallback_backend():
+    # Monkey-patching must happen before any pycryptodome import, hence a fresh interpreter
+    code = (
+        "import wacryptolib.cipher as c, wacryptolib.keygen as k\n"
+        "kp = k.generate_keypair(key_algo='RSA_OAEP', serialize=False)\n"
+        "cd = c.encrypt_bytestring(b'abc', cipher_algo='RSA_OAEP', key_dict=dict(key=kp['public_key']))\n"
+        "assert c.decrypt_bytestring(cd, cipher_algo='RSA_OAEP', key_dict=dict(key=kp['private_key'])) == b'abc'\n"
+    )
+    # Pin the subprocess to the wacryptolib under test, not whatever copy is installed in the interpreter
+    src_dir = os.path.dirname(os.path.dirname(wacryptolib.__file__))
+    pythonpath = os.pathsep.join(filter(None, [src_dir, os.environ.get("PYTHONPATH")]))
+    env = dict(os.environ, FORCE_WACRYPTOLIB_FALLBACK_BACKEND="1", PYTHONPATH=pythonpath)
+    subprocess.run([sys.executable, "-c", code], env=env, check=True, timeout=300)
+
+
 # Test each node separately, then a pipeline with all nodes
 _stream_algo_nodes = [[algo] for algo in STREAMABLE_CIPHER_ALGOS] + [STREAMABLE_CIPHER_ALGOS]
 
@@ -245,6 +274,18 @@ def test_invalid_payload_encryption_pipeline():
         PayloadEncryptionPipeline(output_stream=output_stream, secrets=secrets)
 
 
+def test_payload_encryption_pipeline_lowercase_cipher_algo():
+    secrets = dict(
+        payload_plaintext_hash_algos=[],
+        payload_cipher_layer_extracts=[
+            {"cipher_algo": "aes_eax", "symkey": generate_symkey("AES_EAX"), "hash_algos": []}
+        ],
+    )
+    encryption_pipeline = PayloadEncryptionPipeline(output_stream=io.BytesIO(), secrets=secrets)
+    encryption_pipeline.encrypt_chunk(b"abc")
+    encryption_pipeline.finalize()
+
+
 @pytest.mark.parametrize("cipher_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
 def test_symmetric_decryption_verify(cipher_algo):
     attribute_to_corrupt = "tag"  # For now it's the only kind of authentication marker
@@ -278,3 +319,103 @@ def test_symmetric_decryption_verify(cipher_algo):
             decryption_callable()
     else:
         decryption_callable()
+
+
+def test_ml_kem_768_asymmetric_encryption_and_decryption():
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
+    cipher_algo = "ML_KEM_768"
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=cipher_algo, serialize=False)
+    # Bypass the keypair cache of conftest.py, to really get a different keypair
+    _other_public_key, other_private_key = wacryptolib._crypto_backend.generate_pq_keypair("ML_KEM_768")
+    public_key_dict = dict(key=keypair["public_key"])
+    private_key_dict = dict(key=keypair["private_key"])
+
+    for binary_content in (b"", b"a", get_random_bytes(61), _get_binary_content()):
+        cipherdict = wacryptolib.cipher.encrypt_bytestring(
+            key_dict=public_key_dict, plaintext=binary_content, cipher_algo=cipher_algo
+        )
+        assert set(cipherdict.keys()) == {"kem_ciphertext", "ciphertext"}
+        assert len(cipherdict["kem_ciphertext"]) == 1088  # ML-KEM-768 encapsulation
+        assert len(cipherdict["ciphertext"]) == len(binary_content) + 16  # Poly1305 tag appended
+
+        for verify_integrity_tags in (True, False):
+            decrypted_content = wacryptolib.cipher.decrypt_bytestring(
+                key_dict=private_key_dict, cipherdict=cipherdict, cipher_algo=cipher_algo,
+                verify_integrity_tags=verify_integrity_tags,
+            )
+            assert decrypted_content == binary_content
+
+    decryption_func = functools.partial(
+        wacryptolib.cipher.decrypt_bytestring, key_dict=private_key_dict, cipher_algo=cipher_algo
+    )
+    _test_random_ciphertext_corruption(decryption_func, cipherdict=cipherdict, initial_content=binary_content)
+
+    corrupted_cipherdict = copy.deepcopy(cipherdict)
+    corrupted_cipherdict["kem_ciphertext"] = b"\x00" + corrupted_cipherdict["kem_ciphertext"][1:]
+    with pytest.raises(DecryptionIntegrityError):  # Implicit rejection of ML-KEM gives a wrong key
+        decryption_func(cipherdict=corrupted_cipherdict)
+
+    for corrupted_kem_ciphertext in (b"", cipherdict["kem_ciphertext"][:-1], cipherdict["kem_ciphertext"] + b"\x00"):
+        corrupted_cipherdict = dict(cipherdict, kem_ciphertext=corrupted_kem_ciphertext)  # Invalid encapsulation length
+        with pytest.raises(DecryptionIntegrityError):
+            decryption_func(cipherdict=corrupted_cipherdict)
+
+    for plaintext in (b"", b"a", b"abcdef"):  # Short ciphertexts are checked for length before their tag
+        cipherdict_to_truncate = wacryptolib.cipher.encrypt_bytestring(
+            key_dict=public_key_dict, plaintext=plaintext, cipher_algo=cipher_algo
+        )
+        for truncation in (1, 2, 16):
+            corrupted_cipherdict = copy.deepcopy(cipherdict_to_truncate)
+            corrupted_cipherdict["ciphertext"] = corrupted_cipherdict["ciphertext"][:-truncation]  # Truncated tag
+            with pytest.raises(DecryptionIntegrityError):
+                decryption_func(cipherdict=corrupted_cipherdict)
+
+    # Unlike RSA_OAEP, indistinguishable from a corrupted ciphertext, so it's reported as an integrity error too
+    with pytest.raises(DecryptionIntegrityError, match="wrong ML-KEM private key or corrupted ciphertext"):
+        wacryptolib.cipher.decrypt_bytestring(
+            key_dict=dict(key=other_private_key), cipherdict=cipherdict, cipher_algo=cipher_algo
+        )
+
+    cipherdict_from_private_key = wacryptolib.cipher.encrypt_bytestring(  # Like RSA_OAEP, uses the public part
+        key_dict=private_key_dict, plaintext=b"abc", cipher_algo=cipher_algo
+    )
+    assert decryption_func(cipherdict=cipherdict_from_private_key) == b"abc"
+
+    with pytest.raises(DecryptionError, match="private ML-KEM key"):  # Public key can't decrypt
+        wacryptolib.cipher.decrypt_bytestring(key_dict=public_key_dict, cipherdict=cipherdict, cipher_algo=cipher_algo)
+
+    # Incompatible key families (RSA, ECC and ML-DSA) are rejected on both sides
+    incompatible_keypairs = [
+        wacryptolib.keygen.generate_keypair(key_algo="RSA_OAEP", serialize=False, key_length_bits=2048),
+        wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", serialize=False, curve="p256"),
+        wacryptolib.keygen.generate_keypair(key_algo="ML_DSA_65", serialize=False),
+    ]
+    for incompatible_keypair in incompatible_keypairs:
+        with pytest.raises(EncryptionError, match="Incompatible key type"):
+            wacryptolib.cipher.encrypt_bytestring(
+                key_dict=dict(key=incompatible_keypair["public_key"]), plaintext=b"abc", cipher_algo=cipher_algo
+            )
+        with pytest.raises(DecryptionError, match="Incompatible key type"):
+            wacryptolib.cipher.decrypt_bytestring(
+                key_dict=dict(key=incompatible_keypair["private_key"]), cipherdict=cipherdict, cipher_algo=cipher_algo
+            )
+
+
+@pytest.mark.parametrize("param_set_name", ["ML_KEM_512", "ML_KEM_1024"])
+def test_ml_kem_768_rejects_other_ml_kem_parameter_sets(param_set_name):
+    skip_if_fallback_backend("ML-KEM/ML-DSA")
+    from Crypto.PublicKey import MLKEM
+
+    private_key = MLKEM.generate(param_set=getattr(MLKEM.ParamSet, param_set_name))
+    public_key = private_key.public_key()
+
+    with pytest.raises(EncryptionError, match="Incompatible key type"):
+        wacryptolib.cipher.encrypt_bytestring(key_dict=dict(key=public_key), plaintext=b"abc", cipher_algo="ML_KEM_768")
+    with pytest.raises(DecryptionError, match="Incompatible key type"):
+        wacryptolib.cipher.decrypt_bytestring(
+            key_dict=dict(key=private_key), cipherdict=dict(kem_ciphertext=b"", ciphertext=b""), cipher_algo="ML_KEM_768"
+        )
+
+    for key in (public_key, private_key):
+        with pytest.raises(KeyLoadingError, match="Incompatible key type"):
+            load_asymmetric_key_from_pem_bytestring(key_pem=key.export_key(format="PEM"), key_algo="ML_KEM_768")

@@ -23,7 +23,6 @@ RSA_OAEP_CHUNKS_SIZE = 60
 
 
 def _get_cipher_algo_conf(cipher_algo):
-    cipher_algo = cipher_algo.upper()
     if cipher_algo not in CIPHER_ALGOS_REGISTRY:
         raise ValueError("Unknown cipher type '%s'" % cipher_algo)
 
@@ -52,7 +51,8 @@ def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) ->
     using the provided key dict (which must contain keys/initializers of proper types and lengths).
 
     :return: dictionary with encryption data"""
-    assert isinstance(plaintext, bytes), repr(plaintext)
+    assert isinstance(plaintext, bytes), type(plaintext)
+    cipher_algo = cipher_algo.upper()
     logger.debug("Encrypting %d bytes of plaintext with cipher algo %s", len(plaintext), cipher_algo)
     cipher_algo_conf = _get_cipher_algo_conf(cipher_algo=cipher_algo)
     encryption_function = cipher_algo_conf["encryption_function"]
@@ -77,6 +77,7 @@ def decrypt_bytestring(
     :param verify_integrity_tags: whether to check MAC tags of the ciphertext
 
     :return: dictionary with encryption data."""
+    cipher_algo = cipher_algo.upper()
     logger.debug(
         "Decrypting cipherdict with cipher algo %s, and verify_integrity_tags=%s", cipher_algo, verify_integrity_tags
     )
@@ -87,7 +88,7 @@ def decrypt_bytestring(
             key_dict=key_dict, cipherdict=cipherdict, verify_integrity_tags=verify_integrity_tags
         )
     except ValueError as exc:
-        if "MAC check failed" in str(exc):  # Hackish check for pycryptodome
+        if "MAC check failed" in str(exc):  # Hackish check for pycryptodome (ML_KEM_768 raises integrity errors itself)
             raise DecryptionIntegrityError("Failed %s decryption authentication (%s)" % (cipher_algo, exc)) from exc
         raise DecryptionError("Failed %s decryption (%s)" % (cipher_algo, exc)) from exc
     return plaintext
@@ -292,7 +293,7 @@ class EncryptionNodeBase:
         if not plaintext:
             return b""  # Shortcut
         ciphertext = self._cipher.encrypt(plaintext)
-        assert isinstance(ciphertext, bytes), repr(ciphertext)
+        assert isinstance(ciphertext, bytes), type(ciphertext)
 
         if finalize and hasattr(self._cipher, "finalize"):
             assert self._is_finished
@@ -405,7 +406,7 @@ class PayloadEncryptionPipeline:
         payload_cipher_layer_extracts = secrets["payload_cipher_layer_extracts"]
 
         for payload_cipher_layer_extract in payload_cipher_layer_extracts:
-            payload_cipher_algo = payload_cipher_layer_extract["cipher_algo"]
+            payload_cipher_algo = payload_cipher_layer_extract["cipher_algo"].upper()
             symkey = payload_cipher_layer_extract["symkey"]
             payload_hash_algos = payload_cipher_layer_extract["hash_algos"]
 
@@ -456,6 +457,51 @@ class PayloadEncryptionPipeline:
         return dict(plaintext_digests=plaintext_digests, ciphertext_integrity_tags=ciphertext_integrity_tags)
 
 
+def _check_ml_kem_key(key):
+    _crypto_backend.check_pq_key_algo(key, "ML_KEM_768")  # Also rejects weaker ML-KEM-512 keys
+
+
+def _encrypt_via_ml_kem_768(plaintext: bytes, key_dict: dict) -> dict:
+    """Encrypt a bytestring with ML-KEM-768 (post-quantum asymmetric algo), as a KEM+DEM
+    construction (HPKE Base mode with ChaCha20-Poly1305).
+
+    :param plaintext: the bytes to cipher
+    :param key_dict: dict with ML-KEM key object (only its public part is used, like for RSA_OAEP)
+
+    :return: a dict with fields `kem_ciphertext` (key encapsulation) and `ciphertext` (authenticated payload)"""
+    key = key_dict["key"]
+    _check_ml_kem_key(key)
+    if key.has_private():
+        key = key.public_key()  # Else HPKE would consider it as the receiver key of a decryption
+    kem_ciphertext, ciphertext = _crypto_backend.encrypt_via_ml_kem_768(plaintext, public_key=key)
+    return dict(kem_ciphertext=kem_ciphertext, ciphertext=ciphertext)
+
+
+def _decrypt_via_ml_kem_768(cipherdict: dict, key_dict: dict, verify_integrity_tags: bool = True) -> bytes:
+    """Decrypt a bytestring with ML-KEM-768 (post-quantum asymmetric algo).
+
+    :param cipherdict: dict with fields `kem_ciphertext` and `ciphertext`
+    :param key_dict: dict with PRIVATE ML-KEM key object
+    :param verify_integrity_tags: ignored, the AEAD tag is always verified
+
+    :return: the decrypted bytestring"""
+    key = key_dict["key"]
+    _check_ml_kem_key(key)
+    if not key.has_private():
+        raise ValueError("A private ML-KEM key is required for decryption")
+    try:
+        return _crypto_backend.decrypt_via_ml_kem_768(
+            cipherdict["kem_ciphertext"], cipherdict["ciphertext"], private_key=key
+        )
+    except ValueError as exc:
+        # With a KEM + AEAD, a wrong private key and a tampered ciphertext can NOT be told apart: ML-KEM's implicit
+        # rejection then yields a random key, and the AEAD tag check fails. So every HPKE failure (bad tag, too short
+        # ciphertext, malformed encapsulation...) is an integrity error, whatever pycryptodome's message
+        raise DecryptionIntegrityError(
+            "Failed ML_KEM_768 decryption authentication: wrong ML-KEM private key or corrupted ciphertext (%s)" % exc
+        ) from exc
+
+
 # This file is part of Witness Angel Cryptolib
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -487,6 +533,12 @@ CIPHER_ALGOS_REGISTRY = dict(
         "decryption_function": _decrypt_via_rsa_oaep,
         "encryption_node_class": None,
         "is_authenticated": False,
+    },
+    ML_KEM_768={
+        "encryption_function": _encrypt_via_ml_kem_768,
+        "decryption_function": _decrypt_via_ml_kem_768,
+        "encryption_node_class": None,
+        "is_authenticated": True,  # The DEM is an AEAD (ChaCha20-Poly1305)
     },
 )
 

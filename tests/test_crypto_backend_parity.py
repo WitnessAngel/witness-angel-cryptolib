@@ -45,6 +45,11 @@ def test_fallback_rejects_unsupported_parameters_explicitly():
         fallback.import_x25519_key_from_pem(NIST_P256_PUBLIC_KEY_PEM)
     with pytest.raises(NotImplementedError, match="HPKE.*requires pycryptodome"):
         fallback.encrypt_via_hpke(b"abc", fallback.generate_ecc_keypair("curve25519")[0], aead_id=0x0002)
+    nist_public_key, nist_private_key = fallback.generate_ecc_keypair("P-256")
+    with pytest.raises(NotImplementedError, match="HPKE with KEM over curve NIST256p requires pycryptodome"):
+        fallback.encrypt_via_hpke(b"abc", nist_public_key, aead_id=0x0003)
+    with pytest.raises(NotImplementedError, match="HPKE with KEM over curve NIST256p requires pycryptodome"):
+        fallback.decrypt_via_hpke(b"enc", b"ciphertext", nist_private_key, aead_id=0x0003)
 
     public_key, private_key = fallback.generate_ecc_keypair("curve25519")
     hasher = fallback.get_hasher_instance("SHA512")

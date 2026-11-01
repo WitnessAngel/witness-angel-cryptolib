@@ -90,5 +90,9 @@ class ValidationError(FunctionalError):
     pass  # Base for all errors related to corrupted data, and invalid config tree, and bad command parameters
 
 
+class AlgorithmNotSupported(ValidationError):
+    pass  # E.g. a trustee receiving an algo name it doesn't know (maybe one of a newer peer)
+
+
 class SchemaValidationError(ValidationError):
     pass  # When data doesn't respect json format, or an additional python-schema, or some additional security constraints

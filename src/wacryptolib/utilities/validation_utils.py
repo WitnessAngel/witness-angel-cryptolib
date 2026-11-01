@@ -23,6 +23,7 @@ def summarize_validation_error_lines(lines, max_lines=10, max_line_length=120) -
         (line if len(line) <= max_line_length else line[:head_length] + marker + line[-head_length:])
         for line in lines
     ]
+    max_lines = max(max_lines, 1)  # The skip marker line is the minimum, like the marker is for max_line_length
     if len(lines) > max_lines:
         head_count = max_lines // 3
         tail_count = max_lines - head_count - 1  # One line is taken by the skip marker

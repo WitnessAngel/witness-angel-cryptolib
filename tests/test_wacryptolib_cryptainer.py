@@ -2474,6 +2474,7 @@ def test_summarize_validation_error_lines_respects_max_lines():
     assert summary[3] == "[... 3 lines skipped]"
     assert summarize_validation_error_lines(lines[:10], max_lines=10).splitlines() == lines[:10]
     assert summarize_validation_error_lines(lines, max_lines=1) == "[... 12 lines skipped]"
+    assert summarize_validation_error_lines(lines, max_lines=0) == "[... 12 lines skipped]"
 
     long_line = "a" * 50 + "b" * 200 + "c" * 50
     summary = summarize_validation_error_lines([long_line], max_line_length=120)

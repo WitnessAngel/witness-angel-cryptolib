@@ -179,10 +179,20 @@ def _mgf1(seed, length):
     return pkcs1.mgf.mgf1(seed, length, hash_class=_RSA_HASH)
 
 
+class _RsaPublicKey(pkcs1.keys.RsaPublicKey):
+    def __eq__(self, other):  # By value, like pycryptodome's RsaKey (which is unhashable too)
+        return isinstance(other, _RsaPublicKey) and (self.n, self.e) == (other.n, other.e)
+
+
+class _RsaPrivateKey(pkcs1.keys.MultiPrimeRsaPrivateKey):
+    def __eq__(self, other):  # By value, like pycryptodome's RsaKey (which is unhashable too)
+        return isinstance(other, _RsaPrivateKey) and (self.n, self.e, self.primes) == (other.n, other.e, other.primes)
+
+
 def _get_rsa_public_key(key):
     """Like pycryptodome, accept private keys where public keys are needed."""
     if isinstance(key, pkcs1.keys.MultiPrimeRsaPrivateKey):
-        return pkcs1.keys.RsaPublicKey(key.n, key.e)
+        return _RsaPublicKey(key.n, key.e)
     return key
 
 
@@ -304,7 +314,7 @@ def verify_with_pss(message, signature, public_key):
 
 
 def rsa_key_class_fetcher():
-    return (pkcs1.keys.RsaPublicKey, pkcs1.keys.MultiPrimeRsaPrivateKey)
+    return (_RsaPublicKey, _RsaPrivateKey)
 
 
 def generate_rsa_keypair(key_length_bits):
@@ -315,8 +325,8 @@ def generate_rsa_keypair(key_length_bits):
         p, q = sorted(get_random_prime(bits, top_bits_mask=0b11) for bits in (key_length_bits // 2, (key_length_bits + 1) // 2))
         if p != q and math.gcd(e, (p - 1) * (q - 1)) == 1:
             break
-    private_key = pkcs1.keys.MultiPrimeRsaPrivateKey([p, q], e, blind=False)  # _rsa_private_operation() blinds itself
-    return pkcs1.keys.RsaPublicKey(private_key.n, e), private_key
+    private_key = _RsaPrivateKey([p, q], e, blind=False)  # _rsa_private_operation() blinds itself
+    return _RsaPublicKey(private_key.n, e), private_key
 
 
 def _check_rsa_public_numbers(n, e):
@@ -332,7 +342,7 @@ def _build_rsa_private_key(n, e, d, p, q):
     # Like pycryptodome's construct(); ponytail: 10 rounds only catch corrupted keys, not adversarially crafted ones
     if not (is_probable_prime(p, rounds=10) and is_probable_prime(q, rounds=10)):
         raise ValueError("Invalid RSA key components (composite factor)")
-    return pkcs1.keys.MultiPrimeRsaPrivateKey([p, q], e, blind=False)  # _rsa_private_operation() blinds itself
+    return _RsaPrivateKey([p, q], e, blind=False)  # _rsa_private_operation() blinds itself
 
 
 def _encode_rsa_pkcs1_private_key(private_key):
@@ -352,7 +362,7 @@ def _decode_rsa_pkcs1_private_key(der):
 def _decode_rsa_pkcs1_public_key(der):
     n, e = (_pem.decode_integer(x) for x in _pem.decode_sequence(der, 2))
     _check_rsa_public_numbers(n, e)
-    return pkcs1.keys.RsaPublicKey(n, e)
+    return _RsaPublicKey(n, e)
 
 
 _RSA_ALGORITHM_IDENTIFIER = _pem.encode_algorithm_identifier(_pem.OID_RSA, _pem.encode_null())

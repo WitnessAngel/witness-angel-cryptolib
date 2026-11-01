@@ -14,7 +14,7 @@ import pytest
 import _crypto_test_vectors as vectors
 from conftest import import_crypto_backend
 
-PLAINTEXT_LENGTHS = [0, 1, 15, 16, 17, 1000]
+PLAINTEXT_LENGTHS = [0, 1, 15, 16, 17, 63, 64, 65, 1000]  # Including AES and ChaCha20 block boundaries
 PASSPHRASES = [None, b"some passphrase", "sömé passphrâse"]
 
 

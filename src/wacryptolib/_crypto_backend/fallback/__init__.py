@@ -480,19 +480,21 @@ def generate_ecc_keypair(curve):
     return private_key.verifying_key, private_key
 
 
-def _check_hpke_aead_id(aead_id):
+def _check_hpke_parameters(key, aead_id):
+    if not isinstance(key, X25519Key):  # Pycryptodome also has DHKEM over NIST curves
+        raise _requires_pycryptodome("HPKE with KEM over curve %s" % key.curve.name)
     if aead_id != hpke_x25519_seal.AEAD_ID:
         raise _requires_pycryptodome("HPKE with AEAD %#06x" % aead_id)
 
 
 def encrypt_via_hpke(plaintext: bytes, public_key, aead_id) -> tuple[bytes, bytes]:
     """Returns (enc, ciphertext), enc being the KEM encapsulation (ephemeral public key for DHKEM)."""
-    _check_hpke_aead_id(aead_id)
+    _check_hpke_parameters(public_key, aead_id)
     return hpke_x25519_seal.seal(public_key.public_bytes, plaintext)
 
 
 def decrypt_via_hpke(enc: bytes, ciphertext: bytes, private_key, aead_id) -> bytes:
-    _check_hpke_aead_id(aead_id)
+    _check_hpke_parameters(private_key, aead_id)
     if not private_key.has_private():
         raise ValueError("HPKE decryption requires a private key")
     return hpke_x25519_seal.open(private_key.private_bytes, enc, ciphertext)

@@ -42,7 +42,7 @@ class DsaKey:
 
 
 def check_dsa_key(key):
-    """Same consistency checks as pycryptodome's DSA.construct(), raising ValueError."""
+    """Consistency checks of pycryptodome's DSA.construct(), plus y > 1 in the order-q subgroup, raising ValueError."""
     p, q, g, y, x = key.p, key.q, key.g, key.y, key.x
     valid = (
         q > 1 and p > q and (p - 1) % q == 0 and 1 < g < p and 1 < y < p

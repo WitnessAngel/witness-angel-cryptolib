@@ -343,7 +343,7 @@ class EncryptionNodeBase:
         if not plaintext:
             return b""  # Shortcut
         ciphertext = self._cipher.encrypt(plaintext)
-        assert isinstance(ciphertext, bytes), repr(ciphertext)
+        assert isinstance(ciphertext, bytes), type(ciphertext)
 
         if finalize and hasattr(self._cipher, "finalize"):
             assert self._is_finished

@@ -654,6 +654,16 @@ def test_encryption_rejects_cryptoconfs_that_decryption_would_refuse(tmp_path):
         )
     assert not list(tmp_path.iterdir())  # No orphan offloaded payload file
 
+    signature_cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)  # Signing used to replace it by the default keychain_uid
+    signature_cryptoconf["payload_cipher_layers"][0]["payload_ciphertext_signatures"][0]["keychain_uid"] = None
+    with pytest.raises(SchemaValidationError):
+        encrypt_payload_into_cryptainer(
+            payload=b"stuffs",
+            cryptoconf=signature_cryptoconf,
+            cryptainer_metadata=None,
+            keystore_pool=InMemoryKeystorePool(),
+        )
+
     with patch.object(Path, "unlink", side_effect=PermissionError("locked")):  # Cleanup failure is ignored
         with pytest.raises(SchemaValidationError):
             encrypt_payload_and_stream_cryptainer_to_filesystem(

@@ -343,6 +343,8 @@ def _build_rsa_private_key(n, e, d, p, q):
     # Degenerate primes must give a ValueError, not a ZeroDivisionError or an assertion failure in pkcs1
     if p < 2 or q < 2 or math.gcd(p, q) != 1 or p * q != n or e * d % math.lcm(p - 1, q - 1) != 1:
         raise ValueError("Invalid RSA key components")
+    if not 1 < d < n or math.gcd(n, d) != 1:  # Like pycryptodome's construct(), though d is recomputed on export
+        raise ValueError("Invalid RSA private exponent")
     # Like pycryptodome's construct(); ponytail: 10 rounds only catch corrupted keys, not adversarially crafted ones
     if not (is_probable_prime(p, rounds=10) and is_probable_prime(q, rounds=10)):
         raise ValueError("Invalid RSA key components (composite factor)")

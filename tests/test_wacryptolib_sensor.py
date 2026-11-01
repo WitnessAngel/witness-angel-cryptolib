@@ -636,6 +636,7 @@ def test_periodic_subprocess_stream_recorder_doesnt_log_command_line_on_terminat
         with pytest.raises(RuntimeError) as exc_info:
             recorder._do_stop_recording()
     assert "secretpwd" not in str(logger_mock.mock_calls)
+    assert exc_info.value.__context__ is None
     assert "secretpwd" not in "".join(traceback.format_exception(exc_info.value))
 
     # A failing force-termination must not get the TimeoutExpired chained either

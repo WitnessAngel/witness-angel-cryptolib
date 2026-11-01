@@ -542,9 +542,12 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
             self._kill_subprocess(self._subprocess)
             try:
                 self._subprocess.wait(timeout=5)
+                return
             except TimeoutExpired:  # Should never happen IRL...
-                # No chained exceptions, since their tracebacks would show the whole command line
-                raise RuntimeError("Force-termination of dangling %s subprocess failed!" % self.sensor_name) from None
+                pass
+            # Raised OUTSIDE the except block too, since "from None" would still keep the TimeoutExpired
+            # (and so the whole command line) as __context__
+            raise RuntimeError("Force-termination of dangling %s subprocess failed!" % self.sensor_name)
 
         finally:
             # Cleanup recording attributes

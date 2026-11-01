@@ -24,6 +24,7 @@ from wacryptolib.shared_secret import recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import load_from_json_bytes
 from wacryptolib.hash import hash_message
+from wacryptolib.exceptions import AlgorithmNotSupported
 
 
 class DecryptionErrorType:  # FIXME RENAME THIS
@@ -762,6 +763,13 @@ class CryptainerDecryptor(CryptainerBase):
                 operation_report.add_entry(
                     entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
                     entry_message="Private key not found (%s/%s)" % (cipher_algo, keychain_uid),
+                    entry_exception=exc,
+                )
+
+            except AlgorithmNotSupported as exc:  # E.g. an older remote trustee, only this branch is lost
+                operation_report.add_entry(
+                    entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                    entry_message="Algorithm not supported by trustee (%s)" % cipher_algo,
                     entry_exception=exc,
                 )
 

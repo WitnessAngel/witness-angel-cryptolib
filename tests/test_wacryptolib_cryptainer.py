@@ -76,6 +76,7 @@ from wacryptolib.exceptions import (
     KeystoreDoesNotExist,
     KeyLoadingError,
     CryptographyError,
+    AlgorithmNotSupported,
 )
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring
@@ -1063,6 +1064,36 @@ def _check_operation_report_entry(
             pass  # It was not the entry we searched for
 
     assert real_occurrence_count == occurrence_count
+
+
+def test_cryptainer_decryption_with_trustees_not_supporting_algo():
+    payload = b"some secret payload"
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload, cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
+    )
+
+    original_decrypt_with_private_key = TrusteeApi.decrypt_with_private_key
+    call_count = 0
+
+    def _decrypt_with_private_key_sometimes_unsupported(self, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count <= 2:  # Shamir shards are decrypted first, and 3 of the 5 are enough
+            raise AlgorithmNotSupported("Unsupported algorithm %r" % kwargs["cipher_algo"])
+        return original_decrypt_with_private_key(self, **kwargs)
+
+    with patch.object(TrusteeApi, "decrypt_with_private_key", _decrypt_with_private_key_sometimes_unsupported):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer=cryptainer)
+
+    assert result_payload == payload  # Only the branches of the unsupporting trustee were lost
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.WARNING,
+        entry_msg_match="Algorithm not supported by trustee",
+        exception_class=AlgorithmNotSupported,
+        occurrence_count=2,
+    )
 
 
 def test_cryptainer_decryption_rare_cipher_errors(tmp_path):

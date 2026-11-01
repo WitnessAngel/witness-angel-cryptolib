@@ -16,7 +16,7 @@ import secrets
 
 from .primes import get_random_prime, is_probable_prime
 
-L_TO_N = {2048: 224, 3072: 256}  # Same (L, N) pairs as pycryptodome's DSA.generate()
+L_TO_N = {2048: 224, 3072: 256}  # Pycryptodome's DSA.generate() also accepts 1024 bits, which keygen refuses anyway
 FIPS_186_3_L_N = {(1024, 160), (2048, 224), (2048, 256), (3072, 256)}  # Those pycryptodome's DSS signs and verifies with
 
 

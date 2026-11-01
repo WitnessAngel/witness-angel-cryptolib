@@ -189,7 +189,8 @@ class _RsaPublicKey(pkcs1.keys.RsaPublicKey):
 
 class _RsaPrivateKey(pkcs1.keys.MultiPrimeRsaPrivateKey):
     def __eq__(self, other):  # By value, like pycryptodome's RsaKey (which is unhashable too)
-        return isinstance(other, _RsaPrivateKey) and (self.n, self.e, self.primes) == (other.n, other.e, other.primes)
+        # n determines the primes, which may be stored in any order (OpenSSL puts p > q, unlike wacryptolib)
+        return isinstance(other, _RsaPrivateKey) and (self.n, self.e) == (other.n, other.e)
 
 
 def _get_rsa_public_key(key):

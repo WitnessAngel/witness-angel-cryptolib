@@ -15,6 +15,7 @@ from wacryptolib.exceptions import (
     SignatureVerificationError,
     DecryptionError,
     ValidationError,
+    AlgorithmNotSupported,
     AuthorizationError,
     KeyLoadingError,
 )
@@ -122,7 +123,7 @@ def test_trustee_api_workflow():
     assert decrypted == secret
 
     for wrong_cipher_algo in ("AES_CBC", "RSA_PSS", "UNEXISTING", None, 42):
-        with pytest.raises(ValidationError, match="Unsupported algorithm"):
+        with pytest.raises(AlgorithmNotSupported, match="Unsupported algorithm"):  # Specific subclass of ValidationError
             trustee_api.decrypt_with_private_key(
                 keychain_uid=keychain_uid, cipher_algo=wrong_cipher_algo, cipherdict=cipherdict
             )

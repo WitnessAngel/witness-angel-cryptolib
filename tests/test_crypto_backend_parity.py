@@ -411,6 +411,21 @@ def test_ecc_private_key_with_mismatched_public_point_is_rejected(backend):
         backend.import_ecc_key_from_pem(pkcs8_pem(ec_private_key_items(other_key)[3]))
 
 
+@pytest.mark.parametrize("scalar_length", [1, 31, 33])
+def test_ecc_private_key_with_wrong_scalar_length_is_rejected(backend, scalar_length):
+    from wacryptolib._crypto_backend.fallback import pem
+
+    algorithm_identifier = pem.encode_algorithm_identifier(pem.OID_EC_PUBLIC_KEY, bytes.fromhex("06082a8648ce3d030107"))
+
+    def pkcs8_pem(scalar):  # P-256 ECPrivateKey without optional fields
+        ec_private_key = pem.encode_sequence(pem.encode_integer(1), pem.encode_octet_string(scalar))
+        return pem.encode_pem(pem.encode_pkcs8(algorithm_identifier, ec_private_key), "PRIVATE KEY")
+
+    assert backend.import_ecc_key_from_pem(pkcs8_pem(bytes(31) + b"\x05"))  # Sanity check, leading zeros are fine
+    with pytest.raises(ValueError):
+        backend.import_ecc_key_from_pem(pkcs8_pem(bytes(scalar_length - 1) + b"\x05"))
+
+
 def test_fallback_rsa_private_operations_are_freshly_blinded_and_checked(monkeypatch):
     import pkcs1.keys
 

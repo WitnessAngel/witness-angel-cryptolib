@@ -310,6 +310,14 @@ def test_x25519_public_key_high_bit_is_ignored(backend):
     assert key == backend.import_ecc_key_from_pem(_x25519_public_key_pem(9))
 
 
+def test_rsa_keys_are_compared_by_value(backend):
+    public_key, private_key = backend.generate_rsa_keypair(2048)
+    for key in (public_key, private_key):
+        assert key == backend.import_rsa_key_from_pem(backend.export_rsa_key_to_pem(key))
+    assert public_key != private_key
+    assert public_key != backend.generate_rsa_keypair(2048)[0]
+
+
 def test_x25519_private_keys_clamping_to_the_same_scalar_are_equal(backend):
     import base64
 

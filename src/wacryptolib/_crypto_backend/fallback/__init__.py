@@ -83,6 +83,9 @@ IMPLEMENTED_HASH_ALGOS = ["SHA256", "SHA512", "SHA3_256", "SHA3_512"]
 
 
 def get_hasher_instance(hash_algo):
+    hash_algo = hash_algo.upper()
+    if hash_algo not in IMPLEMENTED_HASH_ALGOS:  # Else hashlib would accept other names than pycryptodome
+        raise ValueError("Unsupported hash algorithm %r" % hash_algo)
     return hashlib.new(hash_algo.lower())
 
 

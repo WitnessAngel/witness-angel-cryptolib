@@ -580,3 +580,9 @@ def test_fallback_rejects_misordered_or_repeated_pbkdf2_parameters(optional_item
     der = pem.encode_sequence(pem.encode_algorithm_identifier(pem.OID_PBES2, pbes2_params), pem.encode_octet_string(bytes(16)))
     with pytest.raises(ValueError, match="Malformed encrypted private key"):
         pem.decrypt_pkcs8(der, b"abc", decrypt_via_aes_cbc=fallback.decrypt_via_aes_cbc)
+
+
+@pytest.mark.parametrize("hash_algo", ["MD5", "sha1", "SHA-256", "BLAKE2B", "SHA384"])
+def test_unsupported_hash_algos_are_rejected(backend, hash_algo):
+    with pytest.raises(ValueError, match="Unsupported hash algorithm"):
+        backend.get_hasher_instance(hash_algo)

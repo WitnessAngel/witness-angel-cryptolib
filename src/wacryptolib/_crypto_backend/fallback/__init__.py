@@ -669,8 +669,11 @@ def _decode_nist_ecc_private_key(private_key_octets, parameters):
         lambda der: ecdsa.SigningKey.from_der(der, valid_curve_encodings=["named_curve"]),  # Like pycryptodome
         _pem.encode_pkcs8(algorithm_identifier, private_key_octets),
     )
+    _version, scalar_octets, *optional_items = _pem.decode_sequence(private_key_octets, 2, 4)
+    if len(_pem.decode_octet_string(scalar_octets)) != key.curve.baselen:  # ecdsa zero-pads it, pycryptodome rejects it
+        raise ValueError("Invalid ECC private key (wrong scalar length)")
     # ecdsa ignores the optional [1] publicKey of ECPrivateKey, which pycryptodome checks against the private scalar
-    for item in _pem.decode_sequence(private_key_octets, 2, 4)[2:]:
+    for item in optional_items:
         if item[0] == 0xA1:
             public_point = _pem.decode_bit_string(_pem.decode(item, 0xA1))
             embedded_key = _decode_nist_ecc_key(lambda point: ecdsa.VerifyingKey.from_string(point, key.curve), public_point)

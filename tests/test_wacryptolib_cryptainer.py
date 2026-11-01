@@ -2461,6 +2461,11 @@ def test_summarize_validation_error_lines_respects_max_lines():
     assert summarize_validation_error_lines(lines[:10], max_lines=10).splitlines() == lines[:10]
     assert summarize_validation_error_lines(lines, max_lines=1) == "[... 12 lines skipped]"
 
+    long_line = "a" * 50 + "b" * 200 + "c" * 50
+    summary = summarize_validation_error_lines([long_line], max_line_length=120)
+    assert len(summary) == 119 and summary.startswith("a" * 50) and summary.endswith("c" * 50)
+    assert summarize_validation_error_lines([long_line], max_line_length=1) == "a [...] c"
+
 
 def test_cryptainer_validation_error_messages_keep_deep_causes():
     cryptainer = encrypt_payload_into_cryptainer(

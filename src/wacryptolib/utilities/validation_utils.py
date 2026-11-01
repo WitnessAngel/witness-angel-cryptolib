@@ -16,8 +16,13 @@ def summarize_validation_error_lines(lines, max_lines=10, max_line_length=120) -
     (payloads, ciphertexts...). Each line keeps its head (usually a field name) and its tail (usually the reason).
 
     Same for the lines list: python-schema puts the outer context first and the innermost cause LAST."""
-    half = max_line_length // 2
-    lines = [(line if len(line) <= max_line_length else line[:half] + " [...] " + line[-half:]) for line in lines]
+    marker = " [...] "
+    # The marker counts in max_line_length, and both kept parts stay non-empty, since line[-0:] is the WHOLE line
+    head_length = max(max_line_length - len(marker), 2) // 2
+    lines = [
+        (line if len(line) <= max_line_length else line[:head_length] + marker + line[-head_length:])
+        for line in lines
+    ]
     if len(lines) > max_lines:
         head_count = max_lines // 3
         tail_count = max_lines - head_count - 1  # One line is taken by the skip marker

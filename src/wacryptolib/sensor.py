@@ -532,16 +532,19 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
                 self._quit_subprocess(self._subprocess)
                 self._subprocess.wait(timeout=10)  # Will raise on timeout!
                 # Note : stdout reader thread might still be running now to complete data encryption and cryptainer finalization!
+                return
             except Exception as exc:  # E.g. TimeoutExpired if wait() expired
                 # Not the exception itself, since TimeoutExpired contains the whole command line
                 logger.warning("Failed normal termination of %s subprocess: %r", self.sensor_name, type(exc))
-                logger.warning("Force-terminating dangling %s subprocess" % self.sensor_name)
-                self._kill_subprocess(self._subprocess)
-                try:
-                    self._subprocess.wait(timeout=5)
-                except TimeoutExpired:  # Should never happen IRL...
-                    # No chained exceptions, since their tracebacks would show the whole command line
-                    raise RuntimeError("Force-termination of dangling %s subprocess failed!" % self.sensor_name) from None
+            # Force-termination happens OUTSIDE the except block, else errors raised here would get
+            # the TimeoutExpired (and so the whole command line) chained as their context
+            logger.warning("Force-terminating dangling %s subprocess" % self.sensor_name)
+            self._kill_subprocess(self._subprocess)
+            try:
+                self._subprocess.wait(timeout=5)
+            except TimeoutExpired:  # Should never happen IRL...
+                # No chained exceptions, since their tracebacks would show the whole command line
+                raise RuntimeError("Force-termination of dangling %s subprocess failed!" % self.sensor_name) from None
 
         finally:
             # Cleanup recording attributes

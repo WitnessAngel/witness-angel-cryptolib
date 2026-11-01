@@ -7,7 +7,8 @@ import uuid
 from typing import Optional, Sequence
 
 from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS
-from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, KeyLoadingError, ValidationError
+from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, KeyLoadingError, ValidationError, \
+    AlgorithmNotSupported
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import KeystoreBase, generate_keypair_for_storage
 from wacryptolib.signature import sign_message, SUPPORTED_SIGNATURE_ALGOS
@@ -21,7 +22,7 @@ MAX_PAYLOAD_LENGTH_FOR_SIGNATURE = 128  # Max 2*SHA512 length
 def _normalize_algo(algo, supported_algos: list) -> str:
     """Return the uppercase form of an algo name received by a (remotely called) trustee method, or raise."""
     if not isinstance(algo, str) or algo.upper() not in supported_algos:  # SECURITY
-        raise ValidationError("Unsupported algorithm %r" % str(algo)[:32])  # Truncated, in case of a huge value
+        raise AlgorithmNotSupported("Unsupported algorithm %r" % str(algo)[:32])  # Truncated, in case of a huge value
     return algo.upper()
 
 
@@ -64,7 +65,7 @@ class TrusteeApi:  # TODO rename this?
         """
         try:
             key_algo = _normalize_algo(key_algo, SUPPORTED_ASYMMETRIC_KEY_ALGOS)
-        except ValidationError:
+        except AlgorithmNotSupported:
             if not must_exist:
                 raise  # Never autogenerate keys of unknown types
             # Unsupported here (e.g. an algo of a newer peer), so such a key can't exist: report it as missing
@@ -160,7 +161,7 @@ class TrusteeApi:  # TODO rename this?
             keychain_uid = keypair_identifier["keychain_uid"]
             try:
                 key_algo = _normalize_algo(keypair_identifier["key_algo"], SUPPORTED_ASYMMETRIC_KEY_ALGOS)
-            except ValidationError:  # Unsupported here (e.g. an algo of a newer peer), so no such key can exist
+            except AlgorithmNotSupported:  # Unsupported here (e.g. an algo of a newer peer), so no such key can exist
                 missing_private_key.append(keypair_identifier)
                 continue
 

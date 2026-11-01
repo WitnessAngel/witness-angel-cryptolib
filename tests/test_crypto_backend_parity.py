@@ -323,6 +323,15 @@ def test_rsa_keys_are_compared_by_value(backend):
     assert public_key != backend.generate_rsa_keypair(2048)[0]
 
 
+def test_rsa_private_keys_with_swapped_primes_are_equal(backend):
+    RSA = pytest.importorskip("Crypto.PublicKey.RSA")
+
+    key = RSA.generate(2048)
+    swapped_key = RSA.construct((key.n, key.e, key.d, key.q, key.p))
+    imported_key = backend.import_rsa_key_from_pem(key.export_key(pkcs=8))
+    assert imported_key == backend.import_rsa_key_from_pem(swapped_key.export_key(pkcs=8))
+
+
 def test_x25519_private_keys_clamping_to_the_same_scalar_are_equal(backend):
     import base64
 

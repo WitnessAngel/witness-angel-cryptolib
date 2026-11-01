@@ -764,7 +764,7 @@ class CryptainerDecryptor(CryptainerBase):
                     entry_exception=exc,
                 )
 
-            except AlgorithmNotSupported as exc:  # E.g. an older remote trustee, only this branch is lost
+            except AlgorithmNotSupported as exc:  # E.g. a trustee not knowing this newer algo, only this branch is lost
                 operation_report.add_entry(
                     entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
                     entry_message="Algorithm not supported by trustee (%s)" % cipher_algo,

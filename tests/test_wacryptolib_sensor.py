@@ -4,6 +4,7 @@
 
 import os
 import random
+import sys
 import time
 from unittest import mock
 from concurrent.futures import ThreadPoolExecutor
@@ -589,6 +590,28 @@ def test_periodic_subprocess_stream_recorder_doesnt_log_command_arguments(tmp_pa
         recorder.join()
     log_calls = str(logger_mock.mock_calls)
     assert "'ABCDE', 1)" in log_calls
+    assert "secretpwd" not in log_calls
+
+
+def test_periodic_subprocess_stream_recorder_masks_credentials_in_stderr(tmp_path):
+    cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=True)
+
+    recorder = TestStreamRecorderForTesting(
+        executable_command_line=[
+            sys.executable,
+            "-c",
+            "import sys; print(\"Input #0, rtsp, from 'rtsp://admin:secretpwd@camera/stream':\", file=sys.stderr)",
+        ],
+        interval_s=5,
+        cryptainer_storage=cryptainer_storage,
+    )
+    with mock.patch("wacryptolib.sensor.logger") as logger_mock:
+        recorder.start()
+        time.sleep(1)
+        recorder.stop()
+        recorder.join()
+    log_calls = str(logger_mock.mock_calls)
+    assert "rtsp://***@camera/stream" in log_calls
     assert "secretpwd" not in log_calls
 
 

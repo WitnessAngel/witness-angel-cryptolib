@@ -198,6 +198,7 @@ LEGACY_PEM_EXPORT_PARAMS = {
 }
 
 
+@pytest.mark.requires_pycryptodome
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
 def test_legacy_passphrase_protected_pem_still_loadable(key_algo):
     skip_if_fallback_backend("legacy PEM generation via pycryptodome")
@@ -225,6 +226,7 @@ def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
     assert b"\x60\x86\x48\x01\x65\x03\x04\x01\x2a" in der  # OID of aes256-CBC
 
 
+@pytest.mark.requires_pycryptodome
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
 def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
     skip_if_fallback_backend("PEM decryption helper of the pycryptodome backend")
@@ -290,6 +292,7 @@ def test_crafted_pem_iteration_count_is_bounded(iteration_count):
         load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo="ECC_DSS", passphrase=b"abc")
 
 
+@pytest.mark.requires_pycryptodome
 def test_crafted_pem_with_optional_key_length_uses_fast_path():
     skip_if_fallback_backend("PEM decryption helper of the pycryptodome backend")
     from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
@@ -308,6 +311,7 @@ def test_crafted_pem_with_malformed_cipher_params_is_rejected(crafting_params):
         load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo="ECC_DSS", passphrase=b"abc")
 
 
+@pytest.mark.requires_pycryptodome
 def test_crafted_pem_with_empty_prf_falls_back_to_pycryptodome():
     skip_if_fallback_backend("PEM decryption helper of the pycryptodome backend")
     from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem

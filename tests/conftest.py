@@ -45,7 +45,7 @@ def import_crypto_backend(name):
         pytest.skip("%s crypto backend is unavailable (missing %s)" % (name, getattr(exc, "name", None) or exc))
 
 
-@pytest.fixture(params=["pycryptodome", "fallback"])
+@pytest.fixture(params=[pytest.param("pycryptodome", marks=pytest.mark.requires_pycryptodome), "fallback"])
 def backend(request):
     return import_crypto_backend(request.param)
 

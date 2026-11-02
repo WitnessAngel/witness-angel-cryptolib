@@ -58,6 +58,7 @@ def _flip_last_bit(data):
     return data[:-1] + bytes([data[-1] ^ 1])
 
 
+@pytest.mark.requires_pycryptodome
 @pytest.mark.parametrize("length", PLAINTEXT_LENGTHS)
 def test_symmetric_ciphers(both_backends, length):
     native, fallback = both_backends
@@ -91,6 +92,7 @@ def _feed_in_random_chunks(cipher, data, block_size=1):
     return b"".join(cipher.encrypt(chunk) for chunk in chunks)
 
 
+@pytest.mark.requires_pycryptodome
 @pytest.mark.parametrize("length", PLAINTEXT_LENGTHS)
 def test_streaming_encryption(both_backends, length):
     from wacryptolib.utilities import pad_bytes_pkcs7
@@ -113,6 +115,7 @@ def test_streaming_encryption(both_backends, length):
             assert (ciphertext, cipher.digest()) == getattr(destination, encrypt_name)(plaintext, key=key, nonce=nonce)
 
 
+@pytest.mark.requires_pycryptodome
 def test_rsa_oaep(both_backends, keypairs):
     for index, (source, destination) in enumerate(_directions(both_backends)):
         public_key, private_key = keypairs[(index, "RSA")]
@@ -125,6 +128,7 @@ def test_rsa_oaep(both_backends, keypairs):
             source.decrypt_via_rsa_oaep([_flip_last_bit(ciphertext_chunks[0])], private_key)
 
 
+@pytest.mark.requires_pycryptodome
 def test_rsa_oaep_with_cryptography_as_third_reference(both_backends):
     rsa = pytest.importorskip("cryptography.hazmat.primitives.asymmetric.rsa")
     from cryptography.hazmat.primitives import hashes, serialization
@@ -145,6 +149,7 @@ def test_rsa_oaep_with_cryptography_as_third_reference(both_backends):
         assert private_key.decrypt(ciphertext, oaep_padding) == b"abc"
 
 
+@pytest.mark.requires_pycryptodome
 def test_hpke(both_backends, keypairs):
     aead_id = 0x0003  # ChaCha20-Poly1305, used by ECIES_X25519
     for index, (source, destination) in enumerate(_directions(both_backends)):
@@ -158,6 +163,7 @@ def test_hpke(both_backends, keypairs):
                 source.decrypt_via_hpke(enc, _flip_last_bit(ciphertext), private_key, aead_id=aead_id)
 
 
+@pytest.mark.requires_pycryptodome
 @pytest.mark.parametrize("passphrase", PASSPHRASES)
 @pytest.mark.parametrize("key_type", ["RSA", "DSA", "ECC", "X25519"])
 def test_pem_keys(both_backends, keypairs, key_type, passphrase):
@@ -203,6 +209,7 @@ def test_pycryptodome_pem_fixtures(backend, key_type):
                 import_(fixture[field], passphrase=b"wrong passphrase")
 
 
+@pytest.mark.requires_pycryptodome
 @pytest.mark.parametrize("key_type", ["RSA", "DSA", "ECC"])
 def test_signatures(both_backends, keypairs, key_type):
     sign_name, verify_name = ("sign_with_pss", "verify_with_pss") if key_type == "RSA" else ("sign_with_dss", "verify_with_dss")
@@ -218,6 +225,7 @@ def test_signatures(both_backends, keypairs, key_type):
             verify(_hash_sha512(destination, b"other message"), signature, transferred_public_key)
 
 
+@pytest.mark.requires_pycryptodome
 def test_both_backends_are_tested_in_main_environment():
     # Fails loudly, rather than letting all interop tests be skipped, when pycryptodome is installed
     pytest.importorskip("Crypto.Cipher.AES")

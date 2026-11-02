@@ -9,7 +9,6 @@ from threading import Lock
 
 import pytest
 import pytz
-from Crypto.Hash.MD5 import block_size
 
 from wacryptolib._crypto_backend import get_random_bytes
 from wacryptolib.utilities import (

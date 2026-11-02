@@ -297,25 +297,26 @@ def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
     _validate_data_tree(data_tree=cryptoconf, validation_schema=schema)
 
 
-def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False):
+def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False, require_inline_payload=False):
     """Validate the format of a cryptainer.
 
     :param jsonschema_mode: If True, the cryptainer must have been loaded as raw json
            (with $binary, $numberInt and such) and will be checked using a jsonschema validator.
+    :param require_inline_payload: (python mode only) if True, the payload ciphertext must be present, inline, as bytes.
+           Else it may be absent or offloaded (include_payload_ciphertext=False), and unfinished
+           cryptainers (state STARTED) are tolerated. The payload value is never validated nor shown in errors.
     """
+    if jsonschema_mode:
+        _validate_data_tree(data_tree=cryptainer, validation_schema=CRYPTAINER_SCHEMA_JSON)
+        return
 
-    schema = CRYPTAINER_SCHEMA_JSON if jsonschema_mode else CRYPTAINER_SCHEMA_PYTHON
-    _validate_data_tree(data_tree=cryptainer, validation_schema=schema)
-
-
-def _check_cryptainer_structure(cryptainer: dict, require_inline_payload: bool):
-    """Validate a python cryptainer, but without its payload ciphertext, which may be absent
-    (include_payload_ciphertext=False), and must not end up in (huge) python-schema error messages.
-
-    :param require_inline_payload: if True, the payload ciphertext must be present, inline, as bytes
-    """
-    if not isinstance(cryptainer, dict):
+    if not isinstance(cryptainer, dict):  # Not an assert, which vanishes under "python -O"
         raise SchemaValidationError("Cryptainer must be a dict, not %s" % type(cryptainer).__name__)
+
+    cryptainer_format = cryptainer.get("cryptainer_format")
+    if cryptainer_format != CRYPTAINER_FORMAT:
+        raise ValueError("Unknown cryptainer format %.100r" % (cryptainer_format,))
+
     payload_ciphertext_struct = cryptainer.get("payload_ciphertext_struct")
     if require_inline_payload:
         if not (
@@ -352,7 +353,7 @@ def _check_cryptainer_structure(cryptainer: dict, require_inline_payload: bool):
             for layer in payload_cipher_layers
         ]
 
-    check_cryptainer_sanity(cryptainer)
+    _validate_data_tree(data_tree=cryptainer, validation_schema=CRYPTAINER_SCHEMA_PYTHON)
 
 
 def check_sigconf_sanity(cryptoconf: dict, jsonschema_mode=False):

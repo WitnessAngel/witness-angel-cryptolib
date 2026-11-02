@@ -81,13 +81,13 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
 
     :return: dict with a tuple of the cipher key and the symkey/shard by trustee id.
     """
-    from wacryptolib.cryptainer import _check_cryptainer_structure  # LAZY import, _validation is loaded after us
+    from wacryptolib.cryptainer import check_cryptainer_sanity  # LAZY import, _validation is loaded after us
 
     cryptainers_with_names = list(cryptainers_with_names)  # Might be a one-shot iterable, and we loop twice
     for cryptainer_name, cryptainer in cryptainers_with_names:
         # Else e.g. empty key_cipher_layers would crash below; payload ciphertext is not needed here
         try:
-            _check_cryptainer_structure(cryptainer, require_inline_payload=False)
+            check_cryptainer_sanity(cryptainer, require_inline_payload=False)
         except SchemaValidationError as exc:  # Tell which cryptainer of the batch is faulty
             raise SchemaValidationError("Invalid cryptainer %s: %s" % (cryptainer_name, exc)) from exc
 

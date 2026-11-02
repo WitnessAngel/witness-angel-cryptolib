@@ -627,7 +627,7 @@ def test_get_trustee_id():
 def test_misconfigured_cryptoconfs(cryptoconf):
     keystore_pool = InMemoryKeystorePool()
 
-    with pytest.raises(SchemaValidationError, match="Empty .* list|threshold"):
+    with pytest.raises(SchemaValidationError, match="should evaluate to True|Empty .* list|threshold"):
         encrypt_payload_into_cryptainer(
             payload=b"stuffs",
             cryptoconf=cryptoconf,
@@ -2737,14 +2737,11 @@ def test_retrocompatibility_for_payload_ciphertext_signatures_field_with_both_na
     assert get_payload_ciphertext_signatures(cryptoconf["payload_cipher_layers"][0]) == payload_ciphertext_signatures
     assert "Ciphertext signatures: None" not in get_cryptoconf_summary(cryptoconf)
 
-    cryptainer = encrypt_payload_into_cryptainer(
-        payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
-    )
-    payload_cipher_layer = cryptainer["payload_cipher_layers"][0]
-    assert "payload_signatures" not in payload_cipher_layer
-    assert len(payload_cipher_layer["payload_ciphertext_signatures"]) == len(payload_ciphertext_signatures)
-    assert payload_cipher_layer["payload_ciphertext_signatures"][0]["payload_signature_struct"]  # Really signed
-    check_cryptainer_sanity(cryptainer)
+    # Encryption validates the cryptoconf upfront, so it refuses such ambiguous layers too
+    with pytest.raises(SchemaValidationError):
+        encrypt_payload_into_cryptainer(
+            payload=b"stuffs", cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
+        )
 
 
 @pytest.mark.parametrize(
@@ -2898,3 +2895,14 @@ def test_save_and_load_relaxed_extjson_cryptainer(tmp_path):
     assert not operation_report.has_errors()
 
 
+
+
+def test_encryptor_validates_cryptoconf_upfront():
+    from wacryptolib.cryptainer import CryptainerEncryptor
+    cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    cryptoconf["payload_cipher_layers"] = []
+    encryptor = CryptainerEncryptor(
+        signature_policy=SIGNATURE_POLICIES.SKIP_SIGNING, keystore_pool=InMemoryKeystorePool()
+    )
+    with pytest.raises(SchemaValidationError):
+        encryptor.encrypt_data(b"stuffs", cryptoconf=cryptoconf)

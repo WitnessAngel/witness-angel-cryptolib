@@ -18,14 +18,14 @@ MICROPYTHON_DIR = Path(__file__).resolve().parent
 REPO_DIR = MICROPYTHON_DIR.parent
 LIB_DIR = MICROPYTHON_DIR / "lib"
 
-PACKAGES = ["extjson", "pkcs1", "pyaes", "rsa", "pyasn1"]  # pyasn1 is required by rsa
+PACKAGES = ["extjson", "pkcs1", "pyaes"]
 
 MIP_INDEX = "https://micropython.org/pi/v2"
 MICROPYTHON_LIB_PACKAGES = ["__future__", "copy", "datetime", "hashlib", "hmac", "logging", "threading", "operator", "functools"]
 
 SHARED_MODULES = [REPO_DIR / "src/wacryptolib/utilities/data_utils.py",
-                  REPO_DIR / "src/wacryptolib/_crypto_backend/vendor/chacha20_poly1305.py",
-                  REPO_DIR / "src/wacryptolib/_crypto_backend/hpke_x25519_seal.py"]
+                  REPO_DIR / "src/wacryptolib/_crypto_backend/fallback/chacha20_poly1305.py",
+                  REPO_DIR / "src/wacryptolib/_crypto_backend/fallback/hpke_x25519_seal.py"]
 
 
 def install_from_mip_index(name):

@@ -6,6 +6,8 @@ import random
 
 import pytest
 
+from conftest import import_crypto_backend
+
 from wacryptolib._crypto_backend import get_random_bytes, IMPLEMENTED_HASH_ALGOS
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS, hash_message
 
@@ -26,7 +28,9 @@ def test_hash_message():
         hash_message(bytestring, hash_algo="XYZ")
 
 
+@pytest.mark.requires_pycryptodome
 def test_compatibility_with_pycryptodome_hashers():
+    import_crypto_backend("pycryptodome")  # Skips when pycryptodome or its native code is missing
 
     assert len(SUPPORTED_HASH_ALGOS) == 4  # For now on PC OS
 

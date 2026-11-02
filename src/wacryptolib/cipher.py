@@ -7,7 +7,6 @@ from typing import BinaryIO
 
 
 from wacryptolib import _crypto_backend
-from wacryptolib._crypto_backend import hpke_x25519_seal
 from wacryptolib import utilities
 from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionIntegrityError, OperationNotSupported
 from wacryptolib.keygen import (
@@ -256,13 +255,11 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify_integrity_tag
 # table-based pure python AES; RFC 9180 Appendix A.2 has a test vector for exactly this suite (none for X25519 +
 # AES-256-GCM); security margins are equal and hardware AES speed is irrelevant for tiny key structs.
 # All these parameters are fixed by the algorithm name: changing any of them requires a new name.
-# Single definition, shared with the pure python sealing (= Crypto.Protocol.HPKE.AEAD.CHACHA20_POLY1305)
-ECIES_X25519_HPKE_AEAD_ID = hpke_x25519_seal.AEAD_ID
+# Same value as in the pure python sealing (= Crypto.Protocol.HPKE.AEAD.CHACHA20_POLY1305)
+ECIES_X25519_HPKE_AEAD_ID = 0x0003  # HPKE AEAD id of ChaCha20-Poly1305 (RFC 9180)
 
 
-def _check_x25519_key(key, accept_raw_public_key=False):
-    if accept_raw_public_key and isinstance(key, _crypto_backend.X25519RawPublicKey):
-        return  # Raw public key, as loaded by the fallback backend
+def _check_x25519_key(key):
     if not isinstance(key, _crypto_backend.ecc_key_class_fetcher()):
         raise ValueError("ECIES_X25519 requires an X25519 key, not %r" % type(key))
     if key.curve != "Curve25519":
@@ -277,7 +274,7 @@ def _encrypt_via_ecies_x25519(plaintext: bytes, key_dict: dict) -> dict:
 
     :return: a dict with fields `kem_ciphertext` (ephemeral public key) and `ciphertext` (with its MAC tag)."""
     key = key_dict["key"]
-    _check_x25519_key(key, accept_raw_public_key=True)
+    _check_x25519_key(key)
     kem_ciphertext, ciphertext = _crypto_backend.encrypt_via_hpke(
         plaintext, public_key=key, aead_id=ECIES_X25519_HPKE_AEAD_ID)
     return dict(kem_ciphertext=kem_ciphertext, ciphertext=ciphertext)

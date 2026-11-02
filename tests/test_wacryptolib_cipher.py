@@ -10,14 +10,13 @@ import random
 import pytest
 
 import wacryptolib
-from wacryptolib._crypto_backend import get_random_bytes, generate_rsa_keypair, generate_ecc_keypair, X25519RawPublicKey
+from wacryptolib._crypto_backend import get_random_bytes, generate_rsa_keypair, generate_ecc_keypair
 from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipeline
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
 from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError, OperationNotSupported
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS, hash_message
 
-from _test_mockups import skip_if_fallback_backend
 
 
 def _get_binary_content():
@@ -156,7 +155,6 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
 
 @pytest.mark.parametrize("plaintext_length", [0, 10, 61, 500])
 def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
-    skip_if_fallback_backend("ECC")
     cipher_algo = "ECIES_X25519"
     keypair = wacryptolib.keygen.generate_keypair(key_algo=cipher_algo, serialize=False)
     encrypt = functools.partial(wacryptolib.cipher.encrypt_bytestring, cipher_algo=cipher_algo)
@@ -198,7 +196,7 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
         decrypt(key_dict=dict(key=other_private_key), cipherdict=cipherdict)
     assert not isinstance(exc_info.value, DecryptionIntegrityError)  # Not reported as tampering
 
-    with pytest.raises(EncryptionError, match="X25519 key, not <class 'bytes'>"):  # E.g. a symmetric key mistaken for a public key
+    with pytest.raises(EncryptionError, match="X25519 key"):  # E.g. a symmetric key mistaken for a public key
         encrypt(key_dict=dict(key=get_random_bytes(32)), plaintext=binary_content)
     with pytest.raises(EncryptionError, match="Failed ECIES_X25519 encryption"):  # Algo name normalized to uppercase
         wacryptolib.cipher.encrypt_bytestring(
@@ -206,14 +204,11 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
         )
     with pytest.raises(DecryptionError, match="Failed ECIES_X25519 decryption"):
         wacryptolib.cipher.decrypt_bytestring(
-            key_dict=dict(key=keypair["public_key"].export_key(format="raw")), cipherdict=cipherdict, cipher_algo="ecies_x25519"
+            key_dict=dict(key=get_random_bytes(32)), cipherdict=cipherdict, cipher_algo="ecies_x25519"
         )
 
-    with pytest.raises(EncryptionError, match="fallback backend"):  # Raw public keys are a fallback backend thing
-        encrypt(key_dict=dict(key=X25519RawPublicKey(keypair["public_key"].export_key(format="raw"))), plaintext=binary_content)
-
-    with pytest.raises(DecryptionError, match="X25519 key"):  # Raw keys are only public ones
-        decrypt(key_dict=dict(key=keypair["public_key"].export_key(format="raw")), cipherdict=cipherdict)
+    with pytest.raises(DecryptionError, match="X25519 key"):
+        decrypt(key_dict=dict(key=get_random_bytes(32)), cipherdict=cipherdict)
 
     rsa_public_key, rsa_private_key = generate_rsa_keypair(2048)
     p256_keypair = wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", serialize=False, curve="p256")
@@ -221,7 +216,7 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
         (rsa_public_key, rsa_private_key),
         (p256_keypair["public_key"], p256_keypair["private_key"]),
     ]:
-        with pytest.raises(EncryptionError, match="X25519 key, not (<class 'Crypto.PublicKey.RSA.RsaKey'>|a NIST P-256 one)"):
+        with pytest.raises(EncryptionError, match="X25519 key, not (<class '.*Rsa.*Key'>|a NIST.*256.* one)"):
             encrypt(key_dict=dict(key=wrong_public_key), plaintext=binary_content)
         with pytest.raises(DecryptionError, match="X25519 key"):
             decrypt(key_dict=dict(key=wrong_private_key), cipherdict=cipherdict)

@@ -28,8 +28,16 @@ from _test_mockups import skip_if_fallback_backend
 
 
 def _check_is_asymmetric_key_object(key):
-    # Different behaviors for pycroptodome vs pkcs1 packages:
-    assert hasattr(key, "export_key") or hasattr(key, "save_pkcs1")
+    from wacryptolib import _crypto_backend
+
+    assert isinstance(  # isinstance() accepts nested tuples, as returned by some fetchers
+        key,
+        (
+            _crypto_backend.rsa_key_class_fetcher(),
+            _crypto_backend.dsa_key_class_fetcher(),
+            _crypto_backend.ecc_key_class_fetcher(),
+        ),
+    )
 
 
 def test_passphrase_encoding():
@@ -42,8 +50,6 @@ def test_passphrase_encoding():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_keypair_unicity(key_algo):
-    if key_algo in ("ECC_DSS", "ECIES_X25519"):
-        skip_if_fallback_backend("ECC")
     # We must reuse test-specific caching of asymmetric keypairs, for this test
     wacryptolib.keygen.__original_do_generate_keypair_patcher.stop()
     assert wacryptolib.keygen._do_generate_keypair == wacryptolib.keygen.__original_do_generate_keypair
@@ -106,7 +112,6 @@ def test_dsa_keypair_generation():
 
 
 def test_ecc_keypair_generation():
-    skip_if_fallback_backend("ECC")
     with pytest.raises(ValueError, match="Unexisting ECC curve"):
         wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", curve="unexisting")
 
@@ -122,8 +127,6 @@ def test_ecc_keypair_generation():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_load_asymmetric_key_from_pem_bytestring(key_algo):
-    if key_algo in ("ECC_DSS", "ECIES_X25519"):
-        skip_if_fallback_backend("ECC")
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo)
 
     for field in ["private_key", "public_key"]:
@@ -135,7 +138,6 @@ def test_load_asymmetric_key_from_pem_bytestring(key_algo):
 
 
 def test_load_ecies_x25519_key_rejects_other_curves():
-    skip_if_fallback_backend("ECC")
     keypair = wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", curve="p256")
     for field in ["private_key", "public_key"]:
         with pytest.raises(KeyLoadingError, match="not a NIST P-256 one"):
@@ -144,8 +146,6 @@ def test_load_ecies_x25519_key_rejects_other_curves():
 
 @pytest.mark.parametrize("key_algo", SUPPORTED_ASYMMETRIC_KEY_ALGOS)
 def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
-    if key_algo in ("ECC_DSS", "ECIES_X25519", "DSA_DSS"):
-        skip_if_fallback_backend("ECC, and DES3 for DSA key protection,")
     # Both Unicode and Bytes are supported
     passphrases = ["Thïs is a passphrâse", b"aoh18726"]
 
@@ -165,7 +165,7 @@ def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
         )
         _check_is_asymmetric_key_object(private_key)
 
-        error_matcher = "key format is not supported|Invalid DER encoding|Wrong passphrase"
+        error_matcher = "key format is not supported|Invalid DER encoding|Wrong passphrase|requires a passphrase"
 
         with pytest.raises(KeyLoadingError, match=error_matcher):
             load_asymmetric_key_from_pem_bytestring(
@@ -198,6 +198,7 @@ LEGACY_PEM_EXPORT_PARAMS = {
 }
 
 
+@pytest.mark.requires_pycryptodome
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
 def test_legacy_passphrase_protected_pem_still_loadable(key_algo):
     skip_if_fallback_backend("legacy PEM generation via pycryptodome")
@@ -214,7 +215,6 @@ def test_legacy_passphrase_protected_pem_still_loadable(key_algo):
 
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
 def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
-    skip_if_fallback_backend("PBKDF2 parameters inspection")
     import base64
 
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, passphrase="abc")
@@ -226,9 +226,10 @@ def test_new_passphrase_protected_pem_uses_strong_kdf(key_algo):
     assert b"\x60\x86\x48\x01\x65\x03\x04\x01\x2a" in der  # OID of aes256-CBC
 
 
+@pytest.mark.requires_pycryptodome
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
 def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
-    skip_if_fallback_backend("passphrase-protected PEM export")
+    skip_if_fallback_backend("PEM decryption helper of the pycryptodome backend")
     from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
 
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
@@ -244,7 +245,6 @@ def test_passphrase_protected_pem_roundtrip_is_exact_and_fast(key_algo):
 
 @pytest.mark.parametrize("key_algo", ["RSA_OAEP", "DSA_DSS", "ECC_DSS"])
 def test_public_key_export_with_passphrase_raises(key_algo):
-    skip_if_fallback_backend("passphrase-protected PEM export")
     keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo, serialize=False)
     with pytest.raises(ValueError, match="Public keys"):
         wacryptolib.keygen._serialize_key_object_to_pem_bytestring(
@@ -261,41 +261,40 @@ def _craft_pbes2_pem(
     iv=b"\x00" * 16,
     ciphertext=None,
 ):
-    """Build a PBES2 (PBKDF2-HMAC-SHA256 + AES256-CBC) encrypted PEM, with tamperable fields."""
+    """Build a PBES2 (PBKDF2-HMAC-SHA256 + AES256-CBC) encrypted PEM, with tamperable fields.
+
+    Uses the pure-python DER codec, so that crafted PEMs can be tested without pycryptodome too."""
     import hashlib
-    from Crypto.Cipher import AES
-    from Crypto.IO import PEM
-    from Crypto.Util.Padding import pad
-    from Crypto.Util.asn1 import DerSequence, DerObjectId, DerOctetString, DerNull
+    from wacryptolib._crypto_backend import encrypt_via_aes_cbc
+    from wacryptolib._crypto_backend.fallback import pem
 
     salt = b"\x01" * 16
     if ciphertext is None:
         key = hashlib.pbkdf2_hmac("sha256", passphrase, salt, iteration_count, dklen=32)
-        ciphertext = AES.new(key, AES.MODE_CBC, iv=iv).encrypt(pad(plaintext, 16))
-    prf = DerSequence([DerObjectId("1.2.840.113549.2.9"), DerNull()]) if prf is None else prf
-    pbkdf2_params = [DerOctetString(salt), iteration_count] + ([key_length] if key_length else []) + [prf]
-    pbes2_params = DerSequence(
-        [
-            DerSequence([DerObjectId("1.2.840.113549.1.5.12"), DerSequence(pbkdf2_params)]),
-            DerSequence([DerObjectId("2.16.840.1.101.3.4.1.42"), DerOctetString(iv)]),
-        ]
+        ciphertext = encrypt_via_aes_cbc(plaintext, key=key, iv=iv)
+    prf = pem.encode_algorithm_identifier(pem.OID_HMAC_SHA256, pem.encode_null()) if prf is None else prf
+    pbkdf2_params = [pem.encode_octet_string(salt), pem.encode_integer(iteration_count)]
+    pbkdf2_params += ([pem.encode_integer(key_length)] if key_length else []) + [prf]
+    pbes2_params = pem.encode_sequence(
+        pem.encode_algorithm_identifier(pem.OID_PBKDF2, pem.encode_sequence(*pbkdf2_params)),
+        pem.encode_algorithm_identifier(pem.OID_AES256_CBC, pem.encode_octet_string(iv)),
     )
-    der = DerSequence(
-        [DerSequence([DerObjectId("1.2.840.113549.1.5.13"), pbes2_params]), DerOctetString(ciphertext)]
-    ).encode()
-    return PEM.encode(der, "ENCRYPTED PRIVATE KEY").encode("ascii")
+    der = pem.encode_sequence(
+        pem.encode_algorithm_identifier(pem.OID_PBES2, pbes2_params), pem.encode_octet_string(ciphertext)
+    )
+    return pem.encode_pem(der, "ENCRYPTED PRIVATE KEY")
 
 
 @pytest.mark.parametrize("iteration_count", [0, 10**8, 2**40])
 def test_crafted_pem_iteration_count_is_bounded(iteration_count):
-    skip_if_fallback_backend("passphrase-protected PEM import")
     pem = _craft_pbes2_pem(iteration_count=iteration_count, ciphertext=b"\x00" * 32)
     with pytest.raises(KeyLoadingError, match="Unsupported PBKDF2 iteration count"):
         load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo="ECC_DSS", passphrase=b"abc")
 
 
+@pytest.mark.requires_pycryptodome
 def test_crafted_pem_with_optional_key_length_uses_fast_path():
-    skip_if_fallback_backend("passphrase-protected PEM import")
+    skip_if_fallback_backend("PEM decryption helper of the pycryptodome backend")
     from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
 
     pem = _craft_pbes2_pem(key_length=32, iteration_count=600000)
@@ -307,23 +306,21 @@ def test_crafted_pem_with_optional_key_length_uses_fast_path():
     [dict(key_length=16), dict(iv=b"\x00" * 8, ciphertext=b"\x00" * 16), dict(ciphertext=b""), dict(ciphertext=b"\x00" * 17)],
 )
 def test_crafted_pem_with_malformed_cipher_params_is_rejected(crafting_params):
-    skip_if_fallback_backend("passphrase-protected PEM import")
     pem = _craft_pbes2_pem(**crafting_params)
     with pytest.raises(KeyLoadingError, match="Malformed encrypted private key"):
         load_asymmetric_key_from_pem_bytestring(key_pem=pem, key_algo="ECC_DSS", passphrase=b"abc")
 
 
+@pytest.mark.requires_pycryptodome
 def test_crafted_pem_with_empty_prf_falls_back_to_pycryptodome():
-    skip_if_fallback_backend("passphrase-protected PEM import")
-    from Crypto.Util.asn1 import DerSequence
+    skip_if_fallback_backend("PEM decryption helper of the pycryptodome backend")
     from wacryptolib._crypto_backend.pycryptodome import _decrypt_pkcs8_from_pem
 
-    pem = _craft_pbes2_pem(prf=DerSequence([]))
+    pem = _craft_pbes2_pem(prf=b"\x30\x00")  # Empty SEQUENCE
     assert _decrypt_pkcs8_from_pem(pem, b"abc") is None
 
 
 def test_crafted_pem_errors_do_not_reveal_padding_validity():
-    skip_if_fallback_backend("passphrase-protected PEM import")
     good_padding_pem = _craft_pbes2_pem(plaintext=b"not a DER key")  # Decrypts fine, but to garbage
     bad_padding_pem = _craft_pbes2_pem(ciphertext=b"\x00" * 16)  # Padding check fails
 
@@ -337,11 +334,10 @@ def test_crafted_pem_errors_do_not_reveal_padding_validity():
 
 
 def test_backend_pem_functions_accept_str_passphrases():
-    skip_if_fallback_backend("passphrase-protected PEM export")
     from wacryptolib._crypto_backend import export_ecc_key_to_pem
 
     private_key = wacryptolib.keygen.generate_keypair(key_algo="ECC_DSS", serialize=False)["private_key"]
     pem = export_ecc_key_to_pem(private_key, passphrase="abc")
     loaded = import_ecc_key_from_pem(pem, passphrase="abc")
-    assert loaded.export_key(format="DER") == private_key.export_key(format="DER")
+    assert export_ecc_key_to_pem(loaded) == export_ecc_key_to_pem(private_key)  # Works with both backends
     assert import_ecc_key_from_pem(pem, passphrase=b"abc")  # Same encoding as bytes

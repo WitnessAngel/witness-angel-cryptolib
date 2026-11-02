@@ -14,7 +14,7 @@ from schema import Schema, Or, And
 from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_CIPHER_ALGOS
 from wacryptolib.cryptainer import CryptainerBase, logger, CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
     get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value, get_payload_ciphertext_signatures, \
-    _check_cryptainer_structure
+    check_cryptainer_sanity
 from wacryptolib.exceptions import KeyDoesNotExist, KeyLoadingError, DecryptionError, DecryptionIntegrityError, \
     KeystoreDoesNotExist, SignatureVerificationError, SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -308,18 +308,11 @@ class CryptainerDecryptor(CryptainerBase):
         :return: deciphered plaintext and operation report
         :raises SchemaValidationError: if the cryptainer structure is invalid (e.g. empty cipher layers)
         """
-        if not isinstance(cryptainer, dict):  # Not an assert, which vanishes under "python -O"
-            raise SchemaValidationError("Cryptainer must be a dict, not %s" % type(cryptainer).__name__)
-
-        cryptainer_format = cryptainer.get("cryptainer_format")
-        if cryptainer_format != CRYPTAINER_FORMAT:
-            raise ValueError("Unknown cryptainer format %.100r" % (cryptainer_format,))
-
         # Validate the WHOLE structure upfront (including shards that decryption might never walk), before any
         # network or private key operation. E.g. without this, an empty payload_cipher_layers list would make the
         # inline "ciphertext" be returned as plaintext. Note that this checks structure, NOT authenticity: ciphertext
         # signatures are only reported, so anyone with trustee public keys can still build a valid-looking cryptainer.
-        _check_cryptainer_structure(cryptainer, require_inline_payload=True)
+        check_cryptainer_sanity(cryptainer, require_inline_payload=True)
 
         predecrypted_symkey_mapper = None
         operation_report = OperationReport()

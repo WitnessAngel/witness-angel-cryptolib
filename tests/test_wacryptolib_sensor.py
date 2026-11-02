@@ -15,6 +15,7 @@ import pytest
 from freezegun import freeze_time
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool, oneshot_command_line, get_longrun_command_line
+from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.cryptainer import CryptainerStorage, CryptainerEncryptionPipeline
 from wacryptolib.scaffolding import check_sensor_state_machine
 from wacryptolib.sensor import (
@@ -60,7 +61,7 @@ def test_time_limited_aggregator_mixin():
 def test_tarfile_aggregator(tmp_path):
     offload_payload_ciphertext = random_bool()
     cryptainer_storage = FakeTestCryptainerStorage(
-        default_cryptoconf={"whatever": True},
+        default_cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_dir=tmp_path,
         offload_payload_ciphertext=offload_payload_ciphertext,
     )
@@ -222,7 +223,7 @@ def test_tarfile_aggregator(tmp_path):
 def test_json_aggregator(tmp_path):
     offload_payload_ciphertext = random_bool()
     cryptainer_storage = FakeTestCryptainerStorage(
-        default_cryptoconf={"qsdqsdsd": True},
+        default_cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_dir=tmp_path,
         offload_payload_ciphertext=offload_payload_ciphertext,
     )
@@ -311,7 +312,7 @@ def test_json_aggregator(tmp_path):
 def test_aggregators_thread_safety(tmp_path):
     offload_payload_ciphertext = random_bool()
     cryptainer_storage = FakeTestCryptainerStorage(
-        default_cryptoconf={"zesvscc": True},
+        default_cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_dir=tmp_path,
         offload_payload_ciphertext=offload_payload_ciphertext,
     )
@@ -392,7 +393,7 @@ def test_aggregators_thread_safety(tmp_path):
 def test_periodic_value_poller(tmp_path):
     offload_payload_ciphertext = random_bool()
     cryptainer_storage = FakeTestCryptainerStorage(
-        default_cryptoconf={"zexcsc": True},
+        default_cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_dir=tmp_path,
         offload_payload_ciphertext=offload_payload_ciphertext,
     )

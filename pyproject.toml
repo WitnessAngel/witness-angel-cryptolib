@@ -109,4 +109,5 @@ norecursedirs = "*.egg .eggs dist build docs .tox .git __pycache__ scripts stati
 addopts = "-vl -p no:logging --disable-warnings --strict --tb=long --doctest-modules -p no:faulthandler --cov-report=html"
 env = [
     "D:_WA_RANDOMIZE_CLI_APP_DIR=1",
+    "WACRYPTOLIB_DEBUG_VALIDATED_TOKENS=1",
 ]

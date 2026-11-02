@@ -11,7 +11,7 @@ import uuid
 
 from wacryptolib.cryptainer import CRYPTAINER_SUFFIX, CRYPTAINER_TEMP_SUFFIX, CRYPTAINER_DATETIME_LENGTH, \
     CRYPTAINER_DATETIME_FORMAT, logger, get_cryptainer_size_on_filesystem, load_cryptainer_from_filesystem, \
-    decrypt_payload_from_cryptainer, check_cryptainer_sanity, delete_cryptainer_from_filesystem, \
+    decrypt_payload_from_cryptainer, check_cryptainer_sanity, ensure_validated_cryptoconf, delete_cryptainer_from_filesystem, \
     encrypt_payload_and_stream_cryptainer_to_filesystem, encrypt_payload_into_cryptainer, dump_cryptainer_to_filesystem, \
     is_cryptainer_cryptoconf_streamable, CryptainerEncryptionPipeline, _get_offloaded_file_path
 from wacryptolib.keystore import KeystorePoolBase
@@ -225,7 +225,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         assert max_cryptainer_quota is None or max_cryptainer_quota >= 0, max_cryptainer_quota
         assert max_cryptainer_count is None or max_cryptainer_count >= 0, max_cryptainer_count
         assert max_cryptainer_age is None or max_cryptainer_age >= timedelta(seconds=0), max_cryptainer_age
-        self._default_cryptoconf = default_cryptoconf
+        self._default_cryptoconf = None if default_cryptoconf is None else ensure_validated_cryptoconf(default_cryptoconf)
         self._max_cryptainer_quota = max_cryptainer_quota
         self._max_cryptainer_count = max_cryptainer_count
         self._max_cryptainer_age = max_cryptainer_age
@@ -385,7 +385,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         cryptoconf = cryptoconf or self._default_cryptoconf
         if not cryptoconf:
             raise RuntimeError("Either default or file-specific cryptoconf must be provided to CryptainerStorage")
-        return cryptoconf
+        return ensure_validated_cryptoconf(cryptoconf)  # No-op for the default cryptoconf
 
     def _cleanup_before_new_record_encryption(self):
         """

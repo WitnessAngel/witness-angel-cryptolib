@@ -2,6 +2,9 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import copy
+import hashlib
+import os
 from typing import Union
 
 from schema import Or, Optional as OptionalKey, And, Schema
@@ -377,3 +380,105 @@ def check_sigainer_sanity(cryptoconf: dict, jsonschema_mode=False):
 
     schema = SIGAINER_SCHEMA_JSON if jsonschema_mode else SIGAINER_SCHEMA_PYTHON
     _validate_data_tree(data_tree=cryptoconf, validation_schema=schema)
+
+
+# VALIDATION TOKENS: remember that a cryptoconf/cryptainer was validated, to avoid validating it again and again.
+
+DEBUG_TOKEN_DIGEST_ENV_VAR = "WACRYPTOLIB_DEBUG_VALIDATED_TOKENS"  # If set to a non-empty value, tokens detect mutations
+
+
+def _compute_tree_digest(node) -> bytes:
+    """Digest of a data tree, only used by the debug guard against mutation of validated tokens.
+
+    Bytes values are hashed directly (no repr() of a large ciphertext), and each node is prefixed by its type."""
+    hasher = hashlib.blake2b(digest_size=16)
+
+    def _walk(item):
+        if isinstance(item, dict):
+            hasher.update(b"{%d:" % len(item))
+            for key, value in item.items():
+                _walk(key)
+                _walk(value)
+        elif isinstance(item, (list, tuple)):
+            hasher.update(b"[%d:" % len(item))
+            for value in item:
+                _walk(value)
+        elif isinstance(item, bytes):
+            hasher.update(b"b%d:" % len(item))
+            hasher.update(item)
+        else:
+            hasher.update(("%s:%r;" % (type(item).__name__, item)).encode("utf8", "backslashreplace"))
+
+    _walk(node)
+    return hasher.digest()
+
+
+class _ValidatedToken(dict):
+    """A dict which was validated when this object was built, so that later steps needn't validate it again.
+
+    This is NOT a frozen tree and is not tamper-proof: mutating it afterwards is a caller bug (set the environment
+    variable WACRYPTOLIB_DEBUG_VALIDATED_TOKENS to detect it). The tag is dropped by deepcopy(), dict.copy()
+    and JSON serialization, so reloaded or derived data is always validated again.
+    """
+
+    _debug_digest = None
+
+    def __deepcopy__(self, memo):
+        return copy.deepcopy(dict(self), memo)  # A plain dict, so that derived data never inherits the tag
+
+    def _seal(self):
+        """Record the digest of the tree, if the debug guard is enabled"""
+        if os.environ.get(DEBUG_TOKEN_DIGEST_ENV_VAR):
+            self._debug_digest = _compute_tree_digest(self)
+        return self
+
+    def _assert_unchanged(self):
+        if self._debug_digest is not None and _compute_tree_digest(self) != self._debug_digest:
+            raise AssertionError("Validated %s was mutated after its validation" % type(self).__name__)
+
+
+class ValidatedCryptoconf(_ValidatedToken):
+    """Cryptoconf which was validated by ensure_validated_cryptoconf()"""
+
+
+class ValidatedCryptainer(_ValidatedToken):
+    """Cryptainer which was validated by ensure_validated_cryptainer(), or produced by a trusted encryption.
+
+    :param inline_payload_checked: whether its payload ciphertext was required to be inline bytes (strict validation)
+    """
+
+    def __init__(self, *args, inline_payload_checked=False, **kwargs):  # No-arg call is needed by python-schema
+        super().__init__(*args, **kwargs)
+        self.inline_payload_checked = inline_payload_checked
+
+
+def ensure_validated_cryptoconf(cryptoconf: dict) -> ValidatedCryptoconf:
+    """Validate a cryptoconf, unless it is already a ValidatedCryptoconf, and return a validated snapshot of it.
+
+    Later modifications of the input dict don't affect the returned token.
+    The result is NOT tamper-proof, and must not be mutated.
+    """
+    if isinstance(cryptoconf, ValidatedCryptoconf):
+        cryptoconf._assert_unchanged()
+        return cryptoconf
+    check_cryptoconf_sanity(cryptoconf)
+    return ValidatedCryptoconf(copy.deepcopy(cryptoconf))._seal()
+
+
+def ensure_validated_cryptainer(cryptainer: dict, require_inline_payload=True) -> ValidatedCryptainer:
+    """Validate a cryptainer, unless it is already a ValidatedCryptainer of sufficient strictness,
+    and return a validated snapshot of it.
+
+    A strictly validated cryptainer (inline payload ciphertext) satisfies lenient requirements, but a leniently
+    validated one is validated again if a strict check is requested.
+    The result is NOT tamper-proof, and must not be mutated.
+
+    :param require_inline_payload: see check_cryptainer_sanity()
+    """
+    if isinstance(cryptainer, ValidatedCryptainer) and (
+        cryptainer.inline_payload_checked or not require_inline_payload
+    ):
+        cryptainer._assert_unchanged()
+        return cryptainer
+    check_cryptainer_sanity(cryptainer, require_inline_payload=require_inline_payload)
+    return ValidatedCryptainer(copy.deepcopy(cryptainer), inline_payload_checked=require_inline_payload)._seal()

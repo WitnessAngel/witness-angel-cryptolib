@@ -13,9 +13,9 @@ import pytest
 
 import _crypto_test_vectors as vectors
 from wacryptolib._crypto_backend import hpke_x25519_seal
-from wacryptolib._crypto_backend.vendor import dsa
-from wacryptolib._crypto_backend.vendor.aes_eax import EaxCipher
-from wacryptolib._crypto_backend.vendor.chacha20_poly1305 import ChaCha20Poly1305Cipher
+from wacryptolib._crypto_backend.fallback import dsa
+from wacryptolib._crypto_backend.fallback.aes_eax import EaxCipher
+from wacryptolib._crypto_backend.chacha20_poly1305 import ChaCha20Poly1305Cipher
 
 h = bytes.fromhex
 

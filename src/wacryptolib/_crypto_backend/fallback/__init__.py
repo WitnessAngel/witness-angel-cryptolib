@@ -25,10 +25,10 @@ import pkcs1.rsaes_oaep
 import pyaes
 
 from .. import hpke_x25519_seal
-from ..vendor import dsa as _dsa
-from ..vendor.aes_eax import EaxCipher
-from ..vendor.chacha20_poly1305 import ChaCha20Poly1305Cipher
-from ..vendor.primes import get_random_prime, is_probable_prime
+from . import dsa as _dsa
+from .aes_eax import EaxCipher
+from ..chacha20_poly1305 import ChaCha20Poly1305Cipher
+from .primes import get_random_prime, is_probable_prime
 from . import pem as _pem
 from ...utilities.data_utils import pad_bytes_pkcs7, unpad_bytes_pkcs7
 

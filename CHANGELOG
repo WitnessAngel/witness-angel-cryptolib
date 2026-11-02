@@ -16,7 +16,6 @@ Development
   to start
 * Add ECIES_X25519 asymmetric cipher (HPKE RFC 9180, X25519 + HKDF-SHA256 + ChaCha20-Poly1305), with a pure python encryption-only implementation for MicroPython
 * Allow any registered asymmetric cipher in trustee decryption, and digits in keystore key_algo filenames
-* **BREAKING**: Cryptoconf validation now restricts authenticator trustees to RSA_OAEP
 * **BREAKING**: TrusteeApi and keystore public methods normalize algo names to uppercase (TrusteeApi also raises AlgorithmNotSupported, a ValidationError, on unsupported ones, but reports them as missing keys in fetch_public_key(must_exist=True) and request_decryption_authorization(), and decryption only gives up the cryptainer branches concerned, for compatibility with newer peers), so keypairs and free keypairs previously stored under lowercase algo names are not found anymore
 * **BREAKING**: pycryptodome >= 3.23 is now required, for its Crypto.Protocol.HPKE module
 * ECIES_X25519 keypairs are not pre-generated in free keypair pools by default

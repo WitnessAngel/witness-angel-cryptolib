@@ -118,6 +118,7 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
         if key_algo == "ECIES_X25519":
             return public_key_parameters["x25519"]  # Raw 32-bytes public key
 
+        assert key_algo == "RSA_OAEP", key_algo
         import pkcs1
         public_key = pkcs1.keys.RsaPublicKey(public_key_parameters["n"], public_key_parameters['e'])
 

@@ -1,8 +1,8 @@
 ## 1. Tokens and helpers
 
 - [ ] 1.1 In `cryptainer/_validation.py`, add `ValidatedCryptoconf(dict)` and `ValidatedCryptainer(dict)` (with `inline_payload_checked`), both overriding `__deepcopy__` to return a plain deep-copied dict; verify with a small unit test that `copy.deepcopy(token)` is exactly `dict` and `json.dumps(token)` works
-- [ ] 1.2 Add `ensure_validated_cryptoconf(x)` and `ensure_validated_cryptainer(x, require_inline_payload=True)` implementing D2/D4 (O(1) on sufficient tokens, validate then snapshot otherwise), reusing `check_cryptoconf_sanity` / `check_cryptainer_sanity`; verify with `mock.patch` that a second call does not reach `_validate_data_tree`, and that a lenient token is re-validated for a strict request
-- [ ] 1.3 Re-export the helpers/types from `cryptainer/__init__.py` after `_validation` (internal only, no docs); verify `import wacryptolib.cryptainer` still works
+- [ ] 1.2 Add `ensure_validated_cryptoconf(x)` and `ensure_validated_cryptainer(x, require_inline_payload=True)` implementing D2/D4 (O(1) on sufficient tokens, validate then snapshot otherwise), reusing `check_cryptoconf_sanity` / `check_cryptainer_sanity`; verify with `mock.patch(..., wraps=...)` on `_validate_data_tree` that a second call does not reach `_validate_data_tree`, and that a lenient token is re-validated for a strict request
+- [ ] 1.3 Re-export the helpers (public) and token types from `cryptainer/__init__.py` after `_validation`; verify `import wacryptolib.cryptainer` still works
 
 ## 2. Encryption path
 
@@ -23,5 +23,5 @@
 
 ## 5. Tests and docs
 
-- [ ] 5.1 Add tests: validated-once per encryption, once per storage with many files, tag dropped by deepcopy and JSON round-trip, forged/lenient token handling per spec scenarios
-- [ ] 5.2 Add a CHANGELOG entry (internal refactor, no API change) and docstrings stating that tokens are internal and not tamper-proof; run the full suite (`PYTHONPATH=src pytest tests -n 4`)
+- [ ] 5.1 Add tests, all counting validations via `mock.patch` on `_validate_data_tree`: validated-once per encryption, once per storage with many files, tag dropped by deepcopy and JSON round-trip, forged/lenient token handling per spec scenarios
+- [ ] 5.2 Add a CHANGELOG entry (internal refactor, no API change) and docstrings (and the docs page on validation, if any) presenting `ensure_validated_*` as public and stating that tokens are not tamper-proof; run the full suite (`PYTHONPATH=src pytest tests -n 4`)

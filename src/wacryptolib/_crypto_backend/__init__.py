@@ -61,7 +61,7 @@ def get_random_bytes(nbytes):
 # SHAMIR SHARED SECRETS #
 # We always use the vendored version #
 
-from .vendor.PycryptodomeSecretSharing import Shamir as _Shamir
+from .PycryptodomeSecretSharing import Shamir as _Shamir
 
 
 def shamir_128b_split_func(*args, **kwargs):

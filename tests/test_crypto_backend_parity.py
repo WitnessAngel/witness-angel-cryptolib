@@ -360,7 +360,7 @@ def test_rsa_keys_with_composite_factor_or_even_modulus_are_rejected(backend):
 
     import_crypto_backend("fallback")
     from wacryptolib._crypto_backend.fallback import pem
-    from wacryptolib._crypto_backend.vendor.primes import get_random_prime
+    from wacryptolib._crypto_backend.fallback.primes import get_random_prime
 
     e = 65537
     while True:
@@ -384,7 +384,7 @@ def test_rsa_private_keys_with_bad_exponent_or_even_modulus_are_rejected(backend
 
     import_crypto_backend("fallback")
     from wacryptolib._crypto_backend.fallback import pem
-    from wacryptolib._crypto_backend.vendor.primes import get_random_prime
+    from wacryptolib._crypto_backend.fallback.primes import get_random_prime
 
     while True:
         p, q = p or get_random_prime(512), get_random_prime(512)
@@ -402,7 +402,7 @@ def test_rsa_private_key_with_out_of_range_exponent_is_rejected(backend):
 
     import_crypto_backend("fallback")
     from wacryptolib._crypto_backend.fallback import pem
-    from wacryptolib._crypto_backend.vendor.primes import get_random_prime
+    from wacryptolib._crypto_backend.fallback.primes import get_random_prime
 
     e = 65537
     while True:
@@ -577,7 +577,7 @@ def test_pss_rejects_keys_too_short_for_the_salt(both_backends):
 def test_dss_rejects_dsa_keys_with_non_fips_186_3_sizes(backend):
     p, q, g, y, x = (1 << 2047) + 1, (1 << 159) + 1, 2, 2, 1  # (L, N) = (2048, 160), only sizes are checked
     if backend.__name__.endswith(".fallback"):
-        from wacryptolib._crypto_backend.vendor.dsa import DsaKey
+        from wacryptolib._crypto_backend.fallback.dsa import DsaKey
 
         key = DsaKey(p, q, g, y, x)
     else:

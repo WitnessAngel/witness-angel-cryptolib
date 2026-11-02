@@ -5,8 +5,8 @@ Cryptoconfs and cryptainers are plain dicts, so no function can know whether one
 ## What Changes
 
 - Add two internal `dict` subclasses, `ValidatedCryptoconf` and `ValidatedCryptainer`, in `cryptainer/_validation.py`: a newtype-style tag meaning "validated when this object was built". They are NOT frozen: mutating one afterwards is a caller bug, and malicious in-process code can break the tag, which is accepted.
-- Add idempotent helpers `ensure_validated_cryptoconf(x)` and `ensure_validated_cryptainer(x, require_inline_payload=True)`: a no-op (O(1)) on an already-tagged input of sufficient strictness, otherwise validate then return a tagged deep snapshot.
-- Public functions keep accepting raw dicts (**no public API change**) and wrap on entry; tokens never need to be handled by library users.
+- Add idempotent **public** helpers `ensure_validated_cryptoconf(x)` and `ensure_validated_cryptainer(x, require_inline_payload=True)` (exported from `wacryptolib.cryptainer`, documented): a no-op (O(1)) on an already-tagged input of sufficient strictness, otherwise validate then return a tagged deep snapshot.
+- Existing public functions keep accepting raw dicts (**no breaking API change**) and wrap on entry; library users never have to handle tokens, though they may use the helpers to validate once and reuse the result.
 - Tokens never survive serialization or `copy.deepcopy`: `__deepcopy__` returns a plain dict, so a cryptainer derived by the flightbox from a cryptoconf never carries the cryptoconf tag. Data loaded from JSON or the filesystem is untagged, so it is validated at ingress.
 - `CryptainerStorage` validates `default_cryptoconf` once at construction, not once per enqueued file.
 - `CryptainerEncryptor` wraps the cryptainer it generates as trusted, without re-validating it (valid cryptoconf implies valid cryptainer), and the decryptor trusts a tagged cryptainer without re-validating it.

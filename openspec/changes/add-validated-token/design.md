@@ -53,6 +53,10 @@
 
 **D7: Cryptainer lifecycle.** The encryptor mutates the cryptainer it generated (signatures, MACs, state). It tags the object it returns/stores at the boundaries (generation: lenient; after finalization: strict). Mid-flight mutation by library code is considered part of building the validated structure.
 
+**D8: The `ensure_validated_*` helpers are public.** They are defined in `_validation.py`, re-exported from `wacryptolib.cryptainer`, and documented, so that `operations.py`, the CLI and library users can validate once and pass the result to several operations. The token classes are importable too (they are what the helpers return), but using them stays optional: every public function keeps accepting plain dicts, and nothing requires users to know about tokens.
+
+**D9: Tests count validation calls with `mock.patch`.** Validation-count assertions patch `_validate_data_tree` (via `mock.patch` with `wraps=`) and assert its call count, rather than relying on a module-level counter in production code.
+
 ## Risks / Trade-offs
 
 - [Tag lies if someone mutates a token] → Accepted by decision; documented in docstrings. Serialization always drops the tag.
@@ -67,5 +71,4 @@ Internal refactor; no data or API migration. Rebase on `dev` after PR #63. Ship 
 
 ## Open Questions
 
-- Should `ensure_validated_*` live in `_validation.py` only, or also be re-exported in `cryptainer/__init__.py` for `operations.py` and the CLI (internal re-export, undocumented)?
-- Count validations in tests via a `mock.patch` on `_validate_data_tree`, or via a module-level counter? (Prefer `mock.patch`.)
+(none left: both earlier questions are resolved by D8 and D9)

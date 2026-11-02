@@ -3,7 +3,7 @@ from flightbox import FlightboxUtilitiesBase
 import os
 import logging
 from extjson import dump_to_json_bytes
-from PycryptodomeSecretSharing import Shamir as _Shamir
+from pycryptodome_secret_sharing import Shamir as _Shamir
 from data_utils import do_split_secret_into_shards, split_as_chunks
 from fallback_adapter import encrypt_via_rsa_oaep, encrypt_via_aes_cbc
 

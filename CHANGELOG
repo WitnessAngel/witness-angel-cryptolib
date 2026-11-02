@@ -2,6 +2,14 @@
 Development
 =============
 
+* Remember the validation of cryptoconfs and cryptainers with internal dict subclasses (ValidatedCryptoconf and
+  ValidatedCryptainer), so that they are validated once instead of by every layer; new public helpers
+  ensure_validated_cryptoconf() and ensure_validated_cryptainer() (existing functions still accept plain dicts)
+  - Results of encrypt_payload_into_cryptainer() and similar are such tokens: copy them (deepcopy) before corrupting them
+  - CryptainerStorage now validates its default cryptoconf at construction, and a per-file cryptoconf when enqueuing,
+    so invalid cryptoconfs raise immediately instead of being logged by the worker thread; later edits of the
+    original default_cryptoconf dict don't affect the storage anymore
+  - Setting the WACRYPTOLIB_DEBUG_VALIDATED_TOKENS environment variable detects tokens mutated after validation
 * Summarize schema validation errors (failing field and reason, bounded size) instead of embedding whole
   cryptainers or cryptoconfs, and stop chaining them to the raw validator exceptions
 * Delete the offloaded payload file when CryptainerEncryptionPipeline fails to start

@@ -9,7 +9,7 @@ import uuid
 
 from wacryptolib.cryptainer import CryptainerBase, SIGNATURE_POLICIES, PAYLOAD_CIPHERTEXT_LOCATIONS, logger, \
     CRYPTAINER_FORMAT, CRYPTAINER_STATES, SHARED_SECRET_ALGO_MARKER, get_trustee_proxy, \
-    _inject_payload_digests_and_signatures, FlightboxUtilitiesBase, FlightBox, check_cryptoconf_sanity
+    _inject_payload_digests_and_signatures, FlightboxUtilitiesBase, FlightBox, ensure_validated_cryptoconf, ValidatedCryptainer
 
 from wacryptolib.cipher import (
     encrypt_bytestring,
@@ -167,7 +167,8 @@ class CryptainerEncryptor(CryptainerBase):
         )
         self.add_authentication_data_to_cryptainer(cryptainer, payload_integrity_tags)
 
-        return cryptainer
+        # A valid cryptoconf (and dict metadata) yields a valid cryptainer, so no need to validate it again
+        return ValidatedCryptainer(cryptainer, inline_payload_checked=True)._seal()
 
     @staticmethod
     def _load_all_payload_bytes(payload: Union[bytes, BinaryIO]):
@@ -230,7 +231,9 @@ class CryptainerEncryptor(CryptainerBase):
         'payload_cipher_layer_extracts' keys, and each of 'payload_cipher_layer_extracts' items has
         keys 'cipher_algo', 'symmetric_key' and 'payload_hash_algos'.
         """
-        check_cryptoconf_sanity(cryptoconf)  # Mandatory upfront validation of user input
+        cryptoconf = ensure_validated_cryptoconf(cryptoconf)  # Mandatory upfront validation of user input
+        if cryptainer_metadata is not None and not isinstance(cryptainer_metadata, dict):  # Not an assert (python -O)
+            raise SchemaValidationError("Cryptainer metadata must be a dict or None, not %s" % type(cryptainer_metadata).__name__)
 
         cryptainer, secrets = self._flightbox.generate_cryptainer_base_and_secrets(
             cryptoconf=cryptoconf, cryptainer_metadata=cryptainer_metadata

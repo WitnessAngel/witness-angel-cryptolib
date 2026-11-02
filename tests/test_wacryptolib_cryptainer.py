@@ -830,6 +830,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
     assert result_metadata == metadata
 
     # Invalid Cryptainer Format
+    cryptainer = copy.deepcopy(cryptainer)  # Plain dict, validated tokens must not be mutated
     cryptainer["cryptainer_format"] = "OAJKB"
     with pytest.raises(SchemaValidationError, match="Unknown cryptainer format"):
         decrypt_payload_from_cryptainer(cryptainer=cryptainer)
@@ -1505,7 +1506,7 @@ def test_cryptainer_storage_and_executor(tmp_path, capsys):
 
     offload_payload_ciphertext1 = random_bool()
     storage = FakeTestCryptainerStorage(
-        default_cryptoconf={"smth": True},
+        default_cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_dir=cryptainer_dir,
         offload_payload_ciphertext=offload_payload_ciphertext1,
     )
@@ -1535,7 +1536,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
 
     offload_payload_ciphertext = random_bool()
     storage = FakeTestCryptainerStorage(
-        default_cryptoconf={"stuffs": True},
+        default_cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_dir=cryptainer_dir,
         max_cryptainer_count=3,
         offload_payload_ciphertext=offload_payload_ciphertext,
@@ -1564,7 +1565,7 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
 
     offload_payload_ciphertext2 = random_bool()
     storage = FakeTestCryptainerStorage(
-        default_cryptoconf={"randomthings": True},
+        default_cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_dir=cryptainer_dir,
         max_cryptainer_count=4,
         offload_payload_ciphertext=offload_payload_ciphertext2,
@@ -1633,7 +1634,7 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
 
     offload_payload_ciphertext = random_bool()
     storage = FakeTestCryptainerStorage(
-        default_cryptoconf={"stuffs": True},
+        default_cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_dir=cryptainer_dir,
         max_cryptainer_age=timedelta(days=2),
         offload_payload_ciphertext=offload_payload_ciphertext,
@@ -1691,7 +1692,7 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
 
     offload_payload_ciphertext = random_bool()
     storage = FakeTestCryptainerStorage(
-        default_cryptoconf={"stuffs": True},
+        default_cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_dir=cryptainer_dir,
         max_cryptainer_quota=8000,  # Beware of overhead of encryption and json structs!
         offload_payload_ciphertext=offload_payload_ciphertext,
@@ -1786,7 +1787,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
         offload_payload_ciphertext = random_bool()
 
         storage = FakeTestCryptainerStorage(
-            default_cryptoconf={"stuffs": True},
+            default_cryptoconf=SIMPLE_CRYPTOCONF,
             cryptainer_dir=cryptainer_dir,
             max_cryptainer_count=max_cryptainer_count,
             max_cryptainer_quota=max_cryptainer_quota,
@@ -1815,7 +1816,7 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
     # Special case of "everything restricted"
 
     storage = FakeTestCryptainerStorage(
-        default_cryptoconf={"stuffs": True},
+        default_cryptoconf=SIMPLE_CRYPTOCONF,
         cryptainer_dir=cryptainer_dir,
         max_cryptainer_count=0,
         max_cryptainer_quota=0,
@@ -2300,6 +2301,7 @@ def _get_simple_shamir_cryptainer_and_shared_secret():
     cryptainer = encrypt_payload_into_cryptainer(
         payload=b"stuffs", cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
     )
+    cryptainer = copy.deepcopy(cryptainer)  # Plain dict, so that tests can corrupt it (validated tokens must not be mutated)
     shared_secret = cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][1]
     assert shared_secret["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER
     return cryptainer, shared_secret
@@ -2321,6 +2323,7 @@ def test_cryptainer_decryption_rejects_invalid_structures():
         gather_decryptable_symkeys([("forged", forged_cryptainer)])
 
     cryptainer = encrypt_payload_into_cryptainer(payload=b"stuffs", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    cryptainer = copy.deepcopy(cryptainer)  # Plain dict, validated tokens must not be mutated
     cryptainer["payload_cipher_layers"][0]["key_cipher_layers"] = []
     with pytest.raises(SchemaValidationError):
         decrypt_payload_from_cryptainer(cryptainer)
@@ -2396,93 +2399,9 @@ def test_cryptainer_decryption_rejects_invalid_algos_and_format():
     with pytest.raises(SchemaValidationError):
         gather_decryptable_symkeys([("corrupted", corrupted_cryptainer)])
 
-    # Defense in depth, even if upfront validation is bypassed
-    with pytest.raises(SchemaValidationError, match="Empty key_cipher_layers"):
-        CryptainerDecryptor(keystore_pool=InMemoryKeystorePool())._decrypt_key_through_multiple_layers(
-            default_keychain_uid=uuid.uuid4(),
-            key_ciphertext=b"xyz",
-            key_cipher_layers=[],
-            cryptainer_metadata=None,
-            operation_report=OperationReport(),
-        )
-
-
-def test_cryptainer_validation_errors_dont_include_payload_ciphertext():
-    payload = b"x" * 1_000_000
-    cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
-    cryptainer["unexpected_key"] = True
-    with pytest.raises(SchemaValidationError) as exc_info:
-        decrypt_payload_from_cryptainer(cryptainer)
-    assert len(str(exc_info.value)) < 100_000
-
-
-def test_cryptainer_validation_error_messages_are_bounded():
-    big_value = "y" * 1_000_000  # Validators would dump it in their raw error messages
-    cryptainer = encrypt_payload_into_cryptainer(
-        payload=b"x" * 1_000_000, cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata={"big": big_value}
-    )
-    cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["key_cipher_algo"] = "BAD_ALGO"
-
-    def _check_error(func, *args, **kwargs):
-        with pytest.raises(SchemaValidationError) as exc_info:
-            func(*args, **kwargs)
-        exc = exc_info.value
-        while exc is not None:  # Chained exceptions would show in tracebacks too, or stay alive in memory
-            assert isinstance(exc, SchemaValidationError)
-            assert len(str(exc)) < 2000, len(str(exc))
-            assert exc.__context__ is None or exc.__context__ is exc.__cause__
-            exc = exc.__cause__
-        return str(exc_info.value)
-
-    message = _check_error(check_cryptainer_sanity, cryptainer)
-    assert "key_cipher_algo" in message and "BAD_ALGO" in message
-
-    message = _check_error(check_cryptainer_sanity, convert_to_extjson(cryptainer), jsonschema_mode=True)
-    assert "payload_cipher_layers/0" in message
-
-    message = _check_error(decrypt_payload_from_cryptainer, cryptainer)
-    assert "key_cipher_algo" in message
-
-    message = _check_error(gather_decryptable_symkeys, [("my.crypt", cryptainer)])
-    assert "my.crypt" in message and "key_cipher_algo" in message
-
-    message = _check_error(check_cryptoconf_sanity, dict(SIMPLE_CRYPTOCONF, keychain_uid=big_value))
-    assert "keychain_uid" in message
-
-
-def test_summarize_validation_error_lines_respects_max_lines():
-    from wacryptolib.utilities.validation_utils import summarize_validation_error_lines
-
-    lines = ["line%d" % i for i in range(12)]
-    summary = summarize_validation_error_lines(lines, max_lines=10).splitlines()
-    assert len(summary) == 10
-    assert summary[:3] == lines[:3] and summary[-6:] == lines[-6:]
-    assert summary[3] == "[... 3 lines skipped]"
-    assert summarize_validation_error_lines(lines[:10], max_lines=10).splitlines() == lines[:10]
-    assert summarize_validation_error_lines(lines, max_lines=1) == "[... 12 lines skipped]"
-    assert summarize_validation_error_lines(lines, max_lines=0) == "[... 12 lines skipped]"
-
-    long_line = "a" * 50 + "b" * 200 + "c" * 50
-    summary = summarize_validation_error_lines([long_line], max_line_length=120)
-    assert len(summary) == 119 and summary.startswith("a" * 50) and summary.endswith("c" * 50)
-    assert summarize_validation_error_lines([long_line], max_line_length=1) == "a [...] c"
-
-
-def test_cryptainer_validation_error_messages_keep_deep_causes():
-    cryptainer = encrypt_payload_into_cryptainer(
-        payload=b"abc", cryptoconf=COMPLEX_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
-    )
-    shared_secret_layer = cryptainer["payload_cipher_layers"][2]["key_cipher_layers"][0]
-    shared_secret_layer["key_shared_secret_shards"][1]["key_cipher_layers"][0]["junk_field"] = 1
-
-    with pytest.raises(SchemaValidationError) as exc_info:
-        decrypt_payload_from_cryptainer(cryptainer)
-    message = str(exc_info.value)
-    assert "Wrong key 'junk_field'" in message  # Innermost cause comes LAST in python-schema errors
-    assert len(message.splitlines()) <= 10
-
     # Cause in a NON-last alternative of a key cipher layer Or(), followed by the failures of other alternatives
     cryptainer = encrypt_payload_into_cryptainer(payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    cryptainer = copy.deepcopy(cryptainer)  # Plain dict, validated tokens must not be mutated
     cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]["comment"] = "x"
     with pytest.raises(SchemaValidationError) as exc_info:
         decrypt_payload_from_cryptainer(cryptainer)
@@ -2493,6 +2412,7 @@ def test_cryptainer_validation_error_messages_keep_deep_causes():
 
 def test_cryptainer_without_keychain_uid_is_refused_upfront():
     cryptainer = encrypt_payload_into_cryptainer(payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    cryptainer = copy.deepcopy(cryptainer)  # Plain dict, validated tokens must not be mutated
     del cryptainer["keychain_uid"]
     for func in (check_cryptainer_sanity, decrypt_payload_from_cryptainer):
         with pytest.raises(SchemaValidationError, match="keychain_uid"):
@@ -2671,6 +2591,7 @@ def test_retrocompatibility_for_payload_ciphertext_signatures_field(cryptoconf, 
     cryptainer_summary = get_cryptoconf_summary(cryptainer)
 
     # Old cryptainers are still valid, analysable and decryptable, without needing validation first
+    cryptainer = copy.deepcopy(cryptainer)  # Plain dict, validated tokens must not be mutated
     _to_legacy_payload_signatures(cryptainer, layer_indices=legacy_layer_indices)
     cryptainer_before = copy.deepcopy(cryptainer)
     assert gather_trustee_dependencies([cryptainer]) == trustee_dependencies

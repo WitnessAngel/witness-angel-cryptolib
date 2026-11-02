@@ -26,6 +26,7 @@ from wacryptolib.cryptainer import (
     DECRYPTED_FILE_SUFFIX,
     SHARED_SECRET_ALGO_MARKER,
     check_cryptoconf_sanity,
+    ensure_validated_cryptoconf,
     check_cryptainer_sanity,
     get_cryptoconf_summary,
     CryptainerStorage,
@@ -408,7 +409,7 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
     else:
         cryptoconf = load_from_json_bytes(cryptoconf.read())
 
-    check_cryptoconf_sanity(cryptoconf)
+    cryptoconf = ensure_validated_cryptoconf(cryptoconf)
 
     keystore_pool = _get_keystore_pool(ctx)
 

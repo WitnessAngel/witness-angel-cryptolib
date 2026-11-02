@@ -9,7 +9,6 @@ from pathlib import Path
 from wacryptolib.authdevice import list_available_authdevices
 from wacryptolib.authenticator import SENSITIVE_KEYSTORE_FIELDS, is_authenticator_initialized, initialize_authenticator
 from wacryptolib.cryptainer import (
-    check_cryptoconf_sanity,
     encrypt_payload_into_cryptainer,
     decrypt_payload_from_cryptainer,
 )
@@ -130,8 +129,6 @@ def delete_authenticator(authenticator_dir: Path):
 
 
 def ___encrypt_payload_to_bytes(payload: bytes, cryptoconf: dict, keystore_pool: KeystorePoolBase) -> bytes:
-    check_cryptoconf_sanity(cryptoconf)
-
     cryptainer = encrypt_payload_into_cryptainer(
         payload, cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
     )

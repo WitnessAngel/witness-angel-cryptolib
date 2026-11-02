@@ -14,6 +14,7 @@ J/cA/LmMQfg//vB15ZYD5zIRvlEOTJO9uM+rr3ncYZD7JS/8IiwdrZYofQ==
 -----END PUBLIC KEY-----"""
 
 
+@pytest.mark.requires_pycryptodome
 def test_backends_expose_the_same_names(both_backends):
     native, fallback = both_backends
     assert native.__all__ == fallback.__all__
@@ -24,6 +25,7 @@ def test_backends_expose_the_same_names(both_backends):
     assert native.AES_BLOCK_SIZE == fallback.AES_BLOCK_SIZE
 
 
+@pytest.mark.requires_pycryptodome
 def test_backends_share_pem_protection_constants(both_backends):
     from wacryptolib._crypto_backend.fallback import pem
 
@@ -323,6 +325,7 @@ def test_rsa_keys_are_compared_by_value(backend):
     assert public_key != backend.generate_rsa_keypair(2048)[0]
 
 
+@pytest.mark.requires_pycryptodome
 def test_rsa_private_keys_with_swapped_primes_are_equal(backend):
     RSA = pytest.importorskip("Crypto.PublicKey.RSA")
 
@@ -524,6 +527,7 @@ def test_aes_eax_rejects_empty_nonce(backend):
         backend.encrypt_via_aes_eax(b"abc", key=bytes(32), nonce=b"")
 
 
+@pytest.mark.requires_pycryptodome
 def test_backends_accept_the_same_nist_curve_names(both_backends):
     native, fallback = both_backends
     for curve in fallback._NIST_CURVES:
@@ -538,6 +542,7 @@ def test_ecc_curve_names_are_case_insensitive(backend, curve):
     assert backend.export_ecc_key_to_pem(public_key)
 
 
+@pytest.mark.requires_pycryptodome
 def test_hash_algo_names_are_case_insensitive(both_backends):
     native, fallback = both_backends
     for hash_algo in native.IMPLEMENTED_HASH_ALGOS:
@@ -557,6 +562,7 @@ def test_fallback_ecc_key_errors_do_not_embed_key_bytes():
     assert "aaaa" not in str(exc_info.value) and "UnexpectedDER" in str(exc_info.value)
 
 
+@pytest.mark.requires_pycryptodome
 def test_pss_rejects_keys_too_short_for_the_salt(both_backends):
     from Crypto.Hash import SHA512
     from Crypto.Signature import pss
@@ -574,6 +580,7 @@ def test_pss_rejects_keys_too_short_for_the_salt(both_backends):
             backend.verify_with_pss(hasher, short_salt_signature, key)
 
 
+@pytest.mark.requires_pycryptodome
 def test_dss_rejects_dsa_keys_with_non_fips_186_3_sizes(backend):
     p, q, g, y, x = (1 << 2047) + 1, (1 << 159) + 1, 2, 2, 1  # (L, N) = (2048, 160), only sizes are checked
     if backend.__name__.endswith(".fallback"):

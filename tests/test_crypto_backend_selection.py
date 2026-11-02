@@ -38,11 +38,13 @@ def _assert_backend(script_prefix, expected_backend_name, force_fallback=False):
     assert result.stdout.strip() == expected_backend_name
 
 
+@pytest.mark.requires_pycryptodome
 def test_native_backend_is_selected_by_default():
     pytest.importorskip("Crypto.Cipher.AES")
     _assert_backend("", "pycryptodome")
 
 
+@pytest.mark.requires_pycryptodome
 def test_native_backend_leaves_pycryptodome_untouched():
     pytest.importorskip("Crypto.Cipher.AES")
     script = """
@@ -68,6 +70,7 @@ def test_fallback_backend_is_selected_when_forced():
     _assert_backend("", "fallback", force_fallback=True)
 
 
+@pytest.mark.requires_pycryptodome
 @pytest.mark.parametrize("value", ["0", "false", "No", ""])
 def test_falsy_force_variable_does_not_force_fallback_backend(value):
     pytest.importorskip("Crypto.Cipher.AES")
@@ -80,6 +83,7 @@ def test_fallback_backend_is_selected_without_pycryptodome():
     _assert_backend(BLOCK_PYCRYPTODOME, "fallback")
 
 
+@pytest.mark.requires_pycryptodome
 def test_fallback_backend_is_selected_when_pycryptodome_native_code_cannot_load():
     pytest.importorskip("Crypto.Cipher.AES")
     script = """
@@ -134,6 +138,7 @@ def test_fallback_backend_works_through_the_high_level_api():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.requires_pycryptodome
 def test_backend_name_matches_environment():
     from wacryptolib import _crypto_backend
 

@@ -28,6 +28,7 @@ def test_hash_message():
         hash_message(bytestring, hash_algo="XYZ")
 
 
+@pytest.mark.requires_pycryptodome
 def test_compatibility_with_pycryptodome_hashers():
     import_crypto_backend("pycryptodome")  # Skips when pycryptodome or its native code is missing
 

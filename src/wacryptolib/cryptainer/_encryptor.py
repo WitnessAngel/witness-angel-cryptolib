@@ -9,7 +9,7 @@ import uuid
 
 from wacryptolib.cryptainer import CryptainerBase, SIGNATURE_POLICIES, PAYLOAD_CIPHERTEXT_LOCATIONS, logger, \
     CRYPTAINER_FORMAT, CRYPTAINER_STATES, SHARED_SECRET_ALGO_MARKER, get_trustee_proxy, \
-    _inject_payload_digests_and_signatures, FlightboxUtilitiesBase, FlightBox, check_cryptainer_sanity, check_cryptoconf_sanity
+    _inject_payload_digests_and_signatures, FlightboxUtilitiesBase, FlightBox, check_cryptoconf_sanity
 
 from wacryptolib.cipher import (
     encrypt_bytestring,
@@ -235,8 +235,6 @@ class CryptainerEncryptor(CryptainerBase):
         cryptainer, secrets = self._flightbox.generate_cryptainer_base_and_secrets(
             cryptoconf=cryptoconf, cryptainer_metadata=cryptainer_metadata
         )
-        # Mere double-check of an invariant: a valid cryptoconf MUST produce a valid cryptainer (else it's a lib bug)
-        check_cryptainer_sanity(cryptainer)
         return cryptainer, secrets
 
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: dict):

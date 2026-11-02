@@ -29,9 +29,9 @@ Development
   cryptainers loaded without their payload ciphertext, or still unfinished, are still accepted by
   gather_decryptable_symkeys()
 * **BREAKING**: Encryption now validates the cryptoconf upfront (also when using CryptainerEncryptor directly), so that
-  cryptoconfs with e.g. unexpected fields, lowercase algorithm names or a None keychain_uid in a cipher layer or a
-  signature conf are refused instead of producing cryptainers that decryption would reject (a None top-level
-  keychain_uid is still replaced by a generated one)
+  cryptoconfs with e.g. unexpected fields, lowercase algorithm names or a None keychain_uid (at top level, or in a
+  cipher layer or a signature conf) are refused instead of producing cryptainers that decryption would reject;
+  to get a generated top-level keychain_uid, omit the field
 * **BREAKING**: Cryptainer/cryptoconf schemas now only accept symmetric ciphers as payload_cipher_algo, and
   asymmetric ciphers (not signature algorithms) as asymmetric key_cipher_algo
 * Generated JSON schemas now enforce non-empty payload/key cipher layers, shared-secret shards and sigconf/sigainer

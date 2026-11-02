@@ -831,7 +831,7 @@ def test_standard_cryptainer_encryption_and_decryption(tmp_path, cryptoconf, tru
 
     # Invalid Cryptainer Format
     cryptainer["cryptainer_format"] = "OAJKB"
-    with pytest.raises(ValueError, match="Unknown cryptainer format"):
+    with pytest.raises(SchemaValidationError, match="Unknown cryptainer format"):
         decrypt_payload_from_cryptainer(cryptainer=cryptainer)
 
 
@@ -2392,10 +2392,10 @@ def test_cryptainer_decryption_rejects_invalid_algos_and_format():
 
     corrupted_cryptainer = copy.deepcopy(cryptainer)
     del corrupted_cryptainer["cryptainer_format"]
-    with pytest.raises(ValueError, match="Unknown cryptainer format"):
+    with pytest.raises(SchemaValidationError, match="Unknown cryptainer format"):
         decrypt_payload_from_cryptainer(corrupted_cryptainer)
     corrupted_cryptainer["cryptainer_format"] = ("x", "y")  # Must not break "%" formatting
-    with pytest.raises(ValueError, match="Unknown cryptainer format"):
+    with pytest.raises(SchemaValidationError, match="Unknown cryptainer format"):
         decrypt_payload_from_cryptainer(corrupted_cryptainer)
 
     corrupted_cryptainer = copy.deepcopy(cryptainer)
@@ -2909,14 +2909,15 @@ def test_save_and_load_relaxed_extjson_cryptainer(tmp_path):
     assert not operation_report.has_errors()
 
 
-
-
 def test_encryptor_validates_cryptoconf_upfront():
-    from wacryptolib.cryptainer import CryptainerEncryptor
-    cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
-    cryptoconf["payload_cipher_layers"] = []
+    # Cases which the flightbox alone would NOT refuse, so only the upfront validation catches them
+    unexpected_field_cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    unexpected_field_cryptoconf["payload_cipher_layers"][0]["comment"] = "unexpected"
+    none_keychain_uid_cryptoconf = dict(copy.deepcopy(SIMPLE_CRYPTOCONF), keychain_uid=None)
+
     encryptor = CryptainerEncryptor(
         signature_policy=SIGNATURE_POLICIES.SKIP_SIGNING, keystore_pool=InMemoryKeystorePool()
     )
-    with pytest.raises(SchemaValidationError):
-        encryptor.encrypt_data(b"stuffs", cryptoconf=cryptoconf)
+    for cryptoconf in (unexpected_field_cryptoconf, none_keychain_uid_cryptoconf):
+        with pytest.raises(SchemaValidationError):
+            encryptor.encrypt_data(b"stuffs", cryptoconf=cryptoconf)

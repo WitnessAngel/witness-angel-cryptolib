@@ -297,14 +297,14 @@ def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
     _validate_data_tree(data_tree=cryptoconf, validation_schema=schema)
 
 
-def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False, require_inline_payload=False):
+def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False, require_inline_payload=True):
     """Validate the format of a cryptainer.
 
     :param jsonschema_mode: If True, the cryptainer must have been loaded as raw json
            (with $binary, $numberInt and such) and will be checked using a jsonschema validator.
-    :param require_inline_payload: (python mode only) if True, the payload ciphertext must be present, inline, as bytes.
-           Else it may be absent or offloaded (include_payload_ciphertext=False), and unfinished
-           cryptainers (state STARTED) are tolerated. The payload value is never validated nor shown in errors.
+    :param require_inline_payload: (python mode only) if True (the strict default), the payload ciphertext must be
+           present, inline, as bytes. Else it may be absent or offloaded (include_payload_ciphertext=False), and
+           unfinished cryptainers (state STARTED) are tolerated. The payload value is never validated nor shown in errors.
     """
     if jsonschema_mode:
         _validate_data_tree(data_tree=cryptainer, validation_schema=CRYPTAINER_SCHEMA_JSON)
@@ -315,7 +315,7 @@ def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False, require_inl
 
     cryptainer_format = cryptainer.get("cryptainer_format")
     if cryptainer_format != CRYPTAINER_FORMAT:
-        raise ValueError("Unknown cryptainer format %.100r" % (cryptainer_format,))
+        raise SchemaValidationError("Unknown cryptainer format %.100r" % (cryptainer_format,))
 
     payload_ciphertext_struct = cryptainer.get("payload_ciphertext_struct")
     if require_inline_payload:

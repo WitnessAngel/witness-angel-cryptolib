@@ -312,7 +312,7 @@ class CryptainerDecryptor(CryptainerBase):
         # network or private key operation. E.g. without this, an empty payload_cipher_layers list would make the
         # inline "ciphertext" be returned as plaintext. Note that this checks structure, NOT authenticity: ciphertext
         # signatures are only reported, so anyone with trustee public keys can still build a valid-looking cryptainer.
-        check_cryptainer_sanity(cryptainer, require_inline_payload=True)
+        check_cryptainer_sanity(cryptainer)
 
         predecrypted_symkey_mapper = None
         operation_report = OperationReport()

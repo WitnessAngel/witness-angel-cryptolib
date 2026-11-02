@@ -24,7 +24,8 @@ def _rotate_left(value, shift):
 
 
 def _chacha20_block(key_words, counter, nonce_words):
-    state = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574, *key_words, counter, *nonce_words]
+    # No star-unpacking inside list displays on micropython
+    state = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574] + list(key_words) + [counter] + list(nonce_words)
     w = list(state)
     for _ in range(10):  # 20 rounds
         for a, b, c, d in _QUARTER_ROUND_INDICES:
@@ -60,7 +61,7 @@ class _Poly1305ForAead:
 
     def finalize(self, ciphertext_length):
         if self._pending:
-            self._process_block(self._pending.ljust(16, b"\x00"))
+            self._process_block(self._pending + bytes(16 - len(self._pending)))  # No bytes.ljust() on micropython
         self._process_block(struct.pack("<QQ", 0, ciphertext_length))  # Lengths of associated data and ciphertext
         return ((self._accumulator + self._s) & ((1 << 128) - 1)).to_bytes(16, "little")
 
@@ -82,7 +83,7 @@ class ChaCha20Poly1305Cipher:
         missing_length = len(data) - len(self._keystream)
         if missing_length > 0:
             block_count = -(-missing_length // 64)
-            if self._counter + block_count > _MASK32:
+            if self._counter + block_count - 1 > _MASK32:  # Last block used is counter + block_count - 1
                 raise OverflowError("Too much data for a single ChaCha20 nonce")
             self._keystream += b"".join(
                 _chacha20_block(self._key_words, self._counter + i, self._nonce_words) for i in range(block_count)

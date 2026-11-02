@@ -80,7 +80,7 @@ def test_keystore_basic_get_set_api(tmp_path):
     keychain_uid = filesystem_keystore_test_locals["keychain_uid"]
 
     is_public = random_bool()
-    filepath = filesystem_keystore._get_filepath(keychain_uid, key_algo="abxz", is_public=is_public)
+    filepath = filesystem_keystore._get_filepath(keychain_uid, key_algo="ABXZ", is_public=is_public)  # Normalized
     with open(filepath, "rb") as f:
         key_data = f.read()
         assert key_data == (b"public_data" if is_public else b"private_data")  # IMPORTANT no exchange of keys in files!
@@ -349,6 +349,25 @@ def test_keystore_export_from_keystore_tree(tmp_path: Path):
         remote_keystore.export_to_keystore_tree()
 
 
+def test_keystore_tree_export_with_lowercase_key_algo(tmp_path: Path):
+    initialize_authenticator(tmp_path, keystore_owner="Owner", keystore_passphrase_hint="hint")
+    keystore = FilesystemKeystore(tmp_path)
+    keystore.set_keypair(  # Lowercase algo names are normalized, so they don't break exports
+        keychain_uid=generate_uuid0(), key_algo="rsa_oaep", public_key=b"pub", private_key=b"priv"
+    )
+    keystore_tree = keystore.export_to_keystore_tree()
+    assert [keypair["key_algo"] for keypair in keystore_tree["keypairs"]] == ["RSA_OAEP"]
+
+
+def test_keystore_set_keypair_assertion_does_not_leak_keys(tmp_path: Path):
+    keystore = FilesystemKeystore(tmp_path)
+    with pytest.raises(AssertionError) as exc_info:
+        keystore.set_keypair(
+            keychain_uid=generate_uuid0(), key_algo="RSA_OAEP", public_key=b"", private_key=b"SECRETPRIVATEKEY"
+        )
+    assert b"SECRETPRIVATEKEY" not in str(exc_info.value).encode()
+
+
 def test_keystore_import_from_keystore_tree(tmp_path: Path):
     authdevice_path = tmp_path / "device"
     authdevice_path.mkdir()
@@ -536,7 +555,14 @@ def test_generate_free_keypair_for_least_provisioned_key_algo():
     assert keystore.get_free_keypairs_count("ECC_DSS") == 1
     assert keystore.get_free_keypairs_count("RSA_OAEP") == 1
     assert keystore.get_free_keypairs_count("RSA_PSS") == 1
+    assert keystore.get_free_keypairs_count("ECIES_X25519") == 0  # New key algos are opt-in
     assert generated_keys_count == 4
+
+    keystore = InMemoryKeystore()
+    generate_free_keypair_for_least_provisioned_key_algo(
+        keystore=keystore, max_free_keys_per_algo=1, keygen_func=keygen_func, key_algos=["rsa_oaep"]
+    )
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 1  # Algo names are normalized to uppercase
 
     # Now test with a restricted set of key types
 
@@ -627,7 +653,7 @@ def test_get_free_keypair_generator_worker():
         worker.join()
 
         assert (
-            generated_keys_count == 120  # 4 key types for now
+            generated_keys_count == 120  # 4 default key types
         ), generated_keys_count  # All keys had the time to be generated
 
         print("NEW START")

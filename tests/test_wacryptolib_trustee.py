@@ -15,6 +15,7 @@ from wacryptolib.exceptions import (
     SignatureVerificationError,
     DecryptionError,
     ValidationError,
+    AlgorithmNotSupported,
     AuthorizationError,
     KeyLoadingError,
 )
@@ -104,6 +105,53 @@ def test_trustee_api_workflow():
         keychain_uid=keychain_uid, cipher_algo="RSA_OAEP", cipherdict=cipherdict
     )
     assert decrypted == secret
+
+    # Algo names are normalized to uppercase, so casing doesn't create separate keypairs
+    public_key_rsa_oaep_lowercase_pem = trustee_api.fetch_public_key(keychain_uid=keychain_uid_other, key_algo="rsa_oaep")
+    assert public_key_rsa_oaep_lowercase_pem == trustee_api.fetch_public_key(
+        keychain_uid=keychain_uid_other, key_algo="RSA_OAEP", must_exist=True
+    )
+    public_key_rsa_oaep_lowercase = load_asymmetric_key_from_pem_bytestring(
+        key_pem=public_key_rsa_oaep_lowercase_pem, key_algo="RSA_OAEP"
+    )
+    cipherdict_lowercase = _encrypt_via_rsa_oaep(plaintext=secret, key_dict=dict(key=public_key_rsa_oaep_lowercase))
+    decrypted = trustee_api.decrypt_with_private_key(
+        keychain_uid=keychain_uid_other, cipher_algo="rsa_oaep", cipherdict=cipherdict_lowercase
+    )
+    assert decrypted == secret
+
+    with pytest.raises(AlgorithmNotSupported, match="Unsupported algorithm"):  # Specific subclass of ValidationError
+        trustee_api.decrypt_with_private_key(keychain_uid=keychain_uid, cipher_algo="RSA_PSS", cipherdict=cipherdict)
+    with pytest.raises(ValidationError, match="Unsupported algorithm"):
+        trustee_api.fetch_public_key(keychain_uid=keychain_uid, key_algo="AES_CBC")
+    with pytest.raises(ValidationError, match="Unsupported algorithm"):
+        trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret, signature_algo="RSA_OAEP")
+    assert trustee_api.get_message_signature(keychain_uid=keychain_uid, message=secret, signature_algo="dsa_dss")
+    result = trustee_api.request_decryption_authorization(
+        keypair_identifiers=[dict(keychain_uid=keychain_uid_other, key_algo="rsa_oaep")], request_message="Need it"
+    )
+    assert not result["has_errors"]
+
+    for wrong_cipher_algo in (None, 42):  # Non-strings are rejected too, not crashing on .upper()
+        with pytest.raises(ValidationError, match="Unsupported algorithm"):
+            trustee_api.decrypt_with_private_key(
+                keychain_uid=keychain_uid, cipher_algo=wrong_cipher_algo, cipherdict=cipherdict
+            )
+    with pytest.raises(ValidationError, match=r"Unsupported algorithm 'XXXXX+'$"):  # Huge values are truncated
+        trustee_api.fetch_public_key(keychain_uid=keychain_uid, key_algo="X" * 10000)
+
+    # Algos unsupported here (e.g. those of a newer peer) are reported like missing keys, not as request errors
+    for unsupported_key_algo in ("AES_CBC", "UNEXISTING", None):
+        with pytest.raises(KeyDoesNotExist, match="not found"):
+            trustee_api.fetch_public_key(keychain_uid=keychain_uid, key_algo=unsupported_key_algo, must_exist=True)
+        unsupported_keypair_identifier = dict(keychain_uid=keychain_uid, key_algo=unsupported_key_algo)
+        result = trustee_api.request_decryption_authorization(
+            keypair_identifiers=[dict(keychain_uid=keychain_uid_other, key_algo="RSA_OAEP"), unsupported_keypair_identifier],
+            request_message="Need it",
+        )
+        assert result["has_errors"]
+        assert [k["keychain_uid"] for k in result["keypair_statuses"]["accepted"]] == [keychain_uid_other]
+        assert result["keypair_statuses"]["missing_private_key"] == [unsupported_keypair_identifier]
 
     # NO auto-creation of keypair in decrypt_with_private_key()
     with pytest.raises(KeyDoesNotExist, match="not found"):

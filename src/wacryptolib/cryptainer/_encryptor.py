@@ -9,7 +9,7 @@ import uuid
 
 from wacryptolib.cryptainer import CryptainerBase, SIGNATURE_POLICIES, PAYLOAD_CIPHERTEXT_LOCATIONS, logger, \
     CRYPTAINER_FORMAT, CRYPTAINER_STATES, SHARED_SECRET_ALGO_MARKER, get_trustee_proxy, \
-    _inject_payload_digests_and_signatures, FlightboxUtilitiesBase, FlightBox
+    _inject_payload_digests_and_signatures, FlightboxUtilitiesBase, FlightBox, check_cryptoconf_sanity
 
 from wacryptolib.cipher import (
     encrypt_bytestring,
@@ -230,6 +230,8 @@ class CryptainerEncryptor(CryptainerBase):
         'payload_cipher_layer_extracts' keys, and each of 'payload_cipher_layer_extracts' items has
         keys 'cipher_algo', 'symmetric_key' and 'payload_hash_algos'.
         """
+        check_cryptoconf_sanity(cryptoconf)  # Mandatory upfront validation of user input
+
         cryptainer, secrets = self._flightbox.generate_cryptainer_base_and_secrets(
             cryptoconf=cryptoconf, cryptainer_metadata=cryptainer_metadata
         )

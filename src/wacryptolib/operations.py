@@ -11,7 +11,6 @@ from wacryptolib.authenticator import SENSITIVE_KEYSTORE_FIELDS, is_authenticato
 from wacryptolib.cryptainer import (
     check_cryptoconf_sanity,
     encrypt_payload_into_cryptainer,
-    check_cryptainer_sanity,
     decrypt_payload_from_cryptainer,
 )
 from wacryptolib.exceptions import ValidationError, KeyLoadingError
@@ -144,7 +143,6 @@ def ___decrypt_payload_from_bytes(
     cryptainer_bytes: bytes, keystore_pool: KeystorePoolBase, passphrase_mapper=None
 ) -> tuple:  # FIXME useless?
     cryptainer = load_from_json_bytes(cryptainer_bytes)
-    check_cryptainer_sanity(cryptainer)
 
     payload = decrypt_payload_from_cryptainer(
         cryptainer, keystore_pool=keystore_pool, passphrase_mapper=passphrase_mapper

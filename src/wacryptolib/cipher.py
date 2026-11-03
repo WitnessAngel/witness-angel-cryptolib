@@ -230,7 +230,7 @@ def _decrypt_via_rsa_oaep(cipherdict: dict, key_dict: dict, verify_integrity_tag
     :param cipherdict: list of ciphertext chunks
     :param key_dict: dict with PRIVATE RSA key object (RSA.RsaKey)
     :param verify_integrity_tags: whether to check MAC tags of the ciphertext
-        (not applicable for this cipher)
+        (not applicable for this cipher, OAEP is always checked)
 
     :return: the decrypted bytestring"""
     key = key_dict["key"]

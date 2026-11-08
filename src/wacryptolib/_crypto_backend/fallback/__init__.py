@@ -79,7 +79,8 @@ def _to_bytes(passphrase):
 
 # HASHER FACTORY #
 
-IMPLEMENTED_HASH_ALGOS = ["SHA256", "SHA512", "SHA3_256", "SHA3_512"]
+# Some hashlib builds (e.g. against an OpenSSL without SHA3) lack algorithms
+IMPLEMENTED_HASH_ALGOS = [_x for _x in ["SHA256", "SHA512", "SHA3_256", "SHA3_512"] if hasattr(hashlib, _x.lower())]
 
 
 def get_hasher_instance(hash_algo):

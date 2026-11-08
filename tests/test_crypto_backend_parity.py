@@ -580,7 +580,6 @@ def test_pss_rejects_keys_too_short_for_the_salt(both_backends):
             backend.verify_with_pss(hasher, short_salt_signature, key)
 
 
-@pytest.mark.requires_pycryptodome
 def test_dss_rejects_dsa_keys_with_non_fips_186_3_sizes(backend):
     p, q, g, y, x = (1 << 2047) + 1, (1 << 159) + 1, 2, 2, 1  # (L, N) = (2048, 160), only sizes are checked
     if backend.__name__.endswith(".fallback"):

@@ -48,7 +48,8 @@ def check_dsa_key(key):
         q > 1 and p > q and (p - 1) % q == 0 and 1 < g < p and 1 < y < p
         and pow(g, q, p) == 1 and pow(y, q, p) == 1
         and (x is None or (0 < x < q and pow(g, x, p) == y))
-        and is_probable_prime(q) and is_probable_prime(p)
+        # Like RSA key import, 10 rounds catch corrupted keys, since 40 rounds made each DSA key load last seconds
+        and is_probable_prime(q, rounds=10) and is_probable_prime(p, rounds=10)
     )
     if not valid:
         raise ValueError("Invalid DSA key components")

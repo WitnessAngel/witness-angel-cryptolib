@@ -2913,7 +2913,7 @@ def test_cryptoconf_validation_error_via_json_schema(corrupted_conf):
 
 
 @pytest.mark.parametrize("jsonschema_mode", [False, True])
-@pytest.mark.parametrize("key_cipher_algo", ["RSA_PSS", "DSA_DSS", "ECC_DSS"])
+@pytest.mark.parametrize("key_cipher_algo", ["RSA_PSS", "DSA_DSS", "ECC_DSS", "ML_DSA_65"])
 def test_cryptoconf_validation_rejects_signature_only_key_cipher_algos(key_cipher_algo, jsonschema_mode):
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
     cryptoconf["payload_cipher_layers"][0]["key_cipher_layers"] = [
@@ -2926,7 +2926,7 @@ def test_cryptoconf_validation_rejects_signature_only_key_cipher_algos(key_ciphe
 
 
 @pytest.mark.parametrize("jsonschema_mode", [False, True])
-@pytest.mark.parametrize("payload_cipher_algo", ["RSA_OAEP", "ECIES_X25519"])
+@pytest.mark.parametrize("payload_cipher_algo", ["RSA_OAEP", "ECIES_X25519", "ML_KEM_768"])
 def test_cryptoconf_validation_rejects_asymmetric_payload_cipher_algos(payload_cipher_algo, jsonschema_mode):
     cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
     cryptoconf["payload_cipher_layers"][0]["payload_cipher_algo"] = payload_cipher_algo

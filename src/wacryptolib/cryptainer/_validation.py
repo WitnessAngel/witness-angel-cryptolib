@@ -90,7 +90,7 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
         extra_asymmetric_cipher_algo_block = {"key_ciphertext": micro_schemas.schema_binary}
 
     ASYMMETRIC_CIPHER_ALGO_BLOCK = {
-        "key_cipher_algo": Or(*SUPPORTED_ASYMMETRIC_CIPHER_ALGOS),  # Not signature-only algos
+        "key_cipher_algo": Or(*SUPPORTED_ASYMMETRIC_CIPHER_ALGOS),  # Not signature-only key algos like ML_DSA_65
         "key_cipher_trustee": trustee_schemas,
         OptionalKey("keychain_uid"): micro_schemas.schema_uid,
     }
@@ -135,7 +135,7 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
 
     def _build_payload_cipher_layer_schema(signatures_key):
         return {
-            "payload_cipher_algo": Or(*SUPPORTED_SYMMETRIC_CIPHER_ALGOS),
+            "payload_cipher_algo": Or(*SUPPORTED_SYMMETRIC_CIPHER_ALGOS),  # Payloads are encrypted with a new symkey
             signatures_key: [payload_signature],  # Signatures AFTER encryption
             **extra_payload_cipher_layer,
             "key_cipher_layers": ALL_POSSIBLE_CIPHER_LAYERS_LIST_NON_EMPTY,

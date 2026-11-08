@@ -74,7 +74,7 @@ def verify_message_signature(*, message: bytes, signature_algo: str, signature: 
     try:
         hash_payload = _compute_timestamped_hash(message=message, timestamp_utc=signature["signature_timestamp_utc"])
         verification_function(message=hash_payload, signature=signature["signature_value"], public_key=public_key)
-    except ValueError as exc:
+    except (ValueError, TypeError) as exc:  # ML-DSA raises TypeError on non-bytes signatures, like sign_message() handles
         raise SignatureVerificationError("Failed %s signature verification (%s)" % (signature_algo, exc)) from exc
 
 

@@ -58,6 +58,8 @@ class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionSt
             self._output_data_stream.close()  # Avoid leak of open file
             with suppress(OSError):  # A cleanup failure must not replace the original error
                 offloaded_file_path.unlink(missing_ok=True)  # Else orphan, since storage only lists cryptainer files
+            with suppress(OSError):
+                self._cryptainer_filepath_temp.unlink(missing_ok=True)  # Partial initial dump, pointing to deleted payload
             raise
 
     def _dump_current_cryptainer_to_filesystem(self, is_temporary):

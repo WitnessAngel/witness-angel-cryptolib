@@ -4,7 +4,8 @@ Development
 
 * Summarize schema validation errors (failing field and reason, bounded size) instead of embedding whole
   cryptainers or cryptoconfs, and stop chaining them to the raw validator exceptions
-* Delete the offloaded payload file when CryptainerEncryptionPipeline fails to start
+* Delete the offloaded payload file and the partial initial cryptainer dump when CryptainerEncryptionPipeline fails
+  to start
 * **BREAKING**: Extended JSON format now defaults to RELAXED mode instead of CANONICAL mode
   - UUIDs are now serialized as `{"$uuid": "hex"}` instead of `{"$binary": {"base64": "...", "subType": "04"}}`
   - Integers are now plain JSON numbers instead of `{"$numberInt": "42"}`
@@ -34,6 +35,8 @@ Development
   to get a generated top-level keychain_uid, omit the field
 * **BREAKING**: Cryptainer/cryptoconf schemas now only accept symmetric ciphers as payload_cipher_algo, and
   asymmetric ciphers (not signature algorithms) as asymmetric key_cipher_algo
+* **BREAKING**: check_cryptainer_sanity() (python mode) now requires inline bytes payload ciphertext by default;
+  pass require_inline_payload=False for offloaded, payload-less or unfinished cryptainers (jsonschema mode unchanged)
 * Generated JSON schemas now enforce non-empty payload/key cipher layers, shared-secret shards and sigconf/sigainer
   plaintext signatures, as well as a strictly positive shared-secret threshold
 

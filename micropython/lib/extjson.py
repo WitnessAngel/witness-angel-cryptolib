@@ -124,7 +124,7 @@ def convert_from_extjson(ext_obj: Any) -> Any:
 
 
 def _convert_primitive_from_extjson_dict(ext_obj_dict: Mapping[str, Any]) -> Any:
-    assert isinstance(ext_obj_dict, dict), repr(ext_obj_dict)
+    assert isinstance(ext_obj_dict, dict), type(ext_obj_dict)
     match = None
     if len(ext_obj_dict) != 1:
         return ext_obj_dict  # We assume it's not a {$type: ...} dict
@@ -415,7 +415,7 @@ def load_from_json_str(data, **extra_options):
     of the underlying parsers propagate on malformed data (JSONDecodeError and
     other ValueError subclasses, OverflowError, decimal.InvalidOperation...).
     """
-    assert isinstance(data, str), data
+    assert isinstance(data, str), type(data)
     return loads(data, **extra_options)
 
 

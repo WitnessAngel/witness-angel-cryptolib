@@ -131,7 +131,7 @@ class TrusteeApi:  # TODO rename this?
         )
 
         passphrases = passphrases or []
-        assert isinstance(passphrases, (tuple, list)), repr(passphrases)
+        assert isinstance(passphrases, (tuple, list)), type(passphrases)
 
         if not keypair_identifiers:
             raise ValueError("Keypair identifiers must not be empty, when requesting decryption authorization")
@@ -181,7 +181,7 @@ class TrusteeApi:  # TODO rename this?
         )
 
         has_errors = len(accepted) < len(keypair_identifiers)
-        assert sum(len(x) for x in keypair_statuses.values()) == len(keypair_identifiers), locals()
+        assert sum(len(x) for x in keypair_statuses.values()) == len(keypair_identifiers), {k: len(v) for k, v in keypair_statuses.items()}
 
         return dict(
             response_message="Decryption request denied" if has_errors else "Decryption request accepted",
@@ -214,7 +214,7 @@ class TrusteeApi:  # TODO rename this?
         )
 
         passphrases = passphrases or []
-        assert isinstance(passphrases, (tuple, list)), repr(passphrases)
+        assert isinstance(passphrases, (tuple, list)), type(passphrases)
 
         private_key_pem = self._keystore.get_private_key(keychain_uid=keychain_uid, key_algo=cipher_algo)
 
@@ -226,7 +226,7 @@ class TrusteeApi:  # TODO rename this?
         key_struct_bytes = decrypt_bytestring(
             cipherdict=cipherdict, cipher_algo=cipher_algo, key_dict=dict(key=private_key)
         )
-        assert isinstance(key_struct_bytes, bytes), key_struct_bytes
+        assert isinstance(key_struct_bytes, bytes), type(key_struct_bytes)
         return key_struct_bytes
 
 

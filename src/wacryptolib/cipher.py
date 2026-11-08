@@ -52,7 +52,7 @@ def encrypt_bytestring(plaintext: bytes, *, cipher_algo: str, key_dict: dict) ->
     using the provided key dict (which must contain keys/initializers of proper types and lengths).
 
     :return: dictionary with encryption data"""
-    assert isinstance(plaintext, bytes), repr(plaintext)
+    assert isinstance(plaintext, bytes), type(plaintext)
     logger.debug("Encrypting %d bytes of plaintext with cipher algo %s", len(plaintext), cipher_algo)
     cipher_algo_conf = _get_cipher_algo_conf(cipher_algo=cipher_algo)
     encryption_function = cipher_algo_conf["encryption_function"]
@@ -292,7 +292,7 @@ class EncryptionNodeBase:
         if not plaintext:
             return b""  # Shortcut
         ciphertext = self._cipher.encrypt(plaintext)
-        assert isinstance(ciphertext, bytes), repr(ciphertext)
+        assert isinstance(ciphertext, bytes), type(ciphertext)
 
         if finalize and hasattr(self._cipher, "finalize"):
             assert self._is_finished

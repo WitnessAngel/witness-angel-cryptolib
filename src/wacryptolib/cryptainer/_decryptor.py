@@ -328,7 +328,7 @@ class CryptainerDecryptor(CryptainerBase):
                 "Skipping retrieval of remotely predecrypted symkeys (requires requestor-uid and gateway urls)"
             )
 
-        assert isinstance(cryptainer, dict), cryptainer
+        assert isinstance(cryptainer, dict), type(cryptainer)
 
         cryptainer_format = cryptainer["cryptainer_format"]
         if cryptainer_format != CRYPTAINER_FORMAT:
@@ -722,7 +722,9 @@ class CryptainerDecryptor(CryptainerBase):
         passphrases = self._passphrase_mapper.get(trustee_id) or []
         assert isinstance(passphrases, list), type(passphrases)  # No SINGLE passphrase here
 
-        passphrases = passphrases + list(self._passphrase_mapper.get(None) or [])  # Add COMMON passphrases, in a NEW list
+        common_passphrases = self._passphrase_mapper.get(None) or []
+        assert not isinstance(common_passphrases, (str, bytes)), type(common_passphrases)  # No SINGLE passphrase here
+        passphrases = passphrases + list(common_passphrases)  # Add COMMON passphrases, in a NEW list
 
         operation_report.add_information(
             "Attempting actual decryption of key using asymmetric algorithm %s (via trustee)" % cipher_algo

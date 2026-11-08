@@ -225,7 +225,7 @@ class FlightBox:
             cryptoconf.get("keychain_uid") or self._fbu.generate_uuid0()
         )  # Might be shared by lots of cryptainers
 
-        assert isinstance(cryptoconf, dict), cryptoconf
+        assert isinstance(cryptoconf, dict), type(cryptoconf)
         cryptainer = copy.deepcopy(cryptoconf)  # So that we can manipulate it as new cryptainer
         del cryptoconf
         if not cryptainer["payload_cipher_layers"]:

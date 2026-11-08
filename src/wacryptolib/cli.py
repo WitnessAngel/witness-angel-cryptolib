@@ -468,7 +468,7 @@ def display_cryptoconf(ctx, processors, keychain_uid, output_file):
     """Format and print a cryptoconf"""
     cryptoconf = ctx.obj["cryptoconf"]
     try:
-        check_cryptoconf_sanity(cryptoconf)  # E.g. authenticators restricted to RSA_OAEP
+        check_cryptoconf_sanity(cryptoconf)  # Safety
     except ValidationError as exc:
         raise click.UsageError("Generated cryptoconf is invalid: %s" % exc)
     click.echo(_dump_as_safe_formatted_json(cryptoconf), file=output_file)
@@ -533,7 +533,7 @@ def _build_key_cipher_layer(asym_cipher_algo, trustee_type, keystore_uid, sym_ci
     if trustee_type == CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE:
         if not keystore_uid:
             raise click.BadParameter("Authenticator trustee requires a --keystore-uid value")
-        if asym_cipher_algo != "RSA_OAEP":  # Also enforced by cryptoconf validation, but with an unreadable message
+        if asym_cipher_algo != "RSA_OAEP":  # Only enforced here, cryptoconf schemas do not restrict trustee key algos
             raise click.BadParameter("Authenticator trustee only has RSA_OAEP keys for now")
         key_cipher_trustee["keystore_uid"] = keystore_uid
 

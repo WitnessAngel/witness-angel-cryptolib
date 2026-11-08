@@ -293,8 +293,12 @@ def _decrypt_via_ecies_x25519(cipherdict: dict, key_dict: dict, verify_integrity
     :return: the decrypted bytestring"""
     key = key_dict["key"]
     _check_x25519_key(key)
+    try:
+        kem_ciphertext, ciphertext = cipherdict["kem_ciphertext"], cipherdict["ciphertext"]
+    except KeyError as exc:  # Else a corrupted key ciphertext aborts the whole decryption, instead of its branch
+        raise ValueError("Malformed ECIES_X25519 cipherdict (missing %s)" % exc) from None
     return _crypto_backend.decrypt_via_hpke(
-        cipherdict["kem_ciphertext"], cipherdict["ciphertext"], private_key=key, aead_id=ECIES_X25519_HPKE_AEAD_ID)
+        kem_ciphertext, ciphertext, private_key=key, aead_id=ECIES_X25519_HPKE_AEAD_ID)
 
 
 def _create_hashers_dict(hash_algos):

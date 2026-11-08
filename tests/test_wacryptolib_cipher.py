@@ -193,6 +193,9 @@ def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
     with pytest.raises(DecryptionError):
         decrypt(key_dict=private_key_dict, cipherdict=corrupted_cipherdict)
 
+    with pytest.raises(DecryptionError, match="Malformed"):
+        decrypt(key_dict=private_key_dict, cipherdict={"ciphertext": cipherdict["ciphertext"]})
+
     _other_public_key, other_private_key = generate_ecc_keypair("curve25519")  # Bypasses keypair cache of tests
     with pytest.raises(DecryptionError) as exc_info:
         decrypt(key_dict=dict(key=other_private_key), cipherdict=cipherdict)

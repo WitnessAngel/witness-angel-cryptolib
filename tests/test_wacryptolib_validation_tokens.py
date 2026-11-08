@@ -56,6 +56,7 @@ def test_tokens_are_dropped_by_copies_and_serialization():
     for token in (cryptoconf, cryptainer):
         assert type(copy.deepcopy(token)) is dict
         assert type(token.copy()) is dict
+        assert type(copy.copy(token)) is dict
         assert type(load_from_json_bytes(dump_to_json_bytes(token))) is dict
 
     assert ValidatedCryptoconf() == {} and ValidatedCryptainer().inline_payload_checked is False  # Python-schema needs it
@@ -128,6 +129,15 @@ def test_invalid_cryptainer_metadata_is_refused():
         encrypt_payload_into_cryptainer(b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata="notadict")
 
 
+def test_cryptainer_metadata_is_not_aliased_by_cryptainer_token(monkeypatch):
+    monkeypatch.setenv(_validation.DEBUG_TOKEN_DIGEST_ENV_VAR, "1")
+    cryptainer_metadata = {"a": 1}
+    cryptainer = encrypt_payload_into_cryptainer(b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=cryptainer_metadata)
+    cryptainer_metadata["a"] = 2  # Caller reuses its dict, the token is untouched
+    assert decrypt_payload_from_cryptainer(cryptainer)[0] == b"abc"
+    assert cryptainer["cryptainer_metadata"] == {"a": 1}
+
+
 def test_storage_validates_default_cryptoconf_once(tmp_path, validation_counter):
     storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path)
     assert validation_counter["cryptoconf"] == 1
@@ -140,6 +150,7 @@ def test_storage_validates_default_cryptoconf_once(tmp_path, validation_counter)
     # Early failures, instead of errors swallowed by worker threads
     with pytest.raises(SchemaValidationError):
         CryptainerStorage(default_cryptoconf={"whatever": True}, cryptainer_dir=tmp_path)
+    assert CryptainerStorage(default_cryptoconf={}, cryptainer_dir=tmp_path)._default_cryptoconf is None  # No default
     with pytest.raises(SchemaValidationError):
         storage.enqueue_file_for_encryption("bad.dat", b"stuffs", cryptainer_metadata=None, cryptoconf={"a": 1})
 

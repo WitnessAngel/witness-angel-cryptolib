@@ -417,7 +417,7 @@ class _ValidatedToken(dict):
     """A dict which was validated when this object was built, so that later steps needn't validate it again.
 
     This is NOT a frozen tree and is not tamper-proof: mutating it afterwards is a caller bug (set the environment
-    variable WACRYPTOLIB_DEBUG_VALIDATED_TOKENS to detect it). The tag is dropped by deepcopy(), dict.copy()
+    variable WACRYPTOLIB_DEBUG_VALIDATED_TOKENS to detect it). The tag is dropped by copy(), deepcopy(), dict.copy()
     and JSON serialization, so reloaded or derived data is always validated again.
     """
 
@@ -425,6 +425,9 @@ class _ValidatedToken(dict):
 
     def __deepcopy__(self, memo):
         return copy.deepcopy(dict(self), memo)  # A plain dict, so that derived data never inherits the tag
+
+    def __copy__(self):
+        return dict(self)  # Shallow copies are derived data too, they must not inherit the tag
 
     def _seal(self):
         """Record the digest of the tree, if the debug guard is enabled"""

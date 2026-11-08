@@ -225,7 +225,8 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         assert max_cryptainer_quota is None or max_cryptainer_quota >= 0, max_cryptainer_quota
         assert max_cryptainer_count is None or max_cryptainer_count >= 0, max_cryptainer_count
         assert max_cryptainer_age is None or max_cryptainer_age >= timedelta(seconds=0), max_cryptainer_age
-        self._default_cryptoconf = None if default_cryptoconf is None else ensure_validated_cryptoconf(default_cryptoconf)
+        # Falsy values mean "no default cryptoconf" for _resolve_cryptoconf(), so they are not validated
+        self._default_cryptoconf = ensure_validated_cryptoconf(default_cryptoconf) if default_cryptoconf else None
         self._max_cryptainer_quota = max_cryptainer_quota
         self._max_cryptainer_count = max_cryptainer_count
         self._max_cryptainer_age = max_cryptainer_age
@@ -235,7 +236,9 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         self._offload_payload_ciphertext = offload_payload_ciphertext
 
     def __del__(self):
-        self._thread_pool_executor.shutdown(wait=False)
+        executor = getattr(self, "_thread_pool_executor", None)  # Missing if the constructor failed
+        if executor is not None:
+            executor.shutdown(wait=False)
 
     def _delete_cryptainer(self, cryptainer_name):
         cryptainer_filepath = self._make_absolute(cryptainer_name)

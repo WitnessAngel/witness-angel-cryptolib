@@ -234,6 +234,7 @@ class CryptainerEncryptor(CryptainerBase):
         cryptoconf = ensure_validated_cryptoconf(cryptoconf)  # Mandatory upfront validation of user input
         if cryptainer_metadata is not None and not isinstance(cryptainer_metadata, dict):  # Not an assert (python -O)
             raise SchemaValidationError("Cryptainer metadata must be a dict or None, not %s" % type(cryptainer_metadata).__name__)
+        cryptainer_metadata = copy.deepcopy(cryptainer_metadata)  # The validated cryptainer must not alias caller data
 
         cryptainer, secrets = self._flightbox.generate_cryptainer_base_and_secrets(
             cryptoconf=cryptoconf, cryptainer_metadata=cryptainer_metadata

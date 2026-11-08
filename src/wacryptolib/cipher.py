@@ -493,7 +493,7 @@ def _decrypt_via_ml_kem_768(cipherdict: dict, key_dict: dict, verify_integrity_t
         return _crypto_backend.decrypt_via_ml_kem_768(
             cipherdict["kem_ciphertext"], cipherdict["ciphertext"], private_key=key
         )
-    except ValueError as exc:
+    except (ValueError, TypeError, KeyError) as exc:  # Malformed cipherdicts are corrupted ciphertexts too
         # With a KEM + AEAD, a wrong private key and a tampered ciphertext can NOT be told apart: ML-KEM's implicit
         # rejection then yields a random key, and the AEAD tag check fails. So every HPKE failure (bad tag, too short
         # ciphertext, malformed encapsulation...) is an integrity error, whatever pycryptodome's message

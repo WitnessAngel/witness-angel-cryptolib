@@ -91,7 +91,7 @@ class TrusteeApi:  # TODO rename this?
         """
         Attempt decryption of key with and without provided passphrases, and raise if all fail.
         """
-        for passphrase in [None] + passphrases:
+        for passphrase in [None] + list(passphrases):  # Callers may give tuples
             try:
                 key_obj = load_asymmetric_key_from_pem_bytestring(
                     key_pem=private_key_pem, key_algo=key_algo, passphrase=passphrase

@@ -199,7 +199,7 @@ def test_trustee_api_workflow():
         keychain_uid=keychain_uid_passphrased,
         cipher_algo="RSA_OAEP",
         cipherdict=cipherdict,
-        passphrases=[good_passphrase],
+        passphrases=random.choice(([good_passphrase], (good_passphrase,))),  # Tuples are accepted too
         cryptainer_metadata=random.choice((None, {"hello": "bye"})),
     )
     assert decrypted == secret

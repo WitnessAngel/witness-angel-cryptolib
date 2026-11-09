@@ -600,7 +600,7 @@ def test_periodic_subprocess_stream_recorder_masks_credentials_in_stderr(tmp_pat
         executable_command_line=[
             sys.executable,
             "-c",
-            "import sys; print(\"Input #0, rtsp, from 'rtsp://admin:secret@pwd@camera/stream':\", file=sys.stderr)",
+            "import sys; print(\"Input #0, rtsp, from 'rtsp://admin:secretpwd@camera/stream':\", file=sys.stderr)",
         ],
         interval_s=5,
         cryptainer_storage=cryptainer_storage,

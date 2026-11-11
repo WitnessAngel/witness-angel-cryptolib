@@ -47,6 +47,15 @@ def _check_key_struct_sanity(key_struct):
     _validate_data_tree(data_tree=key_struct, validation_schema=KEY_STRUCT_SCHEMA)
 
 
+def _load_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str) -> dict:
+    """Deserialize and validate the cipherdict of a key cipher layer, raising DecryptionError if it is malformed."""
+    return _load_untrusted_json_bytes(
+        key_ciphertext,
+        description="%s key cipherdict" % key_cipher_algo,
+        sanity_check=lambda key_cipherdict: check_key_cipherdict_sanity(key_cipherdict, key_cipher_algo),
+    )
+
+
 class DecryptionErrorType:  # FIXME RENAME THIS
     INFORMATION = "INFORMATION"
     SIGNATURE_ERROR = "SIGNATURE_ERROR"
@@ -566,7 +575,7 @@ class CryptainerDecryptor(CryptainerBase):
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
 
         try:
-            key_cipherdict = self._load_key_cipherdict(key_ciphertext, key_cipher_algo=key_cipher_algo)
+            key_cipherdict = _load_key_cipherdict(key_ciphertext, key_cipher_algo=key_cipher_algo)
         except DecryptionError as exc:  # E.g. a corrupted key ciphertext, only this branch is lost
             operation_report.add_entry(
                 entry_type=(
@@ -730,15 +739,6 @@ class CryptainerDecryptor(CryptainerBase):
                     )
 
         return key_bytes
-
-    @staticmethod
-    def _load_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str) -> dict:
-        """Deserialize and validate the cipherdict of a key cipher layer, raising DecryptionError if it is malformed."""
-        return _load_untrusted_json_bytes(
-            key_ciphertext,
-            description="%s key cipherdict" % key_cipher_algo,
-            sanity_check=lambda key_cipherdict: check_key_cipherdict_sanity(key_cipherdict, key_cipher_algo),
-        )
 
     @staticmethod
     def _get_predecrypted_symkey_or_none(key_ciphertext, predecrypted_symkey_mapper: Optional[dict]) -> Optional[bytes]:

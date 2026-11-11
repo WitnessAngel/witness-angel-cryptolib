@@ -1411,6 +1411,24 @@ def test_unwrap_malformed_predecrypted_symkeys():
         )
 
 
+def test_gather_decryptable_symkeys_with_malformed_shared_secret():
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"abc", cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
+    )
+    malformed_cryptainer = copy.deepcopy(cryptainer)
+    malformed_cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes({"shard_ciphertexts": 1})
+
+    def _get_symkey_requests_count(cryptainers_with_names):
+        decryptable_symkeys_per_trustee = gather_decryptable_symkeys(cryptainers_with_names=cryptainers_with_names)
+        return sum(len(symkeys) for (_trustee_data, symkeys) in decryptable_symkeys_per_trustee.values())
+
+    assert _get_symkey_requests_count([("good", cryptainer)]) == 5  # Shards of SIMPLE_SHAMIR_CRYPTOCONF
+    with patch("wacryptolib.cryptainer._analysis.logger") as logger_mock:
+        assert _get_symkey_requests_count([("bad", malformed_cryptainer), ("good", cryptainer)]) == 5
+    ((log_message, cryptainer_name, _exc),) = [call.args for call in logger_mock.warning.call_args_list]
+    assert "Skipping malformed shared secret" in log_message and cryptainer_name == "bad"
+
+
 def test_key_cipherdict_sanity_checks():
     check_key_cipherdict_sanity({"shard_ciphertexts": [b"abc"], "unused_field": 1}, key_cipher_algo=SHARED_SECRET_ALGO_MARKER)
     for invalid_cipherdict in [{"shard_ciphertexts": []}, {"shard_ciphertexts": [None]}, [b"abc"], None]:

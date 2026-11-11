@@ -2,13 +2,15 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import logging
 from typing import Sequence
 
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
 from wacryptolib.cryptainer import get_trustee_id, SHARED_SECRET_ALGO_MARKER, get_payload_ciphertext_signatures
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, SUPPORTED_ASYMMETRIC_KEY_ALGOS
-from wacryptolib.exceptions import SchemaValidationError
-from wacryptolib.utilities import load_from_json_bytes
+from wacryptolib.exceptions import SchemaValidationError, DecryptionError
+
+logger = logging.getLogger(__name__)
 
 
 def is_cryptainer_cryptoconf_streamable(cryptoconf):  # FIXME rename and add to docs?
@@ -82,6 +84,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
     :return: dict with a tuple of the cipher key and the symkey/shard by trustee id.
     """
     from wacryptolib.cryptainer import ensure_validated_cryptainer  # LAZY import, _validation is loaded after us
+    from wacryptolib.cryptainer._decryptor import _load_key_cipherdict  # LAZY import too
 
     cryptainers_with_names = list(cryptainers_with_names)  # Might be a one-shot iterable, and we loop twice
     for cryptainer_name, cryptainer in cryptainers_with_names:
@@ -129,7 +132,11 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
 
         if last_key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
             key_shared_secret_shards = last_key_cipher_layer["key_shared_secret_shards"]
-            key_cipherdict = load_from_json_bytes(key_ciphertext)
+            try:
+                key_cipherdict = _load_key_cipherdict(key_ciphertext, key_cipher_algo=last_key_cipher_algo)
+            except DecryptionError as exc:  # Like on decryption, only this branch is lost
+                logger.warning("Skipping malformed shared secret of cryptainer %s: %s", cryptainer_name, exc)
+                return
             shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
 
             for shard_ciphertext, shard_conf in zip(shard_ciphertexts, key_shared_secret_shards):

@@ -1411,6 +1411,66 @@ def test_unwrap_malformed_predecrypted_symkeys():
         )
 
 
+def test_cryptainer_decryption_with_malformed_ecies_and_symmetric_key_cipherdicts():
+    skip_if_fallback_backend("ECC")
+    payload = b"some secret payload"
+    cryptoconf = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_CBC",
+                key_cipher_layers=[
+                    dict(
+                        key_cipher_algo="AES_EAX",
+                        key_cipher_layers=[
+                            dict(key_cipher_algo="ECIES_X25519", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                        ],
+                    )
+                ],
+                payload_ciphertext_signatures=[],
+            )
+        ]
+    )
+    cryptainer_original = encrypt_payload_into_cryptainer(
+        payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=None
+    )
+    result_payload, _operation_report = decrypt_payload_from_cryptainer(cryptainer_original)
+    assert result_payload == payload
+
+    def _get_corrupted_cryptainer(key_cipher_layer_path, removed_field):
+        cryptainer = copy.deepcopy(cryptainer_original)
+        key_cipher_layer = cryptainer["payload_cipher_layers"][0]
+        for key in key_cipher_layer_path:
+            key_cipher_layer = key_cipher_layer[key]
+        key_cipherdict = load_from_json_bytes(key_cipher_layer["key_ciphertext"])
+        del key_cipherdict[removed_field]
+        key_cipher_layer["key_ciphertext"] = dump_to_json_bytes(key_cipherdict)
+        return cryptainer
+
+    # The outer AES_EAX cipherdict, reported as a symmetric decryption error
+    cryptainer = _get_corrupted_cryptainer([], removed_field="tag")
+    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload is None
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Malformed key cipherdict for algorithm AES_EAX",
+        exception_class=DecryptionError,
+    )
+
+    # The inner ECIES_X25519 cipherdict, which protects the AES_EAX key
+    cryptainer = _get_corrupted_cryptainer(["key_cipher_layers", 0], removed_field="kem_ciphertext")
+    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload is None
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Malformed key cipherdict for algorithm ECIES_X25519",
+        exception_class=DecryptionError,
+    )
+
+
 def test_gather_decryptable_symkeys_with_malformed_shared_secret():
     cryptainer = encrypt_payload_into_cryptainer(
         payload=b"abc", cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None

@@ -185,6 +185,19 @@ def test_generate_and_load_passphrase_protected_asymmetric_key(key_algo):
             )
 
 
+@pytest.mark.parametrize(
+    "key_algo", [key_algo for key_algo in SUPPORTED_ASYMMETRIC_KEY_ALGOS if not key_algo.startswith("RSA_")]
+)
+def test_load_unencrypted_pkcs8_private_key_with_passphrase(key_algo):  # Clear RSA private keys are PKCS#1 instead
+    if key_algo.startswith("ML_"):
+        skip_if_fallback_backend("ML-KEM/ML-DSA")
+    keypair = wacryptolib.keygen.generate_keypair(key_algo=key_algo)
+    assert keypair["private_key"].startswith(b"-----BEGIN PRIVATE KEY-----")
+
+    with pytest.raises(KeyLoadingError, match="Unencrypted PKCS#8 private key can't be loaded with a passphrase"):
+        load_asymmetric_key_from_pem_bytestring(key_pem=keypair["private_key"], key_algo=key_algo, passphrase="abc")
+
+
 def test_key_algos_mapping_and_isolation():
     # We separate keys for encryption and signature (especially for RSA)!
     assert not set(SUPPORTED_CIPHER_ALGOS) & set(SUPPORTED_SIGNATURE_ALGOS)

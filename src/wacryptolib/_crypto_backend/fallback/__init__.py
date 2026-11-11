@@ -519,21 +519,24 @@ def decrypt_via_hpke(enc: bytes, ciphertext: bytes, private_key, aead_id) -> byt
 # PEM IMPORT/EXPORT #
 
 
-def _import_key_from_pem(key_pem, passphrase, private_key_decoders, public_key_decoders):
-    """Decoders are dicts {marker or OID: callable}, OIDs being used for PKCS#8 and SubjectPublicKeyInfo."""
+def _import_key_from_pem(key_pem, passphrase, private_key_decoders, public_key_decoders, get_public_key=None):
+    """Decoders are dicts {marker or OID: callable}, OIDs being used for PKCS#8 and SubjectPublicKeyInfo.
+
+    If given, `get_public_key(private_key)` is used to check the public key optionally embedded in PKCS#8 private keys,
+    like pycryptodome does for ECC keys (it ignores this public key for RSA and DSA keys)."""
     der, marker = _pem.decode_pem(key_pem)
     if marker == "ENCRYPTED PRIVATE KEY":
         if not passphrase:
-            raise ValueError("Encrypted private key requires a passphrase")
+            raise ValueError("The private key is encrypted: a passphrase is required")  # Like pycryptodome
         clear_pkcs8_der = _pem.decrypt_pkcs8(der, _to_bytes(passphrase), decrypt_via_aes_cbc=decrypt_via_aes_cbc)
         try:
-            return _decode_pkcs8_private_key(clear_pkcs8_der, private_key_decoders)
+            return _decode_pkcs8_private_key(clear_pkcs8_der, private_key_decoders, public_key_decoders, get_public_key)
         except (ValueError, IndexError, TypeError):
             raise ValueError(_pem.PEM_DECRYPTION_ERROR) from None  # Same error as for a bad padding
     if marker == "PRIVATE KEY":
-        if passphrase:  # Like pycryptodome, which then expects an encrypted PKCS#8 structure
+        if passphrase:  # Like our pycryptodome backend
             raise ValueError("Unencrypted PKCS#8 private key can't be loaded with a passphrase")
-        return _decode_pkcs8_private_key(der, private_key_decoders)
+        return _decode_pkcs8_private_key(der, private_key_decoders, public_key_decoders, get_public_key)
     if marker == "PUBLIC KEY":
         oid, parameters, public_key_bits = _pem.decode_spki(der)
         return _get_decoder(public_key_decoders, oid)(public_key_bits, parameters)
@@ -546,9 +549,14 @@ def _import_key_from_pem(key_pem, passphrase, private_key_decoders, public_key_d
     raise ValueError("Unsupported PEM type %r" % marker)
 
 
-def _decode_pkcs8_private_key(der, private_key_decoders):
-    oid, parameters, private_key_octets = _pem.decode_pkcs8(der)
-    return _get_decoder(private_key_decoders, oid)(private_key_octets, parameters)
+def _decode_pkcs8_private_key(der, private_key_decoders, public_key_decoders, get_public_key):
+    oid, parameters, private_key_octets, public_key_bits = _pem.decode_pkcs8(der)
+    private_key = _get_decoder(private_key_decoders, oid)(private_key_octets, parameters)
+    if get_public_key and public_key_bits is not None:
+        public_key = _get_decoder(public_key_decoders, oid)(public_key_bits, parameters)
+        if public_key != get_public_key(private_key):
+            raise ValueError("Private and public keys don't match")
+    return private_key
 
 
 def _get_decoder(decoders, oid):
@@ -726,6 +734,7 @@ def import_ecc_key_from_pem(key_pem, passphrase=None):
             _pem.OID_X25519: _decode_x25519_public_key,
             _pem.OID_EC_PUBLIC_KEY: _decode_nist_ecc_public_key,
         },
+        get_public_key=lambda key: key.public_key() if isinstance(key, X25519Key) else key.verifying_key,
     )
 
 

@@ -103,7 +103,7 @@ def test_passphrase_is_rejected_only_for_clear_pkcs8_private_keys(backend):
 
     ecc_public_key, ecc_private_key = backend.generate_ecc_keypair("p256")
     backend.import_ecc_key_from_pem(backend.export_ecc_key_to_pem(ecc_public_key), passphrase=b"abc")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unencrypted PKCS#8 private key can't be loaded with a passphrase"):
         backend.import_ecc_key_from_pem(backend.export_ecc_key_to_pem(ecc_private_key), passphrase=b"abc")
 
 
@@ -500,15 +500,23 @@ def test_rsa_keypair_has_the_requested_length(backend, key_length_bits):
     assert private_key.n.bit_length() == key_length_bits
 
 
+def _encode_pkcs8_public_key_item(backend, public_key):
+    from wacryptolib._crypto_backend.fallback import pem
+
+    _oid, _parameters, public_key_bits = pem.decode_spki(pem.decode_pem(backend.export_ecc_key_to_pem(public_key))[0])
+    return bytes([pem.TAG_PKCS8_PUBLIC_KEY]) + pem.encode_bit_string(public_key_bits)[1:]  # [1] IMPLICIT BIT STRING
+
+
 @pytest.mark.parametrize(
-    "version, optional_items",
-    [(0, [b"\xa0\x00"]), (1, [b"\x81\x21\x00" + bytes(32)]), (1, [b"\xa0\x00", b"\x81\x21\x00" + bytes(32)])],
+    "version, optional_item_names", [(0, ["attributes"]), (1, ["public_key"]), (1, ["attributes", "public_key"])]
 )
-def test_pkcs8_private_keys_with_attributes_or_public_key_are_accepted(backend, version, optional_items):
+def test_pkcs8_private_keys_with_attributes_or_public_key_are_accepted(backend, version, optional_item_names):
     import_crypto_backend("fallback")
     from wacryptolib._crypto_backend.fallback import pem
 
-    _public_key, private_key = backend.generate_ecc_keypair("curve25519")
+    public_key, private_key = backend.generate_ecc_keypair("curve25519")
+    encoded_optional_items = {"attributes": b"\xa0\x00", "public_key": _encode_pkcs8_public_key_item(backend, public_key)}
+    optional_items = [encoded_optional_items[name] for name in optional_item_names]
     clear_version, algorithm_identifier, private_key_octets = pem.decode_sequence(
         pem.decode_pem(backend.export_ecc_key_to_pem(private_key))[0], 3
     )
@@ -520,6 +528,27 @@ def test_pkcs8_private_keys_with_attributes_or_public_key_are_accepted(backend, 
         der = pem.encode_sequence(pem.encode_integer(bad_version), algorithm_identifier, private_key_octets, *bad_optional_items)
         with pytest.raises(ValueError):
             backend.import_ecc_key_from_pem(pem.encode_pem(der, "PRIVATE KEY"))
+
+
+@pytest.mark.parametrize("curve", ["curve25519", "p256"])
+def test_pkcs8_private_keys_with_a_mismatching_public_key_are_rejected(backend, curve):
+    import_crypto_backend("fallback")
+    from wacryptolib._crypto_backend.fallback import pem
+
+    public_key, private_key = backend.generate_ecc_keypair(curve)
+    other_public_key, _other_private_key = backend.generate_ecc_keypair(curve)
+    _version, algorithm_identifier, private_key_octets = pem.decode_sequence(
+        pem.decode_pem(backend.export_ecc_key_to_pem(private_key))[0], 3
+    )
+
+    def _build_private_key_pem(embedded_public_key):  # Like pycryptodome, the public key is checked for ECC keys
+        public_key_item = _encode_pkcs8_public_key_item(backend, embedded_public_key)
+        der = pem.encode_sequence(pem.encode_integer(1), algorithm_identifier, private_key_octets, public_key_item)
+        return pem.encode_pem(der, "PRIVATE KEY")
+
+    assert backend.import_ecc_key_from_pem(_build_private_key_pem(public_key)) == private_key
+    with pytest.raises(ValueError):
+        backend.import_ecc_key_from_pem(_build_private_key_pem(other_public_key))
 
 
 def test_aes_eax_rejects_empty_nonce(backend):

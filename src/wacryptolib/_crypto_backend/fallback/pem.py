@@ -20,6 +20,7 @@ TAG_OCTET_STRING = 0x04
 TAG_NULL = 0x05
 TAG_OID = 0x06
 TAG_SEQUENCE = 0x30
+TAG_PKCS8_PUBLIC_KEY = 0x81  # [1] IMPLICIT BIT STRING of a OneAsymmetricKey (RFC 5958)
 
 OID_RSA = "1.2.840.113549.1.1.1"
 OID_DSA = "1.2.840.10040.4.1"
@@ -150,8 +151,8 @@ def decode_octet_string(data):
     return decode(data, TAG_OCTET_STRING)
 
 
-def decode_bit_string(data):
-    value = decode(data, TAG_BIT_STRING)
+def decode_bit_string(data, tag=TAG_BIT_STRING):
+    value = decode(data, tag)
     if not value or value[0] != 0:
         raise _malformed()  # Only whole bytes are used here
     return value[1:]
@@ -229,13 +230,18 @@ def encode_pkcs8(algorithm_identifier, private_key_octets):
 
 
 def decode_pkcs8(der):
-    """Return (oid, encoded parameters or None, private key octets); like pycryptodome, the optional attributes
-    and (for PKCS#8 v2, i.e. OneAsymmetricKey) public key are ignored."""
+    """Return (oid, encoded parameters or None, private key octets, public key bits or None); like pycryptodome,
+    the optional attributes are ignored, and the public key of PKCS#8 v2 (i.e. OneAsymmetricKey) is returned
+    whatever the version number, so that the caller can check it."""
     version, algorithm_identifier, private_key, *optional_items = decode_sequence(der, 3, 5)
     if len(optional_items) > {0: 1, 1: 2}.get(decode_integer(version), -1):
         raise ValueError("Unsupported PKCS#8 version")
     oid, parameters = decode_algorithm_identifier(algorithm_identifier)
-    return oid, parameters, decode_octet_string(private_key)
+    public_key_bits = None
+    for item in optional_items:
+        if item[0] == TAG_PKCS8_PUBLIC_KEY:
+            public_key_bits = decode_bit_string(item, tag=TAG_PKCS8_PUBLIC_KEY)
+    return oid, parameters, decode_octet_string(private_key), public_key_bits
 
 
 def encode_spki(algorithm_identifier, public_key_bits):

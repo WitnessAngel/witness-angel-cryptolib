@@ -349,9 +349,20 @@ def _passphrase_to_bytes(passphrase):
     return passphrase.encode("latin-1") if isinstance(passphrase, str) else passphrase
 
 
+def _get_pem_marker(key_pem):
+    from Crypto.IO import PEM
+
+    try:
+        return PEM.decode(key_pem.decode("ascii") if isinstance(key_pem, bytes) else key_pem)[1]
+    except (ValueError, TypeError):
+        return None  # E.g. legacy encrypted PEM, left to pycryptodome
+
+
 def _import_key_from_pem(key_module, key_pem, passphrase=None):
     if passphrase:
         passphrase = _passphrase_to_bytes(passphrase)
+        if _get_pem_marker(key_pem) == "PRIVATE KEY":  # Pycryptodome >= 4.2 would silently ignore the passphrase
+            raise ValueError("Unencrypted PKCS#8 private key can't be loaded with a passphrase")
         clear_pkcs8_der = _decrypt_pkcs8_from_pem(key_pem, passphrase)
         if clear_pkcs8_der is not None:
             try:

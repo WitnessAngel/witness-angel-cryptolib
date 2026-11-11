@@ -800,7 +800,7 @@ def generate_keypair_for_storage(  # FIXME document this, or integrate to class?
 
 
 # Explicit list, so that existing free keys pools don't silently start generating newly supported key algos
-DEFAULT_FREE_KEYPAIR_ALGOS = ["DSA_DSS", "ECC_DSS", "RSA_OAEP", "RSA_PSS"]
+DEFAULT_FREE_KEYPAIR_ALGOS = ("DSA_DSS", "ECC_DSS", "RSA_OAEP", "RSA_PSS")  # Immutable, since used as a default argument
 
 
 def generate_free_keypair_for_least_provisioned_key_algo(

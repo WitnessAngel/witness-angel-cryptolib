@@ -1246,31 +1246,48 @@ def test_cryptainer_decryption_with_malformed_key_cipherdicts():
     )
 
 
-@pytest.mark.parametrize(
-    "key_cipher_algo, valid_cipherdicts, invalid_cipherdicts",
-    [
-        ("AES_CBC", [{"ciphertext": b"abc"}], [{}, {"ciphertext": "abc"}, {"tag": b"abc"}]),
-        ("AES_EAX", [{"ciphertext": b"abc", "tag": b"def"}], [{"ciphertext": b"abc"}, {"ciphertext": b"abc", "tag": 1}]),
-        ("CHACHA20_POLY1305", [{"ciphertext": b"abc", "tag": b"def"}], [{"tag": b"def"}]),
-        (
-            "RSA_OAEP",
-            [{"ciphertext_chunks": [b"abc", b"def"]}, {"digest_list": [b"abc"]}],  # Legacy naming too
-            [{"ciphertext_chunks": []}, {"ciphertext_chunks": b"abc"}, {"ciphertext_chunks": [b"abc", None]}],
-        ),
-        (
-            "ECIES_X25519",
-            [{"kem_ciphertext": b"abc", "ciphertext": b"def", "unused_field": 1}],  # Extra fields are tolerated
-            [{"ciphertext": b"def"}, {"kem_ciphertext": None, "ciphertext": b"def"}],
-        ),
-        (SHARED_SECRET_ALGO_MARKER, [{"shard_ciphertexts": [b"abc"]}], [{"shard_ciphertexts": []}, [b"abc"], None]),
-    ],
-)
-def test_key_cipherdict_sanity_checks(key_cipher_algo, valid_cipherdicts, invalid_cipherdicts):
-    for valid_cipherdict in valid_cipherdicts:
-        check_key_cipherdict_sanity(valid_cipherdict, key_cipher_algo=key_cipher_algo)
-    for invalid_cipherdict in invalid_cipherdicts:
+def test_key_cipherdict_sanity_checks():
+    check_key_cipherdict_sanity({"shard_ciphertexts": [b"abc"], "unused_field": 1}, key_cipher_algo=SHARED_SECRET_ALGO_MARKER)
+    for invalid_cipherdict in [{"shard_ciphertexts": []}, {"shard_ciphertexts": [None]}, [b"abc"], None]:
         with pytest.raises(SchemaValidationError):
-            check_key_cipherdict_sanity(invalid_cipherdict, key_cipher_algo=key_cipher_algo)
+            check_key_cipherdict_sanity(invalid_cipherdict, key_cipher_algo=SHARED_SECRET_ALGO_MARKER)
+
+    # Other cipherdicts are checked against the schemas of their cipher algo
+    check_key_cipherdict_sanity({"kem_ciphertext": b"abc", "ciphertext": b"def"}, key_cipher_algo="ECIES_X25519")
+    with pytest.raises(SchemaValidationError):
+        check_key_cipherdict_sanity({"ciphertext": b"def"}, key_cipher_algo="ECIES_X25519")
+    with pytest.raises(ValueError, match="Unknown cipher type"):
+        check_key_cipherdict_sanity({"ciphertext": b"def"}, key_cipher_algo="RSA_PSS")  # Signature-only algo
+
+
+@pytest.mark.parametrize("verify_integrity_tags", [True, False])
+def test_cryptainer_decryption_with_missing_payload_macs(verify_integrity_tags):
+    payload = b"some secret payload"
+    cryptoconf = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_EAX",
+                key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
+                payload_ciphertext_signatures=[],
+            )
+        ]
+    )
+    cryptainer = copy.deepcopy(  # Gives a plain (non-validated) dict
+        encrypt_payload_into_cryptainer(payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=None)
+    )
+    cryptainer["payload_cipher_layers"][0]["payload_macs"] = {}  # Allowed by the cryptainer schema
+
+    result_payload, operation_report = decrypt_payload_from_cryptainer(
+        cryptainer, verify_integrity_tags=verify_integrity_tags
+    )
+    assert result_payload is None  # Reported, instead of aborting with a KeyError
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Failed symmetric decryption (AES_EAX)",
+        exception_class=DecryptionError,
+    )
 
 
 # Cryptoconf with 1 payload_cipher_layer containing 1 key_cipher_layer managed by an authenticator

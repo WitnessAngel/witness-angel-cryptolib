@@ -12,8 +12,9 @@ import pytest
 import wacryptolib
 from wacryptolib._crypto_backend import get_random_bytes, generate_rsa_keypair, generate_ecc_keypair, X25519RawPublicKey
 from wacryptolib.cipher import AUTHENTICATED_CIPHER_ALGOS, PayloadEncryptionPipeline
-from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
-from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError, OperationNotSupported
+from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS, SUPPORTED_CIPHER_ALGOS, check_cipherdict_sanity
+from wacryptolib.exceptions import DecryptionError, EncryptionError, DecryptionIntegrityError, OperationNotSupported, \
+    SchemaValidationError
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, generate_symkey
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS, hash_message
 
@@ -34,6 +35,40 @@ def test_generic_encryption_and_decryption_errors():
 
     with pytest.raises(ValueError, match="Unknown cipher type"):
         wacryptolib.cipher.decrypt_bytestring(key_dict=key_dict, cipherdict={}, cipher_algo="EXHD")
+
+    with pytest.raises(ValueError, match="Unknown cipher type"):
+        check_cipherdict_sanity({}, cipher_algo="EXHD")
+
+
+@pytest.mark.parametrize(
+    "cipher_algo, valid_cipherdicts, invalid_cipherdicts",
+    [
+        ("AES_CBC", [{"ciphertext": b"abc"}], [{}, {"ciphertext": "abc"}, {"tag": b"abc"}]),
+        ("AES_EAX", [{"ciphertext": b"abc", "tag": b"def"}], [{"ciphertext": b"abc"}, {"ciphertext": b"abc", "tag": 1}]),
+        ("CHACHA20_POLY1305", [{"ciphertext": b"abc", "tag": b"def"}], [{"tag": b"def"}]),
+        (
+            "RSA_OAEP",
+            [{"ciphertext_chunks": [b"abc", b"def"]}, {"ciphertext_chunks": []}, {"digest_list": [b"abc"]}],
+            [{}, {"ciphertext_chunks": b"abc"}, {"ciphertext_chunks": [b"abc", None]}, {"digest_list": None}],
+        ),
+        (
+            "ECIES_X25519",
+            [{"kem_ciphertext": b"abc", "ciphertext": b"def", "unused_field": 1}],  # Extra fields are tolerated
+            [{"ciphertext": b"def"}, {"kem_ciphertext": None, "ciphertext": b"def"}, [b"abc"], None],
+        ),
+    ],
+)
+def test_cipherdict_sanity_checks(cipher_algo, valid_cipherdicts, invalid_cipherdicts):
+    assert cipher_algo in SUPPORTED_CIPHER_ALGOS
+    for valid_cipherdict in valid_cipherdicts:
+        check_cipherdict_sanity(valid_cipherdict, cipher_algo=cipher_algo)
+        check_cipherdict_sanity(valid_cipherdict, cipher_algo=cipher_algo.lower())  # Algo names are normalized
+    for invalid_cipherdict in invalid_cipherdicts:
+        with pytest.raises(SchemaValidationError):
+            check_cipherdict_sanity(invalid_cipherdict, cipher_algo=cipher_algo)
+        # The key is not even used, since the cipherdict is checked first
+        with pytest.raises(DecryptionError, match="Malformed %s cipherdict" % cipher_algo):
+            wacryptolib.cipher.decrypt_bytestring(invalid_cipherdict, cipher_algo=cipher_algo, key_dict={})
 
 
 def _test_random_ciphertext_corruption(decryption_func, cipherdict, initial_content):

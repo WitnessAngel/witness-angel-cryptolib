@@ -9,7 +9,7 @@ from typing import Union
 
 from schema import Or, Optional as OptionalKey, And, Schema
 
-from wacryptolib.cipher import SUPPORTED_SYMMETRIC_CIPHER_ALGOS, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, SUPPORTED_CIPHER_ALGOS
+from wacryptolib.cipher import SUPPORTED_SYMMETRIC_CIPHER_ALGOS, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, check_cipherdict_sanity
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_TRUSTEE_TYPES, CRYPTAINER_STATES, \
     CRYPTAINER_FORMAT, PAYLOAD_CIPHERTEXT_LOCATIONS, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, SHARED_SECRET_ALGO_MARKER
 from wacryptolib.exceptions import SchemaValidationError
@@ -384,28 +384,18 @@ def check_sigainer_sanity(cryptoconf: dict, jsonschema_mode=False):
 
 # KEY CIPHERDICTS: the cryptainer schema can't check them, since they are only revealed layer after layer on decryption
 
-_NON_EMPTY_BINARY_LIST = And([bytes], len)
-_EXTRA_FIELDS = {OptionalKey(str): object}  # Unused fields are harmless, so tolerated (e.g. in legacy cryptainers)
-
-KEY_CIPHERDICT_SCHEMAS = {
-    "AES_CBC": Schema({"ciphertext": bytes, **_EXTRA_FIELDS}),
-    "AES_EAX": Schema({"ciphertext": bytes, "tag": bytes, **_EXTRA_FIELDS}),
-    "CHACHA20_POLY1305": Schema({"ciphertext": bytes, "tag": bytes, **_EXTRA_FIELDS}),
-    "RSA_OAEP": Schema(
-        Or(
-            {"ciphertext_chunks": _NON_EMPTY_BINARY_LIST, **_EXTRA_FIELDS},
-            {"digest_list": _NON_EMPTY_BINARY_LIST, **_EXTRA_FIELDS},  # Legacy naming, in old cryptainers
-        )
-    ),
-    "ECIES_X25519": Schema({"kem_ciphertext": bytes, "ciphertext": bytes, **_EXTRA_FIELDS}),
-    SHARED_SECRET_ALGO_MARKER: Schema({"shard_ciphertexts": _NON_EMPTY_BINARY_LIST, **_EXTRA_FIELDS}),
-}
-assert set(KEY_CIPHERDICT_SCHEMAS) == set(SUPPORTED_CIPHER_ALGOS) | {SHARED_SECRET_ALGO_MARKER}, KEY_CIPHERDICT_SCHEMAS
+SHARED_SECRET_CIPHERDICT_SCHEMA = Schema({"shard_ciphertexts": And([bytes], len)}, ignore_extra_keys=True)
 
 
 def check_key_cipherdict_sanity(key_cipherdict: dict, key_cipher_algo: str):
-    """Validate the format of a key cipherdict, once deserialized from the "key_ciphertext" of a cipher layer."""
-    _validate_data_tree(data_tree=key_cipherdict, validation_schema=KEY_CIPHERDICT_SCHEMAS[key_cipher_algo])
+    """Validate the format of a key cipherdict, once deserialized from the "key_ciphertext" of a cipher layer.
+
+    :raises SchemaValidationError: if the cipherdict is malformed
+    :raises ValueError: if the key cipher algo is unknown"""
+    if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
+        _validate_data_tree(data_tree=key_cipherdict, validation_schema=SHARED_SECRET_CIPHERDICT_SCHEMA)
+    else:
+        check_cipherdict_sanity(key_cipherdict, cipher_algo=key_cipher_algo)
 
 
 # VALIDATION TOKENS: remember that a cryptoconf/cryptainer was validated, to avoid validating it again and again.

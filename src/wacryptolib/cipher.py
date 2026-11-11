@@ -5,18 +5,20 @@
 import logging
 from typing import BinaryIO
 
+from schema import Schema, Or
 
 from wacryptolib import _crypto_backend
 from wacryptolib._crypto_backend import hpke_x25519_seal
 from wacryptolib import utilities
-from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionIntegrityError, OperationNotSupported
+from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionIntegrityError, OperationNotSupported, \
+    SchemaValidationError
 from wacryptolib.keygen import (
     _check_symmetric_key_length_bytes,
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
     _check_asymmetric_key_length_bits,
     SUPPORTED_ASYMMETRIC_KEY_ALGOS,
 )
-from wacryptolib.utilities import split_as_chunks, pad_bytes_pkcs7
+from wacryptolib.utilities import split_as_chunks, pad_bytes_pkcs7, validate_data_against_schema
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +86,10 @@ def decrypt_bytestring(
         "Decrypting cipherdict with cipher algo %s, and verify_integrity_tags=%s", cipher_algo, verify_integrity_tags
     )
     cipher_algo_conf = _get_cipher_algo_conf(cipher_algo)
+    try:
+        check_cipherdict_sanity(cipherdict, cipher_algo=cipher_algo)
+    except SchemaValidationError as exc:  # E.g. a corrupted or forged cipherdict
+        raise DecryptionError("Malformed %s cipherdict (%s)" % (cipher_algo, exc)) from exc
     decryption_function = cipher_algo_conf["decryption_function"]
     try:
         plaintext = decryption_function(
@@ -95,6 +101,16 @@ def decrypt_bytestring(
             raise DecryptionIntegrityError("Failed %s decryption authentication (%s)" % (cipher_algo, exc)) from exc
         raise DecryptionError("Failed %s decryption (%s)" % (cipher_algo, exc)) from exc
     return plaintext
+
+
+def check_cipherdict_sanity(cipherdict: dict, *, cipher_algo: str):
+    """Validate the fields of a cipherdict, as produced by encrypt_bytestring() for the selected algorithm.
+
+    Unknown fields are tolerated, since they are not used for decryption.
+
+    :raises SchemaValidationError: if the cipherdict is malformed"""
+    cipher_algo_conf = _get_cipher_algo_conf(cipher_algo)
+    validate_data_against_schema(cipherdict, schema=cipher_algo_conf["cipherdict_schema"])
 
 
 def _encrypt_via_aes_cbc(plaintext: bytes, key_dict: dict) -> dict:
@@ -511,24 +527,31 @@ class PayloadEncryptionPipeline:
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+def _build_cipherdict_schema(*fields):
+    return Schema({field: bytes for field in fields}, ignore_extra_keys=True)
+
+
 CIPHER_ALGOS_REGISTRY = dict(
     ## SYMMETRIC ENCRYPTION ##
     # ALL encryption/decryption routines must handle a "ciphertext" attribute on their cipherdict
     AES_CBC={
         "encryption_function": _encrypt_via_aes_cbc,
         "decryption_function": _decrypt_via_aes_cbc,
+        "cipherdict_schema": _build_cipherdict_schema("ciphertext"),
         "encryption_node_class": AesCbcEncryptionNode,
         "is_authenticated": False,
     },
     AES_EAX={
         "encryption_function": _encrypt_via_aes_eax,
         "decryption_function": _decrypt_via_aes_eax,
+        "cipherdict_schema": _build_cipherdict_schema("ciphertext", "tag"),
         "encryption_node_class": AesEaxEncryptionNode,
         "is_authenticated": True,
     },
     CHACHA20_POLY1305={
         "encryption_function": _encrypt_via_chacha20_poly1305,
         "decryption_function": _decrypt_via_chacha20_poly1305,
+        "cipherdict_schema": _build_cipherdict_schema("ciphertext", "tag"),
         "encryption_node_class": Chacha20Poly1305EncryptionNode,
         "is_authenticated": True,
     },
@@ -536,12 +559,20 @@ CIPHER_ALGOS_REGISTRY = dict(
     RSA_OAEP={
         "encryption_function": _encrypt_via_rsa_oaep,
         "decryption_function": _decrypt_via_rsa_oaep,
+        "cipherdict_schema": Schema(
+            Or(
+                {"ciphertext_chunks": [bytes]},  # Empty for an empty plaintext
+                {"digest_list": [bytes]},  # Legacy naming, in old cryptainers
+                ignore_extra_keys=True,
+            )
+        ),
         "encryption_node_class": None,
         "is_authenticated": False,
     },
     ECIES_X25519={
         "encryption_function": _encrypt_via_ecies_x25519,
         "decryption_function": _decrypt_via_ecies_x25519,
+        "cipherdict_schema": _build_cipherdict_schema("kem_ciphertext", "ciphertext"),
         "encryption_node_class": None,
         "is_authenticated": True,
     },

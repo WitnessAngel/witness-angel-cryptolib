@@ -1189,7 +1189,7 @@ def test_cryptainer_decryption_with_malformed_key_cipherdicts():
     cryptainer = copy.deepcopy(cryptainer_original)
     key_cipherdict = load_from_json_bytes(cryptainer["payload_cipher_layers"][0]["key_ciphertext"])
     key_cipherdict["shard_ciphertexts"][0] = b"\xffnot json"
-    key_cipherdict["shard_ciphertexts"][1] = dump_to_json_bytes([1, 2])
+    key_cipherdict["shard_ciphertexts"][1] = b"[" * 100000  # Too deeply nested for the json decoder
     cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes(key_cipherdict)
 
     result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)

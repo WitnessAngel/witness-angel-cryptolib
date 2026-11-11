@@ -27,6 +27,15 @@ from wacryptolib.hash import hash_message
 from wacryptolib.exceptions import AlgorithmNotSupported
 
 
+def _load_untrusted_json_bytes(data: bytes, description: str):
+    """Deserialize JSON bytes found during decryption (thus maybe corrupted or forged), raising DecryptionError if
+    they are malformed."""
+    try:
+        return load_from_json_bytes(data)
+    except Exception as exc:  # Not only ValueError/TypeError, e.g. RecursionError for deeply nested data
+        raise DecryptionError("Unparseable %s (%s)" % (description, exc)) from exc
+
+
 class DecryptionErrorType:  # FIXME RENAME THIS
     INFORMATION = "INFORMATION"
     SIGNATURE_ERROR = "SIGNATURE_ERROR"
@@ -666,10 +675,7 @@ class CryptainerDecryptor(CryptainerBase):
     @staticmethod
     def _load_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str) -> dict:
         """Deserialize and validate the cipherdict of a key cipher layer, raising DecryptionError if it is malformed."""
-        try:
-            key_cipherdict = load_from_json_bytes(key_ciphertext)
-        except (ValueError, TypeError) as exc:  # Invalid utf8, json, or extended-json fields
-            raise DecryptionError("Unparseable %s key cipherdict (%s)" % (key_cipher_algo, exc)) from exc
+        key_cipherdict = _load_untrusted_json_bytes(key_ciphertext, description="%s key cipherdict" % key_cipher_algo)
         try:
             check_key_cipherdict_sanity(key_cipherdict, key_cipher_algo=key_cipher_algo)
         except SchemaValidationError as exc:  # E.g. missing or wrongly typed fields

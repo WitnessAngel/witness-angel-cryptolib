@@ -425,10 +425,15 @@ def test_ml_kem_768_asymmetric_encryption_and_decryption():
     with pytest.raises(DecryptionError):
         decryption_func(cipherdict=corrupted_cipherdict)
 
-    corrupted_cipherdict = copy.deepcopy(cipherdict)
-    corrupted_cipherdict["ciphertext"] = corrupted_cipherdict["ciphertext"][:-1]  # Truncated tag
-    with pytest.raises(DecryptionError):
-        decryption_func(cipherdict=corrupted_cipherdict)
+    for plaintext in (b"", b"a", b"abcdef"):  # Short ciphertexts are checked for length before their tag
+        cipherdict_to_truncate = wacryptolib.cipher.encrypt_bytestring(
+            key_dict=public_key_dict, plaintext=plaintext, cipher_algo=cipher_algo
+        )
+        for truncation in (1, 2, 16):
+            corrupted_cipherdict = copy.deepcopy(cipherdict_to_truncate)
+            corrupted_cipherdict["ciphertext"] = corrupted_cipherdict["ciphertext"][:-truncation]  # Truncated tag
+            with pytest.raises(DecryptionError):
+                decryption_func(cipherdict=corrupted_cipherdict)
 
     with pytest.raises(DecryptionError):  # Wrong private key
         wacryptolib.cipher.decrypt_bytestring(

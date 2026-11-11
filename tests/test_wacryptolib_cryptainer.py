@@ -1449,6 +1449,28 @@ def test_cryptainer_decryption_with_malformed_revealed_ecies_and_symmetric_key_c
     )
 
 
+def test_cryptainer_encryption_with_aliased_cryptoconf_layers():
+    # The same layer dicts are reused at several places, but each one must store its own key ciphertext
+    rsa_layer = dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+    chacha_layer = dict(key_cipher_algo="CHACHA20_POLY1305", key_cipher_layers=[rsa_layer])
+    payload_cipher_layer = dict(
+        payload_cipher_algo="AES_CBC",
+        key_cipher_layers=[chacha_layer, chacha_layer, rsa_layer],
+        payload_ciphertext_signatures=[],
+    )
+    cryptoconf = dict(payload_cipher_layers=[payload_cipher_layer, payload_cipher_layer])
+    payload = b"some secret payload"
+    cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=None)
+
+    assert "key_ciphertext" not in chacha_layer  # Cryptoconf was left untouched
+    first_key_cipher_layers = cryptainer["payload_cipher_layers"][0]["key_cipher_layers"]
+    assert first_key_cipher_layers[0]["key_ciphertext"] != first_key_cipher_layers[1]["key_ciphertext"]
+
+    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload == payload
+    assert not operation_report.get_error_entries()
+
+
 def test_cryptainer_validation_of_readable_key_cipherdicts():
     rsa_layer = dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
     def _get_chacha_layer():  # Distinct dicts, since corruptions below must target a single location

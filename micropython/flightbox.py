@@ -16,8 +16,6 @@ if typing.TYPE_CHECKING:
     import uuid
     import logging
 
-import copy
-
 
 SHARED_SECRET_ALGO_MARKER = "[SHARED_SECRET]"  # Special "key_cipher_algo" value
 
@@ -26,6 +24,17 @@ CRYPTAINER_FORMAT = "cryptainer_1.0"
 class CRYPTAINER_STATES:
     STARTED = "STARTED"
     FINISHED = "FINISHED"
+
+
+def _copy_data_tree(data_tree):
+    """Deep-copy the dicts and lists of a data tree WITHOUT preserving aliasing (unlike copy.deepcopy()), so that a
+    sub-tree reused at several places of a cryptoconf gets its own copy in the cryptainer, where encryption results
+    (e.g. the "key_ciphertext" of symmetric key cipher layers) are stored."""
+    if isinstance(data_tree, dict):
+        return {key: _copy_data_tree(value) for key, value in data_tree.items()}
+    if isinstance(data_tree, list):
+        return [_copy_data_tree(item) for item in data_tree]
+    return data_tree  # Leaves (str, bytes, int, UUID...) are immutable
 
 
 class FlightboxUtilitiesBase:
@@ -226,7 +235,7 @@ class FlightBox:
         )  # Might be shared by lots of cryptainers
 
         assert isinstance(cryptoconf, dict), type(cryptoconf)
-        cryptainer = copy.deepcopy(cryptoconf)  # So that we can manipulate it as new cryptainer
+        cryptainer = _copy_data_tree(cryptoconf)  # So that we can manipulate it as new cryptainer
         del cryptoconf
         if not cryptainer["payload_cipher_layers"]:
             raise self._fbu.raise_validation_error("Empty payload_cipher_layers list is forbidden in cryptoconf")

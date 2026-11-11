@@ -362,6 +362,17 @@ def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False, require_inl
 
     for payload_cipher_layer_index, payload_cipher_layer in enumerate(cryptainer["payload_cipher_layers"]):
         location = "payload_cipher_layers[%d]" % payload_cipher_layer_index
+        if require_inline_payload or cryptainer["cryptainer_state"] == CRYPTAINER_STATES.FINISHED:
+            # The payload cipherdict is rebuilt from the ciphertext and these MACs, so their fields must match the algo
+            payload_cipher_algo = payload_cipher_layer["payload_cipher_algo"]
+            try:
+                check_cipherdict_sanity(
+                    dict(payload_cipher_layer["payload_macs"], ciphertext=b""), cipher_algo=payload_cipher_algo
+                )
+            except SchemaValidationError as exc:
+                raise SchemaValidationError(
+                    "Invalid %s payload MACs at %s/payload_macs: %s" % (payload_cipher_algo, location, exc)
+                ) from None
         _check_readable_key_cipherdicts(
             key_ciphertext=payload_cipher_layer["key_ciphertext"],
             key_ciphertext_location=location + "/key_ciphertext",

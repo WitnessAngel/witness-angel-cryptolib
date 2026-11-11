@@ -1622,34 +1622,46 @@ def test_key_cipherdict_sanity_checks():
         check_key_cipherdict_sanity({"ciphertext": b"def"}, key_cipher_algo="RSA_PSS")  # Signature-only algo
 
 
-@pytest.mark.parametrize("verify_integrity_tags", [True, False])
-def test_cryptainer_decryption_with_missing_payload_macs(verify_integrity_tags):
+def test_cryptainer_validation_of_payload_macs():
     payload = b"some secret payload"
-    cryptoconf = dict(
-        payload_cipher_layers=[
-            dict(
-                payload_cipher_algo="AES_EAX",
-                key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
-                payload_ciphertext_signatures=[],
-            )
-        ]
-    )
-    cryptainer = copy.deepcopy(  # Gives a plain (non-validated) dict
-        encrypt_payload_into_cryptainer(payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=None)
-    )
-    cryptainer["payload_cipher_layers"][0]["payload_macs"] = {}  # Allowed by the cryptainer schema
 
-    result_payload, operation_report = decrypt_payload_from_cryptainer(
-        cryptainer, verify_integrity_tags=verify_integrity_tags
-    )
-    assert result_payload is None  # Reported, instead of aborting with a KeyError
-    _check_operation_report_entry(
-        operation_report=operation_report,
-        entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
-        entry_criticity=DecryptionErrorCriticity.ERROR,
-        entry_msg_match="Failed symmetric decryption (AES_EAX)",
-        exception_class=DecryptionError,
-    )
+    def _get_cryptainer(payload_cipher_algo):
+        cryptoconf = dict(
+            payload_cipher_layers=[
+                dict(
+                    payload_cipher_algo=payload_cipher_algo,
+                    key_cipher_layers=[
+                        dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                    ],
+                    payload_ciphertext_signatures=[],
+                )
+            ]
+        )
+        return copy.deepcopy(  # Gives a plain (non-validated) dict
+            encrypt_payload_into_cryptainer(payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=None)
+        )
+
+    # AES_CBC has no MAC
+    cryptainer = _get_cryptainer("AES_CBC")
+    assert cryptainer["payload_cipher_layers"][0]["payload_macs"] == {}
+    result_payload, _operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload == payload
+
+    cryptainer = _get_cryptainer("AES_EAX")
+    cryptainer["payload_cipher_layers"][0]["payload_macs"] = {}  # Allowed by the generic cryptainer schema
+    error_match = r"Invalid AES_EAX payload MACs at payload_cipher_layers\[0\]/payload_macs"
+    with pytest.raises(SchemaValidationError, match=error_match):
+        check_cryptainer_sanity(cryptainer)
+    with pytest.raises(SchemaValidationError, match=error_match):  # No decryption operation even starts
+        decrypt_payload_from_cryptainer(cryptainer)
+
+    # Unfinished cryptainers only get their payload MACs at finalization, but they can't be decrypted meanwhile
+    cryptainer["cryptainer_state"] = CRYPTAINER_STATES.STARTED
+    with pytest.raises(SchemaValidationError, match=error_match):
+        check_cryptainer_sanity(cryptainer)
+    check_cryptainer_sanity(cryptainer, require_inline_payload=False)
+    cryptainer["payload_cipher_layers"][0]["payload_macs"] = None
+    check_cryptainer_sanity(cryptainer, require_inline_payload=False)
 
 
 # Cryptoconf with 1 payload_cipher_layer containing 1 key_cipher_layer managed by an authenticator

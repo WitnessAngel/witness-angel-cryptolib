@@ -14,7 +14,7 @@ from schema import Schema, Or, And
 from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_CIPHER_ALGOS
 from wacryptolib.cryptainer import CryptainerBase, logger, CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
     get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value, get_payload_ciphertext_signatures, \
-    ensure_validated_cryptainer
+    ensure_validated_cryptainer, check_key_cipherdict_sanity
 from wacryptolib.exceptions import KeyDoesNotExist, KeyLoadingError, DecryptionError, DecryptionIntegrityError, \
     KeystoreDoesNotExist, SignatureVerificationError, SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
@@ -665,13 +665,15 @@ class CryptainerDecryptor(CryptainerBase):
 
     @staticmethod
     def _load_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str) -> dict:
-        """Deserialize the cipherdict of a key cipher layer, raising DecryptionError if it is malformed."""
+        """Deserialize and validate the cipherdict of a key cipher layer, raising DecryptionError if it is malformed."""
         try:
             key_cipherdict = load_from_json_bytes(key_ciphertext)
         except (ValueError, TypeError) as exc:  # Invalid utf8, json, or extended-json fields
             raise DecryptionError("Unparseable %s key cipherdict (%s)" % (key_cipher_algo, exc)) from exc
-        if not isinstance(key_cipherdict, dict):
-            raise DecryptionError("%s key cipherdict is not a dict (%s)" % (key_cipher_algo, type(key_cipherdict)))
+        try:
+            check_key_cipherdict_sanity(key_cipherdict, key_cipher_algo=key_cipher_algo)
+        except SchemaValidationError as exc:  # E.g. missing or wrongly typed fields
+            raise DecryptionError("Invalid %s key cipherdict (%s)" % (key_cipher_algo, exc)) from exc
         return key_cipherdict
 
     @staticmethod

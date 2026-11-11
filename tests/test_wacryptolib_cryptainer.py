@@ -54,6 +54,7 @@ from wacryptolib.cryptainer import (
     check_cryptainer_sanity,
     check_sigainer_sanity,
     check_sigconf_sanity,
+    check_key_cipherdict_sanity,
     CRYPTAINER_TEMP_SUFFIX,
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
     ReadonlyCryptainerStorage,
@@ -1202,6 +1203,34 @@ def test_cryptainer_decryption_with_malformed_key_cipherdicts():
         occurrence_count=2,
     )
 
+    # Cipherdicts with missing or wrongly typed fields are rejected the same way, before reaching the trustee
+    cryptainer = copy.deepcopy(cryptainer_original)
+    key_cipherdict = load_from_json_bytes(cryptainer["payload_cipher_layers"][0]["key_ciphertext"])
+    key_cipherdict["shard_ciphertexts"][0] = dump_to_json_bytes({"ciphertext": b"abc"})
+    key_cipherdict["shard_ciphertexts"][1] = dump_to_json_bytes({"ciphertext_chunks": [123]})
+    cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes(key_cipherdict)
+
+    original_decrypt_with_private_key = TrusteeApi.decrypt_with_private_key
+    call_count = 0
+
+    def _counting_decrypt_with_private_key(self, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return original_decrypt_with_private_key(self, **kwargs)
+
+    with patch.object(TrusteeApi, "decrypt_with_private_key", _counting_decrypt_with_private_key):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload == payload
+    assert call_count == 4  # The 3 valid shards, and the main RSA_OAEP layer
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Malformed key cipherdict for algorithm RSA_OAEP",
+        exception_class=DecryptionError,
+        occurrence_count=2,
+    )
+
     # A malformed outermost cipherdict loses the whole payload, but without aborting the decryption
     cryptainer = copy.deepcopy(cryptainer_original)
     cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = b'{"shard_ciphertexts": '
@@ -1215,6 +1244,33 @@ def test_cryptainer_decryption_with_malformed_key_cipherdicts():
         entry_msg_match="Malformed key cipherdict for algorithm [SHARED_SECRET]",
         exception_class=DecryptionError,
     )
+
+
+@pytest.mark.parametrize(
+    "key_cipher_algo, valid_cipherdicts, invalid_cipherdicts",
+    [
+        ("AES_CBC", [{"ciphertext": b"abc"}], [{}, {"ciphertext": "abc"}, {"tag": b"abc"}]),
+        ("AES_EAX", [{"ciphertext": b"abc", "tag": b"def"}], [{"ciphertext": b"abc"}, {"ciphertext": b"abc", "tag": 1}]),
+        ("CHACHA20_POLY1305", [{"ciphertext": b"abc", "tag": b"def"}], [{"tag": b"def"}]),
+        (
+            "RSA_OAEP",
+            [{"ciphertext_chunks": [b"abc", b"def"]}, {"digest_list": [b"abc"]}],  # Legacy naming too
+            [{"ciphertext_chunks": []}, {"ciphertext_chunks": b"abc"}, {"ciphertext_chunks": [b"abc", None]}],
+        ),
+        (
+            "ECIES_X25519",
+            [{"kem_ciphertext": b"abc", "ciphertext": b"def", "unused_field": 1}],  # Extra fields are tolerated
+            [{"ciphertext": b"def"}, {"kem_ciphertext": None, "ciphertext": b"def"}],
+        ),
+        (SHARED_SECRET_ALGO_MARKER, [{"shard_ciphertexts": [b"abc"]}], [{"shard_ciphertexts": []}, [b"abc"], None]),
+    ],
+)
+def test_key_cipherdict_sanity_checks(key_cipher_algo, valid_cipherdicts, invalid_cipherdicts):
+    for valid_cipherdict in valid_cipherdicts:
+        check_key_cipherdict_sanity(valid_cipherdict, key_cipher_algo=key_cipher_algo)
+    for invalid_cipherdict in invalid_cipherdicts:
+        with pytest.raises(SchemaValidationError):
+            check_key_cipherdict_sanity(invalid_cipherdict, key_cipher_algo=key_cipher_algo)
 
 
 # Cryptoconf with 1 payload_cipher_layer containing 1 key_cipher_layer managed by an authenticator

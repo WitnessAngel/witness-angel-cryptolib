@@ -12,7 +12,7 @@ from uuid import UUID
 
 import pytest
 
-from _test_mockups import get_fake_authdevice, random_bool, skip_if_fallback_backend
+from _test_mockups import get_fake_authdevice, is_fallback_backend, random_bool, skip_if_fallback_backend
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.exceptions import (
     KeystoreDoesNotExist,
@@ -136,6 +136,8 @@ def test_filesystem_keystore_list_keypair_identifiers(tmp_path: Path):
         assert isinstance(key["private_key_present"], bool)
 
     key_algos = SUPPORTED_ASYMMETRIC_KEY_ALGOS
+    if is_fallback_backend():  # Post-quantum keys are only implemented by pycryptodome
+        key_algos = [key_algo for key_algo in key_algos if not key_algo.startswith("ML_")]
 
     keystore = FilesystemKeystore(tmp_path)
     assert keystore.list_keypair_identifiers() == []

@@ -3618,7 +3618,7 @@ def test_pq_hybrid_cryptainer_decryption_with_missing_private_key(removed_key_al
 def test_pq_hybrid_cryptainer_with_corrupted_ml_dsa_signature():
     skip_if_fallback_backend("ML-KEM/ML-DSA")
     keystore_pool = InMemoryKeystorePool()
-    cryptainer = _build_pq_hybrid_cryptainer(keystore_pool)
+    cryptainer = copy.deepcopy(_build_pq_hybrid_cryptainer(keystore_pool))  # Plain dict, validated tokens must not be mutated
 
     signature_conf = cryptainer["payload_cipher_layers"][0]["payload_ciphertext_signatures"][0]
     assert signature_conf["payload_signature_algo"] == "ML_DSA_65"

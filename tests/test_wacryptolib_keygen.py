@@ -26,20 +26,20 @@ from wacryptolib.keygen import (
 )
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
 
-from _test_mockups import skip_if_fallback_backend
+from _test_mockups import is_fallback_backend, skip_if_fallback_backend
 
 
 def _check_is_asymmetric_key_object(key):
     from wacryptolib import _crypto_backend
 
-    assert isinstance(  # isinstance() accepts nested tuples, as returned by some fetchers
-        key,
-        (
-            _crypto_backend.rsa_key_class_fetcher(),
-            _crypto_backend.dsa_key_class_fetcher(),
-            _crypto_backend.ecc_key_class_fetcher(),
-        ),
-    )
+    key_classes = [
+        _crypto_backend.rsa_key_class_fetcher(),
+        _crypto_backend.dsa_key_class_fetcher(),
+        _crypto_backend.ecc_key_class_fetcher(),
+    ]
+    if not is_fallback_backend():  # Post-quantum keys are only implemented by pycryptodome
+        key_classes += [_crypto_backend.pq_key_class_fetcher("ML_KEM_768"), _crypto_backend.pq_key_class_fetcher("ML_DSA_65")]
+    assert isinstance(key, tuple(key_classes))  # isinstance() accepts nested tuples, as returned by some fetchers
 
 
 def test_passphrase_encoding():

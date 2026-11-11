@@ -518,10 +518,22 @@ class CryptainerDecryptor(CryptainerBase):
 
         assert isinstance(key_ciphertext, bytes), type(key_ciphertext)
 
-        key_cipherdict = load_from_json_bytes(key_ciphertext)
-        assert isinstance(key_cipherdict, dict), type(key_cipherdict)
-
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
+
+        try:
+            key_cipherdict = self._load_key_cipherdict(key_ciphertext, key_cipher_algo=key_cipher_algo)
+        except DecryptionError as exc:  # E.g. a corrupted key ciphertext, only this branch is lost
+            operation_report.add_entry(
+                entry_type=(
+                    DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR
+                    if key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS
+                    else DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR
+                ),
+                entry_message="Malformed key cipherdict for algorithm %s" % key_cipher_algo,
+                entry_criticity=DecryptionErrorCriticity.ERROR,
+                entry_exception=exc,
+            )
+            return None
 
         if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
             decrypted_shards = []
@@ -650,6 +662,17 @@ class CryptainerDecryptor(CryptainerBase):
                     )
 
         return key_bytes
+
+    @staticmethod
+    def _load_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str) -> dict:
+        """Deserialize the cipherdict of a key cipher layer, raising DecryptionError if it is malformed."""
+        try:
+            key_cipherdict = load_from_json_bytes(key_ciphertext)
+        except (ValueError, TypeError) as exc:  # Invalid utf8, json, or extended-json fields
+            raise DecryptionError("Unparseable %s key cipherdict (%s)" % (key_cipher_algo, exc)) from exc
+        if not isinstance(key_cipherdict, dict):
+            raise DecryptionError("%s key cipherdict is not a dict (%s)" % (key_cipher_algo, type(key_cipherdict)))
+        return key_cipherdict
 
     @staticmethod
     def _get_predecrypted_symkey_or_none(key_ciphertext, predecrypted_symkey_mapper: Optional[dict]) -> Optional[bytes]:

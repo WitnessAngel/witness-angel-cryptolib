@@ -1178,6 +1178,45 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
     assert operation_report.get_error_count() == 2
 
 
+def test_cryptainer_decryption_with_malformed_key_cipherdicts():
+    payload = b"some secret payload"
+    cryptainer_original = encrypt_payload_into_cryptainer(
+        payload=payload, cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
+    )
+
+    # Malformed shard cipherdicts only lose their own branch, since 3 of the 5 shards are enough
+    cryptainer = copy.deepcopy(cryptainer_original)
+    key_cipherdict = load_from_json_bytes(cryptainer["payload_cipher_layers"][0]["key_ciphertext"])
+    key_cipherdict["shard_ciphertexts"][0] = b"\xffnot json"
+    key_cipherdict["shard_ciphertexts"][1] = dump_to_json_bytes([1, 2])
+    cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes(key_cipherdict)
+
+    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload == payload
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Malformed key cipherdict for algorithm RSA_OAEP",
+        exception_class=DecryptionError,
+        occurrence_count=2,
+    )
+
+    # A malformed outermost cipherdict loses the whole payload, but without aborting the decryption
+    cryptainer = copy.deepcopy(cryptainer_original)
+    cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = b'{"shard_ciphertexts": '
+
+    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload is None
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Malformed key cipherdict for algorithm [SHARED_SECRET]",
+        exception_class=DecryptionError,
+    )
+
+
 # Cryptoconf with 1 payload_cipher_layer containing 1 key_cipher_layer managed by an authenticator
 def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simplecryptoconf(tmp_path):
 

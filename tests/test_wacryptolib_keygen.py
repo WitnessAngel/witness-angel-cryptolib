@@ -15,12 +15,14 @@ from wacryptolib._crypto_backend import (
     import_rsa_key_from_pem,
 )
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS
-from wacryptolib.exceptions import KeyLoadingError
+from wacryptolib.exceptions import KeyLoadingError, SchemaValidationError
 from wacryptolib.keygen import (
     load_asymmetric_key_from_pem_bytestring,
     SUPPORTED_ASYMMETRIC_KEY_ALGOS,
     SUPPORTED_SYMMETRIC_KEY_ALGOS,
     _encode_passphrase,
+    check_symkey_dict_sanity,
+    generate_symkey,
 )
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
 
@@ -345,3 +347,22 @@ def test_backend_pem_functions_accept_str_passphrases():
     loaded = import_ecc_key_from_pem(pem, passphrase="abc")
     assert loaded.export_key(format="DER") == private_key.export_key(format="DER")
     assert import_ecc_key_from_pem(pem, passphrase=b"abc")  # Same encoding as bytes
+
+
+@pytest.mark.parametrize("cipher_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
+def test_symkey_dict_sanity_checks(cipher_algo):
+    key_dict = generate_symkey(cipher_algo=cipher_algo)
+    check_symkey_dict_sanity(key_dict, cipher_algo=cipher_algo)
+    check_symkey_dict_sanity(dict(key_dict, unused_field=1), cipher_algo=cipher_algo.lower())
+
+    for field_name in key_dict:
+        with pytest.raises(SchemaValidationError):
+            check_symkey_dict_sanity({k: v for (k, v) in key_dict.items() if k != field_name}, cipher_algo=cipher_algo)
+        with pytest.raises(SchemaValidationError):
+            check_symkey_dict_sanity(dict(key_dict, **{field_name: "abc"}), cipher_algo=cipher_algo)
+
+    with pytest.raises(SchemaValidationError):
+        check_symkey_dict_sanity([b"abc"], cipher_algo=cipher_algo)
+
+    with pytest.raises(ValueError, match="Unknown symmetric key algorithm"):
+        check_symkey_dict_sanity(key_dict, cipher_algo="RSA_OAEP")

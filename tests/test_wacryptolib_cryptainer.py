@@ -1246,6 +1246,171 @@ def test_cryptainer_decryption_with_malformed_key_cipherdicts():
     )
 
 
+def _forge_key_struct_bytes(key_bytes):
+    return dump_to_json_bytes(dict(key_bytes=key_bytes, cryptainer_metadata=None))
+
+
+def _patch_trustee_decryption_results(forged_results: dict):
+    """Make the Nth (1-based) trustee decryptions return forged key structs, like forged ciphertexts would do,
+    since anyone can encrypt data with the public key of a trustee."""
+    original_decrypt_with_private_key = TrusteeApi.decrypt_with_private_key
+    call_count = 0
+
+    def _decrypt_with_private_key_sometimes_forged(self, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        key_struct_bytes = original_decrypt_with_private_key(self, **kwargs)
+        forged_result = forged_results.get(call_count)
+        return forged_result(key_struct_bytes) if callable(forged_result) else (forged_result or key_struct_bytes)
+
+    return patch.object(TrusteeApi, "decrypt_with_private_key", _decrypt_with_private_key_sometimes_forged)
+
+
+def test_cryptainer_decryption_with_forged_decrypted_structures():
+    payload = b"some secret payload"
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload, cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
+    )
+
+    # Malformed key structs and shards only lose their own branch, since 3 of the 5 shards are enough
+    forged_results = {1: b"garbage", 2: _forge_key_struct_bytes(dump_to_json_bytes(["abc", 1]))}
+    with _patch_trustee_decryption_results(forged_results):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload == payload
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Failed decrypting key with asymmetric algorithm RSA_OAEP",
+        exception_class=DecryptionError,
+    )
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Malformed shared secret shard",
+        exception_class=DecryptionError,
+    )
+
+    # Shards which can't be recombined (here, duplicates) are reported too
+    first_key_struct_bytes = None
+
+    def _replay_first_key_struct(key_struct_bytes):
+        nonlocal first_key_struct_bytes
+        first_key_struct_bytes = first_key_struct_bytes or key_struct_bytes
+        return first_key_struct_bytes
+
+    forged_results = {1: _replay_first_key_struct, 2: _replay_first_key_struct, 3: _replay_first_key_struct}
+    with _patch_trustee_decryption_results(forged_results):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload is None
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Shards could not be recombined",
+        exception_class=ValueError,
+    )
+
+    # A malformed payload symkey (here, lacking its AES_CBC "iv") is reported too
+    forged_results = {4: _forge_key_struct_bytes(dump_to_json_bytes({"key": b"x" * 32}))}  # After the 3 shards
+    with _patch_trustee_decryption_results(forged_results):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload is None
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Failed symmetric decryption (AES_CBC)",
+        exception_class=DecryptionError,
+    )
+
+
+def test_cryptainer_decryption_with_forged_sub_symkey():
+    cryptoconf = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_CBC",
+                key_cipher_layers=[
+                    dict(
+                        key_cipher_algo="AES_EAX",
+                        key_cipher_layers=[
+                            dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                        ],
+                    )
+                ],
+                payload_ciphertext_signatures=[],
+            )
+        ]
+    )
+    cryptainer = encrypt_payload_into_cryptainer(payload=b"abc", cryptoconf=cryptoconf, cryptainer_metadata=None)
+
+    forged_results = {1: _forge_key_struct_bytes(dump_to_json_bytes({"key": 123, "nonce": b"x"}))}
+    with _patch_trustee_decryption_results(forged_results):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload is None
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Error decrypting key with symmetric algorithm AES_EAX",
+        exception_class=DecryptionError,
+    )
+
+
+def test_unwrap_malformed_predecrypted_symkeys():
+    keystore_pool = InMemoryKeystorePool()
+    local_keystore = keystore_pool.get_local_keyfactory()
+    response_keychain_uid = generate_uuid0()
+    generate_keypair_for_storage(key_algo="RSA_OAEP", keystore=local_keystore, keychain_uid=response_keychain_uid)
+    response_public_key = load_asymmetric_key_from_pem_bytestring(
+        key_pem=local_keystore.get_public_key(keychain_uid=response_keychain_uid, key_algo="RSA_OAEP"),
+        key_algo="RSA_OAEP",
+    )
+
+    def _build_symkey_decryption(request_data, response_data):
+        revelation_request = dict(revelation_response_keychain_uid=response_keychain_uid,
+                                  revelation_response_key_algo="RSA_OAEP")
+        return dict(
+            revelation_request=revelation_request,
+            symkey_decryption_request_data=request_data,
+            symkey_decryption_response_data=response_data,
+        )
+
+    def _encrypt_for_response_key(plaintext):
+        return dump_to_json_bytes(
+            encrypt_bytestring(plaintext=plaintext, cipher_algo="RSA_OAEP", key_dict=dict(key=response_public_key))
+        )
+
+    valid_key_struct_bytes = _forge_key_struct_bytes(b"symkey")
+    successful_symkey_decryptions = [
+        _build_symkey_decryption(b"request1", b"garbage"),
+        _build_symkey_decryption(b"request2", dump_to_json_bytes({"ciphertext": b"abc"})),
+        _build_symkey_decryption(b"request3", _encrypt_for_response_key(b"not a key struct")),
+        _build_symkey_decryption(b"request4", _encrypt_for_response_key(valid_key_struct_bytes)),
+    ]
+
+    decryptor = CryptainerDecryptor(keystore_pool=keystore_pool)
+    operation_report = OperationReport()
+    predecrypted_symkey_mapper = decryptor._unwrap_predecrypted_symkeys(
+        successful_symkey_decryptions, operation_report=operation_report
+    )
+    assert predecrypted_symkey_mapper == {b"request4": valid_key_struct_bytes}  # Only valid ones are kept
+
+    for entry_msg_match in [
+        "Malformed remote symkey/shard cipherdict",
+        "Failed decryption of remote symkey/shard RSA_OAEP",
+        "Malformed remote key struct",
+    ]:
+        _check_operation_report_entry(
+            operation_report=operation_report,
+            entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+            entry_criticity=DecryptionErrorCriticity.ERROR,
+            entry_msg_match=entry_msg_match,
+            exception_class=DecryptionError,
+        )
+
+
 def test_key_cipherdict_sanity_checks():
     check_key_cipherdict_sanity({"shard_ciphertexts": [b"abc"], "unused_field": 1}, key_cipher_algo=SHARED_SECRET_ALGO_MARKER)
     for invalid_cipherdict in [{"shard_ciphertexts": []}, {"shard_ciphertexts": [None]}, [b"abc"], None]:

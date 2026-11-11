@@ -386,6 +386,14 @@ def check_sigainer_sanity(cryptoconf: dict, jsonschema_mode=False):
 
 SHARED_SECRET_CIPHERDICT_SCHEMA = Schema({"shard_ciphertexts": And([bytes], len)}, ignore_extra_keys=True)
 
+# DECRYPTED STRUCTURES: they may be forged too, since anyone can encrypt data with the public key of a trustee
+
+SHARED_SECRET_SHARD_SCHEMA = Schema(  # An (index, bytes) tuple, serialized as a list
+    And(list, lambda shard: len(shard) == 2 and isinstance(shard[0], int) and isinstance(shard[1], bytes))
+)
+
+KEY_STRUCT_SCHEMA = Schema({"key_bytes": bytes, "cryptainer_metadata": Or(dict, None)}, ignore_extra_keys=True)
+
 
 def check_key_cipherdict_sanity(key_cipherdict: dict, key_cipher_algo: str):
     """Validate the format of a key cipherdict, once deserialized from the "key_ciphertext" of a cipher layer.

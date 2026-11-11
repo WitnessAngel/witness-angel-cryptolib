@@ -5,7 +5,7 @@
 import contextlib
 import logging
 from pprint import pformat
-from typing import Optional
+from typing import Optional, Callable
 import uuid
 
 from jsonrpc_requests import JSONRPCError
@@ -15,11 +15,12 @@ from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_CIPHER_ALGOS
 from wacryptolib.cryptainer import CryptainerBase, logger, CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
     get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value, get_payload_ciphertext_signatures, \
     ensure_validated_cryptainer, check_key_cipherdict_sanity
+from wacryptolib.cryptainer._validation import KEY_STRUCT_SCHEMA, SHARED_SECRET_SHARD_SCHEMA
 from wacryptolib.exceptions import KeyDoesNotExist, KeyLoadingError, DecryptionError, DecryptionIntegrityError, \
     KeystoreDoesNotExist, SignatureVerificationError, SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring, SUPPORTED_SYMMETRIC_KEY_ALGOS, \
-    SUPPORTED_ASYMMETRIC_KEY_ALGOS
+    SUPPORTED_ASYMMETRIC_KEY_ALGOS, check_symkey_dict_sanity
 from wacryptolib.shared_secret import recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature
 from wacryptolib.utilities import load_from_json_bytes
@@ -27,13 +28,23 @@ from wacryptolib.hash import hash_message
 from wacryptolib.exceptions import AlgorithmNotSupported
 
 
-def _load_untrusted_json_bytes(data: bytes, description: str):
+def _load_untrusted_json_bytes(data: bytes, description: str, sanity_check: Optional[Callable] = None):
     """Deserialize JSON bytes found during decryption (thus maybe corrupted or forged), raising DecryptionError if
-    they are malformed."""
+    they are malformed, or if they fail the sanity_check() callable (which may raise SchemaValidationError)."""
     try:
-        return load_from_json_bytes(data)
+        data_tree = load_from_json_bytes(data)
     except Exception as exc:  # Not only ValueError/TypeError, e.g. RecursionError for deeply nested data
         raise DecryptionError("Unparseable %s (%s)" % (description, exc)) from exc
+    if sanity_check is not None:
+        try:
+            sanity_check(data_tree)
+        except SchemaValidationError as exc:  # E.g. missing or wrongly typed fields
+            raise DecryptionError("Invalid %s (%s)" % (description, exc)) from exc
+    return data_tree
+
+
+def _check_key_struct_sanity(key_struct):
+    _validate_data_tree(data_tree=key_struct, validation_schema=KEY_STRUCT_SCHEMA)
 
 
 class DecryptionErrorType:  # FIXME RENAME THIS
@@ -209,10 +220,19 @@ class CryptainerDecryptor(CryptainerBase):
 
             request_data = symkey_decryption["symkey_decryption_request_data"]
 
-            cipherdict = load_from_json_bytes(symkey_decryption["symkey_decryption_response_data"])
+            try:
+                cipherdict = _load_untrusted_json_bytes(
+                    symkey_decryption["symkey_decryption_response_data"], description="remote symkey/shard cipherdict"
+                )
+            except DecryptionError as exc:
+                operation_report.add_entry(
+                    entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                    entry_message="Malformed remote symkey/shard cipherdict",
+                    entry_criticity=DecryptionErrorCriticity.ERROR,
+                    entry_exception=exc,
+                )
+                continue
 
-            # FIXME handle errors?
-            # FIXME immediately deserialize "key_struct_bytes" here and handle operation_report ? Or somewhere else ?
             key_struct_bytes = self._decrypt_with_local_private_key(
                 cipherdict=cipherdict,
                 keychain_uid=keychain_uid,
@@ -221,7 +241,19 @@ class CryptainerDecryptor(CryptainerBase):
             )
 
             if key_struct_bytes:
-                predecrypted_symkey_mapper.setdefault(request_data, key_struct_bytes)
+                try:  # Checked now, so that only valid key structs end up in the mapper
+                    _load_untrusted_json_bytes(
+                        key_struct_bytes, description="remote key struct", sanity_check=_check_key_struct_sanity
+                    )
+                except DecryptionError as exc:
+                    operation_report.add_entry(
+                        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                        entry_message="Malformed remote key struct (%s)" % cipher_algo,
+                        entry_criticity=DecryptionErrorCriticity.ERROR,
+                        entry_exception=exc,
+                    )
+                else:
+                    predecrypted_symkey_mapper.setdefault(request_data, key_struct_bytes)
 
         return predecrypted_symkey_mapper
 
@@ -433,13 +465,17 @@ class CryptainerDecryptor(CryptainerBase):
 
         if key_bytes is not None:
             assert isinstance(key_bytes, bytes), type(key_bytes)
-            symkey = load_from_json_bytes(key_bytes)
 
             payload_macs = payload_cipher_layer[
                 "payload_macs"
             ]  # FIXME handle and test if it's None: missing integrity tags due to unfinished container!!
             payload_cipherdict = dict(ciphertext=payload_ciphertext, **payload_macs)
             try:
+                symkey = _load_untrusted_json_bytes(
+                    key_bytes,
+                    description="%s symkey" % payload_cipher_algo,
+                    sanity_check=lambda key_dict: check_symkey_dict_sanity(key_dict, cipher_algo=payload_cipher_algo),
+                )
                 payload_cleartext = decrypt_bytestring(
                     cipherdict=payload_cipherdict,
                     key_dict=symkey,
@@ -573,10 +609,21 @@ class CryptainerDecryptor(CryptainerBase):
                         operation_report=operation_report,
                     )  # Recursive structure
                     if shard_bytes is not None:
-                        shard = load_from_json_bytes(
-                            shard_bytes
-                        )  # The tuple (idx, payload) of each shard thus becomes encryptable
-                        decrypted_shards.append(shard)
+                        try:  # The tuple (idx, payload) of each shard was serialized to become encryptable
+                            shard = _load_untrusted_json_bytes(
+                                shard_bytes,
+                                description="shared secret shard",
+                                sanity_check=lambda shard: _validate_data_tree(shard, SHARED_SECRET_SHARD_SCHEMA),
+                            )
+                        except DecryptionError as exc:
+                            operation_report.add_entry(
+                                entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                                entry_message="Malformed shared secret shard",
+                                entry_criticity=DecryptionErrorCriticity.ERROR,
+                                entry_exception=exc,
+                            )
+                        else:
+                            decrypted_shards.append(shard)
                     else:
                         operation_report.add_entry(
                             entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
@@ -599,7 +646,15 @@ class CryptainerDecryptor(CryptainerBase):
                     operation_report.add_information(
                         "A sufficient number of shared-secret shards (%d) have been decrypted" % len(decrypted_shards)
                     )
-                    key_bytes = recombine_secret_from_shards(shards=decrypted_shards)
+                    try:
+                        key_bytes = recombine_secret_from_shards(shards=decrypted_shards)
+                    except ValueError as exc:  # E.g. duplicate indices or inconsistent lengths, in forged shards
+                        operation_report.add_entry(
+                            entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                            entry_message="Shared secret failure! Shards could not be recombined",
+                            entry_criticity=DecryptionErrorCriticity.ERROR,
+                            entry_exception=exc,
+                        )
 
         elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
             assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
@@ -621,8 +676,12 @@ class CryptainerDecryptor(CryptainerBase):
             )  # Recursive structure
 
             if sub_symkey_bytes:
-                sub_symkey_dict = load_from_json_bytes(sub_symkey_bytes)
                 try:
+                    sub_symkey_dict = _load_untrusted_json_bytes(
+                        sub_symkey_bytes,
+                        description="%s symkey" % key_cipher_algo,
+                        sanity_check=lambda key_dict: check_symkey_dict_sanity(key_dict, cipher_algo=key_cipher_algo),
+                    )
                     key_bytes = decrypt_bytestring(
                         key_cipherdict, cipher_algo=key_cipher_algo, key_dict=sub_symkey_dict
                     )
@@ -675,12 +734,11 @@ class CryptainerDecryptor(CryptainerBase):
     @staticmethod
     def _load_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str) -> dict:
         """Deserialize and validate the cipherdict of a key cipher layer, raising DecryptionError if it is malformed."""
-        key_cipherdict = _load_untrusted_json_bytes(key_ciphertext, description="%s key cipherdict" % key_cipher_algo)
-        try:
-            check_key_cipherdict_sanity(key_cipherdict, key_cipher_algo=key_cipher_algo)
-        except SchemaValidationError as exc:  # E.g. missing or wrongly typed fields
-            raise DecryptionError("Invalid %s key cipherdict (%s)" % (key_cipher_algo, exc)) from exc
-        return key_cipherdict
+        return _load_untrusted_json_bytes(
+            key_ciphertext,
+            description="%s key cipherdict" % key_cipher_algo,
+            sanity_check=lambda key_cipherdict: check_key_cipherdict_sanity(key_cipherdict, key_cipher_algo),
+        )
 
     @staticmethod
     def _get_predecrypted_symkey_or_none(key_ciphertext, predecrypted_symkey_mapper: Optional[dict]) -> Optional[bytes]:
@@ -781,7 +839,9 @@ class CryptainerDecryptor(CryptainerBase):
                     passphrases=passphrases,
                     cryptainer_metadata=cryptainer_metadata,
                 )
-                key_struct = load_from_json_bytes(key_struct_bytes)
+                key_struct = _load_untrusted_json_bytes(
+                    key_struct_bytes, description="key struct", sanity_check=_check_key_struct_sanity
+                )
                 key_bytes = key_struct["key_bytes"]
                 assert isinstance(key_bytes, bytes), type(key_bytes)
 

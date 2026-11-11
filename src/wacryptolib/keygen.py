@@ -8,8 +8,11 @@ from typing import Optional, AnyStr
 
 import unicodedata
 
+from schema import Schema
+
 from wacryptolib import _crypto_backend
 from wacryptolib.exceptions import KeyLoadingError
+from wacryptolib.utilities import validate_data_against_schema
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,18 @@ def generate_symkey(cipher_algo: str) -> dict:
 
     key_dict = generation_function()
     return key_dict
+
+
+def check_symkey_dict_sanity(key_dict: dict, *, cipher_algo: str):
+    """Validate the fields of a symmetric key dict, as produced by generate_symkey() for the selected algorithm.
+
+    Unknown fields are tolerated, and lengths are left to the checks of cipher functions.
+
+    :raises SchemaValidationError: if the key dict is malformed"""
+    cipher_algo = cipher_algo.upper()
+    if cipher_algo not in SUPPORTED_SYMMETRIC_KEY_ALGOS:
+        raise ValueError("Unknown symmetric key algorithm '%s'" % cipher_algo)
+    validate_data_against_schema(key_dict, schema=SYMMETRIC_KEY_ALGOS_REGISTRY[cipher_algo]["key_dict_schema"])
 
 
 def _generate_aes_cbc_key_dict():
@@ -197,9 +212,18 @@ def _check_asymmetric_key_length_bits(key_length_bits):
 
 
 SYMMETRIC_KEY_ALGOS_REGISTRY = dict(
-    AES_CBC={"generation_function": _generate_aes_cbc_key_dict},
-    AES_EAX={"generation_function": _generate_aes_eax_key_dict},
-    CHACHA20_POLY1305={"generation_function": _generate_chacha20_poly1305_key_dict},
+    AES_CBC={
+        "generation_function": _generate_aes_cbc_key_dict,
+        "key_dict_schema": Schema({"key": bytes, "iv": bytes}, ignore_extra_keys=True),
+    },
+    AES_EAX={
+        "generation_function": _generate_aes_eax_key_dict,
+        "key_dict_schema": Schema({"key": bytes, "nonce": bytes}, ignore_extra_keys=True),
+    },
+    CHACHA20_POLY1305={
+        "generation_function": _generate_chacha20_poly1305_key_dict,
+        "key_dict_schema": Schema({"key": bytes, "nonce": bytes}, ignore_extra_keys=True),
+    },
 )
 
 ASYMMETRIC_KEY_ALGOS_REGISTRY = dict(

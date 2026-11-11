@@ -1,11 +1,11 @@
-from flightbox import FlightboxUtilitiesBase
+from ._flightbox import FlightboxUtilitiesBase
 
 import os
 import logging
 from extjson import dump_to_json_bytes
-from pycryptodome_secret_sharing import Shamir as _Shamir
+from .pycryptodome_secret_sharing import Shamir as _Shamir
 from data_utils import do_split_secret_into_shards, split_as_chunks
-from fallback_adapter import encrypt_via_rsa_oaep, encrypt_via_aes_cbc
+from .fallback_adapter import encrypt_via_rsa_oaep, encrypt_via_aes_cbc
 
 import time
 import struct
@@ -104,7 +104,7 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
             iv=_get_random_bytes(AES_BLOCK_SIZE)
         )
 
-    def get_public_key(self, trustee: dict, key_algo: str, keychain_uid: uuid.UUID) -> dict:  # FIXME
+    def get_public_key(self, trustee: dict, key_algo: str, keychain_uid: UUID) -> dict:  # FIXME
         trustee_type = trustee["trustee_type"]
         if trustee_type != AUTHENTICATOR_TRUSTEE:
             raise RuntimeError(f"Unsupported trustee type {trustee_type}")

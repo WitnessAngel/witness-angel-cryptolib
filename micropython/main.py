@@ -3,10 +3,12 @@ import sys
 ## MONKEY PATCHING
 IS_MICROPYTHON = (sys.implementation.name == "micropython")
 
-# Vendored dependencies, see vendor_dependencies.py
-_LIB_DIR = (sys.path[0] or ".") + "/lib"
+# Our own sources, and vendored dependencies (see vendor_dependencies.py)
+_BASE_DIR = sys.path[0] or "."
+sys.path.insert(0, _BASE_DIR + "/src")
+_LIB_DIR = _BASE_DIR + "/lib"
 if IS_MICROPYTHON:
-    sys.path.insert(0, _LIB_DIR)
+    sys.path.insert(1, _LIB_DIR)
 else:
     sys.path.append(_LIB_DIR)  # Stdlib and installed packages take precedence over our stubs
 print("SYSPATHS", sys.path)
@@ -48,8 +50,8 @@ if IS_MICROPYTHON:
     threading.Lock = _DummyLock
 ###########
 
-from flightbox import FlightBox
-from flightbox_utilities_implementation import FlightboxUtilitiesImpl, AUTHENTICATOR_TRUSTEE
+from cryptainer._flightbox import FlightBox
+from cryptainer.flightbox_utilities_implementation import FlightboxUtilitiesImpl, AUTHENTICATOR_TRUSTEE
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()

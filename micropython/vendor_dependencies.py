@@ -1,7 +1,8 @@
 """
 Regenerate micropython/lib/ : PyPI packages at the exact versions of ../poetry.lock (so that
 micropython and cpython code get cross-validated), plus micropython-lib stdlib modules (latest versions, as python
-sources, from the index used by "mip"), micropython patches, stubs and shared wacryptolib modules.
+sources, from the index used by "mip"), micropython patches, stubs and shared wacryptolib modules. Also refresh
+micropython/src/cryptainer/_flightbox.py, a verbatim copy of wacryptolib's portable flightbox core.
 
 Usage (from any directory, with CPython >= 3.11):  python micropython/vendor_dependencies.py
 """
@@ -17,6 +18,7 @@ from urllib.request import urlopen
 MICROPYTHON_DIR = Path(__file__).resolve().parent
 REPO_DIR = MICROPYTHON_DIR.parent
 LIB_DIR = MICROPYTHON_DIR / "lib"
+SRC_DIR = MICROPYTHON_DIR / "src"
 
 PACKAGES = ["extjson", "pkcs1", "pyaes"]
 
@@ -26,6 +28,9 @@ MICROPYTHON_LIB_PACKAGES = ["__future__", "copy", "datetime", "hashlib", "hmac",
 SHARED_MODULES = [REPO_DIR / "src/wacryptolib/utilities/data_utils.py",
                   REPO_DIR / "src/wacryptolib/_crypto_backend/fallback/chacha20_poly1305.py",
                   REPO_DIR / "src/wacryptolib/_crypto_backend/fallback/hpke_x25519_seal.py"]
+
+# Verbatim copies of wacryptolib modules into micropython sources
+SHARED_SOURCES = {REPO_DIR / "src/wacryptolib/cryptainer/_flightbox.py": SRC_DIR / "cryptainer/_flightbox.py"}
 
 
 def install_from_mip_index(name):
@@ -62,6 +67,9 @@ def main():
 
     for module in [*sorted((MICROPYTHON_DIR / "stubs").glob("*.py")), *SHARED_MODULES]:
         shutil.copy(module, LIB_DIR)
+
+    for source, target in SHARED_SOURCES.items():
+        shutil.copy(source, target)
 
     print("Vendored into %s: %s" % (LIB_DIR, ", ".join(requirements)))
 

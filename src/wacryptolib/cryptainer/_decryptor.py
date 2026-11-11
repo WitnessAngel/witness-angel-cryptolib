@@ -91,6 +91,20 @@ OPERATION_REPORT_ENTRY_SCHEMA = Schema(
 )
 
 
+def _strip_exception_tracebacks(exception: BaseException):
+    """Drop the tracebacks of an exception and of its chained exceptions, since their frames would keep alive all the
+    local variables of the decryption call stack (e.g. payload ciphertexts), as long as the exception is stored."""
+    pending_exceptions = [exception]
+    seen_exception_ids = set()
+    while pending_exceptions:
+        current_exception = pending_exceptions.pop()
+        if current_exception is None or id(current_exception) in seen_exception_ids:
+            continue
+        seen_exception_ids.add(id(current_exception))
+        current_exception.__traceback__ = None
+        pending_exceptions.extend((current_exception.__cause__, current_exception.__context__))
+
+
 class OperationReport:
     """
     Wrapper around a list of operation info/error entries with different levels of imbrication.
@@ -123,6 +137,7 @@ class OperationReport:
         # We immediately forward entry to standard logging too, but always in DEBUG level!
         if entry_exception:
             logger.debug("%s report entry: %s (%r)", entry_type, entry_message, entry_exception)
+            _strip_exception_tracebacks(entry_exception)  # Reports may be kept long after the decryption
         else:
             logger.debug("%s report entry: %s", entry_type, entry_message)
 

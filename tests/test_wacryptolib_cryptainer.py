@@ -1489,6 +1489,29 @@ def test_gather_decryptable_symkeys_with_malformed_shared_secret():
     assert "Skipping malformed shared secret" in log_message and cryptainer_name == "bad"
 
 
+def test_operation_report_entries_dont_keep_tracebacks():
+    def _fail_with_local_payload(payload):
+        try:
+            raise ValueError("inner error")
+        except ValueError as exc:
+            raise DecryptionError("outer error") from exc
+
+    operation_report = OperationReport()
+    try:
+        _fail_with_local_payload(b"big payload")
+    except DecryptionError as exc:
+        assert exc.__traceback__ is not None and exc.__cause__.__traceback__ is not None
+        operation_report.add_entry(
+            entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR, entry_message="Failure", entry_exception=exc
+        )
+
+    (entry,) = operation_report.get_error_entries()
+    entry_exception = entry["entry_exception"]
+    assert str(entry_exception) == "outer error" and str(entry_exception.__cause__) == "inner error"  # Chain is kept
+    assert entry_exception.__traceback__ is None  # Frames, and thus payloads, are not kept alive
+    assert entry_exception.__cause__.__traceback__ is None
+
+
 def test_key_cipherdict_sanity_checks():
     check_key_cipherdict_sanity({"shard_ciphertexts": [b"abc"], "unused_field": 1}, key_cipher_algo=SHARED_SECRET_ALGO_MARKER)
     for invalid_cipherdict in [{"shard_ciphertexts": []}, {"shard_ciphertexts": [None]}, [b"abc"], None]:

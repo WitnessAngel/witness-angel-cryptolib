@@ -5,7 +5,7 @@
 import logging
 from typing import BinaryIO
 
-from schema import Schema, Or
+from schema import Schema, Or, Forbidden
 
 from wacryptolib import _crypto_backend
 from wacryptolib._crypto_backend import hpke_x25519_seal
@@ -561,8 +561,9 @@ CIPHER_ALGOS_REGISTRY = dict(
         "decryption_function": _decrypt_via_rsa_oaep,
         "cipherdict_schema": Schema(
             Or(
-                {"ciphertext_chunks": [bytes]},  # Empty for an empty plaintext
-                {"digest_list": [bytes]},  # Legacy naming, in old cryptainers
+                # Both namings at once are ambiguous, since decryption would just ignore one of them
+                {"ciphertext_chunks": [bytes], Forbidden("digest_list"): object},  # Empty for an empty plaintext
+                {"digest_list": [bytes], Forbidden("ciphertext_chunks"): object},  # Legacy naming, in old cryptainers
                 ignore_extra_keys=True,
             )
         ),

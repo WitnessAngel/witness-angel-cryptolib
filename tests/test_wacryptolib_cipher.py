@@ -49,7 +49,14 @@ def test_generic_encryption_and_decryption_errors():
         (
             "RSA_OAEP",
             [{"ciphertext_chunks": [b"abc", b"def"]}, {"ciphertext_chunks": []}, {"digest_list": [b"abc"]}],
-            [{}, {"ciphertext_chunks": b"abc"}, {"ciphertext_chunks": [b"abc", None]}, {"digest_list": None}],
+            [
+                {},
+                {"ciphertext_chunks": b"abc"},
+                {"ciphertext_chunks": [b"abc", None]},
+                {"digest_list": None},
+                {"ciphertext_chunks": [b"abc"], "digest_list": 123},
+                {"ciphertext_chunks": [b"abc"], "digest_list": []},
+            ],
         ),
         (
             "ECIES_X25519",

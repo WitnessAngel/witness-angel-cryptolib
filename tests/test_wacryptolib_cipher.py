@@ -425,6 +425,11 @@ def test_ml_kem_768_asymmetric_encryption_and_decryption():
     with pytest.raises(DecryptionError):
         decryption_func(cipherdict=corrupted_cipherdict)
 
+    for corrupted_kem_ciphertext in (b"", cipherdict["kem_ciphertext"][:-1], cipherdict["kem_ciphertext"] + b"\x00"):
+        corrupted_cipherdict = dict(cipherdict, kem_ciphertext=corrupted_kem_ciphertext)  # Invalid encapsulation length
+        with pytest.raises(DecryptionError):
+            decryption_func(cipherdict=corrupted_cipherdict)
+
     for plaintext in (b"", b"a", b"abcdef"):  # Short ciphertexts are checked for length before their tag
         cipherdict_to_truncate = wacryptolib.cipher.encrypt_bytestring(
             key_dict=public_key_dict, plaintext=plaintext, cipher_algo=cipher_algo

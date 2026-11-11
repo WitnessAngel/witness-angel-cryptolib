@@ -1417,7 +1417,6 @@ def test_unwrap_malformed_predecrypted_symkeys():
 def test_cryptainer_decryption_with_malformed_revealed_ecies_and_symmetric_key_cipherdicts(
     inner_key_cipher_layer, expected_entry_type
 ):
-    skip_if_fallback_backend("ECC")
     payload = b"some secret payload"
     outer_key_cipher_layer = dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
     cryptoconf = dict(

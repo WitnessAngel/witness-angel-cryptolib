@@ -573,6 +573,7 @@ class CryptainerDecryptor(CryptainerBase):
         assert isinstance(key_ciphertext, bytes), type(key_ciphertext)
 
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
+        is_symmetric_key_cipher_layer = key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS  # Else asymmetric or shared
 
         try:
             key_cipherdict = _load_key_cipherdict(key_ciphertext, key_cipher_algo=key_cipher_algo)
@@ -580,8 +581,8 @@ class CryptainerDecryptor(CryptainerBase):
             operation_report.add_entry(
                 entry_type=(
                     DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR
-                    if key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS
-                    else DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR
+                    if is_symmetric_key_cipher_layer
+                    else DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR  # Like the errors of shared secrets
                 ),
                 entry_message="Malformed key cipherdict for algorithm %s" % key_cipher_algo,
                 entry_criticity=DecryptionErrorCriticity.ERROR,
@@ -665,7 +666,7 @@ class CryptainerDecryptor(CryptainerBase):
                             entry_exception=exc,
                         )
 
-        elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
+        elif is_symmetric_key_cipher_layer:
             assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
 
             sub_symkey_ciphertext = key_cipher_layer["key_ciphertext"]

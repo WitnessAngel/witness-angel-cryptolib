@@ -1179,71 +1179,60 @@ def test_cryptainer_decryption_rare_cipher_errors(tmp_path):
     assert operation_report.get_error_count() == 2
 
 
-def test_cryptainer_decryption_with_malformed_key_cipherdicts():
+def test_cryptainer_decryption_with_malformed_revealed_key_cipherdicts():
+    # Each shard has 2 RSA_OAEP layers, so the inner cipherdict is only revealed by the first decryption
+    double_rsa_layers = [
+        dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
+        dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
+    ]
+    cryptoconf = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_CBC",
+                key_cipher_layers=[
+                    dict(
+                        key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                        key_shared_secret_threshold=2,
+                        key_shared_secret_shards=[dict(key_cipher_layers=double_rsa_layers)] * 4,
+                    )
+                ],
+                payload_ciphertext_signatures=[],
+            )
+        ]
+    )
     payload = b"some secret payload"
-    cryptainer_original = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
-    )
+    cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=None)
 
-    # Malformed shard cipherdicts only lose their own branch, since 3 of the 5 shards are enough
-    cryptainer = copy.deepcopy(cryptainer_original)
-    key_cipherdict = load_from_json_bytes(cryptainer["payload_cipher_layers"][0]["key_ciphertext"])
-    key_cipherdict["shard_ciphertexts"][0] = b"\xffnot json"
-    key_cipherdict["shard_ciphertexts"][1] = b"[" * 100000  # Too deeply nested for the json decoder
-    cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes(key_cipherdict)
+    # Each trustee call decrypts the outer layer of a shard, if the revealed inner cipherdict is valid
+    for forged_inner_cipherdicts in [
+        (b"\xffnot json", b"[" * 100000),  # Unparseable, the second one being too deeply nested for the json decoder
+        (dump_to_json_bytes({"ciphertext": b"abc"}), dump_to_json_bytes({"ciphertext_chunks": [123]})),  # Invalid
+    ]:
+        call_count = 0
 
-    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
-    assert result_payload == payload
-    _check_operation_report_entry(
-        operation_report=operation_report,
-        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-        entry_criticity=DecryptionErrorCriticity.ERROR,
-        entry_msg_match="Malformed key cipherdict for algorithm RSA_OAEP",
-        exception_class=DecryptionError,
-        occurrence_count=2,
-    )
+        def _count_calls(key_struct_bytes):
+            nonlocal call_count
+            call_count += 1
+            return key_struct_bytes
 
-    # Cipherdicts with missing or wrongly typed fields are rejected the same way, before reaching the trustee
-    cryptainer = copy.deepcopy(cryptainer_original)
-    key_cipherdict = load_from_json_bytes(cryptainer["payload_cipher_layers"][0]["key_ciphertext"])
-    key_cipherdict["shard_ciphertexts"][0] = dump_to_json_bytes({"ciphertext": b"abc"})
-    key_cipherdict["shard_ciphertexts"][1] = dump_to_json_bytes({"ciphertext_chunks": [123]})
-    cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes(key_cipherdict)
+        forged_results = {
+            1: _forge_key_struct_bytes(forged_inner_cipherdicts[0]),
+            2: _forge_key_struct_bytes(forged_inner_cipherdicts[1]),
+            **{idx: _count_calls for idx in range(3, 10)},
+        }
+        with _patch_trustee_decryption_results(forged_results):
+            result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
 
-    original_decrypt_with_private_key = TrusteeApi.decrypt_with_private_key
-    call_count = 0
-
-    def _counting_decrypt_with_private_key(self, **kwargs):
-        nonlocal call_count
-        call_count += 1
-        return original_decrypt_with_private_key(self, **kwargs)
-
-    with patch.object(TrusteeApi, "decrypt_with_private_key", _counting_decrypt_with_private_key):
-        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
-    assert result_payload == payload
-    assert call_count == 4  # The 3 valid shards, and the main RSA_OAEP layer
-    _check_operation_report_entry(
-        operation_report=operation_report,
-        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-        entry_criticity=DecryptionErrorCriticity.ERROR,
-        entry_msg_match="Malformed key cipherdict for algorithm RSA_OAEP",
-        exception_class=DecryptionError,
-        occurrence_count=2,
-    )
-
-    # A malformed outermost cipherdict loses the whole payload, but without aborting the decryption
-    cryptainer = copy.deepcopy(cryptainer_original)
-    cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = b'{"shard_ciphertexts": '
-
-    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
-    assert result_payload is None
-    _check_operation_report_entry(
-        operation_report=operation_report,
-        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-        entry_criticity=DecryptionErrorCriticity.ERROR,
-        entry_msg_match="Malformed key cipherdict for algorithm [SHARED_SECRET]",
-        exception_class=DecryptionError,
-    )
+        assert result_payload == payload  # Only the branches of the 2 forged shards were lost
+        assert call_count == 4  # The 2 layers of the 2 remaining shards, forged cipherdicts never reached a trustee
+        _check_operation_report_entry(
+            operation_report=operation_report,
+            entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+            entry_criticity=DecryptionErrorCriticity.ERROR,
+            entry_msg_match="Malformed key cipherdict for algorithm RSA_OAEP",
+            exception_class=DecryptionError,
+            occurrence_count=2,
+        )
 
 
 def _forge_key_struct_bytes(key_bytes):
@@ -1411,64 +1400,150 @@ def test_unwrap_malformed_predecrypted_symkeys():
         )
 
 
-def test_cryptainer_decryption_with_malformed_ecies_and_symmetric_key_cipherdicts():
+@pytest.mark.parametrize(
+    "inner_key_cipher_layer, expected_entry_type",
+    [
+        (
+            dict(key_cipher_algo="ECIES_X25519", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER),
+            DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        ),
+        (
+            dict(
+                key_cipher_algo="AES_EAX",
+                key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
+            ),
+            DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
+        ),
+    ],
+)
+def test_cryptainer_decryption_with_malformed_revealed_ecies_and_symmetric_key_cipherdicts(
+    inner_key_cipher_layer, expected_entry_type
+):
     skip_if_fallback_backend("ECC")
     payload = b"some secret payload"
+    outer_key_cipher_layer = dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+    cryptoconf = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_CBC",
+                key_cipher_layers=[inner_key_cipher_layer, outer_key_cipher_layer],
+                payload_ciphertext_signatures=[],
+            )
+        ]
+    )
+    cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=None)
+    result_payload, _operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload == payload
+
+    # The outer RSA_OAEP decryption reveals a cipherdict lacking a field required by both algos
+    forged_results = {1: _forge_key_struct_bytes(dump_to_json_bytes({"ciphertext": b"abc"}))}
+    with _patch_trustee_decryption_results(forged_results):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload is None
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=expected_entry_type,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Malformed key cipherdict for algorithm %s" % inner_key_cipher_layer["key_cipher_algo"],
+        exception_class=DecryptionError,
+    )
+
+
+def test_cryptainer_validation_of_readable_key_cipherdicts():
+    rsa_layer = dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+    def _get_chacha_layer():  # Distinct dicts, since corruptions below must target a single location
+        return dict(key_cipher_algo="CHACHA20_POLY1305", key_cipher_layers=[rsa_layer])
+
     cryptoconf = dict(
         payload_cipher_layers=[
             dict(
                 payload_cipher_algo="AES_CBC",
                 key_cipher_layers=[
-                    dict(
-                        key_cipher_algo="AES_EAX",
-                        key_cipher_layers=[
-                            dict(key_cipher_algo="ECIES_X25519", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                    dict(key_cipher_algo="AES_EAX", key_cipher_layers=[rsa_layer]),
+                    dict(  # Outermost shared secret, so its shard ciphertexts are readable
+                        key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                        key_shared_secret_threshold=1,
+                        key_shared_secret_shards=[
+                            dict(key_cipher_layers=[rsa_layer]),
+                            dict(key_cipher_layers=[_get_chacha_layer(), rsa_layer]),
                         ],
-                    )
+                    ),
                 ],
                 payload_ciphertext_signatures=[],
-            )
+            ),
+            dict(
+                payload_cipher_algo="AES_EAX",
+                key_cipher_layers=[
+                    dict(  # Inner shared secret, so only the key ciphertexts of its symmetric layers are readable
+                        key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                        key_shared_secret_threshold=1,
+                        key_shared_secret_shards=[dict(key_cipher_layers=[_get_chacha_layer(), rsa_layer])],
+                    ),
+                    rsa_layer,
+                ],
+                payload_ciphertext_signatures=[],
+            ),
         ]
     )
-    cryptainer_original = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=None
+    payload = b"some secret payload"
+    cryptainer_original = copy.deepcopy(  # Gives a plain (non-validated) dict
+        encrypt_payload_into_cryptainer(payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=None)
     )
+    check_cryptainer_sanity(cryptainer_original)
     result_payload, _operation_report = decrypt_payload_from_cryptainer(cryptainer_original)
     assert result_payload == payload
 
-    def _get_corrupted_cryptainer(key_cipher_layer_path, removed_field):
+    def _corrupt_layer(layer_path, corrupt_key_cipherdict):
         cryptainer = copy.deepcopy(cryptainer_original)
-        key_cipher_layer = cryptainer["payload_cipher_layers"][0]
-        for key in key_cipher_layer_path:
-            key_cipher_layer = key_cipher_layer[key]
-        key_cipherdict = load_from_json_bytes(key_cipher_layer["key_ciphertext"])
-        del key_cipherdict[removed_field]
-        key_cipher_layer["key_ciphertext"] = dump_to_json_bytes(key_cipherdict)
+        layer = cryptainer["payload_cipher_layers"]
+        for key in layer_path:
+            layer = layer[key]
+        layer["key_ciphertext"] = corrupt_key_cipherdict(load_from_json_bytes(layer["key_ciphertext"]))
         return cryptainer
 
-    # The outer AES_EAX cipherdict, reported as a symmetric decryption error
-    cryptainer = _get_corrupted_cryptainer([], removed_field="tag")
-    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
-    assert result_payload is None
-    _check_operation_report_entry(
-        operation_report=operation_report,
-        entry_type=DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
-        entry_criticity=DecryptionErrorCriticity.ERROR,
-        entry_msg_match="Malformed key cipherdict for algorithm AES_EAX",
-        exception_class=DecryptionError,
-    )
+    def _corrupt_shard(layer_path, shard_index, shard_ciphertext):
+        def _corrupt_key_cipherdict(key_cipherdict):
+            key_cipherdict["shard_ciphertexts"][shard_index] = shard_ciphertext
+            return dump_to_json_bytes(key_cipherdict)
 
-    # The inner ECIES_X25519 cipherdict, which protects the AES_EAX key
-    cryptainer = _get_corrupted_cryptainer(["key_cipher_layers", 0], removed_field="kem_ciphertext")
-    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
-    assert result_payload is None
-    _check_operation_report_entry(
-        operation_report=operation_report,
-        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-        entry_criticity=DecryptionErrorCriticity.ERROR,
-        entry_msg_match="Malformed key cipherdict for algorithm ECIES_X25519",
-        exception_class=DecryptionError,
-    )
+        return _corrupt_layer(layer_path, _corrupt_key_cipherdict)
+
+    def _drop_shard(key_cipherdict):
+        key_cipherdict["shard_ciphertexts"].pop()
+        return dump_to_json_bytes(key_cipherdict)
+
+    invalid_rsa_cipherdict = dump_to_json_bytes({"ciphertext": b"abc"})
+    for corrupted_cryptainer, error_match in [
+        (
+            _corrupt_layer([0], lambda _cipherdict: b"[" * 100000),
+            r"Unparseable \[SHARED_SECRET\] .* payload_cipher_layers\[0\]/key_ciphertext",
+        ),
+        (_corrupt_layer([0], _drop_shard), "1 shard ciphertexts for 2 configured shards"),
+        (_corrupt_shard([0], 0, b"[1"), r"Unparseable RSA_OAEP .*/shard_ciphertexts\[0\]"),
+        (_corrupt_shard([0], 1, invalid_rsa_cipherdict), r"Invalid RSA_OAEP .*/shard_ciphertexts\[1\]"),
+        (
+            _corrupt_layer([0, "key_cipher_layers", 0], lambda _cipherdict: invalid_rsa_cipherdict),
+            r"Invalid RSA_OAEP .* payload_cipher_layers\[0\]/key_cipher_layers\[0\]/key_ciphertext",
+        ),
+        (
+            _corrupt_layer(
+                [0, "key_cipher_layers", 1, "key_shared_secret_shards", 1, "key_cipher_layers", 0],
+                lambda _cipherdict: invalid_rsa_cipherdict,
+            ),
+            r"key_shared_secret_shards\[1\]/key_cipher_layers\[0\]/key_ciphertext",
+        ),
+        (
+            _corrupt_layer(
+                [1, "key_cipher_layers", 0, "key_shared_secret_shards", 0, "key_cipher_layers", 0],
+                lambda _cipherdict: invalid_rsa_cipherdict,
+            ),
+            r"payload_cipher_layers\[1\]/key_cipher_layers\[0\]/key_shared_secret_shards\[0\]",
+        ),
+    ]:
+        with pytest.raises(SchemaValidationError, match=error_match):
+            check_cryptainer_sanity(corrupted_cryptainer)
+        with pytest.raises(SchemaValidationError, match=error_match):  # No decryption operation even starts
+            decrypt_payload_from_cryptainer(corrupted_cryptainer)
 
 
 def test_gather_decryptable_symkeys_with_malformed_shared_secret():
@@ -1478,15 +1553,12 @@ def test_gather_decryptable_symkeys_with_malformed_shared_secret():
     malformed_cryptainer = copy.deepcopy(cryptainer)
     malformed_cryptainer["payload_cipher_layers"][0]["key_ciphertext"] = dump_to_json_bytes({"shard_ciphertexts": 1})
 
-    def _get_symkey_requests_count(cryptainers_with_names):
-        decryptable_symkeys_per_trustee = gather_decryptable_symkeys(cryptainers_with_names=cryptainers_with_names)
-        return sum(len(symkeys) for (_trustee_data, symkeys) in decryptable_symkeys_per_trustee.values())
+    decryptable_symkeys_per_trustee = gather_decryptable_symkeys(cryptainers_with_names=[("good", cryptainer)])
+    assert sum(len(symkeys) for (_trustee_data, symkeys) in decryptable_symkeys_per_trustee.values()) == 5  # Shards
 
-    assert _get_symkey_requests_count([("good", cryptainer)]) == 5  # Shards of SIMPLE_SHAMIR_CRYPTOCONF
-    with patch("wacryptolib.cryptainer._analysis.logger") as logger_mock:
-        assert _get_symkey_requests_count([("bad", malformed_cryptainer), ("good", cryptainer)]) == 5
-    ((log_message, cryptainer_name, _exc),) = [call.args for call in logger_mock.warning.call_args_list]
-    assert "Skipping malformed shared secret" in log_message and cryptainer_name == "bad"
+    # Readable cipherdicts are validated upfront along with the cryptainer, like any other part of its structure
+    with pytest.raises(SchemaValidationError, match=r"Invalid cryptainer bad: Invalid \[SHARED_SECRET\] key cipherdict"):
+        gather_decryptable_symkeys(cryptainers_with_names=[("bad", malformed_cryptainer), ("good", cryptainer)])
 
 
 def test_operation_report_entries_dont_keep_tracebacks():
@@ -1513,7 +1585,9 @@ def test_operation_report_entries_dont_keep_tracebacks():
 
 
 def test_key_cipherdict_sanity_checks():
-    check_key_cipherdict_sanity({"shard_ciphertexts": [b"abc"], "unused_field": 1}, key_cipher_algo=SHARED_SECRET_ALGO_MARKER)
+    check_key_cipherdict_sanity(
+        {"shard_ciphertexts": [b"abc"], "unused_field": 1}, key_cipher_algo=SHARED_SECRET_ALGO_MARKER
+    )
     for invalid_cipherdict in [{"shard_ciphertexts": []}, {"shard_ciphertexts": [None]}, [b"abc"], None]:
         with pytest.raises(SchemaValidationError):
             check_key_cipherdict_sanity(invalid_cipherdict, key_cipher_algo=SHARED_SECRET_ALGO_MARKER)

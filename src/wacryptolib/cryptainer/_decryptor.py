@@ -48,7 +48,10 @@ def _check_key_struct_sanity(key_struct):
 
 
 def _load_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str) -> dict:
-    """Deserialize and validate the cipherdict of a key cipher layer, raising DecryptionError if it is malformed."""
+    """Deserialize and validate the cipherdict of a key cipher layer, raising DecryptionError if it is malformed.
+
+    Readable cipherdicts were already validated along with the cryptainer, but inner ones are only revealed by
+    decryption, so they may be corrupted or forged."""
     return _load_untrusted_json_bytes(
         key_ciphertext,
         description="%s key cipherdict" % key_cipher_algo,
@@ -592,7 +595,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         try:
             key_cipherdict = _load_key_cipherdict(key_ciphertext, key_cipher_algo=key_cipher_algo)
-        except DecryptionError as exc:  # E.g. a corrupted key ciphertext, only this branch is lost
+        except DecryptionError as exc:  # E.g. a forged ciphertext revealed by decryption, only this branch is lost
             operation_report.add_entry(
                 entry_type=(
                     DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR
@@ -616,7 +619,7 @@ class CryptainerDecryptor(CryptainerBase):
                 "Deciphering %d shards of shared secret (threshold: %d)"
                 % (len(shard_ciphertexts), key_shared_secret_threshold)
             ):
-                # If some shards are missing, we won't detect it here because zip() stops at shortest list
+                # Shard counts were checked by the cryptainer validation, since shard ciphertexts are readable
                 for shard_idx, (shard_ciphertext, key_shared_secret_shard_conf) in enumerate(
                     zip(shard_ciphertexts, key_shared_secret_shards), start=1
                 ):

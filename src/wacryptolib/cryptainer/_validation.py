@@ -5,18 +5,20 @@
 import copy
 import hashlib
 import os
-from typing import Union
+from typing import Union, Optional
 
 from schema import Or, Optional as OptionalKey, And, Schema
 
-from wacryptolib.cipher import SUPPORTED_SYMMETRIC_CIPHER_ALGOS, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, check_cipherdict_sanity
+from wacryptolib.cipher import SUPPORTED_SYMMETRIC_CIPHER_ALGOS, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, \
+    check_cipherdict_sanity
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_TRUSTEE_TYPES, CRYPTAINER_STATES, \
     CRYPTAINER_FORMAT, PAYLOAD_CIPHERTEXT_LOCATIONS, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, SHARED_SECRET_ALGO_MARKER
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
-from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema
+from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema, \
+    load_from_json_bytes
 from wacryptolib.utilities.validation_utils import summarize_validation_error_lines
 
 
@@ -358,6 +360,15 @@ def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False, require_inl
 
     _validate_data_tree(data_tree=cryptainer, validation_schema=CRYPTAINER_SCHEMA_PYTHON)
 
+    for payload_cipher_layer_index, payload_cipher_layer in enumerate(cryptainer["payload_cipher_layers"]):
+        location = "payload_cipher_layers[%d]" % payload_cipher_layer_index
+        _check_readable_key_cipherdicts(
+            key_ciphertext=payload_cipher_layer["key_ciphertext"],
+            key_ciphertext_location=location + "/key_ciphertext",
+            key_cipher_layers=payload_cipher_layer["key_cipher_layers"],
+            key_cipher_layers_location=location,
+        )
+
 
 def check_sigconf_sanity(cryptoconf: dict, jsonschema_mode=False):
     """Validate the format of a plaintext signature config.
@@ -404,6 +415,69 @@ def check_key_cipherdict_sanity(key_cipherdict: dict, key_cipher_algo: str):
         _validate_data_tree(data_tree=key_cipherdict, validation_schema=SHARED_SECRET_CIPHERDICT_SCHEMA)
     else:
         check_cipherdict_sanity(key_cipherdict, cipher_algo=key_cipher_algo)
+
+
+def _load_and_check_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str, location: str) -> dict:
+    try:
+        key_cipherdict = load_from_json_bytes(key_ciphertext)
+    except Exception as exc:  # Not only ValueError/TypeError, e.g. RecursionError for deeply nested data
+        raise SchemaValidationError(
+            "Unparseable %s key cipherdict at %s (%s)" % (key_cipher_algo, location, exc)
+        ) from None  # The faulty bytes may be huge
+    try:
+        check_key_cipherdict_sanity(key_cipherdict, key_cipher_algo=key_cipher_algo)
+    except SchemaValidationError as exc:
+        raise SchemaValidationError("Invalid %s key cipherdict at %s: %s" % (key_cipher_algo, location, exc)) from None
+    return key_cipherdict
+
+
+def _check_readable_key_cipherdicts(
+    key_ciphertext: Optional[bytes], key_ciphertext_location: str, key_cipher_layers: list, key_cipher_layers_location
+):
+    """Validate the key cipherdicts of a chain of key cipher layers which are readable without any key.
+
+    These are the outermost cipherdict of the chain (unless key_ciphertext is None, i.e. it is encrypted by an
+    outer layer), and recursively the outermost cipherdicts of the sub-chains, which protect the keys of symmetric
+    layers and the shards of shared secrets. Inner cipherdicts are only revealed by decryption.
+    """
+    for key_cipher_layer_index, key_cipher_layer in enumerate(key_cipher_layers):
+        location = "%s/key_cipher_layers[%d]" % (key_cipher_layers_location, key_cipher_layer_index)
+        key_cipher_algo = key_cipher_layer["key_cipher_algo"]
+
+        key_cipherdict = None
+        if key_ciphertext is not None and key_cipher_layer_index == len(key_cipher_layers) - 1:  # Outermost layer
+            key_cipherdict = _load_and_check_key_cipherdict(
+                key_ciphertext, key_cipher_algo=key_cipher_algo, location=key_ciphertext_location
+            )
+
+        if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
+            key_shared_secret_shards = key_cipher_layer["key_shared_secret_shards"]
+            if key_cipherdict is None:
+                shard_ciphertexts = [None] * len(key_shared_secret_shards)  # Encrypted by outer layers
+            else:
+                shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
+                if len(shard_ciphertexts) != len(key_shared_secret_shards):
+                    raise SchemaValidationError(
+                        "Shared secret at %s has %d shard ciphertexts for %d configured shards"
+                        % (key_ciphertext_location, len(shard_ciphertexts), len(key_shared_secret_shards))
+                    )
+            for shard_index, (shard_ciphertext, key_shared_secret_shard) in enumerate(
+                zip(shard_ciphertexts, key_shared_secret_shards)
+            ):
+                _check_readable_key_cipherdicts(
+                    key_ciphertext=shard_ciphertext,
+                    key_ciphertext_location="%s/shard_ciphertexts[%d]" % (key_ciphertext_location, shard_index),
+                    key_cipher_layers=key_shared_secret_shard["key_cipher_layers"],
+                    key_cipher_layers_location="%s/key_shared_secret_shards[%d]" % (location, shard_index),
+                )
+
+        elif key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:  # Its own key is stored, protected by a sub-chain
+            _check_readable_key_cipherdicts(
+                key_ciphertext=key_cipher_layer["key_ciphertext"],
+                key_ciphertext_location=location + "/key_ciphertext",
+                key_cipher_layers=key_cipher_layer["key_cipher_layers"],
+                key_cipher_layers_location=location,
+            )
 
 
 # VALIDATION TOKENS: remember that a cryptoconf/cryptainer was validated, to avoid validating it again and again.

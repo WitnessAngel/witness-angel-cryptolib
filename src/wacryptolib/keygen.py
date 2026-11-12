@@ -208,7 +208,7 @@ def _serialize_key_object_to_pem_bytestring(key, key_algo: str, passphrase: Opti
 def _check_symmetric_key_length_bytes(key_length_bytes):
     """Symmetric ciphers usually talk in bytes: 16, 24, 32..."""
     if key_length_bytes < 32:
-        raise ValueError("The symmetric key length must be superior or equal to 32 bits")
+        raise ValueError("The symmetric key length must be superior or equal to 32 bytes")
 
 
 def _check_asymmetric_key_length_bits(key_length_bits):

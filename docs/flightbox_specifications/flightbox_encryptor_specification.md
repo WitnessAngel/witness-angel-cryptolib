@@ -791,6 +791,8 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
 
 ## 11. Conformance checklist and pitfalls
 
+### 11.1 General rules
+
 1. Payload layers and key layers are applied **in list order**; the decryptor reverses them.
 2. What gets encrypted by key layers is always **JSON bytes** (`J(symkey)`, `J(key_struct)`,
    `J(cipherdict)`, `J([index, shard])`), never raw key material.
@@ -813,6 +815,74 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
 12. Symkeys and the `secrets` structure MUST stay in memory only, and SHOULD be wiped after
     use where the language allows it.
 13. Every random value MUST come from a CSPRNG (§3.1).
+
+### 11.2 Key and parameter constraints per algorithm
+
+Reference: CPython `src/wacryptolib/` (`keygen.py`, `cipher.py`, `signature.py`,
+`trustee.py`, and both crypto backends `_crypto_backend/pycryptodome.py` and
+`_crypto_backend/fallback/`). "Checked by" says where a cryptainer violating the constraint
+gets rejected. A reimplementation MUST stay within these bounds, even where the reference only
+enforces them through the underlying library: a value accepted by one backend but not the
+other is not portable.
+
+#### Symmetric key dicts (payload layers and symmetric key layers)
+
+| Algo | Key dict | `key` | IV / nonce | Tag | Checked by |
+|---|---|---|---|---|---|
+| `AES_CBC` | `{"key": bytes, "iv": bytes}` | **exactly 32 bytes** (AES-256) | `iv`: exactly 16 bytes | none | `_check_symmetric_key_length_bytes()` (≥ 32 bytes) + AES itself (16/24/32 bytes only); IV length by the cipher of both backends |
+| `AES_EAX` | `{"key": bytes, "nonce": bytes}` | **exactly 32 bytes** (AES-256) | `nonce`: any **non-empty** length is accepted; 16 bytes are generated and SHOULD be used | 16 bytes | same key checks; empty nonce rejected by both backends |
+| `CHACHA20_POLY1305` | `{"key": bytes, "nonce": bytes}` | **exactly 32 bytes** | `nonce`: **exactly 12 bytes** (RFC 8439) | 16 bytes | `_check_symmetric_key_length_bytes()`; pycryptodome would also accept 8-byte (original ChaCha20) and 24-byte (XChaCha20) nonces, but the fallback backend only accepts 12, so only 12 is portable |
+
+Notes:
+
+- The ≥ 32-byte rule (`_check_symmetric_key_length_bytes`) applies at both encryption and
+  decryption, so AES-128/192 keys are rejected: in practice every symmetric key is 32 bytes.
+  (Its error message wrongly says "32 bits"; the check is on bytes.)
+- Key dicts are validated at decryption by `check_symkey_dict_sanity()`: the fields above
+  MUST be bytes, and extra fields are tolerated but ignored. Encryptors MUST NOT add extra
+  fields.
+- Each `(key, iv/nonce)` pair MUST be freshly generated and used for exactly one encryption
+  (one payload layer, or one key wrap). This is essential for the stream ciphers: reusing a
+  ChaCha20 or EAX nonce with the same key breaks confidentiality and authenticity.
+- There is no AAD/header for any of them, and the tag is always 16 bytes (never truncated).
+
+#### Asymmetric public keys (key cipher layers)
+
+| Algo | Public key | Constraints | Ciphertext sizes | Checked by |
+|---|---|---|---|---|
+| `RSA_OAEP` | RSA public key `(n, e)`; PEM `SubjectPublicKeyInfo` in CPython | modulus **≥ 2048 bits**; `n` odd and ≥ 3, `3 ≤ e < n`, `gcd(n, e) = 1` (generated keys use `e = 65537`) | each chunk is exactly `k` bytes, `k` = modulus byte length (256 for RSA-2048); plaintext chunks ≤ 60 bytes, well under the OAEP-SHA-512 limit of `k − 130` bytes (126 for RSA-2048) | `_check_asymmetric_key_length_bits()` at encryption; public numbers on key import (pycryptodome `construct()`, fallback `_check_rsa_public_numbers()`) |
+| `ECIES_X25519` | X25519 public key, 32 raw bytes (RFC 7748); PEM `SubjectPublicKeyInfo` with OID 1.3.101.110 and no parameters in CPython | must be on **Curve25519** (an Ed25519 or NIST-curve key is rejected); **low-order points rejected**: u ∈ {0, 1, the two order-8 points, p−1}, including their non-canonical encodings (u + p, u + 2p); non-canonical u is reduced mod p; the sealing also fails if the X25519 shared secret is all zeros | `kem_ciphertext`: 32 bytes; `ciphertext`: plaintext length + 16 | `_check_x25519_key()` at encryption; import functions and HPKE layer of both backends |
+| `ML_KEM_768` | ML-KEM public (encapsulation) key, PEM `SubjectPublicKeyInfo` | parameter set **exactly ML-KEM-768** (FIPS 203): ML-KEM-512 and ML-KEM-1024 keys are rejected; if a private key is given, its public part is used | encapsulation key: 1184 bytes; `kem_ciphertext`: 1088 bytes; `ciphertext`: plaintext length + 16 | `check_pq_key_algo()` at import and encryption; pycryptodome only (no fallback) |
+
+The key generation rules of `keygen.py` for trustees match these bounds: RSA keys of 2048
+bits by default (`key_length_bits`, minimum 2048), X25519 keys from 32 random bytes, ML-KEM-768
+keys with the fixed parameter set.
+
+#### Signature keys (trustee side, for reference)
+
+Signing happens on trustees (§4), but an encryptor relying on a local signer MUST respect:
+
+| Algo | Key | Constraints |
+|---|---|---|
+| `RSA_PSS` | RSA private key | ≥ 2048 bits at generation (same rules as `RSA_OAEP`); SHA-512, MGF1-SHA-512, 64-byte salt |
+| `DSA_DSS` | DSA private key | ≥ 2048 bits at generation; FIPS 186-3; signature = `r ‖ s`, fixed length |
+| `ECC_DSS` | ECDSA private key | **NIST prime curves only**: P-192, P-224, P-256, P-384, P-521 (P-521 by default); Curve25519/Ed25519/Ed448 keys are rejected for DSS; signature = `r ‖ s`, fixed length |
+| `ML_DSA_65` | ML-DSA private key | parameter set **exactly ML-DSA-65** (FIPS 204), ML-DSA-44/87 rejected; context `b"wacryptolib-payload-signature-v1"` |
+
+Other parameters:
+
+- The message sent to a trustee for signing MUST be a digest: trustees reject messages longer
+  than 128 bytes (`MAX_PAYLOAD_LENGTH_FOR_SIGNATURE`).
+- `signature_timestamp_utc` is an integer number of seconds.
+- Digests (`payload_digest_value`) are 32 bytes (SHA256, SHA3_256) or 64 bytes (SHA512,
+  SHA3_512); wacryptolib asserts a length between 32 and 64 bytes.
+
+#### Shared secrets
+
+- `key_shared_secret_shards` MUST be non-empty, and `1 ≤ key_shared_secret_threshold ≤ len(key_shared_secret_shards)`.
+- Shamir operates on 16-byte chunks; each shard's byte length equals the PKCS#7-padded
+  secret length (a multiple of 16, at least 16).
+- Shard indices are the integers 1..n, all distinct.
 
 ---
 

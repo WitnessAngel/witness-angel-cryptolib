@@ -43,6 +43,26 @@ def _generate_uuid0() -> UUID:  # Adapted from "uuid0" MIT package
 RSA_OAEP_CHUNKS_SIZE = 60  # SAFE mmini-chunk for RSA
 
 
+def _check_symmetric_key_length_bytes(key_length_bytes):
+    """Symmetric ciphers usually talk in bytes: 16, 24, 32..."""
+    if key_length_bytes < 32:
+        raise ValueError("The symmetric key length must be superior or equal to 32 bytes")
+
+
+def _encrypt_via_aes_cbc(plaintext: bytes, key_dict: dict) -> dict:
+    """Encrypt a bytestring using AES (CBC mode, PKCS#7 padding).
+
+    :param plaintext: the bytes to cipher
+    :param key_dict: dict with AES cryptographic main key (32 bytes, for AES-256) and iv
+
+    :return: dict with field "ciphertext" as bytestring"""
+    key = key_dict["key"]
+    iv = key_dict["iv"]
+    _check_symmetric_key_length_bytes(len(key))
+    ciphertext = encrypt_via_aes_cbc(plaintext, key, iv)
+    return {"ciphertext": ciphertext}
+
+
 def _check_asymmetric_key_length_bits(key_length_bits):
     """Asymmetric ciphers usually talk in bits: 1024, 2048, 3072..."""
     if key_length_bits < 2048:
@@ -132,8 +152,6 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
             kem_ciphertext, ciphertext = hpke_x25519_seal.seal(key_dict["key"], plaintext)
             return dict(kem_ciphertext=kem_ciphertext, ciphertext=ciphertext)
         elif cipher_algo == "AES_CBC":
-            key = key_dict["key"]
-            iv = key_dict["iv"]
-            return encrypt_via_aes_cbc(plaintext, key, iv)
+            return _encrypt_via_aes_cbc(plaintext=plaintext, key_dict=key_dict)
         else:
             raise RuntimeError(f"Abnormal cipher algo {cipher_algo}")

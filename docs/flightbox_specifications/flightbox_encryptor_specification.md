@@ -778,18 +778,14 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
 
 `micropython/` implements step 1 only, with:
 
-- symmetric: `AES_CBC` (via `pyaes`); asymmetric: `RSA_OAEP` (via `pkcs1`, SHA-512) and
+- symmetric: `AES_CBC` (via `pyaes`), as a symmetric key cipher layer, and for payload
+  encryption once step 2 is implemented; asymmetric: `RSA_OAEP` (via `pkcs1`, SHA-512) and
   `ECIES_X25519` (pure-Python HPKE seal);
 - trustees: `authenticator` only, public keys provided as an in-memory dict
   `{keystore_uid: {keychain_uid: {"n": int, "e": int, "x25519": bytes(32)}}}`;
 - validation errors raised as `RuntimeError`; no upfront schema validation;
 - Shamir via a vendored copy of pycryptodome's pure-Python `Shamir`;
 - no payload encryption, digests, signatures nor file output yet (steps 2 and 3).
-
-Known deviation: its `encrypt_bytestring()` returns **raw bytes** for `AES_CBC` instead of the
-`{"ciphertext": bytes}` cipherdict, so a cryptoconf with a *symmetric key cipher layer* fails
-there (the core asserts a dict). Payload-level `AES_CBC` is unaffected, since step 2 is not
-implemented on MicroPython.
 
 ---
 

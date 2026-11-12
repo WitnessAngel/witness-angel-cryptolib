@@ -80,6 +80,7 @@ responses = ">=0.18.0"
 freezegun = ">=1.1.0"
 typeguard = ">=2.13.0"
 pytz = ">=2021.3"
+cryptography = ">=42.0"  # Third-party reference of the RSA_OAEP interop test, skipped without it
 
 # Linters and formatters
 black = { version = ">=22.1.0" }
@@ -88,8 +89,7 @@ pylint = ">=2.6"
 mypy = ">=0.931"
 xenon = ">=0.9.0"
 doc8 = ">=0.10.1"
-safety = ">=1.10"
-ruamel-yaml-clib = ">=0.2.12"  # To help "safety" be compatible with python 3.13
+pip-audit = ">=2.10"  # Instead of safety, whose filelock<4 cap kept a vulnerable filelock
 
 # Documentation
 sphinx = ">=4.4.0"

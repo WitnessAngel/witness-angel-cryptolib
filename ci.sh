@@ -33,8 +33,8 @@ run_ci () {
 
   # Checking if all the dependencies are secure and do not have any
   # known vulnerabilities:
-  echo ">> Running safety check"
-  safety check --full-report
+  echo ">> Running pip-audit"
+  pip-audit --skip-editable
 
   # Checking `pyproject.toml` file contents and dependencies status:
   echo ">> Running poetry & pip checks"

@@ -12,7 +12,7 @@ from jsonrpc_requests import JSONRPCError
 from schema import Schema, Or, And
 
 from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_CIPHER_ALGOS
-from wacryptolib.cryptainer import CryptainerBase, logger, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
+from wacryptolib.cryptainer import CryptainerBase, CRYPTAINER_TRUSTEE_TYPES, logger, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
     get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value, get_payload_ciphertext_signatures, \
     ensure_validated_cryptainer, check_key_cipherdict_sanity
 from wacryptolib.cryptainer._validation import KEY_STRUCT_SCHEMA, SHARED_SECRET_SHARD_SCHEMA
@@ -828,12 +828,11 @@ class CryptainerDecryptor(CryptainerBase):
         key_bytes = None
 
         trustee_id = get_trustee_id(trustee)
-        passphrases = self._passphrase_mapper.get(trustee_id) or []
-        assert isinstance(passphrases, list), type(passphrases)  # No SINGLE passphrase here
+        passphrases = self._passphrase_mapper.get(trustee_id) or []  # Already normalized to lists
 
-        common_passphrases = self._passphrase_mapper.get(None) or []
-        assert not isinstance(common_passphrases, (str, bytes)), type(common_passphrases)  # No SINGLE passphrase here
-        passphrases = passphrases + list(common_passphrases)  # Add COMMON passphrases, in a NEW list
+        if trustee.get("trustee_type") != CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE:
+            # COMMON passphrases are NEVER sent over the network, since they might protect unrelated keys
+            passphrases = passphrases + self._passphrase_mapper.get(None, [])  # In a NEW list
 
         operation_report.add_information(
             "Attempting actual decryption of key using asymmetric algorithm %s (via trustee)" % cipher_algo

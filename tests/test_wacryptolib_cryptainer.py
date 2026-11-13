@@ -1723,6 +1723,39 @@ def test_cryptainer_validation_of_payload_macs():
     check_cryptainer_sanity(cryptainer, require_inline_payload=False)
 
 
+def test_common_passphrases_are_not_sent_to_jsonrpc_trustees():
+    from wacryptolib.cryptainer._decryptor import CryptainerDecryptor
+
+    sent_passphrases = []
+
+    class FakeProxy:
+        def decrypt_with_private_key(self, **kwargs):
+            sent_passphrases.append(kwargs["passphrases"])
+            raise KeyDoesNotExist("fake")
+
+    jsonrpc_trustee = dict(trustee_type="jsonrpc_api", jsonrpc_url="http://example.com/jsonrpc")
+    local_trustee = dict(trustee_type="local_keyfactory")
+    mapper = {
+        get_trustee_id(jsonrpc_trustee): ["remote_pass"],
+        get_trustee_id(local_trustee): ["local_pass"],
+        None: ["common_pass"],
+    }
+    decryptor = CryptainerDecryptor(keystore_pool=InMemoryKeystorePool(), passphrase_mapper=mapper)
+
+    with patch("wacryptolib.cryptainer._decryptor.get_trustee_proxy", return_value=FakeProxy()):
+        for trustee in (jsonrpc_trustee, local_trustee):
+            decryptor._decrypt_with_asymmetric_cipher(
+                cipher_algo="RSA_OAEP",
+                keychain_uid=uuid.uuid4(),
+                cipherdict={},
+                trustee=trustee,
+                cryptainer_metadata=None,
+                operation_report=OperationReport(),
+            )
+
+    assert sent_passphrases == [["remote_pass"], ["local_pass", "common_pass"]]
+
+
 # Cryptoconf with 1 payload_cipher_layer containing 1 key_cipher_layer managed by an authenticator
 def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simplecryptoconf(tmp_path):
 
@@ -1795,6 +1828,19 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
         cryptainer, keystore_pool=keystore_pool, passphrase_mapper={None: ("fakepassphrase", passphrase)}
     )
     assert result_payload == payload
+
+    # Per-trustee passphrases as a tuple are accepted too
+    result_payload, operation_report = decrypt_payload_from_cryptainer(
+        cryptainer, keystore_pool=keystore_pool, passphrase_mapper={shard_trustee_id: ("fakepassphrase", passphrase)}
+    )
+    assert result_payload == payload
+
+    # A single passphrase (not in a sequence) is rejected instead of being split into characters
+    for bad_passphrases in (passphrase, passphrase.encode(), 42):
+        with pytest.raises(ValueError, match="must be a list/tuple"):
+            decrypt_payload_from_cryptainer(
+                cryptainer, keystore_pool=keystore_pool, passphrase_mapper={shard_trustee_id: bad_passphrases}
+            )
 
     # Wrong passphrase
     result_payload, operation_report = decrypt_payload_from_cryptainer(

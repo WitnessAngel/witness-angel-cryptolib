@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+from collections.abc import Sequence
 from typing import Optional
 
 from wacryptolib.cryptainer import logger
@@ -97,7 +98,22 @@ class CryptainerBase:
             keystore_pool = DUMMY_KEYSTORE_POOL
         assert isinstance(keystore_pool, KeystorePoolBase), keystore_pool
         self._keystore_pool = keystore_pool
-        self._passphrase_mapper = passphrase_mapper or {}
+        self._passphrase_mapper = self._normalize_passphrase_mapper(passphrase_mapper)
+
+    @staticmethod
+    def _normalize_passphrase_mapper(passphrase_mapper: Optional[dict]) -> dict:
+        """Return a new mapper whose values are all lists of passphrases (any non-string sequence is accepted)."""
+        normalized_mapper = {}
+        for trustee_id, passphrases in (passphrase_mapper or {}).items():
+            if passphrases is None:
+                passphrases = []
+            if isinstance(passphrases, (str, bytes)) or not isinstance(passphrases, Sequence):
+                raise ValueError(
+                    "Passphrases of trustee %r must be a list/tuple of passphrases, not %s"
+                    % (trustee_id, type(passphrases).__name__)
+                )
+            normalized_mapper[trustee_id] = list(passphrases)
+        return normalized_mapper
 
 
 # FIXME make it a STATIC METHOD of CryptainerBase ?

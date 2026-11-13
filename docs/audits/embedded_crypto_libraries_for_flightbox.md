@@ -165,15 +165,39 @@ ChaCha20-Poly1305, SHA-2 and SHA-3, RSA, Curve25519, HKDF, ML-KEM-512/768/1024
 and ML-DSA, the existence of its HPKE implementation (with "24 algorithm
 combination variants" tested), and its Rust wrapper crate.
 
-Not verified (from memory or inferred):
+Checked online (November 2026):
 
-- mbedTLS's SHA-3 support (believed added in 3.5, so present in the 3.6 LTS
-  shipped by ESP-IDF 5.x) and its ESP-IDF configuration options.
-- wolfCrypt's HPKE AEAD list: "no ChaCha20-Poly1305" is inferred from
-  4 KEMs x 3 KDFs x 2 AEADs = 24 combinations.
-- wolfSSL's current licence (believed GPLv3 or commercial).
-- The `hpke` crate's suites, `no_std` support and any ML-KEM KEM; the
-  `eax` crate's nonce size matching pycryptodome's 16 bytes.
-- The ESP32 TRNG conditions, and Raspberry Pi's wording on the RP2040's
-  random-number support.
+- mbedTLS: SHA-3 was added in 3.5.0, and `MBEDTLS_SHA3_C` is enabled in the
+  default 3.6.0 `mbedtls_config.h`. ESP-IDF 5.2 to 5.5 ship 3.6.x
+  (3.6.5 to 3.6.7), but ESP-IDF 6.0 and 6.1 ship Mbed TLS 4.x (PSA Crypto
+  as the primary interface), so the glue code must target the ESP-IDF
+  version chosen. ESP-IDF's own Kconfig options for SHA-3 were not checked.
+- wolfCrypt HPKE: wolfSSL's blog post lists KEMs P-256/384/521 and X25519,
+  KDFs HKDF-SHA2-256/384/512, and AES-GCM only as AEAD (no ChaCha20-Poly1305).
+  That post is about two years old: check `hpke.h` of the current release.
+- wolfSSL licence: GPLv3 or commercial for the main library (some older
+  pages and sub-projects still say GPLv2, plus GPLv2 exceptions for a list of
+  named projects).
+- `hpke` crate 0.15.1: features `x25519`, `nistp` and `mlkem` (ML-KEM and
+  X-Wing KEMs), KDFs HKDF-SHA2 and SHAKE/TurboSHAKE, AEADs ChaCha20-Poly1305
+  and AES-GCM, plus `alloc` and `getrandom` features. Contrary to the
+  earlier assumption, it does offer ML-KEM. The KEM/KDF/AEAD lists are
+  inferred from the feature list; `no_std` is still not confirmed.
+- `eax` crate: default nonce is 128 bits (16 bytes), matching pycryptodome;
+  the `alloc` feature can be disabled for heapless targets.
+- ESP32 RNG: truly random only while Wi-Fi or Bluetooth is running, or the
+  SAR ADC entropy source is enabled via `bootloader_random_enable()`, or
+  during the second-stage bootloader; otherwise only pseudo-random. A
+  flightbox without radio must enable that source explicitly.
+- RP2040 RNG: no hardware TRNG. Only the ring oscillator `RANDOMBIT`
+  register exists, and the datasheet (section 2.17.5) says it does not meet
+  the randomness requirements of security systems. pico_rand seeds from it
+  by default, so an external entropy source is needed for key generation.
+  RP2350 was not checked (it is believed to have a TRNG).
+
+Not verified:
+
+- Whether ESP-IDF enables `MBEDTLS_SHA3_C` through its own Kconfig.
+- Whether the `hpke` crate is `no_std`.
+- Whether the RP2350 has a usable TRNG.
 - All performance and memory figures of section 4.

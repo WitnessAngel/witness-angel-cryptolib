@@ -14,8 +14,9 @@ embedded flightboxes: the MicroPython port
 - **The flightbox does not use BSON today.** It uses MongoDB Extended JSON
   (relaxed mode): plain JSON text in which bytes and UUIDs are wrapped as
   `{"$binary": ...}` and `{"$uuid": ...}`. Real BSON would be worse for C:
-  field names repeated in every document, int32 length prefixes everywhere,
-  and a heavy reference library (libbson).
+  field names repeated in every document and int32 length prefixes
+  everywhere. The reference library (libbson) is heavy, but small embedded
+  BSON libraries exist (binson, libbson-mini; see the end of section 5).
 - **Only the device-side input is free to change.** The cryptainer, and every
   intermediate structure encrypted on the way (symkeys, key structs,
   cipherdicts, shards), is Extended JSON, a format shared with every
@@ -111,6 +112,31 @@ a known source of verification bugs.
 | Signing envelope | JWS, with canonicalization problems | COSE_Sign1, CBOR-native, deterministic encoding defined | none standard | none standard | none | firmware signature |
 | Change config without reflashing | yes | yes | yes | yes | yes | **no** |
 
+### Lightweight BSON libraries (why BSON is not a column above)
+
+Real BSON is not as heavy as the libbson reference implementation suggests:
+small libraries exist for C and C++ (found by web search in November 2026,
+READMEs not audited, no size measured):
+
+| Library | Language | Notes |
+|---|---|---|
+| [binson](https://github.com/alialavia/binson) | C | Aimed at embedded devices, minimal flash and RAM, no dynamic allocation, reads a BSON buffer in place (`opendoc`, `lookuppath`, `asint`). Its tests reuse libbson's test cases. Not an ESP-IDF component: must be vendored. |
+| [libbson-mini](https://github.com/franck-exceenis/libbson-mini) | C (C++ wrapper) | Implements only part of the BSON standard; libc headers only; reported to run on ESP32, STM32 and FreeRTOS. |
+| [minibson / microbson](https://github.com/cyberguijarro/minibson) | C++ | Zero dependency. microbson is read-only and needs no per-node memory. |
+| [libbson](https://github.com/mongodb/mongo-c-driver) | C | Official and complete, can be built without libmongoc, but the heaviest. |
+
+For MicroPython, no BSON module exists in micropython-lib and no pure-Python
+port was found: the options are a small `ustruct` codec written in-house, or
+wrapping one of the C libraries as a native module.
+
+These libraries do not change the conclusion: BSON keeps field names in every
+document and has no standard signing envelope, and they cover plain BSON types
+only. The `$binary`/`$uuid` wrappers of Extended JSON, which the cryptainer
+needs, would still be handled by the device's own writer. They do make BSON a
+credible fallback if CBOR were rejected, with binson the best fit for a
+no-malloc C parser. Which BSON types each library supports (binary subtypes,
+UUID subtype 4, int64, big integers for the RSA modulus) is not verified.
+
 ## 6. Recommendation
 
 **CBOR with a CDDL schema, keeping the current string keys and data model.**
@@ -169,9 +195,20 @@ Verified:
   16-byte string, and decodes it back to an equal `uuid.UUID`.
 - The C prototype's state, as described in section 2.
 
+- Checked online (November 2026): micropython-lib's `cbor2` decoder
+  (`python-ecosys/cbor2/cbor2/_decoder.py`) has no handler for major type 6
+  (semantic tags). A tag 37 UUID therefore does not decode to a UUID nor to a
+  generic tag object: the lookup raises a bare `KeyError: 6`. The device
+  cannot read tagged UUIDs as is: either patch the vendored decoder, or
+  encode UUIDs as plain 16-byte strings in the device-side input.
+  (Read through a summarising fetch tool: re-check the file before relying on
+  it.)
+- Checked online: ESP-IDF has an official `espressif/cbor` component on the
+  ESP Component Registry (wraps TinyCBOR, MIT, version 7.0.0 listed as
+  latest). Its size on ESP32 was not measured.
+
 Not verified:
 
-- Whether micropython-lib's `cbor2` decodes tag 37 into a UUID, or returns a
-  generic tag object (the device only needs the 16 bytes either way).
-- The availability and size of a CBOR component for ESP-IDF.
+- The BSON type coverage, licences and footprint of binson, libbson-mini and
+  minibson/microbson (section 5): only their descriptions were read.
 - Code size and RAM figures of the C libraries on ESP32: none were measured.

@@ -4,11 +4,11 @@
 
 import copy
 import logging
-from typing import Optional, Union, BinaryIO
+from typing import Union, BinaryIO
 import uuid
 
 from wacryptolib.cryptainer import CryptainerBase, SIGNATURE_POLICIES, PAYLOAD_CIPHERTEXT_LOCATIONS, logger, \
-    CRYPTAINER_FORMAT, CRYPTAINER_STATES, SHARED_SECRET_ALGO_MARKER, get_trustee_proxy, \
+    CRYPTAINER_STATES, get_trustee_proxy, \
     _inject_payload_digests_and_signatures, FlightboxUtilitiesBase, FlightBox, ensure_validated_cryptoconf, ValidatedCryptainer
 
 from wacryptolib.cipher import (

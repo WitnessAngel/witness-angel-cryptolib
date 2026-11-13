@@ -18,7 +18,7 @@ import os
 
 import ecdsa
 import ecdsa.util
-import pkcs1.exceptions
+import pkcs1
 import pkcs1.keys
 import pkcs1.mgf
 import pkcs1.rsaes_oaep
@@ -254,10 +254,10 @@ def _decrypt_one_rsa_oaep_chunk(ciphertext, private_key):
     separator_position = db.find(b"\x01", _RSA_HASH_LENGTH)
     # Non-short-circuiting "&", so that timings don't tell which check failed (e.g. em[0], for Manger's attack)
     valid = (
-        (em[0] == 0)
-        & hmac.compare_digest(db[:_RSA_HASH_LENGTH], _RSA_HASH(b"").digest())  # Empty label
-        & (separator_position >= 0)
-        & (not any(db[_RSA_HASH_LENGTH:separator_position]))
+            (em[0] == 0)
+            & hmac.compare_digest(db[:_RSA_HASH_LENGTH], _RSA_HASH(b"").digest())  # Empty label
+            & (separator_position >= 0)
+            & (not any(db[_RSA_HASH_LENGTH:separator_position]))
     )
     if not valid:
         raise ValueError("Incorrect decryption.")

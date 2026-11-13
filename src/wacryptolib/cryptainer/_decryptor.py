@@ -12,7 +12,7 @@ from jsonrpc_requests import JSONRPCError
 from schema import Schema, Or, And
 
 from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_CIPHER_ALGOS
-from wacryptolib.cryptainer import CryptainerBase, logger, CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
+from wacryptolib.cryptainer import CryptainerBase, logger, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
     get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value, get_payload_ciphertext_signatures, \
     ensure_validated_cryptainer, check_key_cipherdict_sanity
 from wacryptolib.cryptainer._validation import KEY_STRUCT_SCHEMA, SHARED_SECRET_SHARD_SCHEMA

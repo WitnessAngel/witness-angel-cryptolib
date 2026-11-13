@@ -21,10 +21,9 @@ from uuid import UUID
 import pytest
 from jsonrpc_requests import TransportError
 
-import wacryptolib.cryptainer
 from _test_mockups import FakeTestCryptainerStorage, random_bool, skip_if_fallback_backend
 from wacryptolib._crypto_backend import get_random_bytes
-from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS, AUTHENTICATED_CIPHER_ALGOS, encrypt_bytestring
+from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS, encrypt_bytestring
 from wacryptolib.cryptainer import (
     LOCAL_KEYFACTORY_TRUSTEE_MARKER,
     encrypt_payload_into_cryptainer,
@@ -77,7 +76,6 @@ from wacryptolib.exceptions import (
     KeyDoesNotExist,
     KeystoreDoesNotExist,
     KeyLoadingError,
-    CryptographyError,
     AlgorithmNotSupported,
 )
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler

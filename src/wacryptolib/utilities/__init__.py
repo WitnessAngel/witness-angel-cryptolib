@@ -1,9 +1,6 @@
 # This file is part of Witness Angel Cryptolib
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
-from typing import Sequence
-
-from wacryptolib import _crypto_backend
 
 # Expose these important utilities for the rest of the package:
 from extjson import (UTF8_ENCODING, convert_to_extjson, convert_from_extjson, extjson_decoder_object_hook, load_from_json_bytes,

@@ -2,9 +2,6 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-import abc
-import logging
-
 
 import schema
 from schema import SchemaError, Schema

@@ -3,12 +3,10 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import copy
-import os
 from unittest import mock
 
 import pytest
 
-from _test_mockups import FakeTestCryptainerStorage
 from test_wacryptolib_cli import _get_cli_base_args_for_folder_isolation, _get_cli_runner
 from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.cli import wacryptolib_cli as cli
@@ -22,8 +20,6 @@ from wacryptolib.cryptainer import (
     encrypt_payload_into_cryptainer,
     decrypt_payload_from_cryptainer,
     gather_decryptable_symkeys,
-    load_cryptainer_from_filesystem,
-    dump_cryptainer_to_filesystem,
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
 )
 from wacryptolib.cryptainer import _validation

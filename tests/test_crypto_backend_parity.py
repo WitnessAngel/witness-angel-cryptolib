@@ -459,7 +459,7 @@ def test_ecc_private_key_with_wrong_scalar_length_is_rejected(backend, scalar_le
 
 
 def test_fallback_rsa_private_operations_are_freshly_blinded_and_checked(monkeypatch):
-    import pkcs1.keys
+    import pkcs1
 
     fallback = import_crypto_backend("fallback")
     public_key, private_key = fallback.generate_rsa_keypair(2048)

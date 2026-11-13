@@ -8,7 +8,6 @@ from typing import BinaryIO
 from schema import Schema, Or, Forbidden
 
 from wacryptolib import _crypto_backend
-from wacryptolib import utilities
 from wacryptolib.exceptions import EncryptionError, DecryptionError, DecryptionIntegrityError, OperationNotSupported, \
     SchemaValidationError
 from wacryptolib.keygen import (

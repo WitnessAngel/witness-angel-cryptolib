@@ -1,6 +1,6 @@
 ## Why
 
-Cryptainers are meant to be stored for years, so every symmetric key wrapped today with `RSA_OAEP` and every `RSA_PSS` / `ECC_DSS` payload signature is exposed to harvest-now-decrypt-later attacks once a large quantum computer exists. pycryptodome, the lib's only crypto dependency, shipped ML-DSA (4.1.0, 2026-10-19) and ML-KEM + HPKE (4.2.0, 2026-10-24), so post-quantum support is now a dependency bump plus registry entries rather than a new native dependency. See `docs/audits/post_quantum_algorithms_report.md` for the algorithm selection rationale.
+Cryptainers are meant to be stored for years, so every symmetric key wrapped today with `RSA_OAEP` and every `RSA_PSS` / `ECC_DSS` payload signature is exposed to harvest-now-decrypt-later attacks once a large quantum computer exists. pycryptodome, the lib's only crypto dependency, shipped ML-DSA (4.1.0, 2026-10-19) and ML-KEM + HPKE (4.2.0, 2026-10-24), so post-quantum support is now a dependency bump plus registry entries rather than a new native dependency. See `../../../../docs/audits/archives/post_quantum_algorithms_report.md` for the algorithm selection rationale.
 
 ## What Changes
 

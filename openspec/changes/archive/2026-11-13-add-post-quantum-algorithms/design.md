@@ -1,6 +1,6 @@
 ## Context
 
-See `proposal.md` (Why) and `docs/audits/post_quantum_algorithms_report.md` (algorithm selection). Current state that shapes the approach:
+See `proposal.md` (Why) and `../../../../docs/audits/archives/post_quantum_algorithms_report.md` (algorithm selection). Current state that shapes the approach:
 
 - Algorithms are declared in three registries: `ASYMMETRIC_KEY_ALGOS_REGISTRY` (keygen.py), `CIPHER_ALGOS_REGISTRY` (cipher.py), `SIGNATURE_ALGOS_REGISTRY` (signature.py). Validation schemas, CLI `click.Choice` lists, keystore free-key pools, docs autodata and tests derive from the `SUPPORTED_*` lists, so most of the lib picks up new entries without edits.
 - `generate_keypair` only forwards the parameters named in `generation_extra_parameters` to the generation function (keygen.py `_do_generate_keypair`), so an empty list makes `key_length_bits` and `curve` genuinely ignored.

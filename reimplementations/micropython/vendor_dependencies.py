@@ -1,10 +1,10 @@
 """
-Regenerate micropython/lib/ : PyPI packages at the exact versions of ../poetry.lock (so that
+Regenerate reimplementations/micropython/lib/ : PyPI packages at the exact versions of ../../poetry.lock (so that
 micropython and cpython code get cross-validated), plus micropython-lib stdlib modules (latest versions, as python
 sources, from the index used by "mip"), micropython patches, stubs and shared wacryptolib modules. Also refresh
-micropython/src/cryptainer/_flightbox.py, a verbatim copy of wacryptolib's portable flightbox core.
+reimplementations/micropython/src/cryptainer/_flightbox.py, a verbatim copy of wacryptolib's portable flightbox core.
 
-Usage (from any directory, with CPython >= 3.11):  python micropython/vendor_dependencies.py
+Usage (from any directory, with CPython >= 3.11):  python reimplementations/micropython/vendor_dependencies.py
 """
 
 import json
@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 MICROPYTHON_DIR = Path(__file__).resolve().parent
-REPO_DIR = MICROPYTHON_DIR.parent
+REPO_DIR = MICROPYTHON_DIR.parent.parent
 LIB_DIR = MICROPYTHON_DIR / "lib"
 SRC_DIR = MICROPYTHON_DIR / "src"
 

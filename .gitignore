@@ -64,7 +64,7 @@ downloads/
 eggs/
 lib/
 # Vendored micropython dependencies
-!micropython/lib/
+!reimplementations/micropython/lib/
 lib64/
 parts/
 sdist/

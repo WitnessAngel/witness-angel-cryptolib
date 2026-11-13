@@ -650,3 +650,20 @@ def test_fallback_rejects_misordered_or_repeated_pbkdf2_parameters(optional_item
 def test_unsupported_hash_algos_are_rejected(backend, hash_algo):
     with pytest.raises(ValueError, match="Unsupported hash algorithm"):
         backend.get_hasher_instance(hash_algo)
+
+
+@pytest.mark.parametrize("hash_algo", ["SHA256", "SHA3_256", "SHA3_512"])
+def test_fallback_rejects_non_sha512_hashers_for_pss_and_ecdsa(hash_algo):
+    fallback = import_crypto_backend("fallback")
+
+    hasher = fallback.get_hasher_instance(hash_algo)
+    hasher.update(b"message")
+    rsa_public_key, rsa_private_key = fallback.generate_rsa_keypair(2048)
+    _, ecc_private_key = fallback.generate_ecc_keypair("P-256")
+
+    with pytest.raises(ValueError, match="only supports SHA512"):
+        fallback.sign_with_pss(hasher, rsa_private_key)
+    with pytest.raises(ValueError, match="only supports SHA512"):
+        fallback.verify_with_pss(hasher, b"x" * 256, rsa_public_key)
+    with pytest.raises(ValueError, match="only supports SHA512"):
+        fallback.sign_with_dss(hasher, ecc_private_key)

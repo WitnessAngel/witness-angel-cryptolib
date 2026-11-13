@@ -275,6 +275,16 @@ def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[by
     return [_decrypt_one_rsa_oaep_chunk(chunk, private_key) for chunk in ciphertext_chunks]
 
 
+def _require_sha512(message):
+    """Fail loudly rather than silently diverge from pycryptodome, which uses the hash of the message itself for
+    PSS/MGF1 and for the RFC 6979 nonce, whereas this backend hard-wires SHA-512 for them."""
+    if getattr(message, "name", None) != "sha512":
+        raise ValueError(
+            "The fallback backend only supports SHA512 hashers for PSS and ECDSA signatures, not %r"
+            % getattr(message, "name", message)
+        )
+
+
 def _emsa_pss_hash(message_hash, salt):
     return _RSA_HASH(bytes(8) + message_hash + salt).digest()
 
@@ -283,6 +293,7 @@ def sign_with_pss(message, private_key):
     """RFC 8017 section 8.1, with a salt as long as the hash, like pycryptodome's pss.new() default.
 
     :param message: already-fed SHA512 hasher object"""
+    _require_sha512(message)
     _check_rsa_private_key(private_key)
     message_hash = message.digest()
     em_bits = private_key.bit_size - 1
@@ -300,6 +311,7 @@ def sign_with_pss(message, private_key):
 
 def verify_with_pss(message, signature, public_key):
     """Raise ValueError if the signature is invalid."""
+    _require_sha512(message)
     public_key = _get_rsa_public_key(public_key)
     error = ValueError("Incorrect signature")
     em_bits = public_key.bit_size - 1
@@ -413,6 +425,7 @@ def sign_with_dss(message, private_key):
     if isinstance(private_key, _dsa.DsaKey):
         return _dsa.sign(private_key, message.digest())
     if isinstance(private_key, ecdsa.SigningKey):
+        _require_sha512(message)  # Since the RFC 6979 nonce is derived with SHA-512
         # RFC 6979 deterministic nonce; the digest is truncated to the curve order's bit length, as FIPS 186-4 requires
         return private_key.sign_digest_deterministic(
             message.digest(), hashfunc=_RSA_HASH, sigencode=ecdsa.util.sigencode_string, allow_truncate=True

@@ -13,6 +13,7 @@ ponytail: python bigints are not constant-time, so private key operations may le
 
 import hashlib
 import hmac
+import logging
 import math
 import os
 
@@ -420,12 +421,28 @@ def _decode_dsa_parameters(parameters):
     return [_pem.decode_integer(x) for x in _pem.decode_sequence(parameters, 3)]
 
 
+logger = logging.getLogger(__name__)
+_minerva_warning_emitted = False
+
+
+def _warn_about_ecdsa_timing_side_channel_once():
+    # python-ecdsa has no fix for CVE-2024-23342 (Minerva timing attack on ECDSA signing), see issue #71
+    global _minerva_warning_emitted
+    if not _minerva_warning_emitted:
+        _minerva_warning_emitted = True
+        logger.warning(
+            "ECDSA signing with the pure-python fallback backend is vulnerable to timing side-channels"
+            " (CVE-2024-23342, unfixed in python-ecdsa): do not use it where attackers can time signatures"
+        )
+
+
 def sign_with_dss(message, private_key):
     """FIPS 186-4 DSA or ECDSA signature of an already-fed hasher, as r || s bytes (pycryptodome's "binary")."""
     if isinstance(private_key, _dsa.DsaKey):
         return _dsa.sign(private_key, message.digest())
     if isinstance(private_key, ecdsa.SigningKey):
         _require_sha512(message)  # Since the RFC 6979 nonce is derived with SHA-512
+        _warn_about_ecdsa_timing_side_channel_once()
         # RFC 6979 deterministic nonce; the digest is truncated to the curve order's bit length, as FIPS 186-4 requires
         return private_key.sign_digest_deterministic(
             message.digest(), hashfunc=_RSA_HASH, sigencode=ecdsa.util.sigencode_string, allow_truncate=True

@@ -667,3 +667,19 @@ def test_fallback_rejects_non_sha512_hashers_for_pss_and_ecdsa(hash_algo):
         fallback.verify_with_pss(hasher, b"x" * 256, rsa_public_key)
     with pytest.raises(ValueError, match="only supports SHA512"):
         fallback.sign_with_dss(hasher, ecc_private_key)
+
+
+def test_fallback_warns_once_about_ecdsa_timing_side_channel():
+    from unittest import mock
+
+    fallback = import_crypto_backend("fallback")
+    fallback._minerva_warning_emitted = False
+
+    _, private_key = fallback.generate_ecc_keypair("P-256")
+    hasher = fallback.get_hasher_instance("SHA512")
+    hasher.update(b"message")
+    with mock.patch.object(fallback, "logger") as logger_mock:
+        fallback.sign_with_dss(hasher, private_key)
+        fallback.sign_with_dss(hasher, private_key)
+    assert logger_mock.warning.call_count == 1
+    assert "CVE-2024-23342" in logger_mock.warning.call_args[0][0]

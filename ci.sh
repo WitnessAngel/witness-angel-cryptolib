@@ -34,7 +34,9 @@ run_ci () {
   # Checking if all the dependencies are secure and do not have any
   # known vulnerabilities:
   echo ">> Running pip-audit"
-  pip-audit --skip-editable
+  # CVE-2024-23342 (Minerva timing attack) has NO fix in python-ecdsa, used only by the pure-python fallback
+  # backend, which warns about it: ignored explicitly so that it doesn't hide new findings (see issue #71)
+  pip-audit --skip-editable --ignore-vuln CVE-2024-23342
 
   # Checking `pyproject.toml` file contents and dependencies status:
   echo ">> Running poetry & pip checks"

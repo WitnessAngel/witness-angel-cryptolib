@@ -9,7 +9,7 @@ the ESP32 family or the Raspberry Pi Pico (RP2040 / RP2350), and how far the
 pure-Python MicroPython port (`reimplementations/micropython/`) can go
 without one. Complements
 `../flightbox_specifications/flightbox_encryptor_specification.md`
-(sections 3 and 4 for the primitives), `post_quantum_algorithms_report.md`
+(sections 3 and 4 for the primitives), `archives/post_quantum_algorithms_report.md`
 (section 6 for MicroPython timing estimates) and
 `flightbox_cryptoconf_storage_format.md` (the input format). Library and
 hardware facts were checked online against primary sources (section 9);
@@ -303,7 +303,7 @@ halves (the standard technique for 32-bit CPUs);
 and caching matrix A, which is expanded from the public key's seed only
 (most of the SHAKE128 work) and can be computed once at boot per trustee
 key (about 4.6 KB each). The estimate is **1-5 s per encapsulation**
-(`post_quantum_algorithms_report.md` section 6), paid once per cryptainer
+(`archives/post_quantum_algorithms_report.md` section 6), paid once per cryptainer
 and per ML-KEM key layer: probably acceptable, to benchmark on real
 hardware.
 

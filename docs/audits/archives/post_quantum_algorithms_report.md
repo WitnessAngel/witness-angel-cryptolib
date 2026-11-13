@@ -102,7 +102,7 @@ key_cipher_layers=[
 
 An attacker must break both to recover the key. This matches the
 "security resides in the cryptosystem, not in individual algorithms"
-stance in `docs/selected_protocols.rst`. pycryptodome's X-Wing keys cannot
+stance in `../../selected_protocols.rst`. pycryptodome's X-Wing keys cannot
 be exported to PEM anyway, so they do not fit the keystore model.
 
 ### Rejected KEM candidates
@@ -251,7 +251,7 @@ No code in this report; this is the shape of the diff.
   64-byte digest in pure mode with a fixed context.
 - `_crypto_backend/pycryptodome.py`: thin wrappers; `fallback_adapter.py`
   (MicroPython) gets `encrypt_via_ml_kem_768` only.
-- `pyproject.toml`: `pycryptodome = "^4.2"`.
+- `../../../pyproject.toml`: `pycryptodome = "^4.2"`.
 - Tests: FIPS 203/204 KATs are already covered by pycryptodome; the lib
   needs round-trip tests plus a fixture cryptainer with a `ML_KEM_768` +
   `RSA_OAEP` hybrid layer, decryptable from both desktop and the POC.

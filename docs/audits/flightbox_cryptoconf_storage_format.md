@@ -125,6 +125,29 @@ READMEs not audited, no size measured):
 | [minibson / microbson](https://github.com/cyberguijarro/minibson) | C++ | Zero dependency. microbson is read-only and needs no per-node memory. |
 | [libbson](https://github.com/mongodb/mongo-c-driver) | C | Official and complete, can be built without libmongoc, but the heaviest. |
 
+Details checked on GitHub in November 2026 (README, headers and source read;
+no footprint was measured, none of the projects publishes figures):
+
+| | binson | libbson-mini | minibson / microbson |
+|---|---|---|---|
+| Licence | **none declared** (no `LICENSE` file): legally unusable as is | GPL-3.0 (`LICENSE.md`) | MIT |
+| Last push, stars | May 2018, 12 | March 2025, 1 | May 2020, 43 |
+| Size | about 280 lines (`binson.c` and `.h`) | about 660 lines (`bson.c` and `.h`), plus C++ wrapper | two header-only C++ files (microbson.hpp about 370 lines) |
+| Dynamic allocation | none | none in the C code (no `malloc`/`realloc`) | minibson: one heap node per value; microbson: none |
+| Reading and writing | read only, in place | read and write (`bson_get_*` and `bson_set_*`, with `next` cursor) | minibson: read, write, modify; microbson: read only, linear lookup |
+| Types | all type codes 0x01 to 0x12 declared, including array, binary, datetime, int64 and the binary subtypes (UUID 0x04 among them) | all codes 0x00 to 0x13 and the binary subtypes, with `bson_get/set_element_value_binary` returning or taking the subtype, and `int64` accessors | double, string, document, binary, boolean, null, int32, int64 only: no array, no datetime, no UUID subtype (the subtype byte is skipped) |
+| Value accessors | only `asint` (int32), `asdouble`, `asboolean`, `asstring`; no int64 or binary accessor (raw pointer via `getvalue` only), and unaligned pointer casts | complete for the types above | typed templates |
+| Language and fit for C | C, unaligned casts, global `errorno` | C (libc only), the best API match | C++ with STL: not suited to a plain-C ESP-IDF encryptor or a MicroPython native module |
+
+Consequences: binson cannot be used without its author's permission (no
+licence), and is abandoned and incomplete. libbson-mini is the only
+technically complete C option, but its GPL-3.0 licence is a constraint for
+the firmware (the same question as wolfSSL's licence in the crypto libraries
+audit). minibson/microbson is permissively licensed but C++ only and lacks
+arrays and UUIDs. None of them handles the 617-digit RSA modulus, which has to
+be stored as a byte string (BSON has no big integer type, only the 128-bit
+decimal type), as for CBOR.
+
 For MicroPython, no BSON module exists in micropython-lib and no pure-Python
 port was found: the options are a small `ustruct` codec written in-house, or
 wrapping one of the C libraries as a native module.
@@ -132,10 +155,11 @@ wrapping one of the C libraries as a native module.
 These libraries do not change the conclusion: BSON keeps field names in every
 document and has no standard signing envelope, and they cover plain BSON types
 only. The `$binary`/`$uuid` wrappers of Extended JSON, which the cryptainer
-needs, would still be handled by the device's own writer. They do make BSON a
-credible fallback if CBOR were rejected, with binson the best fit for a
-no-malloc C parser. Which BSON types each library supports (binary subtypes,
-UUID subtype 4, int64, big integers for the RSA modulus) is not verified.
+needs, would still be handled by the device's own writer. BSON is a possible
+fallback if CBOR were rejected, but the licence picture above (binson
+unlicensed, libbson-mini GPL-3.0) makes it weaker than it first looked: the
+no-malloc C parser would be libbson-mini, only if GPL-3.0 is acceptable, or
+an in-house reader of the few types needed.
 
 ## 6. Recommendation
 
@@ -209,6 +233,7 @@ Verified:
 
 Not verified:
 
-- The BSON type coverage, licences and footprint of binson, libbson-mini and
-  minibson/microbson (section 5): only their descriptions were read.
+- The code size and RAM of binson, libbson-mini and minibson/microbson
+  (section 5): none was compiled or measured. Their licences, types and
+  allocation behaviour were checked from the repositories.
 - Code size and RAM figures of the C libraries on ESP32: none were measured.

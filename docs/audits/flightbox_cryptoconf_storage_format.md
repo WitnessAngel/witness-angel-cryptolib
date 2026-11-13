@@ -4,7 +4,7 @@ Date: 2026-11-13. Status: audit, no code changed.
 Scope: which format should replace "BSON" (in fact Extended JSON) to store
 and transmit the cryptoconf, and the trustee public keys it needs, on
 embedded flightboxes: the MicroPython port
-(`../../reimplementations/micropython`) and the C prototype of the sibling
+(`reimplementations/micropython/`) and the C prototype of the sibling
 `witness-angel-cryptolib-c` repository (ESP32, ESP-IDF). Complements
 `../flightbox_specifications/flightbox_encryptor_specification.md`
 (section 2 for serialization, section 5 for the cryptoconf grammar).
@@ -46,7 +46,7 @@ flightbox uses.
   validated upfront against `CRYPTOCONF_SCHEMA_PYTHON` (a JSON Schema export,
   `CRYPTOCONF_SCHEMA_JSON`, also exists). Cryptainers are written as
   Extended JSON.
-- **MicroPython** (`../../reimplementations/micropython`): the cryptoconf is
+- **MicroPython** (`reimplementations/micropython/`): the cryptoconf is
   a Python literal in `main.py`, and trustee public keys an in-memory dict
   `{keystore_uid: {keychain_uid: {"n": int, "e": int, "x25519": bytes}}}`.
   Extended JSON is written by the vendored `extjson` module.

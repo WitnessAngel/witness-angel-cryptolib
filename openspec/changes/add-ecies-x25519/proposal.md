@@ -24,8 +24,8 @@
 
 - `src/wacryptolib/keygen.py`, `cipher.py`: registry entries.
 - `src/wacryptolib/_crypto_backend/pycryptodome.py`, `__init__.py`: generic HPKE seal/open wrappers, reusable by `ML_KEM_768` later.
-- New `src/wacryptolib/_crypto_backend/hpke_x25519_seal.py`: a pure-Python seal, shared with MicroPython through `micropython/vendor_dependencies.py`.
-- `micropython/flightbox_utilities_implementation.py`: the new cipher algo and the loading of raw X25519 public keys.
+- New `src/wacryptolib/_crypto_backend/hpke_x25519_seal.py`: a pure-Python seal, shared with MicroPython through `reimplementations/micropython/vendor_dependencies.py`.
+- `reimplementations/micropython/flightbox_utilities_implementation.py`: the new cipher algo and the loading of raw X25519 public keys.
 - `src/wacryptolib/trustee.py`, `keystore.py`: assertion and regex fixes. These overlap with `add-post-quantum-algorithms`, and whichever change lands first ships them.
 - `pyproject.toml`, `pip_requirements_export.txt`: pycryptodome bound.
 - `docs/selected_protocols.rst`: protocol description.

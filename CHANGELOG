@@ -28,7 +28,7 @@ Development
   it supports all algorithms of the pycryptodome backend (except ML_KEM_768, ML_DSA_65 and the Ed25519, Ed448 and curve448 ECC curves) and the PKCS#8/PKCS#1/SubjectPublicKeyInfo PEM formats it writes (not e.g. SEC1 or OpenSSH keys from other tools), except legacy DES3-protected private keys (DSA keys of wacryptolib <= 0.12, RSA keys of wacryptolib <= 0.8)
 * Test both crypto backends against official vectors (NIST, RFC, Wycheproof) and against each other
 * Stop vendoring rsa and pyasn1 for MicroPython, whose flightbox only encrypts with raw RSA public numbers
-* Move MicroPython flightbox sources to a `micropython/src/cryptainer/` package, whose `_flightbox.py` is now a verbatim
+* Move MicroPython flightbox sources to a `reimplementations/micropython/src/cryptainer/` package, whose `_flightbox.py` is now a verbatim
   copy of wacryptolib's one (refreshed by `vendor_dependencies.py`) instead of an outdated fork
 * Accept ECC curve names case-insensitively, and hash algorithm names case-insensitively in the internal crypto backends (not in `hash_message()`), which now both reject hash algorithms other than SHA256, SHA512, SHA3_256 and SHA3_512 with a ValueError
 * Add post-quantum algorithms:

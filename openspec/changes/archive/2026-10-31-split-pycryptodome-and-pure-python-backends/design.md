@@ -2,7 +2,7 @@
 
 - `_crypto_backend/__init__.py` re-exports names from `pycryptodome.py`. `get_random_bytes` (`os.urandom`) and Shamir (`vendor/PycryptodomeSecretSharing.py`, pure Python, no `Crypto` import) are defined there and are already backend-independent: they stay there and need no parity or interop tests.
 - When `import ios` succeeds or `FORCE_WACRYPTOLIB_FALLBACK_BACKEND` is set, `pycryptodome.py` monkey-patches `Crypto.Util._raw_api`, `strxor`, the `Crypto.Hash.*` classes, `BLAKE2s`, `AES.new` (pyaes adapter), `ChaCha20_Poly1305.new` (vendored) and `PKCS1_OAEP.oaep_decode`. Everything pycryptodome implements in pure Python on top of those patches (EAX, PSS, PEM/ASN.1, DSA via `Integer`) therefore kept working.
-- `fallback_adapter.py` holds a partial pure-Python backend (hashlib hashers, pyaes CBC, pkcs1/rsa OAEP, RSA keygen, unencrypted RSA PEM import). Nothing imports it except `tests/test_pkcs1_cryptography_interop.py`. A diverged copy is used by `micropython/flightbox_utilities_implementation.py`, which never touches PEM: it receives raw `n`/`e` and raw X25519 bytes.
+- `fallback_adapter.py` holds a partial pure-Python backend (hashlib hashers, pyaes CBC, pkcs1/rsa OAEP, RSA keygen, unencrypted RSA PEM import). Nothing imports it except `tests/test_pkcs1_cryptography_interop.py`. A diverged copy is used by `reimplementations/micropython/flightbox_utilities_implementation.py`, which never touches PEM: it receives raw `n`/`e` and raw X25519 bytes.
 - `tests/_test_mockups.py::is_fallback_backend()` imports `_patch_pycryptodome_internals` from `pycryptodome.py`, and is used by keygen/signature/cryptainer tests.
 
 ### What callers actually need from backend objects (verified by grep of `src/wacryptolib`)
@@ -28,7 +28,7 @@ So no wrapper classes are needed around pkcs1 keys. The only caller change is in
 **Non-Goals:**
 - Legacy PEM protections other than PBES2/PBKDF2 (HMAC-SHA1 or HMAC-SHA256) with AES-128/256-CBC. In particular DES-EDE3-CBC (written for DSA keys by versions before commit `f4992a1`, and for RSA keys by versions up to 0.8) and OpenSSL `Proc-Type` headers raise `ValueError` in the fallback (see open question).
 - Running the whole existing test suite under the fallback backend.
-- Changing `micropython/` (its `fallback_adapter.py` stays a separate copy).
+- Changing `reimplementations/micropython/` (its `fallback_adapter.py` stays a separate copy).
 - Constant-time guarantees for the fallback (impossible with Python bigints). Documented, not solved.
 
 ## Decisions
@@ -44,7 +44,7 @@ fallbacks = ["pkcs1", "pyaes", "ecdsa"]
 ```
 `[tool.poetry.extras]` is the right syntax here: `pyproject.toml` uses the legacy `[tool.poetry]` layout (no `[project]` table) with an unpinned `poetry-core`, and both poetry-core 1.x and 2.x read it there. `rsa` is removed from `pyproject.toml` (and with it `pyasn1` from `poetry.lock`): its only uses were PKCS#1/SPKI RSA PEM parsing/writing, now done by `fallback/pem.py`'s DER codec (D3). No DSA package is added (see D3); `ecdsa` (MIT, pure Python, maintained, only depends on `six`) covers NIST-curve ECC. Constrained platforms install `wacryptolib --no-deps` plus an explicit list documented in the Readme (the extra's packages and the non-native runtime deps).
 
-`pip_requirements_export.txt` (used by `tox.ini` and `wacryptolib_installer.py`) is regenerated with `poetry export --with dev --all-extras`, so it keeps listing `pkcs1`/`pyaes` and the main tox envs run the interop tests instead of skipping them. `micropython/vendor_dependencies.py` keeps working for optional packages (they stay in `poetry.lock`), but `rsa`/`pyasn1` leave its `PACKAGES` list since they are no longer locked: `micropython/patches/pyasn1.patch` is deleted, and the dead `import_rsa_key_from_pem` of `micropython/fallback_adapter.py` (the flightbox only imports `encrypt_via_rsa_oaep`/`encrypt_via_aes_cbc`, with raw `n`/`e`) is removed.
+`pip_requirements_export.txt` (used by `tox.ini` and `wacryptolib_installer.py`) is regenerated with `poetry export --with dev --all-extras`, so it keeps listing `pkcs1`/`pyaes` and the main tox envs run the interop tests instead of skipping them. `reimplementations/micropython/vendor_dependencies.py` keeps working for optional packages (they stay in `poetry.lock`), but `rsa`/`pyasn1` leave its `PACKAGES` list since they are no longer locked: `reimplementations/micropython/patches/pyasn1.patch` is deleted, and the dead `import_rsa_key_from_pem` of `reimplementations/micropython/fallback_adapter.py` (the flightbox only imports `encrypt_via_rsa_oaep`/`encrypt_via_aes_cbc`, with raw `n`/`e`) is removed.
 
 *Alternatives:* PEP 771 default extras (still Draft, unsupported); splitting the distribution (two packages to publish, deferred).
 
@@ -150,4 +150,4 @@ Rollback: revert. No data format change: both backends read and write the same b
 Resolved in this design: probe module (D2), PSS/OAEP pkcs1 pitfalls (D3), Wycheproof file names (D4), DSA approach (D3), PBKDF2 vector dropped (both backends use `hashlib.pbkdf2_hmac`, testing it would test the stdlib).
 
 Decided by the user (2026-10-30): iOS needs keygen and passphrase-protected PEM export; legacy DES3-protected DSA PEMs are not supported; `ecdsa` is added for NIST-curve ECC; `rsa`/`pyasn1` are dropped.
-- Later: replace `micropython/fallback_adapter.py` by vendored copies of `_crypto_backend/fallback/` (the DER codec makes it MicroPython-friendly, no `pyasn1` needed). Not part of this change.
+- Later: replace `reimplementations/micropython/fallback_adapter.py` by vendored copies of `_crypto_backend/fallback/` (the DER codec makes it MicroPython-friendly, no `pyasn1` needed). Not part of this change.

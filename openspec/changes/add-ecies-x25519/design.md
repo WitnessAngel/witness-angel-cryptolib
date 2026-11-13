@@ -4,7 +4,7 @@
 - The locked pycryptodome is 3.23. It provides `Crypto.Protocol.HPKE` (RFC 9180, Base/Auth/PSK modes) and X25519 keys (`ECC.generate(curve="curve25519")`). The existing `generate_ecc_keypair`, `import_ecc_key_from_pem` and `export_ecc_key_to_pem` (with the PBKDF2-SHA256 PKCS#8 protection) already handle X25519 keys. This was checked locally: PEM round-trip, and seal/unseal with both ChaCha20-Poly1305 and AES-256-GCM.
 - HPKE accepts any `EccKey`, so key-type and curve checking can't be delegated to it.
 - `trustee.py:decrypt_with_private_key` asserts `cipher_algo == "RSA_OAEP"`. `keystore.PUBLIC_KEY_FILENAME_REGEX` rejects digits in `key_algo`.
-- The MicroPython flightbox (`micropython/`) has no pycryptodome. It only **encrypts** key structs with trustee public keys, which are stored as raw parameters in `keystore_data` (RSA uses `{"n", "e"}`). It already vendors a pure-Python ChaCha20-Poly1305 (`_crypto_backend/chacha20_poly1305.py`), pyaes, `hmac` and `hashlib`. On that platform `hmac.compare_digest` is a non-constant-time stub.
+- The MicroPython flightbox (`reimplementations/micropython/`) has no pycryptodome. It only **encrypts** key structs with trustee public keys, which are stored as raw parameters in `keystore_data` (RSA uses `{"n", "e"}`). It already vendors a pure-Python ChaCha20-Poly1305 (`_crypto_backend/chacha20_poly1305.py`), pyaes, `hmac` and `hashlib`. On that platform `hmac.compare_digest` is a non-constant-time stub.
 - The pending `add-post-quantum-algorithms` change wraps keys with HPKE too, using the same cipherdict shape.
 
 ## Goals / Non-Goals
@@ -42,12 +42,12 @@ Follow-up for `add-post-quantum-algorithms`: its D2 picked AES-256-GCM because i
 
 **D5. CPython backend: generic `encrypt_via_hpke(plaintext, public_key, aead_id)` / `decrypt_via_hpke(enc, ciphertext, private_key, aead_id)` in `pycryptodome.py`.** The cipher.py functions check `isinstance(key, EccKey) and key.curve == "Curve25519"` themselves and raise `ValueError` otherwise, because HPKE would silently accept a P-256 key. The key functions reuse the existing ECC ones.
 
-**D6. MicroPython backend: new pure-Python module `_crypto_backend/hpke_x25519_seal.py`.** It is shared through `SHARED_MODULES` in `micropython/vendor_dependencies.py`, with `chacha20_poly1305.py` added there as well. Its only imports are `hashlib`, `hmac` and `os`. It contains:
+**D6. MicroPython backend: new pure-Python module `_crypto_backend/hpke_x25519_seal.py`.** It is shared through `SHARED_MODULES` in `reimplementations/micropython/vendor_dependencies.py`, with `chacha20_poly1305.py` added there as well. Its only imports are `hashlib`, `hmac` and `os`. It contains:
 - the RFC 7748 X25519 Montgomery ladder, with clamping and a check that rejects an all-zero shared secret;
 - HKDF-SHA256 extract/expand over `hmac`, plus HPKE `LabeledExtract`/`LabeledExpand` with `suite_id`;
 - `seal(receiver_public_key_bytes, plaintext, ephemeral_private_key=None) -> (enc, ciphertext)`, which uses `os.urandom(32)` when no key is injected. Injection exists only so the known-answer test can run.
 
-It lives in `src/` rather than `micropython/` so CPython tests can import it directly and check it against pycryptodome. The flightbox keystore stores the raw 32-byte public key (`{"x25519": bytes}`), mirroring the raw `{"n", "e"}` used for RSA, so the device needs no PEM/ASN.1 parsing.
+It lives in `src/` rather than `reimplementations/micropython/` so CPython tests can import it directly and check it against pycryptodome. The flightbox keystore stores the raw 32-byte public key (`{"x25519": bytes}`), mirroring the raw `{"n", "e"}` used for RSA, so the device needs no PEM/ASN.1 parsing.
 
 **D7. Trustee assertion and keystore regex.** These are the same edits as PQ D7/D10: `assert cipher_algo.upper() in SUPPORTED_ASYMMETRIC_CIPHER_ALGOS`, and `key_algo` group `[_a-zA-Z0-9]+`. Whichever change merges second drops them.
 

@@ -8,23 +8,23 @@ Scope: **only the ENCRYPTOR workflow**, i.e. turning a payload plus a *cryptocon
 encryptor must produce data in the exact format they expect.
 
 The goal is to allow reimplementations in other languages (C, Rust, Kotlin, Swift, JS...), the
-way `micropython/` already reimplements the platform layer, and to produce cryptainers that the
+way `reimplementations/micropython/` already reimplements the platform layer, and to produce cryptainers that the
 existing `wacryptolib` decryptor accepts without changes.
 
 Sources of truth (in this repository):
 
 | Topic | File |
 |---|---|
-| Portable core algorithm ("flightbox") | `src/wacryptolib/cryptainer/_flightbox.py` (copied verbatim to `micropython/src/cryptainer/_flightbox.py`) |
+| Portable core algorithm ("flightbox") | `src/wacryptolib/cryptainer/_flightbox.py` (copied verbatim to `reimplementations/micropython/src/cryptainer/_flightbox.py`) |
 | CPython platform utilities and payload encryption | `src/wacryptolib/cryptainer/_encryptor.py` |
 | Streaming payload encryption | `src/wacryptolib/cipher.py` (`PayloadEncryptionPipeline`, `*EncryptionNode`), `src/wacryptolib/cryptainer/_encryption_pipeline.py` |
 | Signatures of digests | `src/wacryptolib/cryptainer/_signing.py`, `src/wacryptolib/signature.py` |
 | Cipher primitives | `src/wacryptolib/cipher.py`, `src/wacryptolib/keygen.py`, `src/wacryptolib/_crypto_backend/pycryptodome.py` |
-| Shamir shared secret | `src/wacryptolib/utilities/data_utils.py`, `micropython/src/cryptainer/pycryptodome_secret_sharing.py` |
-| Extended JSON | `extjson` package (vendored as `micropython/lib/extjson.py`) |
+| Shamir shared secret | `src/wacryptolib/utilities/data_utils.py`, `reimplementations/micropython/src/cryptainer/pycryptodome_secret_sharing.py` |
+| Extended JSON | `extjson` package (vendored as `reimplementations/micropython/lib/extjson.py`) |
 | Cryptoconf / cryptainer schemas | `src/wacryptolib/cryptainer/_validation.py` |
-| MicroPython platform utilities | `micropython/src/cryptainer/flightbox_utilities_implementation.py`, `micropython/src/cryptainer/fallback_adapter.py` |
-| Pure-Python HPKE X25519 seal | `src/wacryptolib/_crypto_backend/fallback/hpke_x25519_seal.py` (vendored in `micropython/lib/`) |
+| MicroPython platform utilities | `reimplementations/micropython/src/cryptainer/flightbox_utilities_implementation.py`, `reimplementations/micropython/src/cryptainer/fallback_adapter.py` |
+| Pure-Python HPKE X25519 seal | `src/wacryptolib/_crypto_backend/fallback/hpke_x25519_seal.py` (vendored in `reimplementations/micropython/lib/`) |
 
 The key words MUST, SHOULD and MAY are used in the RFC 2119 sense.
 
@@ -717,7 +717,7 @@ The cryptainer is serialized with `J()` (§2) into a UTF-8 JSON file, convention
 
 ### 9.3 Abridged example
 
-Output of `micropython/main.py` (single `AES_CBC` layer wrapped with `RSA_OAEP` by an
+Output of `reimplementations/micropython/main.py` (single `AES_CBC` layer wrapped with `RSA_OAEP` by an
 `authenticator` trustee), before payload encryption, with base64 shortened and the generated
 UUIDs replaced by illustrative values:
 
@@ -776,7 +776,7 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
 
 ### 10.1 Current MicroPython profile
 
-`micropython/` implements step 1 only, with:
+`reimplementations/micropython/` implements step 1 only, with:
 
 - symmetric: `AES_CBC` (via `pyaes`), as a symmetric key cipher layer, and for payload
   encryption once step 2 is implemented; asymmetric: `RSA_OAEP` (via `pkcs1`, SHA-512) and

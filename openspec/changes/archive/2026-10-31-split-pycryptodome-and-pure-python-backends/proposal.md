@@ -34,5 +34,5 @@ The pure-Python packages it relies on (`rsa`, `pkcs1`, `pyaes`) are mandatory de
 - `tests/`: new conformance, interop and parity test modules. Existing `test_pkcs1_cryptography_interop.py` / `test_chacha20_poly1305_fallback.py` / `test_hpke_x25519_seal.py` are folded in.
 - `tox.ini`: fallback test environment.
 - `Readme.rst` / `CHANGELOG`: installation on constrained platforms, coverage table.
-- `micropython/`: `rsa`/`pyasn1` leave its vendored packages; it keeps its own `fallback_adapter.py` copy.
+- `reimplementations/micropython/`: `rsa`/`pyasn1` leave its vendored packages; it keeps its own `fallback_adapter.py` copy.
 - Users who install with plain `pip install wacryptolib` see no behaviour change. Anyone who relied on `FORCE_WACRYPTOLIB_FALLBACK_BACKEND` with the old patched-pycryptodome semantics now gets the new fallback package, which no longer supports legacy PEM protections other than the ones listed in design D3 (notably DES3-protected DSA keys).

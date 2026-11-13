@@ -6,7 +6,7 @@ State after PR #63 (line numbers of `fix/cipher-layers-non-emptiness`):
 - `check_cryptainer_sanity()` is called strictly by `CryptainerDecryptor.decrypt_payload()`, leniently (`require_inline_payload=False`) by `gather_decryptable_symkeys()`, and explicitly by CLI `cryptainer validate` (`cli.py:834`) and `ReadonlyCryptainerStorage.check_cryptainer_sanity()`.
 - `CryptainerStorage` passes `default_cryptoconf` (unvalidated, may be `None`) through `_resolve_cryptoconf()` to `create_cryptainer_encryption_stream()`, `enqueue_file_for_encryption()` (worker threads, errors logged and swallowed by `@catch_and_log_exception`) and `encrypt_file()`, so it is validated once per file by the encryptor.
 - The decryptor keeps an in-flow guard duplicating the schema ("Empty key_cipher_layers list is forbidden in cryptainer", `_decryptor.py:480`).
-- `_flightbox.py` is dependency-injection-only: a diverged copy (`micropython/flightbox.py`) runs on MicroPython and must import nothing. In `cryptainer/__init__.py`, `_analysis` is imported **before** `_validation` (hence PR #63's lazy import in `gather_decryptable_symkeys`); `_decryptor`, `_encryptor`, `_storage` come after.
+- `_flightbox.py` is dependency-injection-only: a diverged copy (`reimplementations/micropython/flightbox.py`) runs on MicroPython and must import nothing. In `cryptainer/__init__.py`, `_analysis` is imported **before** `_validation` (hence PR #63's lazy import in `gather_decryptable_symkeys`); `_decryptor`, `_encryptor`, `_storage` come after.
 
 ## Goals / Non-Goals
 

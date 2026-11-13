@@ -13,8 +13,8 @@
 
 - [x] 3.1 Create `_crypto_backend/hpke_x25519_seal.py` (RFC 7748 X25519 ladder with all-zero shared secret rejection, HKDF-SHA256, HPKE labeled extract/expand and Base-mode key schedule, `seal(receiver_public_key_bytes, plaintext, ephemeral_private_key=None)` using `chacha20_poly1305.py`), with a header comment repeating the D2 AEAD rationale and a `ponytail:` comment on non-constant-time bigints; verify it imports with only `hashlib`, `hmac`, `os` and the ChaCha module
 - [x] 3.2 Add `tests/test_hpke_x25519_seal.py`: RFC 7748 §5.2 X25519 vectors, RFC 9180 A.2.1 known-answer test (`enc`, `shared_secret`, `key`, `base_nonce` with injected ephemeral key), round-trip pure `seal` → pycryptodome `decrypt_via_hpke`, low-order public key rejected; verify the test file passes
-- [x] 3.3 Add `hpke_x25519_seal.py` and `chacha20_poly1305.py` to `SHARED_MODULES` in `micropython/vendor_dependencies.py`; verify running it copies both into `micropython/lib/`
-- [x] 3.4 In `micropython/flightbox_utilities_implementation.py`, add `"ECIES_X25519"` to `SUPPORTED_ASYMMETRIC_CIPHER_ALGOS`, load `{"x25519": bytes}` public key parameters in `get_public_key` per `key_algo`, and dispatch `encrypt_bytestring` to `seal()` returning `{"kem_ciphertext", "ciphertext"}`; verify a MicroPython (unix port) flightbox run with an ECIES layer produces a cryptainer
+- [x] 3.3 Add `hpke_x25519_seal.py` and `chacha20_poly1305.py` to `SHARED_MODULES` in `reimplementations/micropython/vendor_dependencies.py`; verify running it copies both into `reimplementations/micropython/lib/`
+- [x] 3.4 In `reimplementations/micropython/flightbox_utilities_implementation.py`, add `"ECIES_X25519"` to `SUPPORTED_ASYMMETRIC_CIPHER_ALGOS`, load `{"x25519": bytes}` public key parameters in `get_public_key` per `key_algo`, and dispatch `encrypt_bytestring` to `seal()` returning `{"kem_ciphertext", "ciphertext"}`; verify a MicroPython (unix port) flightbox run with an ECIES layer produces a cryptainer
 
 ## 4. Library tests
 

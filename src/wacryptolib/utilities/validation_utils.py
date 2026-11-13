@@ -36,7 +36,47 @@ def summarize_python_schema_error(exc: SchemaError, max_lines=10) -> str:
         # "Or(<schema>) did not validate <data>" lines only introduce the per-alternative causes that follow them,
         # and would push these causes (e.g. a "Wrong key" of a non-last alternative) out of the summary
         lines = [line for line in lines if not (line.startswith("Or(") and " did not validate " in line)] or lines
+    if len(lines) > max_lines:
+        lines = _select_lines_within_budget(lines, max_lines=max_lines)
     return summarize_validation_error_lines(lines, max_lines=max_lines)
+
+
+def _is_essential_schema_error_line(line: str) -> bool:
+    """Lines carrying a field path ("Key 'x' error:") or the direct cause of a failure, which a failing non-last
+    Or() alternative would otherwise lose in the skipped middle, leaving only unrelated mismatches of the last one."""
+    return (line.startswith("Key ") and line.endswith(" error:")) or line.startswith(("Missing key", "Wrong key"))
+
+
+def _select_lines_within_budget(lines, max_lines):
+    """Keep the essential lines first, then fill the remaining budget with the tail lines, and replace each
+    group of dropped lines by a skip marker, so that the result fits in `max_lines` (markers included)."""
+
+    def rendered_length(kept_indices):
+        ordered = sorted(kept_indices)
+        gap_count = sum(1 for previous, current in zip([-1] + ordered, ordered) if current != previous + 1)
+        gap_count += 1 if ordered and ordered[-1] != len(lines) - 1 else 0
+        return len(ordered) + gap_count
+
+    kept = [index for index, line in enumerate(lines) if _is_essential_schema_error_line(line)]
+    kept = set(kept[: max(max_lines // 2, 1)])
+    while kept and rendered_length(kept) > max_lines:
+        kept.discard(max(kept))
+    for index in reversed(range(len(lines))):
+        if index not in kept and rendered_length(kept | {index}) <= max_lines:
+            kept.add(index)
+        elif index not in kept:
+            break
+
+    result = []
+    previous = -1
+    for index in sorted(kept):
+        if index != previous + 1:
+            result.append("[... %d lines skipped]" % (index - previous - 1))
+        result.append(lines[index])
+        previous = index
+    if previous != len(lines) - 1:
+        result.append("[... %d lines skipped]" % (len(lines) - 1 - previous))
+    return result
 
 
 def validate_data_against_schema(data_tree, schema: Schema):

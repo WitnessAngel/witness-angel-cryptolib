@@ -3183,6 +3183,28 @@ def test_summarize_validation_error_lines_respects_max_lines():
     assert summarize_validation_error_lines([long_line], max_line_length=1) == "a [...] c"
 
 
+def test_python_schema_error_summary_keeps_field_path_and_cause_of_non_last_or_alternative():
+    from schema import Schema, Or, SchemaError
+    from wacryptolib.utilities.validation_utils import summarize_python_schema_error
+
+    trustee_schema = Or(
+        {"trustee_type": "authenticator", "keystore_owner": str, "keystore_uid": int},
+        *[{"trustee_type": "other%d" % i, "param%d" % i: str} for i in range(12)],  # Irrelevant last alternatives
+    )
+    data_schema = Schema({"key_cipher_trustee": trustee_schema, "key_cipher_algo": Or("RSA_OAEP", "AES_CBC")})
+    data = {"key_cipher_trustee": {"trustee_type": "authenticator", "keystore_owner": "bob"}, "key_cipher_algo": "AES_CBC"}
+
+    with pytest.raises(SchemaError) as exc_info:
+        data_schema.validate(data)
+    assert len(exc_info.value.code.splitlines()) > 10  # Else no summarizing happens
+
+    for max_lines in (4, 5, 10):
+        summary = summarize_python_schema_error(exc_info.value, max_lines=max_lines)
+        assert len(summary.splitlines()) <= max_lines
+        assert "Key 'key_cipher_trustee' error:" in summary
+        assert "Missing key: 'keystore_uid'" in summary
+
+
 def test_cryptainer_validation_error_messages_keep_deep_causes():
     cryptainer = encrypt_payload_into_cryptainer(
         payload=b"abc", cryptoconf=COMPLEX_SHAMIR_CRYPTOCONF, cryptainer_metadata=None

@@ -210,7 +210,8 @@ HPKE (RFC 9180) Base mode, as implemented by pycryptodome ≥ 4.2 `Crypto.Protoc
 KEM ML-KEM-768 (FIPS 203), KDF HKDF-SHA256, AEAD ChaCha20-Poly1305 (`0x0003`), empty info and
 AAD. Cipherdict: `{"kem_ciphertext": bytes, "ciphertext": bytes}` (same shape as
 ECIES_X25519). Reimplementations MUST cross-check against pycryptodome (e.g. by decrypting
-with wacryptolib, see §12, or with `tests/fixtures/post_quantum/`), since the HPKE KEM
+with wacryptolib, see §12, or with the `compatibility/cipherdicts/2026_post_quantum/ML_KEM_768/`
+vectors), since the HPKE KEM
 identifier of ML-KEM comes from an IETF draft.
 
 ### 3.6 Hash algorithms

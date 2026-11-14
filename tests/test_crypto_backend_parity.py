@@ -669,11 +669,11 @@ def test_fallback_rejects_non_sha512_hashers_for_pss_and_ecdsa(hash_algo):
         fallback.sign_with_dss(hasher, ecc_private_key)
 
 
-def test_fallback_warns_once_about_ecdsa_timing_side_channel():
+def test_fallback_warns_once_about_ecdsa_timing_side_channel(monkeypatch):
     from unittest import mock
 
     fallback = import_crypto_backend("fallback")
-    fallback._minerva_warning_emitted = False
+    monkeypatch.setattr(fallback, "_minerva_warning_emitted", False)  # Restored afterwards
 
     _, private_key = fallback.generate_ecc_keypair("P-256")
     hasher = fallback.get_hasher_instance("SHA512")
@@ -683,3 +683,29 @@ def test_fallback_warns_once_about_ecdsa_timing_side_channel():
         fallback.sign_with_dss(hasher, private_key)
     assert logger_mock.warning.call_count == 1
     assert "CVE-2024-23342" in logger_mock.warning.call_args[0][0]
+
+
+def test_fallback_sha512_guard_accepts_sha512_hashers_with_other_name_forms_only():
+    fallback = import_crypto_backend("fallback")
+
+    class RenamedHasher:
+        def __init__(self, name, oid=None):
+            self.name = name
+            if oid:
+                self.oid = oid
+
+    for accepted in (RenamedHasher("SHA-512"), RenamedHasher("sha_512"), fallback.get_hasher_instance("SHA512")):
+        fallback._require_sha512(accepted)
+
+    class OidOnlyHasher:
+        oid = "2.16.840.1.101.3.4.2.3"
+
+    fallback._require_sha512(OidOnlyHasher())
+
+    class UnknownHasher:
+        pass
+
+    with pytest.raises(ValueError, match="not UnknownHasher$"):  # No object repr in the message
+        fallback._require_sha512(UnknownHasher())
+    with pytest.raises(ValueError, match="not sha256$"):
+        fallback._require_sha512(fallback.get_hasher_instance("SHA256"))

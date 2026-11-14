@@ -16,6 +16,7 @@ import hmac
 import logging
 import math
 import os
+import threading
 
 import ecdsa
 import ecdsa.util
@@ -276,13 +277,24 @@ def decrypt_via_rsa_oaep(ciphertext_chunks: list[bytes], private_key) -> list[by
     return [_decrypt_one_rsa_oaep_chunk(chunk, private_key) for chunk in ciphertext_chunks]
 
 
+_SHA512_OID = "2.16.840.1.101.3.4.2.3"
+
+
 def _require_sha512(message):
-    """Fail loudly rather than silently diverge from pycryptodome, which uses the hash of the message itself for
-    PSS/MGF1 and for the RFC 6979 nonce, whereas this backend hard-wires SHA-512 for them."""
-    if getattr(message, "name", None) != "sha512":
+    """Fail loudly rather than silently diverge from pycryptodome, whose RSA-PSS/MGF1 use the hash of the message
+    itself, whereas this backend hard-wires SHA-512 for them, and for the ECDSA RFC 6979 nonce derivation.
+
+    Not needed where the signature only depends on the digest bytes (DSA, and the verification of ECDSA)."""
+    name = getattr(message, "name", None)
+    is_sha512 = (
+        name.lower().replace("-", "").replace("_", "") == "sha512"
+        if isinstance(name, str)
+        else getattr(message, "oid", None) == _SHA512_OID  # Hash objects of pycryptodome-like APIs
+    )
+    if not is_sha512:
         raise ValueError(
-            "The fallback backend only supports SHA512 hashers for PSS and ECDSA signatures, not %r"
-            % getattr(message, "name", message)
+            "The fallback backend only supports SHA512 hashers for PSS and ECDSA signatures, not %s"
+            % (name if isinstance(name, str) else type(message).__name__)
         )
 
 
@@ -423,17 +435,20 @@ def _decode_dsa_parameters(parameters):
 
 logger = logging.getLogger(__name__)
 _minerva_warning_emitted = False
+_minerva_warning_lock = threading.Lock()
 
 
 def _warn_about_ecdsa_timing_side_channel_once():
     # python-ecdsa has no fix for CVE-2024-23342 (Minerva timing attack on ECDSA signing), see issue #71
     global _minerva_warning_emitted
-    if not _minerva_warning_emitted:
+    with _minerva_warning_lock:
+        if _minerva_warning_emitted:
+            return
         _minerva_warning_emitted = True
-        logger.warning(
-            "ECDSA signing with the pure-python fallback backend is vulnerable to timing side-channels"
-            " (CVE-2024-23342, unfixed in python-ecdsa): do not use it where attackers can time signatures"
-        )
+    logger.warning(
+        "ECDSA signing with the pure-python fallback backend is vulnerable to timing side-channels"
+        " (CVE-2024-23342, unfixed in python-ecdsa): do not use it where attackers can time signatures"
+    )
 
 
 def sign_with_dss(message, private_key):

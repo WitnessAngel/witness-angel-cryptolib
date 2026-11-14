@@ -3237,6 +3237,30 @@ def test_shared_secret_threshold_lower_bound_via_json_schema(canonical):
             check_cryptainer_sanity(convert_to_extjson(cryptainer, canonical=canonical), jsonschema_mode=True)
 
 
+@pytest.mark.parametrize("canonical", [False, True])
+def test_empty_payload_cryptainer_validation_via_json_schema(canonical):
+    cryptoconf = dict(  # A stream cipher, since AES_CBC would pad the empty payload
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_EAX",
+                key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
+                payload_ciphertext_signatures=[],
+            )
+        ]
+    )
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"", cryptoconf=cryptoconf, keystore_pool=InMemoryKeystorePool(), cryptainer_metadata=None
+    )
+    cryptainer_json = convert_to_extjson(cryptainer, canonical=canonical)
+    assert cryptainer_json["payload_ciphertext_struct"]["ciphertext_value"]["$binary"]["base64"] == ""
+    check_cryptainer_sanity(cryptainer_json, jsonschema_mode=True)  # Empty bytes are an empty base64 string
+
+    for corrupted_base64 in ["=", "A", "AB=", "AB C"]:
+        cryptainer_json["payload_ciphertext_struct"]["ciphertext_value"]["$binary"]["base64"] = corrupted_base64
+        with pytest.raises(SchemaValidationError):
+            check_cryptainer_sanity(cryptainer_json, jsonschema_mode=True)
+
+
 @pytest.mark.parametrize(
     "cryptoconf, is_complex_conf", [(SIMPLE_CRYPTOCONF, False), (COMPLEX_SHAMIR_CRYPTOCONF, True)]
 )

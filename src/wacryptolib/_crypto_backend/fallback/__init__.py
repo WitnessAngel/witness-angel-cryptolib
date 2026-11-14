@@ -19,6 +19,7 @@ import os
 import ecdsa
 import ecdsa.util
 import pkcs1
+import pkcs1.exceptions
 import pkcs1.keys
 import pkcs1.mgf
 import pkcs1.rsaes_oaep

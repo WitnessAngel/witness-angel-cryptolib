@@ -74,6 +74,10 @@ def get_validation_micro_schemas(extended_json_format=False):
         _micro_schema_base64 = schema.And(
             str, schema.Regex(r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$")
         )
+        # Empty bytestrings (e.g. the ciphertext of an empty payload) are encoded as an empty base64 string
+        _micro_schema_base64_or_empty = schema.And(
+            str, schema.Regex(r"^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$")
+        )
 
         # RELAXED mode (default) uses $uuid format with hex string (32 chars without dashes)
         _micro_schema_uuid_hex = schema.And(str, schema.Regex(r"^[0-9a-fA-F]{32}$"))
@@ -85,7 +89,7 @@ def get_validation_micro_schemas(extended_json_format=False):
             {"$binary": {"base64": _micro_schema_base64, "subType": schema.Or("03", "04")}},  # CANONICAL format
         )
 
-        micro_schema_binary = {"$binary": {"base64": _micro_schema_base64, "subType": "00"}}
+        micro_schema_binary = {"$binary": {"base64": _micro_schema_base64_or_empty, "subType": "00"}}
 
         # Support both RELAXED (plain int) and CANONICAL (wrapped) formats for integers
         # RELAXED is the default and expected format

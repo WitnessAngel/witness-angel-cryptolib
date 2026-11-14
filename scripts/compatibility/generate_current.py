@@ -8,12 +8,14 @@ Add a NEW generation of compatibility fixtures, produced by the in-tree wacrypto
 
     python scripts/compatibility/generate_current.py classic 2026_current
     python scripts/compatibility/generate_current.py post_quantum 2026_post_quantum
+    python scripts/compatibility/generate_current.py edge_cases 2026_edge_cases
 
 Missing shared plaintexts are added too. The generation is staged, then committed into the corpus, then fully
 checked like the test suite does; it is removed again if any check fails. Existing generations are never touched.
 """
 
 import argparse
+import contextlib
 import copy
 import filecmp
 import shutil
@@ -35,7 +37,12 @@ from wacryptolib.cryptainer import (
     encrypt_payload_and_stream_cryptainer_to_filesystem,
     encrypt_payload_into_cryptainer,
 )
-from wacryptolib.keygen import generate_symkey, load_asymmetric_key_from_pem_bytestring
+from wacryptolib.keygen import (
+    _serialize_key_object_to_pem_bytestring,
+    generate_keypair,
+    generate_symkey,
+    load_asymmetric_key_from_pem_bytestring,
+)
 from wacryptolib.keystore import FilesystemKeystore, FilesystemKeystorePool, generate_keypair_for_storage
 from wacryptolib.operations import import_keystore_from_path
 from wacryptolib.signature import sign_message
@@ -52,16 +59,39 @@ LOCAL_KEYCHAIN_UIDS = (LOCAL_KEYCHAIN_UID1, LOCAL_KEYCHAIN_UID2, LOCAL_KEYCHAIN_
 
 KEYSTORE_PASSPHRASE_HINT = "Dummy compatibility passphrase, see the pool sidecar"
 
+# Private key PEM protections of wacryptolib <= 0.12 (i.e. before commit f4992a1), per key algo
+LEGACY_PEM_EXPORT_PARAMS = {
+    "RSA_OAEP": dict(pkcs=8, protection="PBKDF2WithHMAC-SHA1AndAES256-CBC"),
+    "RSA_PSS": dict(pkcs=8, protection="PBKDF2WithHMAC-SHA1AndAES256-CBC"),
+    "DSA_DSS": dict(pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndDES-EDE3-CBC"),
+    "ECC_DSS": dict(use_pkcs8=True, protection="PBKDF2WithHMAC-SHA1AndAES128-CBC"),
+}
+
+
+def generate_legacy_protected_keypair_for_storage(key_algo: str, *, keystore, keychain_uid: UUID, passphrase: str):
+    """Like generate_keypair_for_storage(), but protecting the private key like wacryptolib <= 0.12 did."""
+    keypair = generate_keypair(key_algo=key_algo, serialize=False)
+    private_key_pem = keypair["private_key"].export_key(
+        format="PEM", passphrase=passphrase, **LEGACY_PEM_EXPORT_PARAMS[key_algo]
+    )
+    if isinstance(private_key_pem, str):
+        private_key_pem = private_key_pem.encode("ascii")
+    public_key_pem = _serialize_key_object_to_pem_bytestring(keypair["public_key"], key_algo=key_algo)
+    keystore.set_keypair(
+        keychain_uid=keychain_uid, key_algo=key_algo, public_key=public_key_pem, private_key=private_key_pem
+    )
+
 
 class AuthenticatorSpec:
     """A dummy authenticator, whose keypairs all share a single keychain UID and passphrase."""
 
-    def __init__(self, name: str, keystore_uid: str, key_algos: tuple):
+    def __init__(self, name: str, keystore_uid: str, key_algos: tuple, legacy_pem_protection=False):
         self.keystore_owner = "compat-%s" % name
         self.passphrase = "compat-%s-passphrase" % name
         self.keystore_uid = UUID(keystore_uid)
         self.keychain_uid = UUID(keystore_uid[:-4] + "00c1")
         self.key_algos = key_algos
+        self.legacy_pem_protection = legacy_pem_protection  # Private keys protected like wacryptolib <= 0.12 did
 
     @property
     def trustee(self) -> dict:
@@ -468,7 +498,128 @@ def build_post_quantum_profile():
     )
 
 
-PROFILES = dict(classic=build_classic_profile, post_quantum=build_post_quantum_profile)
+GRACE = AuthenticatorSpec(
+    "grace", "62ace000-0000-4000-8000-000000000007", ("RSA_OAEP", "RSA_PSS", "DSA_DSS", "ECC_DSS"),
+    legacy_pem_protection=True,
+)
+
+
+def build_edge_cases_profile():
+    authenticators = [GRACE]
+    success_scenario = dict(
+        name="all_passphrases",
+        description="The authenticator passphrase is provided",
+        passphrase_mapper={GRACE.trustee_id: [GRACE.passphrase]},
+        expected="success",
+    )
+    no_passphrase_scenario = dict(
+        name="no_passphrase",
+        description="The authenticator passphrase is missing",
+        passphrase_mapper={},
+        expected="failure",
+        expected_errors=["ASYMMETRIC_DECRYPTION_ERROR"],
+    )
+    cryptoconfs = {
+        "08_legacy_protected_authenticator": dict(
+            level=6,
+            description="AES_EAX payload layer whose key is wrapped by a local RSA_OAEP key, then by the RSA_OAEP "
+            "key of an authenticator with legacy-protected private keys, with a DSA_DSS ciphertext signature and "
+            "an ECC_DSS plaintext signature",
+            cryptoconf=cryptoconf(
+                payload_layer(
+                    "AES_EAX",
+                    [local_key_layer("RSA_OAEP"), GRACE.key_layer("RSA_OAEP")],
+                    [local_signature("DSA_DSS", "SHA256")],
+                ),
+                plaintext_signatures=[local_signature("ECC_DSS", "SHA512")],
+            ),
+            authenticators=authenticators,
+        ),
+    }
+    cryptainers = {
+        "08_canonical_extjson": dict(
+            cryptoconf="08_legacy_protected_authenticator", plaintext_size=257, canonical=True,
+            cryptainer_metadata={"compat_device": "compat-edge-camera"},
+            scenarios=[success_scenario, no_passphrase_scenario],
+            description="CANONICAL extended JSON combined with the current 'payload_ciphertext_signatures' naming, "
+            "inline, with cryptainer metadata",
+        ),
+        "08_legacy_signature_field_corrupted": dict(
+            cryptoconf="08_legacy_protected_authenticator", plaintext_size=61, canonical=True,
+            legacy_signature_field=True, corrupt_ciphertext_signature=True,
+            scenarios=[
+                dict(
+                    success_scenario,
+                    description="Decryption succeeds, but the corrupted signature of the legacy field is reported",
+                    expected_warnings=["SIGNATURE_ERROR"],
+                )
+            ],
+            description="Inline cryptainer using the legacy 'payload_signatures' field, whose ciphertext signature "
+            "value was corrupted after encryption",
+        ),
+        "08_corrupted_payload_tag": dict(
+            cryptoconf="08_legacy_protected_authenticator", plaintext_size=61, corrupt_payload_tag=True,
+            scenarios=[
+                dict(
+                    success_scenario,
+                    description="All keys are available, but the payload MAC tag check fails",
+                    expected="failure",
+                    expected_errors=["SYMMETRIC_DECRYPTION_ERROR"],
+                )
+            ],
+            description="Inline cryptainer whose AES_EAX payload MAC tag was corrupted after encryption",
+        ),
+        "08_digest_list_key_ciphertexts_offloaded": dict(
+            cryptoconf="08_legacy_protected_authenticator", plaintext_size=4099, offloaded=True,
+            digest_list_key_ciphertexts=True,
+            scenarios=[success_scenario, no_passphrase_scenario],
+            description="Offloaded cryptainer whose RSA_OAEP key ciphertexts (nested ones included) use the legacy "
+            "'digest_list' field name",
+        ),
+    }
+    return dict(
+        pool_name="edge_cases_pool",
+        pool_description="Local keyfactory (RSA_OAEP, DSA_DSS, ECC_DSS, ECIES_X25519 keys of three keychains, "
+        "unprotected) and one imported authenticator whose RSA_OAEP, RSA_PSS, DSA_DSS and ECC_DSS private keys are "
+        "protected like wacryptolib <= 0.12 did (DES3 for DSA_DSS)",
+        local_key_algos=("RSA_OAEP", "DSA_DSS", "ECC_DSS", "ECIES_X25519"),
+        authenticators=authenticators,
+        cipher_algos=(),
+        signature_algos=(),
+        digest_list_vector=False,
+        tampered_signature_algo=None,
+        tampered_cipherdicts=(("AES_EAX", 61), ("CHACHA20_POLY1305", 61), ("RSA_OAEP", 61), ("ECIES_X25519", 61)),
+        cryptoconfs=cryptoconfs,
+        invalid_cryptoconfs={},
+        cryptainers=cryptainers,
+    )
+
+
+PROFILES = dict(
+    classic=build_classic_profile, post_quantum=build_post_quantum_profile, edge_cases=build_edge_cases_profile
+)
+
+
+def _corrupt_bytes(value: bytes) -> bytes:
+    corrupted = bytearray(value)
+    corrupted[len(corrupted) // 2] ^= 0xFF
+    return bytes(corrupted)
+
+
+@contextlib.contextmanager
+def _legacy_digest_list_rsa_oaep():
+    """Make RSA_OAEP encryption output the legacy 'digest_list' field name, like old wacryptolib versions did."""
+    from wacryptolib.cipher import CIPHER_ALGOS_REGISTRY
+
+    registry_entry = CIPHER_ALGOS_REGISTRY["RSA_OAEP"]
+    encryption_function = registry_entry["encryption_function"]
+
+    def _encrypt_with_digest_list(*args, **kwargs):
+        cipherdict = encryption_function(*args, **kwargs)
+        return {("digest_list" if key == "ciphertext_chunks" else key): value for key, value in cipherdict.items()}
+
+    with mock.patch.dict(registry_entry, encryption_function=_encrypt_with_digest_list):
+        yield
 
 
 # GENERATION #
@@ -517,8 +668,13 @@ class CurrentGenerationBuilder:
                     keystore_passphrase_hint=KEYSTORE_PASSPHRASE_HINT,
                 )
             authenticator_keystore = FilesystemKeystore(authenticator_dir)
+            keypair_generator = (
+                generate_legacy_protected_keypair_for_storage
+                if authenticator.legacy_pem_protection
+                else generate_keypair_for_storage
+            )
             for key_algo in authenticator.key_algos:
-                generate_keypair_for_storage(
+                keypair_generator(
                     key_algo,
                     keystore=authenticator_keystore,
                     keychain_uid=authenticator.keychain_uid,
@@ -543,11 +699,24 @@ class CurrentGenerationBuilder:
         self.pool_requirements = _corpus.build_requirements(
             [kp["key_algo"] for kp in all_keypairs], [kp["pem_protection"] for kp in all_keypairs]
         )
+        self.authenticator_pem_protections = {
+            (entry["keystore_uid"], kp["keychain_uid"], kp["key_algo"]): kp["pem_protection"]
+            for entry in authenticator_entries
+            for kp in entry["keypairs"]
+        }
+        pool_provenance = self.provenance
+        if any(authenticator.legacy_pem_protection for authenticator in profile["authenticators"]):
+            pool_provenance = _corpus.build_provenance(
+                "synthesized",
+                legacy_forms=["des3_protected_private_key"],
+                notes="Authenticator private keys exported with the PEM protections of wacryptolib <= 0.12 "
+                "(PBKDF2-HMAC-SHA1, with AES-CBC, or DES-EDE3-CBC for DSA_DSS keys)",
+            )
         self.writer.write_sidecar(
             self.pool_path,
             fixture_kind="keystore_pool",
             description=profile["pool_description"],
-            provenance=self.provenance,
+            provenance=pool_provenance,
             requirements=self.pool_requirements,
             local_keyfactory=dict(keypairs=local_keypairs),
             authenticators=authenticator_entries,
@@ -617,6 +786,45 @@ class CurrentGenerationBuilder:
 
         if self.profile["digest_list_vector"]:
             self._build_digest_list_cipherdict(size=257)
+        for cipher_algo, size in self.profile.get("tampered_cipherdicts", ()):
+            self._build_tampered_cipherdict(cipher_algo, size)
+
+    def _build_tampered_cipherdict(self, cipher_algo: str, size: int):
+        from wacryptolib.cipher import SUPPORTED_SYMMETRIC_CIPHER_ALGOS
+
+        plaintext_path = self._plaintext_path(size)
+        plaintext = plaintext_path.read_bytes()
+        asset_path = self.writer.get_final_path("cipherdicts", cipher_algo, plaintext_path.stem + "_tampered.cipherdict")
+        fields = dict(cipher_algo=cipher_algo, plaintext=_corpus.to_relpath(plaintext_path, asset_path))
+        if cipher_algo in SUPPORTED_SYMMETRIC_CIPHER_ALGOS:
+            symkey = generate_symkey(cipher_algo)
+            cipherdict = encrypt_bytestring(plaintext, cipher_algo=cipher_algo, key_dict=symkey)
+            fields.update(symkey={k: v.hex() for k, v in symkey.items()})
+        else:
+            public_key = self._load_local_key(cipher_algo, private=False)
+            cipherdict = encrypt_bytestring(plaintext, cipher_algo=cipher_algo, key_dict={"key": public_key})
+            fields.update(private_key=self._local_key_ref(corpus.get_sidecar_path(asset_path), cipher_algo, True))
+        if "tag" in cipherdict:
+            corrupted_field = "MAC tag"
+            cipherdict["tag"] = _corrupt_bytes(cipherdict["tag"])
+        elif "ciphertext_chunks" in cipherdict:
+            corrupted_field = "first ciphertext chunk"
+            cipherdict["ciphertext_chunks"][0] = _corrupt_bytes(cipherdict["ciphertext_chunks"][0])
+        else:
+            corrupted_field = "ciphertext"
+            cipherdict["ciphertext"] = _corrupt_bytes(cipherdict["ciphertext"])
+        self.writer.write_extjson_asset(asset_path, cipherdict)
+        self.writer.write_sidecar(
+            asset_path,
+            fixture_kind="cipherdict",
+            description="%s encryption of a %d-byte plaintext, whose %s was corrupted (decryption must be rejected)"
+            % (cipher_algo, size, corrupted_field),
+            provenance=dict(self.provenance, notes="Cipherdict deliberately corrupted after encryption"),
+            requirements=_corpus.build_requirements([cipher_algo]),
+            direction="decrypt_only",
+            expected_valid=False,
+            **fields
+        )
 
     def _build_digest_list_cipherdict(self, size: int):
         cipher_algo = "RSA_OAEP"
@@ -681,13 +889,16 @@ class CurrentGenerationBuilder:
     # Cryptoconfs and cryptainers
 
     def _structure_requirements(self, structure, authenticators) -> dict:
+        """Requirements of a cryptoconf or cryptainer, with the PEM protections of the private keys it involves."""
         pem_protections = set()
         authenticator_uids = {str(authenticator.keystore_uid) for authenticator in authenticators or ()}
-        for trustee in corpus._walk_data_tree(structure):
-            if trustee.get("trustee_type") == "authenticator":
-                assert str(trustee["keystore_uid"]) in authenticator_uids, trustee
-        for algo in self.pool_requirements["pem_protections"] if authenticators else ():
-            pem_protections.add(algo)
+        for node in corpus._walk_data_tree(structure):
+            if node.get("trustee_type") == "authenticator":
+                assert str(node["keystore_uid"]) in authenticator_uids, node
+            trustee = node.get("key_cipher_trustee")
+            if isinstance(trustee, dict) and trustee.get("trustee_type") == "authenticator":
+                keypair_key = (str(trustee["keystore_uid"]), str(node["keychain_uid"]), node["key_cipher_algo"])
+                pem_protections.add(self.authenticator_pem_protections[keypair_key])
         return _corpus.build_requirements(corpus.collect_structure_algorithms(structure), pem_protections)
 
     @staticmethod
@@ -778,32 +989,67 @@ class CurrentGenerationBuilder:
                 )
                 assert leftovers == [staging_path.name, staging_path.name + ".payload"], leftovers
             else:
-                cryptainer = encrypt_payload_into_cryptainer(
-                    plaintext,
-                    cryptoconf=conf,
-                    cryptainer_metadata=cryptainer_metadata,
-                    keystore_pool=self._get_pool_copy(),
+                digest_list_context = (
+                    _legacy_digest_list_rsa_oaep() if spec.get("digest_list_key_ciphertexts") else contextlib.nullcontext()
                 )
+                with digest_list_context:
+                    cryptainer = encrypt_payload_into_cryptainer(
+                        plaintext,
+                        cryptoconf=conf,
+                        cryptainer_metadata=cryptainer_metadata,
+                        keystore_pool=self._get_pool_copy(),
+                    )
+                cryptainer = copy.deepcopy(cryptainer)
+                if spec.get("digest_list_key_ciphertexts"):
+                    assert b'"digest_list"' in cryptainer["payload_cipher_layers"][0]["key_ciphertext"]
                 if spec.get("corrupt_ciphertext_signature"):
-                    cryptainer = copy.deepcopy(cryptainer)
                     signature_struct = cryptainer["payload_cipher_layers"][0]["payload_ciphertext_signatures"][0][
                         "payload_signature_struct"
                     ]
-                    signature_value = bytearray(signature_struct["signature_value"])
-                    signature_value[len(signature_value) // 2] ^= 0xFF
-                    signature_struct["signature_value"] = bytes(signature_value)
-                dump_cryptainer_to_filesystem(staging_path, cryptainer, offload_payload_ciphertext=offloaded)
+                    signature_struct["signature_value"] = _corrupt_bytes(signature_struct["signature_value"])
+                if spec.get("corrupt_payload_tag"):
+                    payload_macs = cryptainer["payload_cipher_layers"][0]["payload_macs"]
+                    payload_macs["tag"] = _corrupt_bytes(payload_macs["tag"])
+                if spec.get("legacy_signature_field"):
+                    for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
+                        payload_cipher_layer["payload_signatures"] = payload_cipher_layer.pop(
+                            "payload_ciphertext_signatures"
+                        )
+                if spec.get("canonical"):
+                    assert not offloaded, "Canonical cryptainers are written inline"
+                    self.writer.write_extjson_asset(asset_path, cryptainer, canonical=True)
+                else:
+                    dump_cryptainer_to_filesystem(staging_path, cryptainer, offload_payload_ciphertext=offloaded)
 
             load_cryptainer_from_filesystem(staging_path)  # Sanity check of the dumped files
-            provenance = self.provenance
-            if spec.get("corrupt_ciphertext_signature"):
-                provenance = dict(provenance, notes="Ciphertext signature value deliberately corrupted after encryption")
+            legacy_forms = [
+                legacy_form
+                for option, legacy_form in [
+                    ("canonical", "canonical_extjson"),
+                    ("legacy_signature_field", "payload_signatures_field"),
+                    ("digest_list_key_ciphertexts", "rsa_oaep_digest_list_field"),
+                ]
+                if spec.get(option)
+            ]
+            corruptions = [
+                corruption
+                for option, corruption in [
+                    ("corrupt_ciphertext_signature", "Ciphertext signature value"),
+                    ("corrupt_payload_tag", "Payload MAC tag"),
+                ]
+                if spec.get(option)
+            ]
+            notes = ("%s deliberately corrupted after encryption" % " and ".join(corruptions)) if corruptions else None
+            if legacy_forms:
+                provenance = _corpus.build_provenance("synthesized", legacy_forms=legacy_forms, notes=notes)
+            else:
+                provenance = dict(self.provenance, notes=notes) if notes else self.provenance
             fields = dict(
                 plaintext=_corpus.to_relpath(plaintext_path, asset_path),
                 keystore_pool=_corpus.to_relpath(self.pool_path, asset_path),
                 cryptoconf=_corpus.to_relpath(cryptoconf_paths[spec["cryptoconf"]], asset_path),
                 cryptainer_metadata=cryptainer_metadata,
-                extjson_flavor="relaxed",
+                extjson_flavor="canonical" if spec.get("canonical") else "relaxed",
                 payload_offloaded=offloaded,
                 decryption_scenarios=spec["scenarios"],
             )

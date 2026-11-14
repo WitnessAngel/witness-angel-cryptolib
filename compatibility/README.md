@@ -41,6 +41,7 @@ generation.
 | `2024_pre_signature_rename` | git commit `2328abe`, the last one before the `payload_signatures` → `payload_ciphertext_signatures` rename | idem, with plaintext signatures |
 | `2026_current` | current development version | RELAXED extjson, Shamir shared secrets, multi-trustee signatures, ECIES_X25519, `digest_list` vector, invalid cryptoconfs |
 | `2026_post_quantum` | current development version | ML_KEM_768 / ML_DSA_65, hybrid with RSA_OAEP and ECIES_X25519; includes the fixture formerly in `tests/fixtures/post_quantum/` |
+| `2026_edge_cases` | current development version | Authenticator private keys protected like wacryptolib <= 0.12 did (DES3 for DSA_DSS), tampered cipherdicts, CANONICAL extjson with the current signature naming, corrupted signature in the legacy `payload_signatures` field, corrupted payload MAC tag, `digest_list` key ciphertexts |
 
 
 ## Policy: frozen and append-only
@@ -66,7 +67,8 @@ Assets use wacryptolib's own wire formats, with no conversion.
 - **Cipherdicts** (`.cipherdict`): the dict returned by `wacryptolib.cipher.encrypt_bytestring()`, in extended JSON.
   Field names depend on the algorithm: `ciphertext` (+ `tag` for AES_EAX and CHACHA20_POLY1305);
   `ciphertext_chunks` for RSA_OAEP (or the legacy `digest_list` name, in files suffixed `_digest_list`);
-  `kem_ciphertext` + `ciphertext` for ECIES_X25519 and ML_KEM_768.
+  `kem_ciphertext` + `ciphertext` for ECIES_X25519 and ML_KEM_768. Files suffixed `_tampered` were corrupted after
+  encryption, and must be rejected.
 - **Signatures** (`.signature`): the dict returned by `wacryptolib.signature.sign_message()`, in extended JSON
   (`signature_value` bytes + `signature_timestamp_utc` integer; the timestamp is part of the signed data).
 - **Keystore pools** (directories): the on-disk layout of `wacryptolib.keystore.FilesystemKeystorePool`:
@@ -129,7 +131,7 @@ field references by relative path. All schemas forbid unknown fields.
 | `python_version` | Python version used. |
 | `crypto_backend` | `pycryptodome` (native) or `fallback` (pure Python) backend of wacryptolib. |
 | `produced_on` | Production date. |
-| `legacy_forms` | Legacy wire forms present in the asset (mandatory for `synthesized` ones): `canonical_extjson` (CANONICAL extended JSON), `payload_signatures_field` (former name of `payload_ciphertext_signatures`), `rsa_oaep_digest_list_field` (former name of the RSA-OAEP `ciphertext_chunks`). |
+| `legacy_forms` | Legacy wire forms present in the asset (mandatory for `synthesized` ones): `canonical_extjson` (CANONICAL extended JSON), `payload_signatures_field` (former name of `payload_ciphertext_signatures`), `rsa_oaep_digest_list_field` (former name of the RSA-OAEP `ciphertext_chunks`), `des3_protected_private_key` (private keys exported with the PEM protections of wacryptolib <= 0.12, including DES-EDE3-CBC for DSA_DSS keys). |
 | `notes` | Free-form remarks (e.g. dependency versions used for old releases). |
 
 **`requirements`**: `algorithms` lists the cipher, key and signature algorithms involved, and `pem_protections`
@@ -141,6 +143,7 @@ of them must skip the fixture, and must check all others. PEM protections are:
 | `none` | Unprotected PKCS#8 / traditional PEM. |
 | `pbes2_pbkdf2_hmac_sha1_aes_cbc` | PKCS#8 encrypted, PBES2 with PBKDF2-HMAC-SHA1 and AES-CBC. |
 | `pbes2_pbkdf2_hmac_sha256_aes_cbc` | PKCS#8 encrypted, PBES2 with PBKDF2-HMAC-SHA256 and AES-CBC. |
+| `pbes2_pbkdf2_hmac_sha1_des3_cbc` | PKCS#8 encrypted, PBES2 with PBKDF2-HMAC-SHA1 and DES-EDE3-CBC (DSA_DSS keys of wacryptolib <= 0.12). |
 | `pbes2_scrypt_aes_cbc` | PKCS#8 encrypted, PBES2 with scrypt and AES-CBC. |
 | `legacy_encapsulated_header` | OpenSSL "traditional" encryption (`Proc-Type` / `DEK-Info` headers). |
 
@@ -169,14 +172,16 @@ of them must skip the fixture, and must check all others. PEM protections are:
 | `cipher_algo` | Cipher algorithm (e.g. `AES_CBC`, `RSA_OAEP`, `ML_KEM_768`). |
 | `plaintext` | Relative path to the plaintext. |
 | `direction` | `bidirectional` or `decrypt_only`, see below. |
-| `symkey` | For `bidirectional` vectors: the symmetric key dict of the algorithm, hex-encoded (`key` + `iv` for AES_CBC, `key` + `nonce` for AES_EAX and CHACHA20_POLY1305). |
-| `private_key` | For `decrypt_only` vectors: key reference to the private key that decrypts the cipherdict. |
+| `symkey` | For symmetric algorithms: the symmetric key dict of the algorithm, hex-encoded (`key` + `iv` for AES_CBC, `key` + `nonce` for AES_EAX and CHACHA20_POLY1305). |
+| `private_key` | For asymmetric algorithms (`decrypt_only` vectors): key reference to the private key that decrypts the cipherdict. |
+| `expected_valid` | `false` for tampered vectors (always `decrypt_only`), whose decryption must be rejected; absent means `true`. Authenticated symmetric algorithms must report such a rejection as an integrity error; with asymmetric ones (e.g. KEM + AEAD), a tampered ciphertext can't be told apart from a wrong private key. |
 
 - **`bidirectional`** (symmetric algorithms, which are deterministic for a given key and IV/nonce): decrypting the
   cipherdict with `symkey` gives the plaintext, **and** encrypting the plaintext with `symkey` gives exactly the
   cipherdict.
-- **`decrypt_only`** (asymmetric algorithms, which are randomized): decrypting the cipherdict with the private key gives
-  the plaintext; re-encryption gives a different, but equally valid, cipherdict.
+- **`decrypt_only`** (asymmetric algorithms, which are randomized, and tampered vectors): decrypting the cipherdict with
+  the private key (or `symkey`) gives the plaintext, or is rejected if `expected_valid` is `false`; re-encryption gives a
+  different, but equally valid, cipherdict.
 
 ### Signature sidecars
 
@@ -228,7 +233,8 @@ Each **decryption scenario** has:
 | `name`, `description` | Identification of the scenario (e.g. `all_passphrases`, `threshold_exact_first`, `below_threshold`). |
 | `passphrase_mapper` | Passphrases given to the decryptor. |
 | `expected` | `success`: the decrypted payload equals the plaintext. `failure`: decryption yields no payload. |
-| `expected_warnings` | For successes: error types expected in wacryptolib's decryption report anyway (e.g. `SIGNATURE_ERROR` for a corrupted, non-fatal, signature; `ASYMMETRIC_DECRYPTION_ERROR` for a Shamir shard whose passphrase is missing). Absent means none. |
+| `expected_errors` | For failures: error types which must appear in wacryptolib's decryption report (e.g. `SYMMETRIC_DECRYPTION_ERROR` for a corrupted payload MAC tag). Absent means any. |
+| `expected_warnings` | For successes: error types expected in wacryptolib's decryption report anyway (e.g. `SIGNATURE_ERROR` for a corrupted, non-fatal, signature; `ASYMMETRIC_DECRYPTION_ERROR` for a Shamir shard whose passphrase is missing). Absent means none. `ASYMMETRIC_DECRYPTION_ERROR` is informative only: which shards a decryptor tries before reaching a Shamir threshold is an implementation detail, so checkers tolerate this error type in successes, without requiring it. |
 
 
 ## Using the corpus from another implementation
@@ -238,7 +244,9 @@ Each **decryption scenario** has:
 3. Skip fixtures whose `requirements` your implementation does not support.
 4. Check each fixture according to its kind, as described above: e.g. decrypt each cipherdict vector, or decrypt each
    cryptainer with the passphrases of each scenario and compare with the expected outcome. Encrypt data with
-   `symkey` for `bidirectional` vectors.
+   `symkey` for `bidirectional` vectors. Also check that every signature of a decrypted cryptainer was actually
+   verified, whatever its field name (`payload_signatures` in old generations), and that using a keystore pool never
+   generates missing keys (which would hide old keys that can't be loaded anymore).
 
 `tests/_compatibility_corpus.py` is the reference implementation of these checks.
 
@@ -252,6 +260,7 @@ or features appear). From the repository root, with the development environment:
 # Fixtures of the current library version
 PYTHONPATH=src python scripts/compatibility/generate_current.py classic 2027_current
 PYTHONPATH=src python scripts/compatibility/generate_current.py post_quantum 2027_post_quantum
+PYTHONPATH=src python scripts/compatibility/generate_current.py edge_cases 2027_edge_cases
 
 # Fixtures of old releases, each run in its own throwaway virtualenv (or synthesized when it cannot run)
 PYTHONPATH=src python scripts/compatibility/build_legacy_generations.py --only 0.9

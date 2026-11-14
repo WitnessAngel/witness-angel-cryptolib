@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../_schemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2026_edge_cases",
+  "description": "CHACHA20_POLY1305 encryption of a 61-byte plaintext, whose MAC tag was corrupted (decryption must be rejected)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "15515287867788c26e506fb411d0de6c3ff3e710",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-14",
+    "notes": "Cipherdict deliberately corrupted after encryption"
+  },
+  "requirements": {
+    "algorithms": [
+      "CHACHA20_POLY1305"
+    ],
+    "pem_protections": []
+  },
+  "direction": "decrypt_only",
+  "expected_valid": false,
+  "cipher_algo": "CHACHA20_POLY1305",
+  "plaintext": "../../../plaintexts/p00000061.bin",
+  "symkey": {
+    "key": "ab4680e5f7dcca39a6e2d56fbe7294748dd6b856a57ee675d379553adb40ffdb",
+    "nonce": "86ab2372e24638f381981909"
+  },
+  "asset_sha256": {
+    "p00000061_tampered.cipherdict": "2a449d8b7c7e71a554414689497b1b472b20d5b70baf69b2fe4fa9a707facf70"
+  }
+}

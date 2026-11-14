@@ -9,7 +9,7 @@
     "cipher_algo": {"$ref": "_defs.schema.json#/$defs/algo"},
     "plaintext": {"$ref": "_defs.schema.json#/$defs/relpath"},
     "direction": {
-      "description": "bidirectional: encrypting the plaintext with symkey must reproduce the cipherdict exactly; decrypt_only: decrypting with the private key must yield the plaintext",
+      "description": "bidirectional: encrypting the plaintext with symkey must reproduce the cipherdict exactly; decrypt_only: decrypting with the private key (or symkey) must yield the plaintext",
       "enum": ["bidirectional", "decrypt_only"]
     },
     "symkey": {
@@ -18,12 +18,26 @@
       "minProperties": 1,
       "additionalProperties": {"$ref": "_defs.schema.json#/$defs/hex"}
     },
-    "private_key": {"$ref": "_defs.schema.json#/$defs/key_ref"}
+    "private_key": {"$ref": "_defs.schema.json#/$defs/key_ref"},
+    "expected_valid": {
+      "description": "false for tampered vectors, whose decryption must be rejected (default: true)",
+      "type": "boolean"
+    }
   },
   "required": ["cipher_algo", "plaintext", "direction"],
   "oneOf": [
-    {"properties": {"direction": {"const": "bidirectional"}}, "required": ["symkey"], "not": {"required": ["private_key"]}},
-    {"properties": {"direction": {"const": "decrypt_only"}}, "required": ["private_key"], "not": {"required": ["symkey"]}}
+    {
+      "properties": {"direction": {"const": "bidirectional"}, "expected_valid": {"const": true}},
+      "required": ["symkey"],
+      "not": {"required": ["private_key"]}
+    },
+    {
+      "properties": {"direction": {"const": "decrypt_only"}},
+      "oneOf": [
+        {"required": ["private_key"], "not": {"required": ["symkey"]}},
+        {"required": ["symkey"], "not": {"required": ["private_key"]}}
+      ]
+    }
   ],
   "unevaluatedProperties": false
 }

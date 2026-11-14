@@ -180,6 +180,7 @@ _OID_PBKDF2 = "1.2.840.113549.1.5.12"
 _OID_SCRYPT = "1.3.6.1.4.1.11591.4.11"
 _PBKDF2_PRF_OIDS = {"1.2.840.113549.2.7": "sha1", "1.2.840.113549.2.9": "sha256"}
 _AES_CBC_OIDS = {"2.16.840.1.101.3.4.1.2", "2.16.840.1.101.3.4.1.22", "2.16.840.1.101.3.4.1.42"}
+_DES3_CBC_OID = "1.2.840.113549.3.7"  # Used by wacryptolib <= 0.12 for DSA private keys
 
 
 def _read_der_tlv(data: bytes, position: int = 0):
@@ -232,10 +233,14 @@ def detect_pem_protection(private_key_pem: bytes) -> str:
     kdf, cipher = (item for _tag, item in _read_der_sequence_items(pbes2_parameters))
     kdf_items = [item for _tag, item in _read_der_sequence_items(kdf)]
     cipher_oid = _decode_der_oid(_read_der_sequence_items(cipher)[0][1])
-    if cipher_oid not in _AES_CBC_OIDS:
+    if cipher_oid in _AES_CBC_OIDS:
+        cipher_name = "aes_cbc"
+    elif cipher_oid == _DES3_CBC_OID:
+        cipher_name = "des3_cbc"
+    else:
         raise ValueError("Unknown private key protection cipher %s" % cipher_oid)
     kdf_oid = _decode_der_oid(kdf_items[0])
-    if kdf_oid == _OID_SCRYPT:
+    if kdf_oid == _OID_SCRYPT and cipher_name == "aes_cbc":
         return "pbes2_scrypt_aes_cbc"
     if kdf_oid != _OID_PBKDF2:
         raise ValueError("Unknown private key protection KDF %s" % kdf_oid)
@@ -244,7 +249,7 @@ def detect_pem_protection(private_key_pem: bytes) -> str:
         if tag == 0x30:  # Optional prf AlgorithmIdentifier
             prf_oid = _decode_der_oid(_read_der_sequence_items(item)[0][1])
             prf_name = _PBKDF2_PRF_OIDS[prf_oid]
-    return "pbes2_pbkdf2_hmac_%s_aes_cbc" % prf_name
+    return "pbes2_pbkdf2_hmac_%s_%s" % (prf_name, cipher_name)
 
 
 # REQUIREMENTS OF FIXTURES VERSUS CRYPTO BACKENDS #
@@ -254,7 +259,7 @@ BACKEND_LIMITATIONS = {
     "pycryptodome": {"algorithms": set(), "pem_protections": set()},
     "fallback": {
         "algorithms": {"ML_KEM_768", "ML_DSA_65"},
-        "pem_protections": {"pbes2_scrypt_aes_cbc", "legacy_encapsulated_header"},
+        "pem_protections": {"pbes2_scrypt_aes_cbc", "pbes2_pbkdf2_hmac_sha1_des3_cbc", "legacy_encapsulated_header"},
     },
 }
 
@@ -348,18 +353,32 @@ def list_keystore_keypairs(keystore_dir: Path) -> list:
     return keypairs
 
 
-def copy_keystore_pool(sidecar_path: Path, pool_relpath: str, work_dir: Path):
-    """Return a FilesystemKeystorePool on a fresh temporary copy of a pool fixture (pools may get written when used)."""
+def copy_keystore_pool_dir(sidecar_path: Path, pool_relpath: str, work_dir: Path) -> Path:
+    """Return a fresh temporary copy of a pool fixture (pools may get written when used)."""
     import shutil
     import uuid
-
-    from wacryptolib.keystore import FilesystemKeystorePool
 
     pool_dir = resolve_relpath(sidecar_path, pool_relpath)
     assert is_keystore_pool_dir(pool_dir), pool_dir
     copy_dir = Path(work_dir) / ("pool-%s-%s" % (pool_dir.name, uuid.uuid4().hex[:8]))
     shutil.copytree(pool_dir, copy_dir)
-    return FilesystemKeystorePool(copy_dir)
+    return copy_dir
+
+
+def copy_keystore_pool(sidecar_path: Path, pool_relpath: str, work_dir: Path):
+    """Return a FilesystemKeystorePool on a fresh temporary copy of a pool fixture."""
+    from wacryptolib.keystore import FilesystemKeystorePool
+
+    return FilesystemKeystorePool(copy_keystore_pool_dir(sidecar_path, pool_relpath, work_dir))
+
+
+def snapshot_directory(directory: Path) -> dict:
+    """Return the {relpath: sha256} map of all files of a directory tree."""
+    return {
+        path.relative_to(directory).as_posix(): compute_file_sha256(path)
+        for path in sorted(Path(directory).rglob("*"))
+        if path.is_file()
+    }
 
 
 def parse_passphrase_mapper(passphrase_mapper: dict) -> dict:
@@ -386,20 +405,34 @@ def check_plaintext_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
 
 
 def check_cipherdict_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
-    from wacryptolib.cipher import decrypt_bytestring, encrypt_bytestring
+    from wacryptolib.cipher import CIPHER_ALGOS_REGISTRY, decrypt_bytestring, encrypt_bytestring
+    from wacryptolib.exceptions import DecryptionError, DecryptionIntegrityError
     from wacryptolib.utilities import load_from_json_file
 
     cipherdict = load_from_json_file(get_asset_path(sidecar_path))
     plaintext = resolve_relpath(sidecar_path, sidecar["plaintext"]).read_bytes()
     cipher_algo = sidecar["cipher_algo"]
-
-    if sidecar["direction"] == "bidirectional":
+    if "symkey" in sidecar:
         key_dict = hex_to_bytes_dict(sidecar["symkey"])
-        assert decrypt_bytestring(cipherdict, cipher_algo=cipher_algo, key_dict=key_dict) == plaintext
-        assert encrypt_bytestring(plaintext, cipher_algo=cipher_algo, key_dict=key_dict) == cipherdict
     else:
-        private_key = load_referenced_key(sidecar_path, sidecar["private_key"], private=True)
-        assert decrypt_bytestring(cipherdict, cipher_algo=cipher_algo, key_dict={"key": private_key}) == plaintext
+        key_dict = {"key": load_referenced_key(sidecar_path, sidecar["private_key"], private=True)}
+
+    if not sidecar.get("expected_valid", True):
+        # Authenticated symmetric algorithms must detect the tampering as such; with asymmetric ones (e.g. KEM + AEAD),
+        # a tampered ciphertext can't be told apart from a wrong private key
+        is_authenticated = CIPHER_ALGOS_REGISTRY[cipher_algo]["is_authenticated"]
+        expected_exception_class = DecryptionIntegrityError if is_authenticated and "symkey" in sidecar else DecryptionError
+        try:
+            decrypt_bytestring(cipherdict, cipher_algo=cipher_algo, key_dict=key_dict)
+        except expected_exception_class:
+            pass
+        else:
+            raise AssertionError("Tampered cipherdict %s was not rejected" % sidecar_path)
+        return
+
+    assert decrypt_bytestring(cipherdict, cipher_algo=cipher_algo, key_dict=key_dict) == plaintext
+    if sidecar["direction"] == "bidirectional":
+        assert encrypt_bytestring(plaintext, cipher_algo=cipher_algo, key_dict=key_dict) == cipherdict
 
 
 def check_signature_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
@@ -478,15 +511,42 @@ def check_keystore_pool_fixture(sidecar_path: Path, sidecar: dict, work_dir: Pat
         )
 
 
+def load_referenced_pool_sidecar(sidecar_path: Path, pool_relpath: str) -> dict:
+    """Return the (raw) sidecar of a keystore pool referenced by another sidecar."""
+    pool_dir = resolve_relpath(sidecar_path, pool_relpath)
+    return json.loads(get_sidecar_path(pool_dir).read_text(encoding="utf8"))
+
+
+def get_pool_keypair_identifiers(pool_sidecar: dict) -> set:
+    """Return the (trustee_id, keychain_uid, key_algo) triplets of all keypairs that a pool sidecar declares."""
+    identifiers = {
+        ("local_keyfactory", keypair["keychain_uid"], keypair["key_algo"])
+        for keypair in pool_sidecar["local_keyfactory"]["keypairs"]
+    }
+    for authenticator in pool_sidecar["authenticators"]:
+        identifiers.update(
+            ("authenticator@" + authenticator["keystore_uid"], keypair["keychain_uid"], keypair["key_algo"])
+            for keypair in authenticator["keypairs"]
+        )
+    return identifiers
+
+
 def check_cryptoconf_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
+    import copy
+    from uuid import UUID
+
     from wacryptolib.cryptainer import check_cryptoconf_sanity, decrypt_payload_from_cryptainer
     from wacryptolib.cryptainer import encrypt_payload_into_cryptainer
     from wacryptolib.exceptions import SchemaValidationError
+    from wacryptolib.keystore import FilesystemKeystorePool
     from wacryptolib.utilities import load_from_json_file
 
-    cryptoconf = load_from_json_file(get_asset_path(sidecar_path))
+    asset_path = get_asset_path(sidecar_path)
+    cryptoconf = load_from_json_file(asset_path)
 
     if not sidecar["expected_valid"]:
+        # Only the python mode is required to reject them, since e.g. a threshold above the shard count can't be
+        # expressed in JSON-Schema
         try:
             check_cryptoconf_sanity(cryptoconf)
         except SchemaValidationError:
@@ -494,11 +554,37 @@ def check_cryptoconf_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
         raise AssertionError("Invalid cryptoconf %s was accepted" % sidecar_path)
 
     check_cryptoconf_sanity(cryptoconf)
-    keystore_pool = copy_keystore_pool(sidecar_path, sidecar["keystore_pool"], work_dir)
+    check_cryptoconf_sanity(json.loads(asset_path.read_text(encoding="utf8")), jsonschema_mode=True)
+
+    # Encryption must use the keys of the pool, and never autogenerate missing ones (which would hide unloadable old
+    # keys). Cryptoconfs of old releases may lack a keychain_uid, which was then given at encryption time, so the local
+    # keychains of the pool are tried in turn
+    if "keychain_uid" in cryptoconf:
+        candidate_keychain_uids = [None]
+    else:
+        pool_sidecar = load_referenced_pool_sidecar(sidecar_path, sidecar["keystore_pool"])
+        candidate_keychain_uids = sorted(
+            {keypair["keychain_uid"] for keypair in pool_sidecar["local_keyfactory"]["keypairs"]}
+        )
     payload = b"Compatibility round-trip payload of " + sidecar_path.name.encode("utf8")
-    cryptainer = encrypt_payload_into_cryptainer(
-        payload=payload, cryptoconf=cryptoconf, cryptainer_metadata={"round_trip": True}, keystore_pool=keystore_pool
-    )
+    for keychain_uid in candidate_keychain_uids:
+        pool_dir = copy_keystore_pool_dir(sidecar_path, sidecar["keystore_pool"], work_dir)
+        pool_snapshot = snapshot_directory(pool_dir)
+        keystore_pool = FilesystemKeystorePool(pool_dir)
+        effective_cryptoconf = copy.deepcopy(cryptoconf)
+        if keychain_uid is not None:
+            effective_cryptoconf["keychain_uid"] = UUID(keychain_uid)
+        cryptainer = encrypt_payload_into_cryptainer(
+            payload=payload,
+            cryptoconf=effective_cryptoconf,
+            cryptainer_metadata={"round_trip": True},
+            keystore_pool=keystore_pool,
+        )
+        if snapshot_directory(pool_dir) == pool_snapshot:
+            break
+    else:
+        raise AssertionError("Encryption with cryptoconf %s autogenerated keys missing from its pool" % sidecar_path)
+
     result, operation_report = decrypt_payload_from_cryptainer(
         cryptainer,
         keystore_pool=keystore_pool,
@@ -506,6 +592,7 @@ def check_cryptoconf_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
     )
     assert not operation_report.has_errors(), operation_report.format_entries()
     assert result == payload
+    assert snapshot_directory(pool_dir) == pool_snapshot, "Decryption modified the keystore pool"
 
 
 def get_cryptainer_plaintext(sidecar_path: Path, sidecar: dict) -> bytes:
@@ -514,22 +601,80 @@ def get_cryptainer_plaintext(sidecar_path: Path, sidecar: dict) -> bytes:
     return bytes.fromhex(sidecar["plaintext_hex"])
 
 
-def run_cryptainer_decryption_scenario(cryptainer: dict, keystore_pool, scenario: dict) -> tuple:
-    """Return (payload or None, sorted list of the distinct error types of the decryption report)."""
-    from wacryptolib.cryptainer import decrypt_payload_from_cryptainer
+def count_cryptainer_signatures(cryptainer: dict) -> int:
+    """Count the plaintext and ciphertext signatures of a cryptainer, whatever the field naming of its generation."""
+    signature_count = len(cryptainer.get("payload_plaintext_signatures") or ())
+    for payload_cipher_layer in cryptainer["payload_cipher_layers"]:
+        signature_count += len(
+            payload_cipher_layer.get("payload_ciphertext_signatures")
+            or payload_cipher_layer.get("payload_signatures")  # Before its renaming in 2024
+            or ()
+        )
+    return signature_count
 
-    payload, operation_report = decrypt_payload_from_cryptainer(
-        cryptainer,
-        keystore_pool=keystore_pool,
-        passphrase_mapper=parse_passphrase_mapper(scenario["passphrase_mapper"]),
-    )
+
+# Key decryption errors of shards whose trustee is not unlocked by a scenario: which shards the decryptor tries before
+# reaching a Shamir threshold is an implementation detail, so they are tolerated, but not required, in successes
+TRUSTEE_DEPENDENT_ERROR_TYPES = {"ASYMMETRIC_DECRYPTION_ERROR"}
+
+
+def run_cryptainer_decryption_scenario(cryptainer_path: Path, keystore_pool, scenario: dict) -> tuple:
+    """Decrypt a freshly loaded cryptainer, and return (payload or None, sorted list of the distinct error types of
+    the decryption report, count of the signature verifications performed)."""
+    from unittest import mock
+
+    import wacryptolib.cryptainer._decryptor as decryptor_module
+    from wacryptolib.cryptainer import decrypt_payload_from_cryptainer, load_cryptainer_from_filesystem
+
+    cryptainer = load_cryptainer_from_filesystem(cryptainer_path)
+    with mock.patch.object(
+        decryptor_module, "verify_message_signature", wraps=decryptor_module.verify_message_signature
+    ) as verify_message_signature_spy:
+        payload, operation_report = decrypt_payload_from_cryptainer(
+            cryptainer,
+            keystore_pool=keystore_pool,
+            passphrase_mapper=parse_passphrase_mapper(scenario["passphrase_mapper"]),
+        )
     error_types = sorted({entry["entry_type"] for entry in operation_report.get_error_entries()})
-    return payload, error_types
+    return payload, error_types, verify_message_signature_spy.call_count
+
+
+def _check_cryptainer_analysis(asset_path: Path, pool_sidecar: dict):
+    """Check the APIs which only need the light cryptainer (without payload), e.g. to prepare revelation requests."""
+    from wacryptolib.cryptainer import check_cryptainer_sanity, gather_decryptable_symkeys
+    from wacryptolib.cryptainer import gather_trustee_dependencies, get_cryptoconf_summary
+    from wacryptolib.cryptainer import load_cryptainer_from_filesystem
+
+    light_cryptainer = load_cryptainer_from_filesystem(asset_path, include_payload_ciphertext=False)
+    check_cryptainer_sanity(light_cryptainer, require_inline_payload=False)
+    assert get_cryptoconf_summary(light_cryptainer)
+
+    pool_keypair_identifiers = get_pool_keypair_identifiers(pool_sidecar)
+
+    def _check_keypair_is_in_pool(trustee_id, keychain_uid, key_algo):
+        keypair_identifier = (trustee_id, str(keychain_uid), key_algo)
+        assert keypair_identifier in pool_keypair_identifiers, "Keypair %s is not in the pool" % (keypair_identifier,)
+
+    trustee_dependencies = gather_trustee_dependencies([light_cryptainer])
+    for dependencies in trustee_dependencies.values():  # "encryption" and "signature" dependencies
+        for trustee_id, (_trustee_conf, keypair_identifiers) in dependencies.items():
+            for keypair_identifier in keypair_identifiers:
+                _check_keypair_is_in_pool(trustee_id, keypair_identifier["keychain_uid"], keypair_identifier["key_algo"])
+
+    decryptable_symkeys = gather_decryptable_symkeys([(asset_path.name, light_cryptainer)])
+    assert decryptable_symkeys and set(decryptable_symkeys) <= set(trustee_dependencies["encryption"])
+    for trustee_id, (_trustee_conf, symkey_decryption_requests) in decryptable_symkeys.items():
+        for request in symkey_decryption_requests:
+            assert request["symkey_decryption_request_data"]
+            _check_keypair_is_in_pool(trustee_id, request["keychain_uid"], request["key_algo"])
 
 
 def check_cryptainer_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
-    from wacryptolib.cryptainer import check_cryptainer_sanity, extract_metadata_from_cryptainer
-    from wacryptolib.cryptainer import load_cryptainer_from_filesystem
+    import shutil
+
+    from wacryptolib.cryptainer import ReadonlyCryptainerStorage, check_cryptainer_sanity
+    from wacryptolib.cryptainer import extract_metadata_from_cryptainer, load_cryptainer_from_filesystem
+    from wacryptolib.keystore import FilesystemKeystorePool
 
     asset_path = get_asset_path(sidecar_path)
     raw_cryptainer = asset_path.read_bytes()
@@ -537,23 +682,55 @@ def check_cryptainer_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
     assert is_canonical == (sidecar["extjson_flavor"] == "canonical"), "Unexpected extended JSON flavor"
     assert asset_path.with_name(asset_path.name + ".payload").exists() == sidecar["payload_offloaded"]
 
+    check_cryptainer_sanity(json.loads(raw_cryptainer), jsonschema_mode=True)
     cryptainer = load_cryptainer_from_filesystem(asset_path)
     check_cryptainer_sanity(cryptainer)
     if "cryptainer_metadata" in sidecar:
         assert extract_metadata_from_cryptainer(cryptainer) == sidecar["cryptainer_metadata"]
+    expected_signature_count = count_cryptainer_signatures(cryptainer)
+
+    pool_sidecar = load_referenced_pool_sidecar(sidecar_path, sidecar["keystore_pool"])
+    _check_cryptainer_analysis(asset_path, pool_sidecar)
 
     plaintext = get_cryptainer_plaintext(sidecar_path, sidecar)
-    keystore_pool = copy_keystore_pool(sidecar_path, sidecar["keystore_pool"], work_dir)
 
     for scenario in sidecar["decryption_scenarios"]:
-        payload, error_types = run_cryptainer_decryption_scenario(cryptainer, keystore_pool, scenario)
+        # Each scenario gets fresh copies, so that no state (e.g. cached keys) leaks between scenarios
+        keystore_pool = copy_keystore_pool(sidecar_path, sidecar["keystore_pool"], work_dir)
+        payload, error_types, signature_verification_count = run_cryptainer_decryption_scenario(
+            asset_path, keystore_pool, scenario
+        )
         if scenario["expected"] == "success":
             assert payload == plaintext, "Scenario %r did not return the original plaintext" % scenario["name"]
-            expected_error_types = sorted(set(scenario.get("expected_warnings", [])))
-            assert error_types == expected_error_types, (scenario["name"], error_types)
+            expected_error_types = set(scenario.get("expected_warnings", [])) - TRUSTEE_DEPENDENT_ERROR_TYPES
+            assert set(error_types) - TRUSTEE_DEPENDENT_ERROR_TYPES == expected_error_types, (scenario["name"], error_types)
+            # Proves that signatures, whatever their generation's field naming, are still verified
+            assert signature_verification_count == expected_signature_count, (
+                scenario["name"],
+                signature_verification_count,
+                expected_signature_count,
+            )
         else:
             assert payload is None, "Scenario %r unexpectedly decrypted the cryptainer" % scenario["name"]
             assert error_types, scenario["name"]
+            assert set(scenario.get("expected_errors", [])) <= set(error_types), (scenario["name"], error_types)
+
+    # Decryption through a storage of cryptainers, as done by applications
+    first_scenario = sidecar["decryption_scenarios"][0]
+    storage_dir = Path(work_dir) / ("storage-" + asset_path.name)
+    storage_dir.mkdir()
+    for asset_file in list_asset_files(asset_path):
+        shutil.copyfile(asset_file, storage_dir / asset_file.name)
+    storage = ReadonlyCryptainerStorage(
+        storage_dir, keystore_pool=copy_keystore_pool(sidecar_path, sidecar["keystore_pool"], work_dir)
+    )
+    assert storage.list_cryptainer_names() == [Path(asset_path.name)]
+    storage.check_cryptainer_sanity(asset_path.name)
+    payload, _operation_report = storage.decrypt_cryptainer_from_storage(
+        asset_path.name, passphrase_mapper=parse_passphrase_mapper(first_scenario["passphrase_mapper"])
+    )
+    expected_payload = plaintext if first_scenario["expected"] == "success" else None
+    assert payload == expected_payload, "Unexpected outcome of decryption from storage"
 
 
 FIXTURE_CHECKERS = {
@@ -569,20 +746,36 @@ FIXTURE_CHECKERS = {
 def check_fixture(sidecar_path: Path, work_dir: Path, backend_name: str = None, registry: Registry = None) -> dict:
     """Fully check a fixture against the current library: sidecar schema, asset integrity, then behavior.
 
-    Raises FixtureSkipped (after the structural checks) if the crypto backend lacks a declared requirement.
+    Raises FixtureSkipped (after the structural checks) if the crypto backend lacks a declared requirement;
+    when this backend is the active one, the fixture must then really fail its behavioral checks, so that
+    BACKEND_LIMITATIONS can't silently hide fixtures from a backend which gained the missing capabilities.
     """
+    from wacryptolib._crypto_backend import BACKEND_NAME as active_backend_name
+
     if backend_name is None:
-        from wacryptolib._crypto_backend import BACKEND_NAME as backend_name
+        backend_name = active_backend_name
     sidecar = load_sidecar(sidecar_path, registry=registry)
     check_asset_integrity(sidecar_path, sidecar)
     expected_fixture_kind = get_expected_fixture_kind(get_asset_path(sidecar_path))
     assert sidecar["fixture_kind"] == expected_fixture_kind, (sidecar["fixture_kind"], expected_fixture_kind)
+    fixture_checker = FIXTURE_CHECKERS[sidecar["fixture_kind"]]
     missing_requirements = get_missing_requirements(sidecar, backend_name)
     if missing_requirements:
+        missing_requirements_str = ", ".join(missing_requirements)
+        if backend_name == active_backend_name:
+            try:
+                fixture_checker(sidecar_path, sidecar, Path(work_dir))
+            except Exception:
+                pass  # Expected, since the backend lacks these requirements
+            else:
+                raise AssertionError(
+                    "%s crypto backend handles this fixture despite lacking %s, BACKEND_LIMITATIONS must be updated"
+                    % (backend_name, missing_requirements_str)
+                )
         raise FixtureSkipped(
-            "%s crypto backend lacks %s, required by this fixture" % (backend_name, ", ".join(missing_requirements))
+            "%s crypto backend lacks %s, required by this fixture" % (backend_name, missing_requirements_str)
         )
-    FIXTURE_CHECKERS[sidecar["fixture_kind"]](sidecar_path, sidecar, Path(work_dir))
+    fixture_checker(sidecar_path, sidecar, Path(work_dir))
     return sidecar
 
 
@@ -684,8 +877,4 @@ def find_uncovered_algorithms(corpus_dir: Path = CORPUS_DIR) -> dict:
 
 def snapshot_corpus(corpus_dir: Path = CORPUS_DIR) -> dict:
     """Return the {relpath: sha256} map of all files of the corpus."""
-    return {
-        path.relative_to(corpus_dir).as_posix(): compute_file_sha256(path)
-        for path in sorted(corpus_dir.rglob("*"))
-        if path.is_file()
-    }
+    return snapshot_directory(corpus_dir)

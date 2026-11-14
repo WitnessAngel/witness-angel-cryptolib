@@ -275,17 +275,17 @@ class GenerationWriter(SidecarWriterMixin):
     def commit(self) -> list:
         """Rename the staged kind directories into place, and return the list of created generation directories."""
         assert self.committed_dirs is None, "Generation already committed"
-        committed_dirs = []
+        # Filled as renames succeed, so that discard() also removes a partially committed generation
+        self.committed_dirs = []
         for kind_dirname, final_dir in self.final_dirs.items():
             staging_dir = self.staging_root / kind_dirname / self.generation
             if not staging_dir.exists():
                 continue
             final_dir.parent.mkdir(exist_ok=True)
             os.rename(staging_dir, final_dir)  # Fails if the target appeared meanwhile, contrary to os.replace()
-            committed_dirs.append(final_dir)
+            self.committed_dirs.append(final_dir)
         shutil.rmtree(self.staging_root)
-        self.committed_dirs = committed_dirs
-        return committed_dirs
+        return list(self.committed_dirs)
 
     def iter_committed_sidecar_paths(self):
         for committed_dir in self.committed_dirs:

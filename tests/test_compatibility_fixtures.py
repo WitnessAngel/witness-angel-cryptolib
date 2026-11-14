@@ -162,3 +162,16 @@ def test_corpus_checks_skip_fixtures_by_backend_requirements(tmp_path):
 
     classic_sidecar_path = corpus.CORPUS_DIR / "cryptainers" / _COPIED_GENERATION / "02_signed_inline.crypt.json"
     assert corpus.get_missing_requirements(corpus.load_sidecar(classic_sidecar_path), "fallback") == []
+
+
+def test_corpus_checks_detect_obsolete_backend_limitation(tmp_path, monkeypatch):
+    from wacryptolib._crypto_backend import BACKEND_NAME
+
+    classic_sidecar_path = corpus.CORPUS_DIR / "cryptainers" / _COPIED_GENERATION / "02_signed_inline.crypt.json"
+    classic_algorithms = set(corpus.load_sidecar(classic_sidecar_path)["requirements"]["algorithms"])
+    assert classic_algorithms
+    monkeypatch.setitem(
+        corpus.BACKEND_LIMITATIONS, BACKEND_NAME, {"algorithms": classic_algorithms, "pem_protections": set()}
+    )
+    with pytest.raises(AssertionError, match="BACKEND_LIMITATIONS must be updated"):
+        corpus.check_fixture(classic_sidecar_path, work_dir=tmp_path)

@@ -76,7 +76,10 @@ Development
   `payload_signatures` rename, and the current version (including post-quantum fixtures, formerly in
   `tests/fixtures/post_quantum/`); each asset has a JSON sidecar (secrets, expected outcomes, provenance) validated by
   JSON-Schemas, `tests/test_compatibility_fixtures.py` checks them all on the active crypto backend, and
-  `compatibility/README.md` documents them for other implementations
+  `compatibility/README.md` documents them for other implementations; an edge-case generation adds private keys
+  protected like wacryptolib <= 0.12 did, tampered cipherdicts and cryptainers, and legacy field namings
+* Fix the JSON-schema validation (jsonschema_mode=True) of cryptainers with an empty payload, whose empty base64
+  ciphertext was rejected
 
 
 Version 0.12

@@ -1,0 +1,35 @@
+{
+  "$schema": "../../../_schemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2026_edge_cases",
+  "description": "ECIES_X25519 encryption of a 61-byte plaintext, whose ciphertext was corrupted (decryption must be rejected)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "15515287867788c26e506fb411d0de6c3ff3e710",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-14",
+    "notes": "Cipherdict deliberately corrupted after encryption"
+  },
+  "requirements": {
+    "algorithms": [
+      "ECIES_X25519"
+    ],
+    "pem_protections": []
+  },
+  "direction": "decrypt_only",
+  "expected_valid": false,
+  "cipher_algo": "ECIES_X25519",
+  "plaintext": "../../../plaintexts/p00000061.bin",
+  "private_key": {
+    "keystore_pool": "../../../keystores/2026_edge_cases/edge_cases_pool",
+    "keystore": "local_keyfactory",
+    "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+    "key_algo": "ECIES_X25519",
+    "passphrase": null
+  },
+  "asset_sha256": {
+    "p00000061_tampered.cipherdict": "549673c6009f283688ee533be29a0e5bfbed746d90bceeaca7e8cb002bda365b"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../_schemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2026_edge_cases",
+  "description": "AES_EAX encryption of a 61-byte plaintext, whose MAC tag was corrupted (decryption must be rejected)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "15515287867788c26e506fb411d0de6c3ff3e710",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-14",
+    "notes": "Cipherdict deliberately corrupted after encryption"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_EAX"
+    ],
+    "pem_protections": []
+  },
+  "direction": "decrypt_only",
+  "expected_valid": false,
+  "cipher_algo": "AES_EAX",
+  "plaintext": "../../../plaintexts/p00000061.bin",
+  "symkey": {
+    "key": "5a803b266f120913ccb850112c3d8b7db40023c19718c8a4a55324fa345fd39e",
+    "nonce": "d6ec460e80617b08965da617d68a1b19"
+  },
+  "asset_sha256": {
+    "p00000061_tampered.cipherdict": "2643221ee24b79a1b6a62d3ef3300a25c1a4d2784164e2284912bbc515b8b3d0"
+  }
+}

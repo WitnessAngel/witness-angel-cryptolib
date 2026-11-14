@@ -33,9 +33,18 @@
             "description": "Error types expected in the decryption report besides a success (e.g. a non-fatal SIGNATURE_ERROR)",
             "type": "array",
             "items": {"enum": ["SIGNATURE_ERROR", "SYMMETRIC_DECRYPTION_ERROR", "ASYMMETRIC_DECRYPTION_ERROR"]}
+          },
+          "expected_errors": {
+            "description": "Error types which must appear in the decryption report of a failure (e.g. SYMMETRIC_DECRYPTION_ERROR for a corrupted MAC tag)",
+            "type": "array",
+            "minItems": 1,
+            "items": {"enum": ["SIGNATURE_ERROR", "SYMMETRIC_DECRYPTION_ERROR", "ASYMMETRIC_DECRYPTION_ERROR"]}
           }
         },
         "required": ["name", "passphrase_mapper", "expected"],
+        "if": {"properties": {"expected": {"const": "failure"}}},
+        "then": {"not": {"required": ["expected_warnings"]}},
+        "else": {"not": {"required": ["expected_errors"]}},
         "additionalProperties": false
       }
     }

@@ -50,6 +50,7 @@
         "none",
         "pbes2_pbkdf2_hmac_sha1_aes_cbc",
         "pbes2_pbkdf2_hmac_sha256_aes_cbc",
+        "pbes2_pbkdf2_hmac_sha1_des3_cbc",
         "pbes2_scrypt_aes_cbc",
         "legacy_encapsulated_header"
       ]
@@ -93,7 +94,8 @@
               "payload_signatures_field",
               "rsa_oaep_digest_list_field",
               "canonical_extjson",
-              "legacy_keystore_metadata_filename"
+              "legacy_keystore_metadata_filename",
+              "des3_protected_private_key"
             ]
           },
           "uniqueItems": true

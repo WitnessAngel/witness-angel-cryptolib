@@ -1,0 +1,37 @@
+{
+  "$schema": "../../_schemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2026_edge_cases",
+  "description": "AES_EAX payload layer whose key is wrapped by a local RSA_OAEP key, then by the RSA_OAEP key of an authenticator with legacy-protected private keys, with a DSA_DSS ciphertext signature and an ECC_DSS plaintext signature",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "15515287867788c26e506fb411d0de6c3ff3e710",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-14"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_EAX",
+      "DSA_DSS",
+      "ECC_DSS",
+      "RSA_OAEP"
+    ],
+    "pem_protections": [
+      "pbes2_pbkdf2_hmac_sha1_aes_cbc"
+    ]
+  },
+  "expected_valid": true,
+  "sophistication_level": 6,
+  "keystore_pool": "../../keystores/2026_edge_cases/edge_cases_pool",
+  "passphrase_mapper": {
+    "authenticator@62ace000-0000-4000-8000-000000000007": [
+      "compat-grace-passphrase"
+    ]
+  },
+  "min_library_version": "0.12",
+  "asset_sha256": {
+    "08_legacy_protected_authenticator.cryptoconf": "903ed8b40f7c874c0f688e490511a792b5e918e693ac9cae4e8e17c79f3ec936"
+  }
+}

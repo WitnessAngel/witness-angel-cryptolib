@@ -1,0 +1,50 @@
+{
+  "$schema": "../../schemas/cryptainer.schema.json",
+  "fixture_kind": "cryptainer",
+  "generation": "2026_current",
+  "description": "64 KiB payload through three payload layers, offloaded, with cryptainer metadata",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_CBC",
+      "AES_EAX",
+      "CHACHA20_POLY1305",
+      "ECC_DSS",
+      "ECIES_X25519",
+      "RSA_OAEP"
+    ],
+    "pem_protections": []
+  },
+  "plaintext": "../../plaintexts/p00065539.bin",
+  "keystore_pool": "../../keystores/2026_current/classic_pool",
+  "cryptoconf": "../../cryptoconfs/2026_current/03_multiple_payload_layers.cryptoconf",
+  "cryptainer_metadata": {
+    "compat_device": "compat-camera-1",
+    "compat_index": 3,
+    "compat_tags": [
+      "a",
+      "b"
+    ]
+  },
+  "extjson_flavor": "relaxed",
+  "payload_offloaded": true,
+  "decryption_scenarios": [
+    {
+      "name": "local_keys_only",
+      "description": "Only unprotected local keyfactory keys are involved",
+      "passphrase_mapper": {},
+      "expected": "success"
+    }
+  ],
+  "asset_sha256": {
+    "03_multiple_layers_offloaded_with_metadata.crypt": "c1c171457d79b00c4d6a7d558d446b268694e319ec220be474c9f9e2bb7fcac5",
+    "03_multiple_layers_offloaded_with_metadata.crypt.payload": "7c6df77de978863cf76912a44affbf7529eeddea75366806045aa023d80f2bd6"
+  }
+}

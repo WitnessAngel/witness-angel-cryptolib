@@ -1,0 +1,26 @@
+{
+  "$schema": "../schemas/plaintext.schema.json",
+  "fixture_kind": "plaintext",
+  "generation": "2026_current",
+  "description": "Deterministic pseudo-random plaintext of 16 bytes",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [],
+    "pem_protections": []
+  },
+  "size": 16,
+  "generator": {
+    "algo": "sha256_counter",
+    "seed": "776163727970746f6c69622d636f6d7061746962696c6974792d706c61696e746578742d3136"
+  },
+  "asset_sha256": {
+    "p00000016.bin": "9403ba3b10bd611fffac1705b6e1e8b315d997ed4b1846fb9449f96dccf6b9ea"
+  }
+}

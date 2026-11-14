@@ -1,0 +1,103 @@
+{
+  "$schema": "../../schemas/cryptainer.schema.json",
+  "fixture_kind": "cryptainer",
+  "generation": "2026_current",
+  "description": "Payload with plaintext and ciphertext signatures, local and Shamir authenticator key layers, offloaded, with cryptainer metadata",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_CBC",
+      "AES_EAX",
+      "DSA_DSS",
+      "ECC_DSS",
+      "ECIES_X25519",
+      "RSA_OAEP",
+      "RSA_PSS"
+    ],
+    "pem_protections": [
+      "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+    ]
+  },
+  "plaintext": "../../plaintexts/p00000257.bin",
+  "keystore_pool": "../../keystores/2026_current/classic_pool",
+  "cryptoconf": "../../cryptoconfs/2026_current/06_signed_multi_trustee.cryptoconf",
+  "cryptainer_metadata": {
+    "compat_device": "compat-recorder-2"
+  },
+  "extjson_flavor": "relaxed",
+  "payload_offloaded": true,
+  "decryption_scenarios": [
+    {
+      "name": "all_passphrases",
+      "description": "Every authenticator passphrase is provided",
+      "passphrase_mapper": {
+        "authenticator@a11ce000-0000-4000-8000-000000000001": [
+          "compat-alice-passphrase"
+        ],
+        "authenticator@b0b00000-0000-4000-8000-000000000002": [
+          "compat-bob-passphrase"
+        ],
+        "authenticator@ca201000-0000-4000-8000-000000000003": [
+          "compat-carol-passphrase"
+        ]
+      },
+      "expected": "success"
+    },
+    {
+      "name": "threshold_exact_alice_bob",
+      "description": "Exactly 2 authenticator passphrases, of the first shards (the last shards are not needed)",
+      "passphrase_mapper": {
+        "authenticator@a11ce000-0000-4000-8000-000000000001": [
+          "compat-alice-passphrase"
+        ],
+        "authenticator@b0b00000-0000-4000-8000-000000000002": [
+          "compat-bob-passphrase"
+        ]
+      },
+      "expected": "success"
+    },
+    {
+      "name": "threshold_exact_bob_carol",
+      "description": "Exactly 2 authenticator passphrases, of the last shards (the first ones fail)",
+      "passphrase_mapper": {
+        "authenticator@b0b00000-0000-4000-8000-000000000002": [
+          "compat-bob-passphrase"
+        ],
+        "authenticator@ca201000-0000-4000-8000-000000000003": [
+          "compat-carol-passphrase"
+        ]
+      },
+      "expected": "success",
+      "expected_warnings": [
+        "ASYMMETRIC_DECRYPTION_ERROR"
+      ]
+    },
+    {
+      "name": "below_threshold_alice",
+      "description": "Fewer authenticator passphrases than the threshold of 2",
+      "passphrase_mapper": {
+        "authenticator@a11ce000-0000-4000-8000-000000000001": [
+          "compat-alice-passphrase"
+        ]
+      },
+      "expected": "failure"
+    },
+    {
+      "name": "no_passphrase",
+      "description": "No passphrase at all",
+      "passphrase_mapper": {},
+      "expected": "failure"
+    }
+  ],
+  "asset_sha256": {
+    "06_signed_multi_trustee_offloaded.crypt": "a9ed28fa296071b89bcfe3d2116904b0fb883abd9d63d4a81ce37298a27f690b",
+    "06_signed_multi_trustee_offloaded.crypt.payload": "703e198e9a43600905f1ab93cb354d6963ef55dc987b4f4cadce8e20c850138c"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "../../schemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2026_current",
+  "description": "Symmetric key layers nested in key layers (AES_EAX, CHACHA20_POLY1305 then AES_CBC), wrapped by RSA_OAEP and ECIES_X25519 keys of several keychains, with an RSA_PSS ciphertext signature",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_CBC",
+      "AES_EAX",
+      "CHACHA20_POLY1305",
+      "ECIES_X25519",
+      "RSA_OAEP",
+      "RSA_PSS"
+    ],
+    "pem_protections": []
+  },
+  "expected_valid": true,
+  "sophistication_level": 4,
+  "keystore_pool": "../../keystores/2026_current/classic_pool",
+  "passphrase_mapper": {},
+  "min_library_version": "0.12",
+  "asset_sha256": {
+    "04_recursive_key_layers.cryptoconf": "7b15c1612f0ccba5d0a5affb5318b82733876766d259fcc0fbbb6a5df5f49176"
+  }
+}

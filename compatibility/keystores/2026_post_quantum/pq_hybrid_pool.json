@@ -1,0 +1,62 @@
+{
+  "$schema": "../../schemas/keystore_pool.schema.json",
+  "fixture_kind": "keystore_pool",
+  "generation": "2026_post_quantum",
+  "description": "Former post-quantum test fixture pool: local keyfactory only (RSA_OAEP, ML_KEM_768 and ML_DSA_65 keys, unprotected), without authenticators",
+  "provenance": {
+    "method": "migrated",
+    "library_version": "0.12+dev",
+    "library_commit": "c1c1d5e6c6294d76b40a601cc7b5cd95162ca691",
+    "python_version": "3.14",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-10-30",
+    "notes": "Moved from tests/fixtures/post_quantum/, where scripts/generate_post_quantum_fixtures.py (now removed) had generated it with the PQ_HYBRID_CRYPTOCONF of tests/test_wacryptolib_cryptainer.py; the Python minor version is that of the development environment of the time"
+  },
+  "requirements": {
+    "algorithms": [
+      "ML_DSA_65",
+      "ML_KEM_768",
+      "RSA_OAEP"
+    ],
+    "pem_protections": []
+  },
+  "local_keyfactory": {
+    "keypairs": [
+      {
+        "keychain_uid": "0e8e861e-f0f7-e54b-18ea-34798d5daaaa",
+        "key_algo": "ML_KEM_768",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "7d1b9c2e-5a4f-4e3d-8b6a-1f2e3d4c5b6a",
+        "key_algo": "ML_DSA_65",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "7d1b9c2e-5a4f-4e3d-8b6a-1f2e3d4c5b6a",
+        "key_algo": "ML_KEM_768",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "7d1b9c2e-5a4f-4e3d-8b6a-1f2e3d4c5b6a",
+        "key_algo": "RSA_OAEP",
+        "private_key_present": true,
+        "pem_protection": "none"
+      }
+    ]
+  },
+  "authenticators": [],
+  "asset_sha256": {
+    "pq_hybrid_pool/local_keyfactory/0e8e861e-f0f7-e54b-18ea-34798d5daaaa_ML_KEM_768_private_key.pem": "05e3c7f7cbd1adfe3164909e3c2b37880e67cee2c91f928503626e842c88edce",
+    "pq_hybrid_pool/local_keyfactory/0e8e861e-f0f7-e54b-18ea-34798d5daaaa_ML_KEM_768_public_key.pem": "d165fdc5798cdf788c5c9cddf9b80f3d42a995ea5d34a802f9161aa1e2853a15",
+    "pq_hybrid_pool/local_keyfactory/7d1b9c2e-5a4f-4e3d-8b6a-1f2e3d4c5b6a_ML_DSA_65_private_key.pem": "7dd45eba0ed698df0084e7ea85ffb611f66a5b42bc6e527059f818c90d1a2561",
+    "pq_hybrid_pool/local_keyfactory/7d1b9c2e-5a4f-4e3d-8b6a-1f2e3d4c5b6a_ML_DSA_65_public_key.pem": "413effcc0003934cedc842f16287cf25fdfc6f7a391509faab6453405137d426",
+    "pq_hybrid_pool/local_keyfactory/7d1b9c2e-5a4f-4e3d-8b6a-1f2e3d4c5b6a_ML_KEM_768_private_key.pem": "fe4103b544db9e07ae85754496c012b47a448e62cdc285d081487d7c4d3591e5",
+    "pq_hybrid_pool/local_keyfactory/7d1b9c2e-5a4f-4e3d-8b6a-1f2e3d4c5b6a_ML_KEM_768_public_key.pem": "d4e65b0ac271eb55f918996cc043b0b017a27fe5ba83517e7fb23779c8554053",
+    "pq_hybrid_pool/local_keyfactory/7d1b9c2e-5a4f-4e3d-8b6a-1f2e3d4c5b6a_RSA_OAEP_private_key.pem": "5f267259afc98f29f34ee985b620721475641b5c1d0bfbe2d84113914d6dc01a",
+    "pq_hybrid_pool/local_keyfactory/7d1b9c2e-5a4f-4e3d-8b6a-1f2e3d4c5b6a_RSA_OAEP_public_key.pem": "db44e3d52db94c226b2371ff57d819fbc792e047b38bbcd77b853fa1d6368805"
+  }
+}

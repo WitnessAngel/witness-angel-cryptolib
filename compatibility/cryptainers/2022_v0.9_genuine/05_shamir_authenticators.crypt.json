@@ -1,0 +1,102 @@
+{
+  "$schema": "../../schemas/cryptainer.schema.json",
+  "fixture_kind": "cryptainer",
+  "generation": "2022_v0.9_genuine",
+  "description": "Payload protected by a 2-of-3 Shamir shared secret over authenticators, inline, with cryptainer metadata (by wacryptolib==0.9 from PyPI)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.9",
+    "python_version": "3.9.13",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13",
+    "notes": "Produced by wacryptolib==0.9 from PyPI, on CPython 3.9.13 with pycryptodome 3.24.1, pymongo 4.18.3, schema 0.7.8 (the latest dependencies installable then, not those of the release date)",
+    "legacy_forms": [
+      "canonical_extjson",
+      "payload_signatures_field"
+    ]
+  },
+  "requirements": {
+    "algorithms": [
+      "CHACHA20_POLY1305",
+      "RSA_OAEP",
+      "RSA_PSS"
+    ],
+    "pem_protections": [
+      "pbes2_pbkdf2_hmac_sha1_aes_cbc"
+    ]
+  },
+  "plaintext": "../../plaintexts/p00004099.bin",
+  "keystore_pool": "../../keystores/2022_v0.9_genuine/legacy_pool",
+  "cryptoconf": "../../cryptoconfs/2022_v0.9_genuine/05_shamir_authenticators.cryptoconf",
+  "cryptainer_metadata": {
+    "compat_device": "compat-recorder-2"
+  },
+  "extjson_flavor": "canonical",
+  "payload_offloaded": false,
+  "decryption_scenarios": [
+    {
+      "name": "all_passphrases",
+      "description": "Every authenticator passphrase is provided",
+      "passphrase_mapper": {
+        "authenticator@a11ce000-0000-4000-8000-000000000001": [
+          "compat-alice-passphrase"
+        ],
+        "authenticator@b0b00000-0000-4000-8000-000000000002": [
+          "compat-bob-passphrase"
+        ],
+        "authenticator@ca201000-0000-4000-8000-000000000003": [
+          "compat-carol-passphrase"
+        ]
+      },
+      "expected": "success"
+    },
+    {
+      "name": "threshold_exact_alice_bob",
+      "description": "Exactly 2 authenticator passphrases, of the first shards (the last shards are not needed)",
+      "passphrase_mapper": {
+        "authenticator@a11ce000-0000-4000-8000-000000000001": [
+          "compat-alice-passphrase"
+        ],
+        "authenticator@b0b00000-0000-4000-8000-000000000002": [
+          "compat-bob-passphrase"
+        ]
+      },
+      "expected": "success"
+    },
+    {
+      "name": "threshold_exact_bob_carol",
+      "description": "Exactly 2 authenticator passphrases, of the last shards (the first ones fail)",
+      "passphrase_mapper": {
+        "authenticator@b0b00000-0000-4000-8000-000000000002": [
+          "compat-bob-passphrase"
+        ],
+        "authenticator@ca201000-0000-4000-8000-000000000003": [
+          "compat-carol-passphrase"
+        ]
+      },
+      "expected": "success",
+      "expected_warnings": [
+        "ASYMMETRIC_DECRYPTION_ERROR"
+      ]
+    },
+    {
+      "name": "below_threshold_alice",
+      "description": "Fewer authenticator passphrases than the threshold of 2",
+      "passphrase_mapper": {
+        "authenticator@a11ce000-0000-4000-8000-000000000001": [
+          "compat-alice-passphrase"
+        ]
+      },
+      "expected": "failure"
+    },
+    {
+      "name": "no_passphrase",
+      "description": "No passphrase at all",
+      "passphrase_mapper": {},
+      "expected": "failure"
+    }
+  ],
+  "asset_sha256": {
+    "05_shamir_authenticators.crypt": "5cbdcce21b91ab640242fecdbb9bf9fea23a461b104d9b2591e9cac55d0c9b89"
+  }
+}

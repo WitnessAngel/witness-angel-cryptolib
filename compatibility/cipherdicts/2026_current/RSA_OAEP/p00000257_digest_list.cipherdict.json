@@ -1,0 +1,37 @@
+{
+  "$schema": "../../../schemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2026_current",
+  "description": "RSA_OAEP encryption of a 257-byte plaintext, using the legacy 'digest_list' field name",
+  "provenance": {
+    "method": "synthesized",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13",
+    "legacy_forms": [
+      "rsa_oaep_digest_list_field"
+    ],
+    "notes": "RSA_OAEP cipherdict of the in-tree library, with 'ciphertext_chunks' renamed to 'digest_list'"
+  },
+  "requirements": {
+    "algorithms": [
+      "RSA_OAEP"
+    ],
+    "pem_protections": []
+  },
+  "cipher_algo": "RSA_OAEP",
+  "plaintext": "../../../plaintexts/p00000257.bin",
+  "direction": "decrypt_only",
+  "private_key": {
+    "keystore_pool": "../../../keystores/2026_current/classic_pool",
+    "keystore": "local_keyfactory",
+    "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+    "key_algo": "RSA_OAEP",
+    "passphrase": null
+  },
+  "asset_sha256": {
+    "p00000257_digest_list.cipherdict": "e1e73ae36cf4c8181001daa9cf234cefbc39a9e2a0192fe1519d34c7a8f80204"
+  }
+}

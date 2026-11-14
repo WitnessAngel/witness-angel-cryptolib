@@ -1,0 +1,1 @@
+{"signature_timestamp_utc": {"$numberInt": "1794590346"}, "signature_value": {"$binary": {"base64": "Tq5L9euY+hDlHR5U1LtEtQHXbIzomnEXo8vjSTGVRovtnpMZ3PWZd2Wjif8gNRbIhaaUqeSNXHY=", "subType": "00"}}}

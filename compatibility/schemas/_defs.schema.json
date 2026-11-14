@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "_defs.schema.json",
+  "title": "Shared definitions of compatibility fixture sidecars",
+  "$defs": {
+    "hex": {
+      "description": "Byte string, as lowercase hexadecimal",
+      "type": "string",
+      "pattern": "^([0-9a-f]{2})*$"
+    },
+    "uuid": {
+      "description": "UUID, in canonical lowercase hyphenated form",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "relpath": {
+      "description": "POSIX path relative to the directory of the sidecar (never absolute, never with backslashes)",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![/~])(?!.*\\\\)(?!.*:)[^\\s].*$"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "algo": {
+      "description": "Wacryptolib algorithm name (cipher, key, signature or hash algo)",
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$"
+    },
+    "generation": {
+      "description": "Name of the generation directory of the fixture: <year>_<label>",
+      "type": "string",
+      "pattern": "^[0-9]{4}_[a-z0-9][a-z0-9._-]*$"
+    },
+    "asset_sha256": {
+      "description": "SHA-256 digests of every file of the asset, keyed by their path relative to the sidecar directory",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"$ref": "#/$defs/relpath"},
+      "additionalProperties": {"$ref": "#/$defs/sha256"}
+    },
+    "pem_protection": {
+      "description": "How a private key PEM is protected: unprotected, PKCS#8 PBES2 variants, or legacy OpenSSL encapsulated headers",
+      "enum": [
+        "none",
+        "pbes2_pbkdf2_hmac_sha1_aes_cbc",
+        "pbes2_pbkdf2_hmac_sha256_aes_cbc",
+        "pbes2_scrypt_aes_cbc",
+        "legacy_encapsulated_header"
+      ]
+    },
+    "requirements": {
+      "description": "Capabilities a crypto backend needs to fully exercise this fixture",
+      "type": "object",
+      "properties": {
+        "algorithms": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/algo"},
+          "uniqueItems": true
+        },
+        "pem_protections": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/pem_protection"},
+          "uniqueItems": true
+        }
+      },
+      "required": ["algorithms", "pem_protections"],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "description": "How and with what this fixture was produced",
+      "type": "object",
+      "properties": {
+        "method": {
+          "description": "genuine: produced as-is by the named library version; synthesized: a current output down-converted to legacy forms; migrated: moved from a former fixture location",
+          "enum": ["genuine", "synthesized", "migrated"]
+        },
+        "library_version": {"type": "string", "minLength": 1},
+        "library_commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+        "python_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"},
+        "crypto_backend": {"enum": ["pycryptodome", "fallback"]},
+        "produced_on": {"$ref": "#/$defs/date"},
+        "legacy_forms": {
+          "description": "Legacy wire forms present in the asset (mandatory for synthesized fixtures)",
+          "type": "array",
+          "items": {
+            "enum": [
+              "payload_signatures_field",
+              "rsa_oaep_digest_list_field",
+              "canonical_extjson",
+              "legacy_keystore_metadata_filename"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "notes": {"type": "string"}
+      },
+      "required": ["method", "library_version", "python_version", "crypto_backend", "produced_on"],
+      "additionalProperties": false,
+      "if": {"properties": {"method": {"const": "synthesized"}}},
+      "then": {"required": ["legacy_forms"], "properties": {"legacy_forms": {"minItems": 1}}}
+    },
+    "trustee_id": {
+      "description": "Trustee identifier as built by wacryptolib's get_trustee_id()",
+      "type": "string",
+      "pattern": "^(local_keyfactory|authenticator@[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$"
+    },
+    "passphrase_mapper": {
+      "description": "Passphrases to try, per trustee identifier",
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/trustee_id"},
+      "additionalProperties": {
+        "type": "array",
+        "items": {"type": "string"}
+      }
+    },
+    "keystore_selector": {
+      "description": "Keystore of a pool: its local keyfactory, or the UID of one of its imported authenticators",
+      "oneOf": [
+        {"const": "local_keyfactory"},
+        {"$ref": "#/$defs/uuid"}
+      ]
+    },
+    "key_ref": {
+      "description": "Reference to a keypair inside a keystore pool fixture",
+      "type": "object",
+      "properties": {
+        "keystore_pool": {"$ref": "#/$defs/relpath"},
+        "keystore": {"$ref": "#/$defs/keystore_selector"},
+        "keychain_uid": {"$ref": "#/$defs/uuid"},
+        "key_algo": {"$ref": "#/$defs/algo"},
+        "passphrase": {
+          "description": "Passphrase protecting the private key, or null if unprotected",
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["keystore_pool", "keystore", "keychain_uid", "key_algo"],
+      "additionalProperties": false
+    },
+    "keypair_identifier": {
+      "type": "object",
+      "properties": {
+        "keychain_uid": {"$ref": "#/$defs/uuid"},
+        "key_algo": {"$ref": "#/$defs/algo"},
+        "private_key_present": {"type": "boolean"},
+        "pem_protection": {"$ref": "#/$defs/pem_protection"}
+      },
+      "required": ["keychain_uid", "key_algo", "private_key_present"],
+      "additionalProperties": false
+    },
+    "header": {
+      "description": "Fields common to all sidecars (kind schemas add their own, and forbid any other)",
+      "type": "object",
+      "properties": {
+        "$schema": {"$ref": "#/$defs/relpath"},
+        "fixture_kind": {"enum": ["plaintext", "cipherdict", "signature", "keystore_pool", "cryptoconf", "cryptainer"]},
+        "generation": {"$ref": "#/$defs/generation"},
+        "description": {"type": "string", "minLength": 1},
+        "provenance": {"$ref": "#/$defs/provenance"},
+        "requirements": {"$ref": "#/$defs/requirements"},
+        "asset_sha256": {"$ref": "#/$defs/asset_sha256"}
+      },
+      "required": ["$schema", "fixture_kind", "generation", "description", "provenance", "requirements", "asset_sha256"]
+    }
+  }
+}

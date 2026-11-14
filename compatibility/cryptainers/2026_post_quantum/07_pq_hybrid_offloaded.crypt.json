@@ -1,0 +1,54 @@
+{
+  "$schema": "../../schemas/cryptainer.schema.json",
+  "fixture_kind": "cryptainer",
+  "generation": "2026_post_quantum",
+  "description": "Same hybrid stack with a 64 KiB offloaded payload",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_EAX",
+      "ECIES_X25519",
+      "ML_DSA_65",
+      "ML_KEM_768",
+      "RSA_OAEP"
+    ],
+    "pem_protections": [
+      "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+    ]
+  },
+  "plaintext": "../../plaintexts/p00065539.bin",
+  "keystore_pool": "../../keystores/2026_post_quantum/pq_pool",
+  "cryptoconf": "../../cryptoconfs/2026_post_quantum/07_pq_hybrid.cryptoconf",
+  "cryptainer_metadata": null,
+  "extjson_flavor": "relaxed",
+  "payload_offloaded": true,
+  "decryption_scenarios": [
+    {
+      "name": "all_passphrases",
+      "description": "Every authenticator passphrase is provided",
+      "passphrase_mapper": {
+        "authenticator@da7e0000-0000-4000-8000-000000000004": [
+          "compat-dave-passphrase"
+        ],
+        "authenticator@e1210000-0000-4000-8000-000000000005": [
+          "compat-erin-passphrase"
+        ],
+        "authenticator@f2a40000-0000-4000-8000-000000000006": [
+          "compat-frank-passphrase"
+        ]
+      },
+      "expected": "success"
+    }
+  ],
+  "asset_sha256": {
+    "07_pq_hybrid_offloaded.crypt": "2abb3a78d57118c8edabe340b9201c87bfc7a307de5f2addfd2cee11fc133525",
+    "07_pq_hybrid_offloaded.crypt.payload": "179388ec835661d91adeb638aacac92069934423da77a65262f5856b3a634f97"
+  }
+}

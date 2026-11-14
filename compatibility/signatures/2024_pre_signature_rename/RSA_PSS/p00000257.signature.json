@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../schemas/signature.schema.json",
+  "fixture_kind": "signature",
+  "generation": "2024_pre_signature_rename",
+  "description": "RSA_PSS signature of a plaintext by wacryptolib at git commit 2328abe9e3",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "python_version": "3.11.2",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13",
+    "notes": "Produced by wacryptolib at git commit 2328abe9e3, on CPython 3.11.2 with pycryptodome 3.24.1, pymongo 4.20.0, schema 0.7.8 (the latest dependencies installable then, not those of the release date)",
+    "library_commit": "2328abe9e3abf2ecc85df53f88c1d56727ee5b72",
+    "legacy_forms": [
+      "canonical_extjson"
+    ]
+  },
+  "requirements": {
+    "algorithms": [
+      "RSA_PSS"
+    ],
+    "pem_protections": []
+  },
+  "signature_algo": "RSA_PSS",
+  "message": "../../../plaintexts/p00000257.bin",
+  "public_key": {
+    "keystore_pool": "../../../keystores/2024_pre_signature_rename/legacy_pool",
+    "keystore": "local_keyfactory",
+    "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+    "key_algo": "RSA_PSS"
+  },
+  "expected_valid": true,
+  "asset_sha256": {
+    "p00000257.signature": "34a265ba9575292b3ee9d927c3f29216b032e420688bfb59f3ddadde496e110c"
+  }
+}

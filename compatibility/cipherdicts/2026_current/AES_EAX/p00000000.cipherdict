@@ -1,0 +1,1 @@
+{"ciphertext": {"$binary": {"base64": "", "subType": "00"}}, "tag": {"$binary": {"base64": "38mYaWaPnyfWI2t3mDTHcA==", "subType": "00"}}}

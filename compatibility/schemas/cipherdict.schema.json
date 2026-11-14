@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cipherdict.schema.json",
+  "title": "Sidecar of a cipherdict vector (extended-JSON cipherdict, as returned by encrypt_bytestring())",
+  "type": "object",
+  "allOf": [{"$ref": "_defs.schema.json#/$defs/header"}],
+  "properties": {
+    "fixture_kind": {"const": "cipherdict"},
+    "cipher_algo": {"$ref": "_defs.schema.json#/$defs/algo"},
+    "plaintext": {"$ref": "_defs.schema.json#/$defs/relpath"},
+    "direction": {
+      "description": "bidirectional: encrypting the plaintext with symkey must reproduce the cipherdict exactly; decrypt_only: decrypting with the private key must yield the plaintext",
+      "enum": ["bidirectional", "decrypt_only"]
+    },
+    "symkey": {
+      "description": "Symmetric key dict of the cipher algo, with hex values (e.g. key + iv, or key + nonce)",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "_defs.schema.json#/$defs/hex"}
+    },
+    "private_key": {"$ref": "_defs.schema.json#/$defs/key_ref"}
+  },
+  "required": ["cipher_algo", "plaintext", "direction"],
+  "oneOf": [
+    {"properties": {"direction": {"const": "bidirectional"}}, "required": ["symkey"], "not": {"required": ["private_key"]}},
+    {"properties": {"direction": {"const": "decrypt_only"}}, "required": ["private_key"], "not": {"required": ["symkey"]}}
+  ],
+  "unevaluatedProperties": false
+}

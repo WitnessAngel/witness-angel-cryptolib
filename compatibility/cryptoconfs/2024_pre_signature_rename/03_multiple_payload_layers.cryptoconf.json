@@ -1,0 +1,38 @@
+{
+  "$schema": "../../schemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2024_pre_signature_rename",
+  "description": "Three payload layers (AES_EAX, AES_CBC, CHACHA20_POLY1305) with RSA_OAEP key layers of two keychains, and RSA_PSS and ECC_DSS signatures (as written by wacryptolib at git commit 2328abe9e3)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "python_version": "3.11.2",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13",
+    "notes": "Produced by wacryptolib at git commit 2328abe9e3, on CPython 3.11.2 with pycryptodome 3.24.1, pymongo 4.20.0, schema 0.7.8 (the latest dependencies installable then, not those of the release date)",
+    "library_commit": "2328abe9e3abf2ecc85df53f88c1d56727ee5b72",
+    "legacy_forms": [
+      "canonical_extjson",
+      "payload_signatures_field"
+    ]
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_CBC",
+      "AES_EAX",
+      "CHACHA20_POLY1305",
+      "ECC_DSS",
+      "RSA_OAEP",
+      "RSA_PSS"
+    ],
+    "pem_protections": []
+  },
+  "expected_valid": true,
+  "sophistication_level": 3,
+  "keystore_pool": "../../keystores/2024_pre_signature_rename/legacy_pool",
+  "passphrase_mapper": {},
+  "min_library_version": "0.12+dev",
+  "asset_sha256": {
+    "03_multiple_payload_layers.cryptoconf": "2375d4ba494975c5ad8b9c35a8169f1205e3c02fae965387717764f2ce6115ae"
+  }
+}

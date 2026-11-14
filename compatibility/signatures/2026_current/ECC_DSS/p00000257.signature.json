@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../schemas/signature.schema.json",
+  "fixture_kind": "signature",
+  "generation": "2026_current",
+  "description": "ECC_DSS signature of a 257-byte plaintext",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "ECC_DSS"
+    ],
+    "pem_protections": []
+  },
+  "signature_algo": "ECC_DSS",
+  "public_key": {
+    "keystore_pool": "../../../keystores/2026_current/classic_pool",
+    "keystore": "local_keyfactory",
+    "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+    "key_algo": "ECC_DSS"
+  },
+  "expected_valid": true,
+  "message": "../../../plaintexts/p00000257.bin",
+  "asset_sha256": {
+    "p00000257.signature": "f5ac2abc5a161befd2f26fada7af83d473276b9209ed96cb471d4ca4c4f43d7e"
+  }
+}

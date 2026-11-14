@@ -1,0 +1,31 @@
+{
+  "$schema": "../../../schemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2024_pre_signature_rename",
+  "description": "CHACHA20_POLY1305 encryption of a 33-byte plaintext by wacryptolib at git commit 2328abe9e3, with its symmetric key",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "python_version": "3.11.2",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13",
+    "notes": "Produced by wacryptolib at git commit 2328abe9e3, on CPython 3.11.2 with pycryptodome 3.24.1, pymongo 4.20.0, schema 0.7.8 (the latest dependencies installable then, not those of the release date)",
+    "library_commit": "2328abe9e3abf2ecc85df53f88c1d56727ee5b72"
+  },
+  "requirements": {
+    "algorithms": [
+      "CHACHA20_POLY1305"
+    ],
+    "pem_protections": []
+  },
+  "cipher_algo": "CHACHA20_POLY1305",
+  "plaintext": "../../../plaintexts/p00000033.bin",
+  "direction": "bidirectional",
+  "symkey": {
+    "key": "48e9120fb99dc5965078ed14547e0539b809cf23a25419ed207c9d84980f41a4",
+    "nonce": "f524b40b86a795b6d231bfd8"
+  },
+  "asset_sha256": {
+    "p00000033.cipherdict": "66eed5c58b6ea0c0ef110849372760e10a767807cd668b47f1d1821f132212b8"
+  }
+}

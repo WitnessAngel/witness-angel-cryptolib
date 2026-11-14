@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cryptoconf.schema.json",
+  "title": "Sidecar of a cryptoconf fixture (extended-JSON cryptoconf)",
+  "type": "object",
+  "allOf": [{"$ref": "_defs.schema.json#/$defs/header"}],
+  "properties": {
+    "fixture_kind": {"const": "cryptoconf"},
+    "expected_valid": {"type": "boolean"},
+    "sophistication_level": {
+      "description": "1 (simplest) and up; 0 for invalid cryptoconfs",
+      "type": "integer",
+      "minimum": 0
+    },
+    "keystore_pool": {
+      "description": "Pool whose keys let this cryptoconf encrypt and decrypt",
+      "$ref": "_defs.schema.json#/$defs/relpath"
+    },
+    "passphrase_mapper": {"$ref": "_defs.schema.json#/$defs/passphrase_mapper"},
+    "min_library_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?(\\+dev)?$"}
+  },
+  "required": ["expected_valid", "sophistication_level", "min_library_version"],
+  "if": {"properties": {"expected_valid": {"const": true}}},
+  "then": {"required": ["keystore_pool", "passphrase_mapper"]},
+  "unevaluatedProperties": false
+}

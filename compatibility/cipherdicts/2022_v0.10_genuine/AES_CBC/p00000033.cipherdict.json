@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../schemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2022_v0.10_genuine",
+  "description": "AES_CBC encryption of a 33-byte plaintext by wacryptolib==0.10 from PyPI, with its symmetric key",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.10",
+    "python_version": "3.9.13",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13",
+    "notes": "Produced by wacryptolib==0.10 from PyPI, on CPython 3.9.13 with pycryptodome 3.24.1, pymongo 4.18.3, schema 0.7.8 (the latest dependencies installable then, not those of the release date)"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_CBC"
+    ],
+    "pem_protections": []
+  },
+  "cipher_algo": "AES_CBC",
+  "plaintext": "../../../plaintexts/p00000033.bin",
+  "direction": "bidirectional",
+  "symkey": {
+    "iv": "57cc026a738a874db6c6b80e7d45bc87",
+    "key": "ac108009642dcd2bd2047888e9f1a6daaaae4fc18eaaa1453d2af9ee9f8731b2"
+  },
+  "asset_sha256": {
+    "p00000033.cipherdict": "54e3588ce1de3603031fa9fa4e2ae6f303cc1d3453a392490b7ee871e6742b2f"
+  }
+}

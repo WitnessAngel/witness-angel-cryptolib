@@ -1,0 +1,228 @@
+{
+  "$schema": "../../schemas/keystore_pool.schema.json",
+  "fixture_kind": "keystore_pool",
+  "generation": "2026_post_quantum",
+  "description": "Local keyfactory (RSA_OAEP, ECIES_X25519, ML_KEM_768, ML_DSA_65 keys of three keychains, unprotected) and three imported authenticators with passphrase-protected ML_KEM_768, ECIES_X25519 and ML_DSA_65 keys",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "ECIES_X25519",
+      "ML_DSA_65",
+      "ML_KEM_768",
+      "RSA_OAEP"
+    ],
+    "pem_protections": [
+      "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+    ]
+  },
+  "local_keyfactory": {
+    "keypairs": [
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+        "key_algo": "ECIES_X25519",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+        "key_algo": "ML_DSA_65",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+        "key_algo": "ML_KEM_768",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+        "key_algo": "RSA_OAEP",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000002",
+        "key_algo": "ECIES_X25519",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000002",
+        "key_algo": "ML_DSA_65",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000002",
+        "key_algo": "ML_KEM_768",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000002",
+        "key_algo": "RSA_OAEP",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000003",
+        "key_algo": "ECIES_X25519",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000003",
+        "key_algo": "ML_DSA_65",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000003",
+        "key_algo": "ML_KEM_768",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000003",
+        "key_algo": "RSA_OAEP",
+        "private_key_present": true,
+        "pem_protection": "none"
+      }
+    ]
+  },
+  "authenticators": [
+    {
+      "keystore_uid": "da7e0000-0000-4000-8000-000000000004",
+      "keystore_owner": "compat-dave",
+      "keystore_passphrase_hint": "Dummy compatibility passphrase, see the pool sidecar",
+      "passphrase": "compat-dave-passphrase",
+      "keypairs": [
+        {
+          "keychain_uid": "da7e0000-0000-4000-8000-0000000000c1",
+          "key_algo": "ECIES_X25519",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+        },
+        {
+          "keychain_uid": "da7e0000-0000-4000-8000-0000000000c1",
+          "key_algo": "ML_DSA_65",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+        },
+        {
+          "keychain_uid": "da7e0000-0000-4000-8000-0000000000c1",
+          "key_algo": "ML_KEM_768",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+        }
+      ]
+    },
+    {
+      "keystore_uid": "e1210000-0000-4000-8000-000000000005",
+      "keystore_owner": "compat-erin",
+      "keystore_passphrase_hint": "Dummy compatibility passphrase, see the pool sidecar",
+      "passphrase": "compat-erin-passphrase",
+      "keypairs": [
+        {
+          "keychain_uid": "e1210000-0000-4000-8000-0000000000c1",
+          "key_algo": "ECIES_X25519",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+        },
+        {
+          "keychain_uid": "e1210000-0000-4000-8000-0000000000c1",
+          "key_algo": "ML_DSA_65",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+        },
+        {
+          "keychain_uid": "e1210000-0000-4000-8000-0000000000c1",
+          "key_algo": "ML_KEM_768",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+        }
+      ]
+    },
+    {
+      "keystore_uid": "f2a40000-0000-4000-8000-000000000006",
+      "keystore_owner": "compat-frank",
+      "keystore_passphrase_hint": "Dummy compatibility passphrase, see the pool sidecar",
+      "passphrase": "compat-frank-passphrase",
+      "keypairs": [
+        {
+          "keychain_uid": "f2a40000-0000-4000-8000-0000000000c1",
+          "key_algo": "ECIES_X25519",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+        },
+        {
+          "keychain_uid": "f2a40000-0000-4000-8000-0000000000c1",
+          "key_algo": "ML_DSA_65",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+        },
+        {
+          "keychain_uid": "f2a40000-0000-4000-8000-0000000000c1",
+          "key_algo": "ML_KEM_768",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+        }
+      ]
+    }
+  ],
+  "asset_sha256": {
+    "pq_pool/foreign_keystores/keystore_da7e0000-0000-4000-8000-000000000004/da7e0000-0000-4000-8000-0000000000c1_ECIES_X25519_private_key.pem": "2837b51c32ddfac8480f164309a90adff2e273bf1b504a44e891e448bcf0db84",
+    "pq_pool/foreign_keystores/keystore_da7e0000-0000-4000-8000-000000000004/da7e0000-0000-4000-8000-0000000000c1_ECIES_X25519_public_key.pem": "ac46bdd7fd48d06c3c82c2f4c9d54eac044a4f11e528af4acf873947627c34f0",
+    "pq_pool/foreign_keystores/keystore_da7e0000-0000-4000-8000-000000000004/da7e0000-0000-4000-8000-0000000000c1_ML_DSA_65_private_key.pem": "44e04eb81f96c7113209b1454b64de8bd32ed444306b98530d62282b1675918b",
+    "pq_pool/foreign_keystores/keystore_da7e0000-0000-4000-8000-000000000004/da7e0000-0000-4000-8000-0000000000c1_ML_DSA_65_public_key.pem": "6cc5c9384ad5faaf58bc1afd43d24bebe308ebfa09f68bbeb829dc53d5d0ea07",
+    "pq_pool/foreign_keystores/keystore_da7e0000-0000-4000-8000-000000000004/da7e0000-0000-4000-8000-0000000000c1_ML_KEM_768_private_key.pem": "07727458daa225a65326c975863d48ccbc2b9189500275aab1ac1f824df28ebb",
+    "pq_pool/foreign_keystores/keystore_da7e0000-0000-4000-8000-000000000004/da7e0000-0000-4000-8000-0000000000c1_ML_KEM_768_public_key.pem": "a66b97f99a9083a9f028007421634f4420488e835482fde594a00657888ea1cd",
+    "pq_pool/foreign_keystores/keystore_da7e0000-0000-4000-8000-000000000004/keystore_metadata.json": "606a00540e66040f78b45623aeacd1a392d665d6f303e3961aa7476289c0f5d8",
+    "pq_pool/foreign_keystores/keystore_e1210000-0000-4000-8000-000000000005/e1210000-0000-4000-8000-0000000000c1_ECIES_X25519_private_key.pem": "db021bb40ae9705195de0483a87a9ee49ea7c94653f5d12c697f45ed4c0db092",
+    "pq_pool/foreign_keystores/keystore_e1210000-0000-4000-8000-000000000005/e1210000-0000-4000-8000-0000000000c1_ECIES_X25519_public_key.pem": "3945047c157015c2ebe2fdacf05b144b06d98717cf6acf39549ec82b038b418c",
+    "pq_pool/foreign_keystores/keystore_e1210000-0000-4000-8000-000000000005/e1210000-0000-4000-8000-0000000000c1_ML_DSA_65_private_key.pem": "df30b0e384990507727a596f31732906cbefb6e5bc9c500adc26b909a527cce7",
+    "pq_pool/foreign_keystores/keystore_e1210000-0000-4000-8000-000000000005/e1210000-0000-4000-8000-0000000000c1_ML_DSA_65_public_key.pem": "6455c59e3fd46638a7df4b207e4c4f838201a06d917e301b7a32af7edad7997f",
+    "pq_pool/foreign_keystores/keystore_e1210000-0000-4000-8000-000000000005/e1210000-0000-4000-8000-0000000000c1_ML_KEM_768_private_key.pem": "c436c646caf46ed1e86d52b6d8e086ba09a43d3fdc1247767eb03867ab0aa8e7",
+    "pq_pool/foreign_keystores/keystore_e1210000-0000-4000-8000-000000000005/e1210000-0000-4000-8000-0000000000c1_ML_KEM_768_public_key.pem": "7c592bcc14f122a7c1719a7223d08caf51bf866e6adbe97e27517256a3c201cb",
+    "pq_pool/foreign_keystores/keystore_e1210000-0000-4000-8000-000000000005/keystore_metadata.json": "849495351dc72781b188ad858feac17b42e862fe1b6ef081ea2a710660e77da8",
+    "pq_pool/foreign_keystores/keystore_f2a40000-0000-4000-8000-000000000006/f2a40000-0000-4000-8000-0000000000c1_ECIES_X25519_private_key.pem": "d3844a8558e72ff39ee04bf2a5d62a4d73c45226cb8e4f26cc9b26af3f68c2c1",
+    "pq_pool/foreign_keystores/keystore_f2a40000-0000-4000-8000-000000000006/f2a40000-0000-4000-8000-0000000000c1_ECIES_X25519_public_key.pem": "a0096ad1d7cc824385b0a530c1465d701420779379ef7bd9a94b840cc53ea43a",
+    "pq_pool/foreign_keystores/keystore_f2a40000-0000-4000-8000-000000000006/f2a40000-0000-4000-8000-0000000000c1_ML_DSA_65_private_key.pem": "71931a1ae81779297331d191496824ad38d371a5fbb153eb61ce6e358e8d1b7c",
+    "pq_pool/foreign_keystores/keystore_f2a40000-0000-4000-8000-000000000006/f2a40000-0000-4000-8000-0000000000c1_ML_DSA_65_public_key.pem": "a7462ee93ee65d5f9730a383790f4bf3b4c0a3e1a46a67c5fa91ac517ee5e850",
+    "pq_pool/foreign_keystores/keystore_f2a40000-0000-4000-8000-000000000006/f2a40000-0000-4000-8000-0000000000c1_ML_KEM_768_private_key.pem": "b7277832d1956109df7966b30f470b68bf746a5586464b2d2d2103999e070d0d",
+    "pq_pool/foreign_keystores/keystore_f2a40000-0000-4000-8000-000000000006/f2a40000-0000-4000-8000-0000000000c1_ML_KEM_768_public_key.pem": "7e1f06be2f5952f78a6308fc48777ae924a87187df2092d3f032a5753f90fba3",
+    "pq_pool/foreign_keystores/keystore_f2a40000-0000-4000-8000-000000000006/keystore_metadata.json": "b083a0d9c8d6f27cc0df8ad250f7102822bd046dd3366fe306affbd9a5cc2b7a",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_ECIES_X25519_private_key.pem": "9eb2c1cc4dafc1c2e0184b03bdec23ea48f08747c7604ecf008919cea7a83182",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_ECIES_X25519_public_key.pem": "0ec797e45f81308283b02468d2363aaa1cb0915bda31cbdd0651cbe6f8920c1f",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_ML_DSA_65_private_key.pem": "a1ce6abc29d4e1027800123e4ad5d8c6aeb9deba543265b60614842b6033b8a1",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_ML_DSA_65_public_key.pem": "6c04de4d56df0b1724a27a2078883df345889d518867c1062c9bf14d20571f6e",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_ML_KEM_768_private_key.pem": "14eb40ec84c6f303c192c3b68236bc061b0a2501026eab5da4b8c85c688abbe8",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_ML_KEM_768_public_key.pem": "b7b09868480268be3197fb9399799ae80b4b9291ba824d47245a2677a83caff9",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_RSA_OAEP_private_key.pem": "5f15a69ab0f0fc6c9ecbbda558a718eb340fd01870f7ab0645d6dd9078b9e26f",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_RSA_OAEP_public_key.pem": "7a8e28e85635fc6680b238fc23260929bd93bf3cca324fab51a33d263f29e1e4",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_ECIES_X25519_private_key.pem": "61b0a8c518b35d6e872500cf71b2063d951834d18e96ecc8e6c0d8c543ebef82",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_ECIES_X25519_public_key.pem": "06d8277c09267a25af949cb30a163521329e7a3b5e4c5fc76cc8e8a13b98d1e0",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_ML_DSA_65_private_key.pem": "690081143491ab4f414422770ab7bda129433de77bae371545a171b892bf3e11",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_ML_DSA_65_public_key.pem": "69905f20ebf3619e337056fb1efa2e4f57f432294ff8c093f7771b48ee2f558b",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_ML_KEM_768_private_key.pem": "db93c4326687c4f69a57a8ac1bd5f6010d3390a5be602d5e04d235125bb147d1",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_ML_KEM_768_public_key.pem": "3775b7dac8d56e9d2959d0c37e76c6855424a1d2f4c35e43426098c94ba229bc",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_RSA_OAEP_private_key.pem": "97f960d26dbb51207493f52f2fa1f7c5123f35a68766ee88528bde33f6f0e2f3",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_RSA_OAEP_public_key.pem": "51c09703cbcb9a72fc06e2886ff261007dbcbb627c9b96e8502b9eab714a9a4b",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_ECIES_X25519_private_key.pem": "30f79250c2b266ee34504255f52f41b8a382e3b8f70ca7785857e266c4ae0b84",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_ECIES_X25519_public_key.pem": "8038dbc16ebe740e253df6ec60295c25671581db0969ba91b811f9314f6ad4b3",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_ML_DSA_65_private_key.pem": "34f0104186b63310d0b033da8ac6c414df6ef768fd5b4532c323dcc248394cd4",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_ML_DSA_65_public_key.pem": "a9a87ab4a23648f358b7016c052578c3064b7fe4a47d5449d4d1c7f6e4d838e2",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_ML_KEM_768_private_key.pem": "2638125bd00f4bc7f8d13d837256303f42d53491c06fec8336ed8b397e75cc85",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_ML_KEM_768_public_key.pem": "903d5233e8c25978ad78242a4411dcdd195ec756f9d70f2996943e5b1c92d8e4",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_RSA_OAEP_private_key.pem": "d0c8c94da082e66d3f5df71430be7ce4963c47900471d7f6b13cb07c77e90714",
+    "pq_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_RSA_OAEP_public_key.pem": "bd8a367f637119aa92a0e65e41a605516662ccd89dc23703f4a81528402f2bf1"
+  }
+}

@@ -1,0 +1,180 @@
+{
+  "$schema": "../../schemas/keystore_pool.schema.json",
+  "fixture_kind": "keystore_pool",
+  "generation": "2022_v0.10_genuine",
+  "description": "Keystore pool of wacryptolib==0.10 from PyPI: local keyfactory (RSA_OAEP, RSA_PSS, DSA_DSS, ECC_DSS keys of three keychains, unprotected) and three imported authenticators with a passphrase-protected RSA_OAEP key",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.10",
+    "python_version": "3.9.13",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13",
+    "notes": "Produced by wacryptolib==0.10 from PyPI, on CPython 3.9.13 with pycryptodome 3.24.1, pymongo 4.18.3, schema 0.7.8 (the latest dependencies installable then, not those of the release date)",
+    "legacy_forms": [
+      "canonical_extjson"
+    ]
+  },
+  "requirements": {
+    "algorithms": [
+      "DSA_DSS",
+      "ECC_DSS",
+      "RSA_OAEP",
+      "RSA_PSS"
+    ],
+    "pem_protections": [
+      "pbes2_pbkdf2_hmac_sha1_aes_cbc"
+    ]
+  },
+  "local_keyfactory": {
+    "keypairs": [
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+        "key_algo": "DSA_DSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+        "key_algo": "ECC_DSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+        "key_algo": "RSA_OAEP",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+        "key_algo": "RSA_PSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000002",
+        "key_algo": "DSA_DSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000002",
+        "key_algo": "ECC_DSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000002",
+        "key_algo": "RSA_OAEP",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000002",
+        "key_algo": "RSA_PSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000003",
+        "key_algo": "DSA_DSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000003",
+        "key_algo": "ECC_DSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000003",
+        "key_algo": "RSA_OAEP",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000003",
+        "key_algo": "RSA_PSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      }
+    ]
+  },
+  "authenticators": [
+    {
+      "keystore_uid": "a11ce000-0000-4000-8000-000000000001",
+      "keystore_owner": "compat-alice",
+      "passphrase": "compat-alice-passphrase",
+      "keypairs": [
+        {
+          "keychain_uid": "a11ce000-0000-4000-8000-0000000000c1",
+          "key_algo": "RSA_OAEP",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha1_aes_cbc"
+        }
+      ]
+    },
+    {
+      "keystore_uid": "b0b00000-0000-4000-8000-000000000002",
+      "keystore_owner": "compat-bob",
+      "passphrase": "compat-bob-passphrase",
+      "keypairs": [
+        {
+          "keychain_uid": "b0b00000-0000-4000-8000-0000000000c1",
+          "key_algo": "RSA_OAEP",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha1_aes_cbc"
+        }
+      ]
+    },
+    {
+      "keystore_uid": "ca201000-0000-4000-8000-000000000003",
+      "keystore_owner": "compat-carol",
+      "passphrase": "compat-carol-passphrase",
+      "keypairs": [
+        {
+          "keychain_uid": "ca201000-0000-4000-8000-0000000000c1",
+          "key_algo": "RSA_OAEP",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha1_aes_cbc"
+        }
+      ]
+    }
+  ],
+  "asset_sha256": {
+    "legacy_pool/foreign_keystores/keystore_a11ce000-0000-4000-8000-000000000001/a11ce000-0000-4000-8000-0000000000c1_RSA_OAEP_private_key.pem": "a2e75bc3b0d4a217865d8d9d6b20a57be448df9f6c62b353b2488f7ecc0b2177",
+    "legacy_pool/foreign_keystores/keystore_a11ce000-0000-4000-8000-000000000001/a11ce000-0000-4000-8000-0000000000c1_RSA_OAEP_public_key.pem": "e6adde9353752bc824642febc82eb03e870915ba51f4c1a4f5e85daf9de39ad8",
+    "legacy_pool/foreign_keystores/keystore_a11ce000-0000-4000-8000-000000000001/keystore_metadata.json": "abecc2acf9cb89ad029d5961d43d47f67addf7dfeb6a8f1eb13fde454d26a8de",
+    "legacy_pool/foreign_keystores/keystore_b0b00000-0000-4000-8000-000000000002/b0b00000-0000-4000-8000-0000000000c1_RSA_OAEP_private_key.pem": "91a4bce2cc9fb6df910f755e603b20a27d41dcd2a5c17a63a811806603583f6b",
+    "legacy_pool/foreign_keystores/keystore_b0b00000-0000-4000-8000-000000000002/b0b00000-0000-4000-8000-0000000000c1_RSA_OAEP_public_key.pem": "aa2a6fe3804d10c073faa0c2e3a8029e11d446f3cba8bc85d512c7730e2096de",
+    "legacy_pool/foreign_keystores/keystore_b0b00000-0000-4000-8000-000000000002/keystore_metadata.json": "dd7b088b5ca753fa489482b8f94b6cbf7e45f64b95b4f5c36336082ef85f987b",
+    "legacy_pool/foreign_keystores/keystore_ca201000-0000-4000-8000-000000000003/ca201000-0000-4000-8000-0000000000c1_RSA_OAEP_private_key.pem": "c5e72132e4e4fb81b57556e5873c2876c42f7b6c1d7bf1d205c3196d09ea94fb",
+    "legacy_pool/foreign_keystores/keystore_ca201000-0000-4000-8000-000000000003/ca201000-0000-4000-8000-0000000000c1_RSA_OAEP_public_key.pem": "7684b2d37a6fe56bda4af3171e882a3c7b011fb25de6f158a15ad478784d1a29",
+    "legacy_pool/foreign_keystores/keystore_ca201000-0000-4000-8000-000000000003/keystore_metadata.json": "33e0c9de46d996a82f33fca20b297af4c95e276c28d17519dddcba8911916d67",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_DSA_DSS_private_key.pem": "a9fa55da9fe1cfcbfad7da3e1014d9d3f864d417cf7bb99a8a1c7ee525d1bee8",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_DSA_DSS_public_key.pem": "d9ed7bb58a4e8912fdba46dbfe9a0b6ba7cabae6e8edfacfa27b01300394ec30",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_ECC_DSS_private_key.pem": "ab6671fc059390e7034f90ad995a4b2c23b7d939acecac4757f863ad3f7a82f6",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_ECC_DSS_public_key.pem": "24080f0a323b0dec4865529a1b514cf021aab93a8422356e9860587a1c7c1621",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_RSA_OAEP_private_key.pem": "4bdf3e7d3d365ef3263b2516e78ac2885cf519eb7956633497a0ed29fa810001",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_RSA_OAEP_public_key.pem": "e62f63bcbddba566f7c130537f9c3a6f8a0399e43aa5714a4c2d04d145b13eee",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_RSA_PSS_private_key.pem": "e5e61ed0bf311e0277e2bb80397e4970722f9e0ad31fd397b2f10a9adee493b7",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_RSA_PSS_public_key.pem": "2987e590ccfb751f8d6092c42247fcb3e8bd39f3b2fc727666c0160295656e99",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_DSA_DSS_private_key.pem": "e5ce516b8307d1c1a029010141a2074ad321231fcc7b4add29079132c1329d0d",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_DSA_DSS_public_key.pem": "7e6162f265703d241b086f7164bda3e797c6ba35a033647f430a50391e1c60db",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_ECC_DSS_private_key.pem": "e235b7883b4b307f7a9d6297f160ce0edd51ccb53273fdec2214d91615604a04",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_ECC_DSS_public_key.pem": "dbd2ceccafca1f1176826199846fcecbdef354b96d3564c465f3b81cb96698ce",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_RSA_OAEP_private_key.pem": "a5a9e0f1a5477ac09eaad10253e162a6da45636c64f374fd22b304dd4738a8a2",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_RSA_OAEP_public_key.pem": "e43ebb51c9dd43d84791cc7af1211ae451f16b0cd7800a9122eb1e4377875e23",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_RSA_PSS_private_key.pem": "bdf9ef9ef4c741debbece4aca5ac871b2b26163e1b28a3e7e23bd8b2e78df90f",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_RSA_PSS_public_key.pem": "d0bb43a104e286acc87e8167a0504a2af23158e60f599f99d1fd9ed2d5cb3de7",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_DSA_DSS_private_key.pem": "e3b2e1120e08fcb02b200689f1a820960f3d62896567eccd9707b97776511943",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_DSA_DSS_public_key.pem": "a2432c0d9232b85ce531de4fd3d3697df74d291c15a2aeea976439f5905a8735",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_ECC_DSS_private_key.pem": "0e96c7973c79eaaf4db37b5464ffe8b7c90ad70ab3040198a6d7181dc239271e",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_ECC_DSS_public_key.pem": "b314d371df9da85e5167b003145266fec174c67469cfc48d19ebac3bfd25167d",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_RSA_OAEP_private_key.pem": "52910e0ea66b266fa14659238674bd60b475cea2e602c392d2e30685aeee6baf",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_RSA_OAEP_public_key.pem": "33b9dd90a50215ed5d56f7274d2115746e9314858ef3a30586f52e156b9d3f4d",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_RSA_PSS_private_key.pem": "b9286c116fc4025de23b25179c07bd35be14e5a89383aa7cc820936851de7993",
+    "legacy_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_RSA_PSS_public_key.pem": "432426216771b5b305698bd4e515d8b014282bdb699e687e8ff329ddb30a62ce"
+  }
+}

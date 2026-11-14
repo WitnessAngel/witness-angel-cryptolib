@@ -1,0 +1,33 @@
+{
+  "$schema": "../../schemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2026_current",
+  "description": "Three payload layers (AES_EAX, AES_CBC, CHACHA20_POLY1305), with RSA_OAEP and ECIES_X25519 key layers and an ECC_DSS ciphertext signature",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_CBC",
+      "AES_EAX",
+      "CHACHA20_POLY1305",
+      "ECC_DSS",
+      "ECIES_X25519",
+      "RSA_OAEP"
+    ],
+    "pem_protections": []
+  },
+  "expected_valid": true,
+  "sophistication_level": 3,
+  "keystore_pool": "../../keystores/2026_current/classic_pool",
+  "passphrase_mapper": {},
+  "min_library_version": "0.12",
+  "asset_sha256": {
+    "03_multiple_payload_layers.cryptoconf": "014b7d87abc8e7464c93c85ca71fccc515c6124d658ecb57334ee86732cc6d0a"
+  }
+}

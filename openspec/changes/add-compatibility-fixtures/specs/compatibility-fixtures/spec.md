@@ -82,7 +82,7 @@ For every signature algorithm supported by the library, the corpus SHALL contain
 - **THEN** verification succeeds if the sidecar expects validity, and fails otherwise
 
 ### Requirement: Keystore pool generations
-The corpus SHALL contain keystore pool fixtures of several generations: at least one with RSA-only keypairs in v0.9-era authenticators, and one with ECIES_X25519, ML_KEM_768 and ML_DSA_65 keypairs. Each pool SHALL contain a local keyfactory and one or more imported authenticator keystores. Authenticator private keys SHALL be passphrase-protected, and the pool's sidecar SHALL provide each authenticator's keystore UID, owner and dummy passphrase, as well as the keychain UIDs and key algorithms present.
+The corpus SHALL contain keystore pool fixtures of several generations: at least one with RSA-only keypairs in v0.9-era authenticators, and one with ECIES_X25519, ML_KEM_768 and ML_DSA_65 keypairs. Each pool SHALL contain a local keyfactory, and each pool produced by the generation tooling SHALL also contain one or more imported authenticator keystores (pools migrated from former test fixtures are kept as they were). Authenticator private keys SHALL be passphrase-protected, and the pool's sidecar SHALL provide each authenticator's keystore UID, owner and dummy passphrase, as well as the keychain UIDs and key algorithms present.
 
 #### Scenario: Authenticator private key unlocks with documented passphrase
 - **WHEN** an authenticator private key of a pool fixture is loaded with the passphrase from the pool sidecar

@@ -4,7 +4,6 @@
 
 import copy
 import os
-import shutil
 import random
 import tempfile
 import textwrap
@@ -3579,7 +3578,6 @@ def test_encryptor_validates_cryptoconf_upfront():
             encryptor.encrypt_data(b"stuffs", cryptoconf=cryptoconf)
 
 
-PQ_FIXTURES_DIR = Path(__file__).parent / "fixtures" / "post_quantum"
 PQ_FIXTURE_KEYCHAIN_UID = UUID("7d1b9c2e-5a4f-4e3d-8b6a-1f2e3d4c5b6a")
 PQ_FIXTURE_PAYLOAD = b"Witness Angel post-quantum fixture payload"
 
@@ -3634,20 +3632,3 @@ def test_pq_hybrid_cryptainer_with_corrupted_ml_dsa_signature():
         exception_class=SignatureVerificationError,
     )
     assert operation_report.get_error_count() == 1
-
-
-def test_pq_hybrid_fixture_cryptainer_decryption(tmp_path):
-    """Wire-format compatibility check: a cryptainer and keys committed in the repository must stay decryptable
-    (regenerate with scripts/generate_post_quantum_fixtures.py if the cryptainer format itself changes)."""
-    skip_if_fallback_backend("ML-KEM/ML-DSA")
-    keystore_pool_dir = tmp_path / "keystore_pool"
-    shutil.copytree(PQ_FIXTURES_DIR / "keystore_pool", keystore_pool_dir)
-    keystore_pool = FilesystemKeystorePool(keystore_pool_dir)
-
-    cryptainer = load_cryptainer_from_filesystem(PQ_FIXTURES_DIR / "pq_hybrid_cryptainer.crypt")
-    check_cryptainer_sanity(cryptainer)
-    assert cryptainer["keychain_uid"] == PQ_FIXTURE_KEYCHAIN_UID
-
-    result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
-    assert not operation_report.get_error_entries()
-    assert result_payload == PQ_FIXTURE_PAYLOAD

@@ -1,0 +1,1 @@
+{"ciphertext": {"$binary": {"base64": "ylNV3wOHwHKDwNWuKqvyyA==", "subType": "00"}}, "kem_ciphertext": {"$binary": {"base64": "YIKAeSL+ZaJPqMbvfI+rVs6+LtEc0cVWi3rtmje1q1I=", "subType": "00"}}}

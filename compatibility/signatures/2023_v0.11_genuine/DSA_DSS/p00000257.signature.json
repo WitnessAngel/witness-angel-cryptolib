@@ -1,0 +1,35 @@
+{
+  "$schema": "../../../schemas/signature.schema.json",
+  "fixture_kind": "signature",
+  "generation": "2023_v0.11_genuine",
+  "description": "DSA_DSS signature of a plaintext by wacryptolib==0.11 from PyPI",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.11",
+    "python_version": "3.9.13",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13",
+    "notes": "Produced by wacryptolib==0.11 from PyPI, on CPython 3.9.13 with pycryptodome 3.24.1, pymongo 4.18.3, schema 0.7.8 (the latest dependencies installable then, not those of the release date)",
+    "legacy_forms": [
+      "canonical_extjson"
+    ]
+  },
+  "requirements": {
+    "algorithms": [
+      "DSA_DSS"
+    ],
+    "pem_protections": []
+  },
+  "signature_algo": "DSA_DSS",
+  "message": "../../../plaintexts/p00000257.bin",
+  "public_key": {
+    "keystore_pool": "../../../keystores/2023_v0.11_genuine/legacy_pool",
+    "keystore": "local_keyfactory",
+    "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+    "key_algo": "DSA_DSS"
+  },
+  "expected_valid": true,
+  "asset_sha256": {
+    "p00000257.signature": "de12288c69d60e4461e6877725719819ad567d9bcd366fa5cea3b7fe06feb25f"
+  }
+}

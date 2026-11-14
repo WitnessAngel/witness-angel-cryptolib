@@ -33,6 +33,18 @@ def monkeypatch_generate_keypair_for_tests():
         patcher.stop()
 
 
+@pytest.fixture(autouse=True, scope="session")
+def check_compatibility_corpus_untouched():
+    """The frozen compatibility/ corpus must never be modified by tests (keystore pools are used from copies)."""
+    from _compatibility_corpus import snapshot_corpus
+
+    snapshot_before = snapshot_corpus()
+    yield
+    snapshot_after = snapshot_corpus()
+    changed_paths = sorted(set(snapshot_before.items()) ^ set(snapshot_after.items()))
+    assert not changed_paths, "Tests modified the compatibility corpus: %s" % sorted({path for path, _ in changed_paths})
+
+
 def import_crypto_backend(name):
     """Import a crypto backend module directly (bypassing the backend selector), or skip the test."""
     import importlib

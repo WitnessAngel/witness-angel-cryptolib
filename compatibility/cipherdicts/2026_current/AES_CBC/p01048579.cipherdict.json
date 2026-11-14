@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../schemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2026_current",
+  "description": "AES_CBC encryption of a 1048579-byte plaintext, with its symmetric key",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_CBC"
+    ],
+    "pem_protections": []
+  },
+  "cipher_algo": "AES_CBC",
+  "plaintext": "../../../plaintexts/p01048579.bin",
+  "direction": "bidirectional",
+  "symkey": {
+    "key": "e9dfc58d990a3bdc95f24402bd2df4a31a7d364c5856447744359a1b26a3eb3e",
+    "iv": "96484e4c8b41a6162bc5326435097401"
+  },
+  "asset_sha256": {
+    "p01048579.cipherdict": "4ee963ebb1a7acad5707a56676c2d943f999e66b7874d29fa968aa1c47ba6ad1"
+  }
+}

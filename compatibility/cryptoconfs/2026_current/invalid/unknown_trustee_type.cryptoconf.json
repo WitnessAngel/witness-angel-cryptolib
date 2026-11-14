@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../schemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2026_current",
+  "description": "A key cipher trustee of unknown type (must be rejected)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [],
+    "pem_protections": []
+  },
+  "expected_valid": false,
+  "sophistication_level": 0,
+  "min_library_version": "0.12",
+  "asset_sha256": {
+    "unknown_trustee_type.cryptoconf": "dbf5cc85308bb9cd419b467be17c7665e44dbe4706da053f4b6e78fb9ecb8ae1"
+  }
+}

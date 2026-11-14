@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../schemas/signature.schema.json",
+  "fixture_kind": "signature",
+  "generation": "2026_current",
+  "description": "ECC_DSS signature of a short message",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "ECC_DSS"
+    ],
+    "pem_protections": []
+  },
+  "signature_algo": "ECC_DSS",
+  "public_key": {
+    "keystore_pool": "../../../keystores/2026_current/classic_pool",
+    "keystore": "local_keyfactory",
+    "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+    "key_algo": "ECC_DSS"
+  },
+  "expected_valid": true,
+  "message_hex": "5769746e65737320416e67656c20636f6d7061746962696c697479206d657373616765",
+  "asset_sha256": {
+    "inline_message.signature": "234a77568ef10daf00297d50af1e85ab34e96f0aacdfa5a3b84f9e57ed76b010"
+  }
+}

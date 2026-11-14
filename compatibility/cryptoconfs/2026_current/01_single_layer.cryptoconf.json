@@ -1,0 +1,29 @@
+{
+  "$schema": "../../schemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2026_current",
+  "description": "Single AES_EAX payload layer, its key wrapped with a local RSA_OAEP key",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_EAX",
+      "RSA_OAEP"
+    ],
+    "pem_protections": []
+  },
+  "expected_valid": true,
+  "sophistication_level": 1,
+  "keystore_pool": "../../keystores/2026_current/classic_pool",
+  "passphrase_mapper": {},
+  "min_library_version": "0.12",
+  "asset_sha256": {
+    "01_single_layer.cryptoconf": "a308e788529ef11f36ba5259bfeea4225ffa8ec748497a44fa5c04b07a3b24c2"
+  }
+}

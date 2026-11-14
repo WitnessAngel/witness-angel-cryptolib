@@ -1,0 +1,32 @@
+{
+  "$schema": "../../schemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2022_v0.10_genuine",
+  "description": "Single AES_EAX payload layer, its key wrapped with a local RSA_OAEP key (as written by wacryptolib==0.10 from PyPI)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.10",
+    "python_version": "3.9.13",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13",
+    "notes": "Produced by wacryptolib==0.10 from PyPI, on CPython 3.9.13 with pycryptodome 3.24.1, pymongo 4.18.3, schema 0.7.8 (the latest dependencies installable then, not those of the release date)",
+    "legacy_forms": [
+      "payload_signatures_field"
+    ]
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_EAX",
+      "RSA_OAEP"
+    ],
+    "pem_protections": []
+  },
+  "expected_valid": true,
+  "sophistication_level": 1,
+  "keystore_pool": "../../keystores/2022_v0.10_genuine/legacy_pool",
+  "passphrase_mapper": {},
+  "min_library_version": "0.10",
+  "asset_sha256": {
+    "01_single_layer.cryptoconf": "9849aeabe5696bced83e5caf9a54dd520d17552f9d959a8596df0065fb3e9208"
+  }
+}

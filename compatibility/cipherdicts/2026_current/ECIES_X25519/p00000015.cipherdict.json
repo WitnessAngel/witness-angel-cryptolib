@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../schemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2026_current",
+  "description": "ECIES_X25519 encryption of a 15-byte plaintext, decryptable with a pool key",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "ECIES_X25519"
+    ],
+    "pem_protections": []
+  },
+  "cipher_algo": "ECIES_X25519",
+  "plaintext": "../../../plaintexts/p00000015.bin",
+  "direction": "decrypt_only",
+  "private_key": {
+    "keystore_pool": "../../../keystores/2026_current/classic_pool",
+    "keystore": "local_keyfactory",
+    "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+    "key_algo": "ECIES_X25519",
+    "passphrase": null
+  },
+  "asset_sha256": {
+    "p00000015.cipherdict": "a3c7b61f2ec0a18484e2d84ace1fd19ee00f125ac1a18ae96a7231c95e4e29ae"
+  }
+}

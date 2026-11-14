@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../schemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2026_current",
+  "description": "CHACHA20_POLY1305 encryption of a 15-byte plaintext, with its symmetric key",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "CHACHA20_POLY1305"
+    ],
+    "pem_protections": []
+  },
+  "cipher_algo": "CHACHA20_POLY1305",
+  "plaintext": "../../../plaintexts/p00000015.bin",
+  "direction": "bidirectional",
+  "symkey": {
+    "key": "d61d6766cdb7fd50abc331c010029391aa6f04bbfa67c17523da5646e51b7bdb",
+    "nonce": "8787553744e95602f0b2f739"
+  },
+  "asset_sha256": {
+    "p00000015.cipherdict": "2de8e555378a3adda0b92d96a32e51e6e4253f3927bb058b4daf4b24c79adab3"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plaintext.schema.json",
+  "title": "Sidecar of a plaintext fixture (raw bytes)",
+  "type": "object",
+  "allOf": [{"$ref": "_defs.schema.json#/$defs/header"}],
+  "properties": {
+    "fixture_kind": {"const": "plaintext"},
+    "size": {"type": "integer", "minimum": 0},
+    "generator": {
+      "description": "Plaintext = concatenation of SHA256(seed || counter as 4-byte big-endian), for counter = 0, 1, 2..., truncated to size",
+      "type": "object",
+      "properties": {
+        "algo": {"const": "sha256_counter"},
+        "seed": {"$ref": "_defs.schema.json#/$defs/hex"}
+      },
+      "required": ["algo", "seed"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["size", "generator"],
+  "unevaluatedProperties": false
+}

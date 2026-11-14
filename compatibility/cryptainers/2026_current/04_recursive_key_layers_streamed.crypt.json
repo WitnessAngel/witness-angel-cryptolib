@@ -1,0 +1,43 @@
+{
+  "$schema": "../../schemas/cryptainer.schema.json",
+  "fixture_kind": "cryptainer",
+  "generation": "2026_current",
+  "description": "1 MiB payload encrypted by the streaming pipeline (offloaded), with nested key layers",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_CBC",
+      "AES_EAX",
+      "CHACHA20_POLY1305",
+      "ECIES_X25519",
+      "RSA_OAEP",
+      "RSA_PSS"
+    ],
+    "pem_protections": []
+  },
+  "plaintext": "../../plaintexts/p01048579.bin",
+  "keystore_pool": "../../keystores/2026_current/classic_pool",
+  "cryptoconf": "../../cryptoconfs/2026_current/04_recursive_key_layers.cryptoconf",
+  "cryptainer_metadata": null,
+  "extjson_flavor": "relaxed",
+  "payload_offloaded": true,
+  "decryption_scenarios": [
+    {
+      "name": "local_keys_only",
+      "description": "Only unprotected local keyfactory keys are involved",
+      "passphrase_mapper": {},
+      "expected": "success"
+    }
+  ],
+  "asset_sha256": {
+    "04_recursive_key_layers_streamed.crypt": "f73bee1df26fa707b96d4ef0d81d1884d2cbf42dc52f655cf26e4ed2001f9712",
+    "04_recursive_key_layers_streamed.crypt.payload": "2a17947104906db86aa6b7f210f523a1d0941c6a48b65653d9c38c2c5f6c5962"
+  }
+}

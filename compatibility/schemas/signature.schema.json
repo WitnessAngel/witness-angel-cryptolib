@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "signature.schema.json",
+  "title": "Sidecar of a signature vector (extended-JSON signature dict, as returned by sign_message())",
+  "type": "object",
+  "allOf": [{"$ref": "_defs.schema.json#/$defs/header"}],
+  "properties": {
+    "fixture_kind": {"const": "signature"},
+    "signature_algo": {"$ref": "_defs.schema.json#/$defs/algo"},
+    "message": {"$ref": "_defs.schema.json#/$defs/relpath"},
+    "message_hex": {"$ref": "_defs.schema.json#/$defs/hex"},
+    "public_key": {"$ref": "_defs.schema.json#/$defs/key_ref"},
+    "expected_valid": {"type": "boolean"}
+  },
+  "required": ["signature_algo", "public_key", "expected_valid"],
+  "oneOf": [
+    {"required": ["message"], "not": {"required": ["message_hex"]}},
+    {"required": ["message_hex"], "not": {"required": ["message"]}}
+  ],
+  "unevaluatedProperties": false
+}

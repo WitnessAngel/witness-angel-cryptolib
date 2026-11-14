@@ -71,6 +71,12 @@ Development
   pass require_inline_payload=False for offloaded, payload-less or unfinished cryptainers (jsonschema mode unchanged)
 * Generated JSON schemas now enforce non-empty payload/key cipher layers, shared-secret shards and sigconf/sigainer
   plaintext signatures, as well as a strictly positive shared-secret threshold
+* Add a frozen, append-only `compatibility/` corpus of test vectors (plaintexts, cipherdicts, signatures, keystore
+  pools, cryptoconfs and cryptainers), produced by wacryptolib 0.9, 0.10, 0.11, the last commit before the
+  `payload_signatures` rename, and the current version (including post-quantum fixtures, formerly in
+  `tests/fixtures/post_quantum/`); each asset has a JSON sidecar (secrets, expected outcomes, provenance) validated by
+  JSON-Schemas, `tests/test_compatibility_fixtures.py` checks them all on the active crypto backend, and
+  `compatibility/README.md` documents them for other implementations
 
 
 Version 0.12

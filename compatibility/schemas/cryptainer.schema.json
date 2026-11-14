@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cryptainer.schema.json",
+  "title": "Sidecar of a cryptainer fixture (extended-JSON cryptainer, with its potential offloaded payload)",
+  "type": "object",
+  "allOf": [{"$ref": "_defs.schema.json#/$defs/header"}],
+  "properties": {
+    "fixture_kind": {"const": "cryptainer"},
+    "plaintext": {"$ref": "_defs.schema.json#/$defs/relpath"},
+    "plaintext_hex": {"$ref": "_defs.schema.json#/$defs/hex"},
+    "keystore_pool": {"$ref": "_defs.schema.json#/$defs/relpath"},
+    "cryptoconf": {
+      "description": "Cryptoconf fixture this cryptainer was produced from, if any",
+      "$ref": "_defs.schema.json#/$defs/relpath"
+    },
+    "cryptainer_metadata": {
+      "description": "Expected unencrypted metadata of the cryptainer",
+      "type": ["object", "null"]
+    },
+    "extjson_flavor": {"enum": ["canonical", "relaxed"]},
+    "payload_offloaded": {"type": "boolean"},
+    "decryption_scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+          "description": {"type": "string"},
+          "passphrase_mapper": {"$ref": "_defs.schema.json#/$defs/passphrase_mapper"},
+          "expected": {"enum": ["success", "failure"]},
+          "expected_warnings": {
+            "description": "Error types expected in the decryption report besides a success (e.g. a non-fatal SIGNATURE_ERROR)",
+            "type": "array",
+            "items": {"enum": ["SIGNATURE_ERROR", "SYMMETRIC_DECRYPTION_ERROR", "ASYMMETRIC_DECRYPTION_ERROR"]}
+          }
+        },
+        "required": ["name", "passphrase_mapper", "expected"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["keystore_pool", "extjson_flavor", "payload_offloaded", "decryption_scenarios"],
+  "oneOf": [
+    {"required": ["plaintext"], "not": {"required": ["plaintext_hex"]}},
+    {"required": ["plaintext_hex"], "not": {"required": ["plaintext"]}}
+  ],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "../../schemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2026_post_quantum",
+  "description": "Hybrid classical + post-quantum stack: AES_EAX payload layer whose key is wrapped by local RSA_OAEP and ML_KEM_768 keys, then by a 2-of-3 Shamir shared secret over authenticators (ML_KEM_768, ECIES_X25519 + ML_KEM_768, ML_KEM_768), with ML_DSA_65 plaintext and ciphertext signatures",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_EAX",
+      "ECIES_X25519",
+      "ML_DSA_65",
+      "ML_KEM_768",
+      "RSA_OAEP"
+    ],
+    "pem_protections": [
+      "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+    ]
+  },
+  "expected_valid": true,
+  "sophistication_level": 7,
+  "keystore_pool": "../../keystores/2026_post_quantum/pq_pool",
+  "passphrase_mapper": {
+    "authenticator@da7e0000-0000-4000-8000-000000000004": [
+      "compat-dave-passphrase"
+    ],
+    "authenticator@e1210000-0000-4000-8000-000000000005": [
+      "compat-erin-passphrase"
+    ],
+    "authenticator@f2a40000-0000-4000-8000-000000000006": [
+      "compat-frank-passphrase"
+    ]
+  },
+  "min_library_version": "0.12",
+  "asset_sha256": {
+    "07_pq_hybrid.cryptoconf": "2384a58226a2899063d8fd97657ec53dbe5418bca14022a0fd1ca6915e26caf0"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../schemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2026_current",
+  "description": "AES_EAX encryption of a 4099-byte plaintext, with its symmetric key",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_EAX"
+    ],
+    "pem_protections": []
+  },
+  "cipher_algo": "AES_EAX",
+  "plaintext": "../../../plaintexts/p00004099.bin",
+  "direction": "bidirectional",
+  "symkey": {
+    "key": "a4f63c49f6735eb7b900eab6efdaa1165a52a05800c869bb6608495c7ff52de3",
+    "nonce": "3f1077fe0ba7406fe13cdd2da4a8e581"
+  },
+  "asset_sha256": {
+    "p00004099.cipherdict": "320fd224c33ec2c426f6c6cf40f958f69caac51d47dc69a30787141ecf7ac331"
+  }
+}

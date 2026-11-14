@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../schemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2026_current",
+  "description": "No payload cipher layer at all (must be rejected)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [],
+    "pem_protections": []
+  },
+  "expected_valid": false,
+  "sophistication_level": 0,
+  "min_library_version": "0.12",
+  "asset_sha256": {
+    "no_payload_cipher_layer.cryptoconf": "4e041f69fc6090d47b504cc567bb83ac1d5b9a44ca11484cd6108b85022cd5a6"
+  }
+}

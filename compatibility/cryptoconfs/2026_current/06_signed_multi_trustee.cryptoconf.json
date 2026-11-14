@@ -1,0 +1,46 @@
+{
+  "$schema": "../../schemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2026_current",
+  "description": "Plaintext signatures (RSA_PSS, ECC_DSS), two payload layers, a local ECIES_X25519 key layer plus a 2-of-3 Shamir shared secret over authenticators with nested symmetric and local key layers, and a DSA_DSS ciphertext signature",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "787b93a19ccd3fa9b7a95518b67b02239f3ce22a",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_CBC",
+      "AES_EAX",
+      "DSA_DSS",
+      "ECC_DSS",
+      "ECIES_X25519",
+      "RSA_OAEP",
+      "RSA_PSS"
+    ],
+    "pem_protections": [
+      "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+    ]
+  },
+  "expected_valid": true,
+  "sophistication_level": 6,
+  "keystore_pool": "../../keystores/2026_current/classic_pool",
+  "passphrase_mapper": {
+    "authenticator@a11ce000-0000-4000-8000-000000000001": [
+      "compat-alice-passphrase"
+    ],
+    "authenticator@b0b00000-0000-4000-8000-000000000002": [
+      "compat-bob-passphrase"
+    ],
+    "authenticator@ca201000-0000-4000-8000-000000000003": [
+      "compat-carol-passphrase"
+    ]
+  },
+  "min_library_version": "0.12",
+  "asset_sha256": {
+    "06_signed_multi_trustee.cryptoconf": "af67492e968e0097362ca55114169fa39ab5d1aff909988989939312e6d37484"
+  }
+}

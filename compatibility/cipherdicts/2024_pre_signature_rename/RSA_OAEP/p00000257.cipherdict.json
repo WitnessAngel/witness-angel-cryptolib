@@ -1,0 +1,34 @@
+{
+  "$schema": "../../../schemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2024_pre_signature_rename",
+  "description": "RSA_OAEP encryption of a 257-byte plaintext by wacryptolib at git commit 2328abe9e3, decryptable with a pool key",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "python_version": "3.11.2",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13",
+    "notes": "Produced by wacryptolib at git commit 2328abe9e3, on CPython 3.11.2 with pycryptodome 3.24.1, pymongo 4.20.0, schema 0.7.8 (the latest dependencies installable then, not those of the release date)",
+    "library_commit": "2328abe9e3abf2ecc85df53f88c1d56727ee5b72"
+  },
+  "requirements": {
+    "algorithms": [
+      "RSA_OAEP"
+    ],
+    "pem_protections": []
+  },
+  "cipher_algo": "RSA_OAEP",
+  "plaintext": "../../../plaintexts/p00000257.bin",
+  "direction": "decrypt_only",
+  "private_key": {
+    "keystore_pool": "../../../keystores/2024_pre_signature_rename/legacy_pool",
+    "keystore": "local_keyfactory",
+    "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+    "key_algo": "RSA_OAEP",
+    "passphrase": null
+  },
+  "asset_sha256": {
+    "p00000257.cipherdict": "b5dd327d3b307c97b46361faf2cc2f0afcc54d2de7b57bd09b3792ea7186bd2b"
+  }
+}

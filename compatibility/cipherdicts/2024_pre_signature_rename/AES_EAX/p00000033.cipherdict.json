@@ -1,0 +1,31 @@
+{
+  "$schema": "../../../schemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2024_pre_signature_rename",
+  "description": "AES_EAX encryption of a 33-byte plaintext by wacryptolib at git commit 2328abe9e3, with its symmetric key",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "python_version": "3.11.2",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-13",
+    "notes": "Produced by wacryptolib at git commit 2328abe9e3, on CPython 3.11.2 with pycryptodome 3.24.1, pymongo 4.20.0, schema 0.7.8 (the latest dependencies installable then, not those of the release date)",
+    "library_commit": "2328abe9e3abf2ecc85df53f88c1d56727ee5b72"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_EAX"
+    ],
+    "pem_protections": []
+  },
+  "cipher_algo": "AES_EAX",
+  "plaintext": "../../../plaintexts/p00000033.bin",
+  "direction": "bidirectional",
+  "symkey": {
+    "key": "6d9080b3f4ac566251375725e8ac576fc71308ed6f240cac414beb6c95cfa278",
+    "nonce": "31c7afff8787ffa82b2b9c7787c35776"
+  },
+  "asset_sha256": {
+    "p00000033.cipherdict": "308c6885062a6aea2224b206c382aecd47200dfab409cc61304d4670d6423316"
+  }
+}

@@ -1,0 +1,4 @@
+# Compatibility fixtures must stay byte-exact: never convert their line endings
+compatibility/** -text
+compatibility/**/*.bin binary
+compatibility/**/*.payload binary

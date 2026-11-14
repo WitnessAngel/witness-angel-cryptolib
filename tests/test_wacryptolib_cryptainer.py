@@ -3205,6 +3205,30 @@ def test_python_schema_error_summary_keeps_field_path_and_cause_of_non_last_or_a
         assert "Missing key: 'keystore_uid'" in summary
 
 
+def test_python_schema_error_summary_keeps_deepest_cause_in_deeply_nested_schema():
+    from schema import Schema, Or, SchemaError
+    from wacryptolib.utilities.validation_utils import summarize_python_schema_error
+
+    innermost_schema = Or(
+        {"kind": "wanted", "needed_field": int},
+        *[{"kind": "other%d" % i, "param%d" % i: str} for i in range(12)],  # Irrelevant last alternatives
+    )
+    data_schema = innermost_schema
+    data = {"kind": "wanted"}  # Missing "needed_field"
+    for level in "edcba":  # 5 levels of nesting
+        data_schema = {level: data_schema}
+        data = {level: data}
+
+    with pytest.raises(SchemaError) as exc_info:
+        Schema(data_schema).validate(data)
+
+    for max_lines in (5, 10):
+        summary = summarize_python_schema_error(exc_info.value, max_lines=max_lines)
+        assert len(summary.splitlines()) <= max_lines
+        assert "Missing key: 'needed_field'" in summary
+        assert "Key 'e' error:" in summary  # Deepest path line, closest to the cause
+
+
 def test_cryptainer_validation_error_messages_keep_deep_causes():
     cryptainer = encrypt_payload_into_cryptainer(
         payload=b"abc", cryptoconf=COMPLEX_SHAMIR_CRYPTOCONF, cryptainer_metadata=None

@@ -41,42 +41,39 @@ def summarize_python_schema_error(exc: SchemaError, max_lines=10) -> str:
     return summarize_validation_error_lines(lines, max_lines=max_lines)
 
 
-def _is_essential_schema_error_line(line: str) -> bool:
-    """Lines carrying a field path ("Key 'x' error:") or the direct cause of a failure, which a failing non-last
-    Or() alternative would otherwise lose in the skipped middle, leaving only unrelated mismatches of the last one."""
-    return (line.startswith("Key ") and line.endswith(" error:")) or line.startswith(("Missing key", "Wrong key"))
-
-
-def _select_lines_within_budget(lines, max_lines):
-    """Keep the essential lines first, then fill the remaining budget with the tail lines, and replace each
-    group of dropped lines by a skip marker, so that the result fits in `max_lines` (markers included)."""
-
-    def rendered_length(kept_indices):
-        ordered = sorted(kept_indices)
-        gap_count = sum(1 for previous, current in zip([-1] + ordered, ordered) if current != previous + 1)
-        gap_count += 1 if ordered and ordered[-1] != len(lines) - 1 else 0
-        return len(ordered) + gap_count
-
-    kept = [index for index, line in enumerate(lines) if _is_essential_schema_error_line(line)]
-    kept = set(kept[: max(max_lines // 2, 1)])
-    while kept and rendered_length(kept) > max_lines:
-        kept.discard(max(kept))
-    for index in reversed(range(len(lines))):
-        if index not in kept and rendered_length(kept | {index}) <= max_lines:
-            kept.add(index)
-        elif index not in kept:
-            break
-
+def _render_kept_lines(lines, kept_indices):
+    """Return the kept lines, in order, with one skip marker in place of each group of dropped lines."""
     result = []
     previous = -1
-    for index in sorted(kept):
-        if index != previous + 1:
+    for index in sorted(kept_indices):
+        if index > previous + 1:
             result.append("[... %d lines skipped]" % (index - previous - 1))
         result.append(lines[index])
         previous = index
-    if previous != len(lines) - 1:
+    if previous < len(lines) - 1:
         result.append("[... %d lines skipped]" % (len(lines) - 1 - previous))
     return result
+
+
+def _select_lines_within_budget(lines, max_lines):
+    """Fit `lines` in `max_lines` (skip markers included), by decreasing priority: the lines giving the direct cause
+    of a failure ("Missing key", "Wrong key"), then the field path lines ("Key 'x' error:") preceding the first
+    cause, the closest to it first, then the tail lines. Else a failing non-last Or() alternative would lose its
+    cause to the unrelated mismatches of the last one."""
+    cause_indices = [i for i, line in enumerate(lines) if line.startswith(("Missing key", "Wrong key"))]
+    first_cause_index = cause_indices[0] if cause_indices else 0
+    path_indices = [
+        i for i, line in enumerate(lines[:first_cause_index]) if line.startswith("Key ") and line.endswith(" error:")
+    ]
+    priorities = cause_indices[: max(max_lines // 2, 1)] + path_indices[::-1] + list(range(len(lines)))[::-1]
+
+    kept = set()
+    for index in priorities:
+        if index not in kept and len(_render_kept_lines(lines, kept | {index})) <= max_lines:
+            kept.add(index)
+            if len(_render_kept_lines(lines, kept)) >= max_lines:
+                break  # Budget used up
+    return _render_kept_lines(lines, kept)
 
 
 def validate_data_against_schema(data_tree, schema: Schema):

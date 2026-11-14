@@ -2,6 +2,7 @@
 Development
 =============
 
+* **BREAKING**: common passphrases (the None key of `passphrase_mapper`) are not sent anymore to remote JSON-RPC trustees, which only get the passphrases of their own ID; per-trustee passphrases may be given as a tuple, and a single str/bytes passphrase, or non-str/bytes items, now raise ValueError instead of being split into characters
 * Remember the validation of cryptoconfs and cryptainers with internal dict subclasses (ValidatedCryptoconf and
   ValidatedCryptainer), so that they are validated once instead of by every layer; new public helpers
   ensure_validated_cryptoconf() and ensure_validated_cryptainer() (existing functions still accept plain dicts)

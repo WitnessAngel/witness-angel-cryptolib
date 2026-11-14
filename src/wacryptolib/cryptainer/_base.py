@@ -85,8 +85,10 @@ class CryptainerBase:
 
     `keystore_pool` will be used to fetch local/imported trustees necessary to encryption/decryption operations.
 
-    `passphrase_mapper` maps trustees IDs to potential passphrases; a None key can be used to provide additional
-    passphrases for all trustees.
+    `passphrase_mapper` maps trustees IDs to lists (or tuples) of potential passphrases (str or bytes); a None key can
+    be used to provide additional passphrases for all LOCAL and IMPORTED trustees, but these common passphrases are
+    never sent to remote JSON-RPC trustees, which only get the passphrases listed under their own ID.
+    The mapper is checked at construction, and again when read, so later additions by the caller are taken into account.
     """
 
     def __init__(self, keystore_pool: KeystorePoolBase = None, passphrase_mapper: Optional[dict] = None):
@@ -98,22 +100,27 @@ class CryptainerBase:
             keystore_pool = DUMMY_KEYSTORE_POOL
         assert isinstance(keystore_pool, KeystorePoolBase), keystore_pool
         self._keystore_pool = keystore_pool
-        self._passphrase_mapper = self._normalize_passphrase_mapper(passphrase_mapper)
+        self._passphrase_mapper = {} if passphrase_mapper is None else passphrase_mapper
+        for trustee_id in self._passphrase_mapper:
+            self._get_passphrases(trustee_id)  # Fail early on invalid values
 
-    @staticmethod
-    def _normalize_passphrase_mapper(passphrase_mapper: Optional[dict]) -> dict:
-        """Return a new mapper whose values are all lists of passphrases (any non-string sequence is accepted)."""
-        normalized_mapper = {}
-        for trustee_id, passphrases in (passphrase_mapper or {}).items():
-            if passphrases is None:
-                passphrases = []
-            if isinstance(passphrases, (str, bytes)) or not isinstance(passphrases, Sequence):
+    def _get_passphrases(self, trustee_id) -> list:
+        """Return a NEW list of the passphrases registered for this trustee ID (None for the common ones)."""
+        passphrases = self._passphrase_mapper.get(trustee_id)
+        if passphrases is None:
+            return []
+        # A single passphrase would be split into characters/ints, and bytearray into ints
+        if isinstance(passphrases, (str, bytes, bytearray)) or not isinstance(passphrases, Sequence):
+            raise ValueError(
+                "Passphrases of trustee %r must be a list/tuple of passphrases, not %s"
+                % (trustee_id, type(passphrases).__name__)
+            )
+        for passphrase in passphrases:
+            if not isinstance(passphrase, (str, bytes)):
                 raise ValueError(
-                    "Passphrases of trustee %r must be a list/tuple of passphrases, not %s"
-                    % (trustee_id, type(passphrases).__name__)
+                    "Passphrases of trustee %r must be str or bytes, not %s" % (trustee_id, type(passphrase).__name__)
                 )
-            normalized_mapper[trustee_id] = list(passphrases)
-        return normalized_mapper
+        return list(passphrases)
 
 
 # FIXME make it a STATIC METHOD of CryptainerBase ?

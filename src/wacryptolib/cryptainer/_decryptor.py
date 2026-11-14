@@ -828,11 +828,15 @@ class CryptainerDecryptor(CryptainerBase):
         key_bytes = None
 
         trustee_id = get_trustee_id(trustee)
-        passphrases = self._passphrase_mapper.get(trustee_id) or []  # Already normalized to lists
+        passphrases = self._get_passphrases(trustee_id)
+        common_passphrases = self._get_passphrases(None)
 
-        if trustee.get("trustee_type") != CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE:
-            # COMMON passphrases are NEVER sent over the network, since they might protect unrelated keys
-            passphrases = passphrases + self._passphrase_mapper.get(None, [])  # In a NEW list
+        if trustee.get("trustee_type") == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE:
+            if common_passphrases:
+                # COMMON passphrases are NEVER sent over the network, since they might protect unrelated keys
+                logger.debug("Common passphrases are not sent to remote trustee %s", trustee_id)
+        else:
+            passphrases += common_passphrases
 
         operation_report.add_information(
             "Attempting actual decryption of key using asymmetric algorithm %s (via trustee)" % cipher_algo

@@ -1836,11 +1836,23 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
     assert result_payload == payload
 
     # A single passphrase (not in a sequence) is rejected instead of being split into characters
-    for bad_passphrases in (passphrase, passphrase.encode(), 42):
+    for bad_passphrases in (passphrase, passphrase.encode(), bytearray(passphrase.encode()), 42):
         with pytest.raises(ValueError, match="must be a list/tuple"):
             decrypt_payload_from_cryptainer(
                 cryptainer, keystore_pool=keystore_pool, passphrase_mapper={shard_trustee_id: bad_passphrases}
             )
+    for bad_items in ([None], [passphrase, 42]):
+        with pytest.raises(ValueError, match="must be str or bytes"):
+            decrypt_payload_from_cryptainer(
+                cryptainer, keystore_pool=keystore_pool, passphrase_mapper={None: bad_items}
+            )
+
+    # Entries added to the mapper after the decryptor creation are taken into account
+    late_passphrase_mapper = {}
+    decryptor = CryptainerDecryptor(keystore_pool=keystore_pool, passphrase_mapper=late_passphrase_mapper)
+    late_passphrase_mapper[shard_trustee_id] = [passphrase]
+    assert decryptor._get_passphrases(shard_trustee_id) == [passphrase]
+    assert decryptor._get_passphrases("unknown") == []
 
     # Wrong passphrase
     result_payload, operation_report = decrypt_payload_from_cryptainer(

@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import copy
 import os
 import pathlib
 import random
@@ -10,6 +11,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from unittest import mock
 from uuid import UUID
 
 from click.testing import CliRunner
@@ -20,11 +22,37 @@ from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.cli import wacryptolib_cli as cli, _short_format_datetime
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CryptainerStorage, check_cryptoconf_sanity
+from wacryptolib.exceptions import KeystoreDoesNotExist
+from wacryptolib.keygen import generate_keypair
 from wacryptolib.keystore import FilesystemKeystore, generate_keypair_for_storage, _get_keystore_metadata_file_path
 from wacryptolib.utilities import dump_to_json_file, get_utc_now_date, load_from_json_str
 
-REAL_GATEWAY_URL = "https://api.witnessangel.com/gateway/jsonrpc/"  # Real gateway used by some tests
-REAL_GATEWAY_KEYSTORE_UID = "0f0c0988-80c1-9362-11c1-b06909a3a53c"  # Authenticator of ¤aaa, must exist in real prod
+FAKE_GATEWAY_URL = "https://gateway.example.com/jsonrpc/"  # Never contacted: JSON-RPC calls are mocked
+FAKE_GATEWAY_KEYSTORE_UID = "0f0c0988-80c1-9362-11c1-b06909a3a53c"  # Authenticator of ¤aaa, served by the mock
+FAKE_GATEWAY_KEYCHAIN_UID = UUID("0f0c0989-1111-a226-c471-99cbb2d203c3")
+
+
+def _build_fake_gateway_get_public_authenticator():
+    """Return a replacement for the remote `get_public_authenticator()` method, avoiding any network access."""
+    public_authenticator = dict(
+        keystore_owner="¤aaa",
+        keystore_uid=UUID(FAKE_GATEWAY_KEYSTORE_UID),
+        keystore_creation_datetime=get_utc_now_date(),
+        public_keys=[
+            dict(
+                keychain_uid=FAKE_GATEWAY_KEYCHAIN_UID,
+                key_algo="RSA_OAEP",
+                key_value=generate_keypair(key_algo="RSA_OAEP", serialize=True)["public_key"],
+            )
+        ],
+    )
+
+    def get_public_authenticator(self, keystore_uid):
+        if keystore_uid != public_authenticator["keystore_uid"]:
+            raise KeystoreDoesNotExist("Keystore %s does not exist in database" % keystore_uid)
+        return copy.deepcopy(public_authenticator)
+
+    return get_public_authenticator
 
 # For when runner.invoke() is not sufficient
 FLIGHTBOX_CLI_INVOCATION_ARGS = [sys.executable, "-m", "wacryptolib"]
@@ -771,6 +799,15 @@ def test_cli_subprocess_invocation():
 
 
 def test_cli_foreign_keystore_management(tmp_path):
+    with mock.patch(
+        "wacryptolib.jsonrpc_client.JsonRpcProxy.get_public_authenticator",
+        new=_build_fake_gateway_get_public_authenticator(),
+        create=True,
+    ):
+        _check_cli_foreign_keystore_management(tmp_path)
+
+
+def _check_cli_foreign_keystore_management(tmp_path):
     base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
 
     authenticator_path = tmp_path / "authenticator"
@@ -810,7 +847,7 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert result.exit_code == 0
     assert "No foreign keystores found" in result.stderr
 
-    result = runner.invoke(cli, base_args + ["foreign-keystore", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID])
+    result = runner.invoke(cli, base_args + ["foreign-keystore", "import", "--from-gateway", FAKE_GATEWAY_KEYSTORE_UID])
     assert result.exit_code == 2  # click.UsageError
     assert "No web gateway URL specified" in result.stderr
 
@@ -819,12 +856,12 @@ def test_cli_foreign_keystore_management(tmp_path):
         base_args
         + [
             "--gateway-url",
-            REAL_GATEWAY_URL,  # Here --include-private-keys has no effect
+            FAKE_GATEWAY_URL,  # Here --include-private-keys has no effect
             "foreign-keystore",
             "import",
             "--include-private-keys",
             "--from-gateway",
-            REAL_GATEWAY_KEYSTORE_UID,
+            FAKE_GATEWAY_KEYSTORE_UID,
         ],
         catch_exceptions=False,
     )
@@ -836,11 +873,11 @@ def test_cli_foreign_keystore_management(tmp_path):
         base_args
         + [
             "--gateway-url",
-            REAL_GATEWAY_URL,
+            FAKE_GATEWAY_URL,
             "foreign-keystore",
             "import",
             "--from-gateway",
-            REAL_GATEWAY_KEYSTORE_UID,
+            FAKE_GATEWAY_KEYSTORE_UID,
         ],
         catch_exceptions=False,
     )
@@ -852,7 +889,7 @@ def test_cli_foreign_keystore_management(tmp_path):
         base_args
         + [
             "--gateway-url",
-            REAL_GATEWAY_URL,
+            FAKE_GATEWAY_URL,
             "foreign-keystore",
             "import",
             "--from-gateway",
@@ -864,7 +901,7 @@ def test_cli_foreign_keystore_management(tmp_path):
 
     result = runner.invoke(
         cli,
-        base_args + ["--gateway-url", REAL_GATEWAY_URL, "foreign-keystore", "import", "--from-gateway", wrong_uuid_str],
+        base_args + ["--gateway-url", FAKE_GATEWAY_URL, "foreign-keystore", "import", "--from-gateway", wrong_uuid_str],
     )
     assert result.exit_code == 1  # Other exception raised
     assert "does not exist in database" in str(result.exc_info[1])
@@ -875,7 +912,7 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert " ¤aaa " in result.stdout
 
     result = runner.invoke(
-        cli, base_args + ["foreign-keystore", "view", REAL_GATEWAY_KEYSTORE_UID], catch_exceptions=False
+        cli, base_args + ["foreign-keystore", "view", FAKE_GATEWAY_KEYSTORE_UID], catch_exceptions=False
     )
     assert result.exit_code == 0
     assert " 0f0c0988-80c1-9362-11c1-b06909a3a53c " in result.stdout  # Table is displayed
@@ -886,12 +923,12 @@ def test_cli_foreign_keystore_management(tmp_path):
     assert result.exit_code == 2
     assert "not found" in result.stderr
 
-    result = runner.invoke(cli, base_args + ["foreign-keystore", "import", "--from-gateway", REAL_GATEWAY_KEYSTORE_UID])
+    result = runner.invoke(cli, base_args + ["foreign-keystore", "import", "--from-gateway", FAKE_GATEWAY_KEYSTORE_UID])
     assert result.exit_code == 2
     assert "No web gateway URL specified" in result.stderr
 
     result = runner.invoke(
-        cli, base_args + ["foreign-keystore", "delete", REAL_GATEWAY_KEYSTORE_UID], catch_exceptions=False
+        cli, base_args + ["foreign-keystore", "delete", FAKE_GATEWAY_KEYSTORE_UID], catch_exceptions=False
     )
     assert result.exit_code == 0
     assert "successfully deleted" in result.stderr

@@ -29,7 +29,7 @@ Every fixture that needs accompanying information or secrets (original plaintext
 - **THEN** it obtains the plaintext reference and any symmetric key material without needing extended-JSON decoding
 
 ### Requirement: Sidecars are validated by committed JSON-Schemas
-The corpus SHALL include JSON-Schemas, one per sidecar kind plus shared definitions, in a `schemas` directory at the corpus root. Every sidecar SHALL validate against the schema of its declared kind.
+The corpus SHALL include JSON-Schemas, one per sidecar kind plus shared definitions, in a `_schemas` directory at the corpus root. Every sidecar SHALL validate against the schema of its declared kind.
 
 #### Scenario: Valid corpus
 - **WHEN** the compatibility test suite runs

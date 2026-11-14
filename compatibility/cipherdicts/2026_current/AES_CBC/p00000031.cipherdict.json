@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../schemas/cipherdict.schema.json",
+  "$schema": "../../../_schemas/cipherdict.schema.json",
   "fixture_kind": "cipherdict",
   "generation": "2026_current",
   "description": "AES_CBC encryption of a 31-byte plaintext, with its symmetric key",

@@ -1,5 +1,5 @@
 {
-  "$schema": "../schemas/plaintext.schema.json",
+  "$schema": "../_schemas/plaintext.schema.json",
   "fixture_kind": "plaintext",
   "generation": "2026_current",
   "description": "Deterministic pseudo-random plaintext of 0 bytes",

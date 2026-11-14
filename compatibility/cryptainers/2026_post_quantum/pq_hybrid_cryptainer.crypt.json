@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptainer.schema.json",
+  "$schema": "../../_schemas/cryptainer.schema.json",
   "fixture_kind": "cryptainer",
   "generation": "2026_post_quantum",
   "description": "Former post-quantum test fixture: hybrid RSA_OAEP + ML_KEM_768 key layers (plus a 1-of-2 shared secret), AES_EAX payload, ML_DSA_65 ciphertext signature, inline",

@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../schemas/signature.schema.json",
+  "$schema": "../../../_schemas/signature.schema.json",
   "fixture_kind": "signature",
   "generation": "2026_current",
   "description": "RSA_PSS signature of a 257-byte plaintext",

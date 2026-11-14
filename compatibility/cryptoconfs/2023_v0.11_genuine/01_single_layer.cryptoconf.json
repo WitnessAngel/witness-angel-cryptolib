@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptoconf.schema.json",
+  "$schema": "../../_schemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2023_v0.11_genuine",
   "description": "Single AES_EAX payload layer, its key wrapped with a local RSA_OAEP key (as written by wacryptolib==0.11 from PyPI)",

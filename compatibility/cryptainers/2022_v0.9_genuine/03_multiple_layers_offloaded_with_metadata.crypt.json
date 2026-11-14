@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptainer.schema.json",
+  "$schema": "../../_schemas/cryptainer.schema.json",
   "fixture_kind": "cryptainer",
   "generation": "2022_v0.9_genuine",
   "description": "64 KiB payload, offloaded, with cryptainer metadata (by wacryptolib==0.9 from PyPI)",

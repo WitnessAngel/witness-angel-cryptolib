@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptoconf.schema.json",
+  "$schema": "../../_schemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2026_post_quantum",
   "description": "Hybrid classical + post-quantum stack: AES_EAX payload layer whose key is wrapped by local RSA_OAEP and ML_KEM_768 keys, then by a 2-of-3 Shamir shared secret over authenticators (ML_KEM_768, ECIES_X25519 + ML_KEM_768, ML_KEM_768), with ML_DSA_65 plaintext and ciphertext signatures",

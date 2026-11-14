@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptainer.schema.json",
+  "$schema": "../../_schemas/cryptainer.schema.json",
   "fixture_kind": "cryptainer",
   "generation": "2026_current",
   "description": "Payload protected by a 2-of-3 Shamir shared secret over authenticators, inline",

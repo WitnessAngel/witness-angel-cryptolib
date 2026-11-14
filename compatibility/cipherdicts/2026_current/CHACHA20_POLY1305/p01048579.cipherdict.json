@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../schemas/cipherdict.schema.json",
+  "$schema": "../../../_schemas/cipherdict.schema.json",
   "fixture_kind": "cipherdict",
   "generation": "2026_current",
   "description": "CHACHA20_POLY1305 encryption of a 1048579-byte plaintext, with its symmetric key",

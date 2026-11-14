@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../schemas/signature.schema.json",
+  "$schema": "../../../_schemas/signature.schema.json",
   "fixture_kind": "signature",
   "generation": "2023_v0.11_genuine",
   "description": "ECC_DSS signature of a plaintext by wacryptolib==0.11 from PyPI",

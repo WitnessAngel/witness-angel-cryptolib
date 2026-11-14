@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/keystore_pool.schema.json",
+  "$schema": "../../_schemas/keystore_pool.schema.json",
   "fixture_kind": "keystore_pool",
   "generation": "2024_pre_signature_rename",
   "description": "Keystore pool of wacryptolib at git commit 2328abe9e3: local keyfactory (RSA_OAEP, RSA_PSS, DSA_DSS, ECC_DSS keys of three keychains, unprotected) and three imported authenticators with a passphrase-protected RSA_OAEP key",

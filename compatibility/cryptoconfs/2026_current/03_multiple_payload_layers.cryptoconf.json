@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptoconf.schema.json",
+  "$schema": "../../_schemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2026_current",
   "description": "Three payload layers (AES_EAX, AES_CBC, CHACHA20_POLY1305), with RSA_OAEP and ECIES_X25519 key layers and an ECC_DSS ciphertext signature",

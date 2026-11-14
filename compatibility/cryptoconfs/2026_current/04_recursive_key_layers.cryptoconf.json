@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptoconf.schema.json",
+  "$schema": "../../_schemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2026_current",
   "description": "Symmetric key layers nested in key layers (AES_EAX, CHACHA20_POLY1305 then AES_CBC), wrapped by RSA_OAEP and ECIES_X25519 keys of several keychains, with an RSA_PSS ciphertext signature",

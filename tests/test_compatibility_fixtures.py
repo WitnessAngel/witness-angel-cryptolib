@@ -70,7 +70,7 @@ _COPIED_GENERATION = "2022_v0.9_genuine"
 def corpus_copy_dir(tmp_path):
     """A partial copy of the corpus (schemas, plaintexts, and one legacy generation), which is sound on its own."""
     corpus_copy_dir = tmp_path / "compatibility"
-    shutil.copytree(corpus.SCHEMAS_DIR, corpus_copy_dir / "schemas")
+    shutil.copytree(corpus.SCHEMAS_DIR, corpus_copy_dir / corpus.SCHEMAS_DIR.name)
     shutil.copytree(corpus.CORPUS_DIR / "plaintexts", corpus_copy_dir / "plaintexts")
     for kind_dirname in ("keystores", "cryptoconfs", "cryptainers"):
         shutil.copytree(

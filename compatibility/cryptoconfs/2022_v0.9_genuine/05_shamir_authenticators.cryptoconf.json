@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptoconf.schema.json",
+  "$schema": "../../_schemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2022_v0.9_genuine",
   "description": "CHACHA20_POLY1305 payload layer whose key is wrapped by a local RSA_OAEP key, then split into a 2-of-3 Shamir shared secret over passphrase-protected authenticators, with an RSA_PSS signature (as written by wacryptolib==0.9 from PyPI)",

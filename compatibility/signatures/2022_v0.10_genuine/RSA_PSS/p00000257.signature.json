@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../schemas/signature.schema.json",
+  "$schema": "../../../_schemas/signature.schema.json",
   "fixture_kind": "signature",
   "generation": "2022_v0.10_genuine",
   "description": "RSA_PSS signature of a plaintext by wacryptolib==0.10 from PyPI",

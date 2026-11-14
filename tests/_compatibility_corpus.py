@@ -7,7 +7,7 @@ Read-side utilities of the compatibility/ corpus (see compatibility/README.md), 
 generation scripts of scripts/compatibility/.
 
 Sidecars are plain JSON files named after their asset with ".json" appended, validated by the JSON-Schemas of
-compatibility/schemas/, which are resolved locally (never through the network).
+compatibility/_schemas/, which are resolved locally (never through the network).
 """
 
 import base64
@@ -19,7 +19,7 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
 CORPUS_DIR = Path(__file__).resolve().parents[1] / "compatibility"
-SCHEMAS_DIR = CORPUS_DIR / "schemas"
+SCHEMAS_DIR = CORPUS_DIR / "_schemas"
 SIDECAR_SUFFIX = ".json"
 SCHEMA_SUFFIX = ".schema.json"
 

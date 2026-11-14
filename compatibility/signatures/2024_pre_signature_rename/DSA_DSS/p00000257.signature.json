@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../schemas/signature.schema.json",
+  "$schema": "../../../_schemas/signature.schema.json",
   "fixture_kind": "signature",
   "generation": "2024_pre_signature_rename",
   "description": "DSA_DSS signature of a plaintext by wacryptolib at git commit 2328abe9e3",

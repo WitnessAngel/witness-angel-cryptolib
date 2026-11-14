@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptoconf.schema.json",
+  "$schema": "../../_schemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2026_current",
   "description": "Plaintext signatures (RSA_PSS, ECC_DSS), two payload layers, a local ECIES_X25519 key layer plus a 2-of-3 Shamir shared secret over authenticators with nested symmetric and local key layers, and a DSA_DSS ciphertext signature",

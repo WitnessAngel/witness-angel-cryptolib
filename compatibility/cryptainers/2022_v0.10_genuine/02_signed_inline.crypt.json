@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptainer.schema.json",
+  "$schema": "../../_schemas/cryptainer.schema.json",
   "fixture_kind": "cryptainer",
   "generation": "2022_v0.10_genuine",
   "description": "Small signed payload, inline (by wacryptolib==0.10 from PyPI)",

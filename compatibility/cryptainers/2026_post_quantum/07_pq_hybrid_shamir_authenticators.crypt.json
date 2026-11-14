@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptainer.schema.json",
+  "$schema": "../../_schemas/cryptainer.schema.json",
   "fixture_kind": "cryptainer",
   "generation": "2026_post_quantum",
   "description": "Hybrid RSA_OAEP + ML_KEM_768 cryptainer with a Shamir shared secret over post-quantum authenticators, ML_DSA_65 signatures, inline",

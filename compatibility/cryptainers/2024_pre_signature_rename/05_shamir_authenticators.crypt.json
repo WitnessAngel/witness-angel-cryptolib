@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptainer.schema.json",
+  "$schema": "../../_schemas/cryptainer.schema.json",
   "fixture_kind": "cryptainer",
   "generation": "2024_pre_signature_rename",
   "description": "Payload protected by a 2-of-3 Shamir shared secret over authenticators, inline, with cryptainer metadata (by wacryptolib at git commit 2328abe9e3)",

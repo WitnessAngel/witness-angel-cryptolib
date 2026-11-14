@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../schemas/cipherdict.schema.json",
+  "$schema": "../../../_schemas/cipherdict.schema.json",
   "fixture_kind": "cipherdict",
   "generation": "2022_v0.9_genuine",
   "description": "AES_CBC encryption of a 33-byte plaintext by wacryptolib==0.9 from PyPI, with its symmetric key",

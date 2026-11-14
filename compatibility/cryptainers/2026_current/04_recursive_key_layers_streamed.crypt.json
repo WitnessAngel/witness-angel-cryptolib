@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptainer.schema.json",
+  "$schema": "../../_schemas/cryptainer.schema.json",
   "fixture_kind": "cryptainer",
   "generation": "2026_current",
   "description": "1 MiB payload encrypted by the streaming pipeline (offloaded), with nested key layers",

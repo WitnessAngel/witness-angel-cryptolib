@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptoconf.schema.json",
+  "$schema": "../../_schemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2026_current",
   "description": "CHACHA20_POLY1305 payload layer whose key is a 2-of-3 Shamir shared secret over three passphrase-protected authenticators (RSA_OAEP and ECIES_X25519 keys)",

@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/keystore_pool.schema.json",
+  "$schema": "../../_schemas/keystore_pool.schema.json",
   "fixture_kind": "keystore_pool",
   "generation": "2023_v0.11_genuine",
   "description": "Keystore pool of wacryptolib==0.11 from PyPI: local keyfactory (RSA_OAEP, RSA_PSS, DSA_DSS, ECC_DSS keys of three keychains, unprotected) and three imported authenticators with a passphrase-protected RSA_OAEP key",

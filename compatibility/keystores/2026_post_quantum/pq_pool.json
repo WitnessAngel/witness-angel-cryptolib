@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/keystore_pool.schema.json",
+  "$schema": "../../_schemas/keystore_pool.schema.json",
   "fixture_kind": "keystore_pool",
   "generation": "2026_post_quantum",
   "description": "Local keyfactory (RSA_OAEP, ECIES_X25519, ML_KEM_768, ML_DSA_65 keys of three keychains, unprotected) and three imported authenticators with passphrase-protected ML_KEM_768, ECIES_X25519 and ML_DSA_65 keys",

@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptainer.schema.json",
+  "$schema": "../../_schemas/cryptainer.schema.json",
   "fixture_kind": "cryptainer",
   "generation": "2023_v0.11_genuine",
   "description": "Payload whose key goes through a symmetric key layer, inline (by wacryptolib==0.11 from PyPI)",

@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptoconf.schema.json",
+  "$schema": "../../_schemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2024_pre_signature_rename",
   "description": "Single AES_EAX payload layer, its key wrapped with a local RSA_OAEP key (as written by wacryptolib at git commit 2328abe9e3)",

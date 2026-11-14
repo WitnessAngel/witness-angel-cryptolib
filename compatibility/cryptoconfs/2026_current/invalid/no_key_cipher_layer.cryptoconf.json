@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../schemas/cryptoconf.schema.json",
+  "$schema": "../../../_schemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2026_current",
   "description": "A payload cipher layer without any key cipher layer (must be rejected)",

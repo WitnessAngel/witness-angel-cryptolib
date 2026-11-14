@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../schemas/cipherdict.schema.json",
+  "$schema": "../../../_schemas/cipherdict.schema.json",
   "fixture_kind": "cipherdict",
   "generation": "2024_pre_signature_rename",
   "description": "AES_CBC encryption of a 4099-byte plaintext by wacryptolib at git commit 2328abe9e3, with its symmetric key",

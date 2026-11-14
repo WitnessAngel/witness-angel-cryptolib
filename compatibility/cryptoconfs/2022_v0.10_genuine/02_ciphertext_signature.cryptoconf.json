@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptoconf.schema.json",
+  "$schema": "../../_schemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2022_v0.10_genuine",
   "description": "AES_CBC payload layer with a local RSA_OAEP key layer and a DSA_DSS signature (as written by wacryptolib==0.10 from PyPI)",

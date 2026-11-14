@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../schemas/cipherdict.schema.json",
+  "$schema": "../../../_schemas/cipherdict.schema.json",
   "fixture_kind": "cipherdict",
   "generation": "2026_post_quantum",
   "description": "ML_KEM_768 encryption of a 4099-byte plaintext, decryptable with a pool key",

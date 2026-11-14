@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/cryptoconf.schema.json",
+  "$schema": "../../_schemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2024_pre_signature_rename",
   "description": "Three payload layers (AES_EAX, AES_CBC, CHACHA20_POLY1305) with RSA_OAEP key layers of two keychains, and RSA_PSS and ECC_DSS signatures (as written by wacryptolib at git commit 2328abe9e3)",

@@ -19,7 +19,7 @@ This directory is not shipped in the published `wacryptolib` package.
 ```
 compatibility/
   README.md
-  schemas/                          JSON-Schemas (2020-12) of the sidecars, one per fixture kind, plus _defs
+  _schemas/                         JSON-Schemas (2020-12) of the sidecars, one per fixture kind, plus _defs
   plaintexts/                       p<size>.bin + sidecars, shared by all generations
   keystores/<generation>/           keystore pool directories + "<pool>.json" sidecars
   cipherdicts/<generation>/<ALGO>/  p<size>.cipherdict (+ variants) + sidecars
@@ -104,7 +104,7 @@ Every asset has a **sidecar**: a plain JSON file named after the asset with `.js
 - references to other fixtures are **POSIX paths relative to the sidecar's directory** (never absolute);
 - dates are `YYYY-MM-DD` strings.
 
-Each sidecar validates against the schema of its kind, in `schemas/<fixture_kind>.schema.json`, which its `$schema`
+Each sidecar validates against the schema of its kind, in `_schemas/<fixture_kind>.schema.json`, which its `$schema`
 field references by relative path. All schemas forbid unknown fields.
 
 ### Common fields (all kinds)
@@ -233,7 +233,7 @@ Each **decryption scenario** has:
 
 ## Using the corpus from another implementation
 
-1. Discover all `*.json` files outside `schemas/` and outside keystore pool directories: these are the sidecars.
+1. Discover all `*.json` files outside `_schemas/` and outside keystore pool directories: these are the sidecars.
 2. Validate each one against its schema, and check its `asset_sha256` digests.
 3. Skip fixtures whose `requirements` your implementation does not support.
 4. Check each fixture according to its kind, as described above: e.g. decrypt each cipherdict vector, or decrypt each

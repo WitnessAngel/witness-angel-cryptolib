@@ -1,5 +1,5 @@
 {
-  "$schema": "../../schemas/keystore_pool.schema.json",
+  "$schema": "../../_schemas/keystore_pool.schema.json",
   "fixture_kind": "keystore_pool",
   "generation": "2026_post_quantum",
   "description": "Former post-quantum test fixture pool: local keyfactory only (RSA_OAEP, ML_KEM_768 and ML_DSA_65 keys, unprotected), without authenticators",

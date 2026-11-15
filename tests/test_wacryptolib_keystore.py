@@ -7,7 +7,7 @@ import random
 import secrets
 import stat
 import time
-from contextlib import contextmanager
+from contextlib import nullcontext
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
@@ -17,7 +17,6 @@ from uuid import UUID
 import pytest
 
 from _test_mockups import (
-    emulate_case_insensitive_filesystem,
     emulate_case_sensitive_filesystem,
     get_fake_authdevice,
     is_case_insensitive_filesystem,
@@ -33,7 +32,6 @@ from wacryptolib.exceptions import (
     ValidationError,
     KeyAlreadyExists,
     KeyDoesNotExist,
-    KeyFilenameConflict,
     KeystoreMetadataDoesNotExist,
     OperationNotSupported,
 )
@@ -59,7 +57,6 @@ from wacryptolib.scaffolding import (
     check_keystore_basic_get_set_api,
     check_keystore_free_keys_api,
 )
-from wacryptolib.trustee import TrusteeApi
 from wacryptolib.utilities import generate_uuid0, get_utc_now_date, dump_to_json_file
 
 
@@ -748,31 +745,6 @@ def _generate_pem_keypair(key_algo):
     return generate_keypair(key_algo=key_algo, serialize=True)
 
 
-@contextmanager
-def _emulate_distinct_legacy_key_files(*legacy_filepaths):
-    """
-    Make the keystore see the given legacy uppercase key files as existing and distinct from their lowercase twins,
-    like on a case-sensitive filesystem, without creating them (impossible on case-insensitive filesystems).
-    """
-    legacy_filepath_strs = [str(filepath) for filepath in legacy_filepaths]  # Windows paths compare case-insensitively
-    original_stat_if_existing = keystore_module._stat_if_existing
-    original_list_key_filenames = ReadonlyFilesystemKeystore._list_key_filenames
-
-    def fake_stat_if_existing(path):
-        if str(path) in legacy_filepath_strs:
-            fake_inode = 10**12 + legacy_filepath_strs.index(str(path))
-            return os.stat_result((stat.S_IFREG | 0o644, fake_inode, 1234, 1, 0, 0, 1, 0, 0, 0))
-        return original_stat_if_existing(path)
-
-    def fake_list_key_filenames(self):
-        return original_list_key_filenames(self) + [filepath.name for filepath in legacy_filepaths]
-
-    with mock.patch.object(keystore_module, "_stat_if_existing", fake_stat_if_existing), mock.patch.object(
-        ReadonlyFilesystemKeystore, "_list_key_filenames", fake_list_key_filenames
-    ):
-        yield
-
-
 def test_filesystem_keystore_writes_lowercase_names(tmp_path: Path):
     keystore = FilesystemKeystore(tmp_path)
     keychain_uid = generate_uuid0()
@@ -795,11 +767,14 @@ def test_filesystem_keystore_legacy_uppercase_algo_keys_are_found(tmp_path: Path
     write_legacy_uppercase_algo_keystore(tmp_path, [(keychain_uid, "RSA_OAEP", keypair)])
     names_before = sorted(p.name for p in tmp_path.iterdir())
 
-    with emulate_case_sensitive_filesystem():
+    with emulate_case_sensitive_filesystem(), mock.patch.object(keystore_module, "logger") as logger_mock:
         keystore = FilesystemKeystore(tmp_path)
         assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["public_key"]
         assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["private_key"]
         assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="rsa_oaep") == keypair["public_key"]
+        assert keystore.list_keypair_identifiers() == [
+            dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key_present=True)
+        ]
 
         readonly_keystore = ReadonlyFilesystemKeystore(tmp_path)
         assert readonly_keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["public_key"]
@@ -808,160 +783,105 @@ def test_filesystem_keystore_legacy_uppercase_algo_keys_are_found(tmp_path: Path
         with pytest.raises(KeyAlreadyExists):
             keystore.set_keypair(keychain_uid=keychain_uid, key_algo="RSA_OAEP", **_generate_pem_keypair("RSA_OAEP"))
 
+    assert not logger_mock.warning.called and not logger_mock.error.called  # The fallback is silent
     assert sorted(p.name for p in tmp_path.iterdir()) == names_before  # No file created/renamed/deleted
 
 
-def test_filesystem_keystore_same_key_file_under_both_spellings_is_no_conflict(tmp_path: Path):
+def test_filesystem_keystore_lowercase_key_files_take_precedence(tmp_path: Path):
     keychain_uid = generate_uuid0()
     keystore = FilesystemKeystore(tmp_path)
     keystore.set_keypair(keychain_uid=keychain_uid, key_algo="RSA_OAEP", public_key=b"pub", private_key=b"priv")
+    lowercase_names = ["%s_rsa_oaep_%s_key.pem" % (keychain_uid, kind) for kind in ("public", "private")]
+    legacy_names = ["%s_RSA_OAEP_%s_key.pem" % (keychain_uid, kind) for kind in ("public", "private")]
 
-    # Like on a case-insensitive filesystem, legacy names designate the SAME files as the lowercase ones
+    # Make legacy uppercase twins seem to exist as distinct files, like on a case-sensitive filesystem
     original_stat_if_existing = keystore_module._stat_if_existing
+    original_list_key_filenames = ReadonlyFilesystemKeystore._list_key_filenames
 
-    def aliasing_stat_if_existing(path):
-        return original_stat_if_existing(path.with_name(path.name.lower()))
+    def fake_stat_if_existing(path):
+        if path.name in legacy_names:  # Exact comparison, whereas Windows paths compare case-insensitively
+            fake_inode = 10**12 + legacy_names.index(path.name)
+            return os.stat_result((stat.S_IFREG | 0o644, fake_inode, 1234, 1, 0, 0, 1, 0, 0, 0))
+        return original_stat_if_existing(path)
 
-    with mock.patch.object(keystore_module, "_stat_if_existing", aliasing_stat_if_existing):
+    def fake_list_key_filenames(self):
+        return original_list_key_filenames(self) + legacy_names
+
+    with mock.patch.object(keystore_module, "_stat_if_existing", fake_stat_if_existing), mock.patch.object(
+        ReadonlyFilesystemKeystore, "_list_key_filenames", fake_list_key_filenames
+    ), mock.patch.object(keystore_module, "logger") as logger_mock:
+        for is_public, lowercase_name in zip((True, False), lowercase_names):
+            existing_filepath = keystore._get_existing_key_filepath(keychain_uid, "RSA_OAEP", is_public=is_public)
+            assert existing_filepath.name == lowercase_name
         assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"pub"
         assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"priv"
         assert keystore.list_keypair_identifiers() == [
             dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key_present=True)
         ]
+    assert not logger_mock.warning.called and not logger_mock.error.called
 
 
-@pytest.mark.parametrize(
-    "legacy_kinds", [("public", "private"), ("public",), ("private",)], ids=["full_twin", "public_twin", "private_twin"]
-)
-def test_filesystem_keystore_key_filename_conflict_fails_outright(tmp_path: Path, legacy_kinds):
-    keychain_uid = generate_uuid0()
-    keystore = FilesystemKeystore(tmp_path)
-    keystore.set_keypair(keychain_uid=keychain_uid, key_algo="RSA_OAEP", public_key=b"pub", private_key=b"priv")
-    legacy_filepaths = [tmp_path / ("%s_RSA_OAEP_%s_key.pem" % (keychain_uid, kind)) for kind in legacy_kinds]
-
-    with _emulate_distinct_legacy_key_files(*legacy_filepaths):
-        for conflicting_call in [
-            lambda: keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP"),
-            lambda: keystore.get_private_key(keychain_uid=keychain_uid, key_algo="rsa_oaep"),
-            lambda: keystore.set_keypair(
-                keychain_uid=keychain_uid, key_algo="RSA_OAEP", public_key=b"pub2", private_key=b"priv2"
-            ),
-            lambda: ReadonlyFilesystemKeystore(tmp_path).get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP"),
-            # Not mistaken for a missing keypair, which would be generated over the conflicting ones
-            lambda: TrusteeApi(keystore).fetch_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP"),
-        ]:
-            with pytest.raises(KeyFilenameConflict) as exc_info:
-                conflicting_call()
-            message = str(exc_info.value)
-            assert str(tmp_path) in message
-            assert "%s_rsa_oaep_public_key.pem" % keychain_uid in message
-            for legacy_filepath in legacy_filepaths:
-                assert legacy_filepath.name in message
-
-    assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"pub"  # Untouched
-
-
-def test_filesystem_keystore_key_filename_conflict_with_real_files(tmp_path: Path):
+def test_filesystem_keystore_lowercase_key_files_take_precedence_with_real_files(tmp_path: Path):
     if is_case_insensitive_filesystem(tmp_path):
         pytest.skip("Distinct files differing only in case can't coexist on a case-insensitive filesystem")
     keychain_uid = generate_uuid0()
-    (tmp_path / ("%s_rsa_oaep_public_key.pem" % keychain_uid)).write_bytes(b"pub")
-    (tmp_path / ("%s_RSA_OAEP_private_key.pem" % keychain_uid)).write_bytes(b"priv")  # Halves of different spellings
+    for kind in ("public", "private"):
+        (tmp_path / ("%s_rsa_oaep_%s_key.pem" % (keychain_uid, kind))).write_bytes(b"new_" + kind.encode())
+        (tmp_path / ("%s_RSA_OAEP_%s_key.pem" % (keychain_uid, kind))).write_bytes(b"old_" + kind.encode())
+    lowercase_private_key_name = "%s_rsa_oaep_private_key.pem" % keychain_uid
+    names_before = sorted(p.name for p in tmp_path.iterdir())
+
     keystore = FilesystemKeystore(tmp_path)
-    with pytest.raises(KeyFilenameConflict):
-        keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP")
     with mock.patch.object(keystore_module, "logger") as logger_mock:
+        assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"new_public"
+        assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"new_private"
         assert keystore.list_keypair_identifiers() == [
             dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key_present=True)
         ]
-    assert "%s_RSA_OAEP_private_key.pem" % keychain_uid in str(logger_mock.warning.call_args)
+        with pytest.raises(KeyAlreadyExists):
+            keystore.set_keypair(keychain_uid=keychain_uid, key_algo="RSA_OAEP", public_key=b"x", private_key=b"y")
+
+        # Each key file falls back on its own, so the halves of a keypair may have different spellings
+        (tmp_path / lowercase_private_key_name).unlink()
+        assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"new_public"
+        assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"old_private"
+        assert keystore.list_keypair_identifiers()[0]["private_key_present"]
+    assert not logger_mock.warning.called and not logger_mock.error.called
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        name for name in names_before if name != lowercase_private_key_name
+    ]
 
 
-@pytest.mark.parametrize(
-    "legacy_kinds", [("public", "private"), ("public",), ("private",)], ids=["full_twin", "public_twin", "private_twin"]
-)
-def test_filesystem_keystore_listing_reports_conflicting_keypair_with_warning(tmp_path: Path, legacy_kinds):
-    authenticator_dir = tmp_path / "authenticator"
-    authenticator_dir.mkdir()
-    initialize_authenticator(authenticator_dir, keystore_owner="owner", keystore_passphrase_hint="hint")
-    keychain_uid = generate_uuid0()
-    keystore = FilesystemKeystore(authenticator_dir)
-    keystore.set_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP", public_key=b"pub")  # No private key
-    legacy_filepaths = [authenticator_dir / ("%s_RSA_OAEP_%s_key.pem" % (keychain_uid, kind)) for kind in legacy_kinds]
-
-    with _emulate_distinct_legacy_key_files(*legacy_filepaths):
-        with mock.patch.object(keystore_module, "logger") as logger_mock:
-            assert keystore.list_keypair_identifiers() == [
-                dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key_present="private" in legacy_kinds)
-            ]
-        warning_message = str(logger_mock.warning.call_args)
-        assert "%s_rsa_oaep_public_key.pem" % keychain_uid in warning_message
-        for legacy_filepath in legacy_filepaths:
-            assert legacy_filepath.name in warning_message
-
-        # Keystore metadata (as gathered by keystore pools) can still be listed, but fetching the keys fails
-        metadata = keystore.get_keystore_metadata(include_keypair_identifiers=True)
-        assert len(metadata["keypair_identifiers"]) == 1
-
-        with pytest.raises(KeyFilenameConflict):
-            keystore.export_to_keystore_tree()
-        if "private" in legacy_kinds:
-            with pytest.raises(KeyFilenameConflict):
-                check_authenticator(authenticator_dir, keystore_passphrase=b"whatever")
-
-
-def test_filesystem_keystore_set_private_key_next_to_legacy_public_key(tmp_path: Path):
+@pytest.mark.parametrize("emulate_case_sensitivity", [False, True])
+def test_filesystem_keystore_set_private_key_next_to_legacy_public_key(tmp_path: Path, emulate_case_sensitivity):
     keychain_uid = generate_uuid0()
     keypair = _generate_pem_keypair("RSA_OAEP")
     legacy_public_key_name = "%s_RSA_OAEP_public_key.pem" % keychain_uid
     (tmp_path / legacy_public_key_name).write_bytes(keypair["public_key"])
 
-    with emulate_case_sensitive_filesystem():
+    with emulate_case_sensitive_filesystem() if emulate_case_sensitivity else nullcontext():
         keystore = FilesystemKeystore(tmp_path)
         assert not keystore.list_keypair_identifiers()[0]["private_key_present"]
         keystore.set_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key=keypair["private_key"])
-        assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["private_key"]
-        assert keystore.list_keypair_identifiers()[0]["private_key_present"]
-
-    # Not split into a lowercase private key and a legacy public key, which would then conflict
-    assert sorted(p.name for p in tmp_path.iterdir()) == [
-        "%s_RSA_OAEP_private_key.pem" % keychain_uid,
-        legacy_public_key_name,
-    ]
-
-
-@pytest.mark.parametrize("disk_algo_name", ["RSA_OAEP", "Rsa_Oaep"])
-def test_filesystem_keystore_set_private_key_next_to_legacy_public_key_on_case_insensitive_filesystem(
-    tmp_path: Path, disk_algo_name
-):
-    keychain_uid = generate_uuid0()
-    keypair = _generate_pem_keypair("RSA_OAEP")
-    public_key_name = "%s_%s_public_key.pem" % (keychain_uid, disk_algo_name)
-    (tmp_path / public_key_name).write_bytes(keypair["public_key"])
-
-    with emulate_case_insensitive_filesystem(tmp_path):
-        keystore = FilesystemKeystore(tmp_path)
         assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["public_key"]
-        keystore.set_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key=keypair["private_key"])
         assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["private_key"]
+        assert keystore.list_keypair_identifiers() == [
+            dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key_present=True)
+        ]
 
-    # The private key gets the actual spelling of the public key, so the keypair stays readable on any filesystem
-    assert sorted(p.name for p in tmp_path.iterdir()) == [
-        "%s_%s_private_key.pem" % (keychain_uid, disk_algo_name),
-        public_key_name,
-    ]
+    # New key files are always lowercase, so this keypair is split across spellings, each half being found on its own
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted(
+        ["%s_rsa_oaep_private_key.pem" % keychain_uid, legacy_public_key_name]
+    )
 
 
-def test_filesystem_keystore_import_private_keys_next_to_legacy_public_keys_on_case_insensitive_filesystem(
-    tmp_path: Path,
-):
+def test_filesystem_keystore_import_private_keys_next_to_legacy_public_keys(tmp_path: Path):
     source_dir = tmp_path / "source"
     source_dir.mkdir()
     initialize_authenticator(source_dir, keystore_owner="owner", keystore_passphrase_hint="hint")
     keychain_uids = [generate_uuid0(), generate_uuid0()]
-    write_legacy_uppercase_algo_keystore(
-        source_dir, [(keychain_uid, "RSA_OAEP", _generate_pem_keypair("RSA_OAEP")) for keychain_uid in keychain_uids]
-    )
+    keypairs = [_generate_pem_keypair("RSA_OAEP") for _ in keychain_uids]
+    write_legacy_uppercase_algo_keystore(source_dir, [(uid, "RSA_OAEP", kp) for uid, kp in zip(keychain_uids, keypairs)])
     with emulate_case_sensitive_filesystem():
         keystore_tree = ReadonlyFilesystemKeystore(source_dir).export_to_keystore_tree(include_private_keys=True)
 
@@ -972,14 +892,19 @@ def test_filesystem_keystore_import_private_keys_next_to_legacy_public_keys_on_c
         public_key_name = "%s_RSA_OAEP_public_key.pem" % keychain_uid
         (target_dir / public_key_name).write_bytes((source_dir / public_key_name).read_bytes())
 
-    with emulate_case_insensitive_filesystem(target_dir):
-        FilesystemKeystore(target_dir).import_from_keystore_tree(keystore_tree)
+    with emulate_case_sensitive_filesystem():
+        target_keystore = FilesystemKeystore(target_dir)
+        target_keystore.import_from_keystore_tree(keystore_tree)
+        for keychain_uid, keypair in zip(keychain_uids, keypairs):
+            assert target_keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["public_key"]
+            assert (
+                target_keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["private_key"]
+            )
 
-    key_names = sorted(p.name for p in target_dir.glob("*.pem"))
-    assert key_names == sorted(
-        "%s_RSA_OAEP_%s_key.pem" % (keychain_uid, kind)
+    assert sorted(p.name for p in target_dir.glob("*.pem")) == sorted(
+        name
         for keychain_uid in keychain_uids
-        for kind in ("public", "private")
+        for name in ("%s_RSA_OAEP_public_key.pem" % keychain_uid, "%s_rsa_oaep_private_key.pem" % keychain_uid)
     )
 
 

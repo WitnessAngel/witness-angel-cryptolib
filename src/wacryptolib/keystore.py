@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import AnyStr, NamedTuple, Optional
+from typing import AnyStr, Optional
 from uuid import UUID
 
 from schema import Or, And, Optional as OptionalKey, Schema
@@ -22,7 +22,6 @@ from schema import Or, And, Optional as OptionalKey, Schema
 from wacryptolib.exceptions import (
     KeyAlreadyExists,
     KeyDoesNotExist,
-    KeyFilenameConflict,
     KeystoreDoesNotExist,
     ValidationError,
     KeystoreMetadataDoesNotExist,
@@ -447,15 +446,6 @@ def _stat_if_existing(path: Path):
         return None
 
 
-class _KeypairFiles(NamedTuple):
-    disk_algo_name: Optional[str]  # Selected spelling of the algo name, None if this algo name can't be stored
-    public_key_filepath: Optional[Path]
-    public_key_exists: bool
-    private_key_filepath: Optional[Path]
-    private_key_exists: bool
-    spelling_is_aliased: bool  # Existing files found under both spellings (case-insensitive filesystem)
-
-
 class ReadonlyFilesystemKeystore(KeystoreReadBase):
     """
     Read-only filesystem-based key storage.
@@ -489,102 +479,45 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
         """Build the path of a key file, for an algo name ALREADY spelled as on disk (see _get_disk_algo_names())."""
         return self._keys_dir.joinpath(self._get_key_filename(keychain_uid, disk_algo_name, is_public=is_public))
 
-    def _stat_keypair_files(self, keychain_uid: uuid.UUID, disk_algo_name: str) -> dict:
-        """Return {is_public: (filepath, stat result or None)} for the key files of a keypair, with this spelling."""
-        keypair_stats = {}
-        for is_public in (True, False):
+    def _get_existing_key_filepath(self, keychain_uid: uuid.UUID, key_algo: str, is_public: bool) -> Optional[Path]:
+        """
+        Return the path of an existing key file, or None: the lowercase algo name is tried first, then, as a silent
+        fallback, the legacy uppercase algo name written by earlier releases.
+
+        Each key file is resolved on its own, so the halves of a keypair may have different spellings (e.g. a private
+        key added next to a legacy public key). On case-insensitive filesystems, the first lookup already finds any
+        spelling. If distinct files exist under both spellings (case-sensitive filesystems), the lowercase one wins.
+        """
+        for disk_algo_name in _get_disk_algo_names(key_algo):
             filepath = self._get_key_filepath(keychain_uid, disk_algo_name, is_public=is_public)
-            keypair_stats[is_public] = (filepath, _stat_if_existing(filepath))
-        return keypair_stats
-
-    def _resolve_keypair_files(self, keychain_uid: uuid.UUID, key_algo: str) -> _KeypairFiles:
-        """
-        Locate the public and private key files of a keypair, both with the same spelling of the algo name: the one
-        under which the files of this keypair are stored, or the canonical (lowercase) one if none exists yet.
-        So the public and private keys of different spellings are never mixed.
-
-        On case-insensitive filesystems, both spellings designate the same files, so the canonical one is selected
-        and `spelling_is_aliased` is set: writers must then find the actual spelling of the existing files.
-
-        Raise KeyFilenameConflict if distinct key files of this keypair exist under both spellings (only possible
-        on case-sensitive filesystems), instead of guessing which ones are authoritative.
-        """
-        disk_algo_names = _get_disk_algo_names(key_algo)
-        if not disk_algo_names:  # Such a key can't exist on disk
-            return _KeypairFiles(None, None, False, None, False, False)
-
-        selected_algo_name = disk_algo_names[0]
-        selected_stats = self._stat_keypair_files(keychain_uid, selected_algo_name)
-        spelling_is_aliased = False
-
-        if len(disk_algo_names) == 2:
-            legacy_algo_name = disk_algo_names[1]
-            legacy_stats = self._stat_keypair_files(keychain_uid, legacy_algo_name)
-            distinct_legacy_filepaths = []
-            for is_public, (legacy_filepath, legacy_stat) in legacy_stats.items():
-                if legacy_stat is None:
-                    continue
-                canonical_stat = selected_stats[is_public][1]
-                if canonical_stat is not None and os.path.samestat(legacy_stat, canonical_stat):
-                    spelling_is_aliased = True  # Same file under both names
-                else:
-                    distinct_legacy_filepaths.append(legacy_filepath)
-
-            existing_canonical_filepaths = [
-                filepath for filepath, stat_result in selected_stats.values() if stat_result is not None
-            ]
-            if existing_canonical_filepaths and distinct_legacy_filepaths:
-                raise KeyFilenameConflict(
-                    "Key files of keypair %s/%s exist under both lowercase and uppercase algo names in %s (%s), "
-                    "remove or rename the wrong ones"
-                    % (
-                        key_algo.upper(),
-                        keychain_uid,
-                        self._keys_dir,
-                        ", ".join(sorted(p.name for p in existing_canonical_filepaths + distinct_legacy_filepaths)),
-                    )
-                )
-            if distinct_legacy_filepaths:
-                selected_algo_name, selected_stats = legacy_algo_name, legacy_stats
-
-        (public_key_filepath, public_key_stat), (private_key_filepath, private_key_stat) = (
-            selected_stats[True],
-            selected_stats[False],
-        )
-        return _KeypairFiles(
-            disk_algo_name=selected_algo_name,
-            public_key_filepath=public_key_filepath,
-            public_key_exists=public_key_stat is not None,
-            private_key_filepath=private_key_filepath,
-            private_key_exists=private_key_stat is not None,
-            spelling_is_aliased=spelling_is_aliased,
-        )
+            if _stat_if_existing(filepath) is not None:
+                return filepath
+        return None
 
     def _read_from_storage_file(self, filepath: Path):
         assert self._keys_dir in filepath.parents  # No weirdness with outside folders
         return filepath.read_bytes()
 
     def _public_key_exists(self, *, keychain_uid, key_algo):
-        return self._resolve_keypair_files(keychain_uid, key_algo=key_algo).public_key_exists
+        return self._get_existing_key_filepath(keychain_uid, key_algo=key_algo, is_public=True) is not None
 
     def _private_key_exists(self, *, keychain_uid, key_algo):
-        return self._resolve_keypair_files(keychain_uid, key_algo=key_algo).private_key_exists
+        return self._get_existing_key_filepath(keychain_uid, key_algo=key_algo, is_public=False) is not None
 
     def _get_public_key(self, *, keychain_uid, key_algo):
-        filepath = self._resolve_keypair_files(keychain_uid, key_algo=key_algo).public_key_filepath
+        filepath = self._get_existing_key_filepath(keychain_uid, key_algo=key_algo, is_public=True)
         return self._read_from_storage_file(filepath)
 
     def _get_private_key(self, *, keychain_uid, key_algo):
-        filepath = self._resolve_keypair_files(keychain_uid, key_algo=key_algo).private_key_filepath
+        filepath = self._get_existing_key_filepath(keychain_uid, key_algo=key_algo, is_public=False)
         return self._read_from_storage_file(filepath)
 
     def _list_unordered_keypair_identifiers(self):
         """
         List keypairs from a single listing of the keys directory, as spelled on disk.
 
-        Files which the getters can't fetch (abnormal names, mixed-case algo names, non-canonical keychain uids) are
-        skipped with a warning. Keypairs whose files conflict are listed once, with a warning, so that a single broken
-        keypair doesn't prevent listing the whole keystore: fetching their keys raises KeyFilenameConflict.
+        Key files with legacy uppercase algo names are listed like lowercase ones, silently. Files which the getters
+        can't fetch (abnormal names, mixed-case algo names, non-canonical keychain uids) are skipped with a warning.
         """
         key_filenames = set(self._list_key_filenames())
         keypair_keys = set()  # {(keychain_uid, uppercase key_algo)}
@@ -633,23 +566,10 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
 
         keypair_identifiers = []
         for keychain_uid, key_algo in keypair_keys:
-            present_filenames_by_algo_name = {}  # {disk_algo_name: [present key filenames]}
-            private_key_present = False
-            for disk_algo_name in _get_disk_algo_names(key_algo):
-                for is_public in (True, False):
-                    filename = self._get_key_filename(keychain_uid, disk_algo_name, is_public=is_public)
-                    if filename in key_filenames:
-                        present_filenames_by_algo_name.setdefault(disk_algo_name, []).append(filename)
-                        private_key_present = private_key_present or not is_public
-            if len(present_filenames_by_algo_name) > 1:
-                logger.warning(
-                    "Key files of keypair %s/%s exist under both lowercase and uppercase algo names in %s (%s), "
-                    "its keys can't be fetched until the wrong ones are removed or renamed",
-                    key_algo,
-                    keychain_uid,
-                    self._keys_dir,
-                    ", ".join(sorted(sum(present_filenames_by_algo_name.values(), []))),
-                )
+            private_key_present = any(  # Same lookup as the getters: lowercase name, else uppercase name
+                self._get_key_filename(keychain_uid, disk_algo_name, is_public=False) in key_filenames
+                for disk_algo_name in _get_disk_algo_names(key_algo)
+            )
             keypair_identifiers.append(
                 dict(keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=private_key_present)
             )
@@ -713,57 +633,17 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         assert self._keys_dir in filepath.parents  # No weirdness with outside folders
         filepath.write_bytes(data)
 
-    def _find_actual_disk_algo_name(self, keychain_uid: uuid.UUID, disk_algo_name: str, is_public: bool):
-        """
-        Return the algo name as actually spelled in the name of an existing key file, matched case-insensitively,
-        or None if not found. Lists the keys directory, so only meant for writes on case-insensitive filesystems.
-        """
-        prefix = "%s_" % keychain_uid
-        suffix = self._public_key_suffix if is_public else self._private_key_suffix
-        target_filename = self._get_key_filename(keychain_uid, disk_algo_name, is_public=is_public).lower()
-        matching_filenames = [
-            filename
-            for filename in self._list_key_filenames()
-            if filename.isascii() and filename.lower() == target_filename  # isascii(): no Unicode case folding tricks
-        ]
-        if len(matching_filenames) != 1:  # File removed meanwhile, or distinct spellings (case-sensitive filesystem)
-            return None
-        return matching_filenames[0][len(prefix) : -len(suffix)]
-
-    def _resolve_keypair_files_for_writing(self, keychain_uid: uuid.UUID, key_algo: str) -> _KeypairFiles:
-        """
-        Like _resolve_keypair_files(), but raise ValidationError if the algo name can't be stored, and on
-        case-insensitive filesystems, select the actual spelling of the existing files of the keypair, so that a key
-        added to a legacy keypair (e.g. a private key next to an uppercase public key) never splits it.
-        """
-        keypair_files = self._resolve_keypair_files(keychain_uid, key_algo=key_algo)
-        if keypair_files.disk_algo_name is None:
-            _get_canonical_disk_algo_name(key_algo)  # Raises ValidationError
-        if keypair_files.spelling_is_aliased:
-            actual_disk_algo_name = self._find_actual_disk_algo_name(
-                keychain_uid, keypair_files.disk_algo_name, is_public=keypair_files.public_key_exists
-            )
-            if actual_disk_algo_name and actual_disk_algo_name != keypair_files.disk_algo_name:
-                keypair_files = keypair_files._replace(
-                    disk_algo_name=actual_disk_algo_name,
-                    public_key_filepath=self._get_key_filepath(keychain_uid, actual_disk_algo_name, is_public=True),
-                    private_key_filepath=self._get_key_filepath(keychain_uid, actual_disk_algo_name, is_public=False),
-                )
-        return keypair_files
-
-    def _set_keypair(self, *, keychain_uid, key_algo, public_key, private_key):
-        keypair_files = self._resolve_keypair_files_for_writing(keychain_uid, key_algo=key_algo)
-        self._write_to_storage_file(filepath=keypair_files.public_key_filepath, data=public_key)
-        self._write_to_storage_file(filepath=keypair_files.private_key_filepath, data=private_key)
+    def _get_new_key_filepath(self, keychain_uid: uuid.UUID, key_algo: str, is_public: bool) -> Path:
+        """Return the path of a new key file, always with the lowercase algo name, or raise ValidationError."""
+        return self._get_key_filepath(keychain_uid, _get_canonical_disk_algo_name(key_algo), is_public=is_public)
 
     def _set_public_key(self, *, keychain_uid, key_algo, public_key):
-        # Written with the algo spelling of the keypair's existing files, if any, to never split a keypair
-        filepath = self._resolve_keypair_files_for_writing(keychain_uid, key_algo=key_algo).public_key_filepath
+        filepath = self._get_new_key_filepath(keychain_uid, key_algo=key_algo, is_public=True)
         self._write_to_storage_file(filepath=filepath, data=public_key)
 
     def _set_private_key(self, *, keychain_uid, key_algo, private_key):
-        # Written next to the public key, even if this one has a legacy uppercase algo name
-        filepath = self._resolve_keypair_files_for_writing(keychain_uid, key_algo=key_algo).private_key_filepath
+        # Lowercase even next to a legacy uppercase public key: each key file is looked up on its own
+        filepath = self._get_new_key_filepath(keychain_uid, key_algo=key_algo, is_public=False)
         self._write_to_storage_file(filepath=filepath, data=private_key)
 
     def _ensure_free_keys_dir_exists(self):
@@ -829,11 +709,12 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
 
     def _attach_free_keypair_to_uuid(self, *, keychain_uid, key_algo):
         free_public_key_filepath, free_private_key_filepath = self._pick_free_keypair_files(key_algo)
-        keypair_files = self._resolve_keypair_files_for_writing(keychain_uid, key_algo=key_algo)
+        public_key_filepath = self._get_new_key_filepath(keychain_uid, key_algo=key_algo, is_public=True)
+        private_key_filepath = self._get_new_key_filepath(keychain_uid, key_algo=key_algo, is_public=False)
 
         # First move the PRIVATE key, so that it's not shown anymore as "free"
-        free_private_key_filepath.replace(keypair_files.private_key_filepath)
-        free_public_key_filepath.replace(keypair_files.public_key_filepath)
+        free_private_key_filepath.replace(private_key_filepath)
+        free_public_key_filepath.replace(public_key_filepath)
 
     def _initialize_metadata_from_keystore_tree(self, keystore_tree: dict):
         metadata_file = _get_keystore_metadata_file_path(self._keys_dir)

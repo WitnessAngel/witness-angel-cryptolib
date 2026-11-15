@@ -40,3 +40,10 @@
 - [x] 7.4 Report conflicting key files like missing private keys in `TrusteeApi.request_decryption_authorization()`, and as errors of the concerned branches only in decryption; verify with tests
 - [x] 7.5 Remove `_get_canonical_key_filepath()`, only used by tests, which now check literal file names
 - [x] 7.6 Update the main spec, this change's delta spec, design and proposal, and the CHANGELOG; run the full test suite on Windows and the keystore and trustee tests on a Linux ext4 filesystem
+
+## 8. Silent per-file fallback
+
+- [x] 8.1 Resolve each key file on its own: the lowercase name, else silently the uppercase one (`_get_existing_key_filepath()`), and always write lowercase names (`_get_new_key_filepath()`), also for a private key added to a legacy public key; remove `_resolve_keypair_files()`, `_resolve_keypair_files_for_writing()`, the `_set_keypair` override and the listing conflict warning
+- [x] 8.2 Remove `KeyFilenameConflict` and its handling in `TrusteeApi.request_decryption_authorization()` and decryption, and the `emulate_case_insensitive_filesystem()` test helper
+- [x] 8.3 Test that lowercase files silently win (with mocked stats, and with real files on case-sensitive filesystems), that keypairs split across spellings are readable and listed with their private key, that a private key added to a legacy public key, directly or by import, is written lowercase, and that the fallback logs no warning
+- [x] 8.4 Update the main spec, this change's delta spec, design and proposal, and the CHANGELOG; run the full test suite on Windows and the keystore, trustee and cryptainer tests on a Linux ext4 filesystem

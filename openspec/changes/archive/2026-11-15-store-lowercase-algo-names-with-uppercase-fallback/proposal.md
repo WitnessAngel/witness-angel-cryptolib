@@ -7,8 +7,8 @@ Decision: the **API keeps uppercase algo names**, while filesystem keystores **w
 ## What Changes
 
 - The filesystem keystore converts the algo name in one place, the path layer: new key files and free-key subdirectories are named with the **lowercase** algo (e.g. `<uid>_rsa_oaep_public_key.pem`, `free_keys/rsa_oaep/`).
-- Lookups (existence checks, public/private key reads, free-keypair counting and attachment) find files under the lowercase name or the legacy **uppercase** name used by existing keystores, with a single spelling per keypair, which writes of a missing half also follow. The autogenerating paths therefore find existing keys instead of creating new ones. Files are never renamed or deleted by lookups, so read-only authenticator keystores stay untouched.
-- If distinct key files of a same keypair exist under both spellings, keystore operations on it **fail outright** with a new `KeyFilenameConflict` error naming the keys directory and the files, to be fixed by hand: the keystore can't tell which ones are authoritative, and this error is not a `KeyDoesNotExist`, so no keypair is ever generated over them. Listings still report such a keypair with a warning, trustee decryption authorization requests report it like a missing private key, and decryption only gives up the concerned branches.
+- Lookups (existence checks, public/private key reads, free-keypair counting and attachment) find each file under the lowercase name, else, through a **silent fallback**, under the legacy **uppercase** name used by existing keystores. Writes always use the lowercase name, even for the missing half of a legacy keypair. The autogenerating paths therefore find existing keys instead of creating new ones. Files are never renamed or deleted by lookups, so read-only authenticator keystores stay untouched.
+- If a key file exists under both spellings as distinct files, the lowercase one **silently wins**: uppercase-named files are only fallbacks, and in the long term all file names are meant to be lowercase (see the `lowercase-filenames` change).
 - Algo names which can't appear in file names (anything but 1 to 64 ASCII letters, digits and underscores) are reported missing by lookups, and rejected with a `ValidationError` by writes.
 - `list_keypair_identifiers()` returns **uppercase** `key_algo` values whatever the file spelling, lists a keypair present under both spellings once, computes the private key presence from a single listing of the keys directory, and skips with a warning files with mixed-case algo names or non-canonical keychain uids, which can't be fetched. `check_authenticator()` and `export_to_keystore_tree()` then work on every keystore, and exported trees pass tree validation.
 - Rewrite the CHANGELOG entry of #61/#64: existing keystores keep working, new keys are written with lowercase file names, API algo names are uppercase.
@@ -17,7 +17,7 @@ Decision: the **API keeps uppercase algo names**, while filesystem keystores **w
 ## Capabilities
 
 ### New Capabilities
-- `keystore-algo-name-storage`: lowercase on-disk naming of keys in filesystem keystores, loading of files with legacy uppercase algo names, failure on conflicting spellings, and uppercase algo names in the API and in listings.
+- `keystore-algo-name-storage`: lowercase on-disk naming of keys in filesystem keystores, silent fallback on files with legacy uppercase algo names, precedence of lowercase files, and uppercase algo names in the API and in listings.
 
 ### Modified Capabilities
 
@@ -25,6 +25,6 @@ Decision: the **API keeps uppercase algo names**, while filesystem keystores **w
 
 ## Impact
 
-- Code: `src/wacryptolib/keystore.py` (`ReadonlyFilesystemKeystore` / `FilesystemKeystore`: path building and resolution, free keys, listing), `src/wacryptolib/exceptions.py` (`KeyFilenameConflict`, also exposed through JSON-RPC error slugs), `src/wacryptolib/trustee.py` and `src/wacryptolib/cryptainer/_decryptor.py` (conflicts reported per keypair), tests in `tests/test_wacryptolib_keystore.py`, `tests/test_wacryptolib_trustee.py` and `tests/test_wacryptolib_cryptainer.py`, `CHANGELOG`.
+- Code: `src/wacryptolib/keystore.py` (`ReadonlyFilesystemKeystore` / `FilesystemKeystore`: path building and resolution, free keys, listing), tests in `tests/test_wacryptolib_keystore.py`, `tests/test_wacryptolib_trustee.py` and `tests/test_wacryptolib_cryptainer.py`, `CHANGELOG`.
 - **Compatibility:** keystores written by this version on a case-sensitive filesystem hold lowercase-named files, which earlier releases (expecting uppercase) won't find. Opening a keystore with an older library after using it with this one is therefore not supported for newly created keys. No API signature or dependency change; in-memory keystores are unaffected.
 - Non-goals: bulk renaming of existing uppercase files, and mixed-case spellings other than all-lowercase and all-uppercase.

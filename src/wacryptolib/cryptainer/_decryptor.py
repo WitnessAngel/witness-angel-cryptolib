@@ -17,7 +17,7 @@ from wacryptolib.cryptainer import CryptainerBase, CRYPTAINER_TRUSTEE_TYPES, log
     ensure_validated_cryptainer, check_key_cipherdict_sanity
 from wacryptolib.cryptainer._validation import KEY_STRUCT_SCHEMA, SHARED_SECRET_SHARD_SCHEMA
 from wacryptolib.exceptions import KeyDoesNotExist, KeyLoadingError, DecryptionError, DecryptionIntegrityError, \
-    KeystoreDoesNotExist, SignatureVerificationError, SchemaValidationError, KeyFilenameConflict
+    KeystoreDoesNotExist, SignatureVerificationError, SchemaValidationError
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring, SUPPORTED_SYMMETRIC_KEY_ALGOS, \
     SUPPORTED_ASYMMETRIC_KEY_ALGOS, check_symkey_dict_sanity
@@ -206,15 +206,6 @@ class CryptainerDecryptor(CryptainerBase):
             operation_report.add_entry(
                 entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
                 entry_message="Private key of revelation response not found (%s/%s)" % (cipher_algo, keychain_uid),
-                entry_criticity=DecryptionErrorCriticity.ERROR,
-                entry_exception=exc,
-            )
-            return key_struct_bytes
-        except KeyFilenameConflict as exc:  # Only this response is lost, until the key files are fixed by hand
-            operation_report.add_entry(
-                entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                entry_message="Conflicting key files for private key of revelation response (%s/%s)"
-                % (cipher_algo, keychain_uid),
                 entry_criticity=DecryptionErrorCriticity.ERROR,
                 entry_exception=exc,
             )
@@ -885,13 +876,6 @@ class CryptainerDecryptor(CryptainerBase):
                 operation_report.add_entry(
                     entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
                     entry_message="Private key not found (%s/%s)" % (cipher_algo, keychain_uid),
-                    entry_exception=exc,
-                )
-
-            except KeyFilenameConflict as exc:  # Only this branch is lost, until the key files are fixed by hand
-                operation_report.add_entry(
-                    entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                    entry_message="Conflicting key files for private key (%s/%s)" % (cipher_algo, keychain_uid),
                     entry_exception=exc,
                 )
 

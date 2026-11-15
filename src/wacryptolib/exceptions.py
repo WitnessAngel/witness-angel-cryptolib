@@ -37,17 +37,6 @@ class KeystoreMetadataDoesNotExist(KeystoreDoesNotExist):
     # No KeystoreMetadataAlreadyExists needed for now
 
 
-class KeyFilenameConflict(FunctionalError):
-    """
-    Key files of a same keypair exist under several spellings of the algo name (e.g. lowercase and legacy uppercase),
-    so the keystore can't tell which ones are authoritative: they must be fixed manually.
-
-    Deliberately NOT a KeyDoesNotExist, so that callers never generate a new keypair to replace conflicting ones.
-    """
-
-    pass
-
-
 # ---
 
 

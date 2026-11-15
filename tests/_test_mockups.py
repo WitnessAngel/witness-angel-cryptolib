@@ -127,9 +127,9 @@ def generate_keystore_pool(tmp_path):
     return keystore_pool
 
 
-def write_uppercase_layout_keystore(keys_dir, keypairs, free_keypairs=None):
+def write_legacy_uppercase_algo_keystore(keys_dir, keypairs, free_keypairs=None):
     """
-    Fill a directory like earlier releases did: uppercase algo names in key file names and in
+    Fill a directory like earlier releases did, with legacy uppercase algo names in key file names and in
     `free_keys/<ALGO>/` subdirectories.
 
     :param keypairs: iterable of (keychain_uid, key_algo, keypair dict as returned by generate_keypair())
@@ -147,13 +147,29 @@ def write_uppercase_layout_keystore(keys_dir, keypairs, free_keypairs=None):
 
 
 @contextmanager
-def case_sensitive_paths():
-    """Make Path.exists()/is_dir()/samefile() case-sensitive, to emulate Linux on Windows/macOS."""
+def emulate_case_sensitive_filesystem():
+    """
+    Make the LOOKUPS of Path.stat()/exists()/is_dir() case-sensitive, to emulate Linux on Windows/macOS:
+    a path is only found if its last component is spelled exactly as in its parent directory.
+
+    Writes are NOT emulated: on a case-insensitive filesystem, creating a file or directory whose name only differs
+    in case from an existing one still opens or collides with the existing one (e.g. mkdir() raises FileExistsError).
+    So distinct files under both spellings can't be created here, use a case-sensitive filesystem or mock the stats.
+    """
     path_class = type(Path())
-    orig_exists, orig_is_dir, orig_samefile = path_class.exists, path_class.is_dir, path_class.samefile
+    orig_stat, orig_exists, orig_is_dir = path_class.stat, path_class.exists, path_class.is_dir
 
     def _exact_name_present(path):
-        return path.name in os.listdir(path.parent) if orig_is_dir(path.parent) else False
+        try:
+            return path.name in os.listdir(path.parent)
+        except (FileNotFoundError, NotADirectoryError):
+            return False
+
+    def stat(self, *args, **kwargs):
+        result = orig_stat(self, *args, **kwargs)  # Raises FileNotFoundError on its own if not found at all
+        if not _exact_name_present(self):
+            raise FileNotFoundError(2, "No such file or directory (emulated case-sensitive filesystem)", str(self))
+        return result
 
     def exists(self, *args, **kwargs):
         return orig_exists(self, *args, **kwargs) and _exact_name_present(self)
@@ -161,10 +177,17 @@ def case_sensitive_paths():
     def is_dir(self, *args, **kwargs):
         return orig_is_dir(self, *args, **kwargs) and _exact_name_present(self)
 
-    def samefile(self, other):
-        return self.name == Path(other).name and orig_samefile(self, other)
-
-    with mock.patch.object(path_class, "exists", exists), mock.patch.object(
-        path_class, "is_dir", is_dir
-    ), mock.patch.object(path_class, "samefile", samefile):
+    with mock.patch.object(path_class, "stat", stat), mock.patch.object(
+        path_class, "exists", exists
+    ), mock.patch.object(path_class, "is_dir", is_dir):
         yield
+
+
+def is_case_insensitive_filesystem(directory: Path) -> bool:
+    """Probe whether a (writable) directory lives on a case-insensitive filesystem."""
+    probe = Path(directory) / "case_probe_file"
+    probe.write_bytes(b"")
+    try:
+        return Path(directory, "CASE_PROBE_FILE").exists()
+    finally:
+        probe.unlink()

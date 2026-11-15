@@ -8,6 +8,7 @@ from unittest import mock
 
 import pytest
 
+from _test_mockups import emulate_case_sensitive_filesystem, write_legacy_uppercase_algo_keystore
 from wacryptolib._crypto_backend import get_random_bytes
 from wacryptolib.cipher import _encrypt_via_rsa_oaep
 from wacryptolib.exceptions import (
@@ -19,8 +20,9 @@ from wacryptolib.exceptions import (
     AuthorizationError,
     KeyLoadingError,
 )
-from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
+from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import (
+    FilesystemKeystore,
     InMemoryKeystore,
     generate_free_keypair_for_least_provisioned_key_algo,
     generate_keypair_for_storage,
@@ -315,22 +317,18 @@ def test_readonly_trustee_api_behaviour():
     assert decrypted == secret
 
 
-def test_trustee_api_over_uppercase_layout_filesystem_keystore(tmp_path):
-    """Keystores written by earlier releases (uppercase file names) keep working, with no key shadowing."""
-    from _test_mockups import case_sensitive_paths, write_uppercase_layout_keystore
-    from wacryptolib.keygen import generate_keypair
-    from wacryptolib.keystore import FilesystemKeystore
-
+def test_trustee_api_over_legacy_uppercase_algo_filesystem_keystore(tmp_path):
+    """Keystores written by earlier releases (legacy uppercase algo names in file names) keep working, with no key shadowing."""
     keychain_uid = generate_uuid0()
     encryption_keypair = generate_keypair(key_algo="RSA_OAEP", serialize=True)
     signature_keypair = generate_keypair(key_algo="ECC_DSS", serialize=True)
-    write_uppercase_layout_keystore(
+    write_legacy_uppercase_algo_keystore(
         tmp_path,
         [(keychain_uid, "RSA_OAEP", encryption_keypair), (keychain_uid, "ECC_DSS", signature_keypair)],
     )
     names_before = sorted(p.name for p in tmp_path.iterdir())
 
-    with case_sensitive_paths():
+    with emulate_case_sensitive_filesystem():
         trustee_api = TrusteeApi(keystore=FilesystemKeystore(tmp_path))
 
         # No must_exist: an unfound key would be silently generated

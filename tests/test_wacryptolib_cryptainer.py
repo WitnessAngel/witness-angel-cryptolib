@@ -78,6 +78,7 @@ from wacryptolib.exceptions import (
     KeystoreDoesNotExist,
     KeyLoadingError,
     AlgorithmNotSupported,
+    KeyFilenameConflict,
 )
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring
@@ -3743,6 +3744,30 @@ def test_pq_hybrid_cryptainer_decryption_with_missing_private_key(removed_key_al
     error_entries = operation_report.get_error_entries()
     assert any(entry["entry_type"] == DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR for entry in error_entries)
     assert any(removed_key_algo in entry["entry_message"] for entry in error_entries)
+
+
+def test_cryptainer_decryption_with_conflicting_key_files():
+    keystore_pool = InMemoryKeystorePool()
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"abc",
+        cryptoconf=SIMPLE_CRYPTOCONF_NO_SIGNING,
+        cryptainer_metadata=None,
+        keystore_pool=keystore_pool,
+    )
+    local_keystore = keystore_pool.get_local_keyfactory()
+
+    with mock.patch.object(
+        local_keystore, "get_private_key", side_effect=KeyFilenameConflict("Key files of keypair conflict")
+    ):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+
+    assert result_payload is None  # Only reported, not raised
+    error_entries = operation_report.get_error_entries()
+    assert any(
+        entry["entry_type"] == DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR
+        and "Conflicting key files" in entry["entry_message"]
+        for entry in error_entries
+    ), error_entries
 
 
 def test_pq_hybrid_cryptainer_with_corrupted_ml_dsa_signature():

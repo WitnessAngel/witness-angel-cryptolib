@@ -14,7 +14,8 @@ import sys
 from uuid import UUID
 
 from wacryptolib.cryptainer import CryptainerStorage, dump_cryptainer_to_filesystem, PAYLOAD_CIPHERTEXT_LOCATIONS
-from wacryptolib.keystore import KEYSTORE_FORMAT, FilesystemKeystorePool
+import wacryptolib.keystore as keystore_module
+from wacryptolib.keystore import KEYSTORE_FORMAT, FilesystemKeystore, FilesystemKeystorePool, ReadonlyFilesystemKeystore
 from wacryptolib.utilities import generate_uuid0
 
 
@@ -191,3 +192,44 @@ def is_case_insensitive_filesystem(directory: Path) -> bool:
         return Path(directory, "CASE_PROBE_FILE").exists()
     finally:
         probe.unlink()
+
+
+@contextmanager
+def emulate_case_insensitive_filesystem(directory: Path):
+    """
+    Make the key files of filesystem keystores behave as on a case-insensitive (but case-preserving) filesystem,
+    like NTFS, APFS or FAT: any spelling of an existing key file name designates this file, while a new file keeps
+    the spelling it's created with. Does nothing if `directory` already lives on a case-insensitive filesystem.
+
+    Only key file lookups, reads and writes are emulated, not free keys subdirectories nor other Path methods.
+    """
+    if is_case_insensitive_filesystem(directory):
+        yield
+        return
+
+    def _get_actual_path(path):
+        path = Path(path)
+        try:
+            names = os.listdir(path.parent)
+        except (FileNotFoundError, NotADirectoryError):
+            return path
+        matches = [name for name in names if name.lower() == path.name.lower()]
+        return path.with_name(matches[0]) if matches else path
+
+    original_stat_if_existing = keystore_module._stat_if_existing
+    original_read_from_storage_file = ReadonlyFilesystemKeystore._read_from_storage_file
+    original_write_to_storage_file = FilesystemKeystore._write_to_storage_file
+
+    def stat_if_existing(path):
+        return original_stat_if_existing(_get_actual_path(path))
+
+    def read_from_storage_file(self, filepath):
+        return original_read_from_storage_file(self, _get_actual_path(filepath))
+
+    def write_to_storage_file(self, filepath, data):
+        return original_write_to_storage_file(self, filepath=_get_actual_path(filepath), data=data)
+
+    with mock.patch.object(keystore_module, "_stat_if_existing", stat_if_existing), mock.patch.object(
+        ReadonlyFilesystemKeystore, "_read_from_storage_file", read_from_storage_file
+    ), mock.patch.object(FilesystemKeystore, "_write_to_storage_file", write_to_storage_file):
+        yield

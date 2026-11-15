@@ -17,6 +17,7 @@ from uuid import UUID
 import pytest
 
 from _test_mockups import (
+    emulate_case_insensitive_filesystem,
     emulate_case_sensitive_filesystem,
     get_fake_authdevice,
     is_case_insensitive_filesystem,
@@ -98,7 +99,8 @@ def test_keystore_basic_get_set_api(tmp_path):
     keychain_uid = filesystem_keystore_test_locals["keychain_uid"]
 
     is_public = random_bool()
-    filepath = filesystem_keystore._get_canonical_key_filepath(keychain_uid, key_algo="ABXZ", is_public=is_public)
+    key_filename = "%s_abxz_%s_key.pem" % (keychain_uid, "public" if is_public else "private")  # Lowercase algo
+    filepath = filesystem_keystore._keys_dir / key_filename
     with open(filepath, "rb") as f:
         key_data = f.read()
         assert key_data == (b"public_data" if is_public else b"private_data")  # IMPORTANT no exchange of keys in files!
@@ -727,7 +729,7 @@ def test_filesystem_keystore_lists_post_quantum_keypairs(tmp_path: Path):
     keychain_uid_2 = generate_uuid0()
     generate_keypair_for_storage(key_algo="ML_KEM_768", keystore=keystore, keychain_uid=keychain_uid_1)
     generate_keypair_for_storage(key_algo="ML_DSA_65", keystore=keystore, keychain_uid=keychain_uid_2, passphrase=b"xyz")
-    keystore._get_canonical_key_filepath(keychain_uid_2, "ML_DSA_65", is_public=False).unlink()  # Only public remains
+    tmp_path.joinpath("%s_ml_dsa_65_private_key.pem" % keychain_uid_2).unlink()  # Only public key remains
 
     keys_list = keystore.list_keypair_identifiers()
     assert keys_list == sorted(
@@ -754,6 +756,7 @@ def _emulate_distinct_legacy_key_files(*legacy_filepaths):
     """
     legacy_filepath_strs = [str(filepath) for filepath in legacy_filepaths]  # Windows paths compare case-insensitively
     original_stat_if_existing = keystore_module._stat_if_existing
+    original_list_key_filenames = ReadonlyFilesystemKeystore._list_key_filenames
 
     def fake_stat_if_existing(path):
         if str(path) in legacy_filepath_strs:
@@ -761,7 +764,12 @@ def _emulate_distinct_legacy_key_files(*legacy_filepaths):
             return os.stat_result((stat.S_IFREG | 0o644, fake_inode, 1234, 1, 0, 0, 1, 0, 0, 0))
         return original_stat_if_existing(path)
 
-    with mock.patch.object(keystore_module, "_stat_if_existing", fake_stat_if_existing):
+    def fake_list_key_filenames(self):
+        return original_list_key_filenames(self) + [filepath.name for filepath in legacy_filepaths]
+
+    with mock.patch.object(keystore_module, "_stat_if_existing", fake_stat_if_existing), mock.patch.object(
+        ReadonlyFilesystemKeystore, "_list_key_filenames", fake_list_key_filenames
+    ):
         yield
 
 
@@ -835,7 +843,6 @@ def test_filesystem_keystore_key_filename_conflict_fails_outright(tmp_path: Path
         for conflicting_call in [
             lambda: keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP"),
             lambda: keystore.get_private_key(keychain_uid=keychain_uid, key_algo="rsa_oaep"),
-            lambda: keystore.list_keypair_identifiers(),
             lambda: keystore.set_keypair(
                 keychain_uid=keychain_uid, key_algo="RSA_OAEP", public_key=b"pub2", private_key=b"priv2"
             ),
@@ -863,6 +870,44 @@ def test_filesystem_keystore_key_filename_conflict_with_real_files(tmp_path: Pat
     keystore = FilesystemKeystore(tmp_path)
     with pytest.raises(KeyFilenameConflict):
         keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP")
+    with mock.patch.object(keystore_module, "logger") as logger_mock:
+        assert keystore.list_keypair_identifiers() == [
+            dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key_present=True)
+        ]
+    assert "%s_RSA_OAEP_private_key.pem" % keychain_uid in str(logger_mock.warning.call_args)
+
+
+@pytest.mark.parametrize(
+    "legacy_kinds", [("public", "private"), ("public",), ("private",)], ids=["full_twin", "public_twin", "private_twin"]
+)
+def test_filesystem_keystore_listing_reports_conflicting_keypair_with_warning(tmp_path: Path, legacy_kinds):
+    authenticator_dir = tmp_path / "authenticator"
+    authenticator_dir.mkdir()
+    initialize_authenticator(authenticator_dir, keystore_owner="owner", keystore_passphrase_hint="hint")
+    keychain_uid = generate_uuid0()
+    keystore = FilesystemKeystore(authenticator_dir)
+    keystore.set_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP", public_key=b"pub")  # No private key
+    legacy_filepaths = [authenticator_dir / ("%s_RSA_OAEP_%s_key.pem" % (keychain_uid, kind)) for kind in legacy_kinds]
+
+    with _emulate_distinct_legacy_key_files(*legacy_filepaths):
+        with mock.patch.object(keystore_module, "logger") as logger_mock:
+            assert keystore.list_keypair_identifiers() == [
+                dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key_present="private" in legacy_kinds)
+            ]
+        warning_message = str(logger_mock.warning.call_args)
+        assert "%s_rsa_oaep_public_key.pem" % keychain_uid in warning_message
+        for legacy_filepath in legacy_filepaths:
+            assert legacy_filepath.name in warning_message
+
+        # Keystore metadata (as gathered by keystore pools) can still be listed, but fetching the keys fails
+        metadata = keystore.get_keystore_metadata(include_keypair_identifiers=True)
+        assert len(metadata["keypair_identifiers"]) == 1
+
+        with pytest.raises(KeyFilenameConflict):
+            keystore.export_to_keystore_tree()
+        if "private" in legacy_kinds:
+            with pytest.raises(KeyFilenameConflict):
+                check_authenticator(authenticator_dir, keystore_passphrase=b"whatever")
 
 
 def test_filesystem_keystore_set_private_key_next_to_legacy_public_key(tmp_path: Path):
@@ -885,16 +930,124 @@ def test_filesystem_keystore_set_private_key_next_to_legacy_public_key(tmp_path:
     ]
 
 
-def test_filesystem_keystore_listing_with_non_canonical_uuid_file_names(tmp_path: Path):
+@pytest.mark.parametrize("disk_algo_name", ["RSA_OAEP", "Rsa_Oaep"])
+def test_filesystem_keystore_set_private_key_next_to_legacy_public_key_on_case_insensitive_filesystem(
+    tmp_path: Path, disk_algo_name
+):
     keychain_uid = generate_uuid0()
-    for kind in ("public", "private"):
-        (tmp_path / ("%s_rsa_oaep_%s_key.pem" % (keychain_uid.hex, kind))).write_bytes(b"data")  # UUID without dashes
+    keypair = _generate_pem_keypair("RSA_OAEP")
+    public_key_name = "%s_%s_public_key.pem" % (keychain_uid, disk_algo_name)
+    (tmp_path / public_key_name).write_bytes(keypair["public_key"])
 
-    with emulate_case_sensitive_filesystem():
+    with emulate_case_insensitive_filesystem(tmp_path):
         keystore = FilesystemKeystore(tmp_path)
-        assert keystore.list_keypair_identifiers() == [
-            dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key_present=True)
-        ]
+        assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["public_key"]
+        keystore.set_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key=keypair["private_key"])
+        assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["private_key"]
+
+    # The private key gets the actual spelling of the public key, so the keypair stays readable on any filesystem
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "%s_%s_private_key.pem" % (keychain_uid, disk_algo_name),
+        public_key_name,
+    ]
+
+
+def test_filesystem_keystore_import_private_keys_next_to_legacy_public_keys_on_case_insensitive_filesystem(
+    tmp_path: Path,
+):
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    initialize_authenticator(source_dir, keystore_owner="owner", keystore_passphrase_hint="hint")
+    keychain_uids = [generate_uuid0(), generate_uuid0()]
+    write_legacy_uppercase_algo_keystore(
+        source_dir, [(keychain_uid, "RSA_OAEP", _generate_pem_keypair("RSA_OAEP")) for keychain_uid in keychain_uids]
+    )
+    with emulate_case_sensitive_filesystem():
+        keystore_tree = ReadonlyFilesystemKeystore(source_dir).export_to_keystore_tree(include_private_keys=True)
+
+    # An earlier import, with public keys only, by a release writing uppercase names
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    for keychain_uid in keychain_uids:
+        public_key_name = "%s_RSA_OAEP_public_key.pem" % keychain_uid
+        (target_dir / public_key_name).write_bytes((source_dir / public_key_name).read_bytes())
+
+    with emulate_case_insensitive_filesystem(target_dir):
+        FilesystemKeystore(target_dir).import_from_keystore_tree(keystore_tree)
+
+    key_names = sorted(p.name for p in target_dir.glob("*.pem"))
+    assert key_names == sorted(
+        "%s_RSA_OAEP_%s_key.pem" % (keychain_uid, kind)
+        for keychain_uid in keychain_uids
+        for kind in ("public", "private")
+    )
+
+
+def test_filesystem_keystore_listing_skips_non_canonical_uuid_file_names(tmp_path: Path):
+    keychain_uid = generate_uuid0()
+    non_canonical_public_key_name = "%s_rsa_oaep_public_key.pem" % keychain_uid.hex  # UUID without dashes
+    for kind in ("public", "private"):
+        (tmp_path / ("%s_rsa_oaep_%s_key.pem" % (keychain_uid.hex, kind))).write_bytes(b"data")
+
+    keystore = FilesystemKeystore(tmp_path)
+    with mock.patch.object(keystore_module, "logger") as logger_mock:
+        assert keystore.list_keypair_identifiers() == []  # They couldn't be fetched
+    assert non_canonical_public_key_name in str(logger_mock.warning.call_args)
+
+    # With the canonical public key present too, only it is listed, whatever the listing order
+    keystore.set_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP", public_key=b"pub")
+    for key_filenames in (sorted(os.listdir(tmp_path)), sorted(os.listdir(tmp_path), reverse=True)):
+        with mock.patch.object(ReadonlyFilesystemKeystore, "_list_key_filenames", return_value=key_filenames):
+            assert keystore.list_keypair_identifiers() == [
+                dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key_present=False)
+            ]
+
+
+def test_filesystem_keystore_algo_names_without_letters(tmp_path: Path):
+    keychain_uid = generate_uuid0()
+    keystore = FilesystemKeystore(tmp_path)
+    with pytest.raises(KeyDoesNotExist):
+        keystore.get_public_key(keychain_uid=keychain_uid, key_algo="123")
+
+    keystore.set_keypair(keychain_uid=keychain_uid, key_algo="123", public_key=b"pub", private_key=b"priv")
+    assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="123") == b"pub"
+    assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo="123") == b"priv"
+
+    other_keychain_uid = generate_uuid0()
+    (tmp_path / ("%s___public_key.pem" % other_keychain_uid)).write_bytes(b"stray")  # Algo name "_"
+    assert keystore.list_keypair_identifiers() == sorted(
+        [
+            dict(keychain_uid=keychain_uid, key_algo="123", private_key_present=True),
+            dict(keychain_uid=other_keychain_uid, key_algo="_", private_key_present=False),
+        ],
+        key=lambda x: (x["keychain_uid"], x["key_algo"]),
+    )
+
+    keystore.add_free_keypair(key_algo="123", public_key=b"pub", private_key=b"priv")
+    assert keystore.get_free_keypairs_count("123") == 1  # Not counted twice
+
+
+@pytest.mark.parametrize("key_algo", ["RSA?OAEP", "RSA\0OAEP", "../RSA_OAEP", "RSA/OAEP", "", "A" * 65])
+def test_filesystem_keystore_unstorable_algo_names(tmp_path: Path, key_algo):
+    keychain_uid = generate_uuid0()
+    keystore = FilesystemKeystore(tmp_path)
+    names_before = sorted(os.listdir(tmp_path))
+
+    with pytest.raises(KeyDoesNotExist):
+        keystore.get_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
+    with pytest.raises(KeyDoesNotExist):
+        keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
+    assert keystore.get_free_keypairs_count(key_algo) == 0
+    with pytest.raises(KeyDoesNotExist):
+        keystore.attach_free_keypair_to_uuid(keychain_uid=keychain_uid, key_algo=key_algo)
+    with pytest.raises(ValidationError, match="can't be stored"):
+        keystore.set_keypair(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"pub", private_key=b"priv")
+    with pytest.raises(ValidationError, match="can't be stored"):
+        keystore.set_public_key(keychain_uid=keychain_uid, key_algo=key_algo, public_key=b"pub")
+    with pytest.raises(ValidationError, match="can't be stored"):
+        keystore.add_free_keypair(key_algo=key_algo, public_key=b"pub", private_key=b"priv")
+
+    assert sorted(os.listdir(tmp_path)) == names_before  # No file nor free keys directory created
 
 
 def test_filesystem_keystore_listing_skips_mixed_case_algo_names(tmp_path: Path):

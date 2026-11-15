@@ -31,3 +31,12 @@
 - [x] 6.3 Compute the listing's private key presence with the keychain uid as spelled in the file name, and skip mixed-case algo names with a warning; verify with tests
 - [x] 6.4 Decide the disk spellings in `_get_disk_algo_names()` only, rename helpers and tests to drop the ambiguous "uppercase layout" wording (`_get_key_filepath()`, `_get_canonical_key_filepath()`, `_get_existing_free_keys_subdirs()`, `write_legacy_uppercase_algo_keystore()`, `emulate_case_sensitive_filesystem()`, documenting that it only emulates lookups), and move test imports to the top of modules
 - [x] 6.5 Update the CHANGELOG entry, then run the full test suite and `openspec validate store-lowercase-algo-names-with-uppercase-fallback --strict`
+
+## 7. Code review follow-ups
+
+- [x] 7.1 Support algo names without letters (a single disk spelling, instead of a crash when unpacking two), and report algo names which can't appear in file names as missing keys on lookup and as `ValidationError` on write, without touching the filesystem; verify with tests on `123`, `_`, `../RSA_OAEP`, `RSA?OAEP`, NUL characters and over-long names
+- [x] 7.2 On case-insensitive filesystems, complete an existing keypair with the actual spelling of its files, read from a listing of the keys directory (`_resolve_keypair_files_for_writing()`), and resolve both halves once in `FilesystemKeystore._set_keypair()`; verify with `emulate_case_insensitive_filesystem()` (no-op on case-insensitive filesystems) that the tests fail without the fix on Linux
+- [x] 7.3 List keypairs from a single directory listing (`_list_key_filenames()`), report conflicting keypairs once with a warning instead of raising, and skip non-canonical keychain uids with a warning; verify that export and authenticator checks still fail on conflicting keys
+- [x] 7.4 Report conflicting key files like missing private keys in `TrusteeApi.request_decryption_authorization()`, and as errors of the concerned branches only in decryption; verify with tests
+- [x] 7.5 Remove `_get_canonical_key_filepath()`, only used by tests, which now check literal file names
+- [x] 7.6 Update the main spec, this change's delta spec, design and proposal, and the CHANGELOG; run the full test suite on Windows and the keystore and trustee tests on a Linux ext4 filesystem

@@ -19,6 +19,7 @@ from wacryptolib.exceptions import (
     AlgorithmNotSupported,
     AuthorizationError,
     KeyLoadingError,
+    KeyFilenameConflict,
 )
 from wacryptolib.keygen import generate_keypair, load_asymmetric_key_from_pem_bytestring
 from wacryptolib.keystore import (
@@ -358,3 +359,28 @@ def test_trustee_api_over_legacy_uppercase_algo_filesystem_keystore(tmp_path):
         )
 
     assert sorted(p.name for p in tmp_path.iterdir()) == names_before  # No new keypair generated
+
+
+def test_request_decryption_authorization_reports_conflicting_key_files_as_missing():
+    keystore = InMemoryKeystore()
+    trustee_api = TrusteeApi(keystore=keystore)
+    sane_keychain_uid, conflicting_keychain_uid = generate_uuid0(), generate_uuid0()
+    for keychain_uid in (sane_keychain_uid, conflicting_keychain_uid):
+        generate_keypair_for_storage(key_algo="RSA_OAEP", keystore=keystore, keychain_uid=keychain_uid)
+
+    original_get_private_key = keystore.get_private_key
+
+    def get_private_key(*, keychain_uid, key_algo):
+        if keychain_uid == conflicting_keychain_uid:
+            raise KeyFilenameConflict("Key files of keypair conflict")
+        return original_get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
+
+    sane_keypair_identifier = dict(keychain_uid=sane_keychain_uid, key_algo="RSA_OAEP")
+    conflicting_keypair_identifier = dict(keychain_uid=conflicting_keychain_uid, key_algo="RSA_OAEP")
+    with mock.patch.object(keystore, "get_private_key", get_private_key):
+        result = trustee_api.request_decryption_authorization(
+            keypair_identifiers=[sane_keypair_identifier, conflicting_keypair_identifier], request_message="Need it"
+        )
+    assert result["has_errors"]
+    assert result["keypair_statuses"]["accepted"] == [sane_keypair_identifier]
+    assert result["keypair_statuses"]["missing_private_key"] == [conflicting_keypair_identifier]

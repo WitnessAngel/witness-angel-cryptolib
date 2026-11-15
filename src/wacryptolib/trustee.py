@@ -8,7 +8,7 @@ from typing import Optional, Sequence
 
 from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS
 from wacryptolib.exceptions import KeyDoesNotExist, AuthorizationError, KeyLoadingError, ValidationError, \
-    AlgorithmNotSupported
+    AlgorithmNotSupported, KeyFilenameConflict
 from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import KeystoreBase, generate_keypair_for_storage
 from wacryptolib.signature import sign_message, SUPPORTED_SIGNATURE_ALGOS
@@ -176,6 +176,10 @@ class TrusteeApi:  # TODO rename this?
             try:
                 private_key_pem = self._keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
             except KeyDoesNotExist:
+                missing_private_key.append(keypair_identifier)
+                continue
+            except KeyFilenameConflict as exc:  # Only fixable by an admin, so reported like a missing key
+                logger.warning("Conflicting key files when requesting decryption authorization: %s", exc)
                 missing_private_key.append(keypair_identifier)
                 continue
 

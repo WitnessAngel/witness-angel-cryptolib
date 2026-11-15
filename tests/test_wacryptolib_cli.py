@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import copy
+import io
 import os
 import pathlib
 import random
@@ -14,15 +15,18 @@ from datetime import timedelta
 from unittest import mock
 from uuid import UUID
 
+import click
+import pytest
 from click.testing import CliRunner
 
 import wacryptolib
 from _test_mockups import oneshot_command_line, random_bool, get_longrun_command_line
 from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.authenticator import initialize_authenticator
-from wacryptolib.cli import wacryptolib_cli as cli, _short_format_datetime
+from wacryptolib.cli import wacryptolib_cli as cli, _short_format_datetime, _ensure_paths_not_existing
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CryptainerStorage, check_cryptoconf_sanity
-from wacryptolib.exceptions import KeystoreDoesNotExist
+from wacryptolib import operations
+from wacryptolib.exceptions import KeystoreDoesNotExist, ValidationError
 from wacryptolib.keygen import generate_keypair
 from wacryptolib.keystore import FilesystemKeystore, generate_keypair_for_storage, _get_keystore_metadata_file_path
 from wacryptolib.utilities import dump_to_json_file, get_utc_now_date, load_from_json_str
@@ -96,6 +100,66 @@ def test_cli_help_texts():
     result = runner.invoke(cli, ["cryptainer", "-h"], catch_exceptions=False)
     assert result.exit_code == 0
     assert "summarize" in result.stdout
+
+
+def _iter_cli_commands(command, path=()):
+    yield path, command
+    for name, subcommand in getattr(command, "commands", {}).items():
+        yield from _iter_cli_commands(subcommand, path + (name,))
+
+
+def test_cli_has_no_ambiguous_f_short_option():
+    commands = list(_iter_cli_commands(cli))
+    assert len(commands) > 20, commands  # Sanity check of the tree walking, chained subcommands included
+
+    force_command_paths = set()
+    for path, command in commands:
+        for param in command.params:
+            assert "-f" not in param.opts + param.secondary_opts, (path, param.name)
+            if param.name == "force":
+                assert param.opts == ["--force"] and not param.secondary_opts, (path, param.opts)
+                force_command_paths.add(path)
+    assert force_command_paths == {("encrypt",), ("cryptainer", "decrypt"), ("cryptoconf", "generate-simple")}
+
+
+def test_cli_format_option_is_long_only(tmp_path):
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
+    runner = _get_cli_runner()
+
+    result = runner.invoke(cli, base_args + ["cryptainer", "list", "-f", "json"])
+    assert result.exit_code == 2
+    assert "No such option" in result.stderr
+
+    result = runner.invoke(cli, base_args + ["cryptainer", "list", "--format", "json"])
+    assert result.exit_code == 0, result.stderr
+    assert load_from_json_str(result.stdout) == []
+
+
+def test_ensure_paths_not_existing(tmp_path):
+    existing_file = tmp_path / "existing.txt"
+    existing_file.write_text("hello")
+    missing_file = tmp_path / "missing.txt"
+
+    for force in (False, True):
+        _ensure_paths_not_existing([missing_file, "-", pathlib.Path("-")], force=force)  # No error
+
+        with pytest.raises(click.UsageError, match="is a directory"):
+            _ensure_paths_not_existing([missing_file, tmp_path], force=force)
+
+    _ensure_paths_not_existing([existing_file], force=True)
+    with pytest.raises(click.UsageError, match=r"existing\.txt' already exists, use --force"):
+        _ensure_paths_not_existing([missing_file, existing_file], force=False)
+    assert existing_file.read_text() == "hello"
+
+    dangling_symlink = tmp_path / "dangling_symlink"
+    try:
+        dangling_symlink.symlink_to(tmp_path / "nonexistent_target")
+    except OSError:  # E.g. missing privileges on Windows
+        pass
+    else:
+        _ensure_paths_not_existing([dangling_symlink], force=True)
+        with pytest.raises(click.UsageError, match="already exists"):
+            _ensure_paths_not_existing([dangling_symlink], force=False)
 
 
 def test_cli_authenticator_management(tmp_path):
@@ -1168,3 +1232,223 @@ def test_cli_default_app_root_creation():
     assert proc.returncode == 0
 
     assert os.path.exists(os.path.expanduser("~/.witnessangel/"))  # Auto-created on launch
+
+
+def _encrypt_sample_file_for_overwrite_tests(runner, base_args, data_file, data_sample, extra_args=()):
+    with open(data_file, "wb") as f:
+        f.write(data_sample)
+    result = runner.invoke(cli, base_args + ["encrypt", data_file] + list(extra_args), catch_exceptions=False)
+    assert result.exit_code == 0, result.stderr
+    return result
+
+
+def test_cli_decrypt_refuses_overwriting_existing_files(tmp_path):
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
+    runner = _get_cli_runner()
+    data_file = "video.mp4"
+    data_sample = "original média content".encode("utf8")
+
+    with runner.isolated_filesystem():
+        _encrypt_sample_file_for_overwrite_tests(runner, base_args, data_file, data_sample)
+        cryptainer_name = data_file + ".crypt"
+
+        # Decrypting next to the original file, with the default output name, is refused before any decryption
+        pathlib.Path(data_file).write_bytes(b"precious original")
+        with mock.patch("wacryptolib.cli.decrypt_payload_from_cryptainer") as decryption_mock:
+            result = runner.invoke(cli, base_args + ["cryptainer", "decrypt", cryptainer_name])
+            assert result.exit_code == 2, result.stderr
+            assert "video.mp4' already exists, use --force to overwrite it" in result.stderr
+            decryption_mock.assert_not_called()
+        assert pathlib.Path(data_file).read_bytes() == b"precious original"
+
+        # Same for an explicit existing output file
+        pathlib.Path("out.bin").write_bytes(b"other precious content")
+        result = runner.invoke(cli, base_args + ["cryptainer", "decrypt", cryptainer_name, "-o", "out.bin"])
+        assert result.exit_code == 2, result.stderr
+        assert "out.bin' already exists, use --force" in result.stderr
+        assert pathlib.Path("out.bin").read_bytes() == b"other precious content"
+
+        # The removed "-f" short option is not an alias of --force
+        result = runner.invoke(cli, base_args + ["cryptainer", "decrypt", cryptainer_name, "-o", "out.bin", "-f"])
+        assert result.exit_code == 2, result.stderr
+        assert "No such option" in result.stderr
+        assert pathlib.Path("out.bin").read_bytes() == b"other precious content"
+
+        # Forced decryption overwrites existing files
+        for extra_args, target_file in [([], data_file), (["-o", "out.bin"], "out.bin")]:
+            result = runner.invoke(
+                cli,
+                base_args + ["cryptainer", "decrypt", cryptainer_name, "--force"] + extra_args,
+                catch_exceptions=False,
+            )
+            assert result.exit_code == 0, result.stderr
+            assert pathlib.Path(target_file).read_bytes() == data_sample
+
+        # Directories are refused, even with --force
+        pathlib.Path("some_dir").mkdir()
+        for extra_args in ([], ["--force"]):
+            result = runner.invoke(
+                cli, base_args + ["cryptainer", "decrypt", cryptainer_name, "-o", "some_dir"] + extra_args
+            )
+            assert result.exit_code == 2, result.stderr
+            assert "some_dir" in result.stderr
+            assert "is a directory" in result.stderr
+            assert not any(pathlib.Path("some_dir").iterdir())
+
+        # A new output file is written as before, and STDOUT is never blocked
+        result = runner.invoke(
+            cli, base_args + ["cryptainer", "decrypt", cryptainer_name, "-o", "new.bin"], catch_exceptions=False
+        )
+        assert result.exit_code == 0, result.stderr
+        assert pathlib.Path("new.bin").read_bytes() == data_sample
+
+        result = runner.invoke(
+            cli, base_args + ["cryptainer", "decrypt", cryptainer_name, "-o", "-"], catch_exceptions=False
+        )
+        assert result.exit_code == 0, result.stderr
+        assert data_sample in result.stdout_bytes
+        assert not os.path.exists("-")
+
+        # If the target file appears after the early check, exclusive creation still refuses to overwrite it
+        def _decrypt_and_create_target(*args, **kwargs):
+            pathlib.Path("late.bin").write_bytes(b"late content")
+            return data_sample, None
+
+        with mock.patch("wacryptolib.cli.decrypt_payload_from_cryptainer", side_effect=_decrypt_and_create_target):
+            result = runner.invoke(cli, base_args + ["cryptainer", "decrypt", cryptainer_name, "-o", "late.bin"])
+        assert result.exit_code == 1, result.stderr
+        assert "late.bin" in result.stderr
+        assert pathlib.Path("late.bin").read_bytes() == b"late content"
+
+
+def test_cli_encrypt_refuses_overwriting_existing_cryptainers(tmp_path):
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
+    runner = _get_cli_runner()
+    data_file = "report.txt"
+
+    with runner.isolated_filesystem():
+        _encrypt_sample_file_for_overwrite_tests(runner, base_args, data_file, b"first content", ["-o", "report"])
+        cryptainer_file = cryptainer_storage / "report.crypt"
+        payload_file = cryptainer_storage / "report.crypt.payload"
+        assert cryptainer_file.is_file() and payload_file.is_file()
+        original_contents = (cryptainer_file.read_bytes(), payload_file.read_bytes())
+
+        pathlib.Path(data_file).write_bytes(b"second content")
+
+        # Re-encrypting with the same basename is refused before any encryption, both files staying untouched
+        for extra_args in ([], ["--bundle"]):
+            with mock.patch("wacryptolib.cli.CryptainerStorage.encrypt_file") as encryption_mock:
+                result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "report.crypt"] + extra_args)
+                assert result.exit_code == 2, result.stderr
+                assert "report.crypt' already exists, use --force to overwrite it" in result.stderr
+                encryption_mock.assert_not_called()
+            assert (cryptainer_file.read_bytes(), payload_file.read_bytes()) == original_contents
+
+        # STDIN is not consumed when encryption is refused
+
+        class _UnclosableBytesIO(io.BytesIO):
+            def close(self):
+                pass  # CliRunner closes its input stream, but we want to inspect it afterwards
+
+        stdin_stream = _UnclosableBytesIO(b"piped content")
+        result = runner.invoke(cli, base_args + ["encrypt", "-", "-o", "report"], input=stdin_stream)
+        assert result.exit_code == 2, result.stderr
+        assert stdin_stream.tell() == 0
+
+        # A lone leftover offloaded payload file blocks encryption too, bundled or not
+        cryptainer_file.unlink()
+        for extra_args in ([], ["--bundle"]):
+            result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "report"] + extra_args)
+            assert result.exit_code == 2, result.stderr
+            assert "report.crypt.payload' already exists" in result.stderr
+            assert not cryptainer_file.exists()
+
+        # A directory in the way is refused even with --force
+        cryptainer_storage.joinpath("dirred.crypt").mkdir()
+        result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "dirred", "--force"])
+        assert result.exit_code == 2, result.stderr
+        assert "is a directory" in result.stderr
+
+        # Forced encryption overwrites the stored cryptainer, which then decrypts to the new content
+        cryptainer_file.write_bytes(original_contents[0])
+        result = runner.invoke(
+            cli, base_args + ["encrypt", data_file, "-o", "report", "--force"], catch_exceptions=False
+        )
+        assert result.exit_code == 0, result.stderr
+        assert cryptainer_file.read_bytes() != original_contents[0]
+        result = runner.invoke(
+            cli, base_args + ["cryptainer", "decrypt", "report.crypt", "-o", "decrypted.txt"], catch_exceptions=False
+        )
+        assert result.exit_code == 0, result.stderr
+        assert pathlib.Path("decrypted.txt").read_bytes() == b"second content"
+
+
+def test_cli_cryptoconf_generate_simple_refuses_overwriting_existing_file(tmp_path):
+    runner = _get_cli_runner()
+    layers = """add-payload-cipher-layer --sym-cipher-algo aes_cbc
+                add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory""".split()
+
+    output_file = tmp_path / "conf.json"
+    output_file.write_text("my precious cryptoconf")
+
+    result = runner.invoke(cli, ["cryptoconf", "generate-simple", "-o", str(output_file)] + layers)
+    assert result.exit_code == 2, result.stderr
+    assert "conf.json' already exists, use --force to overwrite it" in result.stderr
+    assert output_file.read_text() == "my precious cryptoconf"
+
+    result = runner.invoke(cli, ["cryptoconf", "generate-simple", "--force", "-o", str(output_file)] + layers)
+    assert result.exit_code == 0, result.stderr
+    check_cryptoconf_sanity(load_from_json_str(output_file.read_text()))
+
+    for extra_args in ([], ["--force"]):
+        result = runner.invoke(cli, ["cryptoconf", "generate-simple", "-o", str(tmp_path)] + extra_args + layers)
+        assert result.exit_code == 2, result.stderr
+        assert "is a directory" in result.stderr
+
+    result = runner.invoke(cli, ["cryptoconf", "generate-simple"] + layers)  # STDOUT is never blocked
+    assert result.exit_code == 0, result.stderr
+    check_cryptoconf_sanity(load_from_json_str(result.stdout))
+
+
+def test_cli_authenticator_create_refuses_existing_paths(tmp_path):
+    runner = _get_cli_runner()
+    no_passphrase_env = {"WA_PASSPHRASE": None}  # Any passphrase prompt would then abort with exit code 1
+    base_args = ["authenticator", "create", "--owner", "Donald", "--passphrase-hint", "somehint"]
+
+    existing_dir = tmp_path / "existing_dir"
+    existing_dir.mkdir()
+    existing_dir.joinpath("content.txt").write_text("content")
+    existing_file = tmp_path / "existing_file"
+    existing_file.write_text("file content")
+
+    result = runner.invoke(cli, base_args + [str(existing_dir)], env=no_passphrase_env)
+    assert result.exit_code == 2, result.stderr
+    assert "must not exist yet" in result.stderr
+    assert "passphrase" not in result.stderr.lower()
+    assert [p.name for p in existing_dir.iterdir()] == ["content.txt"]
+
+    result = runner.invoke(cli, base_args + [str(existing_file)], env=no_passphrase_env)
+    assert result.exit_code == 2, result.stderr
+    assert "already exists and is not a directory, remove it first" in result.stderr
+    assert "existing_file" in result.stderr
+    assert "passphrase" not in result.stderr.lower()
+    assert result.exc_info[0] is SystemExit  # No traceback
+    assert existing_file.read_text() == "file content"
+
+    # No overwriting option exists for directories
+    result = runner.invoke(cli, base_args + [str(existing_dir), "--force"], env=no_passphrase_env)
+    assert result.exit_code == 2, result.stderr
+    assert "No such option: --force" in result.stderr
+    result = runner.invoke(cli, ["authenticator", "create", "--help"])
+    assert "--force" not in result.stdout
+
+    # Library callers get a ValidationError too
+    with pytest.raises(ValidationError, match="already exists and is not a directory"):
+        operations.create_authenticator(
+            existing_file,
+            keypair_count=1,
+            keystore_owner="Donald",
+            keystore_passphrase_hint="somehint",
+            keystore_passphrase="somepassphrase",
+        )
+    assert existing_file.read_text() == "file content"

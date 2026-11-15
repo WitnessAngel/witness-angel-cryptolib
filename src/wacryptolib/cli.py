@@ -24,6 +24,7 @@ from wacryptolib.cryptainer import (
     decrypt_payload_from_cryptainer,
     CRYPTAINER_SUFFIX,
     DECRYPTED_FILE_SUFFIX,
+    OFFLOADED_PAYLOAD_FILENAME_SUFFIX,
     SHARED_SECRET_ALGO_MARKER,
     check_cryptoconf_sanity,
     ensure_validated_cryptoconf,
@@ -61,9 +62,11 @@ DEFAULT_KEYSTORE_POOL_PATH = Path(_DEFAULT_KEYSTORE_POOL_STR).expanduser().resol
 _DEFAULT_CRYPTAINER_STORAGE_STR = os.path.join(_INTERNAL_APP_DIR_STR, "cryptainers")  # With ~ for docstrings
 DEFAULT_CRYPTAINER_STORAGE_PATH = Path(_DEFAULT_CRYPTAINER_STORAGE_STR).expanduser().resolve()
 INDENT = "  "
+# Beware, no "-f" short option anywhere in this CLI, since it would be ambiguous ("--format"? "--force"?)
 FORMAT_OPTION = click.option(
-    "-f", "--format", type=click.Choice(["plain", "json"], case_sensitive=False), default="plain", show_default=True
+    "--format", type=click.Choice(["plain", "json"], case_sensitive=False), default="plain", show_default=True
 )
+FORCE_OPTION = click.option("--force", is_flag=True, help="Overwrite existing target files")
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 # Used as fallback when no proper cryptoconf is provided
@@ -102,6 +105,22 @@ SIMPLE_EXAMPLE_CRYPTOCONF = dict(
 )
 
 
+def _ensure_paths_not_existing(paths, force):
+    """
+    Raise a click.UsageError if one of these target file paths is blocked by an existing filesystem entry.
+
+    An existing directory is always refused, even with `force`, while an existing file (or dangling symlink)
+    is only accepted if `force` is True. The "-" path (STDIN/STDOUT) is ignored.
+    """
+    for path in paths:
+        if os.fspath(path) == "-":
+            continue
+        if os.path.isdir(path):
+            raise click.UsageError("Target path '%s' is a directory" % path)
+        if not force and os.path.lexists(path):
+            raise click.UsageError("Target file '%s' already exists, use --force to overwrite it" % path)
+
+
 def _short_format_datetime(dt):
     if dt is None:
         return ""
@@ -129,7 +148,7 @@ def _get_keystore_pool(ctx):
     return FilesystemKeystorePool(keystore_pool_dir)
 
 
-def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=True, **extra_kwargs):
+def _get_cryptainer_storage_dir(ctx):
     cryptainer_storage_dir_str = ctx.obj["cryptainer_storage"]
     if not cryptainer_storage_dir_str:
         cryptainer_storage_dir = Path().joinpath(DEFAULT_CRYPTAINER_STORAGE_PATH).resolve()
@@ -137,6 +156,11 @@ def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=
         cryptainer_storage_dir.mkdir(exist_ok=True)
     else:
         cryptainer_storage_dir = Path(cryptainer_storage_dir_str)
+    return cryptainer_storage_dir
+
+
+def _get_cryptainer_storage(ctx, keystore_pool=None, offload_payload_ciphertext=True, **extra_kwargs):
+    cryptainer_storage_dir = _get_cryptainer_storage_dir(ctx)
     return CryptainerStorage(
         cryptainer_storage_dir,
         keystore_pool=keystore_pool,
@@ -397,9 +421,13 @@ def delete_authenticator(ctx, authenticator_dir):
 @click.option("-o", "--output-basename", help="Basename of the cryptainer storage output file")
 @click.option("-c", "--cryptoconf", default=None, help="Json crypotoconf file", type=click.File("rb"))
 @click.option("--bundle", help="Combine cryptainer metadata and payload", is_flag=True)
+@FORCE_OPTION
 @click.pass_context
-def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
-    """Turn a media file into a secure container"""
+def encrypt(ctx, input_file, output_basename, cryptoconf, bundle, force):
+    """Turn a media file into a secure container
+
+    Existing cryptainer files are not overwritten, unless --force is used.
+    """
 
     offload_payload_ciphertext = not bundle
 
@@ -426,6 +454,13 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle):
     output_basename = output_basename or input_file.name
     assert isinstance(output_basename, str), repr(output_basename)
 
+    # Both files are checked even when bundling, since a leftover offloaded payload belongs to the same cryptainer
+    cryptainer_filepath = _get_cryptainer_storage_dir(ctx).joinpath(output_basename + CRYPTAINER_SUFFIX)
+    offloaded_payload_filepath = cryptainer_filepath.with_name(
+        cryptainer_filepath.name + OFFLOADED_PAYLOAD_FILENAME_SUFFIX
+    )
+    _ensure_paths_not_existing([cryptainer_filepath, offloaded_payload_filepath], force=force)
+
     cryptainer_storage = _get_cryptainer_storage(
         ctx, keystore_pool=keystore_pool, offload_payload_ciphertext=offload_payload_ciphertext
     )
@@ -451,12 +486,22 @@ def cryptoconf_group():
 
 @cryptoconf_group.group("generate-simple", chain=True)
 @click.option("--keychain-uid", help="Default UID for asymmetric keys", required=False, type=click.UUID)
-@click.option("-o", "--output-file", default="-", help="Output file for the cryptoconf (default: STDOUT)", type=click.File("w"))
+@click.option(
+    "-o",
+    "--output-file",
+    default="-",
+    help="Output file for the cryptoconf (default: STDOUT)",
+    type=click.Path(dir_okay=False, allow_dash=True, path_type=Path),
+)
+@FORCE_OPTION
 @click.pass_context
-def generate_simple_cryptoconf(ctx, keychain_uid, output_file):
+def generate_simple_cryptoconf(ctx, keychain_uid, output_file, force):
     """
     Generate a simple cryptoconf using subcommands
+
+    An existing output file is not overwritten, unless --force is used.
     """
+    _ensure_paths_not_existing([output_file], force=force)  # Before any subcommand gets run
     cryptoconf = {"payload_cipher_layers": []}
     if keychain_uid:
         cryptoconf["keychain_uid"] = keychain_uid
@@ -465,14 +510,16 @@ def generate_simple_cryptoconf(ctx, keychain_uid, output_file):
 
 @generate_simple_cryptoconf.result_callback()
 @click.pass_context
-def display_cryptoconf(ctx, processors, keychain_uid, output_file):
+def display_cryptoconf(ctx, processors, keychain_uid, output_file, force):
     """Format and print a cryptoconf"""
     cryptoconf = ctx.obj["cryptoconf"]
     try:
         check_cryptoconf_sanity(cryptoconf)  # Safety
     except ValidationError as exc:
         raise click.UsageError("Generated cryptoconf is invalid: %s" % exc)
-    click.echo(_dump_as_safe_formatted_json(cryptoconf), file=output_file)
+    # Exclusive creation in case the file appeared since our early check; "-" still means STDOUT
+    with click.open_file(output_file, mode="w" if force else "x", lazy=True) as output_stream:
+        click.echo(_dump_as_safe_formatted_json(cryptoconf), file=output_stream)
 
 
 @generate_simple_cryptoconf.command("add-payload-cipher-layer")
@@ -869,15 +916,23 @@ def delete_cryptainer(ctx, cryptainer_name):
 # FIXE move this OUT of cryptainer storage subcommand!!!!??? For symmetry
 @cryptainer_group.command("decrypt")
 @click.argument("cryptainer_name")
-@click.option("-o", "--output-file", type=click.File("wb"))
+@click.option(
+    "-o",
+    "--output-file",
+    help="Output file for the decrypted content, or '-' for STDOUT (default: cryptainer name without its suffix)",
+    type=click.Path(dir_okay=False, allow_dash=True, path_type=Path),
+)
+@FORCE_OPTION
 @click.pass_context
-def decrypt(ctx, cryptainer_name, output_file):
+def decrypt(ctx, cryptainer_name, output_file, force):
     """Turn a cryptainer back into the original media file
 
     This command is for test purposes only, since it only works with INSECURE cryptoconfs
     where private keys are locally available, and not protected by passphrases.
 
     For real world use cases, see the Witness Angel software suite (Authenticator, Revelation Station...).
+
+    An existing output file is not overwritten, unless --force is used.
     """
 
     if not output_file:
@@ -886,7 +941,11 @@ def decrypt(ctx, cryptainer_name, output_file):
             output_file_name = cryptainer_name[: -len(CRYPTAINER_SUFFIX)]
         else:
             output_file_name = cryptainer_name + DECRYPTED_FILE_SUFFIX
-        output_file = LazyFile(output_file_name, "wb")  # We output it in current directory...
+        output_file = Path(output_file_name)  # We output it in current directory...
+
+    _ensure_paths_not_existing([output_file], force=force)  # Before any decryption work
+    # Exclusive creation in case the file appeared in the meantime; "-" still means STDOUT
+    output_file = LazyFile(output_file, "wb" if force else "xb")
 
     # click.echo("In decrypt: %s" % str(locals()))
     keystore_pool = _get_keystore_pool(ctx)

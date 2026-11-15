@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -29,8 +30,13 @@ logger = logging.getLogger(__name__)
 
 
 def _check_target_authenticator_parameters_validity(authenticator_dir, keypair_count, exception_cls=ValidationError):
+    # No overwriting option exists here: the user must remove any existing entry manually
     if authenticator_dir.is_dir():
         raise exception_cls("Target directory %s must not exist yet" % authenticator_dir)
+    if os.path.lexists(authenticator_dir):
+        raise exception_cls(
+            "Target path %s already exists and is not a directory, remove it first" % authenticator_dir
+        )
 
     authenticator_dir_parent = authenticator_dir.parent
     if not authenticator_dir_parent.is_dir():

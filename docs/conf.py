@@ -34,6 +34,17 @@ authenticator_dir = root_dir.joinpath("docs/mysphinxdocauthenticator")
 if authenticator_dir.exists():
     shutil.rmtree(authenticator_dir)
 
+# The CLI never overwrites existing files (without --force), so we remove the files that the tutorial commands
+# create, to keep doc builds re-runnable; only these exact names are touched, in the default cryptainer storage too
+_default_cryptainer_storage_dir = pathlib.Path("~/.witnessangel/cryptainers").expanduser()
+for _tutorial_output_file in (
+    root_dir.joinpath("docs/readme.rst.decrypted"),
+    _default_cryptainer_storage_dir.joinpath("readme.rst.crypt"),
+    _default_cryptainer_storage_dir.joinpath("readme.rst.crypt.payload"),
+):
+    if _tutorial_output_file.is_file():
+        _tutorial_output_file.unlink()
+
 os.environ["WA_PASSPHRASE"] = "My Passphrase For Sphinx-CLI"
 
 # -- Project information -----------------------------------------------------

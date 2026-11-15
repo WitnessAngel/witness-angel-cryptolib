@@ -46,6 +46,12 @@ This means that we can directly decrypt the content of this cryptainer:
 
 We can then check that readme.rst and readme.rst.decrypted are well the same.
 
+.. hint::
+
+    Existing files are never overwritten by the flightbox: if a target file already exists (a cryptainer with the same name in the storage, a decrypted file, a generated cryptoconf...), the command fails with an error, unless the `--force` option is given to that command. Note that without `-o`, decryption writes the cryptainer name minus its ".crypt" suffix into the current directory, so `--force` would then replace the original file.
+
+    Existing directories, e.g. the target of `flightbox authenticator create`, are never overwritten, and no option exists for that: such a directory must be removed manually first.
+
 
 Creating an authenticator trustee
 ----------------------------------

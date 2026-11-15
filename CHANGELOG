@@ -2,6 +2,13 @@
 Development
 =============
 
+* **BREAKING**: the flightbox CLI never overwrites existing files anymore: `encrypt` (target `.crypt` or `.crypt.payload` file
+  in the cryptainer storage), `cryptainer decrypt` (output file, including the default one derived from the cryptainer name)
+  and `cryptoconf generate-simple -o` fail with a usage error naming the blocking file, before any passphrase prompt or
+  encryption/decryption work, unless the new `--force` option is given; existing directories are never overwritten, even
+  with `--force`, and `authenticator create` now also refuses an existing file at its target path (directories must be
+  removed manually); the Python library API is unchanged
+* **BREAKING**: the ambiguous `-f` short option is removed from the whole CLI: use `--format` (and `--force`) instead
 * **BREAKING**: common passphrases (the None key of `passphrase_mapper`) are not sent anymore to remote JSON-RPC trustees, which only get the passphrases of their own ID; per-trustee passphrases may be given as a tuple, and a single str/bytes passphrase, or non-str/bytes items, now raise ValueError instead of being split into characters
 * Remember the validation of cryptoconfs and cryptainers with internal dict subclasses (ValidatedCryptoconf and
   ValidatedCryptainer), so that they are validated once instead of by every layer; new public helpers

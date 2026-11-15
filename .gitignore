@@ -102,6 +102,7 @@ coverage.xml
 # Sphinx documentation
 docs/_build/
 mysphinxdocauthenticator/
+docs/readme.rst.decrypted
 
 # PyBuilder
 target/

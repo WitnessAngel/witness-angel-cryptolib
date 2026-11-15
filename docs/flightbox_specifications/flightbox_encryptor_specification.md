@@ -816,6 +816,16 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
 12. Symkeys and the `secrets` structure MUST stay in memory only, and SHOULD be wiped after
     use where the language allows it.
 13. Every random value MUST come from a CSPRNG (§3.1).
+14. The parts of file names chosen by an implementation MUST be lowercase:
+    - cryptainer and payload suffixes;
+    - timestamps;
+    - sensor and record names, even when configured in another letter case;
+    - algo names in key file names.
+
+    Basenames given by the caller, such as an original media file name, MUST be kept as given
+    (e.g. `20261111_184000_frontcam_cryptainer.mp4.crypt`, but `IMG_0001.MP4.crypt` for a
+    user-supplied `IMG_0001.MP4`). Readers MUST recognize the lowercase suffixes, and filesystem
+    keystores also accept key files with the legacy uppercase algo names of earlier releases.
 
 ### 11.2 Key and parameter constraints per algorithm
 

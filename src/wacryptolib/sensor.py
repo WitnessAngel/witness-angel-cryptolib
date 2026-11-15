@@ -102,7 +102,7 @@ class TarfileRecordAggregator(TimeLimitedAggregatorMixin):
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
         to_ts = to_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
-        filename = "{from_ts}_to_{to_ts}_cryptainer{extension}".format(**locals())
+        filename = "{from_ts}_to_{to_ts}_cryptainer{extension}".format(**locals()).lower()  # Lowercase file names
         assert " " not in filename, repr(filename)
         return filename
 
@@ -131,7 +131,8 @@ class TarfileRecordAggregator(TimeLimitedAggregatorMixin):
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
         to_ts = to_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
-        filename = "{from_ts}_to_{to_ts}_{sensor_name}{extension}".format(**locals())
+        # Sensor names and extensions may come from configs, but file names built by the library are lowercase
+        filename = "{from_ts}_to_{to_ts}_{sensor_name}{extension}".format(**locals()).lower()
         assert " " not in filename, repr(filename)
         return filename
 
@@ -386,7 +387,8 @@ class PeriodicEncryptionStreamMixin:
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
         sensor_name = self.sensor_name
-        filename = "{from_ts}_{sensor_name}_cryptainer{extension}".format(**locals())
+        # Sensor names and extensions may come from configs, but file names built by the library are lowercase
+        filename = "{from_ts}_{sensor_name}_cryptainer{extension}".format(**locals()).lower()
         assert " " not in filename, repr(filename)
         return filename
 

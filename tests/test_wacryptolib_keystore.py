@@ -5,6 +5,7 @@
 import os
 import random
 import secrets
+import shutil
 import stat
 import time
 from contextlib import nullcontext
@@ -568,6 +569,84 @@ def test_keystorepool_export_and_import_foreign_keystore_to_keystore_tree(tmp_pa
             foreign_keystore.get_private_key(keychain_uid=keychain_uid, key_algo=key_algo)
             == keystore_tree["keypairs"][0]["private_key"]
         )
+
+
+def _build_minimal_keystore_tree(keystore_uid, keystore_secret, public_keys_by_keychain_uid: dict):
+    return {
+        "keystore_type": "authenticator",
+        "keystore_format": KEYSTORE_FORMAT,
+        "keystore_owner": "Jacques",
+        "keystore_uid": keystore_uid,
+        "keystore_secret": keystore_secret,
+        "keypairs": [
+            {"keychain_uid": keychain_uid, "key_algo": "RSA_OAEP", "public_key": public_key, "private_key": b"okj"}
+            for keychain_uid, public_key in public_keys_by_keychain_uid.items()
+        ],
+    }
+
+
+@pytest.mark.parametrize("emulate_case_sensitivity", [False, True])
+def test_keystorepool_foreign_keystore_dirs_in_other_letter_cases(tmp_path: Path, emulate_case_sensitivity):
+    keystore_uid = generate_uuid0()
+    keystore_secret = secrets.token_urlsafe(64)
+    keychain_uid, new_keychain_uid = generate_uuid0(), generate_uuid0()
+    keystore_pool = FilesystemKeystorePool(tmp_path)
+    keystore_pool.import_foreign_keystore_from_keystore_tree(
+        _build_minimal_keystore_tree(keystore_uid, keystore_secret, {keychain_uid: b"555"})
+    )
+    foreign_keystores_dir = tmp_path / keystore_pool.FOREIGN_KEYSTORES_DIRNAME
+    canonical_dirname = "keystore_%s" % keystore_uid
+    assert os.listdir(foreign_keystores_dir) == [canonical_dirname]  # New directories are lowercase
+
+    # Like a keystore copied by hand or by FAT tools
+    uppercase_dirname = canonical_dirname.upper()
+    (foreign_keystores_dir / canonical_dirname).rename(foreign_keystores_dir / uppercase_dirname)
+    abnormal_dirnames = ["keystore_backup", "keystore_%s" % generate_uuid0().hex]  # The latter has no dashes
+    for dirname in abnormal_dirnames + ["temp_import_dir"]:
+        (foreign_keystores_dir / dirname).mkdir()
+    names_before = sorted(os.listdir(foreign_keystores_dir))
+
+    with emulate_case_sensitive_filesystem() if emulate_case_sensitivity else nullcontext():
+        with mock.patch.object(keystore_module, "logger") as logger_mock:
+            assert keystore_pool.list_foreign_keystore_uids() == [keystore_uid]
+        warnings = str(logger_mock.warning.call_args_list)
+        for dirname in abnormal_dirnames:
+            assert dirname in warnings
+        assert "temp_import_dir" not in warnings  # Not a foreign keystore, like before
+
+        metadata = keystore_pool.get_foreign_keystore_metadata(keystore_uid)
+        assert metadata["keystore_uid"] == keystore_uid
+        foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+        assert foreign_keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"555"
+
+        # Importing again completes the existing directory, without creating a lowercase twin
+        assert keystore_pool.import_foreign_keystore_from_keystore_tree(
+            _build_minimal_keystore_tree(keystore_uid, keystore_secret, {keychain_uid: b"555", new_keychain_uid: b"666"})
+        )
+        foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+        assert foreign_keystore.get_public_key(keychain_uid=new_keychain_uid, key_algo="RSA_OAEP") == b"666"
+
+    assert sorted(os.listdir(foreign_keystores_dir)) == names_before  # Nothing created, renamed or deleted
+
+
+def test_keystorepool_foreign_keystore_dir_under_both_spellings(tmp_path: Path):
+    if is_case_insensitive_filesystem(tmp_path):
+        pytest.skip("Distinct directories differing only in case can't coexist on a case-insensitive filesystem")
+    keystore_uid = generate_uuid0()
+    keychain_uid = generate_uuid0()
+    keystore_pool = FilesystemKeystorePool(tmp_path)
+    keystore_pool.import_foreign_keystore_from_keystore_tree(
+        _build_minimal_keystore_tree(keystore_uid, secrets.token_urlsafe(64), {keychain_uid: b"new"})
+    )
+    foreign_keystores_dir = tmp_path / keystore_pool.FOREIGN_KEYSTORES_DIRNAME
+    canonical_dir = foreign_keystores_dir / ("keystore_%s" % keystore_uid)
+    uppercase_dir = foreign_keystores_dir / canonical_dir.name.upper()
+    shutil.copytree(canonical_dir, uppercase_dir)
+    (uppercase_dir / ("%s_rsa_oaep_public_key.pem" % keychain_uid)).write_bytes(b"old")
+
+    assert keystore_pool.list_foreign_keystore_uids() == [keystore_uid]
+    foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+    assert foreign_keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"new"
 
 
 def test_generate_free_keypair_for_least_provisioned_key_algo():

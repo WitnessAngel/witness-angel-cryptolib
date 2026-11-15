@@ -834,10 +834,52 @@ class FilesystemKeystorePool(KeystorePoolBase):
         # TODO initialize metadata for local keystore too??
         return FilesystemKeystore(local_keystore_dir)
 
-    def _get_foreign_keystore_dir(self, keystore_uid: UUID):
-        foreign_keystore_dir = self._root_dir.joinpath(
-            self.FOREIGN_KEYSTORES_DIRNAME, "%s%s" % (self.FOREIGN_KEYSTORE_PREFIX, keystore_uid)
-        )
+    def _get_foreign_keystores_dir(self) -> Path:
+        return self._root_dir.joinpath(self.FOREIGN_KEYSTORES_DIRNAME)
+
+    def _list_foreign_keystore_dirnames(self) -> dict:
+        """
+        Return a dict mapping the UUIDs of foreign keystores to the actual names of their directories.
+
+        Directory names are matched case-insensitively (e.g. keystores copied by FAT tools may be uppercase), with
+        the same result on every filesystem; the canonical lowercase name wins if several spellings exist.
+        Names with the keystore prefix but no canonical UUID can't be looked up, so they are skipped with a warning.
+        """
+        foreign_keystores_dir = self._get_foreign_keystores_dir()
+        prefix = self.FOREIGN_KEYSTORE_PREFIX
+        try:
+            entries = sorted(os.scandir(foreign_keystores_dir), key=lambda entry: entry.name)
+        except (FileNotFoundError, NotADirectoryError):
+            return {}
+        dirnames = {}
+        for entry in entries:
+            if not entry.name.lower().startswith(prefix) or not entry.is_dir():
+                continue  # Not a foreign keystore (e.g. a temporary directory)
+            uid_str = entry.name[len(prefix):]
+            try:
+                keystore_uid = uuid.UUID(uid_str)
+            except ValueError:
+                keystore_uid = None
+            if keystore_uid is None or str(keystore_uid) != uid_str.lower():
+                logger.warning(
+                    "Skipping foreign keystore directory with abnormal name %r in %s", entry.name, foreign_keystores_dir
+                )
+                continue
+            if keystore_uid not in dirnames or entry.name == prefix + str(keystore_uid):
+                dirnames[keystore_uid] = entry.name
+        return dirnames
+
+    def _get_foreign_keystore_dir(self, keystore_uid: UUID) -> Path:
+        """
+        Return the directory of a foreign keystore: the one with the canonical lowercase name if it exists, else,
+        silently, one with the same name in another letter case, else the canonical one (e.g. for its creation).
+        """
+        foreign_keystores_dir = self._get_foreign_keystores_dir()
+        foreign_keystore_dir = foreign_keystores_dir.joinpath("%s%s" % (self.FOREIGN_KEYSTORE_PREFIX, keystore_uid))
+        if not foreign_keystore_dir.is_dir():
+            actual_dirname = self._list_foreign_keystore_dirnames().get(keystore_uid)
+            if actual_dirname:
+                foreign_keystore_dir = foreign_keystores_dir.joinpath(actual_dirname)
         return foreign_keystore_dir
 
     def _ensure_foreign_keystore_dir_exists(self, keystore_uid: UUID):  # Not always INITIALIZED
@@ -856,9 +898,7 @@ class FilesystemKeystorePool(KeystorePoolBase):
     def list_foreign_keystore_uids(self) -> list:
         """Return a sorted list of UUIDs of key storages, corresponding
         to the keystore_uid of their origin authentication devices."""
-        foreign_keystores_dir = self._root_dir.joinpath(self.FOREIGN_KEYSTORES_DIRNAME)
-        paths = foreign_keystores_dir.glob("%s*" % self.FOREIGN_KEYSTORE_PREFIX)  # This excludes TEMP folders
-        return sorted([uuid.UUID(d.name.replace(self.FOREIGN_KEYSTORE_PREFIX, "")) for d in paths])
+        return sorted(self._list_foreign_keystore_dirnames())  # This excludes TEMP folders
 
     def get_foreign_keystore_metadata(self, keystore_uid: UUID, include_keypair_identifiers=False):
         """Return a metadata dict for the keystore `keystore_uid`."""

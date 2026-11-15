@@ -757,6 +757,59 @@ def test_periodic_subprocess_stream_recorder_with_custom_encryption_stream(tmp_p
     _check_stream_recorder_cryptainer_name(cryptainer_names[0])
 
 
+class _UppercaseTarfileRecordAggregator(TarfileRecordAggregator):
+    tarfile_extension = ".TAR"
+
+
+def test_tarfile_aggregator_lowercases_built_names(tmp_path):
+    cryptainer_storage = FakeTestCryptainerStorage(
+        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path, offload_payload_ciphertext=random_bool()
+    )
+    tarfile_aggregator = _UppercaseTarfileRecordAggregator(cryptainer_storage=cryptainer_storage, max_duration_s=10)
+
+    tarfile_aggregator.add_record(
+        sensor_name="GPS",
+        from_datetime=datetime(year=2017, month=10, day=11, tzinfo=timezone.utc),
+        to_datetime=datetime(year=2017, month=12, day=1, tzinfo=timezone.utc),
+        extension=".JSON",
+        payload=b"{}",
+    )
+    tarfile_aggregator.finalize_tarfile()
+    cryptainer_storage.wait_for_idle_state()
+
+    (cryptainer_name,) = cryptainer_storage.list_cryptainer_names()
+    assert str(cryptainer_name) == str(cryptainer_name).lower()
+    assert "_cryptainer.tar." in str(cryptainer_name)  # The fake storage adds a counter to names
+
+    tarfile_bytestring, _operation_report = cryptainer_storage.decrypt_cryptainer_from_storage(
+        cryptainer_name_or_idx=-1
+    )
+    tar_file = TarfileRecordAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
+    assert tar_file.getnames() == ["20171011_000000_to_20171201_000000_gps.json"]
+
+
+class _UppercaseStreamRecorderForTesting(TestStreamRecorderForTesting):
+    sensor_name = "FrontCam"
+    record_extension = ".MP4"
+
+
+def test_periodic_subprocess_stream_recorder_lowercases_built_names(tmp_path):
+    cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=True)
+    recorder = _UppercaseStreamRecorderForTesting(
+        executable_command_line=oneshot_command_line, interval_s=5, cryptainer_storage=cryptainer_storage
+    )
+    assert recorder.sensor_name == "FrontCam"  # Public attribute keeps its configured spelling
+
+    recorder._current_start_time = datetime(year=2017, month=10, day=11, tzinfo=timezone.utc)
+    cryptainer_encryption_stream = recorder._build_cryptainer_encryption_stream()
+    cryptainer_encryption_stream.encrypt_chunk(b"some video data")
+    cryptainer_encryption_stream.finalize()
+
+    assert [str(name) for name in cryptainer_storage.list_cryptainer_names()] == [
+        "20171011_000000_frontcam_cryptainer.mp4.crypt"
+    ]
+
+
 def test_sensor_manager():
     class DummyUnstableSensor(TaskRunnerStateMachineBase):
         def __init__(self, is_broken):

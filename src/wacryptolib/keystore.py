@@ -514,60 +514,40 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
 
     def _list_unordered_keypair_identifiers(self):
         """
-        List keypairs from a single listing of the keys directory, as spelled on disk.
+        List keypairs from a single listing of the keys directory, with names compared like the platform does
+        (case-insensitively on Windows only, where the getters also find files in any letter case).
 
         Key files with legacy uppercase algo names are listed like lowercase ones, silently. Files which the getters
         can't fetch (abnormal names, mixed-case algo names, non-canonical keychain uids) are skipped with a warning.
         """
-        key_filenames = set(self._list_key_filenames())
+        key_filenames = {os.path.normcase(name): name for name in self._list_key_filenames()}  # Normalized: actual
         keypair_keys = set()  # {(keychain_uid, uppercase key_algo)}
 
-        for public_key_pem_filename in sorted(key_filenames):  # Sorted for deterministic warnings
+        for normalized_filename, public_key_pem_filename in sorted(key_filenames.items()):  # For deterministic warnings
             # Hidden files (e.g. "._*" AppleDouble files of macOS on FAT drives) are ignored, like glob did
-            if public_key_pem_filename.startswith(".") or not public_key_pem_filename.endswith(self._public_key_suffix):
+            if normalized_filename.startswith(".") or not normalized_filename.endswith(self._public_key_suffix):
                 continue
 
-            match = re.match(self.PUBLIC_KEY_FILENAME_REGEX, public_key_pem_filename)
+            match = re.match(self.PUBLIC_KEY_FILENAME_REGEX, normalized_filename)
+            keychain_uid = None
+            if match and match.group("key_algo") in _get_disk_algo_names(match.group("key_algo")):
+                try:
+                    keychain_uid = uuid.UUID(match.group("keychain_uid"))
+                except ValueError:
+                    pass
 
-            if not match:
+            if keychain_uid is None or str(keychain_uid) != match.group("keychain_uid"):
                 logger.warning(
                     "Skipping abnormally named PEM file %r when listing public keys", public_key_pem_filename
                 )
                 continue
 
-            keychain_uid_str = match.group("keychain_uid")
-            disk_algo_name = match.group("key_algo")
-
-            if disk_algo_name not in _get_disk_algo_names(disk_algo_name):
-                logger.warning(
-                    "Skipping PEM file %r with a mixed-case algo name, which can't be fetched, when listing public keys",
-                    public_key_pem_filename,
-                )
-                continue
-            key_algo = disk_algo_name.upper()  # As exposed by the API
-
-            try:
-                keychain_uid = uuid.UUID(keychain_uid_str)
-            except ValueError:
-                logger.warning(
-                    "Skipping PEM file with abnormal UUID %r when listing public keys", public_key_pem_filename
-                )
-                continue
-
-            if str(keychain_uid) != keychain_uid_str:
-                logger.warning(
-                    "Skipping PEM file %r with a non-canonical keychain uid, which can't be fetched, "
-                    "when listing public keys",
-                    public_key_pem_filename,
-                )
-                continue
-
-            keypair_keys.add((keychain_uid, key_algo))
+            keypair_keys.add((keychain_uid, match.group("key_algo").upper()))  # Uppercase, as exposed by the API
 
         keypair_identifiers = []
         for keychain_uid, key_algo in keypair_keys:
             private_key_present = any(  # Same lookup as the getters: lowercase name, else uppercase name
-                self._get_key_filename(keychain_uid, disk_algo_name, is_public=False) in key_filenames
+                os.path.normcase(self._get_key_filename(keychain_uid, disk_algo_name, is_public=False)) in key_filenames
                 for disk_algo_name in _get_disk_algo_names(key_algo)
             )
             keypair_identifiers.append(
@@ -834,52 +814,11 @@ class FilesystemKeystorePool(KeystorePoolBase):
         # TODO initialize metadata for local keystore too??
         return FilesystemKeystore(local_keystore_dir)
 
-    def _get_foreign_keystores_dir(self) -> Path:
-        return self._root_dir.joinpath(self.FOREIGN_KEYSTORES_DIRNAME)
-
-    def _list_foreign_keystore_dirnames(self) -> dict:
-        """
-        Return a dict mapping the UUIDs of foreign keystores to the actual names of their directories.
-
-        Directory names are matched case-insensitively (e.g. keystores copied by FAT tools may be uppercase), with
-        the same result on every filesystem; the canonical lowercase name wins if several spellings exist.
-        Names with the keystore prefix but no canonical UUID can't be looked up, so they are skipped with a warning.
-        """
-        foreign_keystores_dir = self._get_foreign_keystores_dir()
-        prefix = self.FOREIGN_KEYSTORE_PREFIX
-        try:
-            entries = sorted(os.scandir(foreign_keystores_dir), key=lambda entry: entry.name)
-        except (FileNotFoundError, NotADirectoryError):
-            return {}
-        dirnames = {}
-        for entry in entries:
-            if not entry.name.lower().startswith(prefix) or not entry.is_dir():
-                continue  # Not a foreign keystore (e.g. a temporary directory)
-            uid_str = entry.name[len(prefix):]
-            try:
-                keystore_uid = uuid.UUID(uid_str)
-            except ValueError:
-                keystore_uid = None
-            if keystore_uid is None or str(keystore_uid) != uid_str.lower():
-                logger.warning(
-                    "Skipping foreign keystore directory with abnormal name %r in %s", entry.name, foreign_keystores_dir
-                )
-                continue
-            if keystore_uid not in dirnames or entry.name == prefix + str(keystore_uid):
-                dirnames[keystore_uid] = entry.name
-        return dirnames
-
     def _get_foreign_keystore_dir(self, keystore_uid: UUID) -> Path:
-        """
-        Return the directory of a foreign keystore: the one with the canonical lowercase name if it exists, else,
-        silently, one with the same name in another letter case, else the canonical one (e.g. for its creation).
-        """
-        foreign_keystores_dir = self._get_foreign_keystores_dir()
-        foreign_keystore_dir = foreign_keystores_dir.joinpath("%s%s" % (self.FOREIGN_KEYSTORE_PREFIX, keystore_uid))
-        if not foreign_keystore_dir.is_dir():
-            actual_dirname = self._list_foreign_keystore_dirnames().get(keystore_uid)
-            if actual_dirname:
-                foreign_keystore_dir = foreign_keystores_dir.joinpath(actual_dirname)
+        # Opened under its canonical name, so the filesystem decides whether letter case matters
+        foreign_keystore_dir = self._root_dir.joinpath(
+            self.FOREIGN_KEYSTORES_DIRNAME, "%s%s" % (self.FOREIGN_KEYSTORE_PREFIX, keystore_uid)
+        )
         return foreign_keystore_dir
 
     def _ensure_foreign_keystore_dir_exists(self, keystore_uid: UUID):  # Not always INITIALIZED
@@ -898,7 +837,24 @@ class FilesystemKeystorePool(KeystorePoolBase):
     def list_foreign_keystore_uids(self) -> list:
         """Return a sorted list of UUIDs of key storages, corresponding
         to the keystore_uid of their origin authentication devices."""
-        return sorted(self._list_foreign_keystore_dirnames())  # This excludes TEMP folders
+        foreign_keystores_dir = self._root_dir.joinpath(self.FOREIGN_KEYSTORES_DIRNAME)
+        prefix = self.FOREIGN_KEYSTORE_PREFIX
+        keystore_uids = []
+        # Names are compared like the platform does (case-insensitively on Windows only); this excludes TEMP folders
+        for path in foreign_keystores_dir.glob("%s*" % prefix):
+            uid_str = path.name[len(prefix):]  # The prefix may be spelled in another letter case on Windows
+            try:
+                keystore_uid = uuid.UUID(uid_str)
+            except ValueError:
+                keystore_uid = None
+            if keystore_uid is None or os.path.normcase(uid_str) != str(keystore_uid):
+                # Such a keystore couldn't be opened at its canonical path
+                logger.warning(
+                    "Skipping foreign keystore directory with abnormal name %r in %s", path.name, foreign_keystores_dir
+                )
+                continue
+            keystore_uids.append(keystore_uid)
+        return sorted(keystore_uids)
 
     def get_foreign_keystore_metadata(self, keystore_uid: UUID, include_keypair_identifiers=False):
         """Return a metadata dict for the keystore `keystore_uid`."""

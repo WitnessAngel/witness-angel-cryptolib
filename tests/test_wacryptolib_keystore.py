@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import os
+import posixpath
 import random
 import secrets
-import shutil
 import stat
 import time
 from contextlib import nullcontext
@@ -585,68 +585,86 @@ def _build_minimal_keystore_tree(keystore_uid, keystore_secret, public_keys_by_k
     }
 
 
-@pytest.mark.parametrize("emulate_case_sensitivity", [False, True])
-def test_keystorepool_foreign_keystore_dirs_in_other_letter_cases(tmp_path: Path, emulate_case_sensitivity):
-    keystore_uid = generate_uuid0()
-    keystore_secret = secrets.token_urlsafe(64)
+PLATFORM_IGNORES_CASE = os.path.normcase("A") == "a"  # Like Windows, which compares file names case-insensitively
+
+
+def _import_minimal_foreign_keystore(keystore_pool, public_keys_by_keychain_uid: dict, keystore_uid=None):
+    keystore_uid = keystore_uid or generate_uuid0()
+    keystore_pool.import_foreign_keystore_from_keystore_tree(
+        _build_minimal_keystore_tree(keystore_uid, "secret-%s" % keystore_uid, public_keys_by_keychain_uid)
+    )
+    return keystore_uid
+
+
+def test_keystorepool_foreign_keystore_dir_in_uppercase(tmp_path: Path):
     keychain_uid, new_keychain_uid = generate_uuid0(), generate_uuid0()
     keystore_pool = FilesystemKeystorePool(tmp_path)
-    keystore_pool.import_foreign_keystore_from_keystore_tree(
-        _build_minimal_keystore_tree(keystore_uid, keystore_secret, {keychain_uid: b"555"})
-    )
+    keystore_uid = _import_minimal_foreign_keystore(keystore_pool, {keychain_uid: b"555"})
     foreign_keystores_dir = tmp_path / keystore_pool.FOREIGN_KEYSTORES_DIRNAME
     canonical_dirname = "keystore_%s" % keystore_uid
     assert os.listdir(foreign_keystores_dir) == [canonical_dirname]  # New directories are lowercase
 
-    # Like a keystore copied by hand or by FAT tools
-    uppercase_dirname = canonical_dirname.upper()
+    uppercase_dirname = canonical_dirname.upper()  # Like a keystore copied by hand or by FAT tools
     (foreign_keystores_dir / canonical_dirname).rename(foreign_keystores_dir / uppercase_dirname)
+
+    with mock.patch.object(keystore_module, "logger") as logger_mock:
+        keystore_uids = keystore_pool.list_foreign_keystore_uids()
+    assert not logger_mock.warning.called
+
+    if not PLATFORM_IGNORES_CASE:
+        assert keystore_uids == []  # Not a foreign keystore name on this platform
+        return
+
+    assert keystore_uids == [keystore_uid]
+    assert keystore_pool.get_foreign_keystore_metadata(keystore_uid)["keystore_uid"] == keystore_uid
+    foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+    assert foreign_keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"555"
+
+    # Importing again completes the existing directory, without creating another one
+    _import_minimal_foreign_keystore(
+        keystore_pool, {keychain_uid: b"555", new_keychain_uid: b"666"}, keystore_uid=keystore_uid
+    )
+    foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+    assert foreign_keystore.get_public_key(keychain_uid=new_keychain_uid, key_algo="RSA_OAEP") == b"666"
+    assert os.listdir(foreign_keystores_dir) == [uppercase_dirname]  # Not renamed
+
+
+def test_keystorepool_foreign_keystore_dir_with_uppercase_uuid(tmp_path: Path):
+    keychain_uid = generate_uuid0()
+    keystore_pool = FilesystemKeystorePool(tmp_path)
+    keystore_uid = _import_minimal_foreign_keystore(keystore_pool, {keychain_uid: b"555"})
+    foreign_keystores_dir = tmp_path / keystore_pool.FOREIGN_KEYSTORES_DIRNAME
+    uppercase_uuid_dirname = "keystore_%s" % str(keystore_uid).upper()
+    (foreign_keystores_dir / ("keystore_%s" % keystore_uid)).rename(foreign_keystores_dir / uppercase_uuid_dirname)
+
+    with mock.patch.object(keystore_module, "logger") as logger_mock:
+        keystore_uids = keystore_pool.list_foreign_keystore_uids()
+
+    if PLATFORM_IGNORES_CASE:
+        assert keystore_uids == [keystore_uid]
+        assert not logger_mock.warning.called
+        foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+        assert foreign_keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"555"
+    else:
+        assert keystore_uids == []  # It couldn't be opened at its canonical path
+        assert uppercase_uuid_dirname in str(logger_mock.warning.call_args_list)
+    assert os.listdir(foreign_keystores_dir) == [uppercase_uuid_dirname]  # Not renamed
+
+
+def test_keystorepool_unparsable_foreign_keystore_dirs(tmp_path: Path):
+    keystore_pool = FilesystemKeystorePool(tmp_path)
+    keystore_uid = _import_minimal_foreign_keystore(keystore_pool, {generate_uuid0(): b"555"})
+    foreign_keystores_dir = tmp_path / keystore_pool.FOREIGN_KEYSTORES_DIRNAME
     abnormal_dirnames = ["keystore_backup", "keystore_%s" % generate_uuid0().hex]  # The latter has no dashes
     for dirname in abnormal_dirnames + ["temp_import_dir"]:
         (foreign_keystores_dir / dirname).mkdir()
-    names_before = sorted(os.listdir(foreign_keystores_dir))
 
-    with emulate_case_sensitive_filesystem() if emulate_case_sensitivity else nullcontext():
-        with mock.patch.object(keystore_module, "logger") as logger_mock:
-            assert keystore_pool.list_foreign_keystore_uids() == [keystore_uid]
-        warnings = str(logger_mock.warning.call_args_list)
-        for dirname in abnormal_dirnames:
-            assert dirname in warnings
-        assert "temp_import_dir" not in warnings  # Not a foreign keystore, like before
-
-        metadata = keystore_pool.get_foreign_keystore_metadata(keystore_uid)
-        assert metadata["keystore_uid"] == keystore_uid
-        foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
-        assert foreign_keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"555"
-
-        # Importing again completes the existing directory, without creating a lowercase twin
-        assert keystore_pool.import_foreign_keystore_from_keystore_tree(
-            _build_minimal_keystore_tree(keystore_uid, keystore_secret, {keychain_uid: b"555", new_keychain_uid: b"666"})
-        )
-        foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
-        assert foreign_keystore.get_public_key(keychain_uid=new_keychain_uid, key_algo="RSA_OAEP") == b"666"
-
-    assert sorted(os.listdir(foreign_keystores_dir)) == names_before  # Nothing created, renamed or deleted
-
-
-def test_keystorepool_foreign_keystore_dir_under_both_spellings(tmp_path: Path):
-    if is_case_insensitive_filesystem(tmp_path):
-        pytest.skip("Distinct directories differing only in case can't coexist on a case-insensitive filesystem")
-    keystore_uid = generate_uuid0()
-    keychain_uid = generate_uuid0()
-    keystore_pool = FilesystemKeystorePool(tmp_path)
-    keystore_pool.import_foreign_keystore_from_keystore_tree(
-        _build_minimal_keystore_tree(keystore_uid, secrets.token_urlsafe(64), {keychain_uid: b"new"})
-    )
-    foreign_keystores_dir = tmp_path / keystore_pool.FOREIGN_KEYSTORES_DIRNAME
-    canonical_dir = foreign_keystores_dir / ("keystore_%s" % keystore_uid)
-    uppercase_dir = foreign_keystores_dir / canonical_dir.name.upper()
-    shutil.copytree(canonical_dir, uppercase_dir)
-    (uppercase_dir / ("%s_rsa_oaep_public_key.pem" % keychain_uid)).write_bytes(b"old")
-
-    assert keystore_pool.list_foreign_keystore_uids() == [keystore_uid]
-    foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
-    assert foreign_keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"new"
+    with mock.patch.object(keystore_module, "logger") as logger_mock:
+        assert keystore_pool.list_foreign_keystore_uids() == [keystore_uid]
+    warnings = str(logger_mock.warning.call_args_list)
+    for dirname in abnormal_dirnames:
+        assert dirname in warnings
+    assert "temp_import_dir" not in warnings  # Not a foreign keystore
 
 
 def test_generate_free_keypair_for_least_provisioned_key_algo():
@@ -1054,13 +1072,40 @@ def test_filesystem_keystore_unstorable_algo_names(tmp_path: Path, key_algo):
     assert sorted(os.listdir(tmp_path)) == names_before  # No file nor free keys directory created
 
 
-def test_filesystem_keystore_listing_skips_mixed_case_algo_names(tmp_path: Path):
+@pytest.mark.parametrize(
+    "uid_spelling, disk_algo_name, listed_when_ignoring_case",
+    [
+        ("uppercase", "rsa_oaep", True),
+        ("lowercase", "Rsa_Oaep", True),  # Mixed-case algo name
+        ("hex", "rsa_oaep", False),  # Keychain uid without dashes
+    ],
+)
+def test_filesystem_keystore_listing_of_key_names_in_other_letter_cases(
+    tmp_path: Path, uid_spelling, disk_algo_name, listed_when_ignoring_case
+):
     keychain_uid = generate_uuid0()
-    (tmp_path / ("%s_Rsa_Oaep_public_key.pem" % keychain_uid)).write_bytes(b"data")
+    uid_str = dict(uppercase=str(keychain_uid).upper(), lowercase=str(keychain_uid), hex=keychain_uid.hex)[uid_spelling]
+    public_key_name = "%s_%s_public_key.pem" % (uid_str, disk_algo_name)
+    for kind in ("public", "private"):
+        (tmp_path / ("%s_%s_%s_key.pem" % (uid_str, disk_algo_name, kind))).write_bytes(b"data-" + kind.encode())
+    keystore = FilesystemKeystore(tmp_path)
 
-    with emulate_case_sensitive_filesystem(), mock.patch.object(keystore_module, "logger") as logger_mock:
-        assert FilesystemKeystore(tmp_path).list_keypair_identifiers() == []  # It couldn't be fetched
-    assert "Rsa_Oaep" in str(logger_mock.warning.call_args)
+    # Names are compared like the platform does, so other platforms are emulated on Windows
+    normcase_functions = [os.path.normcase] + ([posixpath.normcase] if PLATFORM_IGNORES_CASE else [])
+    for normcase in normcase_functions:
+        with mock.patch.object(os.path, "normcase", normcase), mock.patch.object(keystore_module, "logger") as logger_mock:
+            keypair_identifiers = keystore.list_keypair_identifiers()
+
+        if listed_when_ignoring_case and normcase("A") == "a":
+            assert keypair_identifiers == [
+                dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP", private_key_present=True)
+            ]
+            assert not logger_mock.warning.called
+            # The filesystem ignores letter case too, so the getters find these files
+            assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"data-public"
+        else:
+            assert keypair_identifiers == []  # They couldn't be fetched
+            assert public_key_name in str(logger_mock.warning.call_args_list)
 
 
 def test_filesystem_keystore_legacy_uppercase_algo_free_keypairs(tmp_path: Path):

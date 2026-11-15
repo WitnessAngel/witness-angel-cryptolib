@@ -818,14 +818,17 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
 13. Every random value MUST come from a CSPRNG (§3.1).
 14. The parts of file names chosen by an implementation MUST be lowercase:
     - cryptainer and payload suffixes;
+    - extensions, including record extensions taken from a configuration;
     - timestamps;
-    - sensor and record names, even when configured in another letter case;
     - algo names in key file names.
 
-    Basenames given by the caller, such as an original media file name, MUST be kept as given
-    (e.g. `20261111_184000_frontcam_cryptainer.mp4.crypt`, but `IMG_0001.MP4.crypt` for a
-    user-supplied `IMG_0001.MP4`). Readers MUST recognize the lowercase suffixes, and filesystem
-    keystores also accept key files with the legacy uppercase algo names of earlier releases.
+    Parts given by the caller or by a configuration, such as an original media file name or a
+    sensor name, MUST be kept as given (e.g. `20261111_184000_FrontCam_cryptainer.mp4.crypt` for a
+    sensor `FrontCam` recording `.MP4` files, and `IMG_0001.MP4.crypt` for a user-supplied
+    `IMG_0001.MP4`). Files MUST be opened by their exact names, so that the filesystem decides
+    whether letter case matters. Readers MUST recognize the lowercase suffixes, and SHOULD compare
+    names like their platform does (ignoring letter case on Windows only). Filesystem keystores also
+    accept key files with the legacy uppercase algo names of earlier releases.
 
 ### 11.2 Key and parameter constraints per algorithm
 

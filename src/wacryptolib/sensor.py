@@ -98,11 +98,11 @@ class TarfileRecordAggregator(TimeLimitedAggregatorMixin):
             self._current_metadata = {"members": {}}
 
     def _build_tarfile_filename(self, from_datetime, to_datetime):
-        extension = self.tarfile_extension
+        extension = self.tarfile_extension.lower()  # Extensions of the names built here are lowercase
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
         to_ts = to_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
-        filename = "{from_ts}_to_{to_ts}_cryptainer{extension}".format(**locals()).lower()  # Lowercase file names
+        filename = "{from_ts}_to_{to_ts}_cryptainer{extension}".format(**locals())
         assert " " not in filename, repr(filename)
         return filename
 
@@ -129,10 +129,10 @@ class TarfileRecordAggregator(TimeLimitedAggregatorMixin):
 
     def _build_record_filename(self, sensor_name, from_datetime, to_datetime, extension):
         assert extension.startswith("."), extension
+        extension = extension.lower()  # Unlike the configured sensor name, kept as given
         from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
         to_ts = to_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
-        # Sensor names and extensions may come from configs, but file names built by the library are lowercase
-        filename = "{from_ts}_to_{to_ts}_{sensor_name}{extension}".format(**locals()).lower()
+        filename = "{from_ts}_to_{to_ts}_{sensor_name}{extension}".format(**locals())
         assert " " not in filename, repr(filename)
         return filename
 
@@ -383,12 +383,11 @@ class PeriodicEncryptionStreamMixin:
 
     def _build_cryptainer_filename_base(self, from_datetime):
         # FIXME use same format as build_record_filename, less verbose!!!!
-        extension = self.record_extension
+        extension = self.record_extension.lower()  # Unlike the configured sensor name, kept as given
         assert extension.startswith("."), extension
         from_ts = from_datetime.strftime(CRYPTAINER_DATETIME_FORMAT)
         sensor_name = self.sensor_name
-        # Sensor names and extensions may come from configs, but file names built by the library are lowercase
-        filename = "{from_ts}_{sensor_name}_cryptainer{extension}".format(**locals()).lower()
+        filename = "{from_ts}_{sensor_name}_cryptainer{extension}".format(**locals())
         assert " " not in filename, repr(filename)
         return filename
 

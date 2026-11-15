@@ -1,6 +1,6 @@
 ## Purpose
 
-Extends the lowercase naming policy to the file names that sensors build and to the foreign keystore directories of keystore pools. Mixed-case configuration values no longer produce mixed-case names, and keystore pools list the same foreign keystores on case-sensitive and case-insensitive filesystems.
+Extends the lowercase naming policy to the extensions of the file names that sensors build, and defines how keystore pools recognize their foreign keystore directories. Configured sensor names are kept as given, and directory names are compared like the platform compares file names, without letting unexpected names make the listing fail.
 
 ## Requirements
 

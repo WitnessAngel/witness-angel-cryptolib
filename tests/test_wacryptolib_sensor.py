@@ -761,7 +761,7 @@ class _UppercaseTarfileRecordAggregator(TarfileRecordAggregator):
     tarfile_extension = ".TAR"
 
 
-def test_tarfile_aggregator_lowercases_built_names(tmp_path):
+def test_tarfile_aggregator_lowercases_extensions(tmp_path):
     cryptainer_storage = FakeTestCryptainerStorage(
         default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path, offload_payload_ciphertext=random_bool()
     )
@@ -785,7 +785,7 @@ def test_tarfile_aggregator_lowercases_built_names(tmp_path):
         cryptainer_name_or_idx=-1
     )
     tar_file = TarfileRecordAggregator.read_tarfile_from_bytestring(tarfile_bytestring)
-    assert tar_file.getnames() == ["20171011_000000_to_20171201_000000_gps.json"]
+    assert tar_file.getnames() == ["20171011_000000_to_20171201_000000_GPS.json"]  # Sensor name kept as given
 
 
 class _UppercaseStreamRecorderForTesting(TestStreamRecorderForTesting):
@@ -793,12 +793,12 @@ class _UppercaseStreamRecorderForTesting(TestStreamRecorderForTesting):
     record_extension = ".MP4"
 
 
-def test_periodic_subprocess_stream_recorder_lowercases_built_names(tmp_path):
+def test_periodic_subprocess_stream_recorder_lowercases_extensions(tmp_path):
     cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=True)
     recorder = _UppercaseStreamRecorderForTesting(
         executable_command_line=oneshot_command_line, interval_s=5, cryptainer_storage=cryptainer_storage
     )
-    assert recorder.sensor_name == "FrontCam"  # Public attribute keeps its configured spelling
+    assert recorder.sensor_name == "FrontCam"
 
     recorder._current_start_time = datetime(year=2017, month=10, day=11, tzinfo=timezone.utc)
     cryptainer_encryption_stream = recorder._build_cryptainer_encryption_stream()
@@ -806,7 +806,7 @@ def test_periodic_subprocess_stream_recorder_lowercases_built_names(tmp_path):
     cryptainer_encryption_stream.finalize()
 
     assert [str(name) for name in cryptainer_storage.list_cryptainer_names()] == [
-        "20171011_000000_frontcam_cryptainer.mp4.crypt"
+        "20171011_000000_FrontCam_cryptainer.mp4.crypt"  # Sensor name kept as configured
     ]
 
 

@@ -115,11 +115,15 @@ For every document of the data model that contains no unsupported value, loading
 - **THEN** the result is the RELAXED Extended JSON form of the same tree, and loads to a tree equal to the original's
 
 ### Requirement: Document file format recognition
-When reading a document file, the system SHALL determine its format from its name: `.json` and legacy `.crypt` files are Extended JSON, `.cbor` files are WA-CBOR. For any other name, or for a stream without a name, it SHALL detect the format from the first significant byte: after an optional UTF-8 byte order mark and JSON whitespace, `{` or `[` means Extended JSON; a first byte in the range 0x80-0xBF (CBOR array or map), or the tag 55799 prefix `D9 D9 F7`, means WA-CBOR; anything else is an error. A file whose content contradicts the format given by its name SHALL be refused with an error naming the file and both formats. When writing a document file, the system SHALL use the format given by the `.json` or `.cbor` extension, or the format explicitly requested.
+When reading a document file, the system SHALL determine its format from its name: names ending with `.json` or with the legacy cryptainer suffix `.crypt` are Extended JSON, and names ending with `.cbor` are WA-CBOR, these extensions being matched in lowercase only. For any other name (including another letter case of these extensions, such as `CONF.JSON`), or for a stream without a name, it SHALL detect the format from the first significant byte: after an optional UTF-8 byte order mark and JSON whitespace, `{` or `[` means Extended JSON; a first byte in the range 0x80-0xBF (CBOR array or map), or the tag 55799 prefix `D9 D9 F7`, means WA-CBOR; anything else is an error. A file whose content contradicts the format given by its name SHALL be refused with an error naming the file and both formats. When writing a document file, the system SHALL use the format explicitly requested, or else the format given by a lowercase `.json` or `.cbor` extension. An explicit format contradicting that extension, or the absence of both, SHALL raise an error, and nothing SHALL be written.
 
 #### Scenario: Corpus asset without format extension
 - **WHEN** an Extended JSON cryptoconf named `01_simple.cryptoconf` is read
 - **THEN** it is detected and loaded as Extended JSON
+
+#### Scenario: Extension in another letter case
+- **WHEN** an Extended JSON cryptoconf named `CONF.JSON` is read
+- **THEN** its format is detected from its content, and it is loaded as Extended JSON
 
 #### Scenario: CBOR read from STDIN
 - **WHEN** a WA-CBOR cryptoconf is piped to a command reading the cryptoconf from STDIN
@@ -135,6 +139,10 @@ The library SHALL provide public functions to dump a document to WA-CBOR bytes a
 #### Scenario: Dump a file in the format of its extension
 - **WHEN** a cryptoconf is dumped to `conf.cbor` with the generic file function, without an explicit format
 - **THEN** the file holds WA-CBOR, and the generic load function returns an equal cryptoconf
+
+#### Scenario: No format for a written file
+- **WHEN** a cryptoconf is dumped with the generic file function to `conf.data`, or to `conf.JSON`, without an explicit format
+- **THEN** an error is raised, and no file is created
 
 ### Requirement: Normative dialect specification in the repository
 The repository SHALL contain a normative specification of WA-CBOR, usable by other implementations, giving the data model, the type mapping table with its Extended JSON equivalents, a CDDL (RFC 8610) description of the generic item grammar, the deterministic encoding and strict decoding rules, the unsupported values, the file format recognition rules, and hex test vectors covering each data model type and each rejection case. The library's test suite SHALL check every test vector of that specification.

@@ -50,7 +50,7 @@ The corpus SHALL contain cryptainers of several generations, at least: produced 
 - **THEN** the metadata extracted from the cryptainer equals the declared metadata
 
 ### Requirement: Corpus is documented for other implementations
-The corpus SHALL include a README describing its layout, the naming and sidecar conventions (including how `.json` assets are told apart from sidecars), the meaning of each sidecar field, the bidirectional versus decrypt-only vector semantics, the extended-JSON flavors and the WA-CBOR dialect used by the assets (with a reference to the WA-CBOR specification), and how new generations are added. The corpus SHALL NOT be shipped in the published library package.
+The corpus SHALL include a README describing its layout, the naming and sidecar conventions (including how `.json` assets are told apart from sidecars), the meaning of each sidecar field, the bidirectional versus decrypt-only vector semantics, the extended-JSON flavors and the WA-CBOR dialect used by the assets (with a reference to the WA-CBOR specification), the letter case of file and directory names in each generation, and how new generations are added. The corpus SHALL NOT be shipped in the published library package.
 
 #### Scenario: Package contents
 - **WHEN** the library's distribution package is built
@@ -68,3 +68,14 @@ The corpus SHALL contain a generation in which cryptoconfs, cryptainers (inline 
 #### Scenario: Invalid WA-CBOR document rejected
 - **WHEN** an invalid WA-CBOR fixture is loaded
 - **THEN** loading fails, as its sidecar expects
+
+### Requirement: New generations use lowercase names
+Every file and directory created by a generation added from the WA-CBOR generation on SHALL have a lowercase name, including per-algorithm subdirectories (e.g. `aes_cbc/`), cryptainer and sidecar names, and the key files of the keystore pools it creates. Earlier generations SHALL keep their names, including uppercase algo names, since they are frozen. The generation tooling SHALL refuse to write a file or directory with a non-lowercase name in a new generation, and the compatibility test suite SHALL check that the names of these generations are lowercase.
+
+#### Scenario: Uppercase name refused by the tooling
+- **WHEN** the generation tooling is asked to write a cipherdict under an `AES_CBC/` subdirectory of a new generation
+- **THEN** it fails before writing anything into the corpus
+
+#### Scenario: Frozen uppercase names accepted
+- **WHEN** the compatibility test suite runs over generations produced before the WA-CBOR generation, which hold `AES_CBC/` subdirectories and `<uid>_RSA_OAEP_public_key.pem` files
+- **THEN** their names are accepted, and their fixtures are checked as before

@@ -6,7 +6,9 @@ See proposal.md for the motivation. Current state that shapes the approach:
 - JSON appears at two levels:
   - **outer documents**: cryptoconf files, cryptainer files (`_filesystem.py`), keystore metadata;
   - **inner blobs**: symkeys, key structs and shards are dumped with `dump_to_json_bytes()` and then *encrypted* into `key_ciphertext` (`_flightbox.py`, `_decryptor.py`). Signatures cover payload digests, never the serialized document (`_signing.py`).
-- Cryptainer naming: `CRYPTAINER_SUFFIX = ".crypt"`, temporary suffix `~`, and offloaded payload = cryptainer filename (minus `~`) + `.payload` (`_get_offloaded_file_path`). `CryptainerStorage.list_cryptainer_names()` globs `*.crypt` and `*.crypt~`; the CLI strips `.crypt` in `encrypt -o` and in the `decrypt` default output name.
+- Cryptainer naming: `CRYPTAINER_SUFFIX = ".crypt"`, temporary suffix `~`, and offloaded payload = cryptainer filename (minus `~`) + `.payload` (`_get_offloaded_file_path`). `CryptainerStorage.list_cryptainer_names()` globs `*.crypt` and `*.crypt~` with `Path.glob()`, which ignores letter case on Windows (so `X.CRYPT` is listed there, but not on Linux); the CLI strips `.crypt` in `encrypt -o` and in the `decrypt` default output name.
+- Lowercase naming policy: since the archived `store-lowercase-algo-names-with-uppercase-fallback` change (`keystore-algo-name-storage` main spec), filesystem keystores write lowercase key file names whatever the caller's letter case, keep reading legacy uppercase files, and list from a single directory listing so that results don't depend on the filesystem's case sensitivity. From now on, every filename the library creates is lowercase. The compatibility corpus still names its per-algorithm subdirectories and key files in uppercase (`cipherdicts/<generation>/AES_CBC/`, `<uid>_RSA_OAEP_public_key.pem`).
+- The unfinished cryptainer audit (`docs/audits/unfinished_cryptainer_decryption.md`, issue #45) found that a temporary `x.crypt~` and its finalized `x.crypt` share `x.crypt.payload`, so deleting a stale temporary cryptainer deletes the payload of the finished one. It also plans a `cryptainer decrypt --allow-unfinished` option.
 - CLI overwrite protection is in place (`cli-overwrite-protection` main spec, from the archived `cli-refuse-overwriting-files` change):
   - no option has a `-f` short form anymore; `--format plain|json` is a display option of listing and viewing commands;
   - `FORCE_OPTION` (`--force`) is on `encrypt`, `cryptainer decrypt` and `cryptoconf generate-simple`;
@@ -21,7 +23,8 @@ See proposal.md for the motivation. Current state that shapes the approach:
 **Goals:**
 - One dialect, specified precisely enough for the C and MicroPython ports and third parties to reproduce byte-exact output.
 - A strict reader: anything outside the dialect fails loudly instead of loading as a near-miss tree.
-- Every existing file keeps loading, and every existing API keeps its behaviour, except the default cryptainer filename.
+- Every existing file keeps loading, and every existing API keeps its behaviour, except the default cryptainer filename (and the listing of hand-renamed uppercase suffixes on Windows, D12).
+- Every filename the library creates is lowercase, in the parts the library chooses (D12).
 
 **Non-Goals:**
 - Changing the inner encrypted serializations (protocol change; and converting them would need the keys).
@@ -71,14 +74,14 @@ In `wacryptolib.utilities`:
 - `dump_to_cbor_bytes()` / `load_from_cbor_bytes()` and their `_file` variants;
 - `detect_document_format(data, filename=None)`, `load_from_document_file(path, format=None)`, `dump_to_document_file(path, data, format=None)`, `load_from_document_bytes(data, filename=None, format=None)`.
 
-Recognition follows the spec. The extension decides for `.json`, `.cbor` and `.crypt`. The first significant byte decides otherwise, and it is always checked against the extension. JSON's possible first bytes (`{`, `[`, whitespace, BOM 0xEF) never overlap CBOR's 0x80-0xBF and 0xD9, so detection is unambiguous for map- or array-rooted documents. The existing `extjson` functions stay re-exported unchanged.
+Recognition follows the spec. The extension decides for `.json`, `.cbor` and `.crypt`, matched in lowercase only (D12). The first significant byte decides otherwise, and it is always checked against the extension. JSON's possible first bytes (`{`, `[`, whitespace, BOM 0xEF) never overlap CBOR's 0x80-0xBF and 0xD9, so detection is unambiguous for map- or array-rooted documents. When writing, an explicit `format` wins, but contradicting a lowercase `.json`/`.cbor` extension is an error; with neither, `dump_to_document_file()` raises instead of guessing. The existing `extjson` functions stay re-exported unchanged.
 
 ### D6. Cryptainer naming constants and helpers
 - `CRYPTAINER_SUFFIX = ".crypt"` keeps its value: external code imports it, and it remains the legacy suffix. New constants `CRYPTAINER_JSON_SUFFIX = ".crypt.json"`, `CRYPTAINER_CBOR_SUFFIX = ".crypt.cbor"` and `CRYPTAINER_SUFFIXES` (all three) are added.
-- Helpers `get_cryptainer_suffix(format)`, `split_cryptainer_suffix(name)` (returns basename and format, or None) and `get_cryptainer_format_from_filename(path)` replace the scattered `endswith(CRYPTAINER_SUFFIX)` logic.
+- Helpers `get_cryptainer_suffix(format)`, `split_cryptainer_suffix(name)` (returns basename and format, or None) and `get_cryptainer_format_from_filename(path)` replace the scattered `endswith(CRYPTAINER_SUFFIX)` logic. They match lowercase suffixes only, and handle a temporary `~` by looking at the final filename. The CLI strips suffixes from names typed by users with a case-insensitive variant (`split_cryptainer_suffix(name, ignore_case=True)` or a private CLI helper), then appends the lowercase suffix.
 - `_get_offloaded_file_path` is already "filename minus `~` + `.payload`", so it is unchanged.
-- `dump_cryptainer_to_filesystem` / `load_cryptainer_from_filesystem` pick the format from the filename via D5. A path with no cryptainer suffix (e.g. ad-hoc test paths) falls back to D5's general rules, which keeps current callers working.
-- Listing globs `*.crypt`, `*.crypt.json`, `*.crypt.cbor` (and the same with `~`). These globs cannot overlap, since a name ends with exactly one of them, and `.payload` files match none.
+- `dump_cryptainer_to_filesystem` writes WA-CBOR when the filename, without a temporary `~`, ends with `.cbor`, and Extended JSON otherwise: legacy `.crypt` paths and ad-hoc paths without suffix (tests, the recorder's fixture generator) keep working as today. `load_cryptainer_from_filesystem` reads with D5's recognition (sniffing for `~` and suffix-less names).
+- Listing reads the storage directory once (`os.scandir()` / `Path.iterdir()`) and keeps the names ending exactly with `.crypt`, `.crypt.json`, `.crypt.cbor` (and the same with `~`), compared as strings, instead of `Path.glob()`, whose case sensitivity depends on the platform. These suffixes cannot overlap, since a name ends with exactly one of them, and `.payload` files match none.
 
 ### D7. Storage format setting and same-basename warning
 `CryptainerStorage(..., cryptainer_format=DocumentFormat.JSON)`. The read-only storage base lists and reads all formats. The point where a storage computes a target cryptainer path (both `encrypt_file()` and the enqueued encryption path, through the encryption pipeline) checks for same-basename siblings in the other formats, logs a warning and proceeds. The pipeline's temporary filename becomes "final filename + `~`" for every format.
@@ -96,8 +99,9 @@ Order of operations:
 No schema validation runs, because the command converts any document. The payload is detected structurally (top-level map, exact marker), not by filename, so offloaded cryptainers with arbitrary names work too. Alternative considered: temporary file + `os.replace` in both modes. It was rejected because `os.replace` silently overwrites a file created after the check, and a no-clobber rename needs hard links, which FAT-formatted SD cards lack.
 
 ### D9. Derived target names and the `--format` option
-Without `-o`, a final `.json` and `.cbor` are swapped, and anything else gets the opposite extension appended (so `x.crypt` becomes `x.crypt.cbor` with no special case).
+Without `-o`, a final `.json` and `.cbor`, in any letter case, are swapped for the lowercase opposite one, and anything else gets the opposite extension appended (so `x.crypt` becomes `x.crypt.cbor` with no special case, and `Report.JSON` becomes `Report.cbor`). An explicit `-o` must end with a lowercase `.json` or `.cbor`. Other spellings are usage errors that name the lowercase extension: accepting them would create uppercase names, and the written file would then be recognized by sniffing rather than by its name.
 - `encrypt --format json|cbor` and `cryptoconf generate-simple --format json|cbor` are long-only, like every CLI option (no `-f` anywhere).
+- `generate-simple -o` keeps accepting any name (e.g. `conf.txt`, written as JSON by default), except `.json`/`.cbor` spelled in another letter case, refused for the same reason as above.
 - `generate-simple` keeps its `click.Path` `-o`, but opens it in binary mode (`wb` / `xb`, and the binary STDOUT stream for `-`). CBOR bytes, or the current indented JSON encoded as UTF-8, are written to it.
 - On listing and viewing commands, `--format plain|json` (display) is untouched. The help texts say "file format" versus "display format" explicitly.
 
@@ -115,9 +119,18 @@ Without `-o`, a final `.json` and `.cbor` are swapped, and anything else gets th
   - §9.1 and §9.2 adopt the new names ("writers SHOULD use `.crypt.json`/`.crypt.cbor`, readers MUST accept all three").
 - The storage-format audit gets a short follow-up note answering its open question.
 - The corpus gains a new generation (e.g. `2026_cbor_pairs`), produced by the existing generation tooling. It holds JSON/CBOR pairs and invalid CBOR documents, its sidecars use the new `x.crypt.json.json` naming, and the fixture loader applies the sidecar disambiguation rule.
+- The new generation is the first one with lowercase names only: the writer of the tooling (`scripts/compatibility/_corpus.py`) lowercases algo subdirectory names and asserts that every path it writes below the generation directory is lowercase. The keystore pools it creates are lowercase thanks to the keystore change. A compatibility test checks the names of this generation and of later ones (declared in a constant next to the corpus loader), and the README marks which generations still use uppercase algo names.
+
+### D12. Lowercase names
+Every name part chosen by the library is lowercase: cryptainer suffixes, `.payload`, extensions added by `convert-format`, corpus files and directories. Recognition (format extensions, cryptainer suffixes, listing) is exact-lowercase, so a storage gives the same listing on Linux, Windows and FAT SD cards. Previous writers, the MicroPython and C ports included, always wrote a lowercase `.crypt`, so nothing legitimate is lost. Two cases are deliberately different:
+- **Caller-provided basenames and explicit paths are kept as is.** A basename is the user's data (often the media filename). Lowercasing it would make `cryptainer decrypt` restore a different name, and on case-sensitive filesystems it could merge distinct recordings. The keystore precedent lowercases only the algo name, never something the user named.
+- **Names typed by users are matched case-insensitively when the CLI derives another name from them** (`encrypt -o`, the `decrypt` default output, the `convert-format` default target). The result always gets lowercase suffixes, so normalizing user input produces lowercase names instead of `Clip.CRYPT.crypt.json`.
+
+Alternative considered: case-insensitive recognition everywhere, as Windows globbing did. It was rejected because the same storage would then list differently depending on the platform, and because a `.CBOR` file name would be read by its name but could not have been written that way by the library.
 
 ## Risks / Trade-offs
 
+- [Cryptainers whose suffix was renamed by hand in another letter case (e.g. `X.CRYPT`) are no longer listed on Windows] → previous writers never produced such names; CHANGELOG note; renaming the files to lowercase restores them.
 - [Older apps don't list `.crypt.json`/`.crypt.cbor`] → BREAKING entry in the CHANGELOG, coordinated upgrade of the recorder, Authenticator and `wacomponents`. Manual downgrade path: a JSON cryptainer is byte-identical whatever its name, so renaming `x.crypt.json` → `x.crypt` and `x.crypt.json.payload` → `x.crypt.payload` makes it visible to old versions again (documented).
 - [In-house codec bugs] → spec test vectors, a `cbor2` oracle in property-based tests over generated trees, and invalid-document fixtures. The decoder's depth limit and length bounds guard against hostile input.
 - [Duplicate cryptainers after conversion (same basename, two formats, payload copied)] → accepted by design (copy semantics). Listing shows both, deletion is per file, and a warning is logged when new ones are created next to siblings. Disk usage doubles for converted offloaded cryptainers, as the user explicitly wants a copy.
@@ -134,4 +147,4 @@ Without `-o`, a final `.json` and `.cbor` are swapped, and anything else gets th
 ## Open Questions
 
 - Whether to later move `wacbor.py` into the `extjson` package (or vendor it for MicroPython, patching around micropython-lib's missing tag support): this doesn't change the dialect or the API.
-- The exact name of the new corpus generation directory.
+- The exact name of the new corpus generation directory (lowercase, like all its contents).

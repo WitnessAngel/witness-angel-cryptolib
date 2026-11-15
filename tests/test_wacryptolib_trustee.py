@@ -313,3 +313,50 @@ def test_readonly_trustee_api_behaviour():
         keychain_uid=keychain_uid, cipher_algo=key_algo_cipher, cipherdict=cipherdict
     )
     assert decrypted == secret
+
+
+def test_trustee_api_over_uppercase_layout_filesystem_keystore(tmp_path):
+    """Keystores written by earlier releases (uppercase file names) keep working, with no key shadowing."""
+    from _test_mockups import case_sensitive_paths, write_uppercase_layout_keystore
+    from wacryptolib.keygen import generate_keypair
+    from wacryptolib.keystore import FilesystemKeystore
+
+    keychain_uid = generate_uuid0()
+    encryption_keypair = generate_keypair(key_algo="RSA_OAEP", serialize=True)
+    signature_keypair = generate_keypair(key_algo="ECC_DSS", serialize=True)
+    write_uppercase_layout_keystore(
+        tmp_path,
+        [(keychain_uid, "RSA_OAEP", encryption_keypair), (keychain_uid, "ECC_DSS", signature_keypair)],
+    )
+    names_before = sorted(p.name for p in tmp_path.iterdir())
+
+    with case_sensitive_paths():
+        trustee_api = TrusteeApi(keystore=FilesystemKeystore(tmp_path))
+
+        # No must_exist: an unfound key would be silently generated
+        assert trustee_api.fetch_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == encryption_keypair[
+            "public_key"
+        ]
+
+        secret = get_random_bytes(64)
+        public_key = load_asymmetric_key_from_pem_bytestring(
+            key_pem=encryption_keypair["public_key"], key_algo="RSA_OAEP"
+        )
+        cipherdict = _encrypt_via_rsa_oaep(plaintext=secret, key_dict=dict(key=public_key))
+        assert (
+            trustee_api.decrypt_with_private_key(keychain_uid=keychain_uid, cipher_algo="RSA_OAEP", cipherdict=cipherdict)
+            == secret
+        )
+
+        message = b"hello"
+        signature = trustee_api.get_message_signature(message=message, keychain_uid=keychain_uid, signature_algo="ECC_DSS")
+        verify_message_signature(
+            message=message,
+            signature_algo="ECC_DSS",
+            signature=signature,
+            public_key=load_asymmetric_key_from_pem_bytestring(
+                key_pem=signature_keypair["public_key"], key_algo="ECC_DSS"
+            ),
+        )
+
+    assert sorted(p.name for p in tmp_path.iterdir()) == names_before  # No new keypair generated

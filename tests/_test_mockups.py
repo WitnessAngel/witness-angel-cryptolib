@@ -2,7 +2,11 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+import os
 import random
+from contextlib import contextmanager
+from pathlib import Path
+from unittest import mock
 
 import pytest
 import secrets
@@ -121,3 +125,46 @@ def generate_keystore_pool(tmp_path):
         keystore_pool.import_foreign_keystore_from_keystore_tree(keystore_tree)
 
     return keystore_pool
+
+
+def write_uppercase_layout_keystore(keys_dir, keypairs, free_keypairs=None):
+    """
+    Fill a directory like earlier releases did: uppercase algo names in key file names and in
+    `free_keys/<ALGO>/` subdirectories.
+
+    :param keypairs: iterable of (keychain_uid, key_algo, keypair dict as returned by generate_keypair())
+    :param free_keypairs: iterable of (key_algo, keypair dict)
+    """
+    keys_dir = Path(keys_dir)
+    for keychain_uid, key_algo, keypair in keypairs:
+        (keys_dir / ("%s_%s_public_key.pem" % (keychain_uid, key_algo.upper()))).write_bytes(keypair["public_key"])
+        (keys_dir / ("%s_%s_private_key.pem" % (keychain_uid, key_algo.upper()))).write_bytes(keypair["private_key"])
+    for index, (key_algo, keypair) in enumerate(free_keypairs or ()):
+        subdir = keys_dir / "free_keys" / key_algo.upper()
+        subdir.mkdir(parents=True, exist_ok=True)
+        (subdir / ("%d_public_key.pem" % (1000 + index))).write_bytes(keypair["public_key"])
+        (subdir / ("%d_private_key.pem" % (1000 + index))).write_bytes(keypair["private_key"])
+
+
+@contextmanager
+def case_sensitive_paths():
+    """Make Path.exists()/is_dir()/samefile() case-sensitive, to emulate Linux on Windows/macOS."""
+    path_class = type(Path())
+    orig_exists, orig_is_dir, orig_samefile = path_class.exists, path_class.is_dir, path_class.samefile
+
+    def _exact_name_present(path):
+        return path.name in os.listdir(path.parent) if orig_is_dir(path.parent) else False
+
+    def exists(self, *args, **kwargs):
+        return orig_exists(self, *args, **kwargs) and _exact_name_present(self)
+
+    def is_dir(self, *args, **kwargs):
+        return orig_is_dir(self, *args, **kwargs) and _exact_name_present(self)
+
+    def samefile(self, other):
+        return self.name == Path(other).name and orig_samefile(self, other)
+
+    with mock.patch.object(path_class, "exists", exists), mock.patch.object(
+        path_class, "is_dir", is_dir
+    ), mock.patch.object(path_class, "samefile", samefile):
+        yield

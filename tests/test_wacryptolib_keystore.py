@@ -7,6 +7,7 @@ import secrets
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest import mock
 from unittest.mock import ANY
 from uuid import UUID
 
@@ -720,3 +721,148 @@ def test_filesystem_keystore_lists_post_quantum_keypairs(tmp_path: Path):
         ],
         key=lambda x: (x["keychain_uid"], x["key_algo"]),
     )
+
+
+# --- Lowercase on-disk algo names, with fallback on uppercase-named files of earlier releases ---
+
+from _test_mockups import case_sensitive_paths, write_uppercase_layout_keystore  # noqa: E402
+from wacryptolib.exceptions import KeyAlreadyExists  # noqa: E402
+from wacryptolib.keygen import generate_keypair  # noqa: E402
+from wacryptolib.operations import check_authenticator  # noqa: E402
+
+
+def _generate_pem_keypair(key_algo):
+    return generate_keypair(key_algo=key_algo, serialize=True)
+
+
+def test_filesystem_keystore_writes_lowercase_names(tmp_path: Path):
+    keystore = FilesystemKeystore(tmp_path)
+    keychain_uid = generate_uuid0()
+    keypair = _generate_pem_keypair("RSA_OAEP")
+    keystore.set_keypair(keychain_uid=keychain_uid, key_algo="RSA_OAEP", **keypair)
+
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "%s_rsa_oaep_private_key.pem" % keychain_uid,
+        "%s_rsa_oaep_public_key.pem" % keychain_uid,
+    ]
+    assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["public_key"]
+
+    keystore.add_free_keypair(key_algo="RSA_OAEP", **keypair)
+    assert [p.name for p in (tmp_path / "free_keys").iterdir()] == ["rsa_oaep"]
+
+
+def test_filesystem_keystore_uppercase_layout_is_found(tmp_path: Path):
+    keychain_uid = generate_uuid0()
+    keypair = _generate_pem_keypair("RSA_OAEP")
+    write_uppercase_layout_keystore(tmp_path, [(keychain_uid, "RSA_OAEP", keypair)])
+    names_before = sorted(p.name for p in tmp_path.iterdir())
+
+    with case_sensitive_paths():
+        keystore = FilesystemKeystore(tmp_path)
+        assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["public_key"]
+        assert keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["private_key"]
+        assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="rsa_oaep") == keypair["public_key"]
+
+        readonly_keystore = ReadonlyFilesystemKeystore(tmp_path)
+        assert readonly_keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == keypair["public_key"]
+
+        # Setting over an existing uppercase keypair must not create a lowercase twin
+        with pytest.raises(KeyAlreadyExists):
+            keystore.set_keypair(keychain_uid=keychain_uid, key_algo="RSA_OAEP", **_generate_pem_keypair("RSA_OAEP"))
+
+    assert sorted(p.name for p in tmp_path.iterdir()) == names_before  # No file created/renamed/deleted
+
+
+def test_filesystem_keystore_lowercase_wins_on_conflict(tmp_path: Path):
+    keychain_uid = generate_uuid0()
+    lower_name = "%s_rsa_oaep_public_key.pem" % keychain_uid
+    upper_name = "%s_RSA_OAEP_public_key.pem" % keychain_uid
+    (tmp_path / lower_name).write_bytes(b"lowercase content")
+    keystore = FilesystemKeystore(tmp_path)
+
+    # Only one file, possibly seen under two names (case-insensitive filesystem): no warning
+    with mock.patch("wacryptolib.keystore.logger") as logger_mock:
+        assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"lowercase content"
+    assert not logger_mock.warning.called
+
+    # Two distinct files (case-sensitive filesystem, emulated)
+    path_class = type(tmp_path)
+    orig_exists = path_class.exists
+    with mock.patch.object(
+        path_class, "exists", lambda self, *a, **k: True if self.name == upper_name else orig_exists(self, *a, **k)
+    ), mock.patch.object(path_class, "samefile", lambda self, other: False), mock.patch(
+        "wacryptolib.keystore.logger"
+    ) as logger_mock:
+        assert keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP") == b"lowercase content"
+    assert logger_mock.warning.called  # Once per path resolution
+    assert all(upper_name in str(call) for call in logger_mock.warning.call_args_list)
+
+
+def test_filesystem_keystore_uppercase_free_keypairs(tmp_path: Path):
+    free_keypairs = [("RSA_OAEP", _generate_pem_keypair("RSA_OAEP")) for _ in range(2)]
+    write_uppercase_layout_keystore(tmp_path, [], free_keypairs=free_keypairs)
+
+    with case_sensitive_paths():
+        keystore = FilesystemKeystore(tmp_path)
+        assert keystore.get_free_keypairs_count("RSA_OAEP") == 2
+
+        for _ in range(2):
+            keystore.attach_free_keypair_to_uuid(keychain_uid=generate_uuid0(), key_algo="RSA_OAEP")
+        assert keystore.get_free_keypairs_count("RSA_OAEP") == 0
+        with pytest.raises(KeyDoesNotExist):
+            keystore.attach_free_keypair_to_uuid(keychain_uid=generate_uuid0(), key_algo="RSA_OAEP")
+
+    key_names = [p.name for p in tmp_path.iterdir() if p.is_file()]
+    assert len(key_names) == 4
+    assert all("_rsa_oaep_" in name for name in key_names), key_names
+
+
+def test_filesystem_keystore_free_keypairs_count_sums_both_spellings(tmp_path: Path):
+    (tmp_path / "free_keys").mkdir()
+    (tmp_path / "free_keys" / "rsa_oaep").mkdir()
+    (tmp_path / "free_keys" / "rsa_oaep" / "1_private_key.pem").write_bytes(b"a")
+    keystore = FilesystemKeystore(tmp_path)
+    try:
+        (tmp_path / "free_keys" / "RSA_OAEP").mkdir()
+    except FileExistsError:
+        pytest.skip("Case-insensitive filesystem")
+    (tmp_path / "free_keys" / "RSA_OAEP" / "2_private_key.pem").write_bytes(b"b")
+    assert keystore.get_free_keypairs_count("RSA_OAEP") == 2
+
+
+def test_filesystem_keystore_mixed_layout_listing_check_and_export(tmp_path: Path):
+    authenticator_dir = tmp_path / "authenticator"
+    authenticator_dir.mkdir()
+    initialize_authenticator(authenticator_dir, keystore_owner="owner", keystore_passphrase_hint="hint")
+
+    uppercase_uid, lowercase_uid = generate_uuid0(), generate_uuid0()
+    uppercase_keypair = generate_keypair(key_algo="RSA_OAEP", serialize=True, passphrase=b"pass")
+    lowercase_keypair = generate_keypair(key_algo="ECC_DSS", serialize=True, passphrase=b"pass")
+    write_uppercase_layout_keystore(authenticator_dir, [(uppercase_uid, "RSA_OAEP", uppercase_keypair)])
+
+    with case_sensitive_paths():
+        keystore = FilesystemKeystore(authenticator_dir)
+        keystore.set_keypair(keychain_uid=lowercase_uid, key_algo="ECC_DSS", **lowercase_keypair)
+
+        identifiers = keystore.list_keypair_identifiers()
+        assert sorted((str(i["keychain_uid"]), i["key_algo"], i["private_key_present"]) for i in identifiers) == sorted(
+            [(str(uppercase_uid), "RSA_OAEP", True), (str(lowercase_uid), "ECC_DSS", True)]
+        )
+        for identifier in identifiers:  # Every listed identifier is fetchable
+            keystore.get_public_key(keychain_uid=identifier["keychain_uid"], key_algo=identifier["key_algo"])
+
+        check_authenticator(authenticator_dir, keystore_passphrase=b"pass")  # Doesn't raise
+
+        keystore_tree = ReadonlyFilesystemKeystore(authenticator_dir).export_to_keystore_tree()
+        assert {(k["keychain_uid"], k["key_algo"]) for k in keystore_tree["keypairs"]} == {
+            (uppercase_uid, "RSA_OAEP"),
+            (lowercase_uid, "ECC_DSS"),
+        }
+
+    # Re-import into a fresh keystore: lowercase-named files
+    fresh_dir = tmp_path / "fresh"
+    fresh_dir.mkdir()
+    FilesystemKeystore(fresh_dir).import_from_keystore_tree(keystore_tree)
+    key_files = [p.name for p in fresh_dir.glob("*.pem")]
+    assert len(key_files) == 4
+    assert all(name == name.lower() for name in key_files), key_files

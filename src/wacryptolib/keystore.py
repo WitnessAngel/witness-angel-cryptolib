@@ -417,7 +417,9 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
         assert keys_dir.is_dir(), keys_dir
         self._keys_dir = keys_dir
 
-    def _get_filepath(self, keychain_uid, key_algo, is_public: bool):
+    def _get_filepath(self, keychain_uid, key_algo, is_public: bool, uppercase: bool = False):
+        """Build the CANONICAL (lowercase) path, used for writes, or the legacy uppercase one on demand."""
+        key_algo = key_algo.upper() if uppercase else key_algo.lower()
         filename = "%s_%s%s" % (
             keychain_uid,
             key_algo,
@@ -425,26 +427,40 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
         )
         return self._keys_dir.joinpath(filename)
 
+    def _find_existing_filepath(self, keychain_uid, key_algo, is_public: bool):
+        """Return the lowercase path if it exists, else the legacy uppercase path if it exists, else the lowercase path."""
+        canonical = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=is_public)
+        legacy = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=is_public, uppercase=True)
+        if canonical.exists():
+            if legacy.exists() and not canonical.samefile(legacy):
+                logger.warning(
+                    "Both %r and %r exist in keystore, ignoring the uppercase-named file", canonical.name, legacy.name
+                )
+            return canonical
+        if legacy.exists():
+            return legacy
+        return canonical
+
     def _read_from_storage_file(self, filepath: Path):
         assert self._keys_dir in filepath.parents  # No weirdness with outside folders
         return filepath.read_bytes()
 
     def _public_key_exists(self, *, keychain_uid, key_algo):
-        return self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True).exists()
+        return self._find_existing_filepath(keychain_uid, key_algo=key_algo, is_public=True).exists()
 
     def _private_key_exists(self, *, keychain_uid, key_algo):
-        return self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False).exists()
+        return self._find_existing_filepath(keychain_uid, key_algo=key_algo, is_public=False).exists()
 
     def _get_public_key(self, *, keychain_uid, key_algo):
-        filepath = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True)
+        filepath = self._find_existing_filepath(keychain_uid, key_algo=key_algo, is_public=True)
         return self._read_from_storage_file(filepath)
 
     def _get_private_key(self, *, keychain_uid, key_algo):
-        filepath = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False)
+        filepath = self._find_existing_filepath(keychain_uid, key_algo=key_algo, is_public=False)
         return self._read_from_storage_file(filepath)
 
     def _list_unordered_keypair_identifiers(self):
-        key_information_list = []
+        key_information_dict = {}  # Deduplicated by (keychain_uid, uppercase algo)
 
         public_key_pem_paths = glob.glob(join(self._keys_dir, "*" + self._public_key_suffix))
 
@@ -462,7 +478,7 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
             # print("MATCH FOUND", public_key_pem_filename, match.groups(), self.PUBLIC_KEY_FILENAME_REGEX)
 
             keychain_uid_str = match.group("keychain_uid")
-            key_algo = match.group("key_algo")
+            key_algo = match.group("key_algo").upper()
 
             try:
                 keychain_uid = uuid.UUID(keychain_uid_str)
@@ -472,16 +488,12 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
                 )
                 continue
 
-            private_key_pem_filename = public_key_pem_filename.replace(
-                self._public_key_suffix, self._private_key_suffix
-            )
-            private_key_present = os.path.exists(join(self._keys_dir, private_key_pem_filename))
-            key_information = dict(
+            private_key_present = self._private_key_exists(keychain_uid=keychain_uid, key_algo=key_algo)
+            key_information_dict[(keychain_uid, key_algo)] = dict(
                 keychain_uid=keychain_uid, key_algo=key_algo, private_key_present=private_key_present
             )
-            key_information_list.append(key_information)
 
-        return key_information_list
+        return list(key_information_dict.values())
 
     def get_keystore_metadata(self, include_keypair_identifiers=False):
         """Return a metadata dict for the filesystem keystore, or raise KeystoreMetadataDoesNotExist."""
@@ -551,15 +563,27 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
     def _ensure_free_keys_dir_exists(self):
         self._free_keys_dir.mkdir(exist_ok=True)
 
+    def _get_free_keys_subdirs(self, key_algo):
+        """Existing free keys subdirectories, lowercase (canonical) first then uppercase (legacy), without duplicates."""
+        subdirs = []
+        for name in (key_algo.lower(), key_algo.upper()):
+            subdir = self._free_keys_dir.joinpath(name)  # Might not exist yet
+            if not subdir.is_dir():
+                continue
+            if any(subdir.samefile(other) for other in subdirs):  # Case-insensitive filesystem
+                continue
+            subdirs.append(subdir)
+        return subdirs
+
     def _get_free_keypairs_count(self, key_algo):
-        subdir = self._free_keys_dir.joinpath(key_algo)  # Might not exist yet
-        if not subdir.is_dir():
-            return 0
-        return len(list(subdir.glob("*" + self._private_key_suffix)))  # PRIVATE keys show existence of FREE keypairs
+        # PRIVATE keys show existence of FREE keypairs
+        return sum(
+            len(list(subdir.glob("*" + self._private_key_suffix))) for subdir in self._get_free_keys_subdirs(key_algo)
+        )
 
     def _add_free_keypair(self, *, key_algo, public_key, private_key):
         self._ensure_free_keys_dir_exists()
-        subdir = self._free_keys_dir.joinpath(key_algo)
+        subdir = self._free_keys_dir.joinpath(key_algo.lower())
         subdir.mkdir(exist_ok=True)
 
         random_name = str(random.randint(*self._randint_args))
@@ -582,11 +606,12 @@ class FilesystemKeystore(ReadonlyFilesystemKeystore, KeystoreReadWriteBase):
         target_public_key_filename = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=True)
         target_private_key_filename = self._get_filepath(keychain_uid, key_algo=key_algo, is_public=False)
 
-        subdir = self._free_keys_dir.joinpath(key_algo)  # Might not exist
-        globber = subdir.glob("*" + self._private_key_suffix)
-        try:
-            free_private_key = next(globber)
-        except StopIteration:
+        free_private_key = None
+        for subdir in self._get_free_keys_subdirs(key_algo):
+            free_private_key = next(subdir.glob("*" + self._private_key_suffix), None)
+            if free_private_key is not None:
+                break
+        if free_private_key is None:
             raise KeyDoesNotExist("No free keypair of type %s available in filesystem storage" % key_algo)
         _free_public_key_name = free_private_key.name.replace(self._private_key_suffix, self._public_key_suffix)
         free_public_key = subdir.joinpath(_free_public_key_name)

@@ -1,5 +1,5 @@
 {
-  "$schema": "../../_schemas/cryptainer.schema.json",
+  "$schema": "../../_jsonschemas/cryptainer.schema.json",
   "fixture_kind": "cryptainer",
   "generation": "2026_edge_cases",
   "description": "Offloaded cryptainer whose RSA_OAEP key ciphertexts (nested ones included) use the legacy 'digest_list' field name",

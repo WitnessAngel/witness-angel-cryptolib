@@ -1,5 +1,5 @@
 {
-  "$schema": "../../_schemas/cryptoconf.schema.json",
+  "$schema": "../../_jsonschemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2026_edge_cases",
   "description": "AES_EAX payload layer whose key is wrapped by a local RSA_OAEP key, then by the RSA_OAEP key of an authenticator with legacy-protected private keys, with a DSA_DSS ciphertext signature and an ECC_DSS plaintext signature",

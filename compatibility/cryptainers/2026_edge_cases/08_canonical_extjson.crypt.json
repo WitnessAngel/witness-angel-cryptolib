@@ -1,5 +1,5 @@
 {
-  "$schema": "../../_schemas/cryptainer.schema.json",
+  "$schema": "../../_jsonschemas/cryptainer.schema.json",
   "fixture_kind": "cryptainer",
   "generation": "2026_edge_cases",
   "description": "CANONICAL extended JSON combined with the current 'payload_ciphertext_signatures' naming, inline, with cryptainer metadata",

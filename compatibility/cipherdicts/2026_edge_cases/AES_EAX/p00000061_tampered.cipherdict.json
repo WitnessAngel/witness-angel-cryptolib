@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../_schemas/cipherdict.schema.json",
+  "$schema": "../../../_jsonschemas/cipherdict.schema.json",
   "fixture_kind": "cipherdict",
   "generation": "2026_edge_cases",
   "description": "AES_EAX encryption of a 61-byte plaintext, whose MAC tag was corrupted (decryption must be rejected)",

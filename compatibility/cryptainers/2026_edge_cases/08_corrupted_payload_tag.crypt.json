@@ -1,5 +1,5 @@
 {
-  "$schema": "../../_schemas/cryptainer.schema.json",
+  "$schema": "../../_jsonschemas/cryptainer.schema.json",
   "fixture_kind": "cryptainer",
   "generation": "2026_edge_cases",
   "description": "Inline cryptainer whose AES_EAX payload MAC tag was corrupted after encryption",

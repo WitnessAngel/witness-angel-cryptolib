@@ -1,5 +1,5 @@
 {
-  "$schema": "../../_schemas/cryptainer.schema.json",
+  "$schema": "../../_jsonschemas/cryptainer.schema.json",
   "fixture_kind": "cryptainer",
   "generation": "2026_edge_cases",
   "description": "Inline cryptainer using the legacy 'payload_signatures' field, whose ciphertext signature value was corrupted after encryption",

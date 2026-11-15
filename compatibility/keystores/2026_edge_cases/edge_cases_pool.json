@@ -1,5 +1,5 @@
 {
-  "$schema": "../../_schemas/keystore_pool.schema.json",
+  "$schema": "../../_jsonschemas/keystore_pool.schema.json",
   "fixture_kind": "keystore_pool",
   "generation": "2026_edge_cases",
   "description": "Local keyfactory (RSA_OAEP, DSA_DSS, ECC_DSS, ECIES_X25519 keys of three keychains, unprotected) and one imported authenticator whose RSA_OAEP, RSA_PSS, DSA_DSS and ECC_DSS private keys are protected like wacryptolib <= 0.12 did (DES3 for DSA_DSS)",

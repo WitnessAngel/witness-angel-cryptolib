@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../_schemas/cryptoconf.schema.json",
+  "$schema": "../../../_jsonschemas/cryptoconf.schema.json",
   "fixture_kind": "cryptoconf",
   "generation": "2026_current",
   "description": "A key cipher trustee of unknown type (must be rejected)",

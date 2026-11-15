@@ -5,7 +5,11 @@ Defines how cryptainer files and their offloaded payload files are named for eac
 ## ADDED Requirements
 
 ### Requirement: Cryptainer filenames by format
-The system SHALL write new cryptainers as `<basename>.crypt.json` when they are serialized as Extended JSON, and as `<basename>.crypt.cbor` when they are serialized as WA-CBOR. It SHALL NOT write new cryptainers with the legacy `<basename>.crypt` name.
+When a cryptainer storage or the CLI chooses the name of a new cryptainer, it SHALL be `<basename>.crypt.json` for an Extended JSON cryptainer and `<basename>.crypt.cbor` for a WA-CBOR cryptainer, never the legacy `<basename>.crypt`. Library functions that write a cryptainer to an explicit path given by the caller SHALL write it to that path, in the format implied by its suffix (a legacy `.crypt` path meaning Extended JSON).
+
+#### Scenario: Explicit legacy path
+- **WHEN** a cryptainer is dumped to the filesystem at an explicit path `x.crypt`, outside any storage
+- **THEN** it is written to `x.crypt` in Extended JSON, and loads back with the filesystem cryptainer loader
 
 #### Scenario: Default storage writes JSON cryptainers
 - **WHEN** a file `video.mp4` is encrypted into a cryptainer storage created without a format setting

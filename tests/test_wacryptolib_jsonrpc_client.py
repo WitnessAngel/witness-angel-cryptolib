@@ -3,12 +3,14 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import json
+import socket
 import uuid
 from base64 import b64encode
 
 import pytest
 import responses
 from jsonrpc_requests import ProtocolError
+from pytest_socket import SocketBlockedError
 
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 
@@ -126,3 +128,15 @@ def test_status_slugs_response_error_handler():
     exc = ProtocolError("problems occurred", server_data={"error": {"code": 400, "data": None}})
     with pytest.raises(ProtocolError, match="problems occurred"):
         status_slugs_response_error_handler(exc)
+
+
+def test_real_network_is_blocked_during_tests():
+    # Ensured by pytest-socket ("--disable-socket" in pyproject.toml), so that unmocked remote calls fail loudly
+    with pytest.raises(SocketBlockedError):
+        socket.getaddrinfo("example.com", 80)
+    with pytest.raises(SocketBlockedError):
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    server = JsonRpcProxy("http://example.com/jsonrpc", timeout=1, response_error_handler=None)
+    with pytest.raises(SocketBlockedError):
+        server.get_status()

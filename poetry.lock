@@ -1883,6 +1883,21 @@ files = [
 pytest = "*"
 
 [[package]]
+name = "pytest-socket"
+version = "0.8.1"
+description = "Pytest Plugin to disable socket calls during tests"
+optional = false
+python-versions = ">=3.10"
+groups = ["dev"]
+files = [
+    {file = "pytest_socket-0.8.1-py3-none-any.whl", hash = "sha256:f9846bed1dcd96eed459e5e14795bbaf96715cf4e827891fe70773817ecb8ed4"},
+    {file = "pytest_socket-0.8.1.tar.gz", hash = "sha256:2f57787914ad2e1308d09ce141b95c3e55741fbb4fb7b7556593a6b063e0c9c7"},
+]
+
+[package.dependencies]
+pytest = ">=7.0.0"
+
+[[package]]
 name = "pytest-timeout"
 version = "2.4.0"
 description = "pytest plugin to abort hanging tests"
@@ -2976,4 +2991,4 @@ fallbacks = ["ecdsa", "pkcs1", "pyaes"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11, <4.0"
-content-hash = "3a444976d699e8498dc2d142da9a57a54e3fa0c4cc29c8e3d78f6b5dc09d1696"
+content-hash = "8e3c4f164041369001e15ea1a68bed9e97f336a2c3aaf563fc2a1bc84d1539cd"

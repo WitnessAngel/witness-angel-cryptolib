@@ -76,6 +76,7 @@ pytest-randomly = ">=3.11"
 pytest-deadfixtures = ">=2.2.1"
 pytest-timeout = ">=2.1.0"
 pytest-xdist = ">=3.0.0"
+pytest-socket = ">=0.7.0"  # Unit tests must never use the real network
 responses = ">=0.18.0"
 freezegun = ">=1.1.0"
 typeguard = ">=2.13.0"
@@ -110,7 +111,7 @@ tox-uv = "^1.37.2"
 testpaths = ["tests"]
 timeout = 600
 norecursedirs = "*.egg .eggs dist build docs .tox .git __pycache__ scripts static media selenium src"
-addopts = "-vl -p no:logging --disable-warnings --strict --tb=long --doctest-modules -p no:faulthandler --cov-report=html"
+addopts = "-vl -p no:logging --disable-warnings --strict --tb=long --doctest-modules -p no:faulthandler --cov-report=html --disable-socket --allow-unix-socket"
 markers = [
     "requires_pycryptodome: test needing the native pycryptodome (deselected in the pure-python fallback tox env)",
 ]

@@ -44,8 +44,11 @@ When wacryptolib has been installed with pip, it exposes a **"flightbox"** execu
 Handy dev commands
 ------------------------
 
-Use `pytest` to launch unit-tests (default pytest arguments are in `setup.cfg`).
+Use `pytest` to launch unit-tests (default pytest arguments are in `pyproject.toml`).
 Use `poetry run pytest` instead, if poetry manages its own virtualenv.
+
+Unit-tests can't use the real network (only Unix domain sockets are allowed), thanks to `pytest-socket`: mock remote
+calls instead, e.g. with `responses` or `mock.patch`.
 
 Add `--cov=wacryptolib` argument to the pytest command to generate coverage reports.
 

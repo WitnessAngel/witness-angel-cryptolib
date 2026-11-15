@@ -18,6 +18,8 @@ from unittest.mock import patch
 from uuid import UUID
 
 import pytest
+import requests
+import responses
 from jsonrpc_requests import TransportError
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool, skip_if_fallback_backend
@@ -1886,14 +1888,18 @@ def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simp
 
     gateway_urls = DUMMY_GATEWAY_URLS
 
-    # Network warning when no JSONRPC mockups provided
-    result_payload, operation_report = decrypt_payload_from_cryptainer(
-        cryptainer=cryptainer,
-        keystore_pool=keystore_pool,
-        passphrase_mapper=passphrase_mapper,
-        gateway_urls=gateway_urls,
-        revelation_requestor_uid=revelation_requestor_uid,
-    )
+    # Network warning when the gateway can't be reached (simulated, since tests can't use real sockets)
+    with responses.RequestsMock() as requests_mock:  # Also checks that the gateway was called
+        requests_mock.add(
+            responses.POST, gateway_urls[0], body=requests.exceptions.ConnectionError("Simulated unreachable gateway")
+        )
+        result_payload, operation_report = decrypt_payload_from_cryptainer(
+            cryptainer=cryptainer,
+            keystore_pool=keystore_pool,
+            passphrase_mapper=passphrase_mapper,
+            gateway_urls=gateway_urls,
+            revelation_requestor_uid=revelation_requestor_uid,
+        )
     assert result_payload == payload
     _check_operation_report_entry(
         operation_report=operation_report,

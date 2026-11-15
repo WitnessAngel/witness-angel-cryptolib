@@ -22,4 +22,4 @@
 
 - [x] 5.1 Reword the #61/#64 `CHANGELOG` entry (existing keys keep working, new keys use lowercase file names, API names are uppercase, older versions can't see new keys, drop "not found anymore") and check that the text matches the behaviour
 - [x] 5.2 Run the full test suite and `openspec validate store-lowercase-algo-names-with-uppercase-fallback --strict`; verify no new failures compared to the baseline
-- [ ] 5.3 Comment on issue #70 with the commit reference, and close it once merged
+- [x] 5.3 Comment on issue #70 with the commit reference, and close it once merged

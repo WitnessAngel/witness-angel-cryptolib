@@ -19,20 +19,20 @@
 
 ## 4. Amend add-cbor-document-format
 
-- [ ] 4.1 Rewrite D12 of `openspec/changes/add-cbor-document-format/design.md` around the principle of design D1 and the shared name matcher of D5. Align the Context, Goals, D5, D6 (helpers and listing), D9 and Risks sections:
+- [x] 4.1 Rewrite D12 of `openspec/changes/add-cbor-document-format/design.md` around the principle of design D1 and the shared name matcher of D5. Align the Context, Goals, D5, D6 (helpers and listing), D9 and Risks sections:
   - no exact-lowercase recognition;
   - no case-insensitive CLI variant;
   - no usage errors for other-case `.json`/`.cbor`;
   - the "`X.CRYPT` no longer listed on Windows" risk replaced by the per-platform listing.
 
   Update the proposal's "Lowercase names" bullet and its Impact line on listing. Verify with a manual read that lowercase writing, caller basenames and lowercase corpus names are unchanged.
-- [ ] 4.2 Update the delta specs of `add-cbor-document-format`, with Windows and other-platform THEN branches where outcomes differ:
+- [x] 4.2 Update the delta specs of `add-cbor-document-format`, with Windows and other-platform THEN branches where outcomes differ:
   - `cbor-document-format`: "Document file format recognition" and its "Extension in another letter case" scenario;
   - `cli-format-conversion`: "convert-format command", "Derived target name", "Output format option of writing commands" and "CLI reads both formats", with their letter case scenarios;
   - `cryptainer-file-naming`: "Lowercase cryptainer suffixes" and its scenario, and the parenthesis of "Listing covers every cryptainer suffix".
 
   Verify with `openspec validate add-cbor-document-format --strict`. Grep the change for leftovers ("lowercase only", "exact lowercase", "whatever its letter case", "in another letter case").
-- [ ] 4.3 Update tasks 3.1, 4.1, 4.3, 5.3, 5.4, 5.5, 7.1 and 7.3 of `add-cbor-document-format` to the shared matcher. They should test the other platform by patching `os.path.normcase`. Verify with a manual read against the updated delta specs.
+- [x] 4.3 Update tasks 3.1, 4.1, 4.3, 5.3, 5.4, 5.5, 7.1 and 7.3 of `add-cbor-document-format` to the shared matcher. They should test the other platform by patching `os.path.normcase`. Verify with a manual read against the updated delta specs.
 
 ## 5. Documentation
 

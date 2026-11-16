@@ -19,8 +19,8 @@ The system SHALL validate a cryptoconf or cryptainer when it enters an encryptio
 - **WHEN** an invalid cryptoconf or cryptainer is passed as a plain dict to an encryption, decryption or storage operation
 - **THEN** a `SchemaValidationError` is raised to the caller before any key generation, trustee access or cipher operation
 
-### Requirement: Tags do not survive deep-copying or JSON serialization
-The system SHALL NOT propagate a validation tag to derived or reloaded data. Deep-copying a tagged structure SHALL yield a plain dict, and data loaded from JSON or from the filesystem SHALL be untagged and therefore validated at ingress.
+### Requirement: Tags do not survive deep-copying or serialization
+The system SHALL NOT propagate a validation tag to derived or reloaded data. Deep-copying a tagged structure SHALL yield a plain dict, and data loaded from Extended JSON, from WA-CBOR or from the filesystem SHALL be untagged and therefore validated at ingress.
 
 #### Scenario: Cryptainer derived from a cryptoconf is not a validated cryptoconf
 - **WHEN** a validated cryptoconf is deep-copied, as the flightbox does to build a cryptainer base
@@ -28,6 +28,10 @@ The system SHALL NOT propagate a validation tag to derived or reloaded data. Dee
 
 #### Scenario: Loaded cryptainer is validated
 - **WHEN** a cryptainer is dumped to JSON or to the filesystem and loaded back
+- **THEN** the loaded object is a plain dict, and is validated when it enters decryption or analysis
+
+#### Scenario: Cryptainer loaded from WA-CBOR is validated
+- **WHEN** a validated cryptainer is dumped to WA-CBOR and loaded back
 - **THEN** the loaded object is a plain dict, and is validated when it enters decryption or analysis
 
 ### Requirement: Trust of tags inside a process

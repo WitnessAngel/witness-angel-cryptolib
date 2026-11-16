@@ -76,7 +76,7 @@ def split_cryptainer_suffix(name) -> Optional[tuple]:
     return None
 
 
-def get_cryptainer_format_from_filename(path) -> Optional[str]:
+def get_cryptainer_file_format_from_filename(path) -> Optional[str]:
     """Return the document format of a cryptainer from the suffix of its filename (see `split_cryptainer_suffix()`),
     or None if it has no cryptainer suffix."""
     split_name = split_cryptainer_suffix(os.path.basename(os.fspath(path)))

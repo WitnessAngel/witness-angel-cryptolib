@@ -132,6 +132,14 @@ The CLI SHALL match the extensions `.crypt`, `.json` and `.cbor`, and the suffix
 - **WHEN** `flightbox convert-format conf.json -o Backup.CBOR` is run on a case-sensitive filesystem
 - **THEN** `Backup.cbor` is written, and no `Backup.CBOR` file is created
 
+#### Scenario: Decrypted output file gets a lowercase extension
+- **WHEN** `flightbox cryptainer decrypt notes.json.crypt.json -o Out.JSON` is run on a case-sensitive filesystem
+- **THEN** `Out.json` is written, and no `Out.JSON` file is created
+
+#### Scenario: Cryptainer name derived from a typed input name
+- **WHEN** `flightbox encrypt Notes.JSON` is run without `-o`
+- **THEN** the cryptainer `Notes.json.crypt.json` is written, the input file being read at its exact name `Notes.JSON`
+
 #### Scenario: Existing file opened as typed
 - **WHEN** `flightbox cryptoconf validate CONF.JSON` is run on a case-sensitive filesystem holding only `CONF.JSON`
 - **THEN** `CONF.JSON` is read, as Extended JSON

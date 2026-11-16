@@ -1663,6 +1663,43 @@ def test_cli_encrypt_strips_premature_cryptainer_suffixes(tmp_path):
         assert _list_filenames() == ["Upper", "report.json", "unfinished.crypt.json~.decrypted", "video.mp4"]
 
 
+def test_cli_typed_input_and_output_names_get_lowercase_extensions(tmp_path):
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
+    runner = _get_cli_runner()
+
+    with runner.isolated_filesystem():
+        pathlib.Path("Notes.JSON").write_bytes(b"notes content")
+
+        # The cryptainer name derived from the typed input name gets its recognized extension lowercased
+        result = runner.invoke(cli, base_args + ["encrypt", "Notes.JSON", "--bundle"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert _list_filenames(cryptainer_storage) == ["Notes.json.crypt.json"]
+
+        # Output files typed for decryption get their recognized extension lowercased, other names are kept
+        for output_name, expected_output_name in [
+            ("Out.JSON", "Out.json"),
+            ("Back.CRYPT.CBOR", "Back.crypt.cbor"),
+            ("Plain.TXT", "Plain.TXT"),
+            (os.path.join("subdir", "Deep.Cbor"), os.path.join("subdir", "Deep.cbor")),
+        ]:
+            pathlib.Path("subdir").mkdir(exist_ok=True)
+            result = runner.invoke(
+                cli,
+                base_args + ["cryptainer", "decrypt", "Notes.json.crypt.json", "-o", output_name],
+                catch_exceptions=False,
+            )
+            assert result.exit_code == 0, (output_name, result.stderr)
+            assert pathlib.Path(expected_output_name).read_bytes() == b"notes content"
+
+        assert _list_filenames() == ["Back.crypt.cbor", "Notes.JSON", "Out.json", "Plain.TXT", "subdir"]
+        assert _list_filenames("subdir") == ["Deep.cbor"]
+
+        # The overwrite check applies to the normalized name, on every platform
+        result = runner.invoke(cli, base_args + ["cryptainer", "decrypt", "Notes.json.crypt.json", "-o", "Out.Json"])
+        assert result.exit_code == 2
+        assert "'Out.json' already exists" in result.stderr
+
+
 def _write_cryptoconf_files(tmp_path):
     json_cryptoconf_path = tmp_path / "conf.json"
     dump_to_json_file(json_cryptoconf_path, SIMPLE_CRYPTOCONF)

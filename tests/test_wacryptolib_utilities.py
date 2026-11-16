@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import os
+import sys
 import uuid
 from datetime import datetime, timezone, timedelta
 from threading import Lock
@@ -27,7 +28,8 @@ from wacryptolib.utilities import (
     catch_and_log_exception,
     synchronized,
     pad_bytes_pkcs7,
-    unpad_bytes_pkcs7
+    unpad_bytes_pkcs7,
+    is_file_basename,
 )
 
 
@@ -726,3 +728,20 @@ def test_document_file_api(tmp_path):
 
     assert dump_to_document_bytes(cryptoconf, format=DocumentFormat.JSON) == dump_to_json_bytes(cryptoconf)
     assert dump_to_document_bytes(cryptoconf, format=DocumentFormat.CBOR) == dump_to_cbor_bytes(cryptoconf)
+
+
+def test_is_file_basename(tmp_path, monkeypatch):
+    for name in ["report", "Notes.json", "video.mp4.crypt.json", "temp.crypt~", ".hidden", "a b"]:
+        assert is_file_basename(name), name
+    for name in ["", ".", "..", "dir/file", os.path.join("dir", "file"), "/file", "file/"]:
+        assert not is_file_basename(name), name
+    if sys.platform == "win32":
+        for name in ["C:", "C:file", r"dir\file"]:
+            assert not is_file_basename(name), name
+
+    # Pure string check, whatever the files existing in the current directory
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "Notes.JSON").write_bytes(b"")
+    (tmp_path / "subdir").mkdir()
+    assert is_file_basename("Notes.json")
+    assert is_file_basename("subdir")

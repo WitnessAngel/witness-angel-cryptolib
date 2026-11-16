@@ -524,7 +524,8 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle, file_format, f
         if split_output_basename:
             output_basename = split_output_basename[0]  # Strip premature suffix, of any format
 
-    output_basename = output_basename or input_file.name
+    # The input name is typed too, so e.g. "Conf.JSON" gives the cryptainer "Conf.json.crypt.json"
+    output_basename = output_basename or normalize_recognized_extension(input_file.name)
     assert isinstance(output_basename, str), repr(output_basename)
 
     # Both files are checked even when bundling, since a leftover offloaded payload belongs to the same cryptainer;
@@ -541,7 +542,7 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle, file_format, f
         ctx,
         keystore_pool=keystore_pool,
         offload_payload_ciphertext=offload_payload_ciphertext,
-        cryptainer_format=file_format,
+        cryptainer_file_format=file_format,
     )
 
     with click.open_file(input_file, mode="rb") as payload_handle:  # Also handles "-" for STDIN
@@ -1048,7 +1049,10 @@ def decrypt(ctx, cryptainer_name, output_file, force):
     An existing output file is not overwritten, unless --force is used.
     """
 
-    if not output_file:
+    if output_file:
+        if output_file.name:  # Not e.g. "." or "/", which fail later on as directories
+            output_file = output_file.with_name(normalize_recognized_extension(output_file.name))  # E.g. "Data.json"
+    else:
         split_cryptainer_name = _split_typed_cryptainer_suffix(cryptainer_name)
         if split_cryptainer_name:
             # This SHOULD be the case since we add the suffix ourselves on encryption

@@ -71,7 +71,7 @@ from wacryptolib.cryptainer import (
     CRYPTAINER_SUFFIXES,
     get_cryptainer_suffix,
     split_cryptainer_suffix,
-    get_cryptainer_format_from_filename,
+    get_cryptainer_file_format_from_filename,
     SIGNATURE_POLICIES,
     CRYPTAINER_TRUSTEE_TYPES,
     _do_get_message_signature,
@@ -3827,11 +3827,11 @@ def test_cryptainer_suffix_helpers():
     ]:
         assert split_cryptainer_suffix(name) == expected, name
         expected_format = expected[1] if expected else None
-        assert get_cryptainer_format_from_filename(name) == expected_format, name
+        assert get_cryptainer_file_format_from_filename(name) == expected_format, name
 
     # Only the filename is examined
-    assert get_cryptainer_format_from_filename(os.path.join("dir.crypt.cbor", "x.txt")) is None
-    assert get_cryptainer_format_from_filename(Path("dir.crypt") / "X.CRYPT.CBOR~") == DocumentFormat.CBOR
+    assert get_cryptainer_file_format_from_filename(os.path.join("dir.crypt.cbor", "x.txt")) is None
+    assert get_cryptainer_file_format_from_filename(Path("dir.crypt") / "X.CRYPT.CBOR~") == DocumentFormat.CBOR
 
 
 @pytest.mark.parametrize(
@@ -3944,10 +3944,10 @@ def _get_sorted_filenames(directory):
     return sorted(path.name for path in Path(directory).iterdir())
 
 
-@pytest.mark.parametrize("cryptainer_format", [None, DocumentFormat.JSON, DocumentFormat.CBOR])
-def test_cryptainer_storage_format_setting(tmp_path, cryptainer_format):
-    extra_kwargs = dict(cryptainer_format=cryptainer_format) if cryptainer_format else {}
-    expected_format = cryptainer_format or DocumentFormat.JSON  # Extended JSON by default
+@pytest.mark.parametrize("cryptainer_file_format", [None, DocumentFormat.JSON, DocumentFormat.CBOR])
+def test_cryptainer_storage_format_setting(tmp_path, cryptainer_file_format):
+    extra_kwargs = dict(cryptainer_file_format=cryptainer_file_format) if cryptainer_file_format else {}
+    expected_format = cryptainer_file_format or DocumentFormat.JSON  # Extended JSON by default
     suffix = ".crypt.cbor" if expected_format == DocumentFormat.CBOR else ".crypt.json"
 
     storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path, **extra_kwargs)
@@ -3991,13 +3991,13 @@ def test_cryptainer_storage_format_setting(tmp_path, cryptainer_format):
 
     # Storages of every format read cryptainers of every format
     for other_format in DOCUMENT_FORMATS:
-        other_storage = CryptainerStorage(cryptainer_dir=tmp_path, cryptainer_format=other_format)
+        other_storage = CryptainerStorage(cryptainer_dir=tmp_path, cryptainer_file_format=other_format)
         assert sorted(str(name) for name in other_storage.list_cryptainer_names()) == expected_names
         result, _operation_report = other_storage.decrypt_cryptainer_from_storage("Clip.MP4" + suffix)
         assert result == b"def"
 
     with pytest.raises(ValueError, match="Unknown document format"):
-        CryptainerStorage(cryptainer_dir=tmp_path, cryptainer_format="yaml")
+        CryptainerStorage(cryptainer_dir=tmp_path, cryptainer_file_format="yaml")
 
 
 def test_cryptainer_storage_listing_of_mixed_storage(tmp_path):
@@ -4085,7 +4085,7 @@ def test_cryptainer_storage_listing_of_suffixes_in_another_letter_case(tmp_path)
 def test_cryptainer_storage_same_basename_in_two_formats(tmp_path):
     json_storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path)
     cbor_storage = CryptainerStorage(
-        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path, cryptainer_format=DocumentFormat.CBOR
+        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path, cryptainer_file_format=DocumentFormat.CBOR
     )
     json_storage.encrypt_file("a", payload=b"json payload", cryptainer_metadata=None)
     cbor_storage.encrypt_file("a", payload=b"cbor payload", cryptainer_metadata=None)
@@ -4169,7 +4169,7 @@ def test_cryptainer_storage_warning_on_same_basename_in_another_format(tmp_path,
 
     # Enqueued encryption into a CBOR storage, next to both the legacy and the JSON cryptainers
     cbor_storage = CryptainerStorage(
-        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path, cryptainer_format=DocumentFormat.CBOR
+        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path, cryptainer_file_format=DocumentFormat.CBOR
     )
     caplog.clear()
     cbor_storage.enqueue_file_for_encryption("video.mp4", b"newer", cryptainer_metadata=None)
@@ -4242,12 +4242,12 @@ def test_cryptainer_storage_with_legacy_cryptainer_of_corpus(tmp_path):
         assert properties == dict(name=Path("old.crypt"), size=total_size, offloaded=True)
 
     # Storages of both formats write next to it with a warning, without touching it
-    for cryptainer_format in DOCUMENT_FORMATS:
+    for cryptainer_file_format in DOCUMENT_FORMATS:
         storage = CryptainerStorage(
             default_cryptoconf=SIMPLE_CRYPTOCONF,
             cryptainer_dir=cryptainer_dir,
             keystore_pool=keystore_pool,
-            cryptainer_format=cryptainer_format,
+            cryptainer_file_format=cryptainer_file_format,
         )
         storage.encrypt_file("old", payload=b"new", cryptainer_metadata=None)
     assert _get_sorted_filenames(cryptainer_dir) == [

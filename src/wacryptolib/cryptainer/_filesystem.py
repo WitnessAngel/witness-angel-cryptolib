@@ -23,7 +23,7 @@ def _get_final_cryptainer_filename(cryptainer_filepath) -> str:
     return Path(cryptainer_filepath).name.rstrip(CRYPTAINER_TEMP_SUFFIX)
 
 
-def _get_written_cryptainer_format(cryptainer_filepath) -> str:
+def _get_written_cryptainer_file_format(cryptainer_filepath) -> str:
     """WA-CBOR for a filename (without temporary suffix) ending with ".cbor" in any letter case, else Extended JSON
     (".crypt.json", legacy ".crypt", and ad-hoc names without these suffixes)."""
     extension = get_recognized_extension(_get_final_cryptainer_filename(cryptainer_filepath))
@@ -42,12 +42,12 @@ def dump_cryptainer_to_filesystem(cryptainer_filepath: Path, cryptainer: dict, o
     If `offload_payload_ciphertext`, actual encrypted payload is dumped to a separate bytes file nearby the cryptainer.
     """
     cryptainer_filepath = Path(cryptainer_filepath)
-    cryptainer_format = _get_written_cryptainer_format(cryptainer_filepath)
+    cryptainer_file_format = _get_written_cryptainer_file_format(cryptainer_filepath)
     if offload_payload_ciphertext:
         payload_ciphertext = _get_cryptainer_inline_ciphertext_value(cryptainer)
         cryptainer = cryptainer.copy()  # Shallow copy, since we DO NOT touch original dict here!
         cryptainer["payload_ciphertext_struct"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
-    cryptainer_bytes = dump_to_document_bytes(cryptainer, format=cryptainer_format)  # Fails before any write
+    cryptainer_bytes = dump_to_document_bytes(cryptainer, format=cryptainer_file_format)  # Fails before any write
     if offload_payload_ciphertext:
         offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
         offloaded_file_path.write_bytes(payload_ciphertext)

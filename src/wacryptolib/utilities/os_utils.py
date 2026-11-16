@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import os
-from pathlib import Path
+from pathlib import PurePath
 
 
 
@@ -26,7 +26,14 @@ def get_nice_size(size):  # FIXME TEST THIS
 
 
 def is_file_basename(path):
-    """Returns True iff path is a proper filename, without dots or path separators.
+    """Returns True iff path is a proper filename: not empty, not "." or "..", and without path separators
+    (nor drive, on Windows).
 
-    Does not check for forbidden characters or reserved filenames."""
-    return Path(path).resolve().name == str(path)
+    This is a pure string check, which doesn't depend on the files existing on disk, nor on their letter case
+    or symlinks. It doesn't check for forbidden characters or reserved filenames either."""
+    path = os.fspath(path)
+    if path in ("", ".", ".."):
+        return False
+    if any(separator in path for separator in ("/", os.sep, os.altsep) if separator):
+        return False
+    return PurePath(path).name == path  # E.g. rejects "C:" on Windows

@@ -215,7 +215,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
     :param max_cryptainer_age: if set, cryptainers exceeding this age (taken from their name, else their file-stats) in days are automatically erased
     :param max_workers: count of worker threads to use in parallel
     :param offload_payload_ciphertext: whether actual encrypted payload must be kept separated from structured cryptainer file
-    :param cryptainer_format: document format of the cryptainers written by this storage, Extended JSON ("json",
+    :param cryptainer_file_format: document format of the cryptainers written by this storage, Extended JSON ("json",
         written as `<basename>.crypt.json`) or WA-CBOR ("cbor", written as `<basename>.crypt.cbor`); cryptainers of
         all formats are listed and read anyway
     """
@@ -230,11 +230,11 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         max_cryptainer_age: Optional[timedelta] = None,
         max_workers: int = 1,
         offload_payload_ciphertext=True,
-        cryptainer_format: str = DocumentFormat.JSON,
+        cryptainer_file_format: str = DocumentFormat.JSON,
     ):
         super().__init__(cryptainer_dir=cryptainer_dir, keystore_pool=keystore_pool)
-        self._cryptainer_suffix = get_cryptainer_suffix(cryptainer_format)  # Raises if unknown format
-        self._cryptainer_format = cryptainer_format
+        self._cryptainer_suffix = get_cryptainer_suffix(cryptainer_file_format)  # Raises if unknown format
+        self._cryptainer_file_format = cryptainer_file_format
         assert max_cryptainer_quota is None or max_cryptainer_quota >= 0, max_cryptainer_quota
         assert max_cryptainer_count is None or max_cryptainer_count >= 0, max_cryptainer_count
         assert max_cryptainer_age is None or max_cryptainer_age >= timedelta(seconds=0), max_cryptainer_age

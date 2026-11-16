@@ -8,7 +8,7 @@ Development
   - Legacy `<basename>.crypt` cryptainers (always Extended JSON) keep being listed, loaded, decrypted, purged and deleted
   - Code building or stripping cryptainer names with `CRYPTAINER_SUFFIX` (now the legacy suffix only) must use the new
     `CRYPTAINER_JSON_SUFFIX`, `CRYPTAINER_CBOR_SUFFIX` and `CRYPTAINER_SUFFIXES` constants, and the
-    `get_cryptainer_suffix()`, `split_cryptainer_suffix()` and `get_cryptainer_format_from_filename()` helpers
+    `get_cryptainer_suffix()`, `split_cryptainer_suffix()` and `get_cryptainer_file_format_from_filename()` helpers
   - Low-level functions given an explicit cryptainer path keep writing to that exact path, in the format its suffix implies
   - Tools built on older versions only list `*.crypt` files, so they don't see the new cryptainers; to downgrade,
     rename each Extended JSON cryptainer `x.crypt.json` to `x.crypt`, and its offloaded payload `x.crypt.json.payload`
@@ -19,8 +19,11 @@ Development
   in any letter case on every platform (e.g. `X.CRYPT.JSON` is an Extended JSON cryptainer on Linux too), in format
   recognition, cryptainer listings and the CLI's stripping or swapping of suffixes; when the CLI creates a file from a
   name typed by the user, such a trailing extension is normalized to lowercase, the rest of the name being kept as
-  typed (`encrypt -o Clip.CRYPT` gives `Clip.crypt.json`, `convert-format -o OTHER.CBOR` writes `OTHER.cbor`); existing
-  files are still opened at their exact names
+  typed (`encrypt -o Clip.CRYPT` gives `Clip.crypt.json`, `encrypt Notes.JSON` gives `Notes.json.crypt.json`,
+  `convert-format -o OTHER.CBOR` and `cryptainer decrypt -o OTHER.CBOR` write `OTHER.cbor`); existing files are still
+  opened at their exact names
+* `is_file_basename()` is now a pure string check, instead of depending on the files of the current directory: on
+  Windows, it rejected a name differing only in letter case from an existing file, or naming a symlink
 * Add WA-CBOR, a deterministic and strictly decoded CBOR (RFC 8949) document format, bijective with relaxed Extended
   JSON: bytes are native byte strings, UUIDs use tag 37, datetimes tag 0, decimals tag 4 and bignums tags 2/3;
   values that one of the formats can't carry faithfully are rejected, never altered (normative specification with
@@ -31,7 +34,7 @@ Development
     `dump_to_document_file()`, `detect_document_format()`, `convert_document_bytes()` and
     `convert_document_tree_to_bytes()` utilities, taking the format from the file extension, the content or an
     explicit `DocumentFormat.JSON` / `DocumentFormat.CBOR` argument
-  - New `cryptainer_format` parameter of `CryptainerStorage` (Extended JSON by default)
+  - New `cryptainer_file_format` parameter of `CryptainerStorage` (Extended JSON by default)
   - Encrypted intermediate structures (symkeys, key structs, shards) and the JSON-RPC wire format stay Extended JSON
 * New `flightbox convert-format SOURCE [-o TARGET] [--force]` command, converting any Extended JSON or WA-CBOR document
   file (cryptoconf, cryptainer with its offloaded payload...) to the other format, or to the format given by the `-o`

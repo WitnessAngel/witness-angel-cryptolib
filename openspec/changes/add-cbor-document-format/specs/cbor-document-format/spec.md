@@ -142,7 +142,7 @@ The library SHALL provide public functions to dump a document to WA-CBOR bytes a
 - **THEN** the file holds WA-CBOR, and the generic load function returns an equal cryptoconf
 
 #### Scenario: No format for a written file
-- **WHEN** a cryptoconf is dumped with the generic file function to `conf.data`, without an explicit format
+- **WHEN** a cryptoconf is dumped with the generic file function to `conf.data` without an explicit format, or to `conf.JSON` without an explicit format on a platform other than Windows
 - **THEN** an error is raised, and no file is created
 
 ### Requirement: Normative dialect specification in the repository

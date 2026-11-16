@@ -7,7 +7,7 @@ See proposal.md for the motivation. Current state that shapes the approach:
   - **outer documents**: cryptoconf files, cryptainer files (`_filesystem.py`), keystore metadata;
   - **inner blobs**: symkeys, key structs and shards are dumped with `dump_to_json_bytes()` and then *encrypted* into `key_ciphertext` (`_flightbox.py`, `_decryptor.py`). Signatures cover payload digests, never the serialized document (`_signing.py`).
 - Cryptainer naming: `CRYPTAINER_SUFFIX = ".crypt"`, temporary suffix `~`, and offloaded payload = cryptainer filename (minus `~`) + `.payload` (`_get_offloaded_file_path`). `CryptainerStorage.list_cryptainer_names()` globs `*.crypt` and `*.crypt~` with `Path.glob()`, which compares names case-insensitively on Windows only (so `X.CRYPT` is listed there, but not on Linux); the CLI strips `.crypt` in `encrypt -o` and in the `decrypt` default output name.
-- File naming principle (`simplify-filename-casing`, D1 there, which amends this change):
+- File naming principle (archived `simplify-filename-casing` change, D1 there, which amended this change; rule 14 of §11.1 of the encryptor specification):
   - the toolchain opens names exactly as built, and lets the filesystem decide whether letter case matters;
   - it compares names like the platform does (`os.path.normcase()`, `Path.glob()`): case-insensitively on Windows only;
   - it writes the name parts it chooses in lowercase, and keeps the parts given by callers or configs.
@@ -144,7 +144,7 @@ Outcomes therefore differ by platform only for names spelled in another letter c
 - exact-lowercase recognition everywhere, from a dedicated directory listing, with case-insensitive stripping of typed names and usage errors for `.JSON`/`.CBOR` outputs (the previous version of this design);
 - case-insensitive comparison everywhere.
 
-Both are rules of the toolchain's own: they need special listings, variants and errors, and they disagree with what `Path.glob()` and file managers show.
+Both are rules of the toolchain's own: they need special listings, variants and errors, and they disagree with what `Path.glob()` and file managers show. The first hides `X.CRYPT` on Windows, where users see a cryptainer; the second disagrees with the filesystem on Linux, where `X.CRYPT` and `x.crypt` are distinct files.
 
 ## Risks / Trade-offs
 

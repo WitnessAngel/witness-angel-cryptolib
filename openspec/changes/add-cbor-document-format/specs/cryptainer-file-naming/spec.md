@@ -1,11 +1,11 @@
 ## Purpose
 
-Defines how cryptainer files and their offloaded payload files are named for each document format, the lowercase spelling of the suffixes, how legacy `.crypt` cryptainers stay supported, and how cryptainer storages choose the format of the cryptainers they write.
+Defines how cryptainer files and their offloaded payload files are named for each document format, the letter case of the suffixes, how legacy `.crypt` cryptainers stay supported, and how cryptainer storages choose the format of the cryptainers they write.
 
 ## ADDED Requirements
 
 ### Requirement: Cryptainer filenames by format
-When a cryptainer storage or the CLI chooses the name of a new cryptainer, it SHALL be `<basename>.crypt.json` for an Extended JSON cryptainer and `<basename>.crypt.cbor` for a WA-CBOR cryptainer, never the legacy `<basename>.crypt`. Library functions that write a cryptainer to an explicit path given by the caller SHALL write it to that path, in the format implied by its name once a temporary `~` suffix is removed: WA-CBOR for a name ending with `.cbor`, Extended JSON otherwise (legacy `.crypt` paths, `.json` paths, and paths without any of these suffixes, as accepted today).
+When a cryptainer storage or the CLI chooses the name of a new cryptainer, it SHALL be `<basename>.crypt.json` for an Extended JSON cryptainer and `<basename>.crypt.cbor` for a WA-CBOR cryptainer, never the legacy `<basename>.crypt`. Library functions that write a cryptainer to an explicit path given by the caller SHALL write it to that path, in the format implied by its name once a temporary `~` suffix is removed: WA-CBOR for a name ending with `.cbor` (compared per the letter case requirement), Extended JSON otherwise (legacy `.crypt` paths, `.json` paths, and paths without any of these suffixes, as accepted today).
 
 #### Scenario: Explicit legacy path
 - **WHEN** a cryptainer is dumped to the filesystem at an explicit path `x.crypt`, outside any storage
@@ -23,12 +23,13 @@ When a cryptainer storage or the CLI chooses the name of a new cryptainer, it SH
 - **WHEN** a file `Video.MP4` is encrypted into a default cryptainer storage
 - **THEN** the cryptainer is written as `Video.MP4.crypt.json`: the suffix is lowercase, and the basename keeps its letter case
 
-### Requirement: Lowercase cryptainer suffixes
-The cryptainer suffixes (`.crypt`, `.crypt.json`, `.crypt.cbor`), the offloaded payload suffix `.payload` and the temporary suffix `~` SHALL be written in lowercase, and recognized in lowercase only, with the same results on case-sensitive and case-insensitive filesystems. A file whose suffix is spelled in another letter case (e.g. `x.CRYPT.JSON`) SHALL NOT be listed as a cryptainer, and its format SHALL NOT be inferred from that suffix.
+### Requirement: Letter case of cryptainer suffixes
+The cryptainer suffixes (`.crypt`, `.crypt.json`, `.crypt.cbor`), the offloaded payload suffix `.payload` and the temporary suffix `~` SHALL be written in lowercase. When listing cryptainers, inferring their format or stripping their suffix, file names SHALL be compared like the platform compares file names (ignoring letter case on Windows, exactly on other platforms). Payload files SHALL be opened at the exact cryptainer filename followed by `.payload`, the filesystem resolving letter case.
 
-#### Scenario: Other spelling of a suffix not listed
-- **WHEN** a storage directory holds `a.CRYPT.JSON` and `b.crypt.json`, on a case-sensitive or a case-insensitive filesystem
-- **THEN** listing returns exactly `b.crypt.json`
+#### Scenario: Suffix in another letter case
+- **WHEN** a storage directory holds `a.CRYPT.JSON` and `b.crypt.json`
+- **THEN** on Windows, listing returns both, and `a.CRYPT.JSON` is read as Extended JSON
+- **AND** on other platforms, listing returns exactly `b.crypt.json`
 
 ### Requirement: Legacy cryptainers stay supported
 The system SHALL keep listing, loading, validating, analysing, decrypting, deleting, purging and measuring legacy `<basename>.crypt` cryptainers, which are always Extended JSON, exactly as `.crypt.json` cryptainers. Cryptainer files SHALL be read in the format given by their suffix.
@@ -60,7 +61,7 @@ A cryptainer being written by an encryption stream SHALL be named after its fina
 - **THEN** listing unfinished cryptainers returns `x.crypt.cbor~`, listing finished cryptainers does not return it, and `x.crypt.cbor~` holds WA-CBOR
 
 ### Requirement: Listing covers every cryptainer suffix
-Listing the finished cryptainers of a storage SHALL return every file whose name ends with `.crypt`, `.crypt.json` or `.crypt.cbor` (in lowercase, per the lowercase suffix requirement), each as a separate entry with its full filename, and SHALL NOT return payload files nor any other file. Cryptainers sharing a basename in several formats SHALL be listed as distinct cryptainers.
+Listing the finished cryptainers of a storage SHALL return every file whose name ends with `.crypt`, `.crypt.json` or `.crypt.cbor` (compared per the letter case requirement), each as a separate entry with its full filename, and SHALL NOT return payload files nor any other file. Cryptainers sharing a basename in several formats SHALL be listed as distinct cryptainers.
 
 #### Scenario: Mixed storage
 - **WHEN** a storage directory holds `a.crypt`, `a.crypt.payload`, `b.crypt.json`, `c.crypt.cbor`, `c.crypt.cbor.payload` and `notes.txt`

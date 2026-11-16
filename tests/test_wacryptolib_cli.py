@@ -34,7 +34,12 @@ from wacryptolib.cryptainer import (
 from wacryptolib import operations
 from wacryptolib.exceptions import KeystoreDoesNotExist, ValidationError
 from wacryptolib.keygen import generate_keypair
-from wacryptolib.keystore import FilesystemKeystore, generate_keypair_for_storage, _get_keystore_metadata_file_path
+from wacryptolib.keystore import (
+    FilesystemKeystore,
+    generate_keypair_for_storage,
+    _get_keystore_metadata_file_path,
+    load_keystore_metadata,
+)
 from wacryptolib.utilities import (
     dump_to_json_file,
     get_utc_now_date,
@@ -81,6 +86,58 @@ FLIGHTBOX_CLI_INVOCATION_ARGS = [sys.executable, "-m", "wacryptolib"]
 
 def _get_cli_runner():
     return CliRunner()
+
+
+def test_cli_authenticator_view_without_passphrase_hint(tmp_path):
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
+    runner = _get_cli_runner()
+
+    authenticator_path = tmp_path / "authenticator"
+    keystore_metadata = initialize_authenticator(
+        authenticator_path, keystore_owner="Jane", keystore_passphrase_hint="somehint"
+    )
+    generate_keypair_for_storage(key_algo="RSA_OAEP", keystore=FilesystemKeystore(authenticator_path), passphrase=None)
+
+    # Importing it into the pool strips the passphrase hint (and secret) of its copy
+    result = runner.invoke(
+        cli, base_args + ["foreign-keystore", "import", "--from-path", str(authenticator_path)], catch_exceptions=False
+    )
+    assert result.exit_code == 0
+    imported_keystore_path = keystore_pool_path / "foreign_keystores" / ("keystore_%s" % keystore_metadata["keystore_uid"])
+    assert "keystore_passphrase_hint" not in load_keystore_metadata(imported_keystore_path)
+
+    # The genuine 0.11 corpus keystores were imported this way too
+    legacy_keystore_path = tmp_path / "legacy_keystore"
+    shutil.copytree(
+        pathlib.Path(__file__).parent.parent.joinpath(
+            "compatibility",
+            "keystores",
+            "2023_v0.11_genuine",
+            "legacy_pool",
+            "foreign_keystores",
+            "keystore_a11ce000-0000-4000-8000-000000000001",
+        ),
+        legacy_keystore_path,
+    )
+
+    for keystore_path, expected_hint, expected_owner in [
+        (authenticator_path, "somehint", "Jane"),  # Authenticators always have a hint
+        (imported_keystore_path, None, "Jane"),
+        (legacy_keystore_path, None, "compat-alice"),
+    ]:
+        result = runner.invoke(
+            cli, ["authenticator", "view", str(keystore_path), "--format", "json"], catch_exceptions=False
+        )
+        assert result.exit_code == 0, result.stderr
+        authenticator_data = load_from_json_str(result.stdout)
+        assert authenticator_data["keystore_passphrase_hint"] == expected_hint  # Always output, even if None
+        assert authenticator_data["keystore_owner"] == expected_owner
+        assert len(authenticator_data["keypair_identifiers"]) == 1
+
+        result = runner.invoke(cli, ["authenticator", "view", str(keystore_path)], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert "keystore_passphrase_hint" in result.stdout
+        assert expected_owner in result.stdout
 
 
 def _get_cli_base_args_for_folder_isolation(tmp_path):
@@ -222,6 +279,14 @@ def test_cli_authenticator_management(tmp_path):
     )
     assert result.exit_code == 2
     assert "At least 1 keypair must be created" in result.stderr
+
+    for empty_hint in ["", "  "]:  # Authenticators must have a passphrase hint, checked before any passphrase prompt
+        result = runner.invoke(
+            cli, ["authenticator", "create", str(authenticator_path), "--owner", "Donald", "--passphrase-hint", empty_hint]
+        )
+        assert result.exit_code == 2
+        assert "A non-empty passphrase hint must be provided" in result.stderr
+        assert not authenticator_path.exists()
 
     result = runner.invoke(cli, ["authenticator", "delete", str(tmp_path)])
     assert result.exit_code == 1

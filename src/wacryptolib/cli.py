@@ -315,7 +315,10 @@ def create_authenticator(ctx, authenticator_dir, keypair_count, owner, passphras
     """
 
     _check_target_authenticator_parameters_validity(
-        authenticator_dir, keypair_count=keypair_count, exception_cls=click.UsageError
+        authenticator_dir,
+        keypair_count=keypair_count,
+        keystore_passphrase_hint=passphrase_hint,
+        exception_cls=click.UsageError,
     )  # Early check, to not ask for passphrase in vain
 
     keystore_passphrase = _retrieve_keystore_passphrase()
@@ -398,10 +401,6 @@ def validate_authenticator(ctx, authenticator_dir):
 def _analyse_keystore_and_return_data(keystore_dir, format, skipped_fields=()):
     filesystem_keystore = ReadonlyFilesystemKeystore(keystore_dir)
     metadata_enriched = filesystem_keystore.get_keystore_metadata(include_keypair_identifiers=True)
-    metadata_enriched.setdefault(
-        "keystore_creation_datetime", None
-    )  # Fixme do this at loading time and fix the Schema accordingly!
-
     # Restrict data to mask authenticator format, secret, etc.
     selected_field_list = [
         "keystore_uid",
@@ -411,7 +410,9 @@ def _analyse_keystore_and_return_data(keystore_dir, format, skipped_fields=()):
         "keypair_identifiers",
     ]
     selected_field_list = [k for k in selected_field_list if k not in skipped_fields]
-    metadata_enriched = {k: metadata_enriched[k] for k in selected_field_list}
+    # Optional fields are output as None when missing: e.g. no creation datetime in old keystores, and no passphrase
+    # hint in foreign keystores imported into a pool, since import strips it (authenticators always have one)
+    metadata_enriched = {k: metadata_enriched.get(k) for k in selected_field_list}
 
     if format == "json":
         # Even if empty, we output it

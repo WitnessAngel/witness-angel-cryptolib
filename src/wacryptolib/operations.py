@@ -29,7 +29,9 @@ from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, gene
 logger = logging.getLogger(__name__)
 
 
-def _check_target_authenticator_parameters_validity(authenticator_dir, keypair_count, exception_cls=ValidationError):
+def _check_target_authenticator_parameters_validity(
+    authenticator_dir, keypair_count, keystore_passphrase_hint, exception_cls=ValidationError
+):
     # No overwriting option exists here: the user must remove any existing entry manually
     if authenticator_dir.is_dir():
         raise exception_cls("Target directory %s must not exist yet" % authenticator_dir)
@@ -45,6 +47,10 @@ def _check_target_authenticator_parameters_validity(authenticator_dir, keypair_c
     if keypair_count < 1:
         raise exception_cls("At least 1 keypair must be created")
 
+    # Authenticators MUST have a passphrase hint, which the keystore metadata schema also enforces
+    if not isinstance(keystore_passphrase_hint, str) or not keystore_passphrase_hint.strip():
+        raise exception_cls("A non-empty passphrase hint must be provided")
+
 
 def create_authenticator(
     authenticator_dir: Path,
@@ -53,7 +59,9 @@ def create_authenticator(
     keystore_passphrase_hint: str,
     keystore_passphrase: str,
 ):
-    _check_target_authenticator_parameters_validity(authenticator_dir, keypair_count=keypair_count)
+    _check_target_authenticator_parameters_validity(
+        authenticator_dir, keypair_count=keypair_count, keystore_passphrase_hint=keystore_passphrase_hint
+    )
     assert keypair_count >= 1, keypair_count
 
     authenticator_dir.mkdir(parents=False)  # Only 1 level of folder will be created here!

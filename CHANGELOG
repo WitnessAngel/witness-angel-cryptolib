@@ -22,6 +22,9 @@ Development
   typed (`encrypt -o Clip.CRYPT` gives `Clip.crypt.json`, `encrypt Notes.JSON` gives `Notes.json.crypt.json`,
   `convert-format -o OTHER.CBOR` and `cryptainer decrypt -o OTHER.CBOR` write `OTHER.cbor`); existing files are still
   opened at their exact names
+* `flightbox authenticator view` no longer crashes on keystores without passphrase hint (e.g. foreign keystores imported
+  into a pool, whose hint is stripped), and outputs the hint as null instead; `authenticator create` and
+  `create_authenticator()` reject an empty or blank passphrase hint before any passphrase prompt or filesystem change
 * `is_file_basename()` is now a pure string check, instead of depending on the files of the current directory: on
   Windows, it rejected a name differing only in letter case from an existing file, or naming a symlink
 * Add WA-CBOR, a deterministic and strictly decoded CBOR (RFC 8949) document format, bijective with relaxed Extended

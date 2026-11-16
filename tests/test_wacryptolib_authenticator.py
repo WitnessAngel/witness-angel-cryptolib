@@ -108,3 +108,36 @@ def test_authenticator_metadata_filename_backward_compatibility(tmp_path):
     assert metadata["keystore_secret"] == "keystore_secret"
     assert isinstance(metadata["keystore_secret"], str)
     assert isinstance(metadata["keystore_creation_datetime"], datetime)
+
+
+def test_authenticator_creation_requires_passphrase_hint(tmp_path):
+    from wacryptolib.operations import create_authenticator
+
+    authenticator_dir = tmp_path / "authenticator"
+    for empty_hint in [None, "", "  "]:
+        with pytest.raises(ValidationError, match="passphrase hint"):
+            create_authenticator(
+                authenticator_dir,
+                keypair_count=1,
+                keystore_owner="owner",
+                keystore_passphrase_hint=empty_hint,
+                keystore_passphrase="passphrase",
+            )
+        assert not authenticator_dir.exists()  # Checked before any filesystem change
+
+    other_authenticator_dir = tmp_path / "other_authenticator"
+    for empty_hint in [None, ""]:  # Enforced by the metadata schema too
+        with pytest.raises(ValidationError):
+            initialize_authenticator(
+                other_authenticator_dir, keystore_owner="owner", keystore_passphrase_hint=empty_hint
+            )
+        assert not is_authenticator_initialized(other_authenticator_dir)
+
+    create_authenticator(
+        authenticator_dir,
+        keypair_count=1,
+        keystore_owner="owner",
+        keystore_passphrase_hint="my hint",
+        keystore_passphrase="passphrase",
+    )
+    assert load_keystore_metadata(authenticator_dir)["keystore_passphrase_hint"] == "my hint"

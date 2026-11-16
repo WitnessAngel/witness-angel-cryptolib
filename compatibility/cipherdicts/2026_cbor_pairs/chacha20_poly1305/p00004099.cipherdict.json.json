@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../_jsonschemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2026_cbor_pairs",
+  "description": "CHACHA20_POLY1305 encryption of a 4099-byte plaintext, with its symmetric key (Extended JSON asset of an Extended JSON / WA-CBOR pair)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "f451089863a0ccdf238383477d0771c9f2d6dcd0",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-16"
+  },
+  "requirements": {
+    "algorithms": [
+      "CHACHA20_POLY1305"
+    ],
+    "pem_protections": []
+  },
+  "cipher_algo": "CHACHA20_POLY1305",
+  "plaintext": "../../../plaintexts/p00004099.bin",
+  "direction": "bidirectional",
+  "symkey": {
+    "key": "34947db0dddcec0e02a1bc7ca32a1493259e265a421123a608a3b1acdace5c70",
+    "nonce": "ac004d09dc29ad610892b210"
+  },
+  "document_format": "json",
+  "equivalent_asset": "p00004099.cipherdict.cbor",
+  "asset_sha256": {
+    "p00004099.cipherdict.json": "d9132c6bacff37477b7c7094d06bb38e9c0b0c8dd6b2353618c1122ddc4690f4"
+  }
+}

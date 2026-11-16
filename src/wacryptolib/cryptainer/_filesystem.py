@@ -8,38 +8,66 @@ from pathlib import Path
 from wacryptolib.cryptainer import CRYPTAINER_TEMP_SUFFIX, OFFLOADED_PAYLOAD_FILENAME_SUFFIX, \
     OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, PAYLOAD_CIPHERTEXT_LOCATIONS, _get_cryptainer_inline_ciphertext_value
 from wacryptolib.exceptions import SchemaValidationError
-from wacryptolib.utilities import dump_to_json_file, load_from_json_file
+from wacryptolib.utilities import DocumentFormat, dump_to_document_bytes, get_recognized_extension,     load_from_document_bytes
 
 
 def _get_offloaded_file_path(cryptainer_filepath: Path):
     """We also support, discreetly, TEMPORARY cryptainers"""
     return cryptainer_filepath.parent.joinpath(
-        cryptainer_filepath.name.rstrip(CRYPTAINER_TEMP_SUFFIX) + OFFLOADED_PAYLOAD_FILENAME_SUFFIX
+        _get_final_cryptainer_filename(cryptainer_filepath) + OFFLOADED_PAYLOAD_FILENAME_SUFFIX
     )
+
+
+def _get_final_cryptainer_filename(cryptainer_filepath) -> str:
+    """Return the filename of a cryptainer, without its potential temporary suffix."""
+    return Path(cryptainer_filepath).name.rstrip(CRYPTAINER_TEMP_SUFFIX)
+
+
+def _get_written_cryptainer_format(cryptainer_filepath) -> str:
+    """WA-CBOR for a filename (without temporary suffix) ending with ".cbor" in any letter case, else Extended JSON
+    (".crypt.json", legacy ".crypt", and ad-hoc names without these suffixes)."""
+    extension = get_recognized_extension(_get_final_cryptainer_filename(cryptainer_filepath))
+    if extension in (".cbor", ".crypt.cbor"):
+        return DocumentFormat.CBOR
+    return DocumentFormat.JSON
 
 
 # FIXME handle "overwrite" argument to prevent
 def dump_cryptainer_to_filesystem(cryptainer_filepath: Path, cryptainer: dict, offload_payload_ciphertext=True) -> None:
     """Dump a cryptainer to a file path, overwriting it if existing.
 
-    If `offload_payload_ciphertext`, actual encrypted payload is dumped to a separate bytes file nearby the json-formatted cryptainer.
+    The cryptainer is written in WA-CBOR if the filename, without its potential temporary suffix "~", ends with
+    ".cbor" (in any letter case), else in Extended JSON; it is written at the exact path given.
+
+    If `offload_payload_ciphertext`, actual encrypted payload is dumped to a separate bytes file nearby the cryptainer.
     """
+    cryptainer_filepath = Path(cryptainer_filepath)
+    cryptainer_format = _get_written_cryptainer_format(cryptainer_filepath)
     if offload_payload_ciphertext:
-        offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
         payload_ciphertext = _get_cryptainer_inline_ciphertext_value(cryptainer)
-        offloaded_file_path.write_bytes(payload_ciphertext)
         cryptainer = cryptainer.copy()  # Shallow copy, since we DO NOT touch original dict here!
         cryptainer["payload_ciphertext_struct"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
-    dump_to_json_file(cryptainer_filepath, cryptainer)
+    cryptainer_bytes = dump_to_document_bytes(cryptainer, format=cryptainer_format)  # Fails before any write
+    if offload_payload_ciphertext:
+        offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
+        offloaded_file_path.write_bytes(payload_ciphertext)
+    cryptainer_filepath.write_bytes(cryptainer_bytes)
 
 
 def load_cryptainer_from_filesystem(cryptainer_filepath: Path, include_payload_ciphertext=True) -> dict:
-    """Load a json-formatted cryptainer from a file path, potentially loading its offloaded ciphertext from a separate nearby bytes file.
+    """Load a cryptainer from a file path, potentially loading its offloaded ciphertext from a separate nearby bytes file.
+
+    The cryptainer is read in the format given by the extension of its filename, without its potential temporary
+    suffix "~" (Extended JSON for ".crypt.json" and legacy ".crypt", WA-CBOR for ".crypt.cbor", in any letter case),
+    else in the format detected from its content.
 
     Field `payload_ciphertext` is only present in result dict if `include_payload_ciphertext` is True.
     """
-
-    cryptainer = load_from_json_file(cryptainer_filepath)
+    cryptainer_filepath = Path(cryptainer_filepath)
+    cryptainer_bytes = cryptainer_filepath.read_bytes()
+    cryptainer = load_from_document_bytes(
+        cryptainer_bytes, filename=_get_final_cryptainer_filename(cryptainer_filepath)
+    )
 
     if include_payload_ciphertext:
         if (

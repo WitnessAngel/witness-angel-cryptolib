@@ -25,7 +25,8 @@ from wacryptolib.cryptainer import (
 from wacryptolib.cryptainer import _validation
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.keystore import InMemoryKeystorePool
-from wacryptolib.utilities import dump_to_json_bytes, load_from_json_bytes, dump_to_json_file
+from wacryptolib.utilities import (dump_to_json_bytes, load_from_json_bytes, dump_to_json_file, dump_to_cbor_bytes,
+                                   load_from_cbor_bytes)
 
 
 @pytest.fixture
@@ -54,6 +55,7 @@ def test_tokens_are_dropped_by_copies_and_serialization():
         assert type(token.copy()) is dict
         assert type(copy.copy(token)) is dict
         assert type(load_from_json_bytes(dump_to_json_bytes(token))) is dict
+        assert type(load_from_cbor_bytes(dump_to_cbor_bytes(token))) is dict
 
     assert ValidatedCryptoconf() == {} and ValidatedCryptainer().inline_payload_checked is False  # Python-schema needs it
     assert type(copy.deepcopy(cryptoconf["payload_cipher_layers"])) is list
@@ -118,6 +120,23 @@ def test_encrypt_then_decrypt_in_memory_validates_once(validation_counter):
     reloaded_cryptainer = load_from_json_bytes(dump_to_json_bytes(cryptainer))
     decrypt_payload_from_cryptainer(reloaded_cryptainer, keystore_pool=keystore_pool)
     assert validation_counter["cryptainer"] == 1
+
+
+def test_cryptainer_loaded_from_wa_cbor_is_validated(validation_counter):
+    keystore_pool = InMemoryKeystorePool()
+    cryptainer = encrypt_payload_into_cryptainer(
+        b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None, keystore_pool=keystore_pool
+    )
+    assert isinstance(cryptainer, ValidatedCryptainer)
+    validation_counter["cryptainer"] = 0
+
+    reloaded_cryptainer = load_from_cbor_bytes(dump_to_cbor_bytes(cryptainer))
+    assert type(reloaded_cryptainer) is dict  # Untagged
+    assert reloaded_cryptainer == cryptainer
+
+    payload, report = decrypt_payload_from_cryptainer(reloaded_cryptainer, keystore_pool=keystore_pool)
+    assert payload == b"abc"
+    assert validation_counter["cryptainer"] == 1  # Validated when entering decryption
 
 
 def test_invalid_cryptainer_metadata_is_refused():

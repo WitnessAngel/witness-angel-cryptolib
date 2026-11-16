@@ -1,11 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "cipherdict.schema.json",
-  "title": "Sidecar of a cipherdict vector (extended-JSON cipherdict, as returned by encrypt_bytestring())",
+  "title": "Sidecar of a cipherdict vector (Extended JSON or WA-CBOR cipherdict, as returned by encrypt_bytestring())",
   "type": "object",
   "allOf": [{"$ref": "_defs.schema.json#/$defs/header"}],
   "properties": {
     "fixture_kind": {"const": "cipherdict"},
+    "document_format": {"$ref": "_defs.schema.json#/$defs/document_format"},
+    "equivalent_asset": {"$ref": "_defs.schema.json#/$defs/equivalent_asset"},
     "cipher_algo": {"$ref": "_defs.schema.json#/$defs/algo"},
     "plaintext": {"$ref": "_defs.schema.json#/$defs/relpath"},
     "direction": {

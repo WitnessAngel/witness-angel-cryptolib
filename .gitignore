@@ -103,6 +103,8 @@ coverage.xml
 docs/_build/
 mysphinxdocauthenticator/
 docs/readme.rst.decrypted
+docs/tutorial-cryptoconf.cbor
+docs/tutorial-cryptoconf.json
 
 # PyBuilder
 target/

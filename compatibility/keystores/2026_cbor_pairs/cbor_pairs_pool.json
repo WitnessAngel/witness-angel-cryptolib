@@ -1,0 +1,154 @@
+{
+  "$schema": "../../_jsonschemas/keystore_pool.schema.json",
+  "fixture_kind": "keystore_pool",
+  "generation": "2026_cbor_pairs",
+  "description": "Local keyfactory (RSA_OAEP, RSA_PSS, ECC_DSS, ECIES_X25519 keys of three keychains, unprotected) and one imported authenticator with passphrase-protected RSA_OAEP and ECIES_X25519 keys, with lowercase key file names",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "f451089863a0ccdf238383477d0771c9f2d6dcd0",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-16"
+  },
+  "requirements": {
+    "algorithms": [
+      "ECC_DSS",
+      "ECIES_X25519",
+      "RSA_OAEP",
+      "RSA_PSS"
+    ],
+    "pem_protections": [
+      "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+    ]
+  },
+  "local_keyfactory": {
+    "keypairs": [
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+        "key_algo": "ECC_DSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+        "key_algo": "ECIES_X25519",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+        "key_algo": "RSA_OAEP",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+        "key_algo": "RSA_PSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000002",
+        "key_algo": "ECC_DSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000002",
+        "key_algo": "ECIES_X25519",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000002",
+        "key_algo": "RSA_OAEP",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000002",
+        "key_algo": "RSA_PSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000003",
+        "key_algo": "ECC_DSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000003",
+        "key_algo": "ECIES_X25519",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000003",
+        "key_algo": "RSA_OAEP",
+        "private_key_present": true,
+        "pem_protection": "none"
+      },
+      {
+        "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000003",
+        "key_algo": "RSA_PSS",
+        "private_key_present": true,
+        "pem_protection": "none"
+      }
+    ]
+  },
+  "authenticators": [
+    {
+      "keystore_uid": "4e1d1000-0000-4000-8000-000000000008",
+      "keystore_owner": "compat-heidi",
+      "keystore_passphrase_hint": "Dummy compatibility passphrase, see the pool sidecar",
+      "passphrase": "compat-heidi-passphrase",
+      "keypairs": [
+        {
+          "keychain_uid": "4e1d1000-0000-4000-8000-0000000000c1",
+          "key_algo": "ECIES_X25519",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+        },
+        {
+          "keychain_uid": "4e1d1000-0000-4000-8000-0000000000c1",
+          "key_algo": "RSA_OAEP",
+          "private_key_present": true,
+          "pem_protection": "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+        }
+      ]
+    }
+  ],
+  "asset_sha256": {
+    "cbor_pairs_pool/foreign_keystores/keystore_4e1d1000-0000-4000-8000-000000000008/4e1d1000-0000-4000-8000-0000000000c1_ecies_x25519_private_key.pem": "fd356a8062cb5c8409bbff2d4f237a7208cbacd3a346335da857d7ab85114497",
+    "cbor_pairs_pool/foreign_keystores/keystore_4e1d1000-0000-4000-8000-000000000008/4e1d1000-0000-4000-8000-0000000000c1_ecies_x25519_public_key.pem": "556ea7c0c206fa42a9c952663901d10e79dfa707caffecf17600e1c856facf40",
+    "cbor_pairs_pool/foreign_keystores/keystore_4e1d1000-0000-4000-8000-000000000008/4e1d1000-0000-4000-8000-0000000000c1_rsa_oaep_private_key.pem": "7f7f86f5b40760487355acec07780460ba57ac59af366e635510eb59cd26faac",
+    "cbor_pairs_pool/foreign_keystores/keystore_4e1d1000-0000-4000-8000-000000000008/4e1d1000-0000-4000-8000-0000000000c1_rsa_oaep_public_key.pem": "1c7b0cfd6367ecb9dd3d59010b9a1d45aa44b9c4f1a28e6dee65f1b3d6294516",
+    "cbor_pairs_pool/foreign_keystores/keystore_4e1d1000-0000-4000-8000-000000000008/keystore_metadata.json": "5e831bf1d127e0ab71814f4552d154244955b408a0c04ee92e3670482669edf4",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_ecc_dss_private_key.pem": "6275e34dea42e7244da733b13e8cb139bfe93acdf52b9bb415d85a463c24d3f2",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_ecc_dss_public_key.pem": "204b058102bab2943247d5a3dbf4eecf8675c99d7b83db3a1d0cda3ffbfe88f1",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_ecies_x25519_private_key.pem": "3339efe290d5c5bbec22431c04afdfd7f34de6ad8dd6c95a1088fbd64e8f94bf",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_ecies_x25519_public_key.pem": "314ff40ddf2e1684f82f33350fd33e191e1c7960af3bc70e02da808ebdfee36b",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_rsa_oaep_private_key.pem": "55d93d8699e03f69c69c0cea4c04db1b9317efef1c6cb43dc812b48b4f72031b",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_rsa_oaep_public_key.pem": "d36f17aafde0788386f6ac5bcf59d369d9fbf1a36d7516f742bdbda6b1ce0022",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_rsa_pss_private_key.pem": "da2f040c436fb45c3ecbac82928b086344ba32dff468546cbd458afa8bf52f95",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000001_rsa_pss_public_key.pem": "f70ecc021d8050ce07e4f243e5c899c11ad7df9e60a6f54dc8f82836d8c186b4",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_ecc_dss_private_key.pem": "ba4a283d2de5754be4302f2373d1fe5a0a487ee9dee9c22cfaf1c14cae0b2949",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_ecc_dss_public_key.pem": "6590bd411fc3eba45468ec0a421a01e3bd6c4935249bad97a123c259bfbc5277",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_ecies_x25519_private_key.pem": "30bf49fd52e21c44e6d956ff11835342c4376fd4d420342442ff45c8c417681e",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_ecies_x25519_public_key.pem": "9cfae2340442cce3d1c224a12f6960229350024a8e6d32e9f6929bf15f613684",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_rsa_oaep_private_key.pem": "23747edaa45745147f3eb90641ebab6266ddf6047bc6894d3dcafdcdd1db1868",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_rsa_oaep_public_key.pem": "dd779a99cd882d5c84893e86edc26c847d126095e4da23306968e14b0ff3a0d4",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_rsa_pss_private_key.pem": "9084852bd875ee1df836ff358ccfcdec64eefa6365a688f5f7cf044fc4cf38c8",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000002_rsa_pss_public_key.pem": "5becfe5fd72f12be1d2963998dc5a55d822ee843498a1dead660bcabfbe54a90",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_ecc_dss_private_key.pem": "53c066806b1df903be73dc800d217aaf1bca5b6dcc1785a0957c3b955fa8db48",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_ecc_dss_public_key.pem": "80bce89f39c01e365fe14458bf4e30230ba9852865463195d87075ba1d95473d",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_ecies_x25519_private_key.pem": "b2970e7b01ac1b565236b413e417e1a2ce5701efab76320b57c8ef653b68f99c",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_ecies_x25519_public_key.pem": "0c7b010ad9aa70923e49e5064998672f9bbfc6484bde660121faa76ba4a9c611",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_rsa_oaep_private_key.pem": "92a8fa9c84e68c50da1bad1a8438b7e01780ce8fb43ac80ca85b8dcca8371e76",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_rsa_oaep_public_key.pem": "11b21717462b652bb11e01d8d9179bfc21de66c1c123f0f8365b1a170b4b8bad",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_rsa_pss_private_key.pem": "fa9d8de9cd38914e28a75e8bf1ece8a8824438718cf0953e14c3839ea7133c10",
+    "cbor_pairs_pool/local_keyfactory/0c0c0c0c-0000-4000-8000-000000000003_rsa_pss_public_key.pem": "f3a85955a52edccdba8241ab7846f3ba6137c8d8eea1b4a27caee237f99d530e"
+  }
+}

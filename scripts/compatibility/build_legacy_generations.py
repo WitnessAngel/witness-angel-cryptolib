@@ -281,7 +281,7 @@ class LegacyGenerationBuilder:
         for entry in self.report["cipherdicts"]:
             cipher_algo = entry["cipher_algo"]
             asset_path = self.writer.get_final_path(
-                "cipherdicts", cipher_algo, entry["plaintext"].replace(".bin", ".cipherdict")
+                "cipherdicts", cipher_algo.lower(), entry["plaintext"].replace(".bin", ".cipherdict")
             )
             source_path = self.copy_asset(entry["file"], asset_path)
             size = int(entry["plaintext"][1:9])
@@ -305,7 +305,7 @@ class LegacyGenerationBuilder:
         for entry in self.report["signatures"]:
             signature_algo = entry["signature_algo"]
             asset_path = self.writer.get_final_path(
-                "signatures", signature_algo, entry["plaintext"].replace(".bin", ".signature")
+                "signatures", signature_algo.lower(), entry["plaintext"].replace(".bin", ".signature")
             )
             source_path = self.copy_asset(entry["file"], asset_path)
             self.writer.write_sidecar(

@@ -1,11 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "cryptainer.schema.json",
-  "title": "Sidecar of a cryptainer fixture (extended-JSON cryptainer, with its potential offloaded payload)",
+  "title": "Sidecar of a cryptainer fixture (Extended JSON or WA-CBOR cryptainer, with its potential offloaded payload)",
   "type": "object",
   "allOf": [{"$ref": "_defs.schema.json#/$defs/header"}],
   "properties": {
     "fixture_kind": {"const": "cryptainer"},
+    "document_format": {"$ref": "_defs.schema.json#/$defs/document_format"},
+    "equivalent_asset": {"$ref": "_defs.schema.json#/$defs/equivalent_asset"},
     "plaintext": {"$ref": "_defs.schema.json#/$defs/relpath"},
     "plaintext_hex": {"$ref": "_defs.schema.json#/$defs/hex"},
     "keystore_pool": {"$ref": "_defs.schema.json#/$defs/relpath"},
@@ -17,7 +19,10 @@
       "description": "Expected unencrypted metadata of the cryptainer",
       "type": ["object", "null"]
     },
-    "extjson_flavor": {"enum": ["canonical", "relaxed"]},
+    "extjson_flavor": {
+      "description": "Flavor of an Extended JSON asset (absent for WA-CBOR assets)",
+      "enum": ["canonical", "relaxed"]
+    },
     "payload_offloaded": {"type": "boolean"},
     "decryption_scenarios": {
       "type": "array",
@@ -49,7 +54,10 @@
       }
     }
   },
-  "required": ["keystore_pool", "extjson_flavor", "payload_offloaded", "decryption_scenarios"],
+  "required": ["keystore_pool", "payload_offloaded", "decryption_scenarios"],
+  "if": {"properties": {"document_format": {"const": "cbor"}}, "required": ["document_format"]},
+  "then": {"not": {"required": ["extjson_flavor"]}},
+  "else": {"required": ["extjson_flavor"]},
   "oneOf": [
     {"required": ["plaintext"], "not": {"required": ["plaintext_hex"]}},
     {"required": ["plaintext_hex"], "not": {"required": ["plaintext"]}}

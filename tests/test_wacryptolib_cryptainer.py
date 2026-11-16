@@ -3,13 +3,15 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import copy
+import logging
 import os
 import random
+import shutil
 import tempfile
 import textwrap
 import time
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from itertools import product
 from pathlib import Path
 from pprint import pprint
@@ -64,6 +66,12 @@ from wacryptolib.cryptainer import (
     DecryptionErrorType,
     DecryptionErrorCriticity,
     CRYPTAINER_SUFFIX,
+    CRYPTAINER_JSON_SUFFIX,
+    CRYPTAINER_CBOR_SUFFIX,
+    CRYPTAINER_SUFFIXES,
+    get_cryptainer_suffix,
+    split_cryptainer_suffix,
+    get_cryptainer_format_from_filename,
     SIGNATURE_POLICIES,
     CRYPTAINER_TRUSTEE_TYPES,
     _do_get_message_signature,
@@ -95,6 +103,11 @@ from wacryptolib.utilities import (
     generate_uuid0,
     get_utc_now_date,
     convert_to_extjson,
+    DocumentFormat,
+    DOCUMENT_FORMATS,
+    DocumentFormatError,
+    WaCborEncodingError,
+    load_from_cbor_bytes,
 )
 from wacryptolib.utilities import load_from_json_file
 
@@ -2148,11 +2161,11 @@ def test_cryptainer_storage_and_executor(tmp_path, capsys):
     assert animals_file_path.is_file() == (not already_deleted_file_input)  # NOT AUTO-DELETED after encryption!
 
     assert storage.get_cryptainer_count() == 2
-    assert storage.list_cryptainer_names(as_sorted_list=True) == [Path("animals.dat.crypt"), Path("empty.txt.crypt")]
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [Path("animals.dat.crypt.json"), Path("empty.txt.crypt.json")]
     assert storage._cryptainer_dir.joinpath(
-        "animals.dat.crypt.payload"
+        "animals.dat.crypt.json.payload"
     ).is_file()  # By default, DATA OFFLOADING is activated
-    assert storage._cryptainer_dir.joinpath("empty.txt.crypt.payload").is_file()
+    assert storage._cryptainer_dir.joinpath("empty.txt.crypt.json.payload").is_file()
     assert len(list(storage._cryptainer_dir.iterdir())) == 6  # 2 files per cryptainer, including the pending cryptainer
 
     storage = CryptainerStorage(
@@ -2161,18 +2174,18 @@ def test_cryptainer_storage_and_executor(tmp_path, capsys):
     storage.enqueue_file_for_encryption("newfile.bmp", b"stuffs", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     assert storage.get_cryptainer_count() == 3
-    expected_cryptainer_names = [Path("animals.dat.crypt"), Path("empty.txt.crypt"), Path("newfile.bmp.crypt")]
+    expected_cryptainer_names = [Path("animals.dat.crypt.json"), Path("empty.txt.crypt.json"), Path("newfile.bmp.crypt.json")]
     assert storage.list_cryptainer_names(as_sorted_list=True) == expected_cryptainer_names
     assert sorted(storage.list_cryptainer_names(as_sorted_list=False)) == expected_cryptainer_names
 
     assert not list(storage._cryptainer_dir.glob("newfile*data"))  # Offloading is well disabled now
     assert len(list(storage._cryptainer_dir.iterdir())) == 7  # Still the pending cryptainer is here
 
-    _cryptainer_for_txt = storage.load_cryptainer_from_storage("empty.txt.crypt")
+    _cryptainer_for_txt = storage.load_cryptainer_from_storage("empty.txt.crypt.json")
     assert storage.load_cryptainer_from_storage(1) == _cryptainer_for_txt
     assert _cryptainer_for_txt["payload_ciphertext_struct"]  # Padding occurs for AES_CBC
 
-    _cryptainer_for_txt2 = storage.load_cryptainer_from_storage("empty.txt.crypt", include_payload_ciphertext=False)
+    _cryptainer_for_txt2 = storage.load_cryptainer_from_storage("empty.txt.crypt.json", include_payload_ciphertext=False)
     assert storage.load_cryptainer_from_storage(1, include_payload_ciphertext=False) == _cryptainer_for_txt2
     assert not hasattr(_cryptainer_for_txt2, "payload_ciphertext_struct")
 
@@ -2201,16 +2214,16 @@ def test_cryptainer_storage_and_executor(tmp_path, capsys):
     assert len(abs_entries) == 3  # Unchanged
     assert all(entry.is_absolute() for entry in abs_entries)
 
-    animals_content, _operation_report = storage.decrypt_cryptainer_from_storage("animals.dat.crypt")
+    animals_content, _operation_report = storage.decrypt_cryptainer_from_storage("animals.dat.crypt.json")
     assert animals_content == b"dogs\ncats\n"
 
-    empty_content, _operation_report = storage.decrypt_cryptainer_from_storage("empty.txt.crypt")
+    empty_content, _operation_report = storage.decrypt_cryptainer_from_storage("empty.txt.crypt.json")
     assert empty_content == b""
 
     assert storage.get_cryptainer_count() == 3
-    os.remove(os.path.join(cryptainer_dir, "animals.dat.crypt"))
-    os.remove(os.path.join(cryptainer_dir, "newfile.bmp.crypt"))
-    assert storage.list_cryptainer_names(as_sorted_list=True) == [Path("empty.txt.crypt")]
+    os.remove(os.path.join(cryptainer_dir, "animals.dat.crypt.json"))
+    os.remove(os.path.join(cryptainer_dir, "newfile.bmp.crypt.json"))
+    assert storage.list_cryptainer_names(as_sorted_list=True) == [Path("empty.txt.crypt.json")]
     assert storage.get_cryptainer_count() == 1  # Remaining offloaded data file is ignored
 
     offload_payload_ciphertext1 = random_bool()
@@ -2256,18 +2269,18 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
     storage.wait_for_idle_state()
     assert storage.get_cryptainer_count() == 3  # Purged
     assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == [
-        Path("xyz.dat.000.crypt"),
-        Path("xyz.dat.001.crypt"),
-        Path("xyz.dat.002.crypt"),
+        Path("xyz.dat.000.crypt.json"),
+        Path("xyz.dat.001.crypt.json"),
+        Path("xyz.dat.002.crypt.json"),
     ]
 
     storage.enqueue_file_for_encryption("xyz.dat", b"abc", cryptainer_metadata=None)
     storage.wait_for_idle_state()
     assert storage.get_cryptainer_count() == 3  # Purged
     assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == [
-        Path("xyz.dat.001.crypt"),
-        Path("xyz.dat.002.crypt"),
-        Path("xyz.dat.003.crypt"),
+        Path("xyz.dat.001.crypt.json"),
+        Path("xyz.dat.002.crypt.json"),
+        Path("xyz.dat.003.crypt.json"),
     ]
 
     time.sleep(0.2)  # Leave delay, else if files have exactly same timestamp, it's the filename that matters
@@ -2287,31 +2300,31 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
     storage.wait_for_idle_state()
     assert storage.get_cryptainer_count() == 4  # Purge occurred
     assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == [
-        Path("aaa.dat.000.crypt"),  # It's the file timestamps that counts, not the name!
-        Path("xyz.dat.002.crypt"),
-        Path("xyz.dat.003.crypt"),
-        Path("zzz.dat.001.crypt"),
+        Path("aaa.dat.000.crypt.json"),  # It's the file timestamps that counts, not the name!
+        Path("xyz.dat.002.crypt.json"),
+        Path("xyz.dat.003.crypt.json"),
+        Path("zzz.dat.001.crypt.json"),
     ]
 
-    cryptainer_path = storage._make_absolute("aaa.dat.000.crypt")
+    cryptainer_path = storage._make_absolute("aaa.dat.000.crypt.json")
     cryptainer_path.rename(cryptainer_path.with_suffix(cryptainer_path.suffix + CRYPTAINER_TEMP_SUFFIX))
 
-    storage.delete_cryptainer(Path("xyz.dat.002.crypt"))
+    storage.delete_cryptainer(Path("xyz.dat.002.crypt.json"))
 
     assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == [
-        Path("aaa.dat.000.crypt~"),
-        Path("xyz.dat.003.crypt"),
-        Path("zzz.dat.001.crypt"),
+        Path("aaa.dat.000.crypt.json~"),
+        Path("xyz.dat.003.crypt.json"),
+        Path("zzz.dat.001.crypt.json"),
     ]
 
     storage.enqueue_file_for_encryption("20201121_222727_whatever.dat", b"000", cryptainer_metadata=None)
     storage.wait_for_idle_state()
 
     assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == [
-        Path("20201121_222727_whatever.dat.002.crypt"),
-        Path("aaa.dat.000.crypt~"),
-        Path("xyz.dat.003.crypt"),
-        Path("zzz.dat.001.crypt"),
+        Path("20201121_222727_whatever.dat.002.crypt.json"),
+        Path("aaa.dat.000.crypt.json~"),
+        Path("xyz.dat.003.crypt.json"),
+        Path("zzz.dat.001.crypt.json"),
     ]
 
     storage.enqueue_file_for_encryption("21201121_222729_smth.dat", b"000", cryptainer_metadata=None)
@@ -2320,10 +2333,10 @@ def test_cryptainer_storage_purge_by_max_count(tmp_path):
 
     # print(">>>>>>>", storage.list_cryptainer_names(as_sorted_list=True))
     assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == [
-        Path("21201121_222729_smth.dat.003.crypt"),
-        Path("aaa.dat.000.crypt~"),  # It's the file timestamps that counts, not the name!
-        Path("lmn.dat.004.crypt"),
-        Path("zzz.dat.001.crypt"),
+        Path("21201121_222729_smth.dat.003.crypt.json"),
+        Path("aaa.dat.000.crypt.json~"),  # It's the file timestamps that counts, not the name!
+        Path("lmn.dat.004.crypt.json"),
+        Path("zzz.dat.001.crypt.json"),
     ]
 
     assert storage._max_cryptainer_count
@@ -2370,19 +2383,19 @@ def test_cryptainer_storage_purge_by_age(tmp_path):
     assert Path("20201021_222700_oldfile.dat.crypt~") not in cryptainer_names
 
     assert Path("20301021_222711_oldfile.dat.crypt") in cryptainer_names
-    assert Path("whatever_stuff.dat.005.crypt") in cryptainer_names
+    assert Path("whatever_stuff.dat.005.crypt.json") in cryptainer_names
 
     assert storage.get_cryptainer_count() == 4  # 2 listed just above + 2 recent "<date>_stuff.dat" from loop
 
     # Change mtime to VERY old!
-    os.utime(storage._make_absolute(Path("whatever_stuff.dat.005.crypt")), (1000, 1000))
+    os.utime(storage._make_absolute(Path("whatever_stuff.dat.005.crypt.json")), (1000, 1000))
 
     storage.enqueue_file_for_encryption("abcde.dat", b"xxx", cryptainer_metadata=None)
     storage.wait_for_idle_state()
 
     cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True, finished=None)
-    assert Path("whatever_stuff.dat.005.crypt") not in cryptainer_names
-    assert Path("abcde.dat.006.crypt") in cryptainer_names
+    assert Path("whatever_stuff.dat.005.crypt.json") not in cryptainer_names
+    assert Path("abcde.dat.006.crypt.json") in cryptainer_names
 
     assert storage.get_cryptainer_count() == 4
 
@@ -2420,39 +2433,39 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
     # With RELAXED format, cryptainers are smaller (UUIDs and ints are more compact) than canonical ExtJson, so more fit in the quota
     if offload_payload_ciphertext:  # Offloaded cryptainers are smaller due to skipping of base64 encoding of ciphertext
         assert cryptainer_names == [
-            Path("20301021_222711_stuff.dat.001.crypt"),
-            Path("some_stuff.dat.007.crypt"),
-            Path("some_stuff.dat.008.crypt"),
-            Path("some_stuff.dat.009.crypt"),
-            Path("some_stuff.dat.010.crypt"),
-            Path("some_stuff.dat.011.crypt"),
+            Path("20301021_222711_stuff.dat.001.crypt.json"),
+            Path("some_stuff.dat.007.crypt.json"),
+            Path("some_stuff.dat.008.crypt.json"),
+            Path("some_stuff.dat.009.crypt.json"),
+            Path("some_stuff.dat.010.crypt.json"),
+            Path("some_stuff.dat.011.crypt.json"),
         ]
     else:
         assert cryptainer_names == [
-            Path("20301021_222711_stuff.dat.001.crypt"),
-            Path("some_stuff.dat.009.crypt"),
-            Path("some_stuff.dat.010.crypt"),
-            Path("some_stuff.dat.011.crypt"),
+            Path("20301021_222711_stuff.dat.001.crypt.json"),
+            Path("some_stuff.dat.009.crypt.json"),
+            Path("some_stuff.dat.010.crypt.json"),
+            Path("some_stuff.dat.011.crypt.json"),
         ]
 
-    cryptainer_path = storage._make_absolute("20301021_222711_stuff.dat.001.crypt")
+    cryptainer_path = storage._make_absolute("20301021_222711_stuff.dat.001.crypt.json")
     cryptainer_path.rename(cryptainer_path.with_suffix(cryptainer_path.suffix + CRYPTAINER_TEMP_SUFFIX))
 
-    storage.delete_cryptainer(Path("some_stuff.dat.009.crypt"))
+    storage.delete_cryptainer(Path("some_stuff.dat.009.crypt.json"))
 
     if offload_payload_ciphertext:
         assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == [
-            Path("20301021_222711_stuff.dat.001.crypt~"),
-            Path("some_stuff.dat.007.crypt"),
-            Path("some_stuff.dat.008.crypt"),
-            Path("some_stuff.dat.010.crypt"),
-            Path("some_stuff.dat.011.crypt"),
+            Path("20301021_222711_stuff.dat.001.crypt.json~"),
+            Path("some_stuff.dat.007.crypt.json"),
+            Path("some_stuff.dat.008.crypt.json"),
+            Path("some_stuff.dat.010.crypt.json"),
+            Path("some_stuff.dat.011.crypt.json"),
         ]
     else:
         assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == [
-            Path("20301021_222711_stuff.dat.001.crypt~"),
-            Path("some_stuff.dat.010.crypt"),
-            Path("some_stuff.dat.011.crypt"),
+            Path("20301021_222711_stuff.dat.001.crypt.json~"),
+            Path("some_stuff.dat.010.crypt.json"),
+            Path("some_stuff.dat.011.crypt.json"),
         ]
 
     storage.enqueue_file_for_encryption("abc.dat", b"000", cryptainer_metadata=None)
@@ -2461,19 +2474,19 @@ def test_cryptainer_storage_purge_by_quota(tmp_path):
     # With RELAXED format, more files fit in the quota so the results differ
     if offload_payload_ciphertext:
         assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == [
-            Path("20301021_222711_stuff.dat.001.crypt~"),
-            Path("abc.dat.012.crypt"),  # Incremented counter from FakeTestCryptainerStorage
-            Path("some_stuff.dat.007.crypt"),
-            Path("some_stuff.dat.008.crypt"),  # One more file fits in quota with RELAXED format
-            Path("some_stuff.dat.010.crypt"),
-            Path("some_stuff.dat.011.crypt"),
+            Path("20301021_222711_stuff.dat.001.crypt.json~"),
+            Path("abc.dat.012.crypt.json"),  # Incremented counter from FakeTestCryptainerStorage
+            Path("some_stuff.dat.007.crypt.json"),
+            Path("some_stuff.dat.008.crypt.json"),  # One more file fits in quota with RELAXED format
+            Path("some_stuff.dat.010.crypt.json"),
+            Path("some_stuff.dat.011.crypt.json"),
         ]
     else:
         assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == [
-            Path("20301021_222711_stuff.dat.001.crypt~"),
-            Path("abc.dat.012.crypt"),
-            Path("some_stuff.dat.010.crypt"),
-            Path("some_stuff.dat.011.crypt"),
+            Path("20301021_222711_stuff.dat.001.crypt.json~"),
+            Path("abc.dat.012.crypt.json"),
+            Path("some_stuff.dat.010.crypt.json"),
+            Path("some_stuff.dat.011.crypt.json"),
         ]
 
     assert storage._max_cryptainer_quota
@@ -2513,14 +2526,14 @@ def test_cryptainer_storage_purge_parameter_combinations(tmp_path):
         first_file_purged = max_cryptainer_count or max_cryptainer_quota or max_cryptainer_age
 
         if not first_file_purged:
-            cryptainer_path = storage._make_absolute("20001121_222729_smth.dat.000.crypt")
+            cryptainer_path = storage._make_absolute("20001121_222729_smth.dat.000.crypt.json")
             cryptainer_path.rename(cryptainer_path.with_suffix(cryptainer_path.suffix + CRYPTAINER_TEMP_SUFFIX))
 
         cryptainer_names = storage.list_cryptainer_names(as_sorted_list=True, finished=None)
 
-        assert (Path("20001121_222729_smth.dat.000.crypt~") in cryptainer_names) == (not first_file_purged)
-        assert (Path(recent_big_file_name + ".001.crypt") in cryptainer_names) == (not max_cryptainer_quota)
-        assert (Path("recent_small_file.dat.002.crypt") in cryptainer_names) == True
+        assert (Path("20001121_222729_smth.dat.000.crypt.json~") in cryptainer_names) == (not first_file_purged)
+        assert (Path(recent_big_file_name + ".001.crypt.json") in cryptainer_names) == (not max_cryptainer_quota)
+        assert (Path("recent_small_file.dat.002.crypt.json") in cryptainer_names) == True
 
     # Special case of "everything restricted"
 
@@ -2553,7 +2566,7 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
     )
 
     storage.wait_for_idle_state()
-    assert storage.list_cryptainer_names() == [Path("animals.dat.crypt")]
+    assert storage.list_cryptainer_names() == [Path("animals.dat.crypt.json")]
 
     # ---
 
@@ -2567,9 +2580,9 @@ def test_cryptainer_storage_cryptoconf_precedence(tmp_path):
     StorageClass = _get_random_cryptainer_storage_class()  # Test READONLY mode too!
     storage = StorageClass(tmp_path)
 
-    cryptainer_simple = storage.load_cryptainer_from_storage("stuff_simple.txt.crypt")
+    cryptainer_simple = storage.load_cryptainer_from_storage("stuff_simple.txt.crypt.json")
     assert len(cryptainer_simple["payload_cipher_layers"]) == 1
-    cryptainer_complex = storage.load_cryptainer_from_storage("stuff_complex.txt.crypt")
+    cryptainer_complex = storage.load_cryptainer_from_storage("stuff_complex.txt.crypt.json")
     assert len(cryptainer_complex["payload_cipher_layers"]) == 3
 
 
@@ -2840,7 +2853,7 @@ def test_create_cryptainer_encryption_stream(tmp_path):
     )
 
     cryptainer_started = storage.load_cryptainer_from_storage(
-        "20200101_cryptainer_example.crypt" + CRYPTAINER_TEMP_SUFFIX
+        "20200101_cryptainer_example.crypt.json" + CRYPTAINER_TEMP_SUFFIX
     )
     assert cryptainer_started["cryptainer_state"] == "STARTED"
 
@@ -2851,11 +2864,11 @@ def test_create_cryptainer_encryption_stream(tmp_path):
     StorageClass = _get_random_cryptainer_storage_class()  # Test READONLY mode too!
     storage = StorageClass(cryptainer_dir)
 
-    cryptainer = storage.load_cryptainer_from_storage("20200101_cryptainer_example.crypt")
+    cryptainer = storage.load_cryptainer_from_storage("20200101_cryptainer_example.crypt.json")
     assert cryptainer["cryptainer_metadata"] == {"mymetadata": True}
     assert cryptainer["cryptainer_state"] == "FINISHED"
 
-    plaintext, _operation_report = storage.decrypt_cryptainer_from_storage("20200101_cryptainer_example.crypt")
+    plaintext, _operation_report = storage.decrypt_cryptainer_from_storage("20200101_cryptainer_example.crypt.json")
     assert plaintext == b"bonjoureveryone"
 
 
@@ -3516,10 +3529,10 @@ def test_retrocompatibility_for_payload_ciphertext_signatures_field_in_cryptaine
     storage.enqueue_file_for_encryption("animals.dat", b"dogs\ncats\n", cryptainer_metadata=None)
     storage.wait_for_idle_state()
 
-    cryptainer = storage.load_cryptainer_from_storage("animals.dat.crypt")
+    cryptainer = storage.load_cryptainer_from_storage("animals.dat.crypt.json")
     assert cryptainer["payload_cipher_layers"][0]["payload_ciphertext_signatures"][0]["payload_signature_struct"]
 
-    result_payload, error_report = storage.decrypt_cryptainer_from_storage("animals.dat.crypt")
+    result_payload, error_report = storage.decrypt_cryptainer_from_storage("animals.dat.crypt.json")
     assert result_payload == b"dogs\ncats\n"
     assert not error_report.has_errors()
 
@@ -3766,3 +3779,512 @@ def test_pq_hybrid_cryptainer_with_corrupted_ml_dsa_signature():
         exception_class=SignatureVerificationError,
     )
     assert operation_report.get_error_count() == 1
+
+
+def test_cryptainer_suffix_helpers():
+    assert CRYPTAINER_SUFFIX == ".crypt"
+    assert CRYPTAINER_JSON_SUFFIX == ".crypt.json"
+    assert CRYPTAINER_CBOR_SUFFIX == ".crypt.cbor"
+    assert set(CRYPTAINER_SUFFIXES) == {".crypt", ".crypt.json", ".crypt.cbor"}
+
+    assert get_cryptainer_suffix(DocumentFormat.JSON) == ".crypt.json"
+    assert get_cryptainer_suffix(DocumentFormat.CBOR) == ".crypt.cbor"
+    with pytest.raises(ValueError, match="Unknown document format"):
+        get_cryptainer_suffix("yaml")
+    with pytest.raises(ValueError, match="Unknown document format"):
+        get_cryptainer_suffix("JSON")
+
+    for name, expected in [
+        # The three suffixes
+        ("x.crypt.json", ("x", DocumentFormat.JSON)),
+        ("x.crypt.cbor", ("x", DocumentFormat.CBOR)),
+        ("x.crypt", ("x", DocumentFormat.JSON)),
+        ("video.mp4.crypt.cbor", ("video.mp4", DocumentFormat.CBOR)),
+        # Temporary names are split according to their final name
+        ("x.crypt.json~", ("x", DocumentFormat.JSON)),
+        ("x.crypt.cbor~", ("x", DocumentFormat.CBOR)),
+        ("x.crypt~", ("x", DocumentFormat.JSON)),
+        # Other letter cases, the basename keeping its spelling
+        ("x.CRYPT.JSON", ("x", DocumentFormat.JSON)),
+        ("x.Crypt.Cbor~", ("x", DocumentFormat.CBOR)),
+        ("Clip.MP4.CRYPT", ("Clip.MP4", DocumentFormat.JSON)),
+        ("Clip.MP4.crypt.JSON", ("Clip.MP4", DocumentFormat.JSON)),
+        ("x.Json.CRYPT", ("x.Json", DocumentFormat.JSON)),
+        # Paths keep their directory in the basename
+        (os.path.join("some", "Dir", "x.crypt.cbor"), (os.path.join("some", "Dir", "x"), DocumentFormat.CBOR)),
+        (Path("some") / "x.crypt", (str(Path("some") / "x"), DocumentFormat.JSON)),
+        # Unrelated names
+        ("x", None),
+        ("x.json", None),
+        ("x.cbor", None),
+        ("x.crypt.payload", None),
+        ("x.crypt.json.payload", None),
+        ("x.crypt.yaml", None),
+        ("x.crypto", None),
+        ("x.json.crypt.txt", None),
+        ("x.crypt~~", None),
+        ("x.CRYPT.JSON.payload", None),
+    ]:
+        assert split_cryptainer_suffix(name) == expected, name
+        expected_format = expected[1] if expected else None
+        assert get_cryptainer_format_from_filename(name) == expected_format, name
+
+    # Only the filename is examined
+    assert get_cryptainer_format_from_filename(os.path.join("dir.crypt.cbor", "x.txt")) is None
+    assert get_cryptainer_format_from_filename(Path("dir.crypt") / "X.CRYPT.CBOR~") == DocumentFormat.CBOR
+
+
+@pytest.mark.parametrize(
+    "cryptainer_filename, expected_format",
+    [
+        ("x.crypt", DocumentFormat.JSON),
+        ("x.crypt.json", DocumentFormat.JSON),
+        ("x.crypt.cbor", DocumentFormat.CBOR),
+        ("x.crypt.json~", DocumentFormat.JSON),
+        ("x.crypt.cbor~", DocumentFormat.CBOR),
+        ("x.crypt~", DocumentFormat.JSON),
+        ("x.CRYPT.CBOR", DocumentFormat.CBOR),
+        ("x.dat", DocumentFormat.JSON),  # Suffix-less names stay Extended JSON
+        ("x", DocumentFormat.JSON),
+        ("x.cbor", DocumentFormat.CBOR),
+        ("x.json", DocumentFormat.JSON),
+    ],
+)
+def test_filesystem_cryptainer_formats_by_filename(tmp_path, cryptainer_filename, expected_format):
+    payload = b"abcd" * 100
+    cryptoconf = _get_enriched_cryptoconf(SIMPLE_CRYPTOCONF, keychain_uid=None)
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=dict(a=[123])
+    )
+    ciphertext_value = cryptainer["payload_ciphertext_struct"]["ciphertext_value"]
+
+    cryptainer_filepath = tmp_path / cryptainer_filename
+    final_filename = cryptainer_filename.rstrip(CRYPTAINER_TEMP_SUFFIX)
+    offloaded_filepath = tmp_path / (final_filename + ".payload")
+
+    def _load_raw_tree():
+        raw_bytes = cryptainer_filepath.read_bytes()
+        if expected_format == DocumentFormat.CBOR:
+            assert raw_bytes[0] == 0xBF or 0xA0 <= raw_bytes[0] <= 0xBB  # A CBOR map
+            return load_from_cbor_bytes(raw_bytes)
+        assert raw_bytes.startswith(b"{")
+        return load_from_json_bytes(raw_bytes)
+
+    # Inline payload ciphertext
+
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [cryptainer_filename]  # Written at the exact path given
+    assert _load_raw_tree()["payload_ciphertext_struct"]["ciphertext_value"] == ciphertext_value
+    assert load_cryptainer_from_filesystem(cryptainer_filepath) == cryptainer
+    decrypted, _operation_report = decrypt_payload_from_cryptainer(load_cryptainer_from_filesystem(cryptainer_filepath))
+    assert decrypted == payload
+    os.remove(cryptainer_filepath)
+
+    # Offloaded payload ciphertext
+
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer)
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted([cryptainer_filename, offloaded_filepath.name])
+    assert _load_raw_tree()["payload_ciphertext_struct"] == OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
+    assert offloaded_filepath.read_bytes() == ciphertext_value
+    assert load_cryptainer_from_filesystem(cryptainer_filepath) == cryptainer
+    truncated_cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath, include_payload_ciphertext=False)
+    assert "payload_ciphertext_struct" not in truncated_cryptainer
+    assert get_cryptainer_size_on_filesystem(cryptainer_filepath) == (
+        cryptainer_filepath.stat().st_size + len(ciphertext_value)
+    )
+
+    delete_cryptainer_from_filesystem(cryptainer_filepath)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_filesystem_cryptainer_explicit_legacy_path(tmp_path):
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"xyz", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None
+    )
+    cryptainer_filepath = tmp_path / "x.crypt"
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["x.crypt", "x.crypt.payload"]
+    assert load_from_json_file(cryptainer_filepath)["payload_ciphertext_struct"] == OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
+    assert load_cryptainer_from_filesystem(cryptainer_filepath) == cryptainer
+
+
+def test_filesystem_cryptainer_format_contradicting_its_name(tmp_path):
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"xyz", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None
+    )
+    dump_cryptainer_to_filesystem(tmp_path / "x.crypt.json", cryptainer=cryptainer)
+    os.rename(tmp_path / "x.crypt.json", tmp_path / "x.crypt.cbor")
+    os.rename(tmp_path / "x.crypt.json.payload", tmp_path / "x.crypt.cbor.payload")
+    with pytest.raises(DocumentFormatError, match="should be WA-CBOR from its name"):
+        load_cryptainer_from_filesystem(tmp_path / "x.crypt.cbor")
+
+    # Temporary names are read in the format of their final name
+    os.rename(tmp_path / "x.crypt.cbor", tmp_path / "x.crypt.cbor~")
+    with pytest.raises(DocumentFormatError, match="should be WA-CBOR from its name"):
+        load_cryptainer_from_filesystem(tmp_path / "x.crypt.cbor~")
+
+    # Unsupported values fail before anything gets written
+    cryptainer["cryptainer_metadata"] = dict(naive_datetime=datetime(2020, 1, 1))
+    with pytest.raises(WaCborEncodingError):
+        dump_cryptainer_to_filesystem(tmp_path / "y.crypt.cbor", cryptainer=cryptainer)
+    assert not (tmp_path / "y.crypt.cbor").exists()
+    assert not (tmp_path / "y.crypt.cbor.payload").exists()
+
+
+def _get_cryptainer_file_format(cryptainer_filepath):
+    """Detect the format of a cryptainer file from its content only."""
+    first_byte = Path(cryptainer_filepath).read_bytes()[:1]
+    if first_byte == b"{":
+        return DocumentFormat.JSON
+    assert first_byte and (first_byte[0] == 0xBF or 0xA0 <= first_byte[0] <= 0xBB), first_byte  # A CBOR map
+    return DocumentFormat.CBOR
+
+
+def _get_sorted_filenames(directory):
+    return sorted(path.name for path in Path(directory).iterdir())
+
+
+@pytest.mark.parametrize("cryptainer_format", [None, DocumentFormat.JSON, DocumentFormat.CBOR])
+def test_cryptainer_storage_format_setting(tmp_path, cryptainer_format):
+    extra_kwargs = dict(cryptainer_format=cryptainer_format) if cryptainer_format else {}
+    expected_format = cryptainer_format or DocumentFormat.JSON  # Extended JSON by default
+    suffix = ".crypt.cbor" if expected_format == DocumentFormat.CBOR else ".crypt.json"
+
+    storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path, **extra_kwargs)
+
+    # Synchronous encryption, streamed to the storage
+    cryptainer_name = storage.encrypt_file("video.mp4", payload=b"abc", cryptainer_metadata=None)
+    assert cryptainer_name == "video.mp4" + suffix
+
+    # Enqueued encryption, with the caller's basename kept as is
+    storage.enqueue_file_for_encryption("Clip.MP4", b"def", cryptainer_metadata=dict(a=1))
+    storage.wait_for_idle_state()
+
+    # Encryption stream, with a temporary cryptainer named after the final one
+    cryptainer_encryption_stream = storage.create_cryptainer_encryption_stream(
+        "stream.dat", cryptainer_metadata=None, signature_policy=None, cryptoconf=SIMPLE_CRYPTOCONF
+    )
+    temporary_name = "stream.dat" + suffix + "~"
+    assert storage.list_cryptainer_names(finished=False) == [Path(temporary_name)]
+    assert Path(temporary_name) not in storage.list_cryptainer_names(finished=True)
+    assert _get_cryptainer_file_format(tmp_path / temporary_name) == expected_format
+    assert storage.load_cryptainer_from_storage(temporary_name)["cryptainer_state"] == "STARTED"
+    cryptainer_encryption_stream.encrypt_chunk(b"ghi")
+    cryptainer_encryption_stream.finalize()
+    assert storage.list_cryptainer_names(finished=False) == []
+
+    # Non-streamed encryption, with an inline payload ciphertext
+    storage_without_offloading = CryptainerStorage(
+        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path, offload_payload_ciphertext=False, **extra_kwargs
+    )
+    storage_without_offloading.encrypt_file("inline.txt", payload=b"jkl", cryptainer_metadata=None)
+
+    expected_names = sorted(["Clip.MP4" + suffix, "inline.txt" + suffix, "stream.dat" + suffix, "video.mp4" + suffix])
+    assert sorted(str(name) for name in storage.list_cryptainer_names()) == expected_names
+    assert _get_sorted_filenames(tmp_path) == sorted(
+        expected_names + [name + ".payload" for name in expected_names if not name.startswith("inline")]
+    )
+    for name, payload in zip(expected_names, [b"def", b"jkl", b"ghi", b"abc"]):
+        assert _get_cryptainer_file_format(tmp_path / name) == expected_format
+        result, _operation_report = storage.decrypt_cryptainer_from_storage(name)
+        assert result == payload
+
+    # Storages of every format read cryptainers of every format
+    for other_format in DOCUMENT_FORMATS:
+        other_storage = CryptainerStorage(cryptainer_dir=tmp_path, cryptainer_format=other_format)
+        assert sorted(str(name) for name in other_storage.list_cryptainer_names()) == expected_names
+        result, _operation_report = other_storage.decrypt_cryptainer_from_storage("Clip.MP4" + suffix)
+        assert result == b"def"
+
+    with pytest.raises(ValueError, match="Unknown document format"):
+        CryptainerStorage(cryptainer_dir=tmp_path, cryptainer_format="yaml")
+
+
+def test_cryptainer_storage_listing_of_mixed_storage(tmp_path):
+    for filename in [
+        "a.crypt",
+        "a.crypt.payload",
+        "b.crypt.json",
+        "c.crypt.cbor",
+        "c.crypt.cbor.payload",
+        "notes.txt",
+        "d.crypt.json.payload",
+        "e.json",
+        "f.cbor",
+        "g.crypt.yaml",
+    ]:
+        (tmp_path / filename).touch()
+
+    storage = ReadonlyCryptainerStorage(cryptainer_dir=tmp_path)
+    expected_names = [Path("a.crypt"), Path("b.crypt.json"), Path("c.crypt.cbor")]
+    assert storage.list_cryptainer_names(as_sorted_list=True) == expected_names
+    assert sorted(storage.list_cryptainer_names()) == expected_names
+    assert storage.list_cryptainer_names(as_sorted_list=True, as_absolute_paths=True) == [
+        tmp_path / name for name in expected_names
+    ]
+    assert storage.list_cryptainer_names(finished=False) == []
+    assert storage.get_cryptainer_count() == 3
+
+    # Unfinished cryptainers of all suffixes
+    for filename in ["a.crypt~", "b.crypt.json~", "x.crypt.cbor~", "y.crypt.cbor~~", "z.payload~"]:
+        (tmp_path / filename).touch()
+    expected_unfinished_names = [Path("a.crypt~"), Path("b.crypt.json~"), Path("x.crypt.cbor~")]
+    assert storage.list_cryptainer_names(as_sorted_list=True, finished=False) == expected_unfinished_names
+    assert storage.list_cryptainer_names(as_sorted_list=True) == expected_names
+    assert storage.list_cryptainer_names(as_sorted_list=True, finished=None) == sorted(
+        expected_names + expected_unfinished_names
+    )
+
+
+def test_cryptainer_storage_listing_of_suffixes_in_another_letter_case(tmp_path):
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None
+    )
+    dump_cryptainer_to_filesystem(tmp_path / "a.CRYPT.JSON", cryptainer=cryptainer)  # Offloaded payload
+    dump_cryptainer_to_filesystem(tmp_path / "b.crypt.json", cryptainer=cryptainer, offload_payload_ciphertext=False)
+    dump_cryptainer_to_filesystem(tmp_path / "C.Crypt.Cbor", cryptainer=cryptainer)
+    (tmp_path / "D.CRYPT~").touch()
+    assert _get_sorted_filenames(tmp_path) == [
+        "C.Crypt.Cbor",
+        "C.Crypt.Cbor.payload",
+        "D.CRYPT~",
+        "a.CRYPT.JSON",
+        "a.CRYPT.JSON.payload",
+        "b.crypt.json",
+    ]
+    assert _get_cryptainer_file_format(tmp_path / "a.CRYPT.JSON") == DocumentFormat.JSON
+    assert _get_cryptainer_file_format(tmp_path / "C.Crypt.Cbor") == DocumentFormat.CBOR
+
+    storage = CryptainerStorage(cryptainer_dir=tmp_path)
+    assert sorted(str(name) for name in storage.list_cryptainer_names()) == [  # Actual names, on every platform
+        "C.Crypt.Cbor",
+        "a.CRYPT.JSON",
+        "b.crypt.json",
+    ]
+    assert storage.list_cryptainer_names(finished=False) == [Path("D.CRYPT~")]
+
+    for cryptainer_name in ["a.CRYPT.JSON", "b.crypt.json", "C.Crypt.Cbor"]:
+        result, _operation_report = storage.decrypt_cryptainer_from_storage(cryptainer_name)
+        assert result == b"abc"
+
+    properties = storage.list_cryptainer_properties(with_size=True, with_offloaded=True)
+    properties = sorted(properties, key=lambda entry: str(entry["name"]))
+    assert [(str(entry["name"]), entry["offloaded"]) for entry in properties] == [
+        ("C.Crypt.Cbor", True),
+        ("a.CRYPT.JSON", True),
+        ("b.crypt.json", False),
+    ]
+    assert properties[1]["size"] == (
+        (tmp_path / "a.CRYPT.JSON").stat().st_size + (tmp_path / "a.CRYPT.JSON.payload").stat().st_size
+    )
+
+    storage.delete_cryptainer("a.CRYPT.JSON")
+    assert _get_sorted_filenames(tmp_path) == ["C.Crypt.Cbor", "C.Crypt.Cbor.payload", "D.CRYPT~", "b.crypt.json"]
+
+
+def test_cryptainer_storage_same_basename_in_two_formats(tmp_path):
+    json_storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path)
+    cbor_storage = CryptainerStorage(
+        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path, cryptainer_format=DocumentFormat.CBOR
+    )
+    json_storage.encrypt_file("a", payload=b"json payload", cryptainer_metadata=None)
+    cbor_storage.encrypt_file("a", payload=b"cbor payload", cryptainer_metadata=None)
+    assert _get_sorted_filenames(tmp_path) == ["a.crypt.cbor", "a.crypt.cbor.payload", "a.crypt.json", "a.crypt.json.payload"]
+
+    for storage in (json_storage, cbor_storage):
+        assert storage.list_cryptainer_names(as_sorted_list=True) == [Path("a.crypt.cbor"), Path("a.crypt.json")]
+        assert storage.decrypt_cryptainer_from_storage("a.crypt.json")[0] == b"json payload"
+        assert storage.decrypt_cryptainer_from_storage("a.crypt.cbor")[0] == b"cbor payload"
+
+    json_storage.delete_cryptainer("a.crypt.cbor")
+    assert _get_sorted_filenames(tmp_path) == ["a.crypt.json", "a.crypt.json.payload"]
+    assert cbor_storage.decrypt_cryptainer_from_storage("a.crypt.json")[0] == b"json payload"
+
+    cbor_storage.encrypt_file("a", payload=b"cbor payload", cryptainer_metadata=None)
+    cbor_storage.delete_cryptainer("a.crypt.json")
+    assert _get_sorted_filenames(tmp_path) == ["a.crypt.cbor", "a.crypt.cbor.payload"]
+    assert json_storage.decrypt_cryptainer_from_storage("a.crypt.cbor")[0] == b"cbor payload"
+
+
+class _LogRecordCollector(logging.Handler):
+    """Equivalent of the caplog fixture, which is unavailable since the pytest logging plugin is disabled."""
+
+    def __init__(self):
+        super().__init__(level=logging.DEBUG)
+        self.records = []
+
+    def emit(self, record):
+        self.records.append(record)
+
+    def clear(self):
+        self.records = []
+
+
+@pytest.fixture
+def log_records():
+    collector = _LogRecordCollector()
+    cryptainer_logger = logging.getLogger("wacryptolib.cryptainer")
+    cryptainer_logger.addHandler(collector)
+    try:
+        yield collector
+    finally:
+        cryptainer_logger.removeHandler(collector)
+
+
+def _get_same_basename_warnings(caplog):
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelname == "WARNING" and "same basename in another format" in record.getMessage()
+    ]
+
+
+def test_cryptainer_storage_warning_on_same_basename_in_another_format(tmp_path, log_records):
+    caplog = log_records
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"old", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None
+    )
+    dump_cryptainer_to_filesystem(tmp_path / "video.mp4.crypt", cryptainer=cryptainer)  # Legacy cryptainer
+    legacy_snapshot = {name: (tmp_path / name).read_bytes() for name in _get_sorted_filenames(tmp_path)}
+    assert sorted(legacy_snapshot) == ["video.mp4.crypt", "video.mp4.crypt.payload"]
+
+    storage = CryptainerStorage(default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path)
+
+    caplog.clear()
+    storage.encrypt_file("other.mp4", payload=b"other", cryptainer_metadata=None)
+    assert _get_same_basename_warnings(caplog) == []
+
+    caplog.clear()
+    storage.encrypt_file("video.mp4", payload=b"new", cryptainer_metadata=None)
+    (warning,) = _get_same_basename_warnings(caplog)
+    assert "video.mp4.crypt.json" in warning
+    assert "existing cryptainer video.mp4.crypt," in warning
+
+    for name, content in legacy_snapshot.items():
+        assert (tmp_path / name).read_bytes() == content  # Untouched sibling and payload
+    assert storage.decrypt_cryptainer_from_storage("video.mp4.crypt")[0] == b"old"
+    assert storage.decrypt_cryptainer_from_storage("video.mp4.crypt.json")[0] == b"new"
+
+    json_snapshot = {name: (tmp_path / name).read_bytes() for name in _get_sorted_filenames(tmp_path)}
+
+    # Enqueued encryption into a CBOR storage, next to both the legacy and the JSON cryptainers
+    cbor_storage = CryptainerStorage(
+        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=tmp_path, cryptainer_format=DocumentFormat.CBOR
+    )
+    caplog.clear()
+    cbor_storage.enqueue_file_for_encryption("video.mp4", b"newer", cryptainer_metadata=None)
+    cbor_storage.wait_for_idle_state()
+    warnings = _get_same_basename_warnings(caplog)
+    assert len(warnings) == 2
+    assert all("video.mp4.crypt.cbor" in warning for warning in warnings)
+    assert any("existing cryptainer video.mp4.crypt," in warning for warning in warnings)
+    assert any("existing cryptainer video.mp4.crypt.json," in warning for warning in warnings)
+
+    # Encryption stream, overwriting its own format but warning about the other ones
+    caplog.clear()
+    cryptainer_encryption_stream = storage.create_cryptainer_encryption_stream(
+        "video.mp4", cryptainer_metadata=None, signature_policy=None, cryptoconf=SIMPLE_CRYPTOCONF
+    )
+    cryptainer_encryption_stream.encrypt_chunk(b"newest")
+    cryptainer_encryption_stream.finalize()
+    warnings = _get_same_basename_warnings(caplog)
+    assert len(warnings) == 2
+    assert any("existing cryptainer video.mp4.crypt," in warning for warning in warnings)
+    assert any("existing cryptainer video.mp4.crypt.cbor," in warning for warning in warnings)
+
+    for name, content in json_snapshot.items():
+        if name.startswith("video.mp4.crypt.json"):
+            continue  # Overwritten by the stream of the same format
+        assert (tmp_path / name).read_bytes() == content
+    assert storage.decrypt_cryptainer_from_storage("video.mp4.crypt")[0] == b"old"
+    assert storage.decrypt_cryptainer_from_storage("video.mp4.crypt.cbor")[0] == b"newer"
+    assert storage.decrypt_cryptainer_from_storage("video.mp4.crypt.json")[0] == b"newest"
+
+
+def _seed_storage_with_legacy_corpus_cryptainer(tmp_path):
+    from _compatibility_corpus import CORPUS_DIR, copy_keystore_pool
+
+    corpus_cryptainer_dir = CORPUS_DIR / "cryptainers" / "2026_current"
+    sidecar_path = corpus_cryptainer_dir / "03_multiple_layers_offloaded_with_metadata.crypt.json"
+    sidecar = load_from_json_file(sidecar_path)
+    assert sidecar["payload_offloaded"]
+
+    cryptainer_dir = tmp_path / "cryptainers"
+    cryptainer_dir.mkdir()
+    for suffix in ("", ".payload"):
+        shutil.copyfile(
+            corpus_cryptainer_dir / ("03_multiple_layers_offloaded_with_metadata.crypt" + suffix),
+            cryptainer_dir / ("old.crypt" + suffix),
+        )
+    keystore_pool = copy_keystore_pool(sidecar_path, sidecar["keystore_pool"], tmp_path)
+    plaintext = (sidecar_path.parent / sidecar["plaintext"]).resolve().read_bytes()
+    return cryptainer_dir, keystore_pool, plaintext, sidecar["cryptainer_metadata"]
+
+
+def test_cryptainer_storage_with_legacy_cryptainer_of_corpus(tmp_path):
+    cryptainer_dir, keystore_pool, plaintext, cryptainer_metadata = _seed_storage_with_legacy_corpus_cryptainer(
+        tmp_path
+    )
+    total_size = sum(path.stat().st_size for path in cryptainer_dir.iterdir())
+
+    for StorageClass in (ReadonlyCryptainerStorage, CryptainerStorage):
+        storage = StorageClass(cryptainer_dir=cryptainer_dir, keystore_pool=keystore_pool)
+        assert storage.list_cryptainer_names() == [Path("old.crypt")]
+        assert storage.list_cryptainer_names(finished=False) == []
+        cryptainer = storage.load_cryptainer_from_storage("old.crypt")
+        assert cryptainer["cryptainer_metadata"] == cryptainer_metadata
+        assert storage.load_cryptainer_from_storage(0) == cryptainer
+        storage.check_cryptainer_sanity("old.crypt")
+        result, operation_report = storage.decrypt_cryptainer_from_storage("old.crypt")
+        assert result == plaintext
+        assert not operation_report.has_errors()
+        (properties,) = storage.list_cryptainer_properties(with_size=True, with_offloaded=True)
+        assert properties == dict(name=Path("old.crypt"), size=total_size, offloaded=True)
+
+    # Storages of both formats write next to it with a warning, without touching it
+    for cryptainer_format in DOCUMENT_FORMATS:
+        storage = CryptainerStorage(
+            default_cryptoconf=SIMPLE_CRYPTOCONF,
+            cryptainer_dir=cryptainer_dir,
+            keystore_pool=keystore_pool,
+            cryptainer_format=cryptainer_format,
+        )
+        storage.encrypt_file("old", payload=b"new", cryptainer_metadata=None)
+    assert _get_sorted_filenames(cryptainer_dir) == [
+        "old.crypt",
+        "old.crypt.cbor",
+        "old.crypt.cbor.payload",
+        "old.crypt.json",
+        "old.crypt.json.payload",
+        "old.crypt.payload",
+    ]
+    assert storage.decrypt_cryptainer_from_storage("old.crypt")[0] == plaintext
+
+    storage.delete_cryptainer("old.crypt")
+    assert _get_sorted_filenames(cryptainer_dir) == [
+        "old.crypt.cbor",
+        "old.crypt.cbor.payload",
+        "old.crypt.json",
+        "old.crypt.json.payload",
+    ]
+
+
+@pytest.mark.parametrize("purge_setting", ["max_cryptainer_age", "max_cryptainer_count", "max_cryptainer_quota"])
+def test_cryptainer_storage_purge_of_legacy_cryptainer_of_corpus(tmp_path, purge_setting):
+    cryptainer_dir, keystore_pool, _plaintext, _cryptainer_metadata = _seed_storage_with_legacy_corpus_cryptainer(
+        tmp_path
+    )
+    os.utime(cryptainer_dir / "old.crypt", (1000, 1000))  # Oldest cryptainer, by its file time
+
+    purge_kwargs = dict(
+        max_cryptainer_age=dict(max_cryptainer_age=timedelta(days=1)),
+        max_cryptainer_count=dict(max_cryptainer_count=1),
+        max_cryptainer_quota=dict(max_cryptainer_quota=20000),  # The legacy cryptainer alone exceeds it
+    )[purge_setting]
+    storage = CryptainerStorage(
+        default_cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_dir=cryptainer_dir, keystore_pool=keystore_pool, **purge_kwargs
+    )
+    storage.encrypt_file("recent", payload=b"abc", cryptainer_metadata=None)
+    assert (cryptainer_dir / "old.crypt").stat().st_size + (cryptainer_dir / "old.crypt.payload").stat().st_size > 20000
+    assert storage.purge_exceeding_cryptainers() == 1
+    assert _get_sorted_filenames(cryptainer_dir) == ["recent.crypt.json", "recent.crypt.json.payload"]

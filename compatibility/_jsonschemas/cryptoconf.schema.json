@@ -1,11 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "cryptoconf.schema.json",
-  "title": "Sidecar of a cryptoconf fixture (extended-JSON cryptoconf)",
+  "title": "Sidecar of a cryptoconf fixture (Extended JSON or WA-CBOR cryptoconf)",
   "type": "object",
   "allOf": [{"$ref": "_defs.schema.json#/$defs/header"}],
   "properties": {
     "fixture_kind": {"const": "cryptoconf"},
+    "document_format": {"$ref": "_defs.schema.json#/$defs/document_format"},
+    "equivalent_asset": {"$ref": "_defs.schema.json#/$defs/equivalent_asset"},
     "expected_valid": {"type": "boolean"},
     "sophistication_level": {
       "description": "1 (simplest) and up; 0 for invalid cryptoconfs",
@@ -17,10 +19,20 @@
       "$ref": "_defs.schema.json#/$defs/relpath"
     },
     "passphrase_mapper": {"$ref": "_defs.schema.json#/$defs/passphrase_mapper"},
-    "min_library_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?(\\+dev)?$"}
+    "min_library_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?(\\+dev)?$"},
+    "expected_decoding_error": {
+      "description": "For invalid WA-CBOR documents, which the strict decoder must reject: the violated rule of the WA-CBOR dialect",
+      "enum": ["unsupported_tag", "non_text_key", "duplicate_key", "extjson_keyword_map", "malformed_datetime"]
+    }
   },
   "required": ["expected_valid", "sophistication_level", "min_library_version"],
   "if": {"properties": {"expected_valid": {"const": true}}},
   "then": {"required": ["keystore_pool", "passphrase_mapper"]},
+  "dependentSchemas": {
+    "expected_decoding_error": {
+      "properties": {"expected_valid": {"const": false}, "document_format": {"const": "cbor"}},
+      "required": ["document_format"]
+    }
+  },
   "unevaluatedProperties": false
 }

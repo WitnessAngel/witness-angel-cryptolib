@@ -30,8 +30,8 @@ class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionSt
         dump_initial_cryptainer=True,
     ):
         self._cryptainer_filepath = cryptainer_filepath
-        self._cryptainer_filepath_temp = cryptainer_filepath.with_suffix(
-            cryptainer_filepath.suffix + CRYPTAINER_TEMP_SUFFIX
+        self._cryptainer_filepath_temp = cryptainer_filepath.with_name(  # Final filename + "~", in any format
+            cryptainer_filepath.name + CRYPTAINER_TEMP_SUFFIX
         )
 
         offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)

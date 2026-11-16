@@ -1,0 +1,41 @@
+{
+  "$schema": "../../_jsonschemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2026_cbor_pairs",
+  "description": "CHACHA20_POLY1305 payload layer whose key is wrapped by a local ECIES_X25519 key, then by an AES_CBC key layer wrapped by the RSA_OAEP key of an authenticator, with an ECC_DSS ciphertext signature and an RSA_PSS plaintext signature (WA-CBOR asset of an Extended JSON / WA-CBOR pair)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "f451089863a0ccdf238383477d0771c9f2d6dcd0",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-16"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_CBC",
+      "CHACHA20_POLY1305",
+      "ECC_DSS",
+      "ECIES_X25519",
+      "RSA_OAEP",
+      "RSA_PSS"
+    ],
+    "pem_protections": [
+      "pbes2_pbkdf2_hmac_sha256_aes_cbc"
+    ]
+  },
+  "expected_valid": true,
+  "sophistication_level": 5,
+  "keystore_pool": "../../keystores/2026_cbor_pairs/cbor_pairs_pool",
+  "passphrase_mapper": {
+    "authenticator@4e1d1000-0000-4000-8000-000000000008": [
+      "compat-heidi-passphrase"
+    ]
+  },
+  "min_library_version": "0.12",
+  "document_format": "cbor",
+  "equivalent_asset": "02_signed_authenticator.cryptoconf.json",
+  "asset_sha256": {
+    "02_signed_authenticator.cryptoconf.cbor": "b825c00f01bb7a9998ca6707ce2c3d44d85191f7889b9bd7974eb548f918883a"
+  }
+}

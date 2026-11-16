@@ -7,7 +7,9 @@ Read-side utilities of the compatibility/ corpus (see compatibility/README.md), 
 generation scripts of scripts/compatibility/.
 
 Sidecars are plain JSON files named after their asset with ".json" appended, validated by the JSON-Schemas of
-compatibility/_jsonschemas/, which are resolved locally (never through the network).
+compatibility/_jsonschemas/, which are resolved locally (never through the network). Since assets may be ".json" files
+too (e.g. "x.crypt.json" cryptainers), a ".json" file is a sidecar if and only if its name without the final ".json"
+is an existing asset of the same directory ("x.crypt.json" is the sidecar of "x.crypt" if it exists, else an asset).
 """
 
 import base64
@@ -34,6 +36,29 @@ ASSET_SUFFIXES_TO_KINDS = {
     ".crypt": "cryptainer",
 }
 
+# Document assets (all kinds but plaintexts) may end with the extension of their format, after their kind suffix
+# (e.g. "x.cipherdict.cbor", or "x.crypt.json" like the library names cryptainers since WA-CBOR support)
+DOCUMENT_FORMAT_EXTENSIONS = (".json", ".cbor")
+DOCUMENT_FIXTURE_KINDS = ("cipherdict", "signature", "cryptoconf", "cryptainer")
+
+# Directories of the corpus which are split into generations (plaintexts are shared by all generations)
+GENERATION_KIND_DIRNAMES = ("keystores", "cipherdicts", "signatures", "cryptoconfs", "cryptainers")
+
+# Generations produced before the WA-CBOR one, frozen with their names as written, e.g. uppercase per-algorithm
+# subdirectories ("AES_CBC/") and key files ("<uid>_RSA_OAEP_public_key.pem"); all other generations must have
+# lowercase file and directory names only
+MIXED_CASE_GENERATIONS = frozenset(
+    [
+        "2022_v0.9_genuine",
+        "2022_v0.10_genuine",
+        "2023_v0.11_genuine",
+        "2024_pre_signature_rename",
+        "2026_current",
+        "2026_edge_cases",
+        "2026_post_quantum",
+    ]
+)
+
 
 def load_schema_registry(schemas_dir: Path = SCHEMAS_DIR) -> Registry:
     """Return a registry of all corpus schemas, keyed by their $id (which is their filename)."""
@@ -58,20 +83,38 @@ def _is_hidden_or_schema(path: Path, corpus_dir: Path) -> bool:
     return any(is_keystore_pool_dir(parent) for parent in path.parents if corpus_dir in parent.parents)
 
 
+def is_sidecar_path(path: Path) -> bool:
+    """True for a ".json" file whose name without the final ".json" is an existing asset of the same directory."""
+    return path.name.endswith(SIDECAR_SUFFIX) and get_asset_path(path).exists()
+
+
+def get_fixture_kind_from_asset_name(asset_name: str):
+    """Return the fixture kind of a file asset given by its name (e.g. "cryptainer" for "x.crypt", "x.crypt.json"
+    and "x.crypt.cbor"), or None if this name is not the one of an asset."""
+    has_format_extension = asset_name.endswith(DOCUMENT_FORMAT_EXTENSIONS)
+    if has_format_extension:
+        asset_name = asset_name.rsplit(".", 1)[0]
+    fixture_kind = ASSET_SUFFIXES_TO_KINDS.get(PurePosixPath(asset_name).suffix)
+    if has_format_extension and fixture_kind not in DOCUMENT_FIXTURE_KINDS:
+        return None  # E.g. "x.bin.json", which can only be a sidecar
+    return fixture_kind
+
+
 def iter_sidecar_paths(corpus_dir: Path = CORPUS_DIR):
     """Yield all sidecar paths of the corpus, sorted (schemas, and hidden staging dirs of generators, excluded)."""
     for path in sorted(corpus_dir.rglob("*" + SIDECAR_SUFFIX)):
-        if not _is_hidden_or_schema(path, corpus_dir):
+        if not _is_hidden_or_schema(path, corpus_dir) and is_sidecar_path(path):
             yield path
 
 
 def iter_asset_paths(corpus_dir: Path = CORPUS_DIR):
-    """Yield all paths which are assets according to their suffix, or keystore pool directories."""
+    """Yield all paths which are assets according to their name, or keystore pool directories."""
     for path in sorted(corpus_dir.rglob("*")):
-        if _is_hidden_or_schema(path, corpus_dir) or path.name.endswith(SIDECAR_SUFFIX):
+        if _is_hidden_or_schema(path, corpus_dir):
             continue
-        if path.is_file() and path.suffix in ASSET_SUFFIXES_TO_KINDS:
-            yield path
+        if path.is_file():
+            if not is_sidecar_path(path) and get_fixture_kind_from_asset_name(path.name):
+                yield path
         elif is_keystore_pool_dir(path):
             yield path
 
@@ -386,6 +429,77 @@ def parse_passphrase_mapper(passphrase_mapper: dict) -> dict:
     return {trustee_id: list(passphrases) for trustee_id, passphrases in passphrase_mapper.items()}
 
 
+# DOCUMENT ASSETS (Extended JSON or WA-CBOR) #
+
+def get_declared_document_format(sidecar: dict) -> str:
+    """Format of a document asset declared by its sidecar: Extended JSON unless stated otherwise."""
+    return sidecar.get("document_format", "json")
+
+
+def load_document_asset(sidecar_path: Path):
+    """Load the document tree of a cipherdict, signature, cryptoconf or cryptainer asset (without its offloaded
+    payload), whatever its format."""
+    from wacryptolib.utilities import load_from_document_file
+
+    return load_from_document_file(get_asset_path(sidecar_path))
+
+
+def get_raw_extjson_tree(asset_path: Path, document):
+    """Return the raw Extended JSON tree of a document asset, as parsed by a plain JSON parser (e.g. for JSON-Schema
+    validation): the asset itself if it is Extended JSON, else the RELAXED Extended JSON form of its tree."""
+    from wacryptolib.utilities import DocumentFormat, detect_document_format, dump_to_json_bytes
+
+    raw_document = asset_path.read_bytes()
+    if detect_document_format(raw_document, filename=asset_path.name) == DocumentFormat.JSON:
+        return json.loads(raw_document)
+    return json.loads(dump_to_json_bytes(document))
+
+
+def check_document_format(sidecar_path: Path, sidecar: dict):
+    """The format of a document asset, recognized like the library does, must be the one its sidecar declares."""
+    from wacryptolib.utilities import detect_document_format
+
+    asset_path = get_asset_path(sidecar_path)
+    detected_format = detect_document_format(asset_path.read_bytes(), filename=asset_path.name)
+    assert detected_format == get_declared_document_format(sidecar), (
+        "Asset %s is in %s format, unlike what its sidecar declares" % (asset_path, detected_format)
+    )
+
+
+def check_equivalent_asset(sidecar_path: Path, sidecar: dict):
+    """Check that the Extended JSON and WA-CBOR assets of a pair, which reference each other, load to equal trees,
+    and that converting either one with the library reproduces the other byte for byte (offloaded payloads
+    included)."""
+    from wacryptolib.utilities import convert_document_tree_to_bytes
+
+    asset_path = get_asset_path(sidecar_path)
+    equivalent_asset_path = resolve_relpath(sidecar_path, sidecar["equivalent_asset"])
+    equivalent_sidecar_path = get_sidecar_path(equivalent_asset_path)
+    equivalent_sidecar = json.loads(equivalent_sidecar_path.read_text(encoding="utf8"))
+    assert equivalent_sidecar["fixture_kind"] == sidecar["fixture_kind"], equivalent_sidecar_path
+    assert resolve_relpath(equivalent_sidecar_path, equivalent_sidecar["equivalent_asset"]) == asset_path.resolve(), (
+        "Equivalent asset %s doesn't reference %s back" % (equivalent_asset_path, asset_path)
+    )
+    equivalent_format = get_declared_document_format(equivalent_sidecar)
+    assert equivalent_format != get_declared_document_format(sidecar), (asset_path, equivalent_asset_path)
+
+    document = load_document_asset(sidecar_path)
+    equivalent_document = load_document_asset(equivalent_sidecar_path)
+    assert document == equivalent_document, "Assets %s and %s have different trees" % (
+        asset_path,
+        equivalent_asset_path,
+    )
+    assert convert_document_tree_to_bytes(document, target_format=equivalent_format) == (
+        equivalent_asset_path.read_bytes()
+    ), "Converting %s doesn't reproduce %s byte for byte" % (asset_path, equivalent_asset_path)
+
+    payload_files = list_asset_files(asset_path)[1:]
+    equivalent_payload_files = list_asset_files(equivalent_asset_path)[1:]
+    assert [path.read_bytes() for path in payload_files] == [path.read_bytes() for path in equivalent_payload_files], (
+        "Offloaded payloads of %s and %s differ" % (asset_path, equivalent_asset_path)
+    )
+
+
 # BEHAVIORAL CHECKS OF FIXTURES (raising AssertionError, or another exception, on failure) #
 
 def check_asset_integrity(sidecar_path: Path, sidecar: dict):
@@ -407,9 +521,8 @@ def check_plaintext_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
 def check_cipherdict_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
     from wacryptolib.cipher import CIPHER_ALGOS_REGISTRY, decrypt_bytestring, encrypt_bytestring
     from wacryptolib.exceptions import DecryptionError, DecryptionIntegrityError
-    from wacryptolib.utilities import load_from_json_file
 
-    cipherdict = load_from_json_file(get_asset_path(sidecar_path))
+    cipherdict = load_document_asset(sidecar_path)
     plaintext = resolve_relpath(sidecar_path, sidecar["plaintext"]).read_bytes()
     cipher_algo = sidecar["cipher_algo"]
     if "symkey" in sidecar:
@@ -438,9 +551,8 @@ def check_cipherdict_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
 def check_signature_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
     from wacryptolib.exceptions import SignatureVerificationError
     from wacryptolib.signature import verify_message_signature
-    from wacryptolib.utilities import load_from_json_file
 
-    signature = load_from_json_file(get_asset_path(sidecar_path))
+    signature = load_document_asset(sidecar_path)
     if "message" in sidecar:
         message = resolve_relpath(sidecar_path, sidecar["message"]).read_bytes()
     else:
@@ -539,10 +651,19 @@ def check_cryptoconf_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
     from wacryptolib.cryptainer import encrypt_payload_into_cryptainer
     from wacryptolib.exceptions import SchemaValidationError
     from wacryptolib.keystore import FilesystemKeystorePool
-    from wacryptolib.utilities import load_from_json_file
+    from wacryptolib.utilities import WaCborDecodingError
 
     asset_path = get_asset_path(sidecar_path)
-    cryptoconf = load_from_json_file(asset_path)
+
+    if "expected_decoding_error" in sidecar:
+        # Invalid WA-CBOR documents must be rejected by the strict decoder, whatever the cryptoconf they carry
+        try:
+            load_document_asset(sidecar_path)
+        except WaCborDecodingError:
+            return
+        raise AssertionError("Invalid WA-CBOR document %s was decoded" % sidecar_path)
+
+    cryptoconf = load_document_asset(sidecar_path)
 
     if not sidecar["expected_valid"]:
         # Only the python mode is required to reject them, since e.g. a threshold above the shard count can't be
@@ -554,7 +675,7 @@ def check_cryptoconf_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
         raise AssertionError("Invalid cryptoconf %s was accepted" % sidecar_path)
 
     check_cryptoconf_sanity(cryptoconf)
-    check_cryptoconf_sanity(json.loads(asset_path.read_text(encoding="utf8")), jsonschema_mode=True)
+    check_cryptoconf_sanity(get_raw_extjson_tree(asset_path, cryptoconf), jsonschema_mode=True)
 
     # Encryption must use the keys of the pool, and never autogenerate missing ones (which would hide unloadable old
     # keys). Cryptoconfs of old releases may lack a keychain_uid, which was then given at encryption time, so the local
@@ -677,12 +798,12 @@ def check_cryptainer_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
     from wacryptolib.keystore import FilesystemKeystorePool
 
     asset_path = get_asset_path(sidecar_path)
-    raw_cryptainer = asset_path.read_bytes()
-    is_canonical = b'"$uuid"' not in raw_cryptainer  # CANONICAL UUIDs are "$binary" of subtype 04 instead
-    assert is_canonical == (sidecar["extjson_flavor"] == "canonical"), "Unexpected extended JSON flavor"
+    if "extjson_flavor" in sidecar:  # Only for Extended JSON assets
+        is_canonical = b'"$uuid"' not in asset_path.read_bytes()  # CANONICAL UUIDs are "$binary" of subtype 04 instead
+        assert is_canonical == (sidecar["extjson_flavor"] == "canonical"), "Unexpected extended JSON flavor"
     assert asset_path.with_name(asset_path.name + ".payload").exists() == sidecar["payload_offloaded"]
 
-    check_cryptainer_sanity(json.loads(raw_cryptainer), jsonschema_mode=True)
+    check_cryptainer_sanity(get_raw_extjson_tree(asset_path, load_document_asset(sidecar_path)), jsonschema_mode=True)
     cryptainer = load_cryptainer_from_filesystem(asset_path)
     check_cryptainer_sanity(cryptainer)
     if "cryptainer_metadata" in sidecar:
@@ -758,6 +879,10 @@ def check_fixture(sidecar_path: Path, work_dir: Path, backend_name: str = None, 
     check_asset_integrity(sidecar_path, sidecar)
     expected_fixture_kind = get_expected_fixture_kind(get_asset_path(sidecar_path))
     assert sidecar["fixture_kind"] == expected_fixture_kind, (sidecar["fixture_kind"], expected_fixture_kind)
+    if sidecar["fixture_kind"] in DOCUMENT_FIXTURE_KINDS:
+        check_document_format(sidecar_path, sidecar)
+    if "equivalent_asset" in sidecar:
+        check_equivalent_asset(sidecar_path, sidecar)
     fixture_checker = FIXTURE_CHECKERS[sidecar["fixture_kind"]]
     missing_requirements = get_missing_requirements(sidecar, backend_name)
     if missing_requirements:
@@ -790,7 +915,7 @@ CORPUS_DOCUMENTATION_FILENAMES = ("README.md",)
 def get_expected_fixture_kind(asset_path: Path) -> str:
     if is_keystore_pool_dir(asset_path):
         return "keystore_pool"
-    return ASSET_SUFFIXES_TO_KINDS.get(asset_path.suffix)
+    return get_fixture_kind_from_asset_name(asset_path.name)
 
 
 def _load_raw_sidecars(corpus_dir: Path):
@@ -812,11 +937,19 @@ def find_orphan_paths(corpus_dir: Path = CORPUS_DIR) -> list:
 
     for sidecar_path in iter_sidecar_paths(corpus_dir):
         accounted_paths.add(sidecar_path)
-        asset_path = get_asset_path(sidecar_path)
-        if not asset_path.exists():
-            problems.append("Sidecar without its asset: %s" % sidecar_path)
-            continue
-        accounted_paths.update(list_asset_files(asset_path))
+        accounted_paths.update(list_asset_files(get_asset_path(sidecar_path)))
+
+    # A ".json" file without its asset is not a sidecar, but it is no asset either if its name isn't the one of an
+    # asset (e.g. "x.bin.json")
+    for path in sorted(corpus_dir.rglob("*" + SIDECAR_SUFFIX)):
+        if (
+            path.is_file()
+            and not _is_hidden_or_schema(path, corpus_dir)
+            and not is_sidecar_path(path)
+            and not get_fixture_kind_from_asset_name(path.name)
+        ):
+            problems.append("Sidecar without its asset: %s" % path)
+            accounted_paths.add(path)
 
     for asset_path in iter_asset_paths(corpus_dir):
         if not get_sidecar_path(asset_path).exists():
@@ -832,8 +965,6 @@ def find_orphan_paths(corpus_dir: Path = CORPUS_DIR) -> list:
 
 def find_forbidden_trustees(corpus_dir: Path = CORPUS_DIR) -> list:
     """Return problems about valid cryptoconfs, or cryptainers, using other trustees than local/authenticator ones."""
-    from wacryptolib.utilities import load_from_json_file
-
     problems = []
     for sidecar_path, sidecar in _load_raw_sidecars(corpus_dir):
         if sidecar.get("fixture_kind") == "cryptainer" or (
@@ -842,7 +973,7 @@ def find_forbidden_trustees(corpus_dir: Path = CORPUS_DIR) -> list:
             asset_path = get_asset_path(sidecar_path)
             if not asset_path.is_file():
                 continue  # Reported as orphan
-            forbidden_trustee_types = collect_trustee_types(load_from_json_file(asset_path)) - ALLOWED_TRUSTEE_TYPES
+            forbidden_trustee_types = collect_trustee_types(load_document_asset(sidecar_path)) - ALLOWED_TRUSTEE_TYPES
             if forbidden_trustee_types:
                 problems.append("Forbidden trustee types %s in %s" % (sorted(forbidden_trustee_types), asset_path))
     return problems
@@ -873,6 +1004,23 @@ def find_uncovered_algorithms(corpus_dir: Path = CORPUS_DIR) -> dict:
         "asymmetric_key_algos": sorted(set(ASYMMETRIC_KEY_ALGOS_REGISTRY) - covered_key_algos),
     }
     return {registry: algos for registry, algos in uncovered_algorithms.items() if algos}
+
+
+def find_non_lowercase_names(corpus_dir: Path = CORPUS_DIR) -> list:
+    """Return problems about files and directories of generations, other than the frozen MIXED_CASE_GENERATIONS,
+    whose names are not lowercase (each faulty name is reported once, by its full path)."""
+    problems = []
+    for kind_dirname in GENERATION_KIND_DIRNAMES:
+        kind_dir = corpus_dir / kind_dirname
+        if not kind_dir.is_dir():
+            continue
+        for generation_dir in sorted(kind_dir.iterdir()):
+            if generation_dir.name in MIXED_CASE_GENERATIONS or generation_dir.name.startswith("."):
+                continue
+            for path in [generation_dir] + sorted(generation_dir.rglob("*")):
+                if path.name != path.name.lower():
+                    problems.append("Non-lowercase name in generation %s: %s" % (generation_dir.name, path))
+    return problems
 
 
 def snapshot_corpus(corpus_dir: Path = CORPUS_DIR) -> dict:

@@ -3,15 +3,20 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from collections.abc import Sequence
+import os
 from typing import Optional
 
 from wacryptolib.cryptainer import logger
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keystore import KeystorePoolBase, InMemoryKeystorePool, FilesystemKeystore
 from wacryptolib.trustee import TrusteeApi, ReadonlyTrusteeApi
+from wacryptolib.utilities import DocumentFormat, normalize_recognized_extension
 
 
-CRYPTAINER_SUFFIX = ".crypt"
+CRYPTAINER_SUFFIX = ".crypt"  # Legacy suffix of Extended JSON cryptainers, still read but no longer written
+CRYPTAINER_JSON_SUFFIX = ".crypt.json"
+CRYPTAINER_CBOR_SUFFIX = ".crypt.cbor"
+CRYPTAINER_SUFFIXES = (CRYPTAINER_JSON_SUFFIX, CRYPTAINER_CBOR_SUFFIX, CRYPTAINER_SUFFIX)  # Longest first
 CRYPTAINER_DATETIME_FORMAT = "%Y%m%d_%H%M%S"  # For use in cryptainer names and their records
 CRYPTAINER_DATETIME_LENGTH = (
     15  # Important to lookup prefix of filename before matching it with CRYPTAINER_DATETIME_FORMAT
@@ -28,11 +33,54 @@ class PAYLOAD_CIPHERTEXT_LOCATIONS:
 # Shortcut helper, should NOT be modified
 OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER = dict(ciphertext_location=PAYLOAD_CIPHERTEXT_LOCATIONS.OFFLOADED)
 
-OFFLOADED_PAYLOAD_FILENAME_SUFFIX = ".payload"  # Added to CRYPTAINER_SUFFIX
+OFFLOADED_PAYLOAD_FILENAME_SUFFIX = ".payload"  # Added to the whole cryptainer filename
 
 DEFAULT_DATA_CHUNK_SIZE = 1024**2  # E.g. when streaming a big payload through encryptors
 
 DECRYPTED_FILE_SUFFIX = ".decrypted"  # To construct decrypted filename when no output filename is provided
+
+
+_CRYPTAINER_FORMATS_BY_SUFFIX = {
+    CRYPTAINER_JSON_SUFFIX: DocumentFormat.JSON,
+    CRYPTAINER_CBOR_SUFFIX: DocumentFormat.CBOR,
+    CRYPTAINER_SUFFIX: DocumentFormat.JSON,  # Legacy cryptainers are always Extended JSON
+}
+
+_CRYPTAINER_SUFFIXES_BY_FORMAT = {
+    DocumentFormat.JSON: CRYPTAINER_JSON_SUFFIX,
+    DocumentFormat.CBOR: CRYPTAINER_CBOR_SUFFIX,
+}
+
+
+def get_cryptainer_suffix(format: str) -> str:
+    """Return the (lowercase) suffix of new cryptainers in the given document format."""
+    try:
+        return _CRYPTAINER_SUFFIXES_BY_FORMAT[format]
+    except KeyError:
+        raise ValueError("Unknown document format %r" % (format,)) from None
+
+
+def split_cryptainer_suffix(name) -> Optional[tuple]:
+    """Split a cryptainer name into its basename and its document format, or return None if it has no cryptainer
+    suffix (`.crypt.json`, `.crypt.cbor` or legacy `.crypt`, matched in any letter case).
+
+    A temporary name ending with "~" is split according to its final name. The basename keeps its spelling, e.g.
+    "Clip.MP4.CRYPT.JSON~" gives ("Clip.MP4", "json")."""
+    name = os.fspath(name)
+    if name.endswith(CRYPTAINER_TEMP_SUFFIX):
+        name = name[: -len(CRYPTAINER_TEMP_SUFFIX)]
+    normalized_name = normalize_recognized_extension(name)
+    for suffix in CRYPTAINER_SUFFIXES:
+        if normalized_name.endswith(suffix):
+            return name[: -len(suffix)], _CRYPTAINER_FORMATS_BY_SUFFIX[suffix]
+    return None
+
+
+def get_cryptainer_format_from_filename(path) -> Optional[str]:
+    """Return the document format of a cryptainer from the suffix of its filename (see `split_cryptainer_suffix()`),
+    or None if it has no cryptainer suffix."""
+    split_name = split_cryptainer_suffix(os.path.basename(os.fspath(path)))
+    return split_name[1] if split_name else None
 
 
 # FIXME get rid of this heavy global dependency? Make it lazy-loaded at least?

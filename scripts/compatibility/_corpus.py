@@ -7,6 +7,7 @@ Write-side utilities of the compatibility/ corpus, shared by the generation scri
 
 A generation is written into a hidden staging directory of the corpus, and only renamed into place once complete.
 Existing generation directories are never touched: the corpus is frozen and append-only (see compatibility/README.md).
+All files and directories of new generations have lowercase names, e.g. "aes_cbc/" for per-algorithm subdirectories.
 """
 
 import datetime
@@ -24,11 +25,10 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT_DIR / "src"), str(ROOT_DIR / "tests")]  # Use the wacryptolib under test, not an installed one
 
 import _compatibility_corpus as corpus  # noqa: E402
-from _compatibility_corpus import CORPUS_DIR, SCHEMA_SUFFIX, SCHEMAS_DIR, SIDECAR_SUFFIX  # noqa: E402
+from _compatibility_corpus import CORPUS_DIR, GENERATION_KIND_DIRNAMES, SCHEMA_SUFFIX, SCHEMAS_DIR  # noqa: E402
+from _compatibility_corpus import SIDECAR_SUFFIX  # noqa: E402
 from jsonschema import Draft202012Validator  # noqa: E402
 
-# Directories of the corpus which are split into generations (plaintexts are shared by all generations)
-GENERATION_KIND_DIRNAMES = ("keystores", "cipherdicts", "signatures", "cryptoconfs", "cryptainers")
 PLAINTEXTS_DIRNAME = "plaintexts"
 GENERATION_NAME_REGEX = r"^[0-9]{4}_[a-z0-9][a-z0-9._-]*$"
 STAGING_DIR_PREFIX = ".staging-"
@@ -36,6 +36,20 @@ STAGING_DIR_PREFIX = ".staging-"
 
 class GenerationAlreadyExists(Exception):
     """Raised when asked to write a generation of which a directory already exists in the corpus."""
+
+
+class NonLowercaseName(ValueError):
+    """Raised when asked to write a file or directory whose name is not lowercase into a new generation."""
+
+
+def check_lowercase_names(relative_path: Path, generation: str):
+    """Raise NonLowercaseName if a part of this path, relative to a generation directory, is not lowercase."""
+    non_lowercase_names = [part for part in Path(relative_path).parts if part != part.lower()]
+    if non_lowercase_names:
+        raise NonLowercaseName(
+            "Refusing non-lowercase name(s) %s in new generation %r: %s"
+            % (", ".join(non_lowercase_names), generation, Path(relative_path).as_posix())
+        )
 
 
 def to_relpath(target_path: Path, sidecar_path: Path) -> str:
@@ -230,7 +244,9 @@ class GenerationWriter(SidecarWriterMixin):
             self.discard()
 
     def get_final_path(self, kind_dirname: str, *parts: str) -> Path:
-        """Return the path that a file of this generation will have in the corpus, once committed."""
+        """Return the path that a file of this generation will have in the corpus, once committed (its name must be
+        lowercase, like all names of new generations)."""
+        check_lowercase_names(Path(*parts), self.generation)
         return self.final_dirs[kind_dirname].joinpath(*parts)
 
     def get_staging_path(self, final_path: Path) -> Path:
@@ -238,7 +254,16 @@ class GenerationWriter(SidecarWriterMixin):
         assert relative_path.parts[0] in GENERATION_KIND_DIRNAMES and relative_path.parts[1] == self.generation, (
             final_path
         )
+        check_lowercase_names(Path(*relative_path.parts[2:]), self.generation)
         return self.staging_root / relative_path
+
+    def check_staged_names(self):
+        """Check that all staged files and directories, including those created by library code inside staging
+        directories (e.g. the key files of keystore pools), have lowercase names."""
+        for kind_dirname in GENERATION_KIND_DIRNAMES:
+            staging_dir = self.staging_root / kind_dirname / self.generation
+            for path in sorted(staging_dir.rglob("*")):
+                check_lowercase_names(path.relative_to(staging_dir), self.generation)
 
     def write_bytes(self, final_path: Path, data: bytes) -> Path:
         staging_path = self.get_staging_path(final_path)
@@ -275,6 +300,7 @@ class GenerationWriter(SidecarWriterMixin):
     def commit(self) -> list:
         """Rename the staged kind directories into place, and return the list of created generation directories."""
         assert self.committed_dirs is None, "Generation already committed"
+        self.check_staged_names()  # Before anything gets renamed into place
         # Filled as renames succeed, so that discard() also removes a partially committed generation
         self.committed_dirs = []
         for kind_dirname, final_dir in self.final_dirs.items():
@@ -290,7 +316,9 @@ class GenerationWriter(SidecarWriterMixin):
     def iter_committed_sidecar_paths(self):
         for committed_dir in self.committed_dirs:
             for sidecar_path in sorted(committed_dir.rglob("*" + SIDECAR_SUFFIX)):
-                if not corpus._is_hidden_or_schema(sidecar_path, self.corpus_dir):
+                if not corpus._is_hidden_or_schema(sidecar_path, self.corpus_dir) and corpus.is_sidecar_path(
+                    sidecar_path
+                ):
                     yield sidecar_path
 
     def discard(self):

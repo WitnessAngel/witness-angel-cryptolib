@@ -4,18 +4,19 @@
 
 from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import timezone, datetime, timedelta
+import os
 from pathlib import Path
 import threading
 from typing import Optional
 import uuid
 
-from wacryptolib.cryptainer import CRYPTAINER_SUFFIX, CRYPTAINER_TEMP_SUFFIX, CRYPTAINER_DATETIME_LENGTH, \
+from wacryptolib.cryptainer import CRYPTAINER_SUFFIXES, CRYPTAINER_TEMP_SUFFIX, CRYPTAINER_DATETIME_LENGTH, \
     CRYPTAINER_DATETIME_FORMAT, logger, get_cryptainer_size_on_filesystem, load_cryptainer_from_filesystem, \
     decrypt_payload_from_cryptainer, check_cryptainer_sanity, ensure_validated_cryptoconf, delete_cryptainer_from_filesystem, \
     encrypt_payload_and_stream_cryptainer_to_filesystem, encrypt_payload_into_cryptainer, dump_cryptainer_to_filesystem, \
-    is_cryptainer_cryptoconf_streamable, CryptainerEncryptionPipeline, _get_offloaded_file_path
+    is_cryptainer_cryptoconf_streamable, CryptainerEncryptionPipeline, _get_offloaded_file_path, split_cryptainer_suffix,     get_cryptainer_suffix
 from wacryptolib.keystore import KeystorePoolBase
-from wacryptolib.utilities import get_utc_now_date, is_file_basename, catch_and_log_exception, synchronized
+from wacryptolib.utilities import get_utc_now_date, is_file_basename, catch_and_log_exception, synchronized,     DocumentFormat
 
 
 class ReadonlyCryptainerStorage:
@@ -44,11 +45,17 @@ class ReadonlyCryptainerStorage:
         If `finished` ìs None, both finished and pending cryptainers are listed.
         """
         assert self._cryptainer_dir.is_absolute(), self._cryptainer_dir
+        include_finished = finished is None or finished
+        include_unfinished = not finished  # None or False
         paths = []  # Result as list, for multiple looping on it
-        if finished is None or finished:
-            paths += list(self._cryptainer_dir.glob("*" + CRYPTAINER_SUFFIX))
-        if not finished:  # None or False
-            paths += list(self._cryptainer_dir.glob("*" + CRYPTAINER_SUFFIX + CRYPTAINER_TEMP_SUFFIX))
+        with os.scandir(self._cryptainer_dir) as entries:  # Single listing, same results on every platform
+            for entry in entries:
+                cryptainer_name = entry.name
+                is_unfinished = cryptainer_name.endswith(CRYPTAINER_TEMP_SUFFIX)
+                if not (include_unfinished if is_unfinished else include_finished):
+                    continue
+                if split_cryptainer_suffix(cryptainer_name):  # Any cryptainer suffix, in any letter case
+                    paths.append(self._cryptainer_dir.joinpath(cryptainer_name))  # Actual name kept
         assert all(p.is_absolute() for p in paths), paths
         if as_sorted_list:
             paths = sorted(paths)
@@ -208,6 +215,9 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
     :param max_cryptainer_age: if set, cryptainers exceeding this age (taken from their name, else their file-stats) in days are automatically erased
     :param max_workers: count of worker threads to use in parallel
     :param offload_payload_ciphertext: whether actual encrypted payload must be kept separated from structured cryptainer file
+    :param cryptainer_format: document format of the cryptainers written by this storage, Extended JSON ("json",
+        written as `<basename>.crypt.json`) or WA-CBOR ("cbor", written as `<basename>.crypt.cbor`); cryptainers of
+        all formats are listed and read anyway
     """
 
     def __init__(
@@ -220,8 +230,11 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         max_cryptainer_age: Optional[timedelta] = None,
         max_workers: int = 1,
         offload_payload_ciphertext=True,
+        cryptainer_format: str = DocumentFormat.JSON,
     ):
         super().__init__(cryptainer_dir=cryptainer_dir, keystore_pool=keystore_pool)
+        self._cryptainer_suffix = get_cryptainer_suffix(cryptainer_format)  # Raises if unknown format
+        self._cryptainer_format = cryptainer_format
         assert max_cryptainer_quota is None or max_cryptainer_quota >= 0, max_cryptainer_quota
         assert max_cryptainer_count is None or max_cryptainer_count >= 0, max_cryptainer_count
         assert max_cryptainer_age is None or max_cryptainer_age >= timedelta(seconds=0), max_cryptainer_age
@@ -325,6 +338,23 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             keystore_pool=self._keystore_pool,
         )
 
+    def _get_new_cryptainer_filepath(self, filename_base) -> Path:
+        """Return the path of a new cryptainer, in the format of this storage, and warn about existing cryptainers
+        having the same basename in other formats (which are left untouched)."""
+        cryptainer_filepath = self._make_absolute(filename_base + self._cryptainer_suffix)
+        for suffix in CRYPTAINER_SUFFIXES:
+            if suffix == self._cryptainer_suffix:
+                continue
+            sibling_filepath = self._make_absolute(filename_base + suffix)
+            if sibling_filepath.exists():  # The filesystem decides whether letter case matters
+                logger.warning(
+                    "Cryptainer %s is being written next to the existing cryptainer %s, which has the same basename"
+                    " in another format",
+                    cryptainer_filepath.name,
+                    sibling_filepath.name,
+                )
+        return cryptainer_filepath
+
     def _do_encrypt_payload_and_dump_cryptainer(self, filename_base, payload, cryptainer_metadata, cryptoconf) -> str:
         # TODO later as a SKIP here!
         # if not payload:
@@ -332,7 +362,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         #    return
         assert cryptoconf, cryptoconf
 
-        cryptainer_filepath = self._make_absolute(filename_base + CRYPTAINER_SUFFIX)
+        cryptainer_filepath = self._get_new_cryptainer_filepath(filename_base)
 
         if self._use_streaming_encryption_for_cryptoconf(cryptoconf):
             # We can use newer, low-memory, streamed API
@@ -418,9 +448,9 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         cryptainer_encryption_stream_extra_kwargs = cryptainer_encryption_stream_extra_kwargs or {}
 
         logger.debug("Building cryptainer stream %r", filename_base)
-        cryptainer_filepath = self._make_absolute(filename_base + CRYPTAINER_SUFFIX)
         cryptoconf = self._resolve_cryptoconf(cryptoconf)
         self._cleanup_before_new_record_encryption()
+        cryptainer_filepath = self._get_new_cryptainer_filepath(filename_base)
 
         cryptainer_encryption_stream = cryptainer_encryption_stream_class(
             cryptainer_filepath,

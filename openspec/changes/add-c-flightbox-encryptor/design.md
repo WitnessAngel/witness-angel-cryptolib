@@ -181,6 +181,8 @@ Alternative considered: a single-pass writer emitting the cryptainer while walki
 
 The decoder handles only the needed subset: definite-length maps, arrays, byte and text strings, major types 0/1 within int64, `true`/`false`/`null`, and tag 37 over 16 bytes. It also checks UTF-8 validity, rejects duplicate map keys, enforces `WA_MAX_CBOR_NESTING_DEPTH` (default 64) and bounds every length against the remaining input. Anything else (floats, other tags, indefinite lengths, undefined and simple values) gives a typed error. Profile semantics (D9) are checked in a second pass over the tree.
 
+Note (change `add-cbor-document-format`): the device profile encoding is a strict sub-profile of WA-CBOR, the CBOR document format of wacryptolib (`docs/specifications/wa_cbor_document_format.md`, section 9): definite lengths only, no floats, and no tag other than 37. WA-CBOR already requires text map keys and rejects duplicate keys, so every valid device profile is a valid WA-CBOR document, which wacryptolib's `load_from_cbor_bytes()` decodes. The device profile specification only needs to list these restrictions on top of the WA-CBOR document, and the C decoder's accepted inputs must stay a subset of WA-CBOR.
+
 The two depth limits are separate because a single Shamir layer already costs about 11 CBOR levels: the corpus profiles reach 11 to 13 levels, measured during review.
 - `WA_MAX_CBOR_NESTING_DEPTH` protects the decoder's stack.
 - `WA_MAX_KEY_CIPHER_NESTING_DEPTH` (default 8, unit defined in the spec) bounds the recursion of the core.
@@ -290,6 +292,10 @@ The pipeline cuts every input chunk into internal slices of at most `WA_PAYLOAD_
 - walks its asymmetric layers to collect every (trustee, keychain uid, algo), rejecting `jsonrpc_api` trustees;
 - fetches public keys from a `FilesystemKeystorePool`, and converts PEMs to raw form: RSA `n`/`e` big-endian bytes, X25519 raw 32 bytes, ML-KEM-768 raw 1184 bytes (pycryptodome, so the ML-KEM tests are marked `requires_pycryptodome`);
 - writes CBOR with `cbor2`, where UUIDs become tag 37 natively.
+
+Note (change `add-cbor-document-format`): the exported file must be a valid WA-CBOR document (see the note of D8). The script may serialize the profile tree with wacryptolib's `dump_to_cbor_bytes()` instead of calling `cbor2` directly, which gives the deterministic WA-CBOR encoding; either way, its tests decode the sample profiles with `load_from_cbor_bytes()`.
+
+Output naming: the host tool of task 8.2 writes Extended JSON cryptainers, so it follows the cryptainer naming of section 9.1 of the encryptor specification: `<output>.crypt.json`, plus `<output>.crypt.json.payload` when offloaded, with these suffixes in lowercase, instead of the legacy `.crypt` and `.crypt.payload`.
 
 `cbor2` goes to the dev dependency group, and `pip_requirements_export.txt` is regenerated so that tox environments install it. The CDDL in the device profile specification is normative, and the script and the C decoder are tested against the same sample files.
 

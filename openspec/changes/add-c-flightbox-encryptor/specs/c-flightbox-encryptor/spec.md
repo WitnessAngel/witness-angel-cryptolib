@@ -102,8 +102,8 @@ When creating a cryptainer, the caller SHALL choose between an inline ciphertext
 - offloaded: the cryptainer gets exactly `{"ciphertext_location": "offloaded"}`, and the raw final ciphertext bytes are delivered progressively to a caller-provided payload sink, to be stored as the `<cryptainer filename>.payload` sibling file.
 
 #### Scenario: Offloaded cryptainer
-- **WHEN** a payload is encrypted with an offloaded ciphertext, and the host tool writes `rec.crypt` and `rec.crypt.payload`
-- **THEN** `rec.crypt` contains the offloaded marker only, and wacryptolib loads both files from the filesystem and decrypts the payload
+- **WHEN** a payload is encrypted with an offloaded ciphertext, and the host tool writes `rec.crypt.json` and `rec.crypt.json.payload`
+- **THEN** `rec.crypt.json` contains the offloaded marker only, and wacryptolib loads both files from the filesystem and decrypts the payload
 
 #### Scenario: Inline cryptainer
 - **WHEN** a 255-byte payload is encrypted with an inline ciphertext
@@ -247,8 +247,8 @@ The C tree SHALL provide a host command-line tool, built only for host targets, 
 - optional CBOR metadata;
 - an inline or offloaded choice and a chunk size.
 
-It SHALL write a `.crypt` file, plus its `.payload` sibling when offloaded. On error, it SHALL exit with a non-zero status and print the status description and error location.
+It SHALL write a `.crypt.json` file, plus its `.payload` sibling when offloaded, with these suffixes in lowercase. On error, it SHALL exit with a non-zero status and print the status description and error location.
 
 #### Scenario: Encrypt a file from the command line
 - **WHEN** the tool is run with a device profile exported from the compatibility corpus and a payload file, in offloaded mode with 4096-byte chunks
-- **THEN** it writes `<output>.crypt` and `<output>.crypt.payload`, exits with status 0, and wacryptolib decrypts the result with the corpus keystore pool and the passphrases documented in its sidecar
+- **THEN** it writes `<output>.crypt.json` and `<output>.crypt.json.payload`, exits with status 0, and wacryptolib decrypts the result with the corpus keystore pool and the passphrases documented in its sidecar

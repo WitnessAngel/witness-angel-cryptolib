@@ -237,3 +237,29 @@ Not verified:
   (section 5): none was compiled or measured. Their licences, types and
   allocation behaviour were checked from the repositories.
 - Code size and RAM figures of the C libraries on ESP32: none were measured.
+
+## 9. Follow-up (2026-11-16)
+
+The open question "Is the cryptainer format in scope?" (section 7) was
+answered by the OpenSpec change `add-cbor-document-format`:
+
+- **WA-CBOR** is now an alternative file format for all wacryptolib
+  documents (cryptoconfs, cryptainers, cipherdicts...). It is a strict and
+  deterministic CBOR dialect, specified in
+  `../specifications/wa_cbor_document_format.md`, that keeps the current
+  string keys and data model: byte strings, UUIDs as tag 37, datetimes as
+  tag 0 text, and exactly the trees of relaxed Extended JSON, to which it
+  converts both ways (`flightbox convert-format`).
+- **Cryptainer files** are now named `<name>.crypt.json` (Extended JSON, the
+  default) or `<name>.crypt.cbor` (WA-CBOR); legacy `<name>.crypt` files are
+  still read. This is the breaking change of the on-disk naming that this
+  report anticipated, recorded in the CHANGELOG.
+- **Only document files change format.** The intermediate structures
+  encrypted on the way (symkeys, key structs, cipherdicts, shards) are still
+  serialized with `J()`, so a device writing WA-CBOR cryptainers still needs
+  a small Extended JSON writer for them; it no longer needs to base64-encode
+  the payload ciphertext, nor to parse Extended JSON when its cryptoconf is in
+  WA-CBOR.
+- **Not decided by that change**: the integrity envelope of the device-side
+  cryptoconf (COSE_Sign1, section 4), and how the MicroPython port reads
+  tag 37 UUIDs with micropython-lib's `cbor2` (section 8).

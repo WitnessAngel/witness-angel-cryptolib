@@ -4,6 +4,7 @@
 
 import functools
 import logging
+from contextlib import suppress
 import os
 import shutil
 import sys
@@ -22,8 +23,9 @@ from wacryptolib.cipher import SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, SUPPORTED_SYMM
 from wacryptolib.cryptainer import (
     LOCAL_KEYFACTORY_TRUSTEE_MARKER,
     decrypt_payload_from_cryptainer,
-    CRYPTAINER_SUFFIX,
+    CRYPTAINER_TEMP_SUFFIX,
     DECRYPTED_FILE_SUFFIX,
+    OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER,
     OFFLOADED_PAYLOAD_FILENAME_SUFFIX,
     SHARED_SECRET_ALGO_MARKER,
     check_cryptoconf_sanity,
@@ -32,11 +34,28 @@ from wacryptolib.cryptainer import (
     get_cryptoconf_summary,
     CryptainerStorage,
     CRYPTAINER_TRUSTEE_TYPES,
+    get_cryptainer_suffix,
+    split_cryptainer_suffix,
+    _get_offloaded_file_path,
 )
 from wacryptolib.exceptions import ValidationError, DecryptionError, SchemaValidationError, KeystoreMetadataDoesNotExist
 from wacryptolib.keystore import FilesystemKeystorePool, ReadonlyFilesystemKeystore
 from wacryptolib.operations import _check_target_authenticator_parameters_validity
-from wacryptolib.utilities import load_from_json_bytes, dump_to_json_str, get_nice_size, is_file_basename
+from wacryptolib.utilities import (
+    dump_to_json_str,
+    get_nice_size,
+    is_file_basename,
+    DocumentFormat,
+    DOCUMENT_FORMATS,
+    DocumentFormatError,
+    WaCborError,
+    convert_document_tree_to_bytes,
+    detect_document_format,
+    dump_to_cbor_bytes,
+    load_from_document_bytes,
+    normalize_recognized_extension,
+)
+from wacryptolib.utilities.document_utils import _get_written_document_format_from_filename
 
 # We setup the whole logging tree!
 _root_logger = logging.getLogger()
@@ -64,8 +83,13 @@ DEFAULT_CRYPTAINER_STORAGE_PATH = Path(_DEFAULT_CRYPTAINER_STORAGE_STR).expandus
 INDENT = "  "
 # Beware, no "-f" short option anywhere in this CLI, since it would be ambiguous ("--format"? "--force"?)
 FORMAT_OPTION = click.option(
-    "--format", type=click.Choice(["plain", "json"], case_sensitive=False), default="plain", show_default=True
+    "--format",
+    type=click.Choice(["plain", "json"], case_sensitive=False),
+    default="plain",
+    show_default=True,
+    help="Display format of the output",
 )
+FILE_FORMAT_CHOICE = click.Choice(DOCUMENT_FORMATS, case_sensitive=False)  # Extended JSON or WA-CBOR
 FORCE_OPTION = click.option("--force", is_flag=True, help="Overwrite existing target files")
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
@@ -119,6 +143,33 @@ def _ensure_paths_not_existing(paths, force):
             raise click.UsageError("Target path '%s' is a directory" % path)
         if not force and os.path.lexists(path):
             raise click.UsageError("Target file '%s' already exists, use --force to overwrite it" % path)
+
+
+def _get_click_file_name(file):
+    """Return the name of a file opened by click.File, or None for STDIN/STDOUT streams."""
+    name = getattr(file, "name", None)
+    if not isinstance(name, str) or name == "-" or name.startswith("<"):  # E.g. "<stdin>"
+        return None
+    return name
+
+
+def _load_document_from_click_file(file):
+    """Load an Extended JSON or WA-CBOR document from a file opened by click.File (or from STDIN), recognizing
+    its format from its name, else from its content."""
+    filename = _get_click_file_name(file)
+    try:
+        return load_from_document_bytes(file.read(), filename=os.path.basename(filename) if filename else None)
+    except (DocumentFormatError, WaCborError) as exc:
+        raise click.UsageError("Couldn't load document file '%s': %s" % (filename or "-", exc))
+
+
+def _split_typed_cryptainer_suffix(name):
+    """Split a typed cryptainer name into its basename (kept as typed) and its format, or return None if it doesn't
+    end with a cryptainer suffix (.crypt.json, .crypt.cbor or legacy .crypt, in any letter case); a temporary
+    name ending with "~" doesn't end with any of them."""
+    if name.endswith(CRYPTAINER_TEMP_SUFFIX):
+        return None
+    return split_cryptainer_suffix(name)
 
 
 def _short_format_datetime(dt):
@@ -418,16 +469,36 @@ def delete_authenticator(ctx, authenticator_dir):
         exists=True, file_okay=True, dir_okay=True, readable=False, resolve_path=True, allow_dash=True, path_type=Path
     ),
 )
-@click.option("-o", "--output-basename", help="Basename of the cryptainer storage output file")
-@click.option("-c", "--cryptoconf", default=None, help="Json crypotoconf file", type=click.File("rb"))
+@click.option(
+    "-o",
+    "--output-basename",
+    help="Basename of the cryptainer storage output file (a premature cryptainer suffix is stripped)",
+)
+@click.option(
+    "-c",
+    "--cryptoconf",
+    default=None,
+    help="Cryptoconf file, in Extended JSON or WA-CBOR, or '-' for STDIN",
+    type=click.File("rb"),
+)
 @click.option("--bundle", help="Combine cryptainer metadata and payload", is_flag=True)
+@click.option(
+    "--format",
+    "file_format",
+    type=FILE_FORMAT_CHOICE,
+    default=DocumentFormat.JSON,
+    show_default=True,
+    help="File format of the cryptainer, written as <basename>.crypt.json (Extended JSON) or <basename>.crypt.cbor"
+    " (WA-CBOR)",
+)
 @FORCE_OPTION
 @click.pass_context
-def encrypt(ctx, input_file, output_basename, cryptoconf, bundle, force):
+def encrypt(ctx, input_file, output_basename, cryptoconf, bundle, file_format, force):
     """Turn a media file into a secure container
 
     Existing cryptainer files are not overwritten, unless --force is used.
     """
+    file_format = file_format.lower()
 
     offload_payload_ciphertext = not bundle
 
@@ -435,7 +506,7 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle, force):
         logger.warning("No cryptoconf provided, defaulting to simple and INSECURE example cryptoconf")
         cryptoconf = SIMPLE_EXAMPLE_CRYPTOCONF
     else:
-        cryptoconf = load_from_json_bytes(cryptoconf.read())
+        cryptoconf = _load_document_from_click_file(cryptoconf)
 
     cryptoconf = ensure_validated_cryptoconf(cryptoconf)
 
@@ -448,21 +519,29 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle, force):
     if output_basename:
         if not is_file_basename(output_basename):
             raise click.BadParameter("Output basename must not contain path separators")
-        if output_basename.endswith(CRYPTAINER_SUFFIX):
-            output_basename = output_basename[: -len(CRYPTAINER_SUFFIX)]  # Strip premature suffix
+        output_basename = normalize_recognized_extension(output_basename)  # E.g. "Clip.CRYPT" -> "Clip.crypt"
+        split_output_basename = _split_typed_cryptainer_suffix(output_basename)
+        if split_output_basename:
+            output_basename = split_output_basename[0]  # Strip premature suffix, of any format
 
     output_basename = output_basename or input_file.name
     assert isinstance(output_basename, str), repr(output_basename)
 
-    # Both files are checked even when bundling, since a leftover offloaded payload belongs to the same cryptainer
-    cryptainer_filepath = _get_cryptainer_storage_dir(ctx).joinpath(output_basename + CRYPTAINER_SUFFIX)
+    # Both files are checked even when bundling, since a leftover offloaded payload belongs to the same cryptainer;
+    # cryptainers of the same basename in other formats are not targets, they only trigger a warning
+    cryptainer_filepath = _get_cryptainer_storage_dir(ctx).joinpath(
+        output_basename + get_cryptainer_suffix(file_format)
+    )
     offloaded_payload_filepath = cryptainer_filepath.with_name(
         cryptainer_filepath.name + OFFLOADED_PAYLOAD_FILENAME_SUFFIX
     )
     _ensure_paths_not_existing([cryptainer_filepath, offloaded_payload_filepath], force=force)
 
     cryptainer_storage = _get_cryptainer_storage(
-        ctx, keystore_pool=keystore_pool, offload_payload_ciphertext=offload_payload_ciphertext
+        ctx,
+        keystore_pool=keystore_pool,
+        offload_payload_ciphertext=offload_payload_ciphertext,
+        cryptainer_format=file_format,
     )
 
     with click.open_file(input_file, mode="rb") as payload_handle:  # Also handles "-" for STDIN
@@ -490,18 +569,39 @@ def cryptoconf_group():
     "-o",
     "--output-file",
     default="-",
-    help="Output file for the cryptoconf (default: STDOUT)",
+    help="Output file for the cryptoconf (default: STDOUT); a .json or .cbor extension, in any letter case, gives"
+    " the default file format, and is written in lowercase",
     type=click.Path(dir_okay=False, allow_dash=True, path_type=Path),
+)
+@click.option(
+    "--format",
+    "file_format",
+    type=FILE_FORMAT_CHOICE,
+    default=None,
+    help="File format of the cryptoconf, Extended JSON or WA-CBOR (default: from the output file extension, else"
+    " json)",
 )
 @FORCE_OPTION
 @click.pass_context
-def generate_simple_cryptoconf(ctx, keychain_uid, output_file, force):
+def generate_simple_cryptoconf(ctx, keychain_uid, output_file, file_format, force):
     """
     Generate a simple cryptoconf using subcommands
 
     An existing output file is not overwritten, unless --force is used.
     """
-    _ensure_paths_not_existing([output_file], force=force)  # Before any subcommand gets run
+    # All checks happen before any subcommand gets run
+    file_format = file_format.lower() if file_format else None
+    if os.fspath(output_file) != "-":
+        output_file = output_file.with_name(normalize_recognized_extension(output_file.name))  # E.g. "conf.cbor"
+        extension_format = _get_written_document_format_from_filename(output_file)
+        if file_format and extension_format and file_format != extension_format:
+            raise click.UsageError(
+                "File format '%s' contradicts the extension of output file '%s'" % (file_format, output_file)
+            )
+        file_format = file_format or extension_format
+    ctx.obj["cryptoconf_output_file"] = output_file
+    ctx.obj["cryptoconf_file_format"] = file_format or DocumentFormat.JSON
+    _ensure_paths_not_existing([output_file], force=force)
     cryptoconf = {"payload_cipher_layers": []}
     if keychain_uid:
         cryptoconf["keychain_uid"] = keychain_uid
@@ -510,16 +610,22 @@ def generate_simple_cryptoconf(ctx, keychain_uid, output_file, force):
 
 @generate_simple_cryptoconf.result_callback()
 @click.pass_context
-def display_cryptoconf(ctx, processors, keychain_uid, output_file, force):
+def display_cryptoconf(ctx, processors, keychain_uid, output_file, file_format, force):
     """Format and print a cryptoconf"""
     cryptoconf = ctx.obj["cryptoconf"]
+    output_file = ctx.obj["cryptoconf_output_file"]  # With normalized extension
+    file_format = ctx.obj["cryptoconf_file_format"]
     try:
         check_cryptoconf_sanity(cryptoconf)  # Safety
     except ValidationError as exc:
         raise click.UsageError("Generated cryptoconf is invalid: %s" % exc)
-    # Exclusive creation in case the file appeared since our early check; "-" still means STDOUT
-    with click.open_file(output_file, mode="w" if force else "x", lazy=True) as output_stream:
-        click.echo(_dump_as_safe_formatted_json(cryptoconf), file=output_stream)
+    if file_format == DocumentFormat.CBOR:
+        cryptoconf_bytes = dump_to_cbor_bytes(cryptoconf)
+    else:
+        cryptoconf_bytes = (_dump_as_safe_formatted_json(cryptoconf) + "\n").encode("utf8")
+    # Exclusive creation in case the file appeared since our early check; "-" still means (binary) STDOUT
+    with click.open_file(output_file, mode="wb" if force else "xb", lazy=True) as output_stream:
+        output_stream.write(cryptoconf_bytes)
 
 
 @generate_simple_cryptoconf.command("add-payload-cipher-layer")
@@ -664,21 +770,28 @@ def cryptoconf_add_key_shared_secret_shard(
 @click.argument("cryptoconf_file", type=click.File("rb"))
 @click.pass_context
 def validate_cryptoconf(ctx, cryptoconf_file):
-    """Ensure that a cryptoconf structure is valid"""
+    """Ensure that a cryptoconf structure is valid
+
+    The cryptoconf file (or '-' for STDIN) may be in Extended JSON or WA-CBOR.
+    """
+    cryptoconf = _load_document_from_click_file(cryptoconf_file)
+    cryptoconf_file_name = _get_click_file_name(cryptoconf_file) or "-"
     try:
-        cryptoconf = load_from_json_bytes(cryptoconf_file.read())
         check_cryptoconf_sanity(cryptoconf)
-        logger.info("Cryptoconf file '%s' is valid" % cryptoconf_file.name)
+        logger.info("Cryptoconf file '%s' is valid" % cryptoconf_file_name)
     except ValidationError as exc:
-        raise click.UsageError("Cryptoconf file '%s' is invalid: %r" % (cryptoconf_file.name, exc))
+        raise click.UsageError("Cryptoconf file '%s' is invalid: %r" % (cryptoconf_file_name, exc))
 
 
 @cryptoconf_group.command("summarize")
 @click.argument("cryptoconf_file", type=click.File("rb"))
 @click.pass_context
 def summarize_cryptoconf(ctx, cryptoconf_file):
-    """Display a summary of a cryptoconf structure"""
-    cryptoconf = load_from_json_bytes(cryptoconf_file.read())
+    """Display a summary of a cryptoconf structure
+
+    The cryptoconf file (or '-' for STDIN) may be in Extended JSON or WA-CBOR.
+    """
+    cryptoconf = _load_document_from_click_file(cryptoconf_file)
     text_summary = get_cryptoconf_summary(cryptoconf)
     click.echo("\n" + text_summary, nl=False)
 
@@ -936,9 +1049,10 @@ def decrypt(ctx, cryptainer_name, output_file, force):
     """
 
     if not output_file:
-        if cryptainer_name.endswith(CRYPTAINER_SUFFIX):
+        split_cryptainer_name = _split_typed_cryptainer_suffix(cryptainer_name)
+        if split_cryptainer_name:
             # This SHOULD be the case since we add the suffix ourselves on encryption
-            output_file_name = cryptainer_name[: -len(CRYPTAINER_SUFFIX)]
+            output_file_name = split_cryptainer_name[0]
         else:
             output_file_name = cryptainer_name + DECRYPTED_FILE_SUFFIX
         output_file = Path(output_file_name)  # We output it in current directory...
@@ -999,6 +1113,161 @@ def purge_cryptainers(ctx, max_age, max_count, max_quota):
     cryptainer_storage = _get_cryptainer_storage(ctx, **extra_kwargs)
     deleted_cryptainer_count = cryptainer_storage.purge_exceeding_cryptainers()
     logger.info("Cryptainers successfully deleted: %s" % deleted_cryptainer_count)
+
+
+_FORMAT_EXTENSIONS = {DocumentFormat.JSON: ".json", DocumentFormat.CBOR: ".cbor"}
+
+
+def _get_opposite_document_format(format):
+    return DocumentFormat.CBOR if format == DocumentFormat.JSON else DocumentFormat.JSON
+
+
+def _derive_converted_document_path(source, target_format):
+    """Swap a final .json/.cbor extension of the source name (normalized to lowercase) for the lowercase extension
+    of the target format, or else append that extension."""
+    source_name = normalize_recognized_extension(source.name)  # E.g. "Report.JSON" -> "Report.json"
+    for extension in _FORMAT_EXTENSIONS.values():
+        if source_name.endswith(extension):
+            source_name = source_name[: -len(extension)]
+            break
+    return source.with_name(source_name + _FORMAT_EXTENSIONS[target_format])
+
+
+def _is_same_existing_file(path1, path2):
+    """True if both paths designate the same existing file (the filesystem decides, e.g. about letter case)."""
+    try:
+        return os.path.samefile(path1, path2)
+    except OSError:  # One of them doesn't exist
+        return False
+
+
+def _write_new_files_exclusively(file_writers):
+    """Create each file exclusively and fill it with its writer callback, in order; on failure, delete the files
+    created by this call, and re-raise."""
+    created_paths = []
+    try:
+        for path, writer in file_writers:
+            with open(path, "xb") as output_stream:
+                created_paths.append(path)
+                writer(output_stream)
+    except BaseException:
+        for path in created_paths:
+            with suppress(OSError):
+                os.remove(path)
+        raise
+
+
+def _replace_files_atomically(file_writers):
+    """Write each file to a temporary file of its target directory, then move it over the target, in order; on
+    failure, delete the temporary file, and re-raise (already replaced targets are kept)."""
+    for path, writer in file_writers:
+        file_descriptor, temporary_path = tempfile.mkstemp(
+            dir=os.path.dirname(os.path.abspath(path)), prefix=".convert-format-", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(file_descriptor, "wb") as output_stream:
+                writer(output_stream)
+            os.replace(temporary_path, path)
+        except BaseException:
+            with suppress(OSError):
+                os.remove(temporary_path)
+            raise
+
+
+@wacryptolib_cli.command("convert-format")
+@click.argument(
+    "source",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=Path),
+)
+@click.option(
+    "-o",
+    "--output",
+    "target",
+    default=None,
+    help="Target file, whose .json or .cbor extension (in any letter case, written in lowercase) gives the file"
+    " format (default: the source path with its .json/.cbor extension swapped, or the extension of the opposite"
+    " format appended)",
+    type=click.Path(dir_okay=False, path_type=Path),
+)
+@FORCE_OPTION
+def convert_format(source, target, force):
+    """Convert a document file between Extended JSON and WA-CBOR
+
+    Any document (cryptoconf, cryptainer, cipherdict...) is converted, without validation of its structure.
+    The offloaded payload file of a cryptainer is copied next to the target. Source files are never modified.
+
+    Existing target files are not overwritten, unless --force is used.
+    """
+    if target is not None:
+        target_format = _get_written_document_format_from_filename(target)
+        if not target_format:
+            raise click.UsageError("Target file '%s' must have a .json or .cbor extension" % target)
+        target = target.with_name(normalize_recognized_extension(target.name))  # E.g. "OTHER.CBOR" -> "OTHER.cbor"
+
+    try:
+        source_bytes = source.read_bytes()
+        source_format = detect_document_format(source_bytes, filename=source.name)
+    except (OSError, DocumentFormatError) as exc:
+        raise click.ClickException("Couldn't read document file '%s': %s" % (source, exc))
+
+    if target is None:
+        target_format = _get_opposite_document_format(source_format)
+        target = _derive_converted_document_path(source, target_format=target_format)
+
+    source_payload = _get_offloaded_file_path(source)
+    for forbidden_path in (source, source_payload):
+        if _is_same_existing_file(target, forbidden_path):
+            raise click.UsageError("Target file '%s' is the same file as '%s'" % (target, forbidden_path))
+
+    try:
+        document = load_from_document_bytes(source_bytes, format=source_format)
+    except ValueError as exc:  # Including malformed Extended JSON and WA-CBOR
+        raise click.ClickException("Couldn't load document file '%s': %s" % (source, exc))
+
+    target_paths = [target]
+    target_payload = None
+    if isinstance(document, dict) and document.get("payload_ciphertext_struct") == OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER:
+        if not source_payload.is_file():
+            raise click.ClickException("Offloaded payload file '%s' of the document is missing" % source_payload)
+        target_payload = _get_offloaded_file_path(target)
+        for forbidden_path in (source, source_payload):
+            if _is_same_existing_file(target_payload, forbidden_path):
+                raise click.UsageError("Target file '%s' is the same file as '%s'" % (target_payload, forbidden_path))
+        target_paths.insert(0, target_payload)
+
+    _ensure_paths_not_existing(target_paths, force=force)  # Before any conversion or write
+
+    try:
+        target_bytes = convert_document_tree_to_bytes(document, target_format=target_format)  # Fully in memory
+    except WaCborError as exc:  # Unsupported value, in either format
+        raise click.ClickException("Couldn't convert document file '%s': %s" % (source, exc))
+
+    def _copy_payload(output_stream):
+        with open(source_payload, "rb") as input_stream:
+            shutil.copyfileobj(input_stream, output_stream)
+
+    file_writers = []  # Payload first, so that a document never points to a missing payload
+    if target_payload:
+        file_writers.append((target_payload, _copy_payload))
+    file_writers.append((target, lambda output_stream: output_stream.write(target_bytes)))
+
+    try:
+        if force:
+            _replace_files_atomically(file_writers)
+        else:
+            _write_new_files_exclusively(file_writers)  # Never clobbers a file appeared since the early check
+    except FileExistsError as exc:
+        raise click.UsageError("Target file '%s' already exists, use --force to overwrite it" % exc.filename)
+    except OSError as exc:
+        raise click.ClickException("Couldn't write converted document: %s" % exc)
+
+    logger.info(
+        "Document file '%s' successfully converted to %s file '%s'%s",
+        source,
+        "WA-CBOR" if target_format == DocumentFormat.CBOR else "Extended JSON",
+        target,
+        " (with payload file '%s')" % target_payload if target_payload else "",
+    )
 
 
 def main(prog_name=None):

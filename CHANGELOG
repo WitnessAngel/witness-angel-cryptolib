@@ -2,9 +2,46 @@
 Development
 =============
 
-* **BREAKING**: the flightbox CLI never overwrites existing files anymore: `encrypt` (target `.crypt` or `.crypt.payload` file
-  in the cryptainer storage), `cryptainer decrypt` (output file, including the default one derived from the cryptainer name)
-  and `cryptoconf generate-simple -o` fail with a usage error naming the blocking file, before any passphrase prompt or
+* **BREAKING**: `CryptainerStorage` and the flightbox CLI name new cryptainers `<basename>.crypt.json` (Extended JSON,
+  the default) or `<basename>.crypt.cbor` (WA-CBOR), instead of `<basename>.crypt`; the offloaded payload file is still
+  named after the whole cryptainer file name plus `.payload` (e.g. `<basename>.crypt.json.payload`)
+  - Legacy `<basename>.crypt` cryptainers (always Extended JSON) keep being listed, loaded, decrypted, purged and deleted
+  - Code building or stripping cryptainer names with `CRYPTAINER_SUFFIX` (now the legacy suffix only) must use the new
+    `CRYPTAINER_JSON_SUFFIX`, `CRYPTAINER_CBOR_SUFFIX` and `CRYPTAINER_SUFFIXES` constants, and the
+    `get_cryptainer_suffix()`, `split_cryptainer_suffix()` and `get_cryptainer_format_from_filename()` helpers
+  - Low-level functions given an explicit cryptainer path keep writing to that exact path, in the format its suffix implies
+  - Tools built on older versions only list `*.crypt` files, so they don't see the new cryptainers; to downgrade,
+    rename each Extended JSON cryptainer `x.crypt.json` to `x.crypt`, and its offloaded payload `x.crypt.json.payload`
+    to `x.crypt.payload` (WA-CBOR cryptainers must first be converted with `flightbox convert-format`)
+  - Creating a cryptainer whose basename already exists in the other format (or as a legacy `.crypt`) logs a warning
+    and proceeds
+* The recognized extensions `.crypt`, `.json`, `.cbor`, and the suffixes `.crypt.json` and `.crypt.cbor`, are matched
+  in any letter case on every platform (e.g. `X.CRYPT.JSON` is an Extended JSON cryptainer on Linux too), in format
+  recognition, cryptainer listings and the CLI's stripping or swapping of suffixes; when the CLI creates a file from a
+  name typed by the user, such a trailing extension is normalized to lowercase, the rest of the name being kept as
+  typed (`encrypt -o Clip.CRYPT` gives `Clip.crypt.json`, `convert-format -o OTHER.CBOR` writes `OTHER.cbor`); existing
+  files are still opened at their exact names
+* Add WA-CBOR, a deterministic and strictly decoded CBOR (RFC 8949) document format, bijective with relaxed Extended
+  JSON: bytes are native byte strings, UUIDs use tag 37, datetimes tag 0, decimals tag 4 and bignums tags 2/3;
+  values that one of the formats can't carry faithfully are rejected, never altered (normative specification with
+  test vectors in `docs/specifications/wa_cbor_document_format.md`)
+  - New `dump_to_cbor_bytes()`, `load_from_cbor_bytes()`, `dump_to_cbor_file()`, `load_from_cbor_file()` and
+    `check_document_tree()` utilities, raising `WaCborEncodingError` / `WaCborDecodingError`
+  - New format-agnostic `load_from_document_bytes()`, `load_from_document_file()`, `dump_to_document_bytes()`,
+    `dump_to_document_file()`, `detect_document_format()`, `convert_document_bytes()` and
+    `convert_document_tree_to_bytes()` utilities, taking the format from the file extension, the content or an
+    explicit `DocumentFormat.JSON` / `DocumentFormat.CBOR` argument
+  - New `cryptainer_format` parameter of `CryptainerStorage` (Extended JSON by default)
+  - Encrypted intermediate structures (symkeys, key structs, shards) and the JSON-RPC wire format stay Extended JSON
+* New `flightbox convert-format SOURCE [-o TARGET] [--force]` command, converting any Extended JSON or WA-CBOR document
+  file (cryptoconf, cryptainer with its offloaded payload...) to the other format, or to the format given by the `-o`
+  extension, without schema validation and without modifying the source
+* New `--format json|cbor` option of `flightbox encrypt` and `flightbox cryptoconf generate-simple`; every command
+  reading a cryptoconf (including from STDIN) or a cryptainer accepts both formats
+* **BREAKING**: the flightbox CLI never overwrites existing files anymore: `encrypt` (target `.crypt.json` or `.crypt.cbor`
+  file of the requested format, or its `.payload` file, in the cryptainer storage; a same-basename cryptainer in
+  another format only triggers a warning), `cryptainer decrypt` (output file, including the default one derived from the cryptainer name),
+  `cryptoconf generate-simple -o` and `convert-format` (target file) fail with a usage error naming the blocking file, before any passphrase prompt or
   encryption/decryption work, unless the new `--force` option is given; existing directories are never overwritten, even
   with `--force`, and `authenticator create` now also refuses an existing file at its target path (directories must be
   removed manually); the Python library API is unchanged
@@ -27,7 +64,7 @@ Development
 * **BREAKING**: TrusteeApi and keystore public methods normalize algo names to uppercase (TrusteeApi also raises AlgorithmNotSupported, a ValidationError, on unsupported ones, but reports them as missing keys in fetch_public_key(must_exist=True) and request_decryption_authorization(), and decryption only gives up the cryptainer branches concerned, for compatibility with newer peers). Filesystem keystores now write key files and free keys directories with lowercase algo names (e.g. `<uid>_rsa_oaep_public_key.pem`) while the API and keypair listings expose uppercase names; each key file with a legacy uppercase algo name keeps being loaded, through a silent fallback used when no lowercase-named file exists (a lowercase-named file always takes precedence), and is never renamed. New key files are always lowercase-named, even when completing a keypair whose other key file has a legacy uppercase name. Keys newly written this way are not visible to older versions of the library on case-sensitive filesystems
 * Filesystem keystores report algo names which can't appear in file names (anything but 1 to 64 ASCII letters, digits and underscores) as missing keys, and reject them with a ValidationError on write
 * Filesystem keystore listings compare key file names like the platform does: on Windows, key files with a mixed-case algo name or an uppercase keychain uid are listed, since the filesystem lets the getters fetch them; elsewhere, they are skipped with a warning, like key files with a non-canonical keychain uid (e.g. without dashes) everywhere
-* **BREAKING**: sensors and record aggregators lowercase record extensions in the record (tar member), tarfile and cryptainer names they build (e.g. `20261111_184000_FrontCam_cryptainer.mp4.crypt` for a sensor `FrontCam` recording `.MP4` files); sensor names are kept as configured
+* **BREAKING**: sensors and record aggregators lowercase record extensions in the record (tar member), tarfile and cryptainer names they build (e.g. `20261111_184000_FrontCam_cryptainer.mp4.crypt.json` for a sensor `FrontCam` recording `.MP4` files); sensor names are kept as configured
 * Keystore pools no longer crash on Windows when listing a foreign keystore directory whose `keystore_` prefix is spelled in another letter case: directory names are compared like the platform does, so `KEYSTORE_<UID>` directories (e.g. copied by FAT tools) are usable on Windows only, and directories with the prefix but no canonical UUID are skipped with a warning
 * **BREAKING**: pycryptodome >= 4.2 is now required, for its Crypto.Protocol.HPKE module and ML-KEM/ML-DSA support
 * ECIES_X25519 and post-quantum keypairs are not pre-generated in free keypair pools by default

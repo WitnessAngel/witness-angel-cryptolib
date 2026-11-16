@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../_jsonschemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2026_cbor_pairs",
+  "description": "AES_EAX encryption of a 0-byte plaintext, with its symmetric key (WA-CBOR asset of an Extended JSON / WA-CBOR pair)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "f451089863a0ccdf238383477d0771c9f2d6dcd0",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-16"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_EAX"
+    ],
+    "pem_protections": []
+  },
+  "cipher_algo": "AES_EAX",
+  "plaintext": "../../../plaintexts/p00000000.bin",
+  "direction": "bidirectional",
+  "symkey": {
+    "key": "fff0127cb717dc41a5bd61d1a8e68584a0f26a9b5abc99675c2482088c040867",
+    "nonce": "f32023ec3c2133d3cf71689febd60921"
+  },
+  "document_format": "cbor",
+  "equivalent_asset": "p00000000.cipherdict.json",
+  "asset_sha256": {
+    "p00000000.cipherdict.cbor": "e7d9942031f6f40309333660c022f578bc1f7240974244bd946c5d5412f5b0df"
+  }
+}

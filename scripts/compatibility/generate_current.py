@@ -9,8 +9,11 @@ Add a NEW generation of compatibility fixtures, produced by the in-tree wacrypto
     python scripts/compatibility/generate_current.py classic 2026_current
     python scripts/compatibility/generate_current.py post_quantum 2026_post_quantum
     python scripts/compatibility/generate_current.py edge_cases 2026_edge_cases
+    python scripts/compatibility/generate_current.py cbor_pairs 2026_cbor_pairs
 
-Missing shared plaintexts are added too. The generation is staged, then committed into the corpus, then fully
+Missing shared plaintexts are added too. All names of the generation are lowercase, and its document assets end with
+the extension of their format ("x.cipherdict.json", "x.crypt.cbor"...); profiles with "document_pairs" write each
+document both as an Extended JSON asset and as a WA-CBOR asset. The generation is staged, then committed into the corpus, then fully
 checked like the test suite does; it is removed again if any check fails. Existing generations are never touched.
 """
 
@@ -46,6 +49,7 @@ from wacryptolib.keygen import (
 from wacryptolib.keystore import FilesystemKeystore, FilesystemKeystorePool, generate_keypair_for_storage
 from wacryptolib.operations import import_keystore_from_path
 from wacryptolib.signature import sign_message
+from wacryptolib.utilities import DocumentFormat, WaCborDecodingError, dump_to_cbor_bytes, load_from_cbor_bytes
 
 # Sizes around AES blocks (16), RSA-OAEP chunks (60), and multi-chunk sizes which are multiples of neither
 PLAINTEXT_SIZES = (0, 1, 15, 16, 17, 31, 32, 33, 59, 60, 61, 255, 256, 257, 4099, 65539, 1048579)
@@ -595,9 +599,123 @@ def build_edge_cases_profile():
     )
 
 
+HEIDI = AuthenticatorSpec("heidi", "4e1d1000-0000-4000-8000-000000000008", ("RSA_OAEP", "ECIES_X25519"))
+
+
+def _cbor_text(text: str) -> bytes:
+    """Encoding of a short CBOR text string, for hand-crafted invalid items."""
+    encoded_text = text.encode("utf8")
+    assert len(encoded_text) < 24, text
+    return bytes([0x60 + len(encoded_text)]) + encoded_text
+
+
+# Hand-crafted items breaking one rule of the WA-CBOR dialect each: rule -> (description, item bytes, decoder message)
+INVALID_CBOR_ITEMS = {
+    "unsupported_tag": (
+        "an epoch-based datetime (tag 1), as written by generic CBOR tools",
+        b"\xc1\x1a\x6a\x8f\x3c\x00",
+        "Unsupported tag 1",
+    ),
+    "non_text_key": ("a map with an integer key", b"\xa1\x01" + _cbor_text("one"), "Map key is not a text string"),
+    "duplicate_key": (
+        "a map with a duplicate key",
+        b"\xa2" + _cbor_text("a") + b"\x01" + _cbor_text("a") + b"\x02",
+        "Duplicate map key",
+    ),
+    "extjson_keyword_map": (
+        "a single-key map whose key is an Extended JSON keyword ($date)",
+        b"\xa1" + _cbor_text("$date") + _cbor_text("2026-01-01T00:00:00Z"),
+        "Extended JSON keyword map",
+    ),
+    "malformed_datetime": (
+        "a datetime text (tag 0) with an impossible month",
+        b"\xc0" + _cbor_text("2026-13-01T00:00:00Z"),
+        "Invalid datetime text",
+    ),
+}
+INVALID_CBOR_PLACEHOLDER = b"WA-CBOR-INJECTED"  # Byte string whose encoding gets replaced by an invalid item
+
+
+def build_cbor_pairs_profile():
+    authenticators = [HEIDI]
+    success_scenario = dict(
+        name="all_passphrases",
+        description="The authenticator passphrase is provided",
+        passphrase_mapper={HEIDI.trustee_id: [HEIDI.passphrase]},
+        expected="success",
+    )
+    no_passphrase_scenario = dict(
+        name="no_passphrase",
+        description="The authenticator passphrase is missing",
+        passphrase_mapper={},
+        expected="failure",
+        expected_errors=["ASYMMETRIC_DECRYPTION_ERROR"],
+    )
+    cryptoconfs = {
+        "01_single_layer": dict(
+            level=1,
+            description="Single AES_EAX payload layer, its key wrapped with a local RSA_OAEP key",
+            cryptoconf=cryptoconf(payload_layer("AES_EAX", [local_key_layer("RSA_OAEP")])),
+        ),
+        "02_signed_authenticator": dict(
+            level=5,
+            description="CHACHA20_POLY1305 payload layer whose key is wrapped by a local ECIES_X25519 key, then by "
+            "an AES_CBC key layer wrapped by the RSA_OAEP key of an authenticator, with an ECC_DSS ciphertext "
+            "signature and an RSA_PSS plaintext signature",
+            cryptoconf=cryptoconf(
+                payload_layer(
+                    "CHACHA20_POLY1305",
+                    [local_key_layer("ECIES_X25519"), symmetric_key_layer("AES_CBC", [HEIDI.key_layer("RSA_OAEP")])],
+                    [local_signature("ECC_DSS", "SHA256")],
+                ),
+                plaintext_signatures=[local_signature("RSA_PSS", "SHA3_256", LOCAL_KEYCHAIN_UID2)],
+            ),
+            authenticators=authenticators,
+        ),
+    }
+    cryptainers = {
+        "01_single_layer_inline_with_metadata": dict(
+            cryptoconf="01_single_layer", plaintext_size=61, scenarios=NO_PASSPHRASE_SCENARIOS,
+            cryptainer_metadata={
+                "compat_device": "compat-cbor-camera", "compat_index": 7, "compat_ratio": 0.5, "compat_tags": ["x", "y"]
+            },
+            description="Small payload, inline, with cryptainer metadata",
+        ),
+        "02_signed_authenticator_offloaded": dict(
+            cryptoconf="02_signed_authenticator", plaintext_size=4099, offloaded=True,
+            scenarios=[success_scenario, no_passphrase_scenario],
+            description="Payload with plaintext and ciphertext signatures and an authenticator key layer, offloaded",
+        ),
+    }
+    return dict(
+        pool_name="cbor_pairs_pool",
+        pool_description="Local keyfactory (RSA_OAEP, RSA_PSS, ECC_DSS, ECIES_X25519 keys of three keychains, "
+        "unprotected) and one imported authenticator with passphrase-protected RSA_OAEP and ECIES_X25519 keys, "
+        "with lowercase key file names",
+        local_key_algos=("RSA_OAEP", "RSA_PSS", "ECC_DSS", "ECIES_X25519"),
+        authenticators=authenticators,
+        document_pairs=True,
+        cipher_algos=("AES_EAX", "CHACHA20_POLY1305", "RSA_OAEP"),
+        cipherdict_plaintext_sizes=(0, 61, 4099),
+        signature_algos=("ECC_DSS", "RSA_PSS"),
+        digest_list_vector=False,
+        tampered_signature_algo="ECC_DSS",
+        tampered_cipherdicts=(("AES_EAX", 61),),
+        cryptoconfs=cryptoconfs,
+        invalid_cryptoconfs={},
+        invalid_cbor_documents=INVALID_CBOR_ITEMS,
+        cryptainers=cryptainers,
+    )
+
+
 PROFILES = dict(
-    classic=build_classic_profile, post_quantum=build_post_quantum_profile, edge_cases=build_edge_cases_profile
+    classic=build_classic_profile,
+    post_quantum=build_post_quantum_profile,
+    edge_cases=build_edge_cases_profile,
+    cbor_pairs=build_cbor_pairs_profile,
 )
+
+DOCUMENT_FORMAT_LABELS = {DocumentFormat.JSON: "Extended JSON", DocumentFormat.CBOR: "WA-CBOR"}
 
 
 def _corrupt_bytes(value: bytes) -> bytes:
@@ -643,6 +761,7 @@ class CurrentGenerationBuilder:
         self.build_cipherdicts()
         self.build_signatures()
         cryptoconf_paths = self.build_cryptoconfs()
+        self.build_invalid_cbor_documents()
         self.build_cryptainers(cryptoconf_paths)
         self.check_pool_untouched()
 
@@ -740,6 +859,46 @@ class CurrentGenerationBuilder:
             key_ref["passphrase"] = None
         return key_ref
 
+    # Document assets
+
+    def _get_document_asset_paths(self, kind_dirname: str, *parts: str) -> dict:
+        """Return the {document format: final path} of the asset(s) of a document, whose name (e.g. "x.cipherdict")
+        gets the extension of each format: Extended JSON only, or both formats in profiles with "document_pairs"."""
+        final_path = self.writer.get_final_path(kind_dirname, *parts)
+        document_formats = [DocumentFormat.JSON]
+        if self.profile.get("document_pairs"):
+            document_formats.append(DocumentFormat.CBOR)
+        return {
+            document_format: final_path.with_name(final_path.name + "." + document_format)
+            for document_format in document_formats
+        }
+
+    def _write_document_sidecars(self, asset_paths: dict, *, description: str, **fields):
+        """Write the sidecar of each staged asset of a document; the sidecars of a pair reference each other."""
+        for document_format, asset_path in asset_paths.items():
+            format_fields = dict(fields, document_format=document_format)
+            if document_format != DocumentFormat.JSON:
+                format_fields.pop("extjson_flavor", None)  # Only meaningful for Extended JSON assets
+            format_description = description
+            if len(asset_paths) > 1:
+                (equivalent_asset_path,) = [path for path in asset_paths.values() if path != asset_path]
+                format_fields["equivalent_asset"] = _corpus.to_relpath(
+                    equivalent_asset_path, corpus.get_sidecar_path(asset_path)
+                )
+                format_description += " (%s asset of an Extended JSON / WA-CBOR pair)" % (
+                    DOCUMENT_FORMAT_LABELS[document_format]
+                )
+            self.writer.write_sidecar(asset_path, description=format_description, **format_fields)
+
+    def _write_document_fixture(self, asset_paths: dict, document, *, canonical=False, **sidecar_fields):
+        """Write the asset(s) of a document, in their formats, and their sidecars."""
+        for document_format, asset_path in asset_paths.items():
+            if document_format == DocumentFormat.CBOR:
+                self.writer.write_bytes(asset_path, dump_to_cbor_bytes(document))
+            else:
+                self.writer.write_extjson_asset(asset_path, document, canonical=canonical)
+        self._write_document_sidecars(asset_paths, **sidecar_fields)
+
     # Cipherdicts and signatures
 
     def _plaintext_path(self, size: int) -> Path:
@@ -748,15 +907,17 @@ class CurrentGenerationBuilder:
     def build_cipherdicts(self):
         from wacryptolib.cipher import SUPPORTED_SYMMETRIC_CIPHER_ALGOS
 
+        plaintext_sizes = self.profile.get("cipherdict_plaintext_sizes", PLAINTEXT_SIZES)
         for cipher_algo in self.profile["cipher_algos"]:
             is_symmetric = cipher_algo in SUPPORTED_SYMMETRIC_CIPHER_ALGOS
-            sizes = [size for size in PLAINTEXT_SIZES if is_symmetric or size <= MAX_ASYMMETRIC_PLAINTEXT_SIZE]
+            sizes = [size for size in plaintext_sizes if is_symmetric or size <= MAX_ASYMMETRIC_PLAINTEXT_SIZE]
             for size in sizes:
                 plaintext_path = self._plaintext_path(size)
                 plaintext = plaintext_path.read_bytes()
-                asset_path = self.writer.get_final_path(
-                    "cipherdicts", cipher_algo, plaintext_path.stem + ".cipherdict"
+                asset_paths = self._get_document_asset_paths(
+                    "cipherdicts", cipher_algo.lower(), plaintext_path.stem + ".cipherdict"
                 )
+                asset_path = asset_paths[DocumentFormat.JSON]  # Sidecar relpaths are the same for both formats
                 fields = dict(cipher_algo=cipher_algo, plaintext=_corpus.to_relpath(plaintext_path, asset_path))
                 if is_symmetric:
                     symkey = generate_symkey(cipher_algo)
@@ -774,9 +935,9 @@ class CurrentGenerationBuilder:
                         cipher_algo,
                         size,
                     )
-                self.writer.write_extjson_asset(asset_path, cipherdict)
-                self.writer.write_sidecar(
-                    asset_path,
+                self._write_document_fixture(
+                    asset_paths,
+                    cipherdict,
                     fixture_kind="cipherdict",
                     description=description,
                     provenance=self.provenance,
@@ -794,7 +955,10 @@ class CurrentGenerationBuilder:
 
         plaintext_path = self._plaintext_path(size)
         plaintext = plaintext_path.read_bytes()
-        asset_path = self.writer.get_final_path("cipherdicts", cipher_algo, plaintext_path.stem + "_tampered.cipherdict")
+        asset_paths = self._get_document_asset_paths(
+            "cipherdicts", cipher_algo.lower(), plaintext_path.stem + "_tampered.cipherdict"
+        )
+        asset_path = asset_paths[DocumentFormat.JSON]
         fields = dict(cipher_algo=cipher_algo, plaintext=_corpus.to_relpath(plaintext_path, asset_path))
         if cipher_algo in SUPPORTED_SYMMETRIC_CIPHER_ALGOS:
             symkey = generate_symkey(cipher_algo)
@@ -813,9 +977,9 @@ class CurrentGenerationBuilder:
         else:
             corrupted_field = "ciphertext"
             cipherdict["ciphertext"] = _corrupt_bytes(cipherdict["ciphertext"])
-        self.writer.write_extjson_asset(asset_path, cipherdict)
-        self.writer.write_sidecar(
-            asset_path,
+        self._write_document_fixture(
+            asset_paths,
+            cipherdict,
             fixture_kind="cipherdict",
             description="%s encryption of a %d-byte plaintext, whose %s was corrupted (decryption must be rejected)"
             % (cipher_algo, size, corrupted_field),
@@ -833,10 +997,13 @@ class CurrentGenerationBuilder:
         cipherdict = encrypt_bytestring(plaintext_path.read_bytes(), cipher_algo=cipher_algo, key_dict={"key": public_key})
         cipherdict = {("digest_list" if key == "ciphertext_chunks" else key): value for key, value in cipherdict.items()}
         assert "digest_list" in cipherdict, cipherdict.keys()
-        asset_path = self.writer.get_final_path("cipherdicts", cipher_algo, plaintext_path.stem + "_digest_list.cipherdict")
-        self.writer.write_extjson_asset(asset_path, cipherdict)
-        self.writer.write_sidecar(
-            asset_path,
+        asset_paths = self._get_document_asset_paths(
+            "cipherdicts", cipher_algo.lower(), plaintext_path.stem + "_digest_list.cipherdict"
+        )
+        asset_path = asset_paths[DocumentFormat.JSON]
+        self._write_document_fixture(
+            asset_paths,
+            cipherdict,
             fixture_kind="cipherdict",
             description="RSA_OAEP encryption of a %d-byte plaintext, using the legacy 'digest_list' field name" % size,
             provenance=_corpus.build_provenance(
@@ -864,13 +1031,14 @@ class CurrentGenerationBuilder:
                 tampered_message = b"Witness Angel compatibility messagE"
                 cases.append(("tampered_message", inline_message, dict(message_hex=tampered_message.hex()), False))
             for name, signed_message, message_fields, expected_valid in cases:
-                asset_path = self.writer.get_final_path("signatures", signature_algo, name + ".signature")
+                asset_paths = self._get_document_asset_paths("signatures", signature_algo.lower(), name + ".signature")
+                asset_path = asset_paths[DocumentFormat.JSON]
                 if "message" in message_fields:
                     message_fields = dict(message=_corpus.to_relpath(message_fields["message"], asset_path))
                 signature = sign_message(signed_message, signature_algo=signature_algo, private_key=private_key)
-                self.writer.write_extjson_asset(asset_path, signature)
-                self.writer.write_sidecar(
-                    asset_path,
+                self._write_document_fixture(
+                    asset_paths,
+                    signature,
                     fixture_kind="signature",
                     description="%s signature of %s%s"
                     % (
@@ -911,10 +1079,11 @@ class CurrentGenerationBuilder:
         cryptoconf_paths = {}
         for name, spec in self.profile["cryptoconfs"].items():
             check_cryptoconf_sanity(spec["cryptoconf"])
-            asset_path = self.writer.get_final_path("cryptoconfs", name + ".cryptoconf")
-            self.writer.write_extjson_asset(asset_path, spec["cryptoconf"])
-            self.writer.write_sidecar(
-                asset_path,
+            asset_paths = self._get_document_asset_paths("cryptoconfs", name + ".cryptoconf")
+            asset_path = asset_paths[DocumentFormat.JSON]
+            self._write_document_fixture(
+                asset_paths,
+                spec["cryptoconf"],
                 fixture_kind="cryptoconf",
                 description=spec["description"],
                 provenance=self.provenance,
@@ -928,10 +1097,10 @@ class CurrentGenerationBuilder:
             cryptoconf_paths[name] = asset_path
 
         for name, spec in self.profile["invalid_cryptoconfs"].items():
-            asset_path = self.writer.get_final_path("cryptoconfs", "invalid", name + ".cryptoconf")
-            self.writer.write_extjson_asset(asset_path, spec["cryptoconf"])
-            self.writer.write_sidecar(
-                asset_path,
+            asset_paths = self._get_document_asset_paths("cryptoconfs", "invalid", name + ".cryptoconf")
+            self._write_document_fixture(
+                asset_paths,
+                spec["cryptoconf"],
                 fixture_kind="cryptoconf",
                 description=spec["description"] + " (must be rejected)",
                 provenance=self.provenance,
@@ -941,6 +1110,44 @@ class CurrentGenerationBuilder:
                 min_library_version="0.12",
             )
         return cryptoconf_paths
+
+    def build_invalid_cbor_documents(self):
+        """Write cryptoconfs whose WA-CBOR encoding breaks one rule of the dialect: the encoding of a placeholder
+        value is replaced by a hand-crafted invalid item, which the strict decoder must reject."""
+        invalid_cbor_documents = self.profile.get("invalid_cbor_documents")
+        if not invalid_cbor_documents:
+            return
+        base_cryptoconf = next(iter(self.profile["cryptoconfs"].values()))["cryptoconf"]
+        valid_bytes = dump_to_cbor_bytes(dict(base_cryptoconf, compat_injected_item=INVALID_CBOR_PLACEHOLDER))
+        load_from_cbor_bytes(valid_bytes)  # Only the injected item will be invalid
+        placeholder_encoding = bytes([0x40 + len(INVALID_CBOR_PLACEHOLDER)]) + INVALID_CBOR_PLACEHOLDER
+        assert valid_bytes.count(placeholder_encoding) == 1, valid_bytes
+
+        for rule, (item_description, invalid_item, expected_message) in invalid_cbor_documents.items():
+            invalid_bytes = valid_bytes.replace(placeholder_encoding, invalid_item)
+            try:
+                load_from_cbor_bytes(invalid_bytes)
+            except WaCborDecodingError as exc:
+                assert expected_message in str(exc), (rule, exc)
+            else:
+                raise AssertionError("Invalid WA-CBOR document %r was decoded" % rule)
+            asset_path = self.writer.get_final_path("cryptoconfs", "invalid", rule + ".cryptoconf.cbor")
+            self.writer.write_bytes(asset_path, invalid_bytes)
+            self.writer.write_sidecar(
+                asset_path,
+                fixture_kind="cryptoconf",
+                description="Cryptoconf whose WA-CBOR encoding contains %s (must be rejected by the decoder)"
+                % item_description,
+                provenance=dict(
+                    self.provenance, notes="Hand-crafted invalid WA-CBOR item, in place of the encoding of a value"
+                ),
+                requirements=_corpus.build_requirements(),
+                expected_valid=False,
+                sophistication_level=0,
+                min_library_version="0.12",
+                document_format=DocumentFormat.CBOR,
+                expected_decoding_error=rule,
+            )
 
     def _get_pool_copy(self) -> FilesystemKeystorePool:
         copy_dir = Path(tempfile.mkdtemp(dir=self.work_dir, prefix="pool-"))
@@ -971,12 +1178,15 @@ class CurrentGenerationBuilder:
             plaintext_path = self._plaintext_path(spec["plaintext_size"])
             plaintext = plaintext_path.read_bytes()
             cryptainer_metadata = spec.get("cryptainer_metadata")
-            asset_path = self.writer.get_final_path("cryptainers", name + ".crypt")
-            staging_path = self.writer.get_staging_path(asset_path)
+            asset_paths = self._get_document_asset_paths("cryptainers", name + ".crypt")  # E.g. "x.crypt.json"
+            asset_path = asset_paths[DocumentFormat.JSON]
+            staging_paths = [self.writer.get_staging_path(path) for path in asset_paths.values()]
+            staging_path = staging_paths[0]
             staging_path.parent.mkdir(parents=True, exist_ok=True)
             offloaded = spec.get("offloaded", False) or spec.get("streamed", False)
 
             if spec.get("streamed"):
+                assert len(staging_paths) == 1, "Streamed cryptainers are written in Extended JSON only"
                 encrypt_payload_and_stream_cryptainer_to_filesystem(
                     plaintext,
                     cryptainer_filepath=staging_path,
@@ -1016,12 +1226,16 @@ class CurrentGenerationBuilder:
                             "payload_ciphertext_signatures"
                         )
                 if spec.get("canonical"):
-                    assert not offloaded, "Canonical cryptainers are written inline"
+                    assert not offloaded and len(staging_paths) == 1, "Canonical cryptainers are written inline, alone"
                     self.writer.write_extjson_asset(asset_path, cryptainer, canonical=True)
                 else:
-                    dump_cryptainer_to_filesystem(staging_path, cryptainer, offload_payload_ciphertext=offloaded)
+                    for format_staging_path in staging_paths:  # The library picks the format from the extension
+                        dump_cryptainer_to_filesystem(
+                            format_staging_path, copy.deepcopy(cryptainer), offload_payload_ciphertext=offloaded
+                        )
 
-            load_cryptainer_from_filesystem(staging_path)  # Sanity check of the dumped files
+            for format_staging_path in staging_paths:
+                load_cryptainer_from_filesystem(format_staging_path)  # Sanity check of the dumped files
             legacy_forms = [
                 legacy_form
                 for option, legacy_form in [
@@ -1053,8 +1267,8 @@ class CurrentGenerationBuilder:
                 payload_offloaded=offloaded,
                 decryption_scenarios=spec["scenarios"],
             )
-            self.writer.write_sidecar(
-                asset_path,
+            self._write_document_sidecars(
+                asset_paths,
                 fixture_kind="cryptainer",
                 description=spec["description"],
                 provenance=provenance,

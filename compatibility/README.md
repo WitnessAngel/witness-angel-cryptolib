@@ -22,11 +22,19 @@ compatibility/
   _jsonschemas/                     JSON-Schemas (2020-12) of the sidecars, one per fixture kind, plus _defs
   plaintexts/                       p<size>.bin + sidecars, shared by all generations
   keystores/<generation>/           keystore pool directories + "<pool>.json" sidecars
-  cipherdicts/<generation>/<ALGO>/  p<size>.cipherdict (+ variants) + sidecars
-  signatures/<generation>/<ALGO>/   *.signature + sidecars
-  cryptoconfs/<generation>/         NN_<label>.cryptoconf + sidecars; invalid/ holds cryptoconfs that must be rejected
-  cryptainers/<generation>/         NN_<label>.crypt (+ .crypt.payload when offloaded) + sidecars
+  cipherdicts/<generation>/<ALGO>/  p<size>.cipherdict[.json|.cbor] (+ variants) + sidecars
+  signatures/<generation>/<ALGO>/   *.signature[.json|.cbor] + sidecars
+  cryptoconfs/<generation>/         NN_<label>.cryptoconf[.json|.cbor] + sidecars; invalid/ holds cryptoconfs that
+                                    must be rejected
+  cryptainers/<generation>/         NN_<label>.crypt, or .crypt.json / .crypt.cbor (+ <name>.payload when
+                                    offloaded) + sidecars
 ```
+
+`<ALGO>` (and `<KEY_ALGO>` in key file names, see the keystore pools below) is the algorithm name in uppercase in the
+generations produced before the WA-CBOR one (e.g. `AES_CBC/`), and in lowercase from the WA-CBOR generation on (e.g.
+`aes_cbc/`), see "Letter case of names" below. Document assets of generations produced before the WA-CBOR one have
+no format extension (`x.cipherdict`, `x.crypt`...) and are all in Extended JSON; from the WA-CBOR generation on, they
+end with the extension of their format (`x.cipherdict.json`, `x.cipherdict.cbor`, `x.crypt.json`, `x.crypt.cbor`...).
 
 A **generation** is a set of fixtures produced together, by one library version and one method. Its name is
 `<year>_<label>` (e.g. `2022_v0.9_genuine`, `2026_current`), and it appears as a subdirectory of each fixture kind
@@ -42,6 +50,21 @@ generation.
 | `2026_current` | current development version | RELAXED extjson, Shamir shared secrets, multi-trustee signatures, ECIES_X25519, `digest_list` vector, invalid cryptoconfs |
 | `2026_post_quantum` | current development version | ML_KEM_768 / ML_DSA_65, hybrid with RSA_OAEP and ECIES_X25519; includes the fixture formerly in `tests/fixtures/post_quantum/` |
 | `2026_edge_cases` | current development version | Authenticator private keys protected like wacryptolib <= 0.12 did (DES3 for DSA_DSS), tampered cipherdicts, CANONICAL extjson with the current signature naming, corrupted signature in the legacy `payload_signatures` field, corrupted payload MAC tag, `digest_list` key ciphertexts |
+| `2026_cbor_pairs` | current development version | Extended JSON / WA-CBOR pairs of cipherdicts, signatures, cryptoconfs and cryptainers (inline and offloaded `.crypt.json` / `.crypt.cbor`), invalid WA-CBOR documents; first generation with lowercase names only |
+
+### Letter case of names
+
+The generations produced before the WA-CBOR one (`2022_v0.9_genuine` to `2026_post_quantum` in the table above) are
+frozen with their names as written, which include uppercase algorithm names: per-algorithm subdirectories (e.g.
+`cipherdicts/2026_current/AES_CBC/`) and key files of keystore pools (e.g. `<keychain_uid>_RSA_OAEP_public_key.pem`).
+wacryptolib still reads such key files, through its fallback to legacy uppercase key file names.
+
+From the WA-CBOR generation (`2026_cbor_pairs`) on, **every file and directory name is lowercase**: per-algorithm
+subdirectories (e.g. `aes_cbc/`), asset and sidecar names, and the key files of keystore pools (e.g.
+`<keychain_uid>_rsa_oaep_public_key.pem`), as the library now writes them. The generation tooling refuses to write a
+non-lowercase name into a new generation, and the test suite checks the names of all generations except the frozen
+mixed-case ones (listed in `MIXED_CASE_GENERATIONS` of `tests/_compatibility_corpus.py`). Algorithm names inside
+sidecars and assets (e.g. `"cipher_algo": "AES_CBC"`) keep their usual uppercase spelling.
 
 
 ## Policy: frozen and append-only
@@ -52,35 +75,45 @@ generation.
   existing generation directory.
 - Every sidecar records the SHA-256 of its asset files, so that any modification is detected.
 - Files are committed **byte-exact**: the root `.gitattributes` disables all line-ending conversion here
-  (`compatibility/** -text`).
+  (`compatibility/** -text`), and marks raw binary files (`.bin`, `.payload`, `.cbor`) as binary.
 - Tests never write into this directory: keystore pools are always used from temporary copies, since wacryptolib may
   write into a pool (e.g. by autogenerating missing keys).
 
 
 ## Assets
 
-Assets use wacryptolib's own wire formats, with no conversion.
+Assets use wacryptolib's own wire formats, with no conversion. Document assets (cipherdicts, signatures, cryptoconfs,
+cryptainers) are in Extended JSON (see "Extended JSON flavors" below), or, from the WA-CBOR generation on, in WA-CBOR
+(see "WA-CBOR" below), each format being given by the asset's final `.json` / `.cbor` extension when it has one.
 
 - **Plaintexts** (`.bin`): raw bytes. Sizes cover the empty case, AES block edges (15/16/17, 31/32/33), RSA-OAEP chunk
   edges (59/60/61), 255/256/257, and multi-chunk sizes just above 4 KiB, 64 KiB and 1 MiB (4099, 65539, 1048579). The
   file name is `p` + the size on 8 digits.
-- **Cipherdicts** (`.cipherdict`): the dict returned by `wacryptolib.cipher.encrypt_bytestring()`, in extended JSON.
+- **Cipherdicts** (`.cipherdict`, `.cipherdict.json`, `.cipherdict.cbor`): the dict returned by
+  `wacryptolib.cipher.encrypt_bytestring()`.
   Field names depend on the algorithm: `ciphertext` (+ `tag` for AES_EAX and CHACHA20_POLY1305);
   `ciphertext_chunks` for RSA_OAEP (or the legacy `digest_list` name, in files suffixed `_digest_list`);
   `kem_ciphertext` + `ciphertext` for ECIES_X25519 and ML_KEM_768. Files suffixed `_tampered` were corrupted after
   encryption, and must be rejected.
-- **Signatures** (`.signature`): the dict returned by `wacryptolib.signature.sign_message()`, in extended JSON
-  (`signature_value` bytes + `signature_timestamp_utc` integer; the timestamp is part of the signed data).
+- **Signatures** (`.signature`, `.signature.json`, `.signature.cbor`): the dict returned by
+  `wacryptolib.signature.sign_message()` (`signature_value` bytes + `signature_timestamp_utc` integer; the timestamp is
+  part of the signed data).
 - **Keystore pools** (directories): the on-disk layout of `wacryptolib.keystore.FilesystemKeystorePool`:
-  - `local_keyfactory/<keychain_uid>_<KEY_ALGO>_{public,private}_key.pem`;
+  - `local_keyfactory/<keychain_uid>_<KEY_ALGO>_{public,private}_key.pem` (`<KEY_ALGO>` in uppercase in the
+    frozen mixed-case generations, in lowercase from the WA-CBOR generation on);
   - `foreign_keystores/keystore_<keystore_uid>/`, one per imported authenticator, with its PEM files (public keys,
     and passphrase-protected private keys) and its `keystore_metadata.json` (extended JSON). Authenticator metadata of
     old generations may carry legacy fields (e.g. `keystore_secret`), which the library still accepts.
-- **Cryptoconfs** (`.cryptoconf`): an encryption configuration, as given to `encrypt_payload_into_cryptainer()`, in
-  extended JSON.
-- **Cryptainers** (`.crypt`): a cryptainer in extended JSON, as written by `dump_cryptainer_to_filesystem()`. When
-  the payload is **offloaded**, the cryptainer's `payload_ciphertext_struct` is the marker
-  `{"ciphertext_location": "offloaded"}`, and the ciphertext is in the sibling `<name>.crypt.payload` file (raw bytes).
+- **Cryptoconfs** (`.cryptoconf`, `.cryptoconf.json`, `.cryptoconf.cbor`): an encryption configuration, as given to
+  `encrypt_payload_into_cryptainer()`. The `invalid/` subdirectory of the WA-CBOR generation also holds cryptoconfs
+  whose WA-CBOR encoding breaks one rule of the dialect, which must be rejected when decoding (see
+  `expected_decoding_error` below).
+- **Cryptainers**: a cryptainer as written by `dump_cryptainer_to_filesystem()`, named with the suffix that the library
+  uses for its format and generation: the legacy `.crypt` (always Extended JSON) in the generations produced before the
+  WA-CBOR one, then `.crypt.json` (Extended JSON) or `.crypt.cbor` (WA-CBOR). When the payload is **offloaded**, the
+  cryptainer's `payload_ciphertext_struct` is the marker `{"ciphertext_location": "offloaded"}`, and the ciphertext is
+  in the sibling `<name>.payload` file (raw bytes), e.g. `x.crypt.payload`, `x.crypt.json.payload` or
+  `x.crypt.cbor.payload`.
 
 ### Extended JSON flavors
 
@@ -95,11 +128,36 @@ two flavors (recorded as `extjson_flavor` in cryptainer sidecars):
 
 Readers must accept both flavors.
 
+### WA-CBOR
+
+WA-CBOR assets use the deterministic CBOR dialect of wacryptolib, specified in
+`docs/specifications/wa_cbor_document_format.md` of the repository. It carries exactly the same document trees as
+RELAXED Extended JSON (bytes as byte strings, UUIDs with tag 37, datetimes with tag 0...), and its decoder rejects
+anything else (other tags, non-text map keys, duplicate keys, single-key maps whose key is an Extended JSON keyword,
+malformed datetimes...).
+
+In the WA-CBOR generation, each cipherdict, signature, valid cryptoconf and cryptainer is provided twice, as an
+**Extended JSON / WA-CBOR pair** (e.g. `x.crypt.json` and `x.crypt.cbor`), whose sidecars reference each other with
+`equivalent_asset`. Both assets of a pair load to equal trees, and converting either one with wacryptolib (e.g.
+`flightbox convert-format`) reproduces the other byte for byte; the offloaded payloads of a cryptainer pair are
+identical too.
+
 
 ## Sidecars
 
 Every asset has a **sidecar**: a plain JSON file named after the asset with `.json` appended, in the same directory
-(`x.crypt` → `x.crypt.json`, keystore pool directory `pool/` → `pool.json`). Sidecars only use standard JSON:
+(`x.crypt` → `x.crypt.json`, `x.crypt.json` → `x.crypt.json.json`, `x.crypt.cbor` → `x.crypt.cbor.json`, keystore
+pool directory `pool/` → `pool.json`).
+
+Since assets may be `.json` files too, a `.json` file is a **sidecar if and only if its name without the final
+`.json` is an existing asset of the same directory**; otherwise it is an asset. E.g. in a frozen generation holding
+`a.crypt` and `a.crypt.json`, `a.crypt.json` is the sidecar of the legacy cryptainer `a.crypt`; in a generation
+holding `b.crypt.json` and `b.crypt.json.json`, `b.crypt.json` is a cryptainer asset and `b.crypt.json.json` its
+sidecar. The fixture kind of a file asset is given by its last suffix, after an optional final `.json` / `.cbor`
+format extension: `.bin` (plaintext, never with a format extension), `.cipherdict`, `.signature`, `.cryptoconf`,
+`.crypt`.
+
+Sidecars only use standard JSON:
 
 - byte strings are **lowercase hex** strings;
 - UUIDs are **canonical hyphenated** lowercase strings;
@@ -120,6 +178,13 @@ field references by relative path. All schemas forbid unknown fields.
 | `provenance` | How the asset was produced, see below. |
 | `requirements` | What a crypto backend needs to exercise the fixture, see below. |
 | `asset_sha256` | SHA-256 (hex) of every file of the asset, keyed by path relative to the sidecar directory: the asset file, plus its `.payload` file if offloaded, or every file of a keystore pool directory. |
+
+### Document fields (cipherdict, signature, cryptoconf and cryptainer sidecars)
+
+| Field | Meaning |
+|---|---|
+| `document_format` | Format of the asset: `json` (Extended JSON) or `cbor` (WA-CBOR). Absent means `json`. It always matches the format that wacryptolib recognizes from the asset name and content. |
+| `equivalent_asset` | For the assets of an Extended JSON / WA-CBOR pair: relative path to the other asset of the pair, whose sidecar references this asset back. |
 
 **`provenance`**:
 
@@ -213,6 +278,7 @@ of them must skip the fixture, and must check all others. PEM protections are:
 | `keystore_pool` | For valid cryptoconfs: relative path to a pool whose keys let the cryptoconf encrypt and decrypt. |
 | `passphrase_mapper` | For valid cryptoconfs: passphrases needed to decrypt with that pool. |
 | `min_library_version` | First wacryptolib version able to use this cryptoconf. |
+| `expected_decoding_error` | For invalid WA-CBOR documents (with `expected_valid` `false` and `document_format` `cbor`): the rule of the dialect that the encoding breaks, among `unsupported_tag`, `non_text_key`, `duplicate_key`, `extjson_keyword_map` and `malformed_datetime`. Decoding the asset must fail, whatever the cryptoconf it would carry. |
 
 ### Cryptainer sidecars
 
@@ -222,8 +288,8 @@ of them must skip the fixture, and must check all others. PEM protections are:
 | `keystore_pool` | Relative path to the pool holding the keys needed to decrypt. |
 | `cryptoconf` | Relative path to the cryptoconf the cryptainer was produced from, if any. |
 | `cryptainer_metadata` | Expected unencrypted metadata of the cryptainer (`null` if none). |
-| `extjson_flavor` | `canonical` or `relaxed`, see above. |
-| `payload_offloaded` | `true` if the ciphertext is in a sibling `.crypt.payload` file. |
+| `extjson_flavor` | `canonical` or `relaxed`, see above; only for Extended JSON assets (absent for WA-CBOR ones). |
+| `payload_offloaded` | `true` if the ciphertext is in the sibling `<name>.payload` file. |
 | `decryption_scenarios` | Decryption attempts and their expected outcomes, see below. |
 
 Each **decryption scenario** has:
@@ -239,14 +305,20 @@ Each **decryption scenario** has:
 
 ## Using the corpus from another implementation
 
-1. Discover all `*.json` files outside `_jsonschemas/` and outside keystore pool directories: these are the sidecars.
+1. Discover all `*.json` files outside `_jsonschemas/` and outside keystore pool directories, and keep those whose
+   name without the final `.json` is an existing file or directory of the same directory: these are the sidecars (see
+   "Sidecars" above for the other `.json` files, which are assets).
 2. Validate each one against its schema, and check its `asset_sha256` digests.
-3. Skip fixtures whose `requirements` your implementation does not support.
+3. Skip fixtures whose `requirements` your implementation does not support, and WA-CBOR assets
+   (`document_format` `cbor`) if your implementation only reads Extended JSON.
 4. Check each fixture according to its kind, as described above: e.g. decrypt each cipherdict vector, or decrypt each
    cryptainer with the passphrases of each scenario and compare with the expected outcome. Encrypt data with
    `symkey` for `bidirectional` vectors. Also check that every signature of a decrypted cryptainer was actually
    verified, whatever its field name (`payload_signatures` in old generations), and that using a keystore pool never
    generates missing keys (which would hide old keys that can't be loaded anymore).
+5. For Extended JSON / WA-CBOR pairs, check that both assets load to equal trees, and, if your implementation writes
+   documents, that converting either one reproduces the other byte for byte. Check that invalid WA-CBOR documents
+   (with `expected_decoding_error`) are rejected by your decoder.
 
 `tests/_compatibility_corpus.py` is the reference implementation of these checks.
 
@@ -261,6 +333,7 @@ or features appear). From the repository root, with the development environment:
 PYTHONPATH=src python scripts/compatibility/generate_current.py classic 2027_current
 PYTHONPATH=src python scripts/compatibility/generate_current.py post_quantum 2027_post_quantum
 PYTHONPATH=src python scripts/compatibility/generate_current.py edge_cases 2027_edge_cases
+PYTHONPATH=src python scripts/compatibility/generate_current.py cbor_pairs 2027_cbor_pairs
 
 # Fixtures of old releases, each run in its own throwaway virtualenv (or synthesized when it cannot run)
 PYTHONPATH=src python scripts/compatibility/build_legacy_generations.py --only 0.9
@@ -268,7 +341,9 @@ PYTHONPATH=src python scripts/compatibility/build_legacy_generations.py --only 0
 
 Both scripts write into hidden staging directories, move them into place, then check every produced fixture with the
 current library, and remove the new generation again if any check fails. Missing plaintexts are added to
-`plaintexts/`, existing ones are never touched. Then run
+`plaintexts/`, existing ones are never touched. New generations have lowercase names only, and their document assets
+end with their format extension (e.g. `.cipherdict.json`, `.crypt.json`); the `cbor_pairs` profile writes each
+document as an Extended JSON / WA-CBOR pair, plus invalid WA-CBOR documents. Then run
 `pytest tests/test_compatibility_fixtures.py`, and commit the new generation as-is.
 
 New algorithms must get vectors: the test suite fails when a cipher, signature or asymmetric key algorithm of the

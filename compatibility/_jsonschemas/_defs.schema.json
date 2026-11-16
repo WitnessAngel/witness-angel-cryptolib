@@ -155,6 +155,14 @@
       "required": ["keychain_uid", "key_algo", "private_key_present"],
       "additionalProperties": false
     },
+    "document_format": {
+      "description": "Format of a document asset: json (Extended JSON, the default when absent) or cbor (WA-CBOR, see docs/specifications/wa_cbor_document_format.md)",
+      "enum": ["json", "cbor"]
+    },
+    "equivalent_asset": {
+      "description": "Asset of the other document format holding the same document tree (Extended JSON / WA-CBOR pair), whose sidecar references this asset back",
+      "$ref": "#/$defs/relpath"
+    },
     "header": {
       "description": "Fields common to all sidecars (kind schemas add their own, and forbid any other)",
       "type": "object",

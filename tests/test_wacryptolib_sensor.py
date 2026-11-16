@@ -520,7 +520,7 @@ class TestStreamRecorderForTestingWithCustomEncryptionStream(TestStreamRecorderF
 
 def _check_stream_recorder_cryptainer_name(cryptainer_name):
     assert "test_sensor" in str(cryptainer_name)
-    assert str(cryptainer_name).endswith(".testext.crypt")
+    assert str(cryptainer_name).endswith(".testext.crypt.json")
 
 
 def _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=False):
@@ -806,7 +806,7 @@ def test_periodic_subprocess_stream_recorder_lowercases_extensions(tmp_path):
     cryptainer_encryption_stream.finalize()
 
     assert [str(name) for name in cryptainer_storage.list_cryptainer_names()] == [
-        "20171011_000000_FrontCam_cryptainer.mp4.crypt"  # Sensor name kept as configured
+        "20171011_000000_FrontCam_cryptainer.mp4.crypt.json"  # Sensor name kept as configured
     ]
 
 

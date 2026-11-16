@@ -2,3 +2,4 @@
 compatibility/** -text
 compatibility/**/*.bin binary
 compatibility/**/*.payload binary
+compatibility/**/*.cbor binary

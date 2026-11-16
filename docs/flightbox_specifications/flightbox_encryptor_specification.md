@@ -22,6 +22,7 @@ Sources of truth (in this repository):
 | Cipher primitives | `src/wacryptolib/cipher.py`, `src/wacryptolib/keygen.py`, `src/wacryptolib/_crypto_backend/pycryptodome.py` |
 | Shamir shared secret | `src/wacryptolib/utilities/data_utils.py`, `reimplementations/micropython/src/cryptainer/pycryptodome_secret_sharing.py` |
 | Extended JSON | `extjson` package (vendored as `reimplementations/micropython/lib/extjson.py`) |
+| WA-CBOR (binary document format of cryptainer files) | `docs/specifications/wa_cbor_document_format.md` (normative), `src/wacryptolib/utilities/wacbor.py` |
 | Cryptoconf / cryptainer schemas | `src/wacryptolib/cryptainer/_validation.py` |
 | MicroPython platform utilities | `reimplementations/micropython/src/cryptainer/flightbox_utilities_implementation.py`, `reimplementations/micropython/src/cryptainer/fallback_adapter.py` |
 | Pure-Python HPKE X25519 seal | `src/wacryptolib/_crypto_backend/fallback/hpke_x25519_seal.py` (vendored in `reimplementations/micropython/lib/`) |
@@ -121,6 +122,12 @@ Decoders also accept canonical forms (`$numberInt`, `$numberLong`, `$binary` wit
 for UUIDs...), but an encoder MUST stick to the relaxed forms above for maximum compatibility.
 
 Below, `J(x)` denotes `dump_to_json_bytes(x)`.
+
+The final cryptainer file MAY instead be serialized in **WA-CBOR**, the deterministic CBOR dialect
+specified in `docs/specifications/wa_cbor_document_format.md`, which carries exactly the same
+document trees as relaxed Extended JSON (§9.1). This only concerns the document file: the
+intermediate structures that get encrypted are always serialized with `J()`, whatever the format
+of the cryptainer file.
 
 ---
 
@@ -702,8 +709,13 @@ A finished cryptainer contains everything from the (normalized) cryptoconf plus:
 | each signature conf | `payload_digest_value` | bytes |
 | each signature conf | `payload_signature_struct` | `{"signature_value": bytes, "signature_timestamp_utc": int}`, if signed |
 
-The cryptainer is serialized with `J()` (§2) into a UTF-8 JSON file, conventionally named
-`<something>.crypt`.
+The cryptainer is serialized either with `J()` (§2) into a UTF-8 Extended JSON file, or in
+WA-CBOR (`docs/specifications/wa_cbor_document_format.md`). Writers SHOULD name the file
+`<something>.crypt.json` (Extended JSON) or `<something>.crypt.cbor` (WA-CBOR), with these
+suffixes in lowercase. The legacy `<something>.crypt` suffix of earlier releases (always Extended
+JSON) SHOULD NOT be used for new files. Readers MUST recognize all three suffixes, `.crypt.json`,
+`.crypt.cbor` and `.crypt`, in any letter case (rule 14 of §11.1), and SHOULD check that the
+content matches the format given by the suffix.
 
 ### 9.2 Payload ciphertext location
 
@@ -711,8 +723,9 @@ The cryptainer is serialized with `J()` (§2) into a UTF-8 JSON file, convention
   the ciphertext is base64-embedded in the JSON.
 - **Offloaded**: `"payload_ciphertext_struct": {"ciphertext_location": "offloaded"}` exactly
   (no other key), and the raw final ciphertext bytes are stored in a sibling file named
-  `<cryptainer filename>.payload` (e.g. `20261111_184000_video.mp4.crypt` and
-  `20261111_184000_video.mp4.crypt.payload`).
+  `<cryptainer filename>.payload` (e.g. `20261111_184000_video.mp4.crypt.json` and
+  `20261111_184000_video.mp4.crypt.json.payload`, or `20261111_184000_video.mp4.crypt.cbor` and
+  `20261111_184000_video.mp4.crypt.cbor.payload`; legacy cryptainers have a `.crypt.payload` file).
 
 `payload_ciphertext_struct` MUST NOT stay null in a persisted cryptainer.
 
@@ -823,12 +836,21 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
     - algo names in key file names.
 
     Parts given by the caller or by a configuration, such as an original media file name or a
-    sensor name, MUST be kept as given (e.g. `20261111_184000_FrontCam_cryptainer.mp4.crypt` for a
-    sensor `FrontCam` recording `.MP4` files, and `IMG_0001.MP4.crypt` for a user-supplied
-    `IMG_0001.MP4`). Files MUST be opened by their exact names, so that the filesystem decides
-    whether letter case matters. Readers MUST recognize the lowercase suffixes, and SHOULD compare
-    names like their platform does (ignoring letter case on Windows only). Filesystem keystores also
-    accept key files with the legacy uppercase algo names of earlier releases.
+    sensor name, MUST be kept as given (e.g. `20261111_184000_FrontCam_cryptainer.mp4.crypt.json`
+    for a sensor `FrontCam` recording `.MP4` files, and `IMG_0001.MP4.crypt.json` for a
+    user-supplied `IMG_0001.MP4`). Files MUST be opened by their exact names, so that the filesystem
+    decides whether letter case matters. Readers MUST recognize the lowercase suffixes, and SHOULD
+    compare names like their platform does (ignoring letter case on Windows only). Filesystem
+    keystores also accept key files with the legacy uppercase algo names of earlier releases.
+
+    Exception: the extensions that carry the format of a file, i.e. `.crypt`, `.json`, `.cbor`,
+    and the suffixes `.crypt.json` and `.crypt.cbor`, MUST be matched in any letter case on every
+    platform (e.g. `X.CRYPT.JSON` is an Extended JSON cryptainer, and `conf.CBOR` a WA-CBOR file,
+    on Linux too), so that a name means the same file format everywhere. When a tool creates a file
+    from a name typed by a user, it SHOULD lowercase such a trailing extension and leave the rest of
+    the name untouched (e.g. the output basename `Clip.CRYPT` gives `Clip.crypt.json`, and the
+    output file `OTHER.CBOR` is written as `OTHER.cbor`). Library functions given an explicit path
+    keep writing to that exact path.
 
 ### 11.2 Key and parameter constraints per algorithm
 

@@ -1,11 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "signature.schema.json",
-  "title": "Sidecar of a signature vector (extended-JSON signature dict, as returned by sign_message())",
+  "title": "Sidecar of a signature vector (Extended JSON or WA-CBOR signature dict, as returned by sign_message())",
   "type": "object",
   "allOf": [{"$ref": "_defs.schema.json#/$defs/header"}],
   "properties": {
     "fixture_kind": {"const": "signature"},
+    "document_format": {"$ref": "_defs.schema.json#/$defs/document_format"},
+    "equivalent_asset": {"$ref": "_defs.schema.json#/$defs/equivalent_asset"},
     "signature_algo": {"$ref": "_defs.schema.json#/$defs/algo"},
     "message": {"$ref": "_defs.schema.json#/$defs/relpath"},
     "message_hex": {"$ref": "_defs.schema.json#/$defs/hex"},

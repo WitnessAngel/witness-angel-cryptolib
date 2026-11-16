@@ -6,6 +6,13 @@
 from extjson import (UTF8_ENCODING, convert_to_extjson, convert_from_extjson, extjson_decoder_object_hook, load_from_json_bytes,
                      load_from_json_str, load_from_json_file, dump_to_json_str, dump_to_json_bytes, dump_to_json_file)
 
+from .wacbor import (WaCborError, WaCborEncodingError, WaCborDecodingError, check_document_tree, dump_to_cbor_bytes,
+                     load_from_cbor_bytes, dump_to_cbor_file, load_from_cbor_file)
+from .document_utils import (DocumentFormat, DOCUMENT_FORMATS, RECOGNIZED_EXTENSIONS, DocumentFormatError,
+                             get_recognized_extension, normalize_recognized_extension, get_document_format_from_filename,
+                             detect_document_format, load_from_document_bytes, load_from_document_file,
+                             dump_to_document_bytes, dump_to_document_file, convert_document_tree_to_bytes,
+                             convert_document_bytes)
 from .data_utils import split_as_chunks, recombine_chunks, do_split_secret_into_shards, do_recombine_secret_from_shards, pad_bytes_pkcs7, unpad_bytes_pkcs7
 from .os_utils import is_file_basename, get_memory_rss_bytes, get_nice_size
 from .time_utils import generate_uuid0, get_utc_now_date, is_datetime_tz_aware, check_datetime_is_tz_aware

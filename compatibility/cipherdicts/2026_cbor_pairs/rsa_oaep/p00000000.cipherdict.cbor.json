@@ -1,0 +1,35 @@
+{
+  "$schema": "../../../_jsonschemas/cipherdict.schema.json",
+  "fixture_kind": "cipherdict",
+  "generation": "2026_cbor_pairs",
+  "description": "RSA_OAEP encryption of a 0-byte plaintext, decryptable with a pool key (WA-CBOR asset of an Extended JSON / WA-CBOR pair)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "f451089863a0ccdf238383477d0771c9f2d6dcd0",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-16"
+  },
+  "requirements": {
+    "algorithms": [
+      "RSA_OAEP"
+    ],
+    "pem_protections": []
+  },
+  "cipher_algo": "RSA_OAEP",
+  "plaintext": "../../../plaintexts/p00000000.bin",
+  "direction": "decrypt_only",
+  "private_key": {
+    "keystore_pool": "../../../keystores/2026_cbor_pairs/cbor_pairs_pool",
+    "keystore": "local_keyfactory",
+    "keychain_uid": "0c0c0c0c-0000-4000-8000-000000000001",
+    "key_algo": "RSA_OAEP",
+    "passphrase": null
+  },
+  "document_format": "cbor",
+  "equivalent_asset": "p00000000.cipherdict.json",
+  "asset_sha256": {
+    "p00000000.cipherdict.cbor": "a6b91116968f9d77bde77effe68699f26ce6c5e3b1ed6cb2f1308d3fc709fa2e"
+  }
+}

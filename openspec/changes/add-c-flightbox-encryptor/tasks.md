@@ -72,7 +72,7 @@
 ## 8. Host tools
 
 - [ ] 8.1 Implement `tools/wa_host_platform_hooks.c` (getrandom or `/dev/urandom` on POSIX, BCryptGenRandom on Windows, clock in 1/10000 s, stdlib allocation), and verify that the random hook returns distinct buffers and fails cleanly when the source is unavailable (simulated)
-- [ ] 8.2 Implement `tools/wa_flightbox_encrypt_file_cli.c` (profile, payload, optional CBOR metadata, inline/offloaded, chunk size, `.crypt` + `.crypt.payload` output, non-zero exit printing status description and error location), and verify a manual run on a corpus-derived profile produces both files
+- [ ] 8.2 Implement `tools/wa_flightbox_encrypt_file_cli.c` (profile, payload, optional CBOR metadata, inline/offloaded, chunk size, `.crypt.json` + `.crypt.json.payload` output with lowercase suffixes (see design D14), non-zero exit printing status description and error location), and verify a manual run on a corpus-derived profile produces both files
 - [ ] 8.3 Implement `tools/wa_flightbox_test_driver.c`, and verify each subcommand on one sample input. Subcommands:
   - symmetric encryption with given key material;
   - HPKE seal with a given ephemeral key and info/AAD;

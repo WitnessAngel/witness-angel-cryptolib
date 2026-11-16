@@ -1,0 +1,47 @@
+{
+  "$schema": "../../_jsonschemas/cryptainer.schema.json",
+  "fixture_kind": "cryptainer",
+  "generation": "2026_cbor_pairs",
+  "description": "Small payload, inline, with cryptainer metadata (WA-CBOR asset of an Extended JSON / WA-CBOR pair)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "f451089863a0ccdf238383477d0771c9f2d6dcd0",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-16"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_EAX",
+      "RSA_OAEP"
+    ],
+    "pem_protections": []
+  },
+  "plaintext": "../../plaintexts/p00000061.bin",
+  "keystore_pool": "../../keystores/2026_cbor_pairs/cbor_pairs_pool",
+  "cryptoconf": "../../cryptoconfs/2026_cbor_pairs/01_single_layer.cryptoconf.json",
+  "cryptainer_metadata": {
+    "compat_device": "compat-cbor-camera",
+    "compat_index": 7,
+    "compat_ratio": 0.5,
+    "compat_tags": [
+      "x",
+      "y"
+    ]
+  },
+  "payload_offloaded": false,
+  "decryption_scenarios": [
+    {
+      "name": "local_keys_only",
+      "description": "Only unprotected local keyfactory keys are involved",
+      "passphrase_mapper": {},
+      "expected": "success"
+    }
+  ],
+  "document_format": "cbor",
+  "equivalent_asset": "01_single_layer_inline_with_metadata.crypt.json",
+  "asset_sha256": {
+    "01_single_layer_inline_with_metadata.crypt.cbor": "c7e0fa4db62430111ff8f6a266ae04f39d75499f0ea0a70e3e72f27c464d1d81"
+  }
+}

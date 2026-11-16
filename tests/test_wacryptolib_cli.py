@@ -4,9 +4,11 @@
 
 import copy
 import io
+import json
 import os
 import pathlib
 import random
+import shutil
 import subprocess
 import sys
 import time
@@ -24,12 +26,27 @@ from _test_mockups import oneshot_command_line, random_bool, get_longrun_command
 from test_wacryptolib_cryptainer import SIMPLE_CRYPTOCONF
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.cli import wacryptolib_cli as cli, _short_format_datetime, _ensure_paths_not_existing
-from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CryptainerStorage, check_cryptoconf_sanity
+from wacryptolib.cryptainer import (
+    LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+    CryptainerStorage,
+    check_cryptoconf_sanity,
+)
 from wacryptolib import operations
 from wacryptolib.exceptions import KeystoreDoesNotExist, ValidationError
 from wacryptolib.keygen import generate_keypair
 from wacryptolib.keystore import FilesystemKeystore, generate_keypair_for_storage, _get_keystore_metadata_file_path
-from wacryptolib.utilities import dump_to_json_file, get_utc_now_date, load_from_json_str
+from wacryptolib.utilities import (
+    dump_to_json_file,
+    get_utc_now_date,
+    load_from_json_str,
+    load_from_json_bytes,
+    convert_to_extjson,
+    DocumentFormat,
+    convert_document_tree_to_bytes,
+    dump_to_cbor_bytes,
+    load_from_cbor_bytes,
+    load_from_document_file,
+)
 
 FAKE_GATEWAY_URL = "https://gateway.example.com/jsonrpc/"  # Never contacted: JSON-RPC calls are mocked
 FAKE_GATEWAY_KEYSTORE_UID = "0f0c0988-80c1-9362-11c1-b06909a3a53c"  # Authenticator of ¤aaa, served by the mock
@@ -119,7 +136,12 @@ def test_cli_has_no_ambiguous_f_short_option():
             if param.name == "force":
                 assert param.opts == ["--force"] and not param.secondary_opts, (path, param.opts)
                 force_command_paths.add(path)
-    assert force_command_paths == {("encrypt",), ("cryptainer", "decrypt"), ("cryptoconf", "generate-simple")}
+    assert force_command_paths == {
+        ("encrypt",),
+        ("cryptainer", "decrypt"),
+        ("cryptoconf", "generate-simple"),
+        ("convert-format",),
+    }
 
 
 def test_cli_format_option_is_long_only(tmp_path):
@@ -353,13 +375,13 @@ def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
             )
             assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
             assert b"successfully encrypted" in consumer_process_completed.stderr
-            assert cryptainer_storage.joinpath("my_piped_oneshot_cryptainer%d.crypt" % idx).is_file()
+            assert cryptainer_storage.joinpath("my_piped_oneshot_cryptainer%d.crypt.json" % idx).is_file()
             assert (
-                cryptainer_storage.joinpath("my_piped_oneshot_cryptainer%d.crypt.payload" % idx).is_file()
+                cryptainer_storage.joinpath("my_piped_oneshot_cryptainer%d.crypt.json.payload" % idx).is_file()
                 != must_bundle
             )
 
-            _decryption_args = ["cryptainer", "decrypt", "my_piped_oneshot_cryptainer%d.crypt" % idx]
+            _decryption_args = ["cryptainer", "decrypt", "my_piped_oneshot_cryptainer%d.crypt.json" % idx]
             consumer_process_completed = subprocess.run(
                 FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _decryption_args, stderr=subprocess.PIPE
             )
@@ -394,13 +416,13 @@ def test_cli_encryption_and_decryption_via_pipe(tmp_path):  # UNFINISHED
             )
             assert consumer_process_completed.returncode == 0, consumer_process_completed.stderr
             assert b"successfully encrypted" in consumer_process_completed.stderr
-            assert cryptainer_storage.joinpath("my_piped_longrun_cryptainer%d.crypt" % idx).is_file()
+            assert cryptainer_storage.joinpath("my_piped_longrun_cryptainer%d.crypt.json" % idx).is_file()
             assert (
-                cryptainer_storage.joinpath("my_piped_longrun_cryptainer%d.crypt.payload" % idx).is_file()
+                cryptainer_storage.joinpath("my_piped_longrun_cryptainer%d.crypt.json.payload" % idx).is_file()
                 != must_bundle
             )
 
-            _decryption_args = ["cryptainer", "decrypt", "my_piped_longrun_cryptainer%d.crypt" % idx]
+            _decryption_args = ["cryptainer", "decrypt", "my_piped_longrun_cryptainer%d.crypt.json" % idx]
             consumer_process_completed = subprocess.run(
                 FLIGHTBOX_CLI_INVOCATION_ARGS + base_args + _decryption_args, stderr=subprocess.PIPE
             )
@@ -435,16 +457,16 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
         result = runner.invoke(cli, base_args + ["encrypt", data_file, "--bundle"], catch_exceptions=False)
         assert result.exit_code == 0
         assert "successfully encrypted" in result.stderr
-        assert cryptainer_storage.joinpath(data_file + ".crypt").is_file()
-        assert not cryptainer_storage.joinpath(data_file + ".crypt.payload").is_file()  # NOT OFFLOADED in this case
+        assert cryptainer_storage.joinpath(data_file + ".crypt.json").is_file()
+        assert not cryptainer_storage.joinpath(data_file + ".crypt.json.payload").is_file()  # NOT OFFLOADED in this case
 
         result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "stuff.dat"], catch_exceptions=False)
         print("TEST-STDERR1:", result.stderr)
         assert result.exit_code == 0
         assert "successfully encrypted" in result.stderr
         assert not os.path.exists("./stuff.dat")  # This is NOT a full target filepath
-        assert cryptainer_storage.joinpath("stuff.dat.crypt").is_file()
-        assert cryptainer_storage.joinpath("stuff.dat.crypt.payload").is_file()  # OFFLOADED in this case
+        assert cryptainer_storage.joinpath("stuff.dat.crypt.json").is_file()
+        assert cryptainer_storage.joinpath("stuff.dat.crypt.json.payload").is_file()  # OFFLOADED in this case
 
         result = runner.invoke(
             cli, base_args + ["encrypt", data_file, "-o", "folder/stuff.dat"], catch_exceptions=False
@@ -453,7 +475,7 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
         assert result.exit_code == 2
         assert "basename must not contain path separators" in result.stderr
 
-        with open(cryptainer_storage.joinpath("stuff.dat.crypt"), "r") as input_file:
+        with open(cryptainer_storage.joinpath("stuff.dat.crypt.json"), "r") as input_file:
             data = input_file.read()
             assert "AES_CBC" in data
             assert "CHACHA20_POLY1305" not in data  # Not in default cryptoconf
@@ -464,14 +486,16 @@ def test_cli_encryption_and_decryption_with_default_cryptoconf(tmp_path):
             data_file
         ).is_file()  # This will be the default output file for decryption
 
-        result = runner.invoke(cli, base_args + ["cryptainer", "decrypt", data_file + ".crypt"], catch_exceptions=False)
+        result = runner.invoke(
+            cli, base_args + ["cryptainer", "decrypt", data_file + ".crypt.json"], catch_exceptions=False
+        )
         assert result.exit_code == 0
         assert os.path.exists(data_file)  # Created in CWD
         assert not cryptainer_storage.joinpath(data_file).is_file()  # Not created in CRYPTAINER STORAGE itself
 
         # Simulate weird suffix for cryptainer file (would cause problems with cryptainer listing, though)
-        cryptainer_storage.joinpath("stuff.dat.crypt").rename(cryptainer_storage.joinpath("stuff.dat.fb"))
-        cryptainer_storage.joinpath("stuff.dat.crypt.payload").rename(
+        cryptainer_storage.joinpath("stuff.dat.crypt.json").rename(cryptainer_storage.joinpath("stuff.dat.fb"))
+        cryptainer_storage.joinpath("stuff.dat.crypt.json.payload").rename(
             cryptainer_storage.joinpath("stuff.dat.fb.payload")
         )
 
@@ -575,14 +599,16 @@ def test_cli_encryption_and_summarize_with_custom_cryptoconf(tmp_path):
         )
         print(">>>>>>", result.stderr)
         assert result.exit_code == 0
-        assert cryptainer_storage.joinpath("specialconf.crypt").is_file()  # No double suffix
+        assert cryptainer_storage.joinpath("specialconf.crypt.json").is_file()  # Premature suffix stripped
+        assert not cryptainer_storage.joinpath("specialconf.crypt").exists()
+        assert not cryptainer_storage.joinpath("specialconf.crypt.crypt.json").exists()
 
-        data = cryptainer_storage.joinpath("specialconf.crypt").read_text()
+        data = cryptainer_storage.joinpath("specialconf.crypt.json").read_text()
         assert "CHACHA20_POLY1305" in data
 
         result = runner.invoke(
             cli,
-            base_args + ["cryptainer", "summarize", "specialconf.crypt"],  # Works on CRYPTAINERS too
+            base_args + ["cryptainer", "summarize", "specialconf.crypt.json"],  # Works on CRYPTAINERS too
             catch_exceptions=False,
         )
         assert result.exit_code == 0
@@ -591,7 +617,7 @@ def test_cli_encryption_and_summarize_with_custom_cryptoconf(tmp_path):
 
         result = runner.invoke(
             cli,
-            base_args + ["cryptainer", "decrypt", "specialconf.crypt", "-o", "specialconf.crypt.decrypted"],
+            base_args + ["cryptainer", "decrypt", "specialconf.crypt.json", "-o", "specialconf.crypt.decrypted"],
             catch_exceptions=False,
         )
         assert result.exit_code == 0
@@ -1118,9 +1144,9 @@ def test_cli_cryptainer_storage_list_delete_and_purge(tmp_path):
 
     result = runner.invoke(cli, base_args + ["cryptainer", "list"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert "myfilename.crypt" in result.stdout
+    assert "myfilename.crypt.json" in result.stdout
 
-    result = runner.invoke(cli, base_args + ["cryptainer", "delete", "myfilename.crypt"], catch_exceptions=False)
+    result = runner.invoke(cli, base_args + ["cryptainer", "delete", "myfilename.crypt.json"], catch_exceptions=False)
     assert result.exit_code == 0
     assert "successfully deleted" in result.stderr
 
@@ -1143,16 +1169,16 @@ def test_cli_cryptainer_storage_list_delete_and_purge(tmp_path):
 
     result = runner.invoke(cli, base_args + ["cryptainer", "list"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert " 20420221_152428_rtsp_camera_cryptainer.mp4.crypt " in result.stdout
+    assert " 20420221_152428_rtsp_camera_cryptainer.mp4.crypt.json " in result.stdout
     assert " X " in result.stdout  # For "is offloaded" column
 
     result = runner.invoke(cli, base_args + ["cryptainer", "list", "--format", "json"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert '"20420221_152428_rtsp_camera_cryptainer.mp4.crypt"' in result.stdout
+    assert '"20420221_152428_rtsp_camera_cryptainer.mp4.crypt.json"' in result.stdout
     data_tree = load_from_json_str(result.stdout)  # Test loading of output
     assert isinstance(data_tree, list)
     assert len(data_tree) == 3
-    assert data_tree[0]["name"] == first_cryptainer_name_base + ".crypt"
+    assert data_tree[0]["name"] == first_cryptainer_name_base + ".crypt.json"
 
     result = runner.invoke(cli, base_args + ["cryptainer", "purge"])  # Missing purge parameters
     assert result.exit_code == 2
@@ -1180,7 +1206,7 @@ def test_cli_cryptainer_storage_list_delete_and_purge(tmp_path):
 
     result = runner.invoke(cli, base_args + ["cryptainer", "list"], catch_exceptions=False)
     assert result.exit_code == 0
-    assert " 20430221_152428_rtsp_camera_cryptainer.mp4.crypt " in result.stdout
+    assert " 20430221_152428_rtsp_camera_cryptainer.mp4.crypt.json " in result.stdout
 
     result = runner.invoke(cli, base_args + ["cryptainer", "purge", "--max-count", "0"], catch_exceptions=False)
     assert result.exit_code == 0
@@ -1198,7 +1224,7 @@ def test_cli_cryptainer_validate(tmp_path):
 
     cryptainer_storage = CryptainerStorage(cryptainer_storage_path, default_cryptoconf=SIMPLE_CRYPTOCONF)
     cryptainer_storage.encrypt_file("goodfile", payload=b"ABCD", cryptainer_metadata=None)
-    assert tmp_path.joinpath("goodfile.crypt").is_file()
+    assert tmp_path.joinpath("goodfile.crypt.json").is_file()
 
     runner = _get_cli_runner()
 
@@ -1208,16 +1234,18 @@ def test_cli_cryptainer_validate(tmp_path):
     assert result.exit_code == 1  # Raised by wacryptolib code and not Click
     assert "No such file or directory" in str(result.exc_info[1])
 
-    result = runner.invoke(cli, base_args + ["cryptainer", "validate", "goodfile.crypt"], catch_exceptions=False)
+    result = runner.invoke(cli, base_args + ["cryptainer", "validate", "goodfile.crypt.json"], catch_exceptions=False)
     assert result.exit_code == 0
     assert "is valid" in result.stderr
 
     result = runner.invoke(
-        cli, base_args + ["cryptainer", "validate", "goodfile.crypt.payload"]
+        cli, base_args + ["cryptainer", "validate", "goodfile.crypt.json.payload"]
     )  # Exists but is not a proper cryptainer!
     assert result.exit_code == 1
     assert "is invalid" not in result.stderr
-    assert "can't decode" in str(result.exc_info[1])  # Unhandled exception for now
+    # Unhandled exception for now: random ciphertext is neither Extended JSON nor WA-CBOR, and depending on its first
+    # byte, it gives a DocumentFormatError, a WaCborDecodingError, or a JSON parsing error (e.g. UnicodeDecodeError)
+    assert isinstance(result.exc_info[1], ValueError), result.exc_info
 
     result = runner.invoke(cli, base_args + ["cryptainer", "validate", "badcryptainer.crypt"])
     assert result.exit_code == 2
@@ -1250,7 +1278,7 @@ def test_cli_decrypt_refuses_overwriting_existing_files(tmp_path):
 
     with runner.isolated_filesystem():
         _encrypt_sample_file_for_overwrite_tests(runner, base_args, data_file, data_sample)
-        cryptainer_name = data_file + ".crypt"
+        cryptainer_name = data_file + ".crypt.json"
 
         # Decrypting next to the original file, with the default output name, is refused before any decryption
         pathlib.Path(data_file).write_bytes(b"precious original")
@@ -1328,8 +1356,8 @@ def test_cli_encrypt_refuses_overwriting_existing_cryptainers(tmp_path):
 
     with runner.isolated_filesystem():
         _encrypt_sample_file_for_overwrite_tests(runner, base_args, data_file, b"first content", ["-o", "report"])
-        cryptainer_file = cryptainer_storage / "report.crypt"
-        payload_file = cryptainer_storage / "report.crypt.payload"
+        cryptainer_file = cryptainer_storage / "report.crypt.json"
+        payload_file = cryptainer_storage / "report.crypt.json.payload"
         assert cryptainer_file.is_file() and payload_file.is_file()
         original_contents = (cryptainer_file.read_bytes(), payload_file.read_bytes())
 
@@ -1340,7 +1368,7 @@ def test_cli_encrypt_refuses_overwriting_existing_cryptainers(tmp_path):
             with mock.patch("wacryptolib.cli.CryptainerStorage.encrypt_file") as encryption_mock:
                 result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "report.crypt"] + extra_args)
                 assert result.exit_code == 2, result.stderr
-                assert "report.crypt' already exists, use --force to overwrite it" in result.stderr
+                assert "report.crypt.json' already exists, use --force to overwrite it" in result.stderr
                 encryption_mock.assert_not_called()
             assert (cryptainer_file.read_bytes(), payload_file.read_bytes()) == original_contents
 
@@ -1360,11 +1388,11 @@ def test_cli_encrypt_refuses_overwriting_existing_cryptainers(tmp_path):
         for extra_args in ([], ["--bundle"]):
             result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "report"] + extra_args)
             assert result.exit_code == 2, result.stderr
-            assert "report.crypt.payload' already exists" in result.stderr
+            assert "report.crypt.json.payload' already exists" in result.stderr
             assert not cryptainer_file.exists()
 
         # A directory in the way is refused even with --force
-        cryptainer_storage.joinpath("dirred.crypt").mkdir()
+        cryptainer_storage.joinpath("dirred.crypt.json").mkdir()
         result = runner.invoke(cli, base_args + ["encrypt", data_file, "-o", "dirred", "--force"])
         assert result.exit_code == 2, result.stderr
         assert "is a directory" in result.stderr
@@ -1377,7 +1405,7 @@ def test_cli_encrypt_refuses_overwriting_existing_cryptainers(tmp_path):
         assert result.exit_code == 0, result.stderr
         assert cryptainer_file.read_bytes() != original_contents[0]
         result = runner.invoke(
-            cli, base_args + ["cryptainer", "decrypt", "report.crypt", "-o", "decrypted.txt"], catch_exceptions=False
+            cli, base_args + ["cryptainer", "decrypt", "report.crypt.json", "-o", "decrypted.txt"], catch_exceptions=False
         )
         assert result.exit_code == 0, result.stderr
         assert pathlib.Path("decrypted.txt").read_bytes() == b"second content"
@@ -1452,3 +1480,576 @@ def test_cli_authenticator_create_refuses_existing_paths(tmp_path):
             keystore_passphrase="somepassphrase",
         )
     assert existing_file.read_text() == "file content"
+
+
+_GENERATE_SIMPLE_LAYERS = """add-payload-cipher-layer --sym-cipher-algo aes_cbc
+    add-key-cipher-layer --asym-cipher-algo RSA_OAEP --trustee-type local_keyfactory""".split()
+
+
+def _get_document_file_format(path):
+    """Detect the format of a document file from its content only."""
+    first_byte = pathlib.Path(path).read_bytes()[:1]
+    assert first_byte, path
+    if first_byte in (b"{", b"["):
+        return DocumentFormat.JSON
+    assert 0x80 <= first_byte[0] <= 0xBF, (path, first_byte)
+    return DocumentFormat.CBOR
+
+
+def _list_filenames(directory="."):
+    return sorted(os.listdir(directory))  # Actual names, whatever the case sensitivity of the filesystem
+
+
+def test_cli_encrypt_with_file_format(tmp_path):
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
+    runner = _get_cli_runner()
+
+    with runner.isolated_filesystem():
+        pathlib.Path("video.mp4").write_bytes(b"some video content")
+
+        # Encrypt default
+        result = runner.invoke(cli, base_args + ["encrypt", "video.mp4"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert _list_filenames(cryptainer_storage) == ["video.mp4.crypt.json", "video.mp4.crypt.json.payload"]
+        assert _get_document_file_format(cryptainer_storage / "video.mp4.crypt.json") == DocumentFormat.JSON
+
+        # Encrypt to CBOR, offloaded or bundled, the warning naming the sibling of another format
+        result = runner.invoke(cli, base_args + ["encrypt", "video.mp4", "--format", "cbor"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert "existing cryptainer video.mp4.crypt.json," in result.stderr
+        result = runner.invoke(
+            cli, base_args + ["encrypt", "video.mp4", "-o", "bundled", "--format", "CBOR", "--bundle"]
+        )
+        assert result.exit_code == 0, result.stderr
+        assert _list_filenames(cryptainer_storage) == [
+            "bundled.crypt.cbor",
+            "video.mp4.crypt.cbor",
+            "video.mp4.crypt.cbor.payload",
+            "video.mp4.crypt.json",
+            "video.mp4.crypt.json.payload",
+        ]
+        for name in ("bundled.crypt.cbor", "video.mp4.crypt.cbor"):
+            assert _get_document_file_format(cryptainer_storage / name) == DocumentFormat.CBOR
+
+        # Decrypt default output name, for every suffix
+        os.remove("video.mp4")
+        result = runner.invoke(cli, base_args + ["cryptainer", "decrypt", "video.mp4.crypt.cbor"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert pathlib.Path("video.mp4").read_bytes() == b"some video content"
+        result = runner.invoke(cli, base_args + ["cryptainer", "decrypt", "bundled.crypt.cbor"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert pathlib.Path("bundled").read_bytes() == b"some video content"
+
+        result = runner.invoke(cli, base_args + ["cryptainer", "list", "--format", "json"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert sorted(entry["name"] for entry in load_from_json_str(result.stdout)) == [
+            "bundled.crypt.cbor",
+            "video.mp4.crypt.cbor",
+            "video.mp4.crypt.json",
+        ]
+
+        # Unknown file format
+        result = runner.invoke(cli, base_args + ["encrypt", "video.mp4", "-o", "other", "--format", "yaml"])
+        assert result.exit_code == 2, result.stderr
+        assert "Invalid value for '--format'" in result.stderr
+        assert not any(name.startswith("other") for name in _list_filenames(cryptainer_storage))
+
+
+def test_cli_encrypt_overwrite_checks_per_file_format(tmp_path):
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
+    runner = _get_cli_runner()
+
+    with runner.isolated_filesystem():
+        pathlib.Path("report.txt").write_bytes(b"new content")
+
+        # Encrypting over an existing CBOR cryptainer is refused
+        cryptainer_storage.joinpath("report.crypt.cbor").write_bytes(b"existing cbor cryptainer")
+        result = runner.invoke(cli, base_args + ["encrypt", "report.txt", "-o", "report", "--format", "cbor"])
+        assert result.exit_code == 2, result.stderr
+        assert "report.crypt.cbor' already exists, use --force to overwrite it" in result.stderr
+        assert cryptainer_storage.joinpath("report.crypt.cbor").read_bytes() == b"existing cbor cryptainer"
+        assert _list_filenames(cryptainer_storage) == ["report.crypt.cbor"]
+
+        # A leftover CBOR payload blocks CBOR encryption, bundled or not
+        cryptainer_storage.joinpath("report.crypt.cbor").unlink()
+        cryptainer_storage.joinpath("report.crypt.cbor.payload").write_bytes(b"leftover")
+        for extra_args in ([], ["--bundle"]):
+            result = runner.invoke(
+                cli, base_args + ["encrypt", "report.txt", "-o", "report", "--format", "cbor"] + extra_args
+            )
+            assert result.exit_code == 2, result.stderr
+            assert "report.crypt.cbor.payload' already exists" in result.stderr
+            assert _list_filenames(cryptainer_storage) == ["report.crypt.cbor.payload"]
+        cryptainer_storage.joinpath("report.crypt.cbor.payload").unlink()
+
+        # A cryptainer in another format does not block encryption
+        pathlib.Path("old.txt").write_bytes(b"old content")
+        result = runner.invoke(cli, base_args + ["encrypt", "old.txt", "-o", "report"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        for suffix in ("", ".payload"):  # Renamed as a legacy cryptainer
+            cryptainer_storage.joinpath("report.crypt.json" + suffix).rename(
+                cryptainer_storage.joinpath("report.crypt" + suffix)
+            )
+        legacy_contents = {
+            name: cryptainer_storage.joinpath(name).read_bytes() for name in ("report.crypt", "report.crypt.payload")
+        }
+        result = runner.invoke(cli, base_args + ["encrypt", "report.txt", "-o", "report"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert "existing cryptainer report.crypt," in result.stderr  # Warning
+        assert _list_filenames(cryptainer_storage) == [
+            "report.crypt",
+            "report.crypt.json",
+            "report.crypt.json.payload",
+            "report.crypt.payload",
+        ]
+        for name, content in legacy_contents.items():
+            assert cryptainer_storage.joinpath(name).read_bytes() == content
+
+        for cryptainer_name, expected_content in [("report.crypt", b"old content"), ("report.crypt.json", b"new content")]:
+            result = runner.invoke(
+                cli,
+                base_args + ["cryptainer", "decrypt", cryptainer_name, "-o", "-"],
+                catch_exceptions=False,
+            )
+            assert result.exit_code == 0, result.stderr
+            assert expected_content in result.stdout_bytes
+
+
+def test_cli_encrypt_strips_premature_cryptainer_suffixes(tmp_path):
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
+    runner = _get_cli_runner()
+
+    with runner.isolated_filesystem():
+        pathlib.Path("video.mp4").write_bytes(b"clip content")
+
+        for output_basename, extra_args, expected_name in [
+            ("clip.crypt.json", ["--format", "cbor"], "clip.crypt.cbor"),  # Premature suffix stripped
+            ("Clip.CRYPT", [], "Clip.crypt.json"),  # Premature suffix in another letter case
+            ("Other.Crypt.Cbor", [], "Other.crypt.json"),
+            ("legacy.crypt", ["--format", "cbor"], "legacy.crypt.cbor"),
+            ("report.JSON", [], "report.json.crypt.json"),  # Not a cryptainer suffix, but a normalized extension
+            ("temp.crypt.json~", [], "temp.crypt.json~.crypt.json"),  # Temporary names end with no cryptainer suffix
+        ]:
+            result = runner.invoke(
+                cli, base_args + ["encrypt", "video.mp4", "-o", output_basename, "--bundle"] + extra_args
+            )
+            assert result.exit_code == 0, (output_basename, result.stderr)
+            assert expected_name in _list_filenames(cryptainer_storage), (output_basename, _list_filenames(cryptainer_storage))
+
+        assert _list_filenames(cryptainer_storage) == sorted(
+            [
+                "Clip.crypt.json",
+                "Other.crypt.json",
+                "clip.crypt.cbor",
+                "legacy.crypt.cbor",
+                "report.json.crypt.json",
+                "temp.crypt.json~.crypt.json",
+            ]
+        )
+
+        # Decrypt default output names: suffix stripped in any letter case, ".decrypted" added to temporary names
+        shutil.copyfile(cryptainer_storage / "Clip.crypt.json", cryptainer_storage / "Upper.CRYPT.JSON")
+        shutil.copyfile(cryptainer_storage / "Clip.crypt.json", cryptainer_storage / "unfinished.crypt.json~")
+        for cryptainer_name, expected_output_name in [
+            ("Upper.CRYPT.JSON", "Upper"),
+            ("unfinished.crypt.json~", "unfinished.crypt.json~.decrypted"),
+            ("report.json.crypt.json", "report.json"),
+        ]:
+            result = runner.invoke(
+                cli, base_args + ["cryptainer", "decrypt", cryptainer_name], catch_exceptions=False
+            )
+            assert result.exit_code == 0, result.stderr
+            assert pathlib.Path(expected_output_name).read_bytes() == b"clip content"
+        assert _list_filenames() == ["Upper", "report.json", "unfinished.crypt.json~.decrypted", "video.mp4"]
+
+
+def _write_cryptoconf_files(tmp_path):
+    json_cryptoconf_path = tmp_path / "conf.json"
+    dump_to_json_file(json_cryptoconf_path, SIMPLE_CRYPTOCONF)
+    cbor_cryptoconf_path = tmp_path / "conf.cbor"
+    cbor_cryptoconf_path.write_bytes(dump_to_cbor_bytes(SIMPLE_CRYPTOCONF))
+    return json_cryptoconf_path, cbor_cryptoconf_path
+
+
+def test_cli_cryptoconf_readers_accept_both_file_formats(tmp_path):
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
+    runner = _get_cli_runner()
+    json_cryptoconf_path, cbor_cryptoconf_path = _write_cryptoconf_files(tmp_path)
+
+    # Recognized by name, else by content, and from STDIN
+    no_extension_path = tmp_path / "01_simple.cryptoconf"
+    no_extension_path.write_bytes(cbor_cryptoconf_path.read_bytes())
+    upper_extension_path = tmp_path / "UPPER.JSON"  # Opened as typed
+    upper_extension_path.write_bytes(json_cryptoconf_path.read_bytes())
+
+    for cryptoconf_path in (json_cryptoconf_path, cbor_cryptoconf_path, no_extension_path, upper_extension_path):
+        result = runner.invoke(cli, ["cryptoconf", "validate", str(cryptoconf_path)], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert "is valid" in result.stderr
+
+        result = runner.invoke(cli, ["cryptoconf", "summarize", str(cryptoconf_path)], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert "AES_CBC" in result.stdout
+
+    for cryptoconf_path in (json_cryptoconf_path, cbor_cryptoconf_path):
+        cryptoconf_bytes = cryptoconf_path.read_bytes()
+        result = runner.invoke(cli, ["cryptoconf", "validate", "-"], input=cryptoconf_bytes, catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        result = runner.invoke(cli, ["cryptoconf", "summarize", "-"], input=cryptoconf_bytes, catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert "AES_CBC" in result.stdout
+
+    data_file = tmp_path / "data.txt"
+    data_file.write_bytes(b"some data")
+    for cryptoconf_path in (json_cryptoconf_path, cbor_cryptoconf_path):
+        output_basename = "data_" + cryptoconf_path.suffix[1:]
+        result = runner.invoke(
+            cli,
+            base_args + ["encrypt", str(data_file), "-o", output_basename, "-c", str(cryptoconf_path)],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.stderr
+        assert cryptainer_storage.joinpath(output_basename + ".crypt.json").is_file()
+
+    # CBOR cryptoconf piped to STDIN, for encryption too
+    result = runner.invoke(
+        cli,
+        base_args + ["encrypt", str(data_file), "-o", "data_stdin", "-c", "-"],
+        input=cbor_cryptoconf_path.read_bytes(),
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0, result.stderr
+    assert cryptainer_storage.joinpath("data_stdin.crypt.json").is_file()
+
+    # Mislabeled file refused, naming the file and both formats
+    mislabeled_path = tmp_path / "mislabeled.json"
+    mislabeled_path.write_bytes(cbor_cryptoconf_path.read_bytes())
+    for command in (["cryptoconf", "validate"], ["cryptoconf", "summarize"]):
+        result = runner.invoke(cli, command + [str(mislabeled_path)])
+        assert result.exit_code == 2, result.stderr
+        assert "mislabeled.json" in result.stderr
+        assert "should be Extended JSON from its name, but its content looks like WA-CBOR" in result.stderr
+    result = runner.invoke(cli, base_args + ["encrypt", str(data_file), "-o", "data_bad", "-c", str(mislabeled_path)])
+    assert result.exit_code == 2, result.stderr
+    assert "mislabeled.json" in result.stderr
+    assert not any(name.startswith("data_bad") for name in _list_filenames(cryptainer_storage))
+
+
+def test_cli_cryptoconf_generate_simple_with_file_format(tmp_path):
+    runner = _get_cli_runner()
+
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        for output_name, extra_args, created_name, expected_format in [
+            ("conf.cbor", [], "conf.cbor", DocumentFormat.CBOR),  # Cryptoconf format from extension
+            ("conf2.CBOR", [], "conf2.cbor", DocumentFormat.CBOR),  # Cryptoconf extension in another letter case
+            ("conf3.Json", [], "conf3.json", DocumentFormat.JSON),
+            ("conf4.json", ["--format", "json"], "conf4.json", DocumentFormat.JSON),
+            ("conf5.txt", [], "conf5.txt", DocumentFormat.JSON),  # Any other name, in Extended JSON by default
+            ("conf6.txt", ["--format", "cbor"], "conf6.txt", DocumentFormat.CBOR),
+            ("conf7.TXT", ["--format", "CBOR"], "conf7.TXT", DocumentFormat.CBOR),
+        ]:
+            result = runner.invoke(
+                cli, ["cryptoconf", "generate-simple", "-o", output_name] + extra_args + _GENERATE_SIMPLE_LAYERS
+            )
+            assert result.exit_code == 0, (output_name, result.stderr)
+            assert created_name in _list_filenames(), (output_name, _list_filenames())
+            assert _get_document_file_format(created_name) == expected_format
+            cryptoconf = load_from_document_file(created_name, format=expected_format)
+            check_cryptoconf_sanity(cryptoconf)
+            assert cryptoconf["payload_cipher_layers"][0]["payload_cipher_algo"] == "AES_CBC"
+        assert _list_filenames() == [
+            "conf.cbor",
+            "conf2.cbor",
+            "conf3.json",
+            "conf4.json",
+            "conf5.txt",
+            "conf6.txt",
+            "conf7.TXT",
+        ]
+
+        # Contradicting format
+        for output_name, extra_args in [("bad.cbor", ["--format", "json"]), ("bad.JSON", ["--format", "cbor"])]:
+            result = runner.invoke(
+                cli, ["cryptoconf", "generate-simple", "-o", output_name] + extra_args + _GENERATE_SIMPLE_LAYERS
+            )
+            assert result.exit_code == 2, result.stderr
+            assert "contradicts the extension of output file" in result.stderr
+        assert not any(name.lower().startswith("bad") for name in _list_filenames())
+
+        # Overwrite protection applies to the normalized name, and --force replaces the file
+        pathlib.Path("conf.cbor").write_bytes(b"precious")
+        result = runner.invoke(cli, ["cryptoconf", "generate-simple", "-o", "conf.CBOR"] + _GENERATE_SIMPLE_LAYERS)
+        assert result.exit_code == 2, result.stderr
+        assert "conf.cbor' already exists, use --force" in result.stderr
+        assert pathlib.Path("conf.cbor").read_bytes() == b"precious"
+        result = runner.invoke(
+            cli, ["cryptoconf", "generate-simple", "-o", "conf.CBOR", "--force"] + _GENERATE_SIMPLE_LAYERS
+        )
+        assert result.exit_code == 0, result.stderr
+        assert _get_document_file_format("conf.cbor") == DocumentFormat.CBOR
+        assert "conf.CBOR" not in _list_filenames()
+
+    # Raw CBOR bytes, or JSON text, to STDOUT
+    result = runner.invoke(cli, ["cryptoconf", "generate-simple", "--format", "cbor"] + _GENERATE_SIMPLE_LAYERS)
+    assert result.exit_code == 0, result.stderr
+    check_cryptoconf_sanity(load_from_cbor_bytes(result.stdout_bytes))
+    result = runner.invoke(cli, ["cryptoconf", "generate-simple"] + _GENERATE_SIMPLE_LAYERS)
+    assert result.exit_code == 0, result.stderr
+    check_cryptoconf_sanity(load_from_json_str(result.stdout))
+
+    # No -f short option
+    result = runner.invoke(cli, ["cryptoconf", "generate-simple", "-f", "cbor"] + _GENERATE_SIMPLE_LAYERS)
+    assert result.exit_code == 2, result.stderr
+    assert "No such option" in result.stderr
+
+
+def _invoke_convert_format(runner, args, **kwargs):
+    return runner.invoke(cli, ["convert-format"] + args, **kwargs)
+
+
+def test_cli_convert_format_of_simple_documents(tmp_path):
+    runner = _get_cli_runner()
+
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        dump_to_json_file("conf.json", SIMPLE_CRYPTOCONF)
+        original_json_bytes = pathlib.Path("conf.json").read_bytes()
+
+        # Cryptoconf to CBOR
+        result = _invoke_convert_format(runner, ["conf.json", "-o", "other.cbor"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert pathlib.Path("conf.json").read_bytes() == original_json_bytes
+        assert pathlib.Path("other.cbor").read_bytes() == dump_to_cbor_bytes(load_from_json_bytes(original_json_bytes))
+
+        # Back to JSON, with a derived name
+        os.remove("conf.json")
+        pathlib.Path("other.cbor").rename("conf.cbor")
+        result = _invoke_convert_format(runner, ["conf.cbor"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert pathlib.Path("conf.json").read_bytes() == original_json_bytes
+        assert _list_filenames() == ["conf.cbor", "conf.json"]
+
+        # Unknown target extension
+        for target in ("conf.yaml", "conf.crypt", "conf"):
+            result = _invoke_convert_format(runner, ["conf.json", "-o", target])
+            assert result.exit_code == 2, result.stderr
+            assert "must have a .json or .cbor extension" in result.stderr
+        assert _list_filenames() == ["conf.cbor", "conf.json"]
+
+        # Target extension in another letter case
+        result = _invoke_convert_format(runner, ["conf.json", "-o", "OTHER.CBOR"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert _list_filenames() == ["OTHER.cbor", "conf.cbor", "conf.json"]
+        assert pathlib.Path("OTHER.cbor").read_bytes() == pathlib.Path("conf.cbor").read_bytes()
+
+        # Source extension in another letter case, read as typed
+        pathlib.Path("Report.JSON").write_bytes(original_json_bytes)
+        result = _invoke_convert_format(runner, ["Report.JSON"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert "Report.cbor" in _list_filenames()
+        assert pathlib.Path("Report.cbor").read_bytes() == pathlib.Path("conf.cbor").read_bytes()
+
+        # Corpus-style name
+        pathlib.Path("01_simple.cryptoconf").write_bytes(original_json_bytes)
+        result = _invoke_convert_format(runner, ["01_simple.cryptoconf"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert pathlib.Path("01_simple.cryptoconf.cbor").read_bytes() == pathlib.Path("conf.cbor").read_bytes()
+
+        # Existing target refused
+        before = _list_filenames()
+        pathlib.Path("conf.cbor").write_bytes(b"precious")
+        result = _invoke_convert_format(runner, ["conf.json"])
+        assert result.exit_code == 2, result.stderr
+        assert "conf.cbor' already exists, use --force to overwrite it" in result.stderr
+        assert pathlib.Path("conf.cbor").read_bytes() == b"precious"
+
+        # Forced overwrite
+        result = _invoke_convert_format(runner, ["conf.json", "--force"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert pathlib.Path("conf.cbor").read_bytes() == pathlib.Path("OTHER.cbor").read_bytes()
+        assert _list_filenames() == before  # No temporary file left
+
+        # Target is the source
+        for args in (["conf.json", "-o", "conf.json", "--force"], ["conf.cbor", "-o", "conf.cbor"]):
+            result = _invoke_convert_format(runner, args)
+            assert result.exit_code == 2, result.stderr
+            assert "is the same file as" in result.stderr
+        assert pathlib.Path("conf.json").read_bytes() == original_json_bytes
+
+        # Letter case of the target: the filesystem decides whether it is the source
+        pathlib.Path("upper.JSON").write_bytes(original_json_bytes)
+        case_insensitive_filesystem = os.path.exists("upper.json")
+        result = _invoke_convert_format(runner, ["upper.JSON", "-o", "upper.json", "--force"])
+        if case_insensitive_filesystem:
+            assert result.exit_code == 2, result.stderr
+            assert "is the same file as" in result.stderr
+            assert "upper.JSON" in _list_filenames()
+        else:
+            assert result.exit_code == 0, result.stderr
+            assert {"upper.JSON", "upper.json"} <= set(_list_filenames())
+        assert pathlib.Path("upper.JSON").read_bytes() == original_json_bytes
+
+        # No -f short option
+        before = _list_filenames()
+        result = _invoke_convert_format(runner, ["conf.json", "-f"])
+        assert result.exit_code == 2, result.stderr
+        assert "No such option" in result.stderr
+        assert _list_filenames() == before
+
+
+def test_cli_convert_format_failures_leave_no_output(tmp_path):
+    runner = _get_cli_runner()
+
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        # Unsupported value
+        pathlib.Path("nan.json").write_text('{"value": {"$numberDecimal": "NaN"}}')
+        result = _invoke_convert_format(runner, ["nan.json"])
+        assert result.exit_code == 1, result.stderr
+        assert "NaN" in result.stderr
+        assert _list_filenames() == ["nan.json"]
+
+        # Same for a same-format conversion, since conversions reject values that a format can't carry faithfully
+        result = _invoke_convert_format(runner, ["nan.json", "-o", "nan2.json"])
+        assert result.exit_code == 1, result.stderr
+        assert _list_filenames() == ["nan.json"]
+
+        # Malformed and mislabeled sources
+        pathlib.Path("malformed.json").write_text('{"value": ')
+        pathlib.Path("mislabeled.json").write_bytes(dump_to_cbor_bytes({"a": 1}))
+        pathlib.Path("malformed.cbor").write_bytes(b"\xa1\x61")
+        pathlib.Path("garbage.dat").write_bytes(b"garbage")
+        for source in ("malformed.json", "mislabeled.json", "malformed.cbor", "garbage.dat"):
+            result = _invoke_convert_format(runner, [source])
+            assert result.exit_code == 1, (source, result.stderr)
+            assert source in result.stderr
+        assert "should be Extended JSON from its name, but its content looks like WA-CBOR" in _invoke_convert_format(
+            runner, ["mislabeled.json"]
+        ).stderr
+        assert _list_filenames() == ["garbage.dat", "malformed.cbor", "malformed.json", "mislabeled.json", "nan.json"]
+
+        # A target appearing after the early check is not clobbered without --force
+        dump_to_json_file("conf.json", SIMPLE_CRYPTOCONF)
+
+        def _convert_and_create_target(*args, **kwargs):
+            pathlib.Path("conf.cbor").write_bytes(b"late content")
+            return convert_document_tree_to_bytes(*args, **kwargs)
+
+        with mock.patch("wacryptolib.cli.convert_document_tree_to_bytes", side_effect=_convert_and_create_target):
+            result = _invoke_convert_format(runner, ["conf.json"])
+        assert result.exit_code == 2, result.stderr
+        assert "conf.cbor' already exists" in result.stderr
+        assert pathlib.Path("conf.cbor").read_bytes() == b"late content"
+
+        # A failed forced conversion leaves the previous target intact, and no temporary file
+        before = _list_filenames()
+        with mock.patch("wacryptolib.cli.os.replace", side_effect=OSError("disk full")):
+            result = _invoke_convert_format(runner, ["conf.json", "--force"])
+        assert result.exit_code == 1, result.stderr
+        assert "disk full" in result.stderr
+        assert pathlib.Path("conf.cbor").read_bytes() == b"late content"
+        assert _list_filenames() == before
+
+
+def test_cli_convert_format_of_cryptainers(tmp_path):
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
+    runner = _get_cli_runner()
+
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        pathlib.Path("x").write_bytes(b"secret content")
+        result = runner.invoke(cli, base_args + ["encrypt", "x"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        result = runner.invoke(cli, base_args + ["encrypt", "x", "-o", "inline", "--bundle"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        os.chdir(cryptainer_storage)
+        source_contents = {name: pathlib.Path(name).read_bytes() for name in _list_filenames()}
+        assert sorted(source_contents) == ["inline.crypt.json", "x.crypt.json", "x.crypt.json.payload"]
+
+        def _check_sources_unchanged():
+            for name, content in source_contents.items():
+                assert pathlib.Path(name).read_bytes() == content
+
+        def _check_decryption(cryptainer_name):
+            result = runner.invoke(
+                cli, base_args + ["cryptainer", "decrypt", cryptainer_name, "-o", "-"], catch_exceptions=False
+            )
+            assert result.exit_code == 0, result.stderr
+            assert b"secret content" in result.stdout_bytes
+
+        # Offloaded cryptainer converted, its payload copied
+        result = _invoke_convert_format(runner, ["x.crypt.json"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert _list_filenames() == [
+            "inline.crypt.json",
+            "x.crypt.cbor",
+            "x.crypt.cbor.payload",
+            "x.crypt.json",
+            "x.crypt.json.payload",
+        ]
+        assert pathlib.Path("x.crypt.cbor.payload").read_bytes() == source_contents["x.crypt.json.payload"]
+        assert _get_document_file_format("x.crypt.cbor") == DocumentFormat.CBOR
+        _check_sources_unchanged()
+        _check_decryption("x.crypt.cbor")
+
+        # Inline cryptainer converted, without payload
+        result = _invoke_convert_format(runner, ["inline.crypt.json"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert "inline.crypt.cbor" in _list_filenames()
+        assert "inline.crypt.cbor.payload" not in _list_filenames()
+        _check_decryption("inline.crypt.cbor")
+
+        # Existing target payload refused
+        os.remove("x.crypt.cbor")
+        pathlib.Path("x.crypt.cbor.payload").write_bytes(b"precious payload")
+        result = _invoke_convert_format(runner, ["x.crypt.json"])
+        assert result.exit_code == 2, result.stderr
+        assert "x.crypt.cbor.payload' already exists" in result.stderr
+        assert not os.path.exists("x.crypt.cbor")
+        assert pathlib.Path("x.crypt.cbor.payload").read_bytes() == b"precious payload"
+
+        # Forced conversion overwrites both target files
+        pathlib.Path("x.crypt.cbor").write_bytes(b"precious cryptainer")
+        result = _invoke_convert_format(runner, ["x.crypt.json", "--force"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert pathlib.Path("x.crypt.cbor.payload").read_bytes() == source_contents["x.crypt.json.payload"]
+        _check_decryption("x.crypt.cbor")
+
+        # Legacy cryptainer, in CANONICAL Extended JSON, normalized to RELAXED Extended JSON
+        cryptainer = load_from_json_bytes(source_contents["x.crypt.json"])
+        pathlib.Path("old.crypt").write_text(json.dumps(convert_to_extjson(cryptainer, canonical=True)))
+        shutil.copyfile("x.crypt.json.payload", "old.crypt.payload")
+        assert pathlib.Path("old.crypt").read_bytes() != source_contents["x.crypt.json"]
+        result = _invoke_convert_format(runner, ["old.crypt", "-o", "old.crypt.json"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert pathlib.Path("old.crypt.json").read_bytes() == source_contents["x.crypt.json"]
+        assert pathlib.Path("old.crypt.json.payload").read_bytes() == source_contents["x.crypt.json.payload"]
+
+        # Legacy cryptainer with a derived name
+        result = _invoke_convert_format(runner, ["old.crypt"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert {"old.crypt.cbor", "old.crypt.cbor.payload"} <= set(_list_filenames())
+        _check_decryption("old.crypt.cbor")
+
+        # Suffix in another letter case
+        shutil.copyfile("x.crypt.json", "Upper.CRYPT.JSON")
+        shutil.copyfile("x.crypt.json.payload", "Upper.CRYPT.JSON.payload")
+        result = _invoke_convert_format(runner, ["Upper.CRYPT.JSON"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert {"Upper.crypt.cbor", "Upper.crypt.cbor.payload"} <= set(_list_filenames())
+        _check_decryption("Upper.crypt.cbor")
+
+        # Missing source payload
+        before = _list_filenames()
+        shutil.copyfile("x.crypt.json", "orphan.crypt.json")
+        result = _invoke_convert_format(runner, ["orphan.crypt.json"])
+        assert result.exit_code == 1, result.stderr
+        assert "orphan.crypt.json.payload" in result.stderr
+        assert _list_filenames() == sorted(before + ["orphan.crypt.json"])
+
+        # A target payload which is the source itself is refused
+        before = _list_filenames()
+        shutil.copyfile("x.crypt.json", "weird.cbor.payload")  # Extended JSON detected from its content
+        shutil.copyfile("x.crypt.json.payload", "weird.cbor.payload.payload")
+        result = _invoke_convert_format(runner, ["weird.cbor.payload", "-o", "weird.cbor", "--force"])
+        assert result.exit_code == 2, result.stderr
+        assert "is the same file as" in result.stderr
+        assert pathlib.Path("weird.cbor.payload").read_bytes() == source_contents["x.crypt.json"]
+        assert _list_filenames() == sorted(before + ["weird.cbor.payload", "weird.cbor.payload.payload"])

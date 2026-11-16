@@ -39,7 +39,11 @@ if authenticator_dir.exists():
 _default_cryptainer_storage_dir = pathlib.Path("~/.witnessangel/cryptainers").expanduser()
 for _tutorial_output_file in (
     root_dir.joinpath("docs/readme.rst.decrypted"),
-    _default_cryptainer_storage_dir.joinpath("readme.rst.crypt"),
+    root_dir.joinpath("docs/tutorial-cryptoconf.cbor"),
+    root_dir.joinpath("docs/tutorial-cryptoconf.json"),
+    _default_cryptainer_storage_dir.joinpath("readme.rst.crypt.json"),
+    _default_cryptainer_storage_dir.joinpath("readme.rst.crypt.json.payload"),
+    _default_cryptainer_storage_dir.joinpath("readme.rst.crypt"),  # Legacy names, from previous doc builds
     _default_cryptainer_storage_dir.joinpath("readme.rst.crypt.payload"),
 ):
     if _tutorial_output_file.is_file():

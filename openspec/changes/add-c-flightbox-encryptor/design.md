@@ -1,16 +1,24 @@
 ## Context
 
-See proposal.md for the motivation. The algorithm is fully specified by `docs/flightbox_specifications/flightbox_encryptor_specification.md` (referred to below as "the spec", with section numbers). The portable Python core (`src/wacryptolib/cryptainer/_flightbox.py`) already separates the algorithm from a platform layer (`FlightboxUtilities`, spec §10), and this C port keeps that split. Library and hardware facts come from `docs/audits/embedded_crypto_libraries_for_flightbox.md`. The CBOR input follows `docs/audits/flightbox_cryptoconf_storage_format.md`.
+See proposal.md for the motivation. The algorithm is fully specified by `docs/flightbox_specifications/flightbox_encryptor_specification.md` (referred to below as "the spec", with section numbers). The portable Python core (`src/wacryptolib/cryptainer/_flightbox.py`) already separates the algorithm from a platform layer (`FlightboxUtilities`, spec §10), and this C port keeps that split. Library and hardware facts come from `docs/audits/embedded_crypto_libraries_for_flightbox.md`. The input format follows `docs/audits/flightbox_cryptoconf_storage_format.md` and its 2026-11-16 follow-up.
 
 Constraints that shape the design:
 
 - Neither Mbed TLS nor wolfCrypt provides our HPKE suite: Mbed TLS has no HPKE, and wolfCrypt's HPKE only has AES-GCM. Mbed TLS also has no AES-EAX and no ML-KEM. Both libraries do provide RSA-OAEP with SHA-512, but wolfCrypt's draws its seed from its own DRBG.
 - The cryptainer copies the whole cryptoconf tree and adds fields to it at several depths (spec §6.6, §9.1). `payload_macs` are only known after the last payload byte.
-- Targets range from a Linux/macOS/Windows host (tests, CLI) to ESP32 under ESP-IDF 5.x, which bundles Mbed TLS 3.6, and later to Cortex-M parts. Hardware acceleration is optional.
+- Documents (change `add-cbor-document-format`, `docs/specifications/wa_cbor_document_format.md`):
+  - wacryptolib reads and writes every document either as relaxed Extended JSON or as **WA-CBOR**, a strict and deterministic CBOR dialect, bijective with it;
+  - cryptainer files are named `<basename>.crypt.json` or `<basename>.crypt.cbor`, with lowercase suffixes;
+  - §9 of the WA-CBOR specification already announces the device profile as a strict sub-profile of WA-CBOR.
+- Key ciphertexts (change `add-cbor-key-ciphertexts`, a prerequisite):
+  - the structures that are serialized and then encrypted (symkeys, key cipherdicts, shards, key structs) may be WA-CBOR, when the `key_ciphertext_format: "cbor"` sibling of their `key_ciphertext` says so;
+  - an absent field means Extended JSON. A C build without JSON support therefore needs no JSON writer at all.
+- Targets range from a Linux/macOS/Windows host (tests, CLI) to ESP32 under ESP-IDF 5.x, which bundles Mbed TLS 3.6, and later to Cortex-M parts. Hardware acceleration is optional. Flash is scarce on the smallest parts, hence the compile-time choice of document codecs.
 - The `compatibility/` corpus provides:
   - symmetric cipherdict fixtures, each tied to one plaintext, with key and IV/nonce;
   - keystore pools with private keys and sidecar passphrases (`2026_post_quantum/pq_pool` covers all three asymmetric algorithms);
-  - cryptoconfs, of which only a few are signature-free with a root `keychain_uid`, and none uses an `AES_CBC` payload layer or `ML_KEM_768` without signatures.
+  - cryptoconfs, of which only a few are signature-free with a root `keychain_uid` (e.g. `2026_cbor_pairs/01_single_layer`, in both formats), and none uses an `AES_CBC` payload layer or `ML_KEM_768` without signatures;
+  - invalid WA-CBOR cryptoconfs (`2026_cbor_pairs/invalid/*.cryptoconf.cbor`), plus the WA-CBOR test vectors of §10 of its specification.
 
   Asymmetric outputs are randomized, so they are checked by having wacryptolib decrypt them, or by byte comparison under fixed randomness where the reference allows it.
 - The repository's CI is GitHub Actions running tox (`.github/workflows/ci.yml`, `tox.ini`), and pytest only collects `tests/` (`testpaths`).
@@ -18,16 +26,18 @@ Constraints that shape the design:
 ## Goals / Non-Goals
 
 **Goals:**
-- One portable core whose behaviour is identical on both backends, so that each backend adapter is a thin, auditable mapping onto a handful of primitives.
+- One portable core whose behaviour is identical on both backends and in both document formats, so that each backend adapter and each document writer is a thin, auditable component.
 - The same RNG path, and the same deterministic test mode, on both backends.
 - Small, readable source files, one concept per file, named after what they implement.
 - A public API usable from bare-metal C: no OS, no globals, caller-owned memory policy, memory bounded independently of payload and chunk sizes.
+- Document codecs that are swappable by compile-time macros, with a single codec in the smallest builds.
 
 **Non-Goals:**
 - Using every backend-native construction where one exists (wolfCrypt's native EAX, both libraries' OAEP): uniformity, a single RNG and deterministic tests come first.
 - Mbed TLS 4.x / PSA-only builds, Mbed TLS 2.x, MSVC, or any third backend. The backend interface makes them possible later.
 - Decryption, key generation, signatures, digests, JSON-RPC key fetching, device profile signing (COSE_Sign1), the STARTED "savegame" serialization (spec §7.2, optional), and ESP-IDF/Pico example firmwares or component manifests.
-- Byte-exact cryptainers compared with CPython. Key order and separators match CPython, but randomness differs, and the spec does not require byte-exactness. Intermediate structures are byte-identical by construction, which the tests check.
+- Mixing document formats inside one cryptainer, which wacryptolib supports, and full WA-CBOR (floats, datetimes, decimals, bignums) in metadata. The C writers only need the sub-profile's types.
+- Comparing whole C cryptainers byte for byte with CPython-made ones: randomness differs, and the spec doesn't require it. Instead, every C document equals its own re-encoding by wacryptolib's default writer, and the intermediate structures are byte-identical by construction. The tests check both.
 
 ## Decisions
 
@@ -35,16 +45,17 @@ Constraints that shape the design:
 
 ```
 reimplementations/c-language/
-  CMakeLists.txt                     host build; option WA_CRYPTO_BACKEND=MBEDTLS|WOLFCRYPT
+  CMakeLists.txt                     host build; WA_CRYPTO_BACKEND=MBEDTLS|WOLFCRYPT, WA_DOCUMENT_FORMATS=JSON;CBOR
   README.md                          integration guide (sources list, defines, hooks, configs)
   include/wa_flightbox/              public API only
     wa_flightbox.h                   umbrella header
     wa_status_codes.h                wa_status_t + wa_status_get_description()
     wa_platform_hooks.h              allocator, random, clock, output sink types
     wa_value_tree.h                  metadata data model + builder functions + CBOR decoding entry
-    wa_device_profile.h              load/validate/destroy a CBOR device profile
-    wa_cryptainer_encryptor.h        create / encrypt chunk / finalize / write JSON / destroy
-    wa_flightbox_config.h            compile-time limits, each overridable with -D
+    wa_device_profile.h              load/validate/destroy a device profile
+    wa_document_formats.h            wa_document_format_t, cryptainer suffix helper (D15)
+    wa_cryptainer_encryptor.h        create / encrypt chunk / finalize / write cryptainer / destroy
+    wa_flightbox_config.h            compile-time limits and document formats, each overridable with -D
   src/
     core/                            the flightbox algorithm (spec §6-§9), no crypto code
       wa_cryptainer_encryptor.c          public API, lifecycle and state machine
@@ -56,10 +67,13 @@ reimplementations/c-language/
       wa_error_location_path.c           builds "cryptoconf.payload_cipher_layers[0]..." paths
     encoding/
       wa_value_tree.c                    tree nodes, deep copy, lookups
-      wa_cbor_strict_decoder.c           CBOR subset -> value tree
+      wa_document_tree_constraints.c     WA-CBOR tree rules: keyword maps, nesting depth (D8)
+      wa_wacbor_subprofile_decoder.c     device profile sub-profile of WA-CBOR -> value tree (D8)
       wa_device_profile_decoding.c       profile structure, key entries, key constraints
-      wa_extended_json_writer.c          value tree -> relaxed Extended JSON (spec §2)
-      wa_base64_encoder.c
+      wa_document_serialization.c        the only dispatch point: value tree -> bytes/sink per format (D15)
+      wa_wacbor_deterministic_writer.c   value tree -> WA-CBOR core deterministic encoding   [CBOR builds]
+      wa_extended_json_writer.c          value tree -> relaxed Extended JSON (spec §2)        [JSON builds]
+      wa_base64_encoder.c                                                                      [JSON builds]
       wa_growable_byte_buffer.c          secret-aware buffer (wipes on growth and release)
     primitives/                      composite constructions, portable, on top of the backend
       wa_symmetric_key_generation.c      spec §3.3
@@ -96,11 +110,13 @@ reimplementations/c-language/
     interop/                         pytest: conftest.py, device_profile_test_helpers.py,
                                      test_c_flightbox_<topic>.py
   build_and_test_all_backends.sh
-scripts/flightbox/export_device_profile.py   CPython -> CBOR device profile
-docs/flightbox_specifications/flightbox_device_profile_specification.md   format + CDDL
+scripts/flightbox/export_device_profile.py   CPython -> WA-CBOR device profile
+docs/flightbox_specifications/flightbox_device_profile_specification.md   sub-profile + CDDL
 ```
 
-Naming: every public and internal symbol is prefixed with `wa_`. Function names follow `wa_<module>_<verb>_<object>`, for example `wa_shamir_split_secret_into_shards()`, `wa_hpke_base_mode_seal()`, `wa_rsa_oaep_sha512_encode_padding()`, `wa_cryptainer_encryptor_encrypt_payload_chunk()`. Compile-time limits are `WA_MAX_...` macros. A source file holds one concept and is named after it. Core files carry spec section references in comments so they can be audited against the Python `_flightbox.py` line by line. Abbreviations are kept to those of the spec (`symkey`, `cipherdict`, `uid`).
+The files marked `[CBOR builds]` or `[JSON builds]` are compiled only when their format is enabled (D15). The WA-CBOR sub-profile decoder is in every build, since device profiles are always WA-CBOR.
+
+Naming: every public and internal symbol is prefixed with `wa_`. Function names follow `wa_<module>_<verb>_<object>`, for example `wa_shamir_split_secret_into_shards()`, `wa_hpke_base_mode_seal()`, `wa_rsa_oaep_sha512_encode_padding()`, `wa_cryptainer_encryptor_encrypt_payload_chunk()`. Compile-time limits are `WA_MAX_...` macros. A source file holds one concept and is named after it. Core files carry spec section references in comments so they can be audited against the Python `_flightbox.py` line by line. Abbreviations are kept to those of the spec (`symkey`, `cipherdict`, `uid`) and of the format names (`wacbor`).
 
 Alternative considered: mirroring the Python module names (`_flightbox.c`, `_encryptor.c`). Rejected: those names reflect Python history, not concepts, and the user asked for self-explanatory names.
 
@@ -109,11 +125,12 @@ Alternative considered: mirroring the Python module names (`_flightbox.c`, `_enc
 ```
  public API (include/)  ──>  core/  ──>  primitives/  ──>  backends/wa_crypto_backend.h
         │                     │  │            │                 ├─ mbedtls (+ mlkem-native)
-        │                     │  └─ encoding/ │                 └─ wolfcrypt
+        │                     │  └─ encoding/ (wa_document_serialization: JSON and/or CBOR writer)
+        │                     │                                 └─ wolfcrypt
         └──────── platform hooks (allocator, random, clock, sinks) used by every layer
 ```
 
-`core/` never calls a backend directly and contains no cryptographic arithmetic, so it is a straight transcription of the spec. `primitives/` holds every composite construction once, for both backends. Only `backends/` includes Mbed TLS or wolfSSL headers.
+`core/` never calls a backend directly and contains no cryptographic arithmetic, so it is a straight transcription of the spec. It serializes every structure through `wa_document_serialization`, never through a specific writer. `primitives/` holds every composite construction once, for both backends. Only `backends/` includes Mbed TLS or wolfSSL headers.
 
 ### D3. Minimal backend interface, compile-time selection
 
@@ -168,26 +185,55 @@ The clock hook returns Unix time in units of 1/10000 s as a `uint64_t`, which UU
 
 ### D7. Value tree as the data model
 
-The cryptoconf, metadata and cryptainer are held in a small generic tree: null, bool, int64, text, bytes, UUID, array, insertion-ordered map. Nodes are allocated through the allocator hook.
+The cryptoconf, metadata and cryptainer are held in a small generic tree: null, bool, int64, text, bytes, UUID, array, insertion-ordered map. This is the sub-profile's subset of the WA-CBOR data model. Nodes are allocated through the allocator hook.
 - The CBOR decoder builds the tree.
 - Step 1 deep-copies the cryptoconf subtree into the cryptainer, with a fresh copy per node, so there is no aliasing, which satisfies spec §6.6 by construction.
-- The core then adds fields (`key_ciphertext`, `payload_macs`...) in place.
-- The JSON writer serializes the tree with keys sorted at write time.
+- The core then adds fields (`key_ciphertext`, `key_ciphertext_format`, `payload_macs`...) in place.
+- The writers serialize the tree with keys sorted at write time, each in its own order (D15).
 - Bytes nodes may be flagged secret, so they are wiped on release.
 
 Alternative considered: a single-pass writer emitting the cryptainer while walking the input (audit "single-pass C design"). Rejected: `payload_macs` arrive last and would need placeholders or a second section, it complicates every layer type, and a cryptainer tree without payload weighs a few KB.
 
-### D8. Strict in-house CBOR decoder
+### D8. Device profile decoder: an exact sub-profile of WA-CBOR
 
-The decoder handles only the needed subset: definite-length maps, arrays, byte and text strings, major types 0/1 within int64, `true`/`false`/`null`, and tag 37 over 16 bytes. It also checks UTF-8 validity, rejects duplicate map keys, enforces `WA_MAX_CBOR_NESTING_DEPTH` (default 64) and bounds every length against the remaining input. Anything else (floats, other tags, indefinite lengths, undefined and simple values) gives a typed error. Profile semantics (D9) are checked in a second pass over the tree.
+The device profile is a WA-CBOR document (WA-CBOR specification, §9) restricted to a sub-profile. The decoder (`wa_wacbor_subprofile_decoder.c`) accepts exactly the WA-CBOR documents of that sub-profile, so the inputs it accepts are always a subset of what wacryptolib's `load_from_cbor_bytes()` accepts:
+- **Accepted**:
+  - definite-length maps with text keys, and definite-length arrays;
+  - byte strings, and text strings that are valid UTF-8 without encoded surrogates;
+  - integers of major types 0 and 1 within int64;
+  - `false`, `true` and `null`;
+  - tag 37 over a 16-byte byte string;
+  - like any WA-CBOR reader, non-shortest heads and unsorted map keys.
+- **Rejected as unsupported** (valid WA-CBOR, outside the sub-profile), with a typed unsupported-type status: floats, tags 0, 2, 3 and 4 (datetimes, bignums, decimals), indefinite lengths, tag 55799 around the top-level item, and integers outside int64.
+- **Rejected as invalid** (not WA-CBOR), with a decoding-error status, exactly like `load_from_cbor_bytes()`:
+  - map keys that are not text strings, and duplicate keys;
+  - simple values other than false/true/null, and any other tag;
+  - tag 37 over anything but 16 bytes;
+  - invalid UTF-8;
+  - reserved additional information values, and stray break codes;
+  - a top-level item that is neither a map nor an array, and bytes left after it (a top-level array is valid WA-CBOR, which profile and metadata semantics then reject);
+  - declared lengths beyond the remaining input, and truncation;
+  - a single-key map whose key is an Extended JSON keyword (`$binary`, `$uuid`, `$date`, `$numberInt`, `$numberLong`, `$numberDouble`, `$numberDecimal`, `$undefined`);
+  - nesting deeper than `WA_MAX_CBOR_NESTING_DEPTH`.
 
-Note (change `add-cbor-document-format`): the device profile encoding is a strict sub-profile of WA-CBOR, the CBOR document format of wacryptolib (`docs/specifications/wa_cbor_document_format.md`, section 9): definite lengths only, no floats, and no tag other than 37. WA-CBOR already requires text map keys and rejects duplicate keys, so every valid device profile is a valid WA-CBOR document, which wacryptolib's `load_from_cbor_bytes()` decodes. The device profile specification only needs to list these restrictions on top of the WA-CBOR document, and the C decoder's accepted inputs must stay a subset of WA-CBOR.
+A WA-CBOR tag whose content is malformed (e.g. tag 0 over an integer) may be reported with either status: it is rejected either way.
+
+The keyword-map and depth rules live in `wa_document_tree_constraints.c`, which is also applied to metadata built with the public builder functions. Without them, metadata such as `{"$uuid": "…"}` would be written as text but read back by wacryptolib as a UUID, and a C-made cryptainer could not be converted with `flightbox convert-format`.
+
+Depth: WA-CBOR caps nesting at 64 levels, the top-level item counting as 1. `WA_MAX_CBOR_NESTING_DEPTH` defaults to 64, may be lowered to save stack, and an `#error` refuses values above 64. Metadata sits at depth 2 in the cryptainer and in key structs, so it is limited to `WA_MAX_CBOR_NESTING_DEPTH - 1` levels. The cryptoconf sits at depth 2 in the profile, so it can't produce a cryptainer deeper than the limit. Every C document is therefore a valid WA-CBOR document.
+
+Profile semantics (D9) are checked in a second pass over the tree.
 
 The two depth limits are separate because a single Shamir layer already costs about 11 CBOR levels: the corpus profiles reach 11 to 13 levels, measured during review.
-- `WA_MAX_CBOR_NESTING_DEPTH` protects the decoder's stack.
+- `WA_MAX_CBOR_NESTING_DEPTH` protects the decoder's stack and keeps documents within WA-CBOR.
 - `WA_MAX_KEY_CIPHER_NESTING_DEPTH` (default 8, unit defined in the spec) bounds the recursion of the core.
 
-Alternatives considered: TinyCBOR (ESP-IDF component), QCBOR, zcbor (CDDL code generation). All are viable, but they would be a third-party dependency on every target, for about 400 lines of decoding that must produce our tree anyway. zcbor's generated decoders don't fit well with a recursive grammar of unbounded shape and arbitrary metadata maps. The decoder is fuzz-tested to compensate for being in-house.
+Acceptance is checked against wacryptolib itself:
+- the C decoder must reject every `invalid` vector of §10 of the WA-CBOR specification and every `2026_cbor_pairs/invalid/*.cryptoconf.cbor` document;
+- it must classify every `valid` vector as accepted or unsupported, as above;
+- a differential test checks that every input the C decoder accepts also loads with `load_from_cbor_bytes()` to the same tree.
+
+Alternatives considered: TinyCBOR (ESP-IDF component), QCBOR, zcbor (CDDL code generation). All are viable, but they would be a third-party dependency on every target, for about 400 lines of decoding that must produce our tree and enforce WA-CBOR's extra rules (keyword maps, duplicate keys, tag whitelist) anyway. zcbor's generated decoders don't fit well with a recursive grammar of unbounded shape and arbitrary metadata maps. The decoder is fuzz-tested to compensate for being in-house.
 
 ### D9. Device profile semantics and key lookup
 
@@ -213,16 +259,21 @@ The root `keychain_uid` is mandatory. Without it, Python generates one at encryp
 
 `wa_cryptoconf_validation.c` mirrors `CRYPTOCONF_SCHEMA_PYTHON` (`src/wacryptolib/cryptainer/_validation.py`):
 - allowed keys per node type, algorithm enums, non-empty lists, threshold bounds and UUID types;
+- the output fields `key_ciphertext`, `key_ciphertext_format` and `payload_macs` are not allowed, like any unknown key;
 - the legacy `payload_signatures` alias, normalized at copy time like spec §6.1 step 8;
 - rejection of layers carrying both alias keys, since the Python schema is an `Or` of two closed schemas.
 
 On top of that come the C-specific rules: mandatory root keychain uid, non-empty signature lists rejected as unsupported, the depth limits, and every asymmetric layer resolving to a key. Validation errors carry an error location path (`wa_error_location_path.c`).
 
 Negative tests can't come from the export script, which validates its input first. Tests instead use `device_profile_test_helpers.py`:
-- a raw cryptoconf → CBOR converter with no validation, which adds a root keychain uid and the needed keys, so that only the targeted rule can fire;
-- profile mutators for text UUIDs, indefinite lengths, unknown or duplicate keys, wrong key sizes, low-order and non-canonical points, and short or long RSA keys.
+- a raw cryptoconf → profile converter with no validation, which adds a root keychain uid and the needed keys, so that only the targeted rule can fire. It encodes with wacryptolib's `dump_to_cbor_bytes()`;
+- profile mutators for text UUIDs, unknown or duplicate keys, wrong key sizes, low-order and non-canonical points, and short or long RSA keys. Mutators that need non-WA-CBOR or non-deterministic encodings (indefinite lengths, duplicate keys, floats, other tags) work at byte level, or through `cbor2`, which is already a dev dependency;
+- a byte-level splicer that puts an arbitrary CBOR item, such as an invalid corpus document, in place of the profile's `cryptoconf` value.
 
-The invalid cryptoconfs of `compatibility/cryptoconfs/*/invalid/` go through the converter, each with an expected status, and C unit tests call cryptoconf validation directly on hand-built trees.
+Three sources of cryptoconfs feed the negative tests:
+- the invalid Extended JSON cryptoconfs of `compatibility/cryptoconfs/*/invalid/` go through the converter, each with an expected status;
+- the invalid WA-CBOR ones of `2026_cbor_pairs/invalid/`, which wacryptolib can't load, go through the splicer, and must give a decoding error;
+- C unit tests call cryptoconf validation directly on hand-built trees.
 
 ### D11. Public API and lifecycle
 
@@ -245,80 +296,129 @@ wa_status_t wa_cryptainer_encryptor_create(const wa_device_profile_t *device_pro
 wa_status_t wa_cryptainer_encryptor_encrypt_payload_chunk(wa_cryptainer_encryptor_t *encryptor,
                                                           const uint8_t *chunk, size_t chunk_length);
 wa_status_t wa_cryptainer_encryptor_finalize(wa_cryptainer_encryptor_t *encryptor);       /* step 2 end + step 3 */
-wa_status_t wa_cryptainer_encryptor_write_cryptainer_json(const wa_cryptainer_encryptor_t *encryptor,
-                                                          const wa_output_sink_t *cryptainer_json_sink);
+wa_status_t wa_cryptainer_encryptor_write_cryptainer(const wa_cryptainer_encryptor_t *encryptor,
+                                                     const wa_output_sink_t *cryptainer_sink);
 void        wa_cryptainer_encryptor_destroy(wa_cryptainer_encryptor_t *encryptor_or_null); /* wipes secrets */
+
+const char *wa_document_format_get_cryptainer_suffix(wa_document_format_t document_format);
+                                                     /* ".crypt.json" / ".crypt.cbor" */
 ```
 
-- `options` holds the platform hooks, the ciphertext location (`WA_CIPHERTEXT_LOCATION_INLINE` / `_OFFLOADED`) and, when offloaded, the payload ciphertext sink.
-- States: `CREATED → STREAMING → FINISHED`, plus `FAILED`, which only accepts destroy. Writing the JSON is only allowed in `FINISHED`.
+- `options` holds:
+  - the platform hooks;
+  - the document format (`WA_DOCUMENT_FORMAT_BUILD_DEFAULT`, `_JSON` or `_CBOR`, D15);
+  - the ciphertext location (`WA_CIPHERTEXT_LOCATION_INLINE` / `_OFFLOADED`) and, when offloaded, the payload ciphertext sink.
+- States: `CREATED → STREAMING → FINISHED`, plus `FAILED`, which only accepts destroy. Writing the cryptainer is only allowed in `FINISHED`, in the document format chosen at creation.
 - A one-shot convenience, `wa_cryptainer_encrypt_payload_in_one_call()`, wraps the sequence.
-- Metadata is built with the public value tree builder, or decoded from CBOR.
-- Sinks are `{write(context, bytes, length) -> wa_status_t, context}`, so the caller decides whether output goes to a file, flash, a socket or a buffer.
+- Metadata is built with the public value tree builder, or decoded from WA-CBOR. In both cases, it is checked against the document tree constraints (D8) at encryptor creation, before any key is generated.
+- Sinks are `{write(context, bytes, length) -> wa_status_t, context}`, so the caller decides whether output goes to a file, flash, a socket or a buffer. The library never names files. Integrators name cryptainer files `<basename>` + `wa_document_format_get_cryptainer_suffix()`, and offloaded payloads `<cryptainer file name>.payload` (spec §9.1, §9.2).
 
 ### D12. Memory policy
 
 Every allocation goes through `platform_hooks->allocate(context, size)` / `release(context, pointer, size)`. Passing the size lets fixed-pool allocators work. The library has no reallocation hook: `wa_growable_byte_buffer` grows by allocate, copy, wipe the old block, then release it, so secrets never survive in freed heap.
 
-The pipeline cuts every input chunk into internal slices of at most `WA_PAYLOAD_PROCESSING_SLICE_SIZE` bytes (default 4096). Per-layer state is a 16-byte CBC remainder, the EAX partial blocks, and one scratch buffer of slice size plus 16 bytes per layer. Offloaded memory therefore depends neither on the payload length nor on the caller's chunk size: a 1 MiB chunk costs the same as a 4 KiB one. Inline mode accumulates the ciphertext in a growable buffer, documented as meant for small payloads. Tests use a counting and fault-injecting allocator to check leaks, out-of-memory paths, wiping and peak usage.
+The pipeline cuts every input chunk into internal slices of at most `WA_PAYLOAD_PROCESSING_SLICE_SIZE` bytes (default 4096). Per-layer state is a 16-byte CBC remainder, the EAX partial blocks, and one scratch buffer of slice size plus 16 bytes per layer. Offloaded memory therefore depends neither on the payload length nor on the caller's chunk size: a 1 MiB chunk costs the same as a 4 KiB one. Inline mode accumulates the ciphertext in a growable buffer, documented as meant for small payloads. In WA-CBOR, the inline ciphertext is then written as one raw byte string, without base64. Tests use a counting and fault-injecting allocator to check leaks, out-of-memory paths, wiping and peak usage.
 
 ### D13. Build, test and CI
 
-- **CMake** (≥ 3.16) for host builds. Mbed TLS (v3.6.x LTS tag) and wolfSSL (v5.8.x tag) are fetched at pinned tags with `FetchContent`, or found via `WA_USE_SYSTEM_CRYPTO_LIBRARIES=ON`. They are compiled with the minimal config headers in `config/`, which also serve as references for device integrators.
+- **CMake** (≥ 3.16) for host builds. Mbed TLS (v3.6.x LTS tag) and wolfSSL (v5.8.x tag) are fetched at pinned tags with `FetchContent`, or found via `WA_USE_SYSTEM_CRYPTO_LIBRARIES=ON`. They are compiled with the minimal config headers in `config/`, which also serve as references for device integrators. `WA_DOCUMENT_FORMATS` (default `JSON;CBOR`) sets the format macros of D15.
 - **Toolchains**: GCC and Clang, with `-std=c99 -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror`; ASan/UBSan builds on Linux. Host platforms are Linux and macOS, plus Windows through MSYS2 MinGW-w64 GCC or Clang. MSVC is not supported.
+- **Build matrix**:
+  - each backend, with both formats: the full unit and interop suites, in both formats;
+  - a JSON-only and a CBOR-only build, on the Mbed TLS backend: the unit tests, plus a symbol check (`nm`) that the disabled writer, and base64 in CBOR-only builds, are absent from the library.
 - **C unit tests**: a dependency-free harness (`wa_minimal_test_harness.h`) and one test executable per module, registered with CTest. They cover:
-  - the encodings: base64, JSON escaping and key order, CBOR valid/invalid/depth;
+  - the encodings: base64, JSON escaping and key order, WA-CBOR deterministic encoding and key order, the sub-profile decoder (valid, unsupported, invalid, depth, keyword maps);
   - UUID0;
   - Shamir: split, then a test-only Lagrange recombination, with k = 1 and k = n;
   - backend conformance: FIPS 197/SP 800-38A AES vectors, RFC 4493 CMAC, the EAX paper vectors, RFC 8439, RFC 7748 X25519, the RFC 9180 A.2.1 vector, ML-KEM derand known-answer vectors, OAEP encoding with a fixed seed;
   - the state machine, out-of-memory sweeps and wiping.
 - **Fuzzing**: libFuzzer targets for the CBOR decoder and profile loader (Clang), 60 s per target in CI, longer runs locally.
 - **Interop tests** (pytest, `reimplementations/c-language/tests/interop/`, outside `testpaths`, run explicitly). They drive `wa_flightbox_test_driver` and the CLI from the build directory given by `WA_FLIGHTBOX_C_BUILD_DIR`, and are skipped when it is absent:
+  - WA-CBOR conformance, using the test vectors of §10 of the WA-CBOR specification:
+    - decoder classification as in D8;
+    - every accepted deterministic vector re-encoded by the C WA-CBOR writer to exactly `cbor_hex`, and written by the C JSON writer as exactly `extjson`;
+    - every invalid corpus WA-CBOR document rejected;
+    - the differential acceptance test of D8;
   - symmetric cipherdict fixtures, each against its own plaintext, byte-for-byte;
+  - intermediate structures (symkeys, key structs, shards, cipherdicts) serialized by the C writers, byte-identical to `dump_to_json_bytes()` / `dump_to_cbor_bytes()` of the same tree;
   - asymmetric wraps decrypted by wacryptolib; ML-KEM KEM output compared byte-for-byte with pycryptodome's `MLKEMKey._encaps(coins)` under the same coins; RFC 9180 vector through the driver;
-  - cryptainers decrypted by wacryptolib using the corpus keystore pools and sidecar passphrases. Profiles come from three sources:
-    - the corpus cryptoconfs that are signature-free and have a root keychain uid;
-    - signature-stripped variants of `2026_current/03`, `04`, `06` and `2026_post_quantum/07_pq_hybrid`;
-    - synthetic cryptoconfs, for `AES_CBC` payloads, every algo, nested symmetric layers, nested shared secrets, and so on.
+  - cryptainers in both formats:
+    - each decrypted by wacryptolib using the corpus keystore pools and sidecar passphrases;
+    - each byte-identical to its re-encoding by wacryptolib's default writer of its format;
+    - each converted to the other format with `flightbox convert-format`, and decrypted again;
+    - with profiles from three sources: the corpus cryptoconfs that are signature-free and have a root keychain uid; signature-stripped variants of `2026_current/03`, `04`, `06` and `2026_post_quantum/07_pq_hybrid`; synthetic cryptoconfs, for `AES_CBC` payloads, every algo, nested symmetric layers, nested shared secrets, and so on;
   - shard subsets tested by withholding one trustee key at a time, asserting only the expected "key not found"-type entries;
-  - backend parity: the same deterministic hook gives identical output from both builds.
-- **Cross-compilation check**: an `arm-none-eabi-gcc` Cortex-M4 compile of the library, the Mbed TLS backend and mlkem-native (no link, no tests).
-- **Entry points**: `reimplementations/c-language/build_and_test_all_backends.sh` runs both backends, unit tests, fuzz smoke and cross-compile. A new tox env, `c_flightbox`, runs that script then the interop pytest. A new `c-flightbox` job in `.github/workflows/ci.yml` (ubuntu-latest, with `arm-none-eabi-gcc` and Clang installed) runs `tox -e c_flightbox`.
+  - backend parity: the same deterministic hook gives identical output from both builds, in each format.
+- **Cross-compilation check**: `arm-none-eabi-gcc` Cortex-M4 compiles (no link, no tests) of the library, the Mbed TLS backend and mlkem-native, once CBOR-only and once JSON-only. The code size of each (`arm-none-eabi-size` on the objects) is recorded in the README, to guide integrators.
+- **Entry points**:
+  - `reimplementations/c-language/build_and_test_all_backends.sh` runs the build matrix, unit tests, fuzz smoke and cross-compiles;
+  - a new tox env, `c_flightbox`, runs that script, then the interop pytest;
+  - a new `c-flightbox` job in `.github/workflows/ci.yml` (ubuntu-latest, with `arm-none-eabi-gcc` and Clang installed) runs `tox -e c_flightbox`.
 
 ### D14. Device profile export script
 
 `scripts/flightbox/export_device_profile.py`:
-- loads an Extended JSON cryptoconf with wacryptolib, validates it, and requires a root keychain uid;
+- loads the cryptoconf with wacryptolib's `load_from_document_file()`, so it accepts Extended JSON and WA-CBOR files (format recognition of the WA-CBOR specification, §8);
+- validates the cryptoconf, and requires a root keychain uid;
 - walks its asymmetric layers to collect every (trustee, keychain uid, algo), rejecting `jsonrpc_api` trustees;
 - fetches public keys from a `FilesystemKeystorePool`, and converts PEMs to raw form: RSA `n`/`e` big-endian bytes, X25519 raw 32 bytes, ML-KEM-768 raw 1184 bytes (pycryptodome, so the ML-KEM tests are marked `requires_pycryptodome`);
-- writes CBOR with `cbor2`, where UUIDs become tag 37 natively.
+- encodes the profile with `dump_to_cbor_bytes()`. That is WA-CBOR's deterministic encoding, so the same inputs always give the same bytes, whichever format the cryptoconf file was in, and UUIDs become tag 37;
+- writes it to an `-o` path ending with `.cbor`, matched in any letter case and lowercased in the created name, like the CLI's typed names. Writing uses exclusive creation, and an existing file is refused unless `--force` is given, like the flightbox CLI.
 
-Note (change `add-cbor-document-format`): the exported file must be a valid WA-CBOR document (see the note of D8). The script may serialize the profile tree with wacryptolib's `dump_to_cbor_bytes()` instead of calling `cbor2` directly, which gives the deterministic WA-CBOR encoding; either way, its tests decode the sample profiles with `load_from_cbor_bytes()`.
+A device profile is thus an ordinary WA-CBOR document: `flightbox convert-format profile.cbor` turns it into readable Extended JSON for review, and converting that back gives the identical bytes.
 
-Output naming: the host tool of task 8.2 writes Extended JSON cryptainers, so it follows the cryptainer naming of section 9.1 of the encryptor specification: `<output>.crypt.json`, plus `<output>.crypt.json.payload` when offloaded, with these suffixes in lowercase, instead of the legacy `.crypt` and `.crypt.payload`.
+Output naming: the host tool of task 8.2 names its outputs like `flightbox encrypt` (spec §9.1):
+- `-o` gives a basename, from which a trailing `.crypt`, `.crypt.json` or `.crypt.cbor` suffix, in any letter case, is stripped;
+- the lowercase suffix of the chosen format is then appended, giving `<basename>.crypt.json` or `<basename>.crypt.cbor`, plus `<that name>.payload` when offloaded;
+- existing outputs are refused unless `--force` is given;
+- the payload is written first and the cryptainer last, both by exclusive creation, so that a cryptainer never points to a missing payload; on failure, the files created by the run are deleted.
 
-`cbor2` goes to the dev dependency group, and `pip_requirements_export.txt` is regenerated so that tox environments install it. The CDDL in the device profile specification is normative, and the script and the C decoder are tested against the same sample files.
+The CDDL in the device profile specification is normative. It refers to the WA-CBOR specification for everything it doesn't restrict. The script and the C decoder are tested against the same sample files.
+
+### D15. Compile-time document formats
+
+Two macros of `wa_flightbox_config.h`, `WA_DOCUMENT_FORMAT_JSON_ENABLED` and `WA_DOCUMENT_FORMAT_CBOR_ENABLED`, each 0 or 1 and both 1 by default, select the writers compiled in. An `#error` refuses a build with neither. `wa_document_serialization.c` is the only code that knows which writers exist: the core asks it to serialize a tree in a `wa_document_format_t`, into a buffer for the structures to encrypt, or into a sink for the cryptainer. Swapping or adding a codec therefore touches that file, the writer and the build lists only.
+
+- **One format per cryptainer.** The format chosen at creation (`options->document_format`) governs both:
+  - every structure serialized to produce key ciphertexts (spec §6, key ciphertext format of `add-cbor-key-ciphertexts`): symkeys, sub-symkeys, cipherdicts, shards and key structs;
+  - the cryptainer document itself.
+
+  In WA-CBOR, the core writes `key_ciphertext_format: "cbor"` on every payload layer and symmetric key layer. In Extended JSON, it writes no such field, so the cryptainer has exactly the form wacryptolib produces by default. A CBOR-only build thus contains no JSON writer and no base64 encoder. Its key structs are also much smaller: for an `AES_CBC` symkey wrapped by `RSA_OAEP`, 93 bytes in 2 OAEP chunks instead of 320 bytes in 6.
+- **Default and errors.** `WA_DOCUMENT_FORMAT_BUILD_DEFAULT` resolves to the only enabled format, or to Extended JSON when both are enabled, like `flightbox encrypt`. Requesting a format that is not compiled in fails at creation with the unsupported-feature status.
+- **Byte-exact writers.** Both writers produce exactly the bytes of wacryptolib's default writers for the same tree, so every C document equals its own re-encoding by wacryptolib:
+  - the WA-CBOR writer emits the core deterministic encoding: shortest heads, definite lengths, map keys sorted by their encoded bytes (shorter keys first, then bytewise);
+  - the Extended JSON writer sorts keys by code point (UTF-8 byte order), with `", "` / `": "` separators, ASCII-only output and `\uXXXX` escapes.
+
+  Both stream to sinks: map and array counts come from the tree, and the inline ciphertext length is known at finalization.
+
+Alternatives considered:
+- A runtime-only choice with both writers always compiled. Rejected: the point of the CBOR-only build is the flash it saves.
+- Independent formats for key ciphertexts and the cryptainer file, as wacryptolib allows. Rejected: it would force both codecs back into a single-format build, for no use on a device. wacryptolib reads every combination anyway.
+- Extended JSON key ciphertexts in a WA-CBOR file, which needs no wacryptolib change. Rejected for the same reason: it keeps the JSON writer and base64 in every build.
 
 ## Risks / Trade-offs
 
 - [In-house composites (HPKE, EAX/CMAC, OAEP encoding, Shamir) are custom crypto code] → Each one is small, exactly specified, checked against RFC/paper vectors where they exist, and validated end to end by wacryptolib decryption on every test run. Shamir's non-GCM encoding has its own split/recombine tests and a comparison with pycryptodome under injected coefficients.
+- [In-house WA-CBOR decoder and writers may drift from wacryptolib's codec] → The WA-CBOR specification's own test vectors, the invalid corpus documents, the byte-exact re-encoding checks of every C document, and the differential acceptance test all compare with wacryptolib on each run. The decoder is fuzzed.
 - [ML-KEM's HPKE KEM id 0x0041 and its key schedule come from an IETF draft that may change] → pycryptodome is the reference, so the interop tests fail loudly if either side moves. The KEM descriptor isolates the change to one file.
 - [Mbed TLS X25519 byte-order and clamping conventions differ from wolfCrypt's] → RFC 7748 vectors are tested through the backend interface on both backends, the adapter is the only place that converts, and non-canonical keys are rejected upfront.
 - [Expected backend option and function names (D3) may differ in the pinned versions] → Task 4 confirms them and updates the `#error` checks and README together.
 - [ESP-IDF menuconfig may lack options (ChaCha20-Poly1305 is off by default in ESP-IDF 5.x)] → Compile-time `#error` checks name each missing option, and the README lists the menuconfig entries to enable.
 - [The wolfCrypt licence (GPL-3.0-or-later) applies to firmwares built with it] → Documented in the README and proposal. Mbed TLS (Apache-2.0 OR GPL-2.0-or-later) remains the default backend.
+- [WA-CBOR key ciphertexts need wacryptolib 0.12 or later to decrypt] → They come with WA-CBOR cryptainer files, which need 0.12 anyway. JSON builds produce cryptainers that older versions also read, apart from the `.crypt.json` naming.
 - [Inline ciphertext keeps the whole payload in RAM] → Documented. Offloaded mode is the default in the CLI and the recommended device mode.
 - [Recursive layers on small stacks] → Both depth limits are enforced at profile load. The stack use per level is measured on host (`-fstack-usage`) and documented.
-- [Device profiles are not authenticated: a swapped profile means a swapped trustee key] → Out of scope here and stated in the profile specification. COSE_Sign1 is the planned follow-up, and the format string allows a later version to require it.
+- [Device profiles are not authenticated: a swapped profile means a swapped trustee key] → Out of scope here and stated in the profile specification. COSE_Sign1 is the planned follow-up: WA-CBOR's deterministic encoding makes it straightforward, and the format string allows a later version to require it.
 - [The random hook on ESP32 is only truly random under conditions, and Pico's `pico_rand` is not a CSPRNG] → The README states the hook contract and points to audit §5. The library cannot check entropy itself.
 - [The interop tests live outside `testpaths`, so a plain `pytest` run skips them] → The dedicated tox env and CI job run them on every push.
 
 ## Migration Plan
 
-Purely additive: a new directory, a new script, a new doc, a dev dependency, a tox env and a CI job. No wacryptolib behaviour, wire format or API changes, so there is no rollback concern beyond reverting the commits. The sibling `witness-angel-cryptolib-c` skeleton can be archived once this port runs on a device. That is outside this change.
+Purely additive: a new directory, a new script, a new doc, a tox env and a CI job. No wacryptolib behaviour, wire format or API changes beyond those of the prerequisite `add-cbor-key-ciphertexts`, so there is no rollback concern beyond reverting the commits. The sibling `witness-angel-cryptolib-c` skeleton can be archived once this port runs on a device. That is outside this change.
 
 ## Open Questions
 
 - Licence of the new C tree. By default it inherits the repository's GPL-2.0-or-later, which is compatible with both backends (with wolfCrypt the combined firmware becomes GPL-3.0-or-later). A more permissive licence (e.g. Apache-2.0) for device makers would only change the licence headers and a LICENSE file, not the specs or tasks.
 - Which exact patch versions to pin (latest Mbed TLS 3.6.x, wolfSSL 5.8.x and mlkem-native 2.x at implementation time).
 - Whether to ship an ESP-IDF component manifest in a follow-up, once a target board is chosen (audit §8).
+- Whether the export script should later become a `flightbox` CLI subcommand, once device profiles are used outside tests.

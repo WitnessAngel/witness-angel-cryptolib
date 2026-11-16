@@ -1,11 +1,11 @@
 ## Purpose
 
-Provides a portable C implementation of the flightbox encryptor workflow for embedded devices. From a device profile, it turns a payload into a finished cryptainer that the reference wacryptolib decryptor accepts unchanged.
+Provides a portable C implementation of the flightbox encryptor workflow for embedded devices. From a device profile, it turns a payload into a finished cryptainer, in Extended JSON or WA-CBOR, that the reference wacryptolib decryptor accepts unchanged.
 
 ## ADDED Requirements
 
 ### Requirement: End-to-end cryptainer creation
-The C encryptor SHALL implement steps 1, 2 and 3 of the encryptor specification (`docs/flightbox_specifications/flightbox_encryptor_specification.md`), referred to below as "the encryptor specification". From a validated device profile and optional cryptainer metadata, it SHALL produce a cryptainer with:
+The C encryptor SHALL implement steps 1, 2 and 3 of the encryptor specification (`docs/flightbox_specifications/flightbox_encryptor_specification.md`), referred to below as "the encryptor specification". From a validated device profile and optional cryptainer metadata, it SHALL produce a cryptainer, in the document format chosen for it, with:
 - state `FINISHED` and format `cryptainer_1.0`;
 - a fresh `cryptainer_uid`;
 - the cryptoconf's root `keychain_uid`;
@@ -16,8 +16,8 @@ The C encryptor SHALL implement steps 1, 2 and 3 of the encryptor specification 
 Given the trustees' private keys, the produced cryptainer SHALL pass wacryptolib's strict cryptainer validation, once loaded from the filesystem when its ciphertext is offloaded. wacryptolib's decryption SHALL recover the original payload with no error entry in the operation report.
 
 #### Scenario: Single-layer cryptainer decrypted by wacryptolib
-- **WHEN** the C encryptor encrypts a 4099-byte payload with a profile made of one `CHACHA20_POLY1305` payload layer wrapped by one `ECIES_X25519` layer for an authenticator trustee
-- **THEN** wacryptolib decrypts the cryptainer with that authenticator's private key, returns the exact payload, and reports no error
+- **WHEN** the C encryptor encrypts a 4099-byte payload with a profile made of one `CHACHA20_POLY1305` payload layer wrapped by one `ECIES_X25519` layer for an authenticator trustee, once in each document format
+- **THEN** wacryptolib decrypts both cryptainers with that authenticator's private key, returns the exact payload, and reports no error
 
 #### Scenario: Nested key layers decrypted by wacryptolib
 - **WHEN** the profile has two payload layers, and the key of one of them goes through `RSA_OAEP`, then a shared secret of threshold 2 out of 3 whose shards use `ECIES_X25519`, `ML_KEM_768` and an `AES_EAX` symmetric layer wrapped by `RSA_OAEP`
@@ -101,32 +101,72 @@ When creating a cryptainer, the caller SHALL choose between an inline ciphertext
 - inline: the cryptainer gets `{"ciphertext_location": "inline", "ciphertext_value": <bytes>}`, and the whole ciphertext is held in memory until serialization;
 - offloaded: the cryptainer gets exactly `{"ciphertext_location": "offloaded"}`, and the raw final ciphertext bytes are delivered progressively to a caller-provided payload sink, to be stored as the `<cryptainer filename>.payload` sibling file.
 
+The library SHALL provide the lowercase cryptainer suffix of each document format (`.crypt.json`, `.crypt.cbor`), so that integrators name files as section 9 of the encryptor specification requires.
+
 #### Scenario: Offloaded cryptainer
-- **WHEN** a payload is encrypted with an offloaded ciphertext, and the host tool writes `rec.crypt.json` and `rec.crypt.json.payload`
-- **THEN** `rec.crypt.json` contains the offloaded marker only, and wacryptolib loads both files from the filesystem and decrypts the payload
+- **WHEN** a payload is encrypted with an offloaded ciphertext in WA-CBOR, and the host tool writes `rec.crypt.cbor` and `rec.crypt.cbor.payload`
+- **THEN** `rec.crypt.cbor` contains the offloaded marker only, and wacryptolib loads both files from the filesystem and decrypts the payload
 
 #### Scenario: Inline cryptainer
-- **WHEN** a 255-byte payload is encrypted with an inline ciphertext
-- **THEN** the cryptainer embeds the ciphertext as an Extended JSON `$binary` value, and wacryptolib decrypts it
+- **WHEN** a 255-byte payload is encrypted with an inline ciphertext, once in each document format
+- **THEN** the Extended JSON cryptainer embeds the ciphertext as a `$binary` value, the WA-CBOR one as a byte string, and wacryptolib decrypts both
 
-### Requirement: Cryptainer serialization
-The cryptainer SHALL be written as UTF-8 Extended JSON in relaxed mode, as defined by section 2 of the encryptor specification:
-- bytes as `{"$binary": {"base64": ..., "subType": "00"}}`, UUIDs as `{"$uuid": "<32 lowercase hex>"}`, integers as plain numbers;
-- keys sorted, separators `", "` and `": "`;
-- ASCII-only output, with `\uXXXX` escapes (surrogate pairs beyond the BMP).
+### Requirement: Document formats
+Each build SHALL enable the Extended JSON format, the WA-CBOR format, or both, through compile-time macros. Compilation SHALL fail with an explicit message when neither is enabled. The code of a disabled format, the base64 encoder included for Extended JSON, SHALL NOT be part of the build. The caller SHALL choose one enabled format per cryptainer, the default being the only enabled format, or Extended JSON when both are. Requesting a format that is not enabled SHALL fail at creation with an unsupported-feature status.
 
-Every intermediate structure that gets encrypted (symkeys, key structs, cipherdicts, shards) SHALL use the same serialization, and SHALL be byte-identical to the reference library's serialization of the same structure. Output SHALL be delivered progressively to a caller-provided sink, without requiring the whole JSON text in memory.
+The chosen format SHALL govern both:
+- every structure serialized and then encrypted (symkeys, sub-symkeys, cipherdicts, shards, key structs), as defined by the key ciphertext format capability;
+- the cryptainer document.
+
+In WA-CBOR, every payload cipher layer and every symmetric key cipher layer SHALL get `key_ciphertext_format: "cbor"`. In Extended JSON, no `key_ciphertext_format` field SHALL be written.
+
+The documents SHALL be written as follows:
+- Extended JSON: UTF-8, relaxed mode, as defined by section 2 of the encryptor specification:
+  - bytes as `{"$binary": {"base64": ..., "subType": "00"}}`, UUIDs as `{"$uuid": "<32 lowercase hex>"}`, integers as plain numbers;
+  - keys sorted by code point, separators `", "` and `": "`;
+  - ASCII-only output, with lowercase `\uXXXX` escapes and surrogate pairs beyond the BMP.
+- WA-CBOR: the core deterministic encoding of the WA-CBOR specification (`docs/specifications/wa_cbor_document_format.md`), with byte strings, tag 37 UUIDs, and map keys sorted by their encoded bytes.
+
+Every serialized structure, intermediate or cryptainer, SHALL be byte-identical to the serialization of the same tree by wacryptolib's default writer of its format (`dump_to_json_bytes()` or `dump_to_cbor_bytes()`). Every cryptainer SHALL be a valid WA-CBOR tree, so that `flightbox convert-format` converts it to the other format. Output SHALL be delivered progressively to a caller-provided sink, without requiring the whole document in memory.
+
+#### Scenario: CBOR-only build
+- **WHEN** the library is built with only the WA-CBOR format enabled
+- **THEN** it contains no Extended JSON writer nor base64 encoder, its cryptainers carry `key_ciphertext_format: "cbor"` on every payload layer and symmetric key layer, and wacryptolib decrypts them
+
+#### Scenario: No format enabled
+- **WHEN** the library is compiled with both document formats disabled
+- **THEN** compilation stops with an error explaining how to enable one
+
+#### Scenario: Disabled format requested
+- **WHEN** a JSON-only build is asked to create a WA-CBOR cryptainer
+- **THEN** creation fails with the unsupported-feature status, before any key is generated
+
+#### Scenario: JSON mode matches the reference form
+- **WHEN** a cryptainer is created in Extended JSON
+- **THEN** it has no `key_ciphertext_format` field, and its bytes equal `dump_to_json_bytes(load_from_json_bytes(bytes))`
+
+#### Scenario: CBOR mode matches the reference form
+- **WHEN** a cryptainer is created in WA-CBOR
+- **THEN** its bytes equal `dump_to_cbor_bytes(load_from_cbor_bytes(bytes))`
 
 #### Scenario: Non-ASCII metadata
-- **WHEN** cryptainer metadata contains the text `"Café ☕"`
-- **THEN** the cryptainer file contains `"Café ☕"`, and wacryptolib reads the metadata back as `"Café ☕"`
+- **WHEN** cryptainer metadata contains the text `"Café ☕"`, in an Extended JSON cryptainer
+- **THEN** the cryptainer file contains `"Caf\u00e9 \u2615"`, and wacryptolib reads the metadata back as `"Café ☕"`
 
 #### Scenario: Same serialization as the reference for intermediate structures
-- **WHEN** a symkey `{"key": K, "iv": IV}` with fixed bytes is serialized by the C library and by wacryptolib
+- **WHEN** a symkey `{"key": K, "iv": IV}` with fixed bytes is serialized by the C library and by wacryptolib, in each format
 - **THEN** both byte sequences are identical
 
+#### Scenario: Conversion of C cryptainers
+- **WHEN** a C-made cryptainer of either format, with an offloaded payload, is converted to the other format with `flightbox convert-format`
+- **THEN** wacryptolib decrypts the converted cryptainer to the original payload
+
 ### Requirement: Cryptainer metadata
-The caller SHALL be able to attach metadata to each cryptainer, or none. Metadata SHALL be a map of text keys whose values are null, booleans, signed 64-bit integers, text strings, byte strings, UUIDs, arrays or maps, within the configured CBOR nesting depth. When provided as CBOR, metadata SHALL use the encodings of the device profile capability. Metadata SHALL appear unencrypted in the cryptainer's `cryptainer_metadata` and in every key struct, as the encryptor specification requires. Floating-point numbers and dates SHALL be rejected with an unsupported-type error.
+The caller SHALL be able to attach metadata to each cryptainer, or none. Metadata SHALL be a map of text keys whose values are null, booleans, signed 64-bit integers, text strings, byte strings, UUIDs, arrays or maps. When provided as CBOR, metadata SHALL be a WA-CBOR document within the sub-profile of the device profile capability. Whether built or decoded, metadata SHALL be checked before any key is generated:
+- it SHALL be nested at most one level less than the configured CBOR nesting depth, since it sits at depth 2 in cryptainers and key structs;
+- it SHALL contain no single-key map whose key is an Extended JSON keyword (`$binary`, `$uuid`, `$date`, `$numberInt`, `$numberLong`, `$numberDouble`, `$numberDecimal`, `$undefined`).
+
+Metadata SHALL appear unencrypted in the cryptainer's `cryptainer_metadata` and in every key struct, as the encryptor specification requires. Floating-point numbers, datetimes, decimals and integers outside the signed 64-bit range SHALL be rejected with an unsupported-type error.
 
 #### Scenario: Metadata copied into key structs
 - **WHEN** a cryptainer is created with metadata `{"device_id": "fb-07", "sequence": 42}` and one `RSA_OAEP` layer
@@ -137,8 +177,12 @@ The caller SHALL be able to attach metadata to each cryptainer, or none. Metadat
 - **THEN** `cryptainer_metadata` is `null` in the cryptainer and in every key struct
 
 #### Scenario: Float metadata rejected
-- **WHEN** CBOR metadata contains a floating-point value
+- **WHEN** CBOR metadata contains a floating-point value or a tag 0 datetime
 - **THEN** cryptainer creation fails with an unsupported-type error before any key is generated
+
+#### Scenario: Extended JSON keyword map rejected
+- **WHEN** metadata built with the value tree builder contains the map `{"$uuid": "0123"}`
+- **THEN** cryptainer creation fails with a validation error before any key is generated, since wacryptolib would read that map back as a UUID
 
 ### Requirement: Signatures are not supported yet
 The C encryptor SHALL reject any cryptoconf that has a non-empty `payload_plaintext_signatures` list, or a non-empty `payload_ciphertext_signatures` (or legacy `payload_signatures`) list. The rejection SHALL happen when the profile is loaded, and the error SHALL state that signatures are unsupported. Absent or empty signature lists SHALL be accepted. An empty legacy `payload_signatures` list SHALL be written into the cryptainer as an empty `payload_ciphertext_signatures` list, as in section 6.1 of the encryptor specification.
@@ -182,13 +226,13 @@ The library SHALL be written in ISO C99. Its sources SHALL use only freestanding
 
 Two compile-time configurable limits SHALL bound recursion, and deeper inputs SHALL be rejected at profile load with a nesting-depth error rather than overflowing the stack:
 - the key cipher nesting depth, default 8: a payload layer's `key_cipher_layers` list is level 1, and each shard or symmetric key layer containing `key_cipher_layers` adds one level;
-- the CBOR item nesting depth, default 64, which applies to profiles and metadata.
+- the CBOR item nesting depth, default 64, which applies to profiles and metadata. It MAY be lowered, but compilation SHALL fail if it is set above 64, the maximum of WA-CBOR.
 
 Public identifiers SHALL share a single library prefix. File and function names SHALL describe their role explicitly.
 
 #### Scenario: Cross-compilation for Cortex-M
-- **WHEN** the library and its Mbed TLS backend are compiled for a Cortex-M4 target with warnings treated as errors
-- **THEN** compilation succeeds
+- **WHEN** the library and its Mbed TLS backend are compiled for a Cortex-M4 target with warnings treated as errors, once with only WA-CBOR and once with only Extended JSON enabled
+- **THEN** both compilations succeed
 
 #### Scenario: Excessive key cipher nesting
 - **WHEN** a profile nests shared secret layers so that the key cipher nesting depth is one above the configured maximum
@@ -244,11 +288,23 @@ A failed creation SHALL return no instance, and destroying a null instance SHALL
 ### Requirement: Host command-line tool
 The C tree SHALL provide a host command-line tool, built only for host targets, using operating-system randomness. It SHALL take:
 - a device profile file and a payload file;
-- optional CBOR metadata;
-- an inline or offloaded choice and a chunk size.
+- an optional WA-CBOR metadata file;
+- an output basename, a document format among those of the build, an inline or offloaded choice, and a chunk size.
 
-It SHALL write a `.crypt.json` file, plus its `.payload` sibling when offloaded, with these suffixes in lowercase. On error, it SHALL exit with a non-zero status and print the status description and error location.
+It SHALL name its outputs like `flightbox encrypt`:
+- a trailing `.crypt`, `.crypt.json` or `.crypt.cbor` suffix of the basename, in any letter case, is stripped;
+- the lowercase suffix of the chosen format is then appended, plus a `.payload` file named after the cryptainer when offloaded.
+
+It SHALL refuse to overwrite existing output files unless a `--force` option is given. It SHALL write the payload file before the cryptainer file. On error, it SHALL exit with a non-zero status, print the status description and error location, and leave no file it created behind.
 
 #### Scenario: Encrypt a file from the command line
-- **WHEN** the tool is run with a device profile exported from the compatibility corpus and a payload file, in offloaded mode with 4096-byte chunks
-- **THEN** it writes `<output>.crypt.json` and `<output>.crypt.json.payload`, exits with status 0, and wacryptolib decrypts the result with the corpus keystore pool and the passphrases documented in its sidecar
+- **WHEN** the tool is run with a device profile exported from the compatibility corpus and a payload file, in offloaded mode with 4096-byte chunks, once per document format
+- **THEN** it writes `<output>.crypt.json` and `<output>.crypt.json.payload`, or `<output>.crypt.cbor` and `<output>.crypt.cbor.payload`, exits with status 0, and wacryptolib decrypts each result with the corpus keystore pool and the passphrases documented in its sidecar
+
+#### Scenario: Typed suffix normalized
+- **WHEN** the tool is run with the output basename `Clip.CRYPT` and the WA-CBOR format
+- **THEN** it writes `Clip.crypt.cbor`
+
+#### Scenario: Existing output refused
+- **WHEN** `<output>.crypt.json` already exists and the tool is run without `--force`
+- **THEN** it exits with a non-zero status before encrypting anything, and leaves the existing file unchanged

@@ -5,7 +5,7 @@ Defines how the `flightbox` CLI converts document files between Extended JSON an
 ## ADDED Requirements
 
 ### Requirement: convert-format command
-The CLI SHALL provide a `convert-format SOURCE` command, with an optional `-o/--output TARGET` path and a `--force` flag (long form only), that converts any Extended JSON or WA-CBOR document file (cryptoconf, cryptainer, cipherdict, keystore metadata...) without validating it against a cryptostructure schema. The source format SHALL be recognized as specified by the document file format recognition rules. The target format SHALL be the one given by the extension of `TARGET`, which SHALL be `.json` or `.cbor`, compared like the platform compares file names (ignoring letter case on Windows, exactly on other platforms) (any other extension is a usage error), or, without `-o`, the format opposite to the source's. The target SHALL be written at the path given, by the library's default writer of its format. The source file, and its payload file if any, SHALL never be modified, moved or deleted.
+The CLI SHALL provide a `convert-format SOURCE` command, with an optional `-o/--output TARGET` path and a `--force` flag (long form only), that converts any Extended JSON or WA-CBOR document file (cryptoconf, cryptainer, cipherdict, keystore metadata...) without validating it against a cryptostructure schema. The source format SHALL be recognized as specified by the document file format recognition rules. The target format SHALL be the one given by the extension of `TARGET`, which SHALL be `.json` or `.cbor` in any letter case, normalized per the typed names requirement (any other extension is a usage error), or, without `-o`, the format opposite to the source's. The target SHALL be written at the path given, once normalized, by the library's default writer of its format. The source file, and its payload file if any, SHALL never be modified, moved or deleted.
 
 #### Scenario: Cryptoconf to CBOR
 - **WHEN** `flightbox convert-format conf.json -o other.cbor` is run on a valid Extended JSON cryptoconf
@@ -17,15 +17,14 @@ The CLI SHALL provide a `convert-format SOURCE` command, with an optional `-o/--
 
 #### Scenario: Target extension in another letter case
 - **WHEN** `flightbox convert-format conf.json -o OTHER.CBOR` is run
-- **THEN** on Windows, `OTHER.CBOR` holds the WA-CBOR form of the cryptoconf
-- **AND** on other platforms, the command fails with a usage error, and no file is written
+- **THEN** `OTHER.cbor` holds the WA-CBOR form of the cryptoconf, on every platform
 
 #### Scenario: Same-format normalization
 - **WHEN** `flightbox convert-format old.crypt -o old.crypt.json` is run on a legacy cryptainer in CANONICAL Extended JSON
 - **THEN** `old.crypt.json` holds the same tree in the library's default RELAXED Extended JSON
 
 ### Requirement: Derived target name
-Without `-o`, the target path SHALL be derived from the source path: a final `.json` extension is replaced by `.cbor`, a final `.cbor` extension is replaced by `.json`, extensions being compared like the platform compares file names (ignoring letter case on Windows, exactly on other platforms), and any other name gets the extension of the opposite format appended. The extension added by the command SHALL be lowercase, and the rest of the source name SHALL be kept as is.
+Without `-o`, the target path SHALL be derived from the source path: a final `.json` extension is replaced by `.cbor`, a final `.cbor` extension is replaced by `.json`, extensions being matched in any letter case, and any other name gets the extension of the opposite format appended. The extension added by the command SHALL be lowercase, and the rest of the source name SHALL be kept as is.
 
 #### Scenario: JSON cryptainer
 - **WHEN** `flightbox convert-format video.mp4.crypt.json` is run
@@ -37,8 +36,7 @@ Without `-o`, the target path SHALL be derived from the source path: a final `.j
 
 #### Scenario: Source extension in another letter case
 - **WHEN** `flightbox convert-format Report.JSON` is run on an Extended JSON document
-- **THEN** on Windows, the target is `Report.cbor`
-- **AND** on other platforms, the target is `Report.JSON.cbor`
+- **THEN** the source is read from `Report.JSON`, and the target is `Report.cbor`, on every platform
 
 #### Scenario: Corpus-style name
 - **WHEN** `flightbox convert-format 01_simple.cryptoconf` is run on an Extended JSON cryptoconf
@@ -56,7 +54,7 @@ When the converted document is a map whose `payload_ciphertext_struct` field equ
 - **THEN** the command fails with an error naming the missing payload file, and neither target file is written
 
 ### Requirement: convert-format overwrite protection
-`convert-format` SHALL apply the `cli-overwrite-protection` rules to its target file and, when a payload is to be copied, to its target payload file. These checks SHALL run before the source document is converted and before any file is written. A file appearing at a target path after these checks SHALL NOT be overwritten without `--force`. Independently of `--force`, the command SHALL refuse a target path that resolves to the source file itself, or to the source payload file.
+`convert-format` SHALL apply the `cli-overwrite-protection` rules to its target file and, when a payload is to be copied, to its target payload file. These checks SHALL run before the source document is converted and before any file is written. A file appearing at a target path after these checks SHALL NOT be overwritten without `--force`. Independently of `--force`, the command SHALL refuse a target path that, once normalized, resolves to the source file itself, or to the source payload file.
 
 #### Scenario: Existing target refused
 - **WHEN** `flightbox convert-format conf.json` is run while `conf.cbor` already exists
@@ -86,7 +84,7 @@ When a conversion fails (unreadable or mislabeled source, malformed document, un
 - **THEN** the command fails naming the unsupported value, and no target file exists afterwards
 
 ### Requirement: Output format option of writing commands
-The `encrypt` and `cryptoconf generate-simple` commands SHALL accept a `--format json|cbor` option, in long form only like every option of the CLI, choosing the format of the document they write. For `encrypt`, the default SHALL be `json`, and the cryptainer SHALL be written with the suffix of its format. For `cryptoconf generate-simple`, the format SHALL default to the one given by the `-o` file extension (`.json` or `.cbor`), and to `json` otherwise, extensions being compared like the platform compares file names (ignoring letter case on Windows, exactly on other platforms); a `--format` contradicting the `-o` extension SHALL be a usage error; CBOR output to STDOUT SHALL be written as raw bytes. On listing and viewing commands, `--format plain|json` SHALL keep its meaning of display format, and the `--help` of each command SHALL make clear whether its `--format` is a display format or a file format.
+The `encrypt` and `cryptoconf generate-simple` commands SHALL accept a `--format json|cbor` option, in long form only like every option of the CLI, choosing the format of the document they write. For `encrypt`, the default SHALL be `json`, and the cryptainer SHALL be written with the suffix of its format. For `cryptoconf generate-simple`, the format SHALL default to the one given by the `-o` file extension (`.json` or `.cbor`), and to `json` otherwise, the extension being matched in any letter case and normalized to lowercase in the created file name; a `--format` contradicting the `-o` extension SHALL be a usage error; CBOR output to STDOUT SHALL be written as raw bytes. On listing and viewing commands, `--format plain|json` SHALL keep its meaning of display format, and the `--help` of each command SHALL make clear whether its `--format` is a display format or a file format.
 
 #### Scenario: Encrypt to CBOR
 - **WHEN** `flightbox encrypt video.mp4 --format cbor` is run
@@ -106,11 +104,10 @@ The `encrypt` and `cryptoconf generate-simple` commands SHALL accept a `--format
 
 #### Scenario: Cryptoconf extension in another letter case
 - **WHEN** `flightbox cryptoconf generate-simple -o conf.CBOR add-payload-cipher-layer ...` is run without `--format`
-- **THEN** on Windows, `conf.CBOR` holds a WA-CBOR cryptoconf
-- **AND** on other platforms, `conf.CBOR` holds an Extended JSON cryptoconf, as for any name without a `.json` or `.cbor` extension
+- **THEN** `conf.cbor` holds a WA-CBOR cryptoconf, on every platform
 
 ### Requirement: CLI reads both formats
-Every CLI command reading a cryptoconf (`encrypt -c`, `cryptoconf validate`, `cryptoconf summarize`) SHALL accept Extended JSON and WA-CBOR files, including from STDIN, per the document file format recognition rules. Every cryptainer command SHALL accept cryptainers named with any of the `.crypt`, `.crypt.json` and `.crypt.cbor` suffixes. Suffixes SHALL be compared like the platform compares file names (ignoring letter case on Windows, exactly on other platforms). When `encrypt -o` is given a basename ending with one of these suffixes, the suffix SHALL be stripped, and the lowercase suffix of the requested format appended. When `cryptainer decrypt` derives its default output filename, it SHALL strip whichever of these suffixes the cryptainer name ends with; a temporary `~` name ends with none of them, and keeps getting the `.decrypted` extension.
+Every CLI command reading a cryptoconf (`encrypt -c`, `cryptoconf validate`, `cryptoconf summarize`) SHALL accept Extended JSON and WA-CBOR files, including from STDIN, per the document file format recognition rules. Every cryptainer command SHALL accept cryptainers named with any of the `.crypt`, `.crypt.json` and `.crypt.cbor` suffixes. Suffixes SHALL be matched in any letter case, per the typed names requirement. When `encrypt -o` is given a basename ending with one of these suffixes, the suffix SHALL be stripped, and the lowercase suffix of the requested format appended. When `cryptainer decrypt` derives its default output filename, it SHALL strip whichever of these suffixes the cryptainer name ends with; a temporary `~` name ends with none of them, and keeps getting the `.decrypted` extension.
 
 #### Scenario: CBOR cryptoconf validated
 - **WHEN** `flightbox cryptoconf validate conf.cbor` is run on a valid WA-CBOR cryptoconf
@@ -126,5 +123,15 @@ Every CLI command reading a cryptoconf (`encrypt -c`, `cryptoconf validate`, `cr
 
 #### Scenario: Premature suffix in another letter case
 - **WHEN** `flightbox encrypt video.mp4 -o Clip.CRYPT` is run
-- **THEN** on Windows, the storage receives `Clip.crypt.json`
-- **AND** on other platforms, the storage receives `Clip.CRYPT.crypt.json`
+- **THEN** the storage receives `Clip.crypt.json`, on every platform
+
+### Requirement: Recognized extensions in typed names
+The CLI SHALL match the extensions `.crypt`, `.json` and `.cbor`, and the suffixes `.crypt.json` and `.crypt.cbor`, in any letter case and on every platform, in the names given on its command line. Before deriving a name from a typed name, or creating a file at a typed path, it SHALL normalize such a trailing extension to lowercase, keeping the rest of the name as typed. It SHALL open existing files at their exact typed names.
+
+#### Scenario: Created file gets a lowercase extension
+- **WHEN** `flightbox convert-format conf.json -o Backup.CBOR` is run on a case-sensitive filesystem
+- **THEN** `Backup.cbor` is written, and no `Backup.CBOR` file is created
+
+#### Scenario: Existing file opened as typed
+- **WHEN** `flightbox cryptoconf validate CONF.JSON` is run on a case-sensitive filesystem holding only `CONF.JSON`
+- **THEN** `CONF.JSON` is read, as Extended JSON

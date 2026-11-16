@@ -13,10 +13,10 @@ All wacryptolib documents (cryptoconfs, cryptainers, cipherdicts, metadata...) a
   - Legacy `<basename>.crypt` cryptainers (always Extended JSON) keep being listed, loaded, decrypted, purged and deleted.
   - Low-level functions given an explicit cryptainer path keep writing to that path, in the format its suffix implies.
   - The offloaded payload file stays named after the whole cryptainer filename plus `.payload`, as today.
-- **Letter case of names**, per the file naming principle of the archived `simplify-filename-casing` change:
+- **Letter case of names**, per the file naming principle of the archived `simplify-filename-casing` change, with one exception for the extensions this change recognizes:
   - name parts chosen by the library are lowercase: cryptainer and payload suffixes, extensions added by the CLI, corpus file and directory names;
   - names given by the caller (cryptainer basenames, explicit paths) are kept as given;
-  - suffixes and format extensions are compared like the platform compares file names (`os.path.normcase()`, as `Path.glob()` does): in any letter case on Windows, in lowercase elsewhere. This applies to recognition, listing, and the CLI's stripping or swapping of suffixes.
+  - the recognized extensions (`.crypt`, `.json`, `.cbor`, and the `.crypt.json` / `.crypt.cbor` suffixes) are matched in any letter case on every platform, instead of like the platform compares file names: in recognition, listing, and the CLI's stripping or swapping of suffixes. When the CLI creates a file from a name typed by the user, such an extension is first normalized to lowercase (`encrypt -o Clip.CRYPT` gives `Clip.crypt.json`, `convert-format -o OTHER.CBOR` writes `OTHER.cbor`). Existing files are still opened at their exact names, and library functions write to the exact path given. Outcomes therefore no longer depend on the platform.
 - `CryptainerStorage` gets a cryptainer format setting (JSON by default). Its listings cover the three suffixes. Creating a cryptainer whose basename already exists in another format logs a warning and proceeds.
 - CLI:
   - new `convert-format SOURCE [-o TARGET] [--force]` command. It converts any Extended JSON or WA-CBOR document file, without schema validation, to the other format, or to the format given by the `-o` extension. The source is never modified, and an offloaded payload is copied next to the target. Existing targets are refused unless `--force` is given, per `cli-overwrite-protection`;
@@ -24,7 +24,7 @@ All wacryptolib documents (cryptoconfs, cryptainers, cipherdicts, metadata...) a
   - `encrypt`'s overwrite check targets the cryptainer of the requested format and its payload, instead of `<basename>.crypt`. A same-basename cryptainer in another format only triggers a warning;
   - every command reading a cryptoconf (including from STDIN) or a cryptainer accepts both formats.
 - Compatibility corpus: a new generation of Extended JSON / WA-CBOR pairs of the same trees (cryptoconfs, inline and offloaded `.crypt.json` / `.crypt.cbor` cryptainers, cipherdicts, signatures), plus invalid WA-CBOR documents that must be rejected. A rule tells `x.crypt.json` assets apart from the legacy `x.crypt.json` sidecars. The new generation, and every later one, uses lowercase file and directory names only (e.g. `aes_cbc/` algo subdirectories), which the tooling enforces.
-- The flightbox encryptor specification adopts the new naming: writers SHOULD use `.crypt.json` / `.crypt.cbor`, in lowercase, and readers MUST recognize all three suffixes, comparing names like their platform does. It also refers to the dialect specification.
+- The flightbox encryptor specification adopts the new naming: writers SHOULD use `.crypt.json` / `.crypt.cbor`, in lowercase, and readers MUST recognize all three suffixes in any letter case. It also refers to the dialect specification.
 - CHANGELOG: entries for the BREAKING naming (with a manual downgrade path), WA-CBOR, `convert-format` and `--format`. The unreleased overwrite-protection entry is amended to name the new suffixes.
 
 Out of scope:
@@ -52,7 +52,7 @@ Out of scope:
 
 - **Code:**
   - `src/wacryptolib/utilities/`: new WA-CBOR codec and format dispatch;
-  - `src/wacryptolib/cryptainer/`: suffix constants and helpers, exports, filesystem dump/load, listing (one directory listing filtered in a single pass with the shared, platform-dependent name matcher, instead of six globs), storage format setting, encryption pipeline;
+  - `src/wacryptolib/cryptainer/`: suffix constants and helpers, exports, filesystem dump/load, listing (one directory listing filtered in a single pass, matching suffixes in any letter case, instead of six globs), storage format setting, encryption pipeline;
   - `src/wacryptolib/cli.py`: `convert-format`, `--format`, cryptoconf reading, `encrypt` overwrite check and basename stripping, `decrypt` default output name;
   - tests, including the CLI overwrite tests that assert `.crypt` names;
   - the corpus tooling (`scripts/compatibility/`, `tests/_compatibility_corpus.py`), including the lowercase name check for new generations, and `compatibility/README.md`, whose layout currently shows uppercase `<ALGO>` and `<KEY_ALGO>` names.
@@ -60,7 +60,7 @@ Out of scope:
 - **Dependencies:** no new runtime dependency, since the WA-CBOR codec is written in-house (see design.md D4). `cbor2` joins the dev dependencies as a test oracle, and `pip_requirements_export.txt` is regenerated.
 - **Coordination:**
   - builds on the applied and archived `cli-refuse-overwriting-files` change, whose `--force` option and existence-check helper `convert-format` reuses;
-  - follows the file naming principle of the applied and archived `simplify-filename-casing` change, which amended this change, and whose rule 14 of §11.1 of the encryptor specification states it. The `keystore-algo-name-storage` and `lowercase-file-naming` main specs apply it too: key files with lowercase algo names and a silent fallback to legacy uppercase ones, and sensor names kept as configured. Cryptainers named by sensors (e.g. `20261111_184000_FrontCam_cryptainer.mp4.crypt.json`) keep that basename, and keystore pools created by the new corpus generation get lowercase key file names;
+  - follows the file naming principle of the applied and archived `simplify-filename-casing` change, which amended this change, and whose rule 14 of §11.1 of the encryptor specification states it. This change matches its recognized extensions in any letter case on every platform instead of like the platform does (design D12), and amends rule 14 accordingly. The `keystore-algo-name-storage` and `lowercase-file-naming` main specs apply it too: key files with lowercase algo names and a silent fallback to legacy uppercase ones, and sensor names kept as configured. Cryptainers named by sensors (e.g. `20261111_184000_FrontCam_cryptainer.mp4.crypt.json`) keep that basename, and keystore pools created by the new corpus generation get lowercase key file names;
   - the future change for issue #45 (decrypting unfinished cryptainers) will deal with `~` names, whose naming rule this change keeps (final filename + `~`, payload named after the final filename);
   - `add-c-flightbox-encryptor`: its device profile CBOR becomes a strict sub-profile of WA-CBOR, and the output naming of its CLI (task 8.2) should follow the new convention, lowercase suffixes included.
 - **Ecosystem:**

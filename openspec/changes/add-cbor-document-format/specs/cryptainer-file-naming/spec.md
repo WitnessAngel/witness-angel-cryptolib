@@ -24,12 +24,11 @@ When a cryptainer storage or the CLI chooses the name of a new cryptainer, it SH
 - **THEN** the cryptainer is written as `Video.MP4.crypt.json`: the suffix is lowercase, and the basename keeps its letter case
 
 ### Requirement: Letter case of cryptainer suffixes
-The cryptainer suffixes (`.crypt`, `.crypt.json`, `.crypt.cbor`), the offloaded payload suffix `.payload` and the temporary suffix `~` SHALL be written in lowercase. When listing cryptainers, inferring their format or stripping their suffix, file names SHALL be compared like the platform compares file names (ignoring letter case on Windows, exactly on other platforms). Payload files SHALL be opened at the exact cryptainer filename followed by `.payload`, the filesystem resolving letter case.
+The cryptainer suffixes (`.crypt`, `.crypt.json`, `.crypt.cbor`), the offloaded payload suffix `.payload` and the temporary suffix `~` SHALL be written in lowercase. When listing cryptainers, inferring their format or stripping their suffix, the suffixes `.crypt`, `.crypt.json` and `.crypt.cbor` SHALL be matched in any letter case, on every platform. Listings SHALL return the actual file names, and payload files SHALL be opened at the exact cryptainer filename followed by `.payload`, the filesystem resolving letter case.
 
 #### Scenario: Suffix in another letter case
 - **WHEN** a storage directory holds `a.CRYPT.JSON` and `b.crypt.json`
-- **THEN** on Windows, listing returns both, and `a.CRYPT.JSON` is read as Extended JSON
-- **AND** on other platforms, listing returns exactly `b.crypt.json`
+- **THEN** listing returns both, on every platform, and `a.CRYPT.JSON` is read as Extended JSON, with its offloaded payload, if any, read from `a.CRYPT.JSON.payload`
 
 ### Requirement: Legacy cryptainers stay supported
 The system SHALL keep listing, loading, validating, analysing, decrypting, deleting, purging and measuring legacy `<basename>.crypt` cryptainers, which are always Extended JSON, exactly as `.crypt.json` cryptainers. Cryptainer files SHALL be read in the format given by their suffix.

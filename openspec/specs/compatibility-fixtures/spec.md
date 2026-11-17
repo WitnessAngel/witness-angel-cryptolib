@@ -121,7 +121,7 @@ The corpus SHALL contain cryptoconfs of increasing sophistication: a single symm
 - **THEN** a schema validation error is raised
 
 ### Requirement: Cryptainer generations stay decryptable
-The corpus SHALL contain cryptainers of several generations, at least: produced by wacryptolib releases 0.9, 0.10 and 0.11; using the legacy `payload_signatures` field name; serialized in CANONICAL and in RELAXED extended JSON; serialized in WA-CBOR; named with the legacy `.crypt` suffix and with the `.crypt.json` and `.crypt.cbor` suffixes; with inline and with offloaded payload; with cryptainer metadata; with plaintext signatures; and protected by the post-quantum hybrid stack. Each cryptainer sidecar SHALL reference its keystore pool and its original plaintext (or carry it inline when small), and SHALL list decryption scenarios. A scenario gives a set of trustee passphrases and an expected outcome: success with the expected plaintext, possibly with expected non-fatal warnings, or failure. Cryptainers using a Shamir shared secret SHALL include both a threshold-satisfying scenario and a below-threshold scenario.
+The corpus SHALL contain cryptainers of several generations, at least: produced by wacryptolib releases 0.9, 0.10 and 0.11; using the legacy `payload_signatures` field name; serialized in CANONICAL and in RELAXED extended JSON; serialized in WA-CBOR; named with the legacy `.crypt` suffix and with the `.crypt.json` and `.crypt.cbor` suffixes; with inline and with offloaded payload; with cryptainer metadata; with plaintext signatures; protected by the post-quantum hybrid stack; with WA-CBOR key ciphertexts (`key_ciphertext_format: "cbor"`) in both file formats, covering every asymmetric cipher algorithm, a shared secret and a nested symmetric key layer; and mixing Extended JSON and WA-CBOR key ciphertexts in one cryptainer. Each cryptainer sidecar SHALL reference its keystore pool and its original plaintext (or carry it inline when small), and SHALL list decryption scenarios. A scenario gives a set of trustee passphrases and an expected outcome: success with the expected plaintext, possibly with expected non-fatal warnings, or failure. Cryptainers using a Shamir shared secret SHALL include both a threshold-satisfying scenario and a below-threshold scenario.
 
 #### Scenario: Cryptainer passes validation
 - **WHEN** a cryptainer fixture is loaded and validated
@@ -138,6 +138,10 @@ The corpus SHALL contain cryptainers of several generations, at least: produced 
 #### Scenario: Cryptainer metadata preserved
 - **WHEN** a cryptainer fixture declares cryptainer metadata in its sidecar
 - **THEN** the metadata extracted from the cryptainer equals the declared metadata
+
+#### Scenario: WA-CBOR key ciphertexts decrypted
+- **WHEN** a cryptainer fixture of the `2026_cbor_key_ciphertexts` generation is decrypted with the passphrases of a scenario expecting success
+- **THEN** the decrypted payload equals the original plaintext, and every `key_ciphertext` governed by `key_ciphertext_format: "cbor"` loads with `load_from_cbor_bytes()`
 
 ### Requirement: Provenance is recorded
 Each sidecar SHALL record the fixture's generation and provenance: whether it was produced genuinely by a given wacryptolib release or commit, or synthesized by down-converting a current output to a legacy form, with the producing library version, Python version, crypto backend and production date.

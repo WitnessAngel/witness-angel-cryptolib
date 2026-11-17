@@ -20,12 +20,15 @@ Sources of truth (in this repository):
 | Streaming payload encryption | `src/wacryptolib/cipher.py` (`PayloadEncryptionPipeline`, `*EncryptionNode`), `src/wacryptolib/cryptainer/_encryption_pipeline.py` |
 | Signatures of digests | `src/wacryptolib/cryptainer/_signing.py`, `src/wacryptolib/signature.py` |
 | Cipher primitives | `src/wacryptolib/cipher.py`, `src/wacryptolib/keygen.py`, `src/wacryptolib/_crypto_backend/pycryptodome.py` |
-| Shamir shared secret | `src/wacryptolib/utilities/data_utils.py`, `reimplementations/micropython/src/cryptainer/pycryptodome_secret_sharing.py` |
+| Shamir shared secret | `src/wacryptolib/utilities/data_utils.py`, `src/wacryptolib/_crypto_backend/pycryptodome_secret_sharing.py` (vendored as `reimplementations/micropython/src/cryptainer/pycryptodome_secret_sharing.py`) |
 | Extended JSON | `extjson` package (vendored as `reimplementations/micropython/lib/extjson.py`) |
 | WA-CBOR (binary document format of cryptainer files and key ciphertexts) | `docs/specifications/wa_cbor_document_format.md` (normative), `src/wacryptolib/utilities/wacbor.py` |
 | Cryptoconf / cryptainer schemas | `src/wacryptolib/cryptainer/_validation.py` |
 | MicroPython platform utilities | `reimplementations/micropython/src/cryptainer/flightbox_utilities_implementation.py`, `reimplementations/micropython/src/cryptainer/fallback_adapter.py` |
 | Pure-Python HPKE X25519 seal | `src/wacryptolib/_crypto_backend/fallback/hpke_x25519_seal.py` (vendored in `reimplementations/micropython/lib/`) |
+| Device profile (input of embedded encryptors) | `docs/flightbox_specifications/flightbox_device_profile_specification.md` |
+| C reimplementation (steps 1 to 3, informative) | `reimplementations/c-language/` (`README.md`, unit test vector generators in `tests/unit/generate_*.py`, interop suites in `tests/interop/`) |
+| Compatibility corpus (cryptoconfs, cryptainers, cipherdicts, keystores) | `compatibility/` (`README.md`, section "Using the corpus from another implementation") |
 
 The key words MUST, SHOULD and MAY are used in the RFC 2119 sense.
 
@@ -145,6 +148,73 @@ from the bytes. An encryptor SHOULD use one `F` for a whole cryptainer, `"cbor"`
 ciphertexts (e.g. fewer RSA-OAEP chunks); constrained devices MAY implement only one of
 the two serializations.
 
+### 2.1 Byte-exact Extended JSON (recommended)
+
+Byte-exactness of `J` is not needed for decryption, but a writer reproducing CPython's
+`dump_to_json_bytes()` byte for byte can be tested against wacryptolib by plain comparison (re-encoding a
+loaded cryptainer, fixtures, deterministic-RNG runs). The C writer does so; reimplementations SHOULD do the
+same, by these rules, which only concern the types an encryptor writes (no floats, datetimes nor decimals):
+
+- **Whitespace**: exactly `", "` between items and `": "` after keys, nothing else: no indentation, no
+  trailing newline. `{}` and `[]` for empty containers.
+- **Key order**: object keys sorted by Unicode **code point**, at every level, wrappers included
+  (`"base64"` before `"subType"`). Code point order equals the byte order of the UTF-8 encodings, but
+  differs from the UTF-16 code unit order used by some languages' default string comparison (JavaScript,
+  Java, C#): CPython sorts the key `"\ue000"` before `"\ud83d\ude00"` (U+E000 before U+1F600), UTF-16 the reverse.
+- **Strings**: `"` and `\` are written `\"` and `\\`; U+0008, U+000C, U+000A, U+000D and U+0009 are written
+  `\b`, `\f`, `\n`, `\r` and `\t`; every other code point below U+0020 or from U+007F up is written `\uXXXX`
+  with **four lowercase** hex digits, code points above U+FFFF as a UTF-16 surrogate pair (U+1F600 is `\ud83d\ude00`).
+  `/` is **not** escaped. The output is therefore pure ASCII.
+- **Integers**: plain decimal, `-` sign only when negative, no exponent; CPython writes any size, but
+  values outside the signed 64-bit range are not portable (§5.4).
+- **Bytes**: standard base64 alphabet (`+`, `/`) with `=` padding, empty bytes giving `""`:
+  `{"$binary": {"base64": "AP8=", "subType": "00"}}`.
+- **UUIDs**: `{"$uuid": "<32 lowercase hex digits>"}`.
+
+Example (as Python would write it): `J({"z": "\x7f\xe9\U0001f600/\x01\t", "t": True, "m": None, "b": UUID(int=1),
+"a": [1, b"\x00\xff"]})` is
+
+```
+{"a": [1, {"$binary": {"base64": "AP8=", "subType": "00"}}], "b": {"$uuid": "00000000000000000000000000000001"}, "m": null, "t": true, "z": "\u007f\u00e9\ud83d\ude00/\u0001\t"}
+```
+
+Pitfalls of general-purpose JSON libraries: compact separators by default (`","`, `":"`), raw UTF-8 output
+instead of `\u` escapes, uppercase hex digits, escaped `/`, keys kept in insertion order or sorted by UTF-16
+code units, and bytes or UUIDs serialized as bare strings or arrays. A writer built on such a library
+still produces decryptable cryptainers if it emits the wrappers above, but not byte-identical ones.
+
+### 2.2 WA-CBOR key ciphertexts
+
+`C` is the core deterministic encoding of RFC 8949 section 4.2.1, as normatively specified in the WA-CBOR
+specification: shortest heads, definite lengths, and map keys sorted by the **bytewise order of their
+encodings**, which puts shorter text keys first. The key order of the same structure therefore usually
+differs between `J` and `C`:
+
+| Structure | `J` key order | `C` encoding (example values) |
+|---|---|---|
+| `AES_CBC` symkey | `iv`, `key` | `a2 62 6976 50 <16 bytes> 63 6b6579 58 20 <32 bytes>` |
+| `AES_EAX` / `CHACHA20_POLY1305` symkey | `key`, `nonce` | `a2 63 6b6579 58 20 <32 bytes> 65 6e6f6e6365 50 <16 bytes>` (`4c <12 bytes>` for ChaCha) |
+| key struct | `cryptainer_metadata`, `key_bytes` | `a2 69 "key_bytes" 42 0102 73 "cryptainer_metadata" f6` (null metadata) |
+| AEAD cipherdict | `ciphertext`, `tag` | `a2 63 "tag" 41 02 6a "ciphertext" 41 01` |
+| HPKE cipherdict | `ciphertext`, `kem_ciphertext` | `ciphertext` first too |
+| shard `(1, b"\xaa")` | `[1, {"$binary": {"base64": "qg==", "subType": "00"}}]` | `82 01 41 aa` (an array, never a map) |
+
+Every intermediate structure is a map with text keys, except shards (2-item arrays); bytes are byte strings
+(major type 2), UUIDs (only inside metadata) tag 37, and `null` metadata is `f6`. Since `C` is byte-exact, a
+WA-CBOR key ciphertext chain is fully reproducible under a deterministic RNG.
+
+Serialized sizes, useful to size buffers, with null metadata and RSA-2048 (each RSA-OAEP chunk wraps up to
+60 bytes, §3.5):
+
+| Payload algo | `S_F(symkey)`, J / C | `S_F(key struct)` of it, J / C | RSA-OAEP chunks, J / C |
+|---|---|---|---|
+| `AES_CBC` | 173 / 59 bytes | 320 / 93 bytes | 6 / 2 |
+| `AES_EAX` | 176 / 62 bytes | 324 / 96 bytes | 6 / 2 |
+| `CHACHA20_POLY1305` | 168 / 58 bytes | 312 / 92 bytes | 6 / 2 |
+
+Each enclosing layer grows the bytes again: `J` expands every wrapped byte string by about 4/3 plus a
+44-byte wrapper, `C` by a 1 to 9-byte head.
+
 ---
 
 ## 3. Primitives
@@ -171,6 +241,11 @@ No RFC 4122 version/variant bits are set. The time prefix only makes UUIDs rough
 uniqueness comes from the 80 random bits. Any reimplementation MUST keep at least these 80
 random bits; the time prefix SHOULD be kept for consistency.
 
+Details: `tsi` is truncated toward zero, then reduced modulo 2^48 by dropping the two high bytes
+(irrelevant before year 2861). CPython reads the clock before drawing the random bytes. A device
+without a wall clock (or whose clock read fails) MAY write a zero time prefix: nothing reads it back,
+and decryption never depends on it. A clock that is wrong but monotonic is harmless too.
+
 ### 3.3 Symmetric key generation (`generate_symkey(cipher_algo)`)
 
 | `cipher_algo` | Generated symkey dict |
@@ -181,6 +256,10 @@ random bits; the time prefix SHOULD be kept for consistency.
 
 Keys MUST be 32 bytes (the decryptor rejects keys shorter than 32 bytes). Each symkey is used
 for exactly one encryption, so the fixed IV/nonce stored next to the key is safe.
+
+CPython draws the key first, then the IV or nonce (`keygen.py`). This order is not observable by the
+decryptor, but implementations SHOULD keep it, so that runs under a deterministic RNG can be compared
+with wacryptolib's (§6.8).
 
 The symkey is serialized as `S_F(symkey)` (§2), e.g. with `F = json`
 `{"iv": {"$binary": {...}}, "key": {"$binary": {...}}}`, and **these bytes** are what gets
@@ -200,6 +279,25 @@ EAX header) is ever used.
 
 Streaming (§7.2) MUST produce exactly the same ciphertext and tag as the one-shot form.
 
+`AES_EAX` details, for libraries without an EAX mode (it is easily built from AES-ECB and
+CMAC): with `OMAC_t(M) = CMAC-AES-256(key, [t]_16 || M)`, where `[t]_16` is the 16-byte block holding
+the integer `t` big-endian (15 zero bytes, then `t`):
+
+```
+N   = OMAC_0(nonce)
+C   = AES-256-CTR(key, initial counter block = N, plaintext)   # 128-bit big-endian counter, + 1 per block, modulo 2^128
+H   = OMAC_1(b"")                                              # empty header, still MACed
+tag = N xor H xor OMAC_2(C)                                    # 16 bytes, never truncated
+```
+
+The whole 16-byte block is the counter (no nonce/counter split), so it wraps from `ff...ff` to `00...00`;
+CTR implementations limited to a 32 or 64-bit counter give wrong output when the low bytes of `N` carry
+over. `AES_CBC` uses the stored `iv` as is; `CHACHA20_POLY1305` is the RFC 8439 AEAD construction
+(block counter 1 for the first plaintext block, block 0 giving the Poly1305 key).
+
+Empty plaintexts are legal everywhere: `AES_CBC` then gives one 16-byte padding block, `AES_EAX` and
+`CHACHA20_POLY1305` an empty ciphertext and a 16-byte tag.
+
 ### 3.5 Asymmetric ciphers (key wrapping)
 
 They are only used in key cipher layers, to encrypt a **key struct** (§6.5) with a trustee's
@@ -214,6 +312,11 @@ public key.
   separately (fresh OAEP seed each time). An empty plaintext yields zero chunks.
 - Cipherdict: `{"ciphertext_chunks": [bytes, bytes, ...]}` (each item is `k` bytes long,
   `k` = modulus size in bytes). The legacy name `digest_list` MUST NOT be produced.
+- Per chunk `M` (RFC 8017 section 7.1.1, `hLen` = 64): `lHash = SHA-512(b"")`;
+  `DB = lHash || PS || 0x01 || M` with `PS` zero bytes, `len(DB) = k − 65`; `seed` = **64 fresh random
+  bytes**; `maskedDB = DB xor MGF1-SHA-512(seed, k − 65)`; `maskedSeed = seed xor MGF1-SHA-512(maskedDB, 64)`;
+  `EM = 0x00 || maskedSeed || maskedDB`; the chunk ciphertext is `EM^e mod n` written big-endian on
+  exactly `k` bytes, **leading zero bytes kept**. Seeds are drawn in chunk order.
 
 #### ECIES_X25519
 
@@ -227,6 +330,38 @@ HPKE (RFC 9180), **Base mode**, single-shot seal:
 - Cipherdict: `{"kem_ciphertext": enc (32 bytes, ephemeral public key), "ciphertext": sealed bytes (plaintext length + 16-byte tag)}`.
 - RFC 9180 Appendix A.2 test vectors apply.
 
+The whole computation, for libraries offering X25519, HKDF-SHA256 and ChaCha20-Poly1305 but no HPKE
+(RFC 9180 sections 4, 4.1, 5.1 and 5.2; `||` is concatenation, `I2OSP(x, n)` the n-byte big-endian
+encoding):
+
+```
+LabeledExtract(suite, salt, label, ikm)    = HKDF-Extract(salt, b"HPKE-v1" || suite || label || ikm)
+LabeledExpand(suite, prk, label, info, L)  = HKDF-Expand(prk, I2OSP(L, 2) || b"HPKE-v1" || suite || label || info, L)
+
+# Encap, DHKEM(X25519, HKDF-SHA256)
+kem_suite     = b"KEM" || I2OSP(0x0020, 2)
+skE           = 32 fresh random bytes            # clamped by X25519 itself
+enc           = X25519(skE, 9)                   # = kem_ciphertext
+dh            = X25519(skE, pkR)                 # all-zero dh: MUST fail
+kem_context   = enc || pkR
+eae_prk       = LabeledExtract(kem_suite, b"", b"eae_prk", dh)
+shared_secret = LabeledExpand(kem_suite, eae_prk, b"shared_secret", kem_context, 32)
+
+# Key schedule, mode_base (0x00), info = b""
+suite         = b"HPKE" || I2OSP(kem_id, 2) || I2OSP(0x0001, 2) || I2OSP(0x0003, 2)
+context       = 0x00 || LabeledExtract(suite, b"", b"psk_id_hash", b"")
+                     || LabeledExtract(suite, b"", b"info_hash", b"")
+secret        = LabeledExtract(suite, shared_secret, b"secret", b"")     # salt = shared_secret, empty psk
+key           = LabeledExpand(suite, secret, b"key", context, 32)
+base_nonce    = LabeledExpand(suite, secret, b"base_nonce", context, 12)
+
+# Single Seal, sequence number 0
+ciphertext    = ChaCha20-Poly1305(key, nonce = base_nonce, aad = b"", plaintext)   # includes the 16-byte tag
+```
+
+The ephemeral key MAY instead come from RFC 9180's `DeriveKeyPair` over 32 fresh random bytes; both are
+indistinguishable to the decryptor. The exporter secret is never needed.
+
 #### ML_KEM_768 (post-quantum, CPython only for now)
 
 HPKE (RFC 9180) Base mode, as implemented by pycryptodome ≥ 4.2 `Crypto.Protocol.HPKE`:
@@ -236,6 +371,18 @@ ECIES_X25519). Reimplementations MUST cross-check against pycryptodome (e.g. by 
 with wacryptolib, see §12, or with the `compatibility/cipherdicts/2026_post_quantum/ML_KEM_768/`
 vectors), since the HPKE KEM
 identifier of ML-KEM comes from an IETF draft.
+
+Exact choices of pycryptodome 4.2, which a reimplementation MUST follow even if later revisions of the
+draft (`draft-ietf-hpke-pq`) change them:
+
+- KEM identifier **`0x0041`**, so `suite = b"HPKE" || 0x0041 || 0x0001 || 0x0003`; KDF HKDF-SHA256
+  (`0x0001`), AEAD ChaCha20-Poly1305 (`0x0003`).
+- Encap is FIPS 203 `ML-KEM.Encaps(ek)`, which consumes 32 fresh random bytes (`m`); `enc` is the ML-KEM
+  ciphertext (1088 bytes) and `shared_secret` is the 32-byte ML-KEM shared key **as is**, with no
+  `LabeledExtract`/`LabeledExpand` step around it (unlike DHKEM).
+- The key schedule and the single `Seal` are then exactly those of ECIES_X25519 above.
+- The encapsulation key SHOULD pass the FIPS 203 section 7.2 modulus check (every decoded 12-bit
+  coefficient below 3329) before use.
 
 ### 3.6 Hash algorithms
 
@@ -270,6 +417,11 @@ for i in 1..n:
   c1..c(k-1) fresh random 16-byte elements (independently drawn **for each chunk**).
 - Share i = p(i), where the index i is encoded as the field element with integer value i;
   output as 16 big-endian bytes.
+- Draw order (pycryptodome `Shamir.split`): for each chunk, in chunk order, the k − 1 random
+  coefficients are drawn **highest degree first** (c(k-1), then c(k-2), ..., c1), then p is
+  evaluated by Horner's rule. All chunks are split before any shard gets encrypted. Only the order
+  of draws is fixed by this rule; it matters for deterministic-RNG comparisons, not for decryption.
+- With k = 1, no random value is drawn.
 
 Each shard tuple is then serialized as `S_F((i, shard_bytes))`, i.e. an **array**, e.g. with
 `F = json` `[i, {"$binary": {...}}]`, which is what the decryptor expects (a 2-item list: int,
@@ -353,9 +505,24 @@ trustee := {"trustee_type": "local_keyfactory"}
 ```
 
 The structure is recursive: shards and symmetric layers contain their own key cipher layers,
-which may again be shared secrets or symmetric layers, without depth limit.
+which may again be shared secrets or symmetric layers, without depth limit in wacryptolib.
 
 Algorithm names are case-sensitive uppercase strings in the cryptoconf.
+
+Value types, as checked by wacryptolib's schema (they are not obvious from the grammar):
+
+- Every `keychain_uid` and `keystore_uid` is a **UUID value** (`{"$uuid": ...}` in Extended JSON, tag 37 in
+  WA-CBOR); a UUID written as a text string is rejected.
+- `key_shared_secret_threshold` is an integer; a boolean is rejected (beware of languages or decoders
+  where `true` is the integer 1).
+- A payload layer MUST contain **exactly one** of `payload_ciphertext_signatures` and the legacy
+  `payload_signatures`; neither, or both, is invalid. Its list MAY be empty.
+- `payload_plaintext_signatures` MAY be absent or empty, with the same meaning.
+- `keystore_owner` and `jsonrpc_url` are any text strings, empty included.
+- `ML_DSA_65` and the other signature algos are not valid `key_cipher_algo` values, and
+  `key_ciphertext_format` is not allowed anywhere in a cryptoconf.
+- Presence, not value, selects a `keychain_uid`: the nil UUID `00000000-0000-0000-0000-000000000000` is
+  a valid, present value (Python's `or` only skips absent keys here, since UUID values are always truthy).
 
 ### 5.2 Validation
 
@@ -370,7 +537,19 @@ error when:
 - any `key_cipher_layers` list is empty;
 - a shared secret threshold is not in `1..len(key_shared_secret_shards)`.
 
-`cryptainer_metadata` MUST be a dict (JSON-serializable with §2 types) or null.
+`cryptainer_metadata` MUST be a dict (JSON-serializable with §2 types) or null (§5.4).
+
+All validation, of the cryptoconf, the metadata and the requested formats, MUST complete before the first
+random draw and before any output is written: a rejected input leaves no file, not even a temporary one.
+Implementations that resolve public keys from a fixed set (e.g. a device profile) SHOULD also resolve and
+check every key before encrypting anything.
+
+**Nesting depth.** wacryptolib has no limit on the nesting of key cipher layers. An implementation MAY
+cap it, to bound recursion or stack use, and MUST then reject deeper cryptoconfs at validation time, with a
+dedicated error (§5.5), never fail half-way. The depth unit is the **key cipher nesting level**: the
+`key_cipher_layers` list of a payload layer is at level 1, and the list inside a symmetric key layer or a
+shard is one level deeper than the list holding that layer. A cap SHOULD be at least 8 (the C
+implementation's default); the cryptoconfs of the compatibility corpus reach level 3.
 
 ### 5.3 Trustee public key resolution
 
@@ -384,7 +563,62 @@ error when:
 | `jsonrpc_api` | Remote call `fetch_public_key(keychain_uid, key_algo)` on `jsonrpc_url`, returning a PEM. |
 
 How keys are stored/transported is platform-specific (PEM in CPython; raw RSA `(n, e)` integers
-or raw X25519 bytes in the MicroPython demo).
+or raw X25519 bytes in the MicroPython demo; raw keys in a WA-CBOR device profile for embedded
+encryptors, `docs/flightbox_specifications/flightbox_device_profile_specification.md`).
+
+Keys are looked up by **trustee identity**, `keychain_uid` and `key_algo`. The trustee identity is
+`trustee_type` plus `keystore_uid` for `authenticator` trustees, plus `jsonrpc_url` for `jsonrpc_api`
+trustees, and `trustee_type` alone for `local_keyfactory`; `keystore_owner` is informative and ignored
+(wacryptolib's `get_trustee_id()`). The `keychain_uid` used is the layer's own one if present, else the
+cryptainer's root one (§6.3). Every public key MUST satisfy the constraints of §11.2 before use.
+
+### 5.4 Cryptainer metadata
+
+`cryptainer_metadata` is copied into the cryptainer and into every key struct (§6.5), so it is
+serialized with the cryptainer file format and with `F`. wacryptolib accepts any dict of §2 types (and
+checks nothing else in Extended JSON mode); for portability, encryptors SHOULD restrict metadata to what
+both formats and every reader handle:
+
+- maps with text keys, arrays, text strings, booleans, null, bytes and UUIDs;
+- integers within the signed 64-bit range (larger ones become bignums in WA-CBOR);
+- floats, datetimes and decimals are valid in wacryptolib but MAY be refused by constrained encryptors
+  (the C one rejects them as unsupported types).
+
+Encryptors MUST reject metadata containing a single-key map whose key is an Extended JSON keyword
+(`$binary`, `$uuid`, `$date`, `$numberInt`, `$numberLong`, `$numberDouble`, `$numberDecimal`,
+`$undefined`): it would be read back as a typed value, or fail to load. wacryptolib's WA-CBOR writer
+rejects them; its Extended JSON writer does not, and then produces a cryptainer that wacryptolib itself
+can't load.
+
+Metadata nesting counts against the WA-CBOR limit of 64 levels, with the metadata map at level 2 both in
+the cryptainer and in key structs: metadata itself MAY nest 63 levels, and an encryptor writing WA-CBOR
+MUST reject deeper metadata before any random draw. These checks SHOULD be applied in Extended JSON mode
+too, so that a cryptainer can always be converted between file formats.
+
+### 5.5 Error categories
+
+wacryptolib raises Python exceptions (mostly `ValueError` and schema errors) without stable codes. New
+implementations SHOULD nevertheless report at least the following distinct categories, which the C
+implementation uses (status names in parentheses, informative) and which its interop suites check:
+
+| Category | Raised for | C status |
+|---|---|---|
+| decoding error | input bytes that are not a well-formed document (WA-CBOR rules, Extended JSON keyword maps, excessive item nesting) | `DECODING_ERROR` |
+| unsupported format | unknown or missing format marker (e.g. `device_profile_format`) | `UNSUPPORTED_FORMAT` |
+| unsupported type | valid document items the implementation doesn't handle (floats, datetimes, bignums...) | `UNSUPPORTED_TYPE` |
+| invalid input | any schema violation of §5.1 and §5.2: unknown or missing keys, wrong types, unknown algo names, empty lists, bad threshold, both signature keys, metadata that is not a map or null, duplicate key entries | `INVALID_PROFILE` |
+| unsupported feature | valid input outside the implemented subset: signatures, a disabled document format, an algorithm not built in | `UNSUPPORTED_SIGNATURE`, `UNSUPPORTED_FEATURE`, `UNSUPPORTED_ALGORITHM` |
+| missing public key | an asymmetric layer resolving to no key (§5.3) | `MISSING_PUBLIC_KEY` |
+| key constraint violation | a public key outside §11.2 (or the stricter device profile rules), an all-zero X25519 shared secret | `KEY_CONSTRAINT_VIOLATION` |
+| nesting too deep | key cipher layers or metadata beyond the limits above | `NESTING_TOO_DEEP` |
+| platform failure | out of memory, randomness source failure, crypto library failure, output write failure | `OUT_OF_MEMORY`, `RANDOMNESS_FAILURE`, `CRYPTO_BACKEND_FAILURE`, `SINK_WRITE_FAILURE` |
+| usage error | invalid arguments, calls in the wrong state (e.g. a chunk after finalization) | `INVALID_ARGUMENT`, `WRONG_STATE` |
+
+When an input has several defects, which one is reported first is **implementation-defined**; tests
+SHOULD use inputs with a single defect. For reference, the C implementation checks, in order: the
+cryptoconf's allowed keys, then signature lists (rejected as unsupported), then each payload layer and its
+key cipher layers depth first, then the root `keychain_uid`; device profiles are checked as listed in
+section 9 of the device profile specification.
 
 ---
 
@@ -593,6 +827,28 @@ where shard1, shard2 = Shamir split of
      J(RSA_T1( J({"key_bytes": J(symkey), "cryptainer_metadata": M}) ))
 ```
 
+### 6.8 Order of random draws (informative)
+
+The decryptor can't observe in which order random values were drawn, so this order is not required for
+interoperability. Implementations SHOULD nevertheless follow wacryptolib's, which the algorithm of §6.1 to
+§6.5 implies, so that a run fed by a deterministic RNG can be compared with another implementation's (the C
+implementation's backends are compared that way):
+
+1. the 10 random bytes of `cryptainer_uid` (§3.2);
+2. those of the default `keychain_uid`, only when the cryptoconf has none;
+3. for each payload layer, in order: its symkey (key, then IV or nonce, §3.3), then its key cipher layers
+   in order, each one consuming:
+   - asymmetric: `RSA_OAEP`, one 64-byte seed per chunk in chunk order; `ECIES_X25519`, the 32-byte
+     ephemeral key; `ML_KEM_768`, the 32 encapsulation bytes (§3.5). wacryptolib draws these inside
+     pycryptodome, from its own RNG, so only implementations with an injectable RNG for every draw can
+     be compared byte for byte;
+   - symmetric: the sub-symkey (key, then IV or nonce), then the draws of its nested key cipher layers;
+     the one-shot encryption with the sub-symkey draws nothing;
+   - shared secret: the Shamir coefficients of every chunk (§3.7), then the draws of each shard's key
+     cipher layers, in shard order.
+
+Steps 2 and 3 draw nothing (signing trustees may, on their side).
+
 ---
 
 ## 7. Step 2 — Payload encryption
@@ -680,6 +936,24 @@ the offloaded marker `{"ciphertext_location": "offloaded"}` (§9.2). An implemen
 dump this unfinished cryptainer (state `STARTED`) as a temporary file, as a savegame in case
 the stream is interrupted before finalization.
 
+### 7.3 Streaming and output rules
+
+- Chunks of any size are accepted, an **empty chunk being a no-op**; chunk boundaries never change the
+  output. A payload of zero bytes (no chunk, or only empty ones) is legal and gives the ciphertext of
+  §3.4 for an empty plaintext.
+- An inline empty ciphertext is written as an empty byte string (`"base64": ""` in Extended JSON).
+- Chunks are refused after finalization, and finalization happens once. After any failure, the
+  encryptor MUST NOT produce a finished cryptainer (the C one enters a failed state, rejecting every
+  further call).
+- **Offloaded output**: the payload file is named after the **final** cryptainer file name (§9.2). The
+  final cryptainer file MUST be written only once the payload file is complete, so that a listed
+  cryptainer never points to a partial payload. CPython creates the payload file first, writes an
+  optional savegame cryptainer under the final name plus `~` (e.g. `x.crypt.json~`, ignored by
+  cryptainer listings), then the final cryptainer, and deletes the savegame. If encryption fails
+  before streaming starts, it deletes the payload file and savegame it created; implementations SHOULD
+  likewise delete the partial files they created on any failure, unless they deliberately keep the
+  savegame for recovery.
+
 ---
 
 ## 8. Step 3 — Authentication data and finalization
@@ -721,6 +995,14 @@ function inject_digests_and_signatures(signature_confs, payload_digests,
 Signature policies: `SKIP_SIGNING`, `ATTEMPT_SIGNING` (default in CPython), `REQUIRE_SIGNING`.
 A constrained device without access to signing trustees SHOULD use `SKIP_SIGNING` (digests are
 still stored) or a cryptoconf without signature confs.
+
+An implementation that computes no digests at all (like the C one) MUST reject, at validation time
+(§5.2), every cryptoconf with a non-empty `payload_plaintext_signatures`, `payload_ciphertext_signatures`
+or `payload_signatures` list: silently dropping signature confs would alter the requested protection, and
+leaving them without `payload_digest_value` would give cryptainers whose integrity can't be checked
+against the requested digests (`SKIP_SIGNING` still stores them, rule 10 of §11.1). With only empty
+signature lists, step 3 reduces to setting `payload_macs` and `cryptainer_state`, and the lists stay empty
+in the cryptainer.
 
 ---
 
@@ -870,6 +1152,31 @@ footprint), with:
   same, so WA-CBOR cryptainers carry `key_ciphertext_format: "cbor"` on every payload layer and
   symmetric key layer (§2). A WA-CBOR-only build is a single-serialization device, as §2 allows.
 
+### 10.3 Notes for new reimplementations
+
+A new implementation (e.g. in Rust) can be written from this specification, the WA-CBOR specification
+and, for embedded inputs, the device profile specification. The table sums up what is fixed by the
+cryptainer format, what is left free, and what the C implementation chose (informative), for the points
+where implementations have to decide:
+
+| Topic | Required | Allowed | C choice |
+|---|---|---|---|
+| Input | a cryptoconf valid per §5.1 and §5.2, validated before any random draw | any transport: Extended JSON or WA-CBOR file, device profile, built-in structure | device profile only |
+| Public keys | §11.2 constraints, lookup of §5.3 | stricter checks (e.g. a maximum RSA size) | device profile rules, RSA ≤ 4096 bits |
+| Subset | rejecting unsupported features at validation time (§5.5) | any subset of algos, trustee types, signatures, formats | no signatures, root `keychain_uid` mandatory |
+| Key ciphertext format `F` | §2 serializations; field written only for `"cbor"` | one or both of `J`, `C`; one `F` per cryptainer | `F` = file format |
+| Extended JSON bytes | decodable relaxed Extended JSON (§2) | any key order, any whitespace | byte-exact CPython output (§2.1) |
+| Key cipher nesting | rejecting too deep cryptoconfs at validation | any cap of at least 8 (§5.2) | 8 (compile-time option) |
+| Metadata | map or null, no keyword maps, WA-CBOR depth limit (§5.4) | refusing floats, datetimes, decimals, bignums | sub-profile types only |
+| Randomness | a CSPRNG for every draw (§3.1) | any draw order | §6.8 order, through one platform hook |
+| UUID0 prefix | 80 random bits | zero prefix without a clock (§3.2) | zero prefix when the clock hook is absent or fails |
+| Payload | inline or offloaded (§9.2), identical streamed and one-shot output | any chunk size, including 0 | both, chunks of any size |
+| Errors | no finished cryptainer, no partial file after a failure (§7.3) | any error representation and precedence | status codes of §5.5, failed state |
+| Secrets | in memory only (rule 12 of §11.1) | — | wiped through a platform hook |
+
+Reading the C sources is not needed, but its test vector generators (§12) are written in Python
+against wacryptolib and give expected bytes for each primitive.
+
 ---
 
 ## 11. Conformance checklist and pitfalls
@@ -887,8 +1194,8 @@ footprint), with:
    coefficients per chunk, over GF(2^128) with big-endian, LSB-is-constant encoding; shard
    indices start at 1; shards are serialized as 2-item arrays, in format `F`.
 6. A symmetric key layer stores the protected sub-key in **its own** `key_ciphertext` field.
-7. `keychain_uid` resolution: layer/signature-conf value if present and non-empty, else the
-   cryptainer's root `keychain_uid` (which is generated if the cryptoconf has none, and is
+7. `keychain_uid` resolution: layer/signature-conf value if present (the nil UUID included, §5.1),
+   else the cryptainer's root `keychain_uid` (which is generated if the cryptoconf has none, and is
    always written into the cryptainer).
 8. `payload_macs` is `null` until finalization, then `{}` (AES_CBC) or `{"tag": ...}`.
 9. Payload digests are computed on each layer's raw ciphertext (CBC padding included, MAC tag
@@ -929,6 +1236,35 @@ footprint), with:
     NEVER guess it by sniffing bytes; Extended JSON bytes in a `"cbor"` chain, or the reverse, are
     an error.
 17. Revelation request data sent to remote trustees is always Extended JSON (§6.5), whatever `F`.
+
+Pitfalls met by the C reimplementation, each of which yields cryptainers that fail to decrypt or
+validate if missed:
+
+18. UUIDs are UUID values everywhere (`{"$uuid": ...}`, tag 37), never text, in the cryptoconf as in the
+    cryptainer; booleans are not integers (§5.1).
+19. The key order of a structure differs between `J` (code point order) and `C` (encoded-bytes
+    order, shorter keys first); a generic CBOR or JSON library with "canonical" options may implement
+    another order (§2.1, §2.2).
+20. The key struct is a map in both formats, and a shard is a 2-item **array** `[index, bytes]` in
+    both, never a map nor a pair of separate fields.
+21. RSA-OAEP chunk ciphertexts are exactly `k` bytes, left-padded with zeros when the integer is
+    shorter; bignum libraries often drop those zeros.
+22. The EAX counter spans the full 128-bit block (§3.4); the HPKE nonce of the single `Seal` is
+    `base_nonce` itself; the ML-KEM shared secret is used without any KDF step around it (§3.5).
+23. Shamir field elements are big-endian, not GCM bit-reflected; the shard index is the field
+    element with integer value i (§3.7).
+24. In a symmetric key layer, the fresh sub-symkey encrypts the **current key bytes** (the one-shot
+    cipherdict going up the chain), while `S_F(sub-symkey)` goes through the **nested** layers into the
+    layer's own `key_ciphertext`; swapping the two roles, or reusing an enclosing symkey, breaks
+    decryption (§6.3, §6.4).
+25. Validation, including key checks, metadata checks and nesting caps, is complete before the first
+    random draw and before any file is created (§5.2); a failure afterwards leaves no finished
+    cryptainer and no partial file (§7.3).
+26. In offloaded mode, the payload file is complete before the final cryptainer file is written, and
+    is named after that final file name, temporary names excluded (§7.3, §9.2).
+27. The output fields of a cryptainer (`key_ciphertext`, `key_ciphertext_format`, `payload_macs`,
+    `payload_digest_value`, `payload_signature_struct`, root identifiers and state) are not allowed in
+    a cryptoconf, which is validated with unknown keys rejected.
 
 ### 11.2 Key and parameter constraints per algorithm
 
@@ -1020,3 +1356,42 @@ validated by:
 Primitive-level vectors: RFC 9180 Appendix A.2 (ECIES_X25519), RFC 8439 (ChaCha20-Poly1305),
 the EAX paper vectors (AES_EAX), and `tests/_crypto_test_vectors.py` /
 `tests/test_crypto_backend_vectors.py` in this repository.
+
+### 12.1 Vectors and corpus for reimplementations
+
+The C reimplementation derives its expected outputs from wacryptolib with Python generators, which
+any implementation can run or read (`reimplementations/c-language/tests/unit/`):
+
+| Generator | Expected outputs |
+|---|---|
+| `generate_primitive_vectors.py` | AES-256 CMAC and EAX (the EAX paper messages with AES-256 keys), symmetric cipherdicts, RSA-OAEP chunks with a fixed seed, HPKE seals for X25519 (given ephemeral key) and ML-KEM-768 (given encapsulation coins), Shamir shards with given coefficients |
+| `generate_backend_conformance_vectors.py` | published vectors of the underlying primitives (SP 800-38A, RFC 8439, RFC 4231, RFC 7748...), an AES-CTR counter wrapping around 2^128 (§3.4), raw RSA values, a deterministic ML-KEM-768 encapsulation |
+| `generate_writer_expected_outputs.py` | wacryptolib's `dump_to_json_bytes()` and `dump_to_cbor_bytes()` of symkeys, key structs, shards, cipherdicts and other sample trees (§2.1, §2.2) |
+| `generate_device_profile_samples.py` | valid and invalid device profiles, each with its expected error category and error location |
+| `generate_wacbor_specification_vectors.py` | the test vectors of section 10 of the WA-CBOR specification |
+
+In `compatibility/` (see its `README.md`): symmetric and asymmetric cipherdict vectors per algo
+(`cipherdicts/*/<ALGO>/`, `cipherdicts/2026_post_quantum/ML_KEM_768/`), which an encryptor can re-encrypt
+byte for byte from their recorded symkey; cryptoconfs, valid and `invalid/`, in both formats; cryptainers
+with WA-CBOR key ciphertexts (`cryptainers/2026_cbor_key_ciphertexts/`); and the keystore pools holding the
+private keys needed to decrypt test outputs (e.g. `keystores/2026_cbor_key_ciphertexts/cbor_key_ciphertexts_pool/`,
+`keystores/2026_post_quantum/pq_pool/`). The signature-free cryptoconfs having a root `keychain_uid` can
+be exported as device profiles with `scripts/flightbox/export_device_profile.py`.
+
+### 12.2 Cryptainer checklist
+
+The C interop suites (`reimplementations/c-language/tests/interop/`) check each produced cryptainer as
+follows; a new implementation SHOULD run the same checks, in both file formats it writes:
+
+1. it loads with `load_cryptainer_from_filesystem()` (payload file included when offloaded) and passes
+   `check_cryptainer_sanity()` in both Python and JSON-Schema modes (`jsonschema_mode=True`);
+2. re-encoding the loaded tree with wacryptolib in the same format gives the same bytes (meaningful for
+   `J` only if §2.1 is followed);
+3. every `key_ciphertext` parses in the format of its `key_ciphertext_format` field
+   (`check_key_ciphertext_formats()` of `tests/_compatibility_corpus.py`), and the cryptainer has the
+   same tree shape as one created by wacryptolib from the same cryptoconf and `F`;
+4. it decrypts to the original payload with no error in the operation report, also after
+   `flightbox convert-format` to the other file format, and with any threshold subset of shard trustees
+   (one trustee's keys withheld);
+5. rejected inputs (§5.5) give the expected error category and leave no output file;
+6. with several crypto libraries or backends, a deterministic RNG gives identical bytes (§6.8).

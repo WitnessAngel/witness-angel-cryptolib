@@ -88,6 +88,12 @@ an alias of `payload_ciphertext_signatures`, a payload layer with both keys reje
 - the output fields of cryptainers (`key_ciphertext`, `key_ciphertext_format`, `payload_macs`...) are not allowed, like
   any unknown key.
 
+The value types are those of the encryptor specification (end of its section 5.1): `key_shared_secret_threshold` is an
+integer of major type 0, never `true` or `false`; every UUID is a tag 37 item, and the nil UUID (16 zero bytes) is a
+valid value, so a layer holding it uses it rather than the root `keychain_uid`. An encryptor that caps the nesting of
+key cipher layers (section 5.2 of the encryptor specification, with its unit) rejects deeper cryptoconfs when the
+profile is loaded; this cap is distinct from the item nesting limit of section 1.
+
 Encryptors MAY support only a subset of the grammar, and MUST then reject the profiles using the rest with an
 unsupported-feature error when the profile is loaded. The C encryptor of `reimplementations/c-language/` rejects
 non-empty signature lists (`payload_plaintext_signatures`, `payload_ciphertext_signatures`, `payload_signatures`), and
@@ -136,7 +142,8 @@ A device profile MUST only be accepted if every public key respects the constrai
 specification, tightened so that all implementations accept exactly the same keys, whatever their crypto backend:
 
 - RSA: modulus of at least 2048 bits, and at most a maximum configurable by the implementation, 4096 bits by default;
-  odd modulus; `3 <= e < n`, with `e` odd.
+  odd modulus; `3 <= e < n`, with `e` odd; `gcd(n, e) = 1`, as in section 11.2 (always true for genuine keys, whose
+  prime factors are far larger than `e`).
 - X25519: canonical u-coordinate, so the most significant bit of the last byte is clear and u < p = 2^255 - 19. The
   low-order points are rejected: 0, 1, the two points of order 8 (`e0eb7a7c...` and `5f9c95bc...` of RFC 7748), and
   p - 1. As non-canonical encodings are rejected, u + p and u + 2p never need to be checked.
@@ -298,3 +305,26 @@ public-key-entry-identity = (
   "keychain_uid": uuid,
 )
 ```
+
+## 9. Loading order and error reporting
+
+A device profile MUST be fully checked when it is loaded, before any cryptainer is created: every rule of sections 1
+to 5 applies to the whole profile, unused key entries included. The error categories are those of section 5.5 of the
+encryptor specification: decoding errors for the rules of section 1 that WA-CBOR readers share, unsupported types for
+the valid items outside the sub-profile, unsupported format for `device_profile_format`, invalid input for the rules
+of sections 2 to 4, unsupported feature for valid cryptoconfs outside the encryptor's subset, missing public key for
+an asymmetric layer without a matching entry, and key constraint violations for section 5.
+
+When a profile breaks several rules, which error is reported is implementation-defined. For reference, the C
+encryptor of `reimplementations/c-language/` loads a profile in this order, stopping at the first error:
+
+1. decoding within the sub-profile (section 1);
+2. a top-level map, then `device_profile_format` (unsupported format), then unknown root keys (section 2);
+3. the cryptoconf (section 3, with the order given in section 5.5 of the encryptor specification);
+4. each key entry: its exact keys, its trustee, its key algo and raw encoding, and its uniqueness (section 4);
+5. the constraints of every public key (section 5);
+6. the resolution of every asymmetric layer to an entry (section 3).
+
+Sample profiles, valid and invalid, each with its expected error category and the location of the faulty item, are
+generated from wacryptolib by `reimplementations/c-language/tests/unit/generate_device_profile_samples.py`, with the
+helpers of `reimplementations/c-language/tests/interop/device_profile_test_helpers.py`.

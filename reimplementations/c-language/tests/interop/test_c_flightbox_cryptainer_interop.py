@@ -7,8 +7,8 @@ Cryptainers of the C encryptor, read and decrypted by wacryptolib (task 9.5).
 
 Cryptainers are made by the driver's "encrypt-cryptainer" subcommand (the library behind the CLI, with a seeded
 random source and a fixed clock), from device profiles exported from:
-- the corpus cryptoconfs that are signature-free with a root keychain uid;
-- signature-stripped variants of corpus cryptoconfs;
+- every valid corpus cryptoconf having a root keychain uid, all generations and both serializations of the WA-CBOR
+  pairs, signed ones with their signatures stripped (test_corpus_cryptoconfs_are_all_used checks the split);
 - synthetic cryptoconfs over the local keyfactory keys of the post-quantum corpus pool, for what the corpus lacks.
 
 Each cryptainer must load from the filesystem, pass strict validation (Python and JSON-Schema modes), equal its
@@ -30,6 +30,8 @@ from c_flightbox_interop_support import (
     corpus,
     export_device_profile_bytes,
     get_tree_shape,
+    get_valid_corpus_cryptoconfs,
+    has_signatures,
     load_corpus_cryptoconf,
     profile_helpers,
 )
@@ -42,21 +44,22 @@ OTHER_DOCUMENT_FORMATS = {"json": "cbor", "cbor": "json"}
 
 # PROFILES #
 
-# Corpus cryptoconfs (relative to compatibility/cryptoconfs), and whether their signatures must be stripped
-CORPUS_CRYPTOCONFS = {
-    "current_01_single_layer": ("2026_current/01_single_layer.cryptoconf", False),
-    "current_03_multiple_payload_layers_unsigned": ("2026_current/03_multiple_payload_layers.cryptoconf", True),
-    "current_04_recursive_key_layers_unsigned": ("2026_current/04_recursive_key_layers.cryptoconf", True),
-    "current_05_shamir_authenticators": ("2026_current/05_shamir_authenticators.cryptoconf", False),
-    "current_06_signed_multi_trustee_unsigned": ("2026_current/06_signed_multi_trustee.cryptoconf", True),
-    "cbor_pairs_01_single_layer": ("2026_cbor_pairs/01_single_layer.cryptoconf.cbor", False),
-    "cbor_key_ciphertexts_01_single_layer": ("2026_cbor_key_ciphertexts/01_single_layer.cryptoconf.json", False),
-    "cbor_key_ciphertexts_02_shared_secret": ("2026_cbor_key_ciphertexts/02_shared_secret.cryptoconf.json", False),
-    "cbor_key_ciphertexts_03_nested_symmetric": ("2026_cbor_key_ciphertexts/03_nested_symmetric.cryptoconf.json", False),
-    "cbor_key_ciphertexts_04_post_quantum": ("2026_cbor_key_ciphertexts/04_post_quantum.cryptoconf.json", False),
-    "cbor_key_ciphertexts_05_mixable": ("2026_cbor_key_ciphertexts/05_mixable.cryptoconf.json", False),
-    "post_quantum_07_pq_hybrid_unsigned": ("2026_post_quantum/07_pq_hybrid.cryptoconf", True),
-}
+
+def _get_corpus_cryptoconfs():
+    """Every valid corpus cryptoconf having a root keychain uid (those without one are rejection cases of
+    test_c_flightbox_rejections.py), as {profile name: (path relative to compatibility/cryptoconfs, whether its
+    signatures must be stripped)}. Signed ones get the "_unsigned" suffix; unsigned ones are used as they are, legacy
+    "payload_signatures" key included."""
+    cryptoconfs = {}
+    for name, relative_path in get_valid_corpus_cryptoconfs():
+        cryptoconf = load_corpus_cryptoconf(relative_path)[0]
+        if cryptoconf.get("keychain_uid"):
+            must_strip_signatures = has_signatures(cryptoconf)
+            cryptoconfs[name + ("_unsigned" if must_strip_signatures else "")] = (relative_path, must_strip_signatures)
+    return cryptoconfs
+
+
+CORPUS_CRYPTOCONFS = _get_corpus_cryptoconfs()
 
 
 def _local_layer(key_algo, keychain_uid=None):
@@ -169,6 +172,20 @@ def get_profile(profile_name):
             export_device_profile_bytes(cryptoconf, pool_dir),
         )
     return _profile_cache[profile_name]
+
+
+def test_corpus_cryptoconfs_are_all_used():
+    """Every valid corpus cryptoconf, of every generation, is a profile here, or a rejection case of
+    test_c_flightbox_rejections.py when it has no root keychain uid (only the 2022 generations, older than the root
+    keychain_uid field)."""
+    valid_paths = {relative_path for _name, relative_path in get_valid_corpus_cryptoconfs()}
+    profile_paths = {relative_path for relative_path, _must_strip_signatures in CORPUS_CRYPTOCONFS.values()}
+    rootless_paths = {path for path in valid_paths if not load_corpus_cryptoconf(path)[0].get("keychain_uid")}
+    assert len(valid_paths) >= 41
+    assert profile_paths == valid_paths - rootless_paths
+    generations = {path.name for path in (COMPATIBILITY_ROOT / "cryptoconfs").iterdir() if path.is_dir()}
+    assert {path.split("/")[0] for path in valid_paths} == generations
+    assert {path.split("/")[0] for path in rootless_paths} == {"2022_v0.9_genuine", "2022_v0.10_genuine"}
 
 
 def test_profiles_cover_the_specified_algorithms():
@@ -394,7 +411,7 @@ def test_payload_sizes(c_build, document_format, payload_size, is_offloaded, tmp
 
 
 CONVERSION_PROFILE_NAMES = (
-    "cbor_key_ciphertexts_05_mixable",
+    "cbor_key_ciphertexts_05_mixable_cbor",
     "current_05_shamir_authenticators",
     "synthetic_nested_shared_secrets",
 )

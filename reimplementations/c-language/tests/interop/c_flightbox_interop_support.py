@@ -131,6 +131,40 @@ def load_corpus_cryptoconf(relative_path: str):
     return cryptoconf, sidecar, pool_dir
 
 
+def has_signatures(cryptoconf: dict) -> bool:
+    """Whether a cryptoconf has a payload plaintext signature or a payload ciphertext signature (legacy key name
+    included), which the C encryptor rejects."""
+    if cryptoconf.get("payload_plaintext_signatures"):
+        return True
+    return any(
+        layer.get("payload_ciphertext_signatures") or layer.get("payload_signatures")
+        for layer in cryptoconf["payload_cipher_layers"]
+    )
+
+
+@lru_cache(maxsize=None)
+def get_valid_corpus_cryptoconfs() -> tuple:
+    """Every valid cryptoconf of the corpus, all generations and both serializations of the WA-CBOR pairs, as sorted
+    (profile name, path relative to compatibility/cryptoconfs) pairs. Names are "<generation without its year>_<asset
+    stem>", plus "_cbor" or "_json" for an asset whose other serialization is also in the corpus."""
+    cryptoconfs_dir = COMPATIBILITY_ROOT / "cryptoconfs"
+    asset_paths = []
+    for sidecar_path in corpus.iter_sidecar_paths(cryptoconfs_dir):
+        if corpus.load_sidecar(sidecar_path)["expected_valid"]:
+            asset_paths.append(corpus.get_asset_path(sidecar_path))
+    stems = [(path.parent.name, path.name.split(".")[0]) for path in asset_paths]
+    result = []
+    for path, stem in zip(asset_paths, stems):
+        generation, asset_stem = stem
+        name = "%s_%s" % (generation.split("_", 1)[1], asset_stem)
+        if stems.count(stem) > 1:
+            name += "_" + ("cbor" if path.name.endswith(".cbor") else "json")
+        result.append((name, path.relative_to(cryptoconfs_dir).as_posix()))
+    names = [name for name, _relative_path in result]
+    assert len(set(names)) == len(names), names
+    return tuple(sorted(result))
+
+
 def export_device_profile_bytes(cryptoconf: dict, keystore_pool_dir: Path) -> bytes:
     """A device profile made by the export script (which validates the cryptoconf and keys)."""
     from wacryptolib.utilities import dump_to_cbor_bytes

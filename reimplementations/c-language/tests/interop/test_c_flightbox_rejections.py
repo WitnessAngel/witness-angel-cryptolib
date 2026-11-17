@@ -8,8 +8,8 @@ and no output file.
 
 Device profiles are the samples of the profile loading unit tests (generate_device_profile_samples.py, built with
 the device profile test helpers): signature confs, missing keys, missing root keychain uid, bad thresholds, both
-signature alias keys, output fields in the cryptoconf, excessive key cipher nesting, mutated profiles, and every
-invalid corpus cryptoconf (WA-CBOR ones spliced into a profile, Extended JSON ones through the raw converter). The
+signature alias keys, output fields in the cryptoconf, excessive key cipher nesting, mutated profiles, every
+valid corpus cryptoconf without a root keychain uid (2022 generations), and every invalid corpus cryptoconf (WA-CBOR ones spliced into a profile, Extended JSON ones through the raw converter). The
 valid samples are encrypted successfully, as a counterpart. Metadata cases cover floats, datetimes, out-of-range
 integers, keyword maps, excessive depth and non-map documents.
 """
@@ -19,7 +19,14 @@ import re
 
 import pytest
 
-from c_flightbox_interop_support import COMPATIBILITY_ROOT, C_UNIT_TESTS_DIR, profile_helpers
+from c_flightbox_interop_support import (
+    COMPATIBILITY_ROOT,
+    C_UNIT_TESTS_DIR,
+    get_valid_corpus_cryptoconfs,
+    has_signatures,
+    load_corpus_cryptoconf,
+    profile_helpers,
+)
 
 CRYPTAINER_SUFFIXES = {"json": ".crypt.json", "cbor": ".crypt.cbor"}
 INPUT_FILENAME = "input.bin"
@@ -197,3 +204,31 @@ def test_metadata(c_build, document_format, metadata_bytes, expected_context, ex
         assert len(outputs) == 2, outputs
     else:
         check_rejection(process, outputs, expected_context, expected_statuses, "")
+
+
+ROOTLESS_CORPUS_CRYPTOCONFS = [
+    (name, relative_path)
+    for name, relative_path in get_valid_corpus_cryptoconfs()
+    if not load_corpus_cryptoconf(relative_path)[0].get("keychain_uid")
+]
+
+
+def test_rootless_corpus_cryptoconfs_are_found():
+    assert len(ROOTLESS_CORPUS_CRYPTOCONFS) == 9
+
+
+@pytest.mark.parametrize("name, relative_path", ROOTLESS_CORPUS_CRYPTOCONFS, ids=[name for name, _ in ROOTLESS_CORPUS_CRYPTOCONFS])
+def test_rootless_corpus_cryptoconfs(c_build, name, relative_path, tmp_path):
+    """Valid corpus cryptoconfs without a root keychain uid (wacryptolib then draws one per cryptainer, which a
+    device can't hold keys for) are rejected, in a raw profile without key entries, legacy "payload_signatures" key
+    included. Signed ones are stripped of their signatures first, since signatures are rejected before (as other
+    samples check)."""
+    cryptoconf = load_corpus_cryptoconf(relative_path)[0]
+    if has_signatures(cryptoconf):
+        cryptoconf = profile_helpers.strip_signatures(cryptoconf)
+    profile_bytes = profile_helpers.encode_cbor_item(
+        profile_helpers.build_raw_device_profile(cryptoconf, add_root_keychain_uid=False, add_public_keys=False)
+    )
+    document_format = _get_document_format(c_build, ROOTLESS_CORPUS_CRYPTOCONFS.index((name, relative_path)))
+    process, outputs = _run_cli(c_build, document_format, tmp_path, profile_bytes)
+    check_rejection(process, outputs, "invalid device profile", {"WA_STATUS_INVALID_PROFILE"}, "cryptoconf.keychain_uid")

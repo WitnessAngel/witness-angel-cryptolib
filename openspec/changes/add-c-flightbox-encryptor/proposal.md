@@ -4,7 +4,7 @@ Flightbox devices (ESP32-class microcontrollers, later others) must encrypt reco
 - the encryptor specification (`docs/flightbox_specifications/flightbox_encryptor_specification.md`);
 - the two embedded audits (`docs/audits/embedded_crypto_libraries_for_flightbox.md`, `docs/audits/flightbox_cryptoconf_storage_format.md`);
 - the WA-CBOR document format (`docs/specifications/wa_cbor_document_format.md`, change `add-cbor-document-format`);
-- the key ciphertext format field (change `add-cbor-key-ciphertexts`).
+- the key ciphertext format field (`key-ciphertext-format` capability, and `S_F` in §2 of the encryptor specification), implemented by the archived change `add-cbor-key-ciphertexts`.
 
 A portable C encryptor can therefore be written in this repository, next to the reference implementation and its compatibility corpus.
 
@@ -42,7 +42,7 @@ A portable C encryptor can therefore be written in this repository, next to the 
 
 ## Impact
 
-- Depends on `add-cbor-key-ciphertexts`, which must be implemented and archived first, so that wacryptolib decrypts the WA-CBOR key ciphertexts of CBOR builds.
+- Builds on `add-cbor-key-ciphertexts`, now implemented and archived: wacryptolib already decrypts WA-CBOR key ciphertexts, and the `2026_cbor_key_ciphertexts` corpus generation provides signature-free cryptoconfs in both formats, a keystore pool, and reference cryptainers for the C tests.
 - New tree `reimplementations/c-language/`: public headers, portable core, document codecs, two backend adapters, a host CLI and test driver, C unit tests, pytest interop tests, CMake build, backend configuration headers, and a vendored and pinned copy of mlkem-native (Apache-2.0 / ISC / MIT).
 - Host builds fetch Mbed TLS 3.6.x and wolfSSL 5.8.x at pinned versions, or use installed ones. Device builds integrate the sources into their own toolchain (e.g. ESP-IDF's bundled Mbed TLS).
 - Licensing:

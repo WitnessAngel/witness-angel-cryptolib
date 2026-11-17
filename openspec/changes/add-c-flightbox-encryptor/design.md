@@ -10,14 +10,25 @@ Constraints that shape the design:
   - wacryptolib reads and writes every document either as relaxed Extended JSON or as **WA-CBOR**, a strict and deterministic CBOR dialect, bijective with it;
   - cryptainer files are named `<basename>.crypt.json` or `<basename>.crypt.cbor`, with lowercase suffixes;
   - §9 of the WA-CBOR specification already announces the device profile as a strict sub-profile of WA-CBOR.
-- Key ciphertexts (change `add-cbor-key-ciphertexts`, a prerequisite):
+- Key ciphertexts (`key-ciphertext-format` capability, from the archived change `add-cbor-key-ciphertexts`; spec §2 `S_F`, §3.3, §6):
   - the structures that are serialized and then encrypted (symkeys, key cipherdicts, shards, key structs) may be WA-CBOR, when the `key_ciphertext_format: "cbor"` sibling of their `key_ciphertext` says so;
-  - an absent field means Extended JSON. A C build without JSON support therefore needs no JSON writer at all.
+  - the field sits on payload cipher layers and symmetric key cipher layers only. Shard chains use the format of their enclosing chain, and nested symmetric key layers carry their own field;
+  - an absent field means Extended JSON, and wacryptolib only writes the field for `"cbor"`. It never guesses the format from the bytes, and rejects the field in cryptoconfs;
+  - spec §2 lets a device implement a single serialization. A C build without JSON support therefore needs no JSON writer at all;
+  - wacryptolib's `CryptainerStorage` and `flightbox encrypt` default their key ciphertext format to their file format, which is exactly the coupling of D15.
 - Targets range from a Linux/macOS/Windows host (tests, CLI) to ESP32 under ESP-IDF 5.x, which bundles Mbed TLS 3.6, and later to Cortex-M parts. Hardware acceleration is optional. Flash is scarce on the smallest parts, hence the compile-time choice of document codecs.
 - The `compatibility/` corpus provides:
   - symmetric cipherdict fixtures, each tied to one plaintext, with key and IV/nonce;
-  - keystore pools with private keys and sidecar passphrases (`2026_post_quantum/pq_pool` covers all three asymmetric algorithms);
-  - cryptoconfs, of which only a few are signature-free with a root `keychain_uid` (e.g. `2026_cbor_pairs/01_single_layer`, in both formats), and none uses an `AES_CBC` payload layer or `ML_KEM_768` without signatures;
+  - keystore pools with private keys and sidecar passphrases (`2026_post_quantum/pq_pool` and `2026_cbor_key_ciphertexts/cbor_key_ciphertexts_pool` cover all three asymmetric algorithms, the latter with authenticators too);
+  - cryptoconfs. In the generations with current wire forms, the signature-free ones with a root `keychain_uid` are `2026_current/01_single_layer` and `05_shamir_authenticators`, `2026_cbor_pairs/01_single_layer`, and the five of `2026_cbor_key_ciphertexts`, the last six in both formats:
+    - `01_single_layer`: `AES_CBC` wrapped by `RSA_OAEP`;
+    - `02_shared_secret`: `AES_EAX` wrapped by `ECIES_X25519` and by a 2-of-3 shared secret over authenticators;
+    - `03_nested_symmetric`: `AES_CBC` → `AES_EAX` → `CHACHA20_POLY1305` → `ECIES_X25519`, plus a second payload layer;
+    - `04_post_quantum`: `AES_EAX` wrapped by `ML_KEM_768` and `ECIES_X25519`;
+    - `05_mixable`: two payload layers, one with a nested symmetric key layer;
+
+    the other current-form cryptoconfs have signatures, which this port doesn't support;
+  - the `2026_cbor_key_ciphertexts` cryptainers, made by wacryptolib from these cryptoconfs with WA-CBOR key ciphertexts, as `.crypt.json` / `.crypt.cbor` pairs, inline and offloaded, plus an Extended JSON twin as size reference. Their sidecars record `key_ciphertext_format`, and `tests/_compatibility_corpus.py` provides `check_key_ciphertext_formats()`, which checks that every key ciphertext loads in its declared format;
   - invalid WA-CBOR cryptoconfs (`2026_cbor_pairs/invalid/*.cryptoconf.cbor`), plus the WA-CBOR test vectors of §10 of its specification.
 
   Asymmetric outputs are randomized, so they are checked by having wacryptolib decrypt them, or by byte comparison under fixed randomness where the reference allows it.
@@ -346,7 +357,8 @@ The pipeline cuts every input chunk into internal slices of at most `WA_PAYLOAD_
     - each decrypted by wacryptolib using the corpus keystore pools and sidecar passphrases;
     - each byte-identical to its re-encoding by wacryptolib's default writer of its format;
     - each converted to the other format with `flightbox convert-format`, and decrypted again;
-    - with profiles from three sources: the corpus cryptoconfs that are signature-free and have a root keychain uid; signature-stripped variants of `2026_current/03`, `04`, `06` and `2026_post_quantum/07_pq_hybrid`; synthetic cryptoconfs, for `AES_CBC` payloads, every algo, nested symmetric layers, nested shared secrets, and so on;
+    - each with the `key_ciphertext_format` fields that `check_key_ciphertext_formats()` expects for its format, and the same tree shape as the cryptainer wacryptolib makes from the same cryptoconf with `key_ciphertext_format` set to that format (byte strings, UUIDs and timestamps aside);
+    - with profiles from three sources: the corpus cryptoconfs that are signature-free and have a root keychain uid, chiefly the five of `2026_cbor_key_ciphertexts`; signature-stripped variants of `2026_current/03`, `04`, `06` and `2026_post_quantum/07_pq_hybrid`; synthetic cryptoconfs, for the remaining algorithm combinations, nested shared secrets, thresholds 1 and n, and so on;
   - shard subsets tested by withholding one trustee key at a time, asserting only the expected "key not found"-type entries;
   - backend parity: the same deterministic hook gives identical output from both builds, in each format.
 - **Cross-compilation check**: `arm-none-eabi-gcc` Cortex-M4 compiles (no link, no tests) of the library, the Mbed TLS backend and mlkem-native, once CBOR-only and once JSON-only. The code size of each (`arm-none-eabi-size` on the objects) is recorded in the README, to guide integrators.
@@ -380,10 +392,10 @@ The CDDL in the device profile specification is normative. It refers to the WA-C
 Two macros of `wa_flightbox_config.h`, `WA_DOCUMENT_FORMAT_JSON_ENABLED` and `WA_DOCUMENT_FORMAT_CBOR_ENABLED`, each 0 or 1 and both 1 by default, select the writers compiled in. An `#error` refuses a build with neither. `wa_document_serialization.c` is the only code that knows which writers exist: the core asks it to serialize a tree in a `wa_document_format_t`, into a buffer for the structures to encrypt, or into a sink for the cryptainer. Swapping or adding a codec therefore touches that file, the writer and the build lists only.
 
 - **One format per cryptainer.** The format chosen at creation (`options->document_format`) governs both:
-  - every structure serialized to produce key ciphertexts (spec §6, key ciphertext format of `add-cbor-key-ciphertexts`): symkeys, sub-symkeys, cipherdicts, shards and key structs;
+  - every structure serialized to produce key ciphertexts (spec §2 `S_F` and §6, `key-ciphertext-format` capability): symkeys, sub-symkeys, cipherdicts, shards and key structs;
   - the cryptainer document itself.
 
-  In WA-CBOR, the core writes `key_ciphertext_format: "cbor"` on every payload layer and symmetric key layer. In Extended JSON, it writes no such field, so the cryptainer has exactly the form wacryptolib produces by default. A CBOR-only build thus contains no JSON writer and no base64 encoder. Its key structs are also much smaller: for an `AES_CBC` symkey wrapped by `RSA_OAEP`, 93 bytes in 2 OAEP chunks instead of 320 bytes in 6.
+  In WA-CBOR, the core writes `key_ciphertext_format: "cbor"` on every payload layer and symmetric key layer. In Extended JSON, it writes no such field, so the cryptainer has exactly the form wacryptolib produces by default. Either way, it has the form of `flightbox encrypt --format <F>`, whose `--key-ciphertext-format` defaults to `--format`. A CBOR-only build thus contains no JSON writer and no base64 encoder. Its key structs are also much smaller: for an `AES_CBC` symkey wrapped by `RSA_OAEP`, 93 bytes in 2 OAEP chunks instead of 320 bytes in 6.
 - **Default and errors.** `WA_DOCUMENT_FORMAT_BUILD_DEFAULT` resolves to the only enabled format, or to Extended JSON when both are enabled, like `flightbox encrypt`. Requesting a format that is not compiled in fails at creation with the unsupported-feature status.
 - **Byte-exact writers.** Both writers produce exactly the bytes of wacryptolib's default writers for the same tree, so every C document equals its own re-encoding by wacryptolib:
   - the WA-CBOR writer emits the core deterministic encoding: shortest heads, definite lengths, map keys sorted by their encoded bytes (shorter keys first, then bytewise);
@@ -405,7 +417,7 @@ Alternatives considered:
 - [Expected backend option and function names (D3) may differ in the pinned versions] → Task 4 confirms them and updates the `#error` checks and README together.
 - [ESP-IDF menuconfig may lack options (ChaCha20-Poly1305 is off by default in ESP-IDF 5.x)] → Compile-time `#error` checks name each missing option, and the README lists the menuconfig entries to enable.
 - [The wolfCrypt licence (GPL-3.0-or-later) applies to firmwares built with it] → Documented in the README and proposal. Mbed TLS (Apache-2.0 OR GPL-2.0-or-later) remains the default backend.
-- [WA-CBOR key ciphertexts need wacryptolib 0.12 or later to decrypt] → They come with WA-CBOR cryptainer files, which need 0.12 anyway. JSON builds produce cryptainers that older versions also read, apart from the `.crypt.json` naming.
+- [WA-CBOR key ciphertexts need a wacryptolib version with the `key-ciphertext-format` capability (the development version, after 0.12) to decrypt] → They come with WA-CBOR cryptainer files, which need that version anyway. JSON builds produce cryptainers that older versions also read, apart from the `.crypt.json` naming.
 - [Inline ciphertext keeps the whole payload in RAM] → Documented. Offloaded mode is the default in the CLI and the recommended device mode.
 - [Recursive layers on small stacks] → Both depth limits are enforced at profile load. The stack use per level is measured on host (`-fstack-usage`) and documented.
 - [Device profiles are not authenticated: a swapped profile means a swapped trustee key] → Out of scope here and stated in the profile specification. COSE_Sign1 is the planned follow-up: WA-CBOR's deterministic encoding makes it straightforward, and the format string allows a later version to require it.
@@ -414,7 +426,7 @@ Alternatives considered:
 
 ## Migration Plan
 
-Purely additive: a new directory, a new script, a new doc, a tox env and a CI job. No wacryptolib behaviour, wire format or API changes beyond those of the prerequisite `add-cbor-key-ciphertexts`, so there is no rollback concern beyond reverting the commits. The sibling `witness-angel-cryptolib-c` skeleton can be archived once this port runs on a device. That is outside this change.
+Purely additive: a new directory, a new script, a new doc, a tox env and a CI job. No wacryptolib behaviour, wire format or API changes (the key ciphertext format came with the archived `add-cbor-key-ciphertexts`), so there is no rollback concern beyond reverting the commits. The sibling `witness-angel-cryptolib-c` skeleton can be archived once this port runs on a device. That is outside this change.
 
 ## Open Questions
 

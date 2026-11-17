@@ -115,10 +115,10 @@ The library SHALL provide the lowercase cryptainer suffix of each document forma
 Each build SHALL enable the Extended JSON format, the WA-CBOR format, or both, through compile-time macros. Compilation SHALL fail with an explicit message when neither is enabled. The code of a disabled format, the base64 encoder included for Extended JSON, SHALL NOT be part of the build. The caller SHALL choose one enabled format per cryptainer, the default being the only enabled format, or Extended JSON when both are. Requesting a format that is not enabled SHALL fail at creation with an unsupported-feature status.
 
 The chosen format SHALL govern both:
-- every structure serialized and then encrypted (symkeys, sub-symkeys, cipherdicts, shards, key structs), as defined by the key ciphertext format capability;
+- every structure serialized and then encrypted (symkeys, sub-symkeys, cipherdicts, shards, key structs), as defined by the `key-ciphertext-format` capability and by `S_F` in section 2 of the encryptor specification;
 - the cryptainer document.
 
-In WA-CBOR, every payload cipher layer and every symmetric key cipher layer SHALL get `key_ciphertext_format: "cbor"`. In Extended JSON, no `key_ciphertext_format` field SHALL be written.
+In WA-CBOR, every payload cipher layer and every symmetric key cipher layer SHALL get `key_ciphertext_format: "cbor"`. In Extended JSON, no `key_ciphertext_format` field SHALL be written. Shards SHALL NOT get the field, since their chains use the format of their enclosing chain.
 
 The documents SHALL be written as follows:
 - Extended JSON: UTF-8, relaxed mode, as defined by section 2 of the encryptor specification:

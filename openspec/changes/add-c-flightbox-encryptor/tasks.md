@@ -1,6 +1,6 @@
 ## 0. Prerequisite
 
-- [ ] 0.1 Check that `add-cbor-key-ciphertexts` is implemented and archived (wacryptolib decrypts WA-CBOR key ciphertexts, and the `key-ciphertext-format` main spec exists), and verify `openspec list` no longer shows it as active
+- [ ] 0.1 Check that `add-cbor-key-ciphertexts` is implemented and archived (in `openspec/changes/archive/2026-11-17-add-cbor-key-ciphertexts/`; wacryptolib decrypts WA-CBOR key ciphertexts; the `key-ciphertext-format` main spec and the `2026_cbor_key_ciphertexts` corpus generation exist), and verify `openspec list` no longer shows it as active
 
 ## 1. Device profile format, export script and test helpers
 
@@ -34,7 +34,7 @@
 
   Verify that each mutator's output differs from its input only as intended: decode valid outputs with `load_from_cbor_bytes()`, and the others with `cbor2`
 - [ ] 1.4 Add `tests/test_flightbox_device_profile_export.py`. It checks that exported profiles load with `load_from_cbor_bytes()`, equal their own `dump_to_cbor_bytes()` re-encoding, and follow the CDDL rules (keys, tag 37, sizes, uniqueness, root keychain uid), for:
-  - every corpus cryptoconf that is signature-free with a root keychain uid;
+  - every corpus cryptoconf that is signature-free with a root keychain uid (`2026_current/01` and `05`, `2026_cbor_pairs/01_single_layer`, and the five of `2026_cbor_key_ciphertexts`), the WA-CBOR pairs from each of their two formats, with byte-identical profiles for both;
   - the signature-stripped variants of `2026_current/03`, `04`, `06` and `2026_post_quantum/07_pq_hybrid`.
 
   ML-KEM cases are marked `requires_pycryptodome`. Verify that it passes with `tox -e py` and is deselected as intended in the fallback env
@@ -137,7 +137,7 @@
 
 ## 9. Interoperability tests (pytest)
 
-- [ ] 9.1 Write `reimplementations/c-language/tests/interop/conftest.py` (locate builds through `WA_FLIGHTBOX_C_BUILD_DIR`, skip when absent, parametrize over the available backends and their enabled document formats, corpus helpers reusing `tests/_compatibility_corpus.py`), and verify tests are skipped cleanly with no build and collected with one
+- [ ] 9.1 Write `reimplementations/c-language/tests/interop/conftest.py` (locate builds through `WA_FLIGHTBOX_C_BUILD_DIR`, skip when absent, parametrize over the available backends and their enabled document formats, corpus helpers reusing `tests/_compatibility_corpus.py`, `check_key_ciphertext_formats()` included), and verify tests are skipped cleanly with no build and collected with one
 - [ ] 9.2 Write `test_c_flightbox_wacbor_conformance.py`, and verify it passes on both backends:
   - the test vectors of §10 of the WA-CBOR specification, parsed from the document like wacryptolib's own test does, classified as in design D8;
   - accepted deterministic vectors re-encoded to exactly `cbor_hex` and written as exactly `extjson`;
@@ -151,13 +151,14 @@
   - the RFC 9180 vector through the driver.
 - [ ] 9.5 Write `test_c_flightbox_cryptainer_interop.py`, and verify it passes on both backends.
   - Profiles:
-    - corpus cryptoconfs that are signature-free with a root keychain uid;
+    - corpus cryptoconfs that are signature-free with a root keychain uid: `2026_current/01` and `05`, `2026_cbor_pairs/01_single_layer`, and `2026_cbor_key_ciphertexts/01`–`05` with `cbor_key_ciphertexts_pool` (authenticator passphrases from its sidecar);
     - signature-stripped `03`, `04`, `06` and `07_pq_hybrid`;
-    - synthetic ones covering `AES_CBC`, `AES_EAX` and `CHACHA20_POLY1305` payloads, multiple payload layers, nested symmetric layers, and nested shared secrets with thresholds 1 and n.
+    - synthetic ones covering what the corpus lacks among `AES_CBC`, `AES_EAX` and `CHACHA20_POLY1305` payloads, multiple payload layers, nested symmetric layers, and nested shared secrets with thresholds 1 and n.
   - Variations: both document formats; metadata null, non-null and non-ASCII; payload sizes 0/1/15/16/17/4099/65539/1048579; inline and offloaded; odd chunk sizes.
   - Each cryptainer must:
     - be loaded from the filesystem (`.crypt.json` / `.crypt.cbor` names), and pass strict cryptainer validation;
-    - equal its re-encoding by wacryptolib's default writer of its format, with `key_ciphertext_format: "cbor"` on every payload and symmetric key layer in WA-CBOR, and none in Extended JSON;
+    - equal its re-encoding by wacryptolib's default writer of its format, with `key_ciphertext_format: "cbor"` on every payload and symmetric key layer in WA-CBOR, and none in Extended JSON, as checked by `check_key_ciphertext_formats()`;
+    - have the same tree shape as the cryptainer wacryptolib makes from the same cryptoconf with `key_ciphertext_format` set to its format (byte strings, UUIDs and timestamps aside);
     - be decrypted by wacryptolib with the pool's sidecar passphrases, with no report error.
   - A sample of them is converted with `flightbox convert-format` to the other format and decrypted again.
   - For one 2-of-3 profile, each trustee key is withheld in turn, and only the expected missing-key entries may appear.
@@ -187,5 +188,5 @@
   - the required Mbed TLS / ESP-IDF menuconfig and wolfSSL options, and the raw-RSA note;
   - the mlkem-native note and licences, including the wolfCrypt GPL-3.0 warning;
   - inline vs offloaded, supported host toolchains, and how to run the tests.
-- [ ] 10.5 Add a "C profile" subsection to section 10 of `docs/flightbox_specifications/flightbox_encryptor_specification.md` (supported algorithms, WA-CBOR device profile input, mandatory root keychain uid, no signatures, backends, compile-time document formats with one format per cryptainer), with a link to the device profile specification, and verify `tox -e doc` still builds
+- [ ] 10.5 Add a "C profile" subsection to section 10 of `docs/flightbox_specifications/flightbox_encryptor_specification.md` next to the JSON-only MicroPython profile of §10.1 (supported algorithms, WA-CBOR device profile input, mandatory root keychain uid, no signatures, backends, compile-time document formats with one format per cryptainer, as §2 allows single-serialization devices), with a link to the device profile specification, and verify `tox -e doc` still builds
 - [ ] 10.6 Run `openspec validate add-c-flightbox-encryptor --strict`, `tox -e py` and `tox -e c_flightbox`, and verify everything passes before marking the change complete

@@ -1452,6 +1452,7 @@ def test_unwrap_malformed_predecrypted_symkeys():
         _build_symkey_decryption(b"request2", dump_to_json_bytes({"ciphertext": b"abc"})),
         _build_symkey_decryption(b"request3", _encrypt_for_response_key(b"not a key struct")),
         _build_symkey_decryption(b"request4", _encrypt_for_response_key(valid_key_struct_bytes)),
+        _build_symkey_decryption(b"request4", _encrypt_for_response_key(b"second response")),
     ]
 
     decryptor = CryptainerDecryptor(keystore_pool=keystore_pool)
@@ -1459,12 +1460,15 @@ def test_unwrap_malformed_predecrypted_symkeys():
     predecrypted_symkey_mapper = decryptor._unwrap_predecrypted_symkeys(
         successful_symkey_decryptions, operation_report=operation_report
     )
-    assert predecrypted_symkey_mapper == {b"request4": valid_key_struct_bytes}  # Only valid ones are kept
+    # Every decrypted response is kept, in order, since key structs can only be parsed once their format is known
+    assert predecrypted_symkey_mapper == {
+        b"request3": [b"not a key struct"],
+        b"request4": [valid_key_struct_bytes, b"second response"],
+    }
 
     for entry_msg_match in [
         "Malformed remote symkey/shard cipherdict",
         "Failed decryption of remote symkey/shard RSA_OAEP",
-        "Malformed remote key struct",
     ]:
         _check_operation_report_entry(
             operation_report=operation_report,
@@ -1766,6 +1770,7 @@ def test_common_passphrases_are_not_sent_to_jsonrpc_trustees():
                 trustee=trustee,
                 cryptainer_metadata=None,
                 operation_report=OperationReport(),
+                key_ciphertext_format="json",
             )
 
     assert sent_passphrases == [["remote_pass"], ["local_pass", "common_pass"]]

@@ -10,7 +10,8 @@ from wacryptolib.cryptainer import logger
 from wacryptolib.jsonrpc_client import JsonRpcProxy, status_slugs_response_error_handler
 from wacryptolib.keystore import KeystorePoolBase, InMemoryKeystorePool, FilesystemKeystore
 from wacryptolib.trustee import TrusteeApi, ReadonlyTrusteeApi
-from wacryptolib.utilities import DocumentFormat, normalize_recognized_extension
+from wacryptolib.utilities import DocumentFormat, normalize_recognized_extension, dump_to_json_bytes, \
+    load_from_cbor_bytes, load_from_json_bytes
 
 
 CRYPTAINER_SUFFIX = ".crypt"  # Legacy suffix of Extended JSON cryptainers, still read but no longer written
@@ -108,6 +109,34 @@ def get_payload_ciphertext_signatures(payload_cipher_layer: dict) -> list:
     if "payload_ciphertext_signatures" in payload_cipher_layer:
         return payload_cipher_layer["payload_ciphertext_signatures"]
     return payload_cipher_layer["payload_signatures"]
+
+
+def get_key_ciphertext_format(cipher_layer: dict) -> str:
+    """Return the document format declared for the "key_ciphertext" of a payload cipher layer or of a symmetric key
+    cipher layer, i.e. the format of every structure serialized in its chain: "json" if the "key_ciphertext_format"
+    field is absent, like in cryptainers of older encryptors."""
+    return cipher_layer.get("key_ciphertext_format", DocumentFormat.JSON)
+
+
+def load_key_structure_bytes(data: bytes, key_ciphertext_format: str):
+    """Parse a structure serialized in a key ciphertext chain (symkey, key cipherdict, shard, key struct), strictly
+    in the declared format: the format is never inferred from the bytes, since they may be forged."""
+    if key_ciphertext_format == DocumentFormat.CBOR:
+        return load_from_cbor_bytes(data)
+    if key_ciphertext_format == DocumentFormat.JSON:
+        return load_from_json_bytes(data)
+    raise ValueError("Unknown key ciphertext format %r" % (key_ciphertext_format,))
+
+
+def get_revelation_request_data(key_ciphertext: bytes, key_ciphertext_format: str) -> bytes:
+    """Return the data to send in a revelation request for the key ciphertext of an asymmetric key cipher layer: the
+    Extended JSON serialization of its cipherdict, which deployed authenticators parse with load_from_json_bytes().
+
+    This is the key ciphertext itself in "json" format, and its lossless transcoding from WA-CBOR in "cbor" format.
+    The decryptor matches revelation responses to layers through these same bytes."""
+    if key_ciphertext_format == DocumentFormat.JSON:
+        return key_ciphertext
+    return dump_to_json_bytes(load_key_structure_bytes(key_ciphertext, key_ciphertext_format=key_ciphertext_format))
 
 
 def get_trustee_id(trustee_conf: dict) -> str:

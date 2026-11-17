@@ -38,12 +38,31 @@ Development
     `convert_document_tree_to_bytes()` utilities, taking the format from the file extension, the content or an
     explicit `DocumentFormat.JSON` / `DocumentFormat.CBOR` argument
   - New `cryptainer_file_format` parameter of `CryptainerStorage` (Extended JSON by default)
-  - Encrypted intermediate structures (symkeys, key structs, shards) and the JSON-RPC wire format stay Extended JSON
+  - The JSON-RPC wire format stays Extended JSON; encrypted intermediate structures may use WA-CBOR, see below
 * New `flightbox convert-format SOURCE [-o TARGET] [--force]` command, converting any Extended JSON or WA-CBOR document
   file (cryptoconf, cryptainer with its offloaded payload...) to the other format, or to the format given by the `-o`
   extension, without schema validation and without modifying the source
 * New `--format json|cbor` option of `flightbox encrypt` and `flightbox cryptoconf generate-simple`; every command
   reading a cryptoconf (including from STDIN) or a cryptainer accepts both formats
+* Key ciphertexts may be WA-CBOR: the structures serialized then encrypted inside a cryptainer (symkeys, shards, key
+  structs, intermediate cipherdicts) are written in the format stated by a new `key_ciphertext_format` field (`"json"`
+  or `"cbor"`) next to each `key_ciphertext` of payload cipher layers and symmetric key cipher layers; the field is
+  only written for `"cbor"`, an absent field meaning `"json"`, and the format is never guessed from the bytes;
+  WA-CBOR key ciphertexts are smaller (e.g. 2 RSA-OAEP chunks instead of 6 for a symkey)
+  - New `key_ciphertext_format` parameter of `encrypt_payload_into_cryptainer()`,
+    `encrypt_payload_and_stream_cryptainer_to_filesystem()`, `CryptainerEncryptor`, `CryptainerEncryptionPipeline`
+    (Extended JSON by default) and `CryptainerStorage` (defaulting to its `cryptainer_file_format`), raising
+    ValueError on unknown values before any key generation
+  - New `--key-ciphertext-format json|cbor` option of `flightbox encrypt`, defaulting to the value of `--format`;
+    `convert-format` leaves key ciphertexts unchanged
+  - Revelation requests sent to remote trustees stay Extended JSON (WA-CBOR cipherdicts are transcoded), so that
+    servers and authenticators are unchanged
+  - New `get_key_ciphertext_format()`, `load_key_structure_bytes()` and `get_revelation_request_data()` helpers, and
+    `dump_to_cbor_bytes()` member of the flightbox platform utilities (needed only for WA-CBOR key ciphertexts)
+  - Compatibility: older versions refuse cryptainers having a `key_ciphertext_format` field; Extended JSON cryptainers
+    written with the default key ciphertext format stay readable by them
+  - New `2026_cbor_key_ciphertexts` generation of the compatibility corpus, whose cryptainer sidecars record
+    `key_ciphertext_format`, and record `cryptainer_metadata` in relaxed Extended JSON form
 * **BREAKING**: the flightbox CLI never overwrites existing files anymore: `encrypt` (target `.crypt.json` or `.crypt.cbor`
   file of the requested format, or its `.payload` file, in the cryptainer storage; a same-basename cryptainer in
   another format only triggers a warning), `cryptainer decrypt` (output file, including the default one derived from the cryptainer name),

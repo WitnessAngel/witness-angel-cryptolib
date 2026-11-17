@@ -51,6 +51,7 @@ generation.
 | `2026_post_quantum` | current development version | ML_KEM_768 / ML_DSA_65, hybrid with RSA_OAEP and ECIES_X25519; includes the fixture formerly in `tests/fixtures/post_quantum/` |
 | `2026_edge_cases` | current development version | Authenticator private keys protected like wacryptolib <= 0.12 did (DES3 for DSA_DSS), tampered cipherdicts, CANONICAL extjson with the current signature naming, corrupted signature in the legacy `payload_signatures` field, corrupted payload MAC tag, `digest_list` key ciphertexts |
 | `2026_cbor_pairs` | current development version | Extended JSON / WA-CBOR pairs of cipherdicts, signatures, cryptoconfs and cryptainers (inline and offloaded `.crypt.json` / `.crypt.cbor`), invalid WA-CBOR documents; first generation with lowercase names only |
+| `2026_cbor_key_ciphertexts` | current development version | WA-CBOR key ciphertexts (`key_ciphertext_format: "cbor"`) in `.crypt.json` / `.crypt.cbor` pairs, inline and offloaded, with RSA_OAEP, ECIES_X25519 and ML_KEM_768, a 2-of-3 Shamir shared secret over authenticators, nested symmetric key layers, metadata holding a datetime and a float; an Extended JSON twin of the simplest cryptainer, as a size reference; a synthesized cryptainer mixing both key ciphertext formats |
 
 ### Letter case of names
 
@@ -114,6 +115,11 @@ cryptainers) are in Extended JSON (see "Extended JSON flavors" below), or, from 
   cryptainer's `payload_ciphertext_struct` is the marker `{"ciphertext_location": "offloaded"}`, and the ciphertext is
   in the sibling `<name>.payload` file (raw bytes), e.g. `x.crypt.payload`, `x.crypt.json.payload` or
   `x.crypt.cbor.payload`.
+  Independently of the file format, the structures serialized then encrypted into each `key_ciphertext` (symkeys,
+  shards, key structs, intermediate cipherdicts) are in Extended JSON, or in WA-CBOR when the payload cipher layer or
+  symmetric key layer holding that `key_ciphertext` has a `key_ciphertext_format: "cbor"` field (absent means
+  `"json"`, as in every generation before `2026_cbor_key_ciphertexts`). Shard chains use the format of their
+  enclosing chain; nested symmetric key layers have their own field. The format is never guessed from the bytes.
 
 ### Extended JSON flavors
 
@@ -190,13 +196,13 @@ field references by relative path. All schemas forbid unknown fields.
 
 | Field | Meaning |
 |---|---|
-| `method` | `genuine`: produced as-is by the named library version. `synthesized`: a current output down-converted to legacy forms, for releases that could not be run. `migrated`: moved from a former location of the repository. |
+| `method` | `genuine`: produced as-is by the named library version. `synthesized`: a current output down-converted to legacy forms, for releases that could not be run, or altered into forms that the library does not write. `migrated`: moved from a former location of the repository. |
 | `library_version` | Version of wacryptolib that produced the asset (e.g. `0.9`, or `0.12+dev` for a development version). |
 | `library_commit` | Git commit of wacryptolib, for development versions. |
 | `python_version` | Python version used. |
 | `crypto_backend` | `pycryptodome` (native) or `fallback` (pure Python) backend of wacryptolib. |
 | `produced_on` | Production date. |
-| `legacy_forms` | Legacy wire forms present in the asset (mandatory for `synthesized` ones): `canonical_extjson` (CANONICAL extended JSON), `payload_signatures_field` (former name of `payload_ciphertext_signatures`), `rsa_oaep_digest_list_field` (former name of the RSA-OAEP `ciphertext_chunks`), `des3_protected_private_key` (private keys exported with the PEM protections of wacryptolib <= 0.12, including DES-EDE3-CBC for DSA_DSS keys). |
+| `legacy_forms` | Legacy wire forms present in the asset (mandatory for `synthesized` ones): `canonical_extjson` (CANONICAL extended JSON), `payload_signatures_field` (former name of `payload_ciphertext_signatures`), `rsa_oaep_digest_list_field` (former name of the RSA-OAEP `ciphertext_chunks`), `des3_protected_private_key` (private keys exported with the PEM protections of wacryptolib <= 0.12, including DES-EDE3-CBC for DSA_DSS keys), `mixed_key_ciphertext_formats` (Extended JSON and WA-CBOR key ciphertexts in one cryptainer, which the library reads but never writes, since it uses one key ciphertext format per cryptainer). |
 | `notes` | Free-form remarks (e.g. dependency versions used for old releases). |
 
 **`requirements`**: `algorithms` lists the cipher, key and signature algorithms involved, and `pem_protections`
@@ -287,7 +293,8 @@ of them must skip the fixture, and must check all others. PEM protections are:
 | `plaintext` / `plaintext_hex` | Original payload: relative path to a plaintext, or inline hex. |
 | `keystore_pool` | Relative path to the pool holding the keys needed to decrypt. |
 | `cryptoconf` | Relative path to the cryptoconf the cryptainer was produced from, if any. |
-| `cryptainer_metadata` | Expected unencrypted metadata of the cryptainer (`null` if none). |
+| `cryptainer_metadata` | Expected unencrypted metadata of the cryptainer (`null` if none), in relaxed Extended JSON form, since sidecars are plain JSON (e.g. `{"$date": "2026-11-17T08:30:15.250Z"}` for a datetime). |
+| `key_ciphertext_format` | Format of the key ciphertexts, as stated by the `key_ciphertext_format` fields of the cryptainer: `json`, `cbor`, or `mixed` (both formats in one cryptainer). Absent means `json`. |
 | `extjson_flavor` | `canonical` or `relaxed`, see above; only for Extended JSON assets (absent for WA-CBOR ones). |
 | `payload_offloaded` | `true` if the ciphertext is in the sibling `<name>.payload` file. |
 | `decryption_scenarios` | Decryption attempts and their expected outcomes, see below. |
@@ -310,7 +317,8 @@ Each **decryption scenario** has:
    "Sidecars" above for the other `.json` files, which are assets).
 2. Validate each one against its schema, and check its `asset_sha256` digests.
 3. Skip fixtures whose `requirements` your implementation does not support, and WA-CBOR assets
-   (`document_format` `cbor`) if your implementation only reads Extended JSON.
+   (`document_format` `cbor`) and cryptainers with WA-CBOR key ciphertexts (`key_ciphertext_format` `cbor` or
+   `mixed`) if your implementation only reads Extended JSON.
 4. Check each fixture according to its kind, as described above: e.g. decrypt each cipherdict vector, or decrypt each
    cryptainer with the passphrases of each scenario and compare with the expected outcome. Encrypt data with
    `symkey` for `bidirectional` vectors. Also check that every signature of a decrypted cryptainer was actually
@@ -318,7 +326,9 @@ Each **decryption scenario** has:
    generates missing keys (which would hide old keys that can't be loaded anymore).
 5. For Extended JSON / WA-CBOR pairs, check that both assets load to equal trees, and, if your implementation writes
    documents, that converting either one reproduces the other byte for byte. Check that invalid WA-CBOR documents
-   (with `expected_decoding_error`) are rejected by your decoder.
+   (with `expected_decoding_error`) are rejected by your decoder. For cryptainers, also check that each
+   `key_ciphertext` loads in the format stated by its `key_ciphertext_format` field (WA-CBOR ones with a strict
+   WA-CBOR decoder), and that these formats match the sidecar's `key_ciphertext_format`.
 
 `tests/_compatibility_corpus.py` is the reference implementation of these checks.
 
@@ -334,6 +344,7 @@ PYTHONPATH=src python scripts/compatibility/generate_current.py classic 2027_cur
 PYTHONPATH=src python scripts/compatibility/generate_current.py post_quantum 2027_post_quantum
 PYTHONPATH=src python scripts/compatibility/generate_current.py edge_cases 2027_edge_cases
 PYTHONPATH=src python scripts/compatibility/generate_current.py cbor_pairs 2027_cbor_pairs
+PYTHONPATH=src python scripts/compatibility/generate_current.py cbor_key_ciphertexts 2027_cbor_key_ciphertexts
 
 # Fixtures of old releases, each run in its own throwaway virtualenv (or synthesized when it cannot run)
 PYTHONPATH=src python scripts/compatibility/build_legacy_generations.py --only 0.9
@@ -343,7 +354,8 @@ Both scripts write into hidden staging directories, move them into place, then c
 current library, and remove the new generation again if any check fails. Missing plaintexts are added to
 `plaintexts/`, existing ones are never touched. New generations have lowercase names only, and their document assets
 end with their format extension (e.g. `.cipherdict.json`, `.crypt.json`); the `cbor_pairs` profile writes each
-document as an Extended JSON / WA-CBOR pair, plus invalid WA-CBOR documents. Then run
+document as an Extended JSON / WA-CBOR pair, plus invalid WA-CBOR documents, and the `cbor_key_ciphertexts`
+profile writes such pairs of cryptainers with WA-CBOR key ciphertexts. Then run
 `pytest tests/test_compatibility_fixtures.py`, and commit the new generation as-is.
 
 New algorithms must get vectors: the test suite fails when a cipher, signature or asymmetric key algorithm of the

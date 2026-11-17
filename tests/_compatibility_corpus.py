@@ -790,12 +790,41 @@ def _check_cryptainer_analysis(asset_path: Path, pool_sidecar: dict):
             _check_keypair_is_in_pool(trustee_id, request["keychain_uid"], request["key_algo"])
 
 
+def _iter_key_ciphertext_holders(tree):
+    """Yield the payload cipher layers and symmetric key cipher layers of a cryptainer, i.e. the holders of a
+    "key_ciphertext" (and of its potential "key_ciphertext_format")."""
+    if isinstance(tree, dict):
+        if "key_ciphertext" in tree:
+            yield tree
+        for value in tree.values():
+            yield from _iter_key_ciphertext_holders(value)
+    elif isinstance(tree, list):
+        for value in tree:
+            yield from _iter_key_ciphertext_holders(value)
+
+
+def check_key_ciphertext_formats(cryptainer: dict, declared_key_ciphertext_format: str):
+    """Check that the key ciphertexts of a cryptainer have the declared format(s), each outermost cipherdict
+    being parsed in the format stated by its sibling field (WA-CBOR ones with load_from_cbor_bytes())."""
+    from wacryptolib.utilities import load_from_cbor_bytes, load_from_json_bytes
+
+    loaders = {"json": load_from_json_bytes, "cbor": load_from_cbor_bytes}
+    key_ciphertext_formats = set()
+    for holder in _iter_key_ciphertext_holders(cryptainer["payload_cipher_layers"]):
+        key_ciphertext_format = holder.get("key_ciphertext_format", "json")
+        key_ciphertext_formats.add(key_ciphertext_format)
+        assert isinstance(loaders[key_ciphertext_format](holder["key_ciphertext"]), dict)
+    expected_formats = {"mixed": {"json", "cbor"}}.get(declared_key_ciphertext_format, {declared_key_ciphertext_format})
+    assert key_ciphertext_formats == expected_formats, (key_ciphertext_formats, declared_key_ciphertext_format)
+
+
 def check_cryptainer_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
     import shutil
 
     from wacryptolib.cryptainer import ReadonlyCryptainerStorage, check_cryptainer_sanity
     from wacryptolib.cryptainer import extract_metadata_from_cryptainer, load_cryptainer_from_filesystem
     from wacryptolib.keystore import FilesystemKeystorePool
+    from wacryptolib.utilities import convert_to_extjson
 
     asset_path = get_asset_path(sidecar_path)
     if "extjson_flavor" in sidecar:  # Only for Extended JSON assets
@@ -806,8 +835,9 @@ def check_cryptainer_fixture(sidecar_path: Path, sidecar: dict, work_dir: Path):
     check_cryptainer_sanity(get_raw_extjson_tree(asset_path, load_document_asset(sidecar_path)), jsonschema_mode=True)
     cryptainer = load_cryptainer_from_filesystem(asset_path)
     check_cryptainer_sanity(cryptainer)
-    if "cryptainer_metadata" in sidecar:
-        assert extract_metadata_from_cryptainer(cryptainer) == sidecar["cryptainer_metadata"]
+    if "cryptainer_metadata" in sidecar:  # Recorded in relaxed Extended JSON form
+        assert convert_to_extjson(extract_metadata_from_cryptainer(cryptainer)) == sidecar["cryptainer_metadata"]
+    check_key_ciphertext_formats(cryptainer, sidecar.get("key_ciphertext_format", "json"))
     expected_signature_count = count_cryptainer_signatures(cryptainer)
 
     pool_sidecar = load_referenced_pool_sidecar(sidecar_path, sidecar["keystore_pool"])

@@ -14,7 +14,8 @@ from schema import Schema, Or, And
 from wacryptolib.cipher import decrypt_bytestring, SUPPORTED_CIPHER_ALGOS
 from wacryptolib.cryptainer import CryptainerBase, CRYPTAINER_TRUSTEE_TYPES, logger, SHARED_SECRET_ALGO_MARKER, get_trustee_id, \
     get_trustee_proxy, _validate_data_tree, _get_cryptainer_inline_ciphertext_value, get_payload_ciphertext_signatures, \
-    ensure_validated_cryptainer, check_key_cipherdict_sanity
+    ensure_validated_cryptainer, check_key_cipherdict_sanity, get_key_ciphertext_format, load_key_structure_bytes, \
+    get_revelation_request_data
 from wacryptolib.cryptainer._validation import KEY_STRUCT_SCHEMA, SHARED_SECRET_SHARD_SCHEMA
 from wacryptolib.exceptions import KeyDoesNotExist, KeyLoadingError, DecryptionError, DecryptionIntegrityError, \
     KeystoreDoesNotExist, SignatureVerificationError, SchemaValidationError
@@ -23,18 +24,21 @@ from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring, SUPPORTE
     SUPPORTED_ASYMMETRIC_KEY_ALGOS, check_symkey_dict_sanity
 from wacryptolib.shared_secret import recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature
-from wacryptolib.utilities import load_from_json_bytes
+from wacryptolib.utilities import DocumentFormat
 from wacryptolib.hash import hash_message
 from wacryptolib.exceptions import AlgorithmNotSupported
 
 
-def _load_untrusted_json_bytes(data: bytes, description: str, sanity_check: Optional[Callable] = None):
-    """Deserialize JSON bytes found during decryption (thus maybe corrupted or forged), raising DecryptionError if
-    they are malformed, or if they fail the sanity_check() callable (which may raise SchemaValidationError)."""
+def _load_untrusted_document_bytes(
+    data: bytes, document_format: str, description: str, sanity_check: Optional[Callable] = None
+):
+    """Deserialize document bytes found during decryption (thus maybe corrupted or forged), strictly in the given
+    format ("json" or "cbor", never inferred from the bytes), raising DecryptionError if they are malformed, or if
+    they fail the sanity_check() callable (which may raise SchemaValidationError)."""
     try:
-        data_tree = load_from_json_bytes(data)
+        data_tree = load_key_structure_bytes(data, key_ciphertext_format=document_format)
     except Exception as exc:  # Not only ValueError/TypeError, e.g. RecursionError for deeply nested data
-        raise DecryptionError("Unparseable %s (%s)" % (description, exc)) from exc
+        raise DecryptionError("Unparseable %s, in format %r (%s)" % (description, document_format, exc)) from exc
     if sanity_check is not None:
         try:
             sanity_check(data_tree)
@@ -47,13 +51,14 @@ def _check_key_struct_sanity(key_struct):
     _validate_data_tree(data_tree=key_struct, validation_schema=KEY_STRUCT_SCHEMA)
 
 
-def _load_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str) -> dict:
+def _load_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str, key_ciphertext_format: str) -> dict:
     """Deserialize and validate the cipherdict of a key cipher layer, raising DecryptionError if it is malformed.
 
     Readable cipherdicts were already validated along with the cryptainer, but inner ones are only revealed by
     decryption, so they may be corrupted or forged."""
-    return _load_untrusted_json_bytes(
+    return _load_untrusted_document_bytes(
         key_ciphertext,
+        document_format=key_ciphertext_format,
         description="%s key cipherdict" % key_cipher_algo,
         sanity_check=lambda key_cipherdict: check_key_cipherdict_sanity(key_cipherdict, key_cipher_algo),
     )
@@ -239,6 +244,10 @@ class CryptainerDecryptor(CryptainerBase):
         return key_struct_bytes
 
     def _unwrap_predecrypted_symkeys(self, successful_symkey_decryptions, operation_report: OperationReport):
+        """Decrypt revelation responses with the local response keys, and return a dict mapping each revelation
+        request data to the list of key struct bytes received for it, in order.
+
+        Key structs are only parsed at lookup time, since their format is the one of the key ciphertext chain."""
         predecrypted_symkey_mapper = {}
 
         for symkey_decryption in successful_symkey_decryptions:
@@ -247,9 +256,11 @@ class CryptainerDecryptor(CryptainerBase):
 
             request_data = symkey_decryption["symkey_decryption_request_data"]
 
-            try:
-                cipherdict = _load_untrusted_json_bytes(
-                    symkey_decryption["symkey_decryption_response_data"], description="remote symkey/shard cipherdict"
+            try:  # Revelation responses are always Extended JSON, like requests
+                cipherdict = _load_untrusted_document_bytes(
+                    symkey_decryption["symkey_decryption_response_data"],
+                    document_format=DocumentFormat.JSON,
+                    description="remote symkey/shard cipherdict",
                 )
             except DecryptionError as exc:
                 operation_report.add_entry(
@@ -268,19 +279,7 @@ class CryptainerDecryptor(CryptainerBase):
             )
 
             if key_struct_bytes:
-                try:  # Checked now, so that only valid key structs end up in the mapper
-                    _load_untrusted_json_bytes(
-                        key_struct_bytes, description="remote key struct", sanity_check=_check_key_struct_sanity
-                    )
-                except DecryptionError as exc:
-                    operation_report.add_entry(
-                        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                        entry_message="Malformed remote key struct (%s)" % cipher_algo,
-                        entry_criticity=DecryptionErrorCriticity.ERROR,
-                        entry_exception=exc,
-                    )
-                else:
-                    predecrypted_symkey_mapper.setdefault(request_data, key_struct_bytes)
+                predecrypted_symkey_mapper.setdefault(request_data, []).append(key_struct_bytes)
 
         return predecrypted_symkey_mapper
 
@@ -481,9 +480,11 @@ class CryptainerDecryptor(CryptainerBase):
         )
 
         key_ciphertext = payload_cipher_layer["key_ciphertext"]  # We start fully encrypted, and unravel it
+        key_ciphertext_format = get_key_ciphertext_format(payload_cipher_layer)
         key_bytes = self._decrypt_key_through_multiple_layers(
             default_keychain_uid=default_keychain_uid,
             key_ciphertext=key_ciphertext,
+            key_ciphertext_format=key_ciphertext_format,
             key_cipher_layers=key_cipher_layers,
             cryptainer_metadata=cryptainer_metadata,
             predecrypted_symkey_mapper=predecrypted_symkey_mapper,
@@ -498,8 +499,9 @@ class CryptainerDecryptor(CryptainerBase):
             ]  # FIXME handle and test if it's None: missing integrity tags due to unfinished container!!
             payload_cipherdict = dict(ciphertext=payload_ciphertext, **payload_macs)
             try:
-                symkey = _load_untrusted_json_bytes(
+                symkey = _load_untrusted_document_bytes(
                     key_bytes,
+                    document_format=key_ciphertext_format,
                     description="%s symkey" % payload_cipher_algo,
                     sanity_check=lambda key_dict: check_symkey_dict_sanity(key_dict, cipher_algo=payload_cipher_algo),
                 )
@@ -544,6 +546,7 @@ class CryptainerDecryptor(CryptainerBase):
         self,
         default_keychain_uid: uuid.UUID,
         key_ciphertext: bytes,
+        key_ciphertext_format: str,
         key_cipher_layers: list,
         cryptainer_metadata: Optional[dict],
         operation_report: OperationReport,
@@ -555,6 +558,7 @@ class CryptainerDecryptor(CryptainerBase):
             key_ciphertext = self._decrypt_key_through_single_layer(
                 default_keychain_uid=default_keychain_uid,
                 key_ciphertext=key_ciphertext,
+                key_ciphertext_format=key_ciphertext_format,
                 key_cipher_layer=key_cipher_layer,
                 cryptainer_metadata=cryptainer_metadata,
                 predecrypted_symkey_mapper=predecrypted_symkey_mapper,
@@ -571,6 +575,7 @@ class CryptainerDecryptor(CryptainerBase):
         self,
         default_keychain_uid: uuid.UUID,
         key_ciphertext: bytes,
+        key_ciphertext_format: str,
         key_cipher_layer: dict,
         cryptainer_metadata: Optional[dict],
         operation_report: OperationReport,
@@ -582,6 +587,7 @@ class CryptainerDecryptor(CryptainerBase):
 
         :param default_keychain_uid: default uuid for the set of encryption keys used
         :param key_ciphertext: encrypted symmetric key
+        :param key_ciphertext_format: format of the structures serialized in this key ciphertext chain
         :param key_cipher_layer: part of the cryptainer related to this key encryption layer
 
         :return: deciphered symmetric key
@@ -594,7 +600,9 @@ class CryptainerDecryptor(CryptainerBase):
         is_symmetric_key_cipher_layer = key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS  # Else asymmetric or shared
 
         try:
-            key_cipherdict = _load_key_cipherdict(key_ciphertext, key_cipher_algo=key_cipher_algo)
+            key_cipherdict = _load_key_cipherdict(
+                key_ciphertext, key_cipher_algo=key_cipher_algo, key_ciphertext_format=key_ciphertext_format
+            )
         except DecryptionError as exc:  # E.g. a forged ciphertext revealed by decryption, only this branch is lost
             operation_report.add_entry(
                 entry_type=(
@@ -631,6 +639,7 @@ class CryptainerDecryptor(CryptainerBase):
                     shard_bytes = self._decrypt_key_through_multiple_layers(
                         default_keychain_uid=default_keychain_uid,
                         key_ciphertext=shard_ciphertext,
+                        key_ciphertext_format=key_ciphertext_format,  # Shard chains belong to the enclosing chain
                         key_cipher_layers=key_shared_secret_shard_conf["key_cipher_layers"],
                         cryptainer_metadata=cryptainer_metadata,
                         predecrypted_symkey_mapper=predecrypted_symkey_mapper,
@@ -638,8 +647,9 @@ class CryptainerDecryptor(CryptainerBase):
                     )  # Recursive structure
                     if shard_bytes is not None:
                         try:  # The tuple (idx, payload) of each shard was serialized to become encryptable
-                            shard = _load_untrusted_json_bytes(
+                            shard = _load_untrusted_document_bytes(
                                 shard_bytes,
+                                document_format=key_ciphertext_format,
                                 description="shared secret shard",
                                 sanity_check=lambda shard: _validate_data_tree(shard, SHARED_SECRET_SHARD_SCHEMA),
                             )
@@ -688,6 +698,7 @@ class CryptainerDecryptor(CryptainerBase):
             assert key_cipher_algo in SUPPORTED_CIPHER_ALGOS, key_cipher_algo  # Not a SIGNATURE algo
 
             sub_symkey_ciphertext = key_cipher_layer["key_ciphertext"]
+            sub_symkey_ciphertext_format = get_key_ciphertext_format(key_cipher_layer)  # This sub-chain has its own
 
             operation_report.add_information(
                 "Decrypting %s symmetric key through %d cipher layer(s)"
@@ -697,6 +708,7 @@ class CryptainerDecryptor(CryptainerBase):
             sub_symkey_bytes = self._decrypt_key_through_multiple_layers(
                 default_keychain_uid=default_keychain_uid,
                 key_ciphertext=sub_symkey_ciphertext,
+                key_ciphertext_format=sub_symkey_ciphertext_format,
                 key_cipher_layers=key_cipher_layer["key_cipher_layers"],
                 cryptainer_metadata=cryptainer_metadata,
                 predecrypted_symkey_mapper=predecrypted_symkey_mapper,
@@ -705,8 +717,9 @@ class CryptainerDecryptor(CryptainerBase):
 
             if sub_symkey_bytes:
                 try:
-                    sub_symkey_dict = _load_untrusted_json_bytes(
+                    sub_symkey_dict = _load_untrusted_document_bytes(
                         sub_symkey_bytes,
+                        document_format=sub_symkey_ciphertext_format,
                         description="%s symkey" % key_cipher_algo,
                         sanity_check=lambda key_dict: check_symkey_dict_sanity(key_dict, cipher_algo=key_cipher_algo),
                     )
@@ -737,7 +750,11 @@ class CryptainerDecryptor(CryptainerBase):
                 % (key_cipher_algo, trustee_label)
             ):
                 predecrypted_symmetric_key = self._get_predecrypted_symkey_or_none(
-                    key_ciphertext, predecrypted_symkey_mapper=predecrypted_symkey_mapper
+                    key_ciphertext,
+                    key_ciphertext_format=key_ciphertext_format,
+                    key_cipher_algo=key_cipher_algo,
+                    predecrypted_symkey_mapper=predecrypted_symkey_mapper,
+                    operation_report=operation_report,
                 )
                 if predecrypted_symmetric_key:
                     operation_report.add_information(
@@ -755,21 +772,46 @@ class CryptainerDecryptor(CryptainerBase):
                         trustee=trustee,
                         cryptainer_metadata=cryptainer_metadata,
                         operation_report=operation_report,
+                        key_ciphertext_format=key_ciphertext_format,
                     )
 
         return key_bytes
 
     @staticmethod
-    def _get_predecrypted_symkey_or_none(key_ciphertext, predecrypted_symkey_mapper: Optional[dict]) -> Optional[bytes]:
-        predecrypted_symkey = None
+    def _get_predecrypted_symkey_or_none(
+        key_ciphertext: bytes,
+        key_ciphertext_format: str,
+        key_cipher_algo: str,
+        predecrypted_symkey_mapper: Optional[dict],
+        operation_report: OperationReport,
+    ) -> Optional[bytes]:
+        """Return the key bytes of the first remotely decrypted key struct which matches this asymmetric layer, and
+        which is valid in the format of its key ciphertext chain, or None."""
+        if not predecrypted_symkey_mapper:
+            return None
 
-        if predecrypted_symkey_mapper and (key_ciphertext in predecrypted_symkey_mapper):
-            predecrypted_symkey_json = predecrypted_symkey_mapper[key_ciphertext]
-            ##print(">>> predecrypted_symkey_json", repr(predecrypted_symkey_json))
-            predecrypted_symkey_struct = load_from_json_bytes(predecrypted_symkey_json)
-            predecrypted_symkey = predecrypted_symkey_struct["key_bytes"]
+        # Same request data as sent by gather_decryptable_symkeys(), i.e. Extended JSON whatever the format
+        request_data = get_revelation_request_data(key_ciphertext, key_ciphertext_format=key_ciphertext_format)
 
-        return predecrypted_symkey
+        for key_struct_bytes in predecrypted_symkey_mapper.get(request_data, ()):
+            try:
+                key_struct = _load_untrusted_document_bytes(
+                    key_struct_bytes,
+                    document_format=key_ciphertext_format,
+                    description="remote key struct",
+                    sanity_check=_check_key_struct_sanity,
+                )
+            except DecryptionError as exc:
+                operation_report.add_entry(
+                    entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                    entry_message="Malformed remote key struct (%s)" % key_cipher_algo,
+                    entry_criticity=DecryptionErrorCriticity.ERROR,
+                    entry_exception=exc,
+                )
+                continue
+            return key_struct["key_bytes"]
+
+        return None
 
     @staticmethod
     def _build_operation_report_entry_______(  # FIXME REMOVE THIS
@@ -814,6 +856,7 @@ class CryptainerDecryptor(CryptainerBase):
         trustee: dict,
         cryptainer_metadata: Optional[dict],
         operation_report: OperationReport,
+        key_ciphertext_format: str,
     ) -> Optional[bytes]:
         """
         Decrypt given cipherdict with an asymmetric algorithm.
@@ -822,6 +865,7 @@ class CryptainerDecryptor(CryptainerBase):
         :param keychain_uid: final uuid for the set of encryption keys used
         :param cipherdict: dictionary with payload components needed to decrypt the ciphered payload
         :param trustee: trustee used for encryption (findable in configuration tree)
+        :param key_ciphertext_format: format of the key struct, the one of the key ciphertext chain
 
         :return: decypted payload as bytes
         """
@@ -861,8 +905,11 @@ class CryptainerDecryptor(CryptainerBase):
                     passphrases=passphrases,
                     cryptainer_metadata=cryptainer_metadata,
                 )
-                key_struct = _load_untrusted_json_bytes(
-                    key_struct_bytes, description="key struct", sanity_check=_check_key_struct_sanity
+                key_struct = _load_untrusted_document_bytes(
+                    key_struct_bytes,
+                    document_format=key_ciphertext_format,
+                    description="key struct",
+                    sanity_check=_check_key_struct_sanity,
                 )
                 key_bytes = key_struct["key_bytes"]
                 assert isinstance(key_bytes, bytes), type(key_bytes)

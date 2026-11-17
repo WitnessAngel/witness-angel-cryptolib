@@ -1620,6 +1620,69 @@ def test_cli_encrypt_with_file_format(tmp_path):
         assert not any(name.startswith("other") for name in _list_filenames(cryptainer_storage))
 
 
+def _get_key_ciphertext_formats(cryptainer_path):
+    cryptainer = load_from_document_file(cryptainer_path)
+    return [layer.get("key_ciphertext_format", "json") for layer in cryptainer["payload_cipher_layers"]]
+
+
+def test_cli_encrypt_with_key_ciphertext_format(tmp_path):
+    base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
+    runner = _get_cli_runner()
+
+    result = runner.invoke(cli, ["encrypt", "--help"], catch_exceptions=False)
+    assert "--key-ciphertext-format" in result.stdout
+
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        pathlib.Path("video.mp4").write_bytes(b"some video content")
+
+        def _encrypt(*args):
+            result = runner.invoke(cli, base_args + ["encrypt", "video.mp4"] + list(args), catch_exceptions=False)
+            assert result.exit_code == 0, result.stderr
+
+        def _check_decryption(cryptainer_name):
+            result = runner.invoke(
+                cli, base_args + ["cryptainer", "decrypt", cryptainer_name, "-o", "-"], catch_exceptions=False
+            )
+            assert result.exit_code == 0, result.stderr
+            assert result.stdout_bytes.endswith(b"some video content")
+
+        # Key ciphertext format follows the file format by default
+        _encrypt()
+        assert _get_key_ciphertext_formats(cryptainer_storage / "video.mp4.crypt.json") == ["json"]
+        assert "key_ciphertext_format" not in (cryptainer_storage / "video.mp4.crypt.json").read_text()
+        _encrypt("--format", "cbor")
+        assert _get_document_file_format(cryptainer_storage / "video.mp4.crypt.cbor") == DocumentFormat.CBOR
+        assert set(_get_key_ciphertext_formats(cryptainer_storage / "video.mp4.crypt.cbor")) == {"cbor"}
+
+        # Explicit key ciphertext formats, independent of the file format
+        _encrypt("-o", "mixed1", "--key-ciphertext-format", "cbor")
+        assert _get_document_file_format(cryptainer_storage / "mixed1.crypt.json") == DocumentFormat.JSON
+        assert set(_get_key_ciphertext_formats(cryptainer_storage / "mixed1.crypt.json")) == {"cbor"}
+        _encrypt("-o", "mixed2", "--format", "cbor", "--key-ciphertext-format", "JSON")
+        assert set(_get_key_ciphertext_formats(cryptainer_storage / "mixed2.crypt.cbor")) == {"json"}
+        for cryptainer_name in ("video.mp4.crypt.json", "video.mp4.crypt.cbor", "mixed1.crypt.json", "mixed2.crypt.cbor"):
+            _check_decryption(cryptainer_name)
+
+        # Conversion keeps key ciphertexts as they are
+        result = _invoke_convert_format(
+            runner, [str(cryptainer_storage / "video.mp4.crypt.cbor"), "-o", str(cryptainer_storage / "converted.crypt.json")],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.stderr
+        source_cryptainer = load_from_document_file(cryptainer_storage / "video.mp4.crypt.cbor")
+        converted_cryptainer = load_from_document_file(cryptainer_storage / "converted.crypt.json")
+        assert _get_document_file_format(cryptainer_storage / "converted.crypt.json") == DocumentFormat.JSON
+        assert converted_cryptainer["payload_cipher_layers"] == source_cryptainer["payload_cipher_layers"]
+        assert set(_get_key_ciphertext_formats(cryptainer_storage / "converted.crypt.json")) == {"cbor"}
+        _check_decryption("converted.crypt.json")
+
+        # Unknown key ciphertext format
+        result = runner.invoke(cli, base_args + ["encrypt", "video.mp4", "-o", "other", "--key-ciphertext-format", "yaml"])
+        assert result.exit_code == 2, result.stderr
+        assert "Invalid value for '--key-ciphertext-format'" in result.stderr
+        assert not any(name.startswith("other") for name in _list_filenames(cryptainer_storage))
+
+
 def test_cli_encrypt_overwrite_checks_per_file_format(tmp_path):
     base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
     runner = _get_cli_runner()

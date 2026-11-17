@@ -22,7 +22,7 @@ Sources of truth (in this repository):
 | Cipher primitives | `src/wacryptolib/cipher.py`, `src/wacryptolib/keygen.py`, `src/wacryptolib/_crypto_backend/pycryptodome.py` |
 | Shamir shared secret | `src/wacryptolib/utilities/data_utils.py`, `reimplementations/micropython/src/cryptainer/pycryptodome_secret_sharing.py` |
 | Extended JSON | `extjson` package (vendored as `reimplementations/micropython/lib/extjson.py`) |
-| WA-CBOR (binary document format of cryptainer files) | `docs/specifications/wa_cbor_document_format.md` (normative), `src/wacryptolib/utilities/wacbor.py` |
+| WA-CBOR (binary document format of cryptainer files and key ciphertexts) | `docs/specifications/wa_cbor_document_format.md` (normative), `src/wacryptolib/utilities/wacbor.py` |
 | Cryptoconf / cryptainer schemas | `src/wacryptolib/cryptainer/_validation.py` |
 | MicroPython platform utilities | `reimplementations/micropython/src/cryptainer/flightbox_utilities_implementation.py`, `reimplementations/micropython/src/cryptainer/fallback_adapter.py` |
 | Pure-Python HPKE X25519 seal | `src/wacryptolib/_crypto_backend/fallback/hpke_x25519_seal.py` (vendored in `reimplementations/micropython/lib/`) |
@@ -43,7 +43,7 @@ The key words MUST, SHOULD and MAY are used in the RFC 2119 sense.
 | **keychain_uid** | UUID selecting one keypair set inside a trustee's keystore. A trustee holds at most one keypair per `(keychain_uid, key_algo)`. |
 | **symkey** | Dict of random secrets for a symmetric cipher, e.g. `{"key": <32 bytes>, "iv": <16 bytes>}`. |
 | **cipherdict** | Dict returned by a cipher, e.g. `{"ciphertext": ...}` or `{"ciphertext_chunks": [...]}`. |
-| **key_ciphertext** | Bytes: the Extended-JSON serialization of the *outermost* cipherdict of a chain of key cipher layers. |
+| **key_ciphertext** | Bytes: the serialization, in Extended JSON or WA-CBOR as stated by the sibling `key_ciphertext_format` field (§2), of the *outermost* cipherdict of a chain of key cipher layers. |
 | **secrets** | Sensitive, in-memory-only extract (symkeys + hash algo lists) used to encrypt the payload. MUST never be persisted. |
 
 ### 1.2 Encryption workflow
@@ -76,7 +76,7 @@ The key words MUST, SHOULD and MAY are used in the RFC 2119 sense.
    │   by trustees, state FINISHED                              │
    └─────────────────────────────┬─────────────────────────────┘
                                  ▼
-               cryptainer (JSON) + ciphertext (inline or offloaded, §9)
+               cryptainer (JSON or CBOR) + ciphertext (inline or offloaded, §9)
 ```
 
 Step 1 is the portable "flightbox" algorithm proper (`FlightBox` class). It is purposely
@@ -89,8 +89,9 @@ written with **dependency injection** only: every platform-specific operation go
 ## 2. Extended JSON serialization (`dump_to_json_bytes`)
 
 Every intermediate structure that gets encrypted (symkeys, key structs, cipherdicts, shards),
-as well as the final cryptainer file, is serialized with the **Extended JSON** dialect of the
-`extjson` package (MongoDB Extended JSON, *relaxed* mode), then UTF-8 encoded.
+as well as the final cryptainer file, is serialized by default with the **Extended JSON** dialect
+of the `extjson` package (MongoDB Extended JSON, *relaxed* mode), then UTF-8 encoded. Both may
+instead use WA-CBOR, independently of each other (see the end of this section).
 
 Encoding rules (encoder side, `canonical=False`):
 
@@ -123,11 +124,26 @@ for UUIDs...), but an encoder MUST stick to the relaxed forms above for maximum 
 
 Below, `J(x)` denotes `dump_to_json_bytes(x)`.
 
-The final cryptainer file MAY instead be serialized in **WA-CBOR**, the deterministic CBOR dialect
-specified in `docs/specifications/wa_cbor_document_format.md`, which carries exactly the same
-document trees as relaxed Extended JSON (§9.1). This only concerns the document file: the
-intermediate structures that get encrypted are always serialized with `J()`, whatever the format
-of the cryptainer file.
+**WA-CBOR** is the deterministic CBOR dialect specified in
+`docs/specifications/wa_cbor_document_format.md`, which carries exactly the same document trees
+as relaxed Extended JSON. `C(x)` denotes its serialization `dump_to_cbor_bytes(x)`, whose output
+is byte-exact (unlike `J()`).
+
+Two formats are chosen independently:
+
+- the **cryptainer file format**: the final cryptainer file is written with `J()` or `C()` (§9.1);
+- the **key ciphertext format** `F`, `"json"` (default) or `"cbor"`: the intermediate structures
+  that get encrypted (symkeys, shards, key structs, and the cipherdicts serialized between key
+  cipher layers) are serialized with `S_F`, where `S_json = J` and `S_cbor = C`.
+
+`F` is stated by a `key_ciphertext_format` field next to each `key_ciphertext` of the cryptainer,
+written only when `F` is `"cbor"` (an absent field means `"json"`, so JSON-mode cryptainers keep the
+exact form of earlier releases). `F` governs the whole chain that produces that `key_ciphertext`,
+shard chains included, but not the chain of a nested symmetric key layer, whose own
+`key_ciphertext` has its own field (§6.4). Readers MUST take `F` from that field, never guess it
+from the bytes. An encryptor SHOULD use one `F` for a whole cryptainer, `"cbor"` giving smaller key
+ciphertexts (e.g. fewer RSA-OAEP chunks); constrained devices MAY implement only one of
+the two serializations.
 
 ---
 
@@ -166,8 +182,8 @@ random bits; the time prefix SHOULD be kept for consistency.
 Keys MUST be 32 bytes (the decryptor rejects keys shorter than 32 bytes). Each symkey is used
 for exactly one encryption, so the fixed IV/nonce stored next to the key is safe.
 
-The symkey is serialized as `J(symkey)`, e.g.
-`{"iv": {"$binary": {...}}, "key": {"$binary": {...}}}`, and **these JSON bytes** are what gets
+The symkey is serialized as `S_F(symkey)` (§2), e.g. with `F = json`
+`{"iv": {"$binary": {...}}, "key": {"$binary": {...}}}`, and **these bytes** are what gets
 encrypted by key cipher layers.
 
 ### 3.4 Symmetric ciphers
@@ -255,8 +271,9 @@ for i in 1..n:
 - Share i = p(i), where the index i is encoded as the field element with integer value i;
   output as 16 big-endian bytes.
 
-Each shard tuple is then serialized as `J((i, shard_bytes))`, i.e. a JSON **array**
-`[i, {"$binary": {...}}]`, which is what the decryptor expects (a 2-item list: int, bytes).
+Each shard tuple is then serialized as `S_F((i, shard_bytes))`, i.e. an **array**, e.g. with
+`F = json` `[i, {"$binary": {...}}]`, which is what the decryptor expects (a 2-item list: int,
+bytes).
 
 Note: with k = 1, every shard equals the padded secret; this is intended (any single trustee
 can then reveal the key).
@@ -376,11 +393,13 @@ or raw X25519 bytes in the MicroPython demo).
 ### 6.1 Entry point
 
 ```
-function generate_cryptainer_base_and_secrets(cryptoconf, cryptainer_metadata = null)
+function generate_cryptainer_base_and_secrets(cryptoconf, cryptainer_metadata = null,
+                                              F = "json")
         -> (cryptainer, secrets)
 ```
 
 ```
+ 0. if F not in ("json", "cbor"): error                            # before any key generation
  1. assert cryptainer_metadata is null or a dict
  2. cryptainer_uid        = generate_uuid0()                       # ALWAYS fresh
  3. default_keychain_uid  = cryptoconf["keychain_uid"] if present and truthy
@@ -398,10 +417,12 @@ function generate_cryptainer_base_and_secrets(cryptoconf, cryptainer_metadata = 
                 layer["payload_ciphertext_signatures"] = legacy
         layer["payload_macs"] = null                               # filled at step 3
         symkey      = generate_symkey(algo)
-        key_bytes   = J(symkey)
+        key_bytes   = S_F(symkey)
         layer["key_ciphertext"] = encrypt_key_through_multiple_layers(
                                       default_keychain_uid, key_bytes,
-                                      layer["key_cipher_layers"], cryptainer_metadata)
+                                      layer["key_cipher_layers"], cryptainer_metadata, F)
+        if F != "json":
+            layer["key_ciphertext_format"] = F                     # absent means "json"
         payload_cipher_layer_extracts.append({
             "cipher_algo": algo,
             "symkey":      symkey,
@@ -429,26 +450,27 @@ The input cryptoconf is never mutated. The CPython caller additionally deep-copi
 
 ```
 function encrypt_key_through_multiple_layers(default_keychain_uid, key_bytes,
-                                             key_cipher_layers, cryptainer_metadata) -> bytes
+                                             key_cipher_layers, cryptainer_metadata, F) -> bytes
     if key_cipher_layers is empty: validation error
     initial = key_bytes
     for key_cipher_layer in key_cipher_layers:                     # in order
         key_cipherdict = encrypt_key_through_single_layer(
-                             default_keychain_uid, key_bytes, key_cipher_layer, cryptainer_metadata)
-        key_bytes = J(key_cipherdict)                              # stays bytes all along
+                             default_keychain_uid, key_bytes, key_cipher_layer,
+                             cryptainer_metadata, F)
+        key_bytes = S_F(key_cipherdict)                            # stays bytes all along
     assert key_bytes != initial                                    # safety net
     return key_bytes                                               # = key_ciphertext
 ```
 
-So the *k*-th layer encrypts the JSON serialization of the (*k*-1)-th layer's cipherdict, and
-the result is the JSON serialization of the **last** layer's cipherdict. The decryptor walks
-the list in reverse order.
+So the *k*-th layer encrypts the serialization of the (*k*-1)-th layer's cipherdict, and
+the result is the serialization of the **last** layer's cipherdict, both in format `F`. The
+decryptor walks the list in reverse order.
 
 ### 6.3 Single key cipher layer
 
 ```
 function encrypt_key_through_single_layer(default_keychain_uid, key_bytes,
-                                          key_cipher_layer, cryptainer_metadata) -> dict
+                                          key_cipher_layer, cryptainer_metadata, F) -> dict
     algo = key_cipher_layer["key_cipher_algo"]
 
     if algo == "[SHARED_SECRET]":                                  # §6.4
@@ -459,33 +481,35 @@ function encrypt_key_through_single_layer(default_keychain_uid, key_bytes,
         shards = split_secret_into_shards(key_bytes, shard_count=n, threshold_count=k)
         shard_ciphertexts = []
         for (shard, shard_conf) in zip(shards, shard_confs):      # shard i -> i-th shard conf
-            shard_bytes = J(shard)                                 # "[i, {"$binary": ...}]"
+            shard_bytes = S_F(shard)                               # J: "[i, {"$binary": ...}]"
             shard_ciphertexts.append(
                 encrypt_key_through_multiple_layers(default_keychain_uid, shard_bytes,
                                                     shard_conf["key_cipher_layers"],
-                                                    cryptainer_metadata))     # recursion
+                                                    cryptainer_metadata, F))  # recursion, same F
         return {"shard_ciphertexts": shard_ciphertexts}
 
     elif algo is a symmetric cipher algo:                          # §6.4
         sub_symkey = generate_symkey(algo)
         key_cipher_layer["key_ciphertext"] = encrypt_key_through_multiple_layers(
-                default_keychain_uid, J(sub_symkey),
-                key_cipher_layer["key_cipher_layers"], cryptainer_metadata)   # recursion, STORED IN PLACE
+                default_keychain_uid, S_F(sub_symkey),
+                key_cipher_layer["key_cipher_layers"], cryptainer_metadata, F)  # recursion, STORED IN PLACE
+        if F != "json":
+            key_cipher_layer["key_ciphertext_format"] = F          # this sub-chain's own field
         return encrypt_bytestring(key_bytes, cipher_algo=algo, key_dict=sub_symkey)   # one-shot cipherdict
 
     else:                                                          # asymmetric algo
         keychain_uid = key_cipher_layer.get("keychain_uid") or default_keychain_uid
         return encrypt_key_with_asymmetric_cipher(algo, keychain_uid, key_bytes,
                                                   key_cipher_layer["key_cipher_trustee"],
-                                                  cryptainer_metadata)
+                                                  cryptainer_metadata, F)
 ```
 
 An unknown `key_cipher_algo` is an error (assertion in the Python code).
 
 ### 6.4 Notes on shared secrets and symmetric sub-keys
 
-- **Shared secret**: the *current* key bytes (the symkey JSON, or an already-wrapped
-  cipherdict JSON if the shared secret is not the first layer) are split into n shards; each
+- **Shared secret**: the *current* key bytes (the serialized symkey, or an already-wrapped
+  serialized cipherdict if the shared secret is not the first layer) are split into n shards; each
   shard goes through its own chain of key cipher layers, typically one trustee per shard. The
   resulting cipherdict `{"shard_ciphertexts": [...]}` keeps the order of
   `key_shared_secret_shards`. Shard *i* (index i, 1-based) MUST be encrypted with the *i*-th
@@ -493,9 +517,12 @@ An unknown `key_cipher_algo` is an error (assertion in the Python code).
 - **Symmetric layer**: a fresh sub-symkey encrypts the current key bytes (one-shot cipherdict,
   integrity tag included for AEAD algos, returned up the chain), while the sub-symkey itself is
   protected by the nested `key_cipher_layers`, and its resulting ciphertext is **written into
-  the symmetric layer dict itself** (`key_cipher_layer["key_ciphertext"]`). This is the only
-  place, besides payload cipher layers, where the core mutates key cipher layers of the
-  cryptainer.
+  the symmetric layer dict itself** (`key_cipher_layer["key_ciphertext"]`), along with its
+  `key_ciphertext_format` field when `F` is `"cbor"`. This is the only place, besides payload
+  cipher layers, where the core mutates key cipher layers of the cryptainer. The format of this
+  sub-chain is read from the symmetric layer's own field, whereas the one-shot cipherdict
+  returned up the chain belongs to the enclosing chain; with a single `F` per cryptainer, both
+  are equal, but readers MUST honor each field separately.
 - Asymmetric layers do not get any extra field: their output only travels up the chain. In
   particular the resolved `keychain_uid` is NOT written into the layer (the decryptor
   re-resolves it the same way: layer's own value, else the cryptainer's `keychain_uid`).
@@ -504,16 +531,19 @@ An unknown `key_cipher_algo` is an error (assertion in the Python code).
 
 ```
 function encrypt_key_with_asymmetric_cipher(cipher_algo, keychain_uid, key_bytes,
-                                            trustee, cryptainer_metadata) -> dict
+                                            trustee, cryptainer_metadata, F) -> dict
     public_key = get_public_key(trustee, key_algo=cipher_algo, keychain_uid=keychain_uid)
     key_struct = {"key_bytes": key_bytes, "cryptainer_metadata": cryptainer_metadata}
-    return encrypt_bytestring(J(key_struct), cipher_algo=cipher_algo, key_dict={"key": public_key})
+    return encrypt_bytestring(S_F(key_struct), cipher_algo=cipher_algo, key_dict={"key": public_key})
 ```
+
+With `F = cbor`, metadata that WA-CBOR can't encode (e.g. nested deeper than its limit) makes
+encryption fail before anything is written.
 
 The key struct embeds the (unencrypted) cryptainer metadata inside every asymmetric
 encryption, so that a trustee can see what it is asked to decrypt. Its exact format is
 mandatory (`KEY_STRUCT_SCHEMA`): a dict with `key_bytes` (bytes) and `cryptainer_metadata`
-(dict or null), e.g. (sorted keys):
+(dict or null), e.g. with `F = json` (sorted keys):
 
 ```json
 {"cryptainer_metadata": {"SOME_METADATA": 2726562425242}, "key_bytes": {"$binary": {"base64": "eyJpdiI6...", "subType": "00"}}}
@@ -521,6 +551,11 @@ mandatory (`KEY_STRUCT_SCHEMA`): a dict with `key_bytes` (bytes) and `cryptainer
 
 Since metadata is repeated in each key struct, large metadata increases the number of
 RSA-OAEP chunks accordingly.
+
+When a trustee is asked remotely to decrypt the key struct (revelation requests), the request
+data is always the **Extended JSON** serialization of the asymmetric cipherdict: `F = json`
+key ciphertexts are sent as they are, and `F = cbor` ones are transcoded with `J(parse_C(...))`,
+which is lossless. The decrypted key struct returned by the trustee is then parsed in format `F`.
 
 ### 6.6 Deep copy without aliasing
 
@@ -547,7 +582,8 @@ payload_cipher_layers: [
     payload_ciphertext_signatures: [] } ]
 ```
 
-the payload layer's `key_ciphertext` is:
+the payload layer's `key_ciphertext` is, with `F = json` (with `F = cbor`, every `J` below
+becomes `C`, and the payload layer gets `key_ciphertext_format: "cbor"`):
 
 ```
 J({"shard_ciphertexts": [
@@ -703,9 +739,11 @@ A finished cryptainer contains everything from the (normalized) cryptoconf plus:
 | root | `cryptainer_metadata` | the metadata dict, or null |
 | root | `payload_ciphertext_struct` | inline or offloaded struct (§9.2) |
 | payload layer | `key_ciphertext` | bytes (§6.2) |
+| payload layer | `key_ciphertext_format` | `"cbor"`, only for WA-CBOR key ciphertexts (absent means `"json"`, §2) |
 | payload layer | `payload_macs` | `{}` or `{"tag": bytes}` |
 | payload layer | `payload_ciphertext_signatures` | legacy `payload_signatures` renamed |
 | symmetric key layer | `key_ciphertext` | bytes: the protected sub-symkey (§6.4) |
+| symmetric key layer | `key_ciphertext_format` | `"cbor"`, only for WA-CBOR key ciphertexts (absent means `"json"`, §2) |
 | each signature conf | `payload_digest_value` | bytes |
 | each signature conf | `payload_signature_struct` | `{"signature_value": bytes, "signature_timestamp_utc": int}`, if signed |
 
@@ -715,7 +753,10 @@ WA-CBOR (`docs/specifications/wa_cbor_document_format.md`). Writers SHOULD name 
 suffixes in lowercase. The legacy `<something>.crypt` suffix of earlier releases (always Extended
 JSON) SHOULD NOT be used for new files. Readers MUST recognize all three suffixes, `.crypt.json`,
 `.crypt.cbor` and `.crypt`, in any letter case (rule 14 of §11.1), and SHOULD check that the
-content matches the format given by the suffix.
+content matches the format given by the suffix. The file format says nothing about the key
+ciphertext format: e.g. a `.crypt.json` file may hold `"cbor"` key ciphertexts, and converting a
+cryptainer between file formats leaves its key ciphertexts and their `key_ciphertext_format`
+fields unchanged. `key_ciphertext_format` is not allowed in cryptoconfs.
 
 ### 9.2 Payload ciphertext location
 
@@ -778,7 +819,8 @@ The core (`FlightBox`) only calls these members of its `FlightboxUtilities` obje
 | `SUPPORTED_SYMMETRIC_CIPHER_ALGOS` | Algo names routed to the "symmetric layer" branch (CPython: `AES_CBC`, `AES_EAX`, `CHACHA20_POLY1305`). |
 | `SUPPORTED_ASYMMETRIC_CIPHER_ALGOS` | Algo names allowed in the asymmetric branch (CPython: `ECIES_X25519`, `ML_KEM_768`, `RSA_OAEP`). |
 | `raise_validation_error(msg)` | MUST raise (never return). |
-| `dump_to_json_bytes(data)` | §2. |
+| `dump_to_json_bytes(data)` | §2 (`J`). |
+| `dump_to_cbor_bytes(data)` | §2 (`C`), needed only for `F = cbor`. |
 | `generate_uuid0()` | §3.2. |
 | `split_secret_into_shards(secret, shard_count, threshold_count)` | §3.7, returns list of `(index, bytes)`. |
 | `generate_symkey(cipher_algo)` | §3.3. |
@@ -798,6 +840,7 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
 - trustees: `authenticator` only, public keys provided as an in-memory dict
   `{keystore_uid: {keychain_uid: {"n": int, "e": int, "x25519": bytes(32)}}}`;
 - validation errors raised as `RuntimeError`; no upfront schema validation;
+- key ciphertexts in Extended JSON only (`F = json`, no `dump_to_cbor_bytes`);
 - Shamir via a vendored copy of pycryptodome's pure-Python `Shamir`;
 - no payload encryption, digests, signatures nor file output yet (steps 2 and 3).
 
@@ -808,14 +851,15 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
 ### 11.1 General rules
 
 1. Payload layers and key layers are applied **in list order**; the decryptor reverses them.
-2. What gets encrypted by key layers is always **JSON bytes** (`J(symkey)`, `J(key_struct)`,
-   `J(cipherdict)`, `J([index, shard])`), never raw key material.
+2. What gets encrypted by key layers is always **serialized bytes** in the key ciphertext format
+   `F` (`S_F(symkey)`, `S_F(key_struct)`, `S_F(cipherdict)`, `S_F([index, shard])`, §2), never raw
+   key material.
 3. Every asymmetric encryption wraps the current bytes in
    `{"key_bytes": ..., "cryptainer_metadata": ...}`; symmetric layers and shared secrets do not.
 4. RSA-OAEP uses SHA-512 for both OAEP hash and MGF1, empty label, 60-byte plaintext chunks.
 5. Shamir works on the PKCS#7-padded secret, chunk by chunk, with independent random
    coefficients per chunk, over GF(2^128) with big-endian, LSB-is-constant encoding; shard
-   indices start at 1; shards are serialized as 2-item JSON arrays.
+   indices start at 1; shards are serialized as 2-item arrays, in format `F`.
 6. A symmetric key layer stores the protected sub-key in **its own** `key_ciphertext` field.
 7. `keychain_uid` resolution: layer/signature-conf value if present and non-empty, else the
    cryptainer's root `keychain_uid` (which is generated if the cryptoconf has none, and is
@@ -851,6 +895,14 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
     the name untouched (e.g. the output basename `Clip.CRYPT` gives `Clip.crypt.json`, and the
     output file `OTHER.CBOR` is written as `OTHER.cbor`). Library functions given an explicit path
     keep writing to that exact path.
+15. `key_ciphertext_format` is written next to a `key_ciphertext` only when `F` is `"cbor"`; with
+    `F = json`, the cryptainer has no such field at all. An unknown `F` is rejected before any key
+    generation.
+16. Readers MUST take the key ciphertext format from the `key_ciphertext_format` field of the
+    payload layer or symmetric key layer governing the chain (shards inheriting it), and MUST
+    NEVER guess it by sniffing bytes; Extended JSON bytes in a `"cbor"` chain, or the reverse, are
+    an error.
+17. Revelation request data sent to remote trustees is always Extended JSON (§6.5), whatever `F`.
 
 ### 11.2 Key and parameter constraints per algorithm
 

@@ -9,7 +9,8 @@ import uuid
 
 from wacryptolib.cryptainer import CryptainerBase, SIGNATURE_POLICIES, PAYLOAD_CIPHERTEXT_LOCATIONS, logger, \
     CRYPTAINER_STATES, get_trustee_proxy, \
-    _inject_payload_digests_and_signatures, FlightboxUtilitiesBase, FlightBox, ensure_validated_cryptoconf, ValidatedCryptainer
+    _inject_payload_digests_and_signatures, FlightboxUtilitiesBase, FlightBox, ensure_validated_cryptoconf, ValidatedCryptainer, \
+    KEY_CIPHERTEXT_FORMAT_JSON, KEY_CIPHERTEXT_FORMATS
 
 from wacryptolib.cipher import (
     encrypt_bytestring,
@@ -28,6 +29,7 @@ from wacryptolib.keygen import (
 from wacryptolib.keystore import KeystorePoolBase
 from wacryptolib.shared_secret import split_secret_into_shards
 from wacryptolib.utilities import (
+    dump_to_cbor_bytes,
     dump_to_json_bytes,
     generate_uuid0,
 )
@@ -54,6 +56,9 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
 
     def dump_to_json_bytes(self, data):
         return dump_to_json_bytes(data)
+
+    def dump_to_cbor_bytes(self, data):
+        return dump_to_cbor_bytes(data)
 
     def generate_uuid0(self) -> uuid.UUID:
         return generate_uuid0()
@@ -86,14 +91,20 @@ class CryptainerEncryptor(CryptainerBase):
     THIS CLASS IS PRIVATE API
 
     Contains every method used to write and encrypt a cryptainer, IN MEMORY.
+
+    :param key_ciphertext_format: document format ("json" or "cbor") of the structures serialized then encrypted
+        into the key ciphertexts of produced cryptainers
     """
 
-    def __init__(self, signature_policy, **kwargs):
+    def __init__(self, signature_policy, key_ciphertext_format: str = KEY_CIPHERTEXT_FORMAT_JSON, **kwargs):
         super().__init__(**kwargs)
         if signature_policy is None:
             signature_policy = SIGNATURE_POLICIES.ATTEMPT_SIGNING  # Sensible default
         assert getattr(SIGNATURE_POLICIES, signature_policy), signature_policy
         self._signature_policy = signature_policy
+        if key_ciphertext_format not in KEY_CIPHERTEXT_FORMATS:  # Not an assert (python -O)
+            raise ValueError("Unknown key ciphertext format %r" % (key_ciphertext_format,))
+        self._key_ciphertext_format = key_ciphertext_format
 
         _flightbox_utilities = FlightboxUtilitiesImpl(logger=logger, keystore_pool=self._keystore_pool)
         self._flightbox = FlightBox(_flightbox_utilities)
@@ -237,7 +248,9 @@ class CryptainerEncryptor(CryptainerBase):
         cryptainer_metadata = copy.deepcopy(cryptainer_metadata)  # The validated cryptainer must not alias caller data
 
         cryptainer, secrets = self._flightbox.generate_cryptainer_base_and_secrets(
-            cryptoconf=cryptoconf, cryptainer_metadata=cryptainer_metadata
+            cryptoconf=cryptoconf,
+            cryptainer_metadata=cryptainer_metadata,
+            key_ciphertext_format=self._key_ciphertext_format,
         )
         return cryptainer, secrets
 

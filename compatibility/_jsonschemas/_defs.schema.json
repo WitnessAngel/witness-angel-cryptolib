@@ -78,7 +78,7 @@
       "type": "object",
       "properties": {
         "method": {
-          "description": "genuine: produced as-is by the named library version; synthesized: a current output down-converted to legacy forms; migrated: moved from a former fixture location",
+          "description": "genuine: produced as-is by the named library version; synthesized: a current output down-converted to legacy forms, or altered into forms that the library does not write; migrated: moved from a former fixture location",
           "enum": ["genuine", "synthesized", "migrated"]
         },
         "library_version": {"type": "string", "minLength": 1},
@@ -87,7 +87,7 @@
         "crypto_backend": {"enum": ["pycryptodome", "fallback"]},
         "produced_on": {"$ref": "#/$defs/date"},
         "legacy_forms": {
-          "description": "Legacy wire forms present in the asset (mandatory for synthesized fixtures)",
+          "description": "Legacy or unwritten wire forms present in the asset (mandatory for synthesized fixtures)",
           "type": "array",
           "items": {
             "enum": [
@@ -95,7 +95,8 @@
               "rsa_oaep_digest_list_field",
               "canonical_extjson",
               "legacy_keystore_metadata_filename",
-              "des3_protected_private_key"
+              "des3_protected_private_key",
+              "mixed_key_ciphertext_formats"
             ]
           },
           "uniqueItems": true

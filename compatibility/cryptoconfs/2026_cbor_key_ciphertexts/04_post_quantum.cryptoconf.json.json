@@ -1,0 +1,32 @@
+{
+  "$schema": "../../_jsonschemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2026_cbor_key_ciphertexts",
+  "description": "AES_EAX payload layer whose key is wrapped by a local ML_KEM_768 key, then by a local ECIES_X25519 key (Extended JSON asset of an Extended JSON / WA-CBOR pair)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "6b57dfe5ee08451939b7ea8cbabcc5926ce78ff6",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-17"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_EAX",
+      "ECIES_X25519",
+      "ML_KEM_768"
+    ],
+    "pem_protections": []
+  },
+  "expected_valid": true,
+  "sophistication_level": 3,
+  "keystore_pool": "../../keystores/2026_cbor_key_ciphertexts/cbor_key_ciphertexts_pool",
+  "passphrase_mapper": {},
+  "min_library_version": "0.12",
+  "document_format": "json",
+  "equivalent_asset": "04_post_quantum.cryptoconf.cbor",
+  "asset_sha256": {
+    "04_post_quantum.cryptoconf.json": "d3684a1981c698bf455c95f5c337a66f1a94cf47136c5d7777246b7cf609bdb7"
+  }
+}

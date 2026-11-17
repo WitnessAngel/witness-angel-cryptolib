@@ -12,13 +12,13 @@ from schema import Or, Optional as OptionalKey, And, Schema
 from wacryptolib.cipher import SUPPORTED_SYMMETRIC_CIPHER_ALGOS, SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, \
     check_cipherdict_sanity
 from wacryptolib.cryptainer import LOCAL_KEYFACTORY_TRUSTEE_MARKER, CRYPTAINER_TRUSTEE_TYPES, CRYPTAINER_STATES, \
-    CRYPTAINER_FORMAT, PAYLOAD_CIPHERTEXT_LOCATIONS, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, SHARED_SECRET_ALGO_MARKER
+    CRYPTAINER_FORMAT, PAYLOAD_CIPHERTEXT_LOCATIONS, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, SHARED_SECRET_ALGO_MARKER, \
+    KEY_CIPHERTEXT_FORMATS, get_key_ciphertext_format, load_key_structure_bytes
 from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
-from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema, \
-    load_from_json_bytes
+from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema
 from wacryptolib.utilities.validation_utils import summarize_validation_error_lines
 
 
@@ -82,12 +82,19 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
             ),
         }
 
+        # Format of all the structures serialized in the chain of a key ciphertext, absent for Extended JSON
+        schema_key_ciphertext_format = Or(*KEY_CIPHERTEXT_FORMATS)
+
         extra_payload_cipher_layer = {
             "payload_macs": {OptionalKey("tag"): micro_schemas.schema_binary},  # For now only "tag" is used
             "key_ciphertext": micro_schemas.schema_binary,
+            OptionalKey("key_ciphertext_format"): schema_key_ciphertext_format,
         }
 
-        extra_asymmetric_cipher_algo_block = {"key_ciphertext": micro_schemas.schema_binary}
+        extra_asymmetric_cipher_algo_block = {  # Actually used by SYMMETRIC key cipher layers, which store their key
+            "key_ciphertext": micro_schemas.schema_binary,
+            OptionalKey("key_ciphertext_format"): schema_key_ciphertext_format,
+        }
 
     ASYMMETRIC_CIPHER_ALGO_BLOCK = {
         "key_cipher_algo": Or(*SUPPORTED_ASYMMETRIC_CIPHER_ALGOS),  # Not signature-only key algos like ML_DSA_65
@@ -376,6 +383,7 @@ def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False, require_inl
         _check_readable_key_cipherdicts(
             key_ciphertext=payload_cipher_layer["key_ciphertext"],
             key_ciphertext_location=location + "/key_ciphertext",
+            key_ciphertext_format=get_key_ciphertext_format(payload_cipher_layer),
             key_cipher_layers=payload_cipher_layer["key_cipher_layers"],
             key_cipher_layers_location=location,
         )
@@ -428,12 +436,15 @@ def check_key_cipherdict_sanity(key_cipherdict: dict, key_cipher_algo: str):
         check_cipherdict_sanity(key_cipherdict, cipher_algo=key_cipher_algo)
 
 
-def _load_and_check_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str, location: str) -> dict:
+def _load_and_check_key_cipherdict(
+    key_ciphertext: bytes, key_cipher_algo: str, location: str, key_ciphertext_format: str
+) -> dict:
     try:
-        key_cipherdict = load_from_json_bytes(key_ciphertext)
+        key_cipherdict = load_key_structure_bytes(key_ciphertext, key_ciphertext_format=key_ciphertext_format)
     except Exception as exc:  # Not only ValueError/TypeError, e.g. RecursionError for deeply nested data
         raise SchemaValidationError(
-            "Unparseable %s key cipherdict at %s (%s)" % (key_cipher_algo, location, exc)
+            "Unparseable %s key cipherdict at %s, in key ciphertext format %r (%s)"
+            % (key_cipher_algo, location, key_ciphertext_format, exc)
         ) from None  # The faulty bytes may be huge
     try:
         check_key_cipherdict_sanity(key_cipherdict, key_cipher_algo=key_cipher_algo)
@@ -443,13 +454,20 @@ def _load_and_check_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str, 
 
 
 def _check_readable_key_cipherdicts(
-    key_ciphertext: Optional[bytes], key_ciphertext_location: str, key_cipher_layers: list, key_cipher_layers_location
+    key_ciphertext: Optional[bytes],
+    key_ciphertext_location: str,
+    key_ciphertext_format: str,
+    key_cipher_layers: list,
+    key_cipher_layers_location,
 ):
     """Validate the key cipherdicts of a chain of key cipher layers which are readable without any key.
 
     These are the outermost cipherdict of the chain (unless key_ciphertext is None, i.e. it is encrypted by an
     outer layer), and recursively the outermost cipherdicts of the sub-chains, which protect the keys of symmetric
     layers and the shards of shared secrets. Inner cipherdicts are only revealed by decryption.
+
+    Shard chains are in the format of the enclosing chain, whereas the key ciphertext of a symmetric layer has its
+    own format field.
     """
     for key_cipher_layer_index, key_cipher_layer in enumerate(key_cipher_layers):
         location = "%s/key_cipher_layers[%d]" % (key_cipher_layers_location, key_cipher_layer_index)
@@ -458,7 +476,10 @@ def _check_readable_key_cipherdicts(
         key_cipherdict = None
         if key_ciphertext is not None and key_cipher_layer_index == len(key_cipher_layers) - 1:  # Outermost layer
             key_cipherdict = _load_and_check_key_cipherdict(
-                key_ciphertext, key_cipher_algo=key_cipher_algo, location=key_ciphertext_location
+                key_ciphertext,
+                key_cipher_algo=key_cipher_algo,
+                location=key_ciphertext_location,
+                key_ciphertext_format=key_ciphertext_format,
             )
 
         if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
@@ -478,6 +499,7 @@ def _check_readable_key_cipherdicts(
                 _check_readable_key_cipherdicts(
                     key_ciphertext=shard_ciphertext,
                     key_ciphertext_location="%s/shard_ciphertexts[%d]" % (key_ciphertext_location, shard_index),
+                    key_ciphertext_format=key_ciphertext_format,
                     key_cipher_layers=key_shared_secret_shard["key_cipher_layers"],
                     key_cipher_layers_location="%s/key_shared_secret_shards[%d]" % (location, shard_index),
                 )
@@ -486,6 +508,7 @@ def _check_readable_key_cipherdicts(
             _check_readable_key_cipherdicts(
                 key_ciphertext=key_cipher_layer["key_ciphertext"],
                 key_ciphertext_location=location + "/key_ciphertext",
+                key_ciphertext_format=get_key_ciphertext_format(key_cipher_layer),
                 key_cipher_layers=key_cipher_layer["key_cipher_layers"],
                 key_cipher_layers_location=location,
             )

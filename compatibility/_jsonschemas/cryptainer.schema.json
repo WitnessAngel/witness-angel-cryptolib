@@ -16,8 +16,12 @@
       "$ref": "_defs.schema.json#/$defs/relpath"
     },
     "cryptainer_metadata": {
-      "description": "Expected unencrypted metadata of the cryptainer",
+      "description": "Expected unencrypted metadata of the cryptainer, in relaxed Extended JSON form (e.g. {\"$date\": ...} for datetimes)",
       "type": ["object", "null"]
+    },
+    "key_ciphertext_format": {
+      "description": "Format of the key ciphertexts of the cryptainer, as stated by its key_ciphertext_format fields: json (also when absent), cbor, or mixed (both formats in one cryptainer)",
+      "enum": ["json", "cbor", "mixed"]
     },
     "extjson_flavor": {
       "description": "Flavor of an Extended JSON asset (absent for WA-CBOR assets)",

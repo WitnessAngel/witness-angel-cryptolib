@@ -231,6 +231,8 @@ Now that we have dealt with trustees and cryptoconf, the rest is easy:
 Notice that we can choose the basename of the target cryptainer with ``-o``, the cryptainer being stored here as "readme.crypt.json".
 There is also a ``--bundle`` option to output the cryptainer as a single file - handy if the input file is rather enough, and a ``--format cbor`` option to write the cryptainer in WA-CBOR, as "readme.crypt.cbor".
 
+Inside the cryptainer, symmetric keys, shards and other key structures are serialized, then encrypted, into "key ciphertexts". The ``--key-ciphertext-format json|cbor`` option chooses their format, independently of the file format: it defaults to the value of ``--format``, and WA-CBOR key ciphertexts are smaller. This format is recorded in the cryptainer, so decryption needs no option.
+
 .. hint::
 
     The ``--format`` option of ``encrypt``, ``cryptoconf generate-simple`` and similar commands is a **file format** (``json`` for Extended JSON, ``cbor`` for WA-CBOR), whereas the ``--format`` option of list and view commands is a **display format** (``plain`` or ``json``).
@@ -245,7 +247,7 @@ Cryptoconfs, cryptainers and other documents can be converted between Extended J
 
 .. command-output:: flightbox cryptoconf summarize tutorial-cryptoconf.json
 
-The source file is never modified. For a cryptainer with an offloaded payload, e.g. ``flightbox convert-format readme.crypt.json``, the payload file is copied next to the new cryptainer ("readme.crypt.cbor.payload"), so that both cryptainers remain usable separately. Like other writing commands, ``convert-format`` refuses to overwrite existing files, unless ``--force`` is given.
+The source file is never modified. For a cryptainer with an offloaded payload, e.g. ``flightbox convert-format readme.crypt.json``, the payload file is copied next to the new cryptainer ("readme.crypt.cbor.payload"), so that both cryptainers remain usable separately. The key ciphertexts of a cryptainer are kept as they are, in their own format, since they are encrypted. Like other writing commands, ``convert-format`` refuses to overwrite existing files, unless ``--force`` is given.
 
 
 Managing cryptainers

@@ -10,6 +10,7 @@ Add a NEW generation of compatibility fixtures, produced by the in-tree wacrypto
     python scripts/compatibility/generate_current.py post_quantum 2026_post_quantum
     python scripts/compatibility/generate_current.py edge_cases 2026_edge_cases
     python scripts/compatibility/generate_current.py cbor_pairs 2026_cbor_pairs
+    python scripts/compatibility/generate_current.py cbor_key_ciphertexts 2026_cbor_key_ciphertexts
 
 Missing shared plaintexts are added too. All names of the generation are lowercase, and its document assets end with
 the extension of their format ("x.cipherdict.json", "x.crypt.cbor"...); profiles with "document_pairs" write each
@@ -20,6 +21,7 @@ checked like the test suite does; it is removed again if any check fails. Existi
 import argparse
 import contextlib
 import copy
+import datetime
 import filecmp
 import shutil
 import sys
@@ -34,8 +36,11 @@ from _corpus import corpus
 from wacryptolib.authenticator import initialize_authenticator
 from wacryptolib.cipher import encrypt_bytestring
 from wacryptolib.cryptainer import (
+    KEY_CIPHERTEXT_FORMAT_CBOR,
+    KEY_CIPHERTEXT_FORMAT_JSON,
     LOCAL_KEYFACTORY_TRUSTEE_MARKER,
     SHARED_SECRET_ALGO_MARKER,
+    FlightBox,
     dump_cryptainer_to_filesystem,
     encrypt_payload_and_stream_cryptainer_to_filesystem,
     encrypt_payload_into_cryptainer,
@@ -45,11 +50,18 @@ from wacryptolib.keygen import (
     generate_keypair,
     generate_symkey,
     load_asymmetric_key_from_pem_bytestring,
+    SUPPORTED_SYMMETRIC_KEY_ALGOS,
 )
 from wacryptolib.keystore import FilesystemKeystore, FilesystemKeystorePool, generate_keypair_for_storage
 from wacryptolib.operations import import_keystore_from_path
 from wacryptolib.signature import sign_message
-from wacryptolib.utilities import DocumentFormat, WaCborDecodingError, dump_to_cbor_bytes, load_from_cbor_bytes
+from wacryptolib.utilities import (
+    DocumentFormat,
+    WaCborDecodingError,
+    convert_to_extjson,
+    dump_to_cbor_bytes,
+    load_from_cbor_bytes,
+)
 
 # Sizes around AES blocks (16), RSA-OAEP chunks (60), and multi-chunk sizes which are multiples of neither
 PLAINTEXT_SIZES = (0, 1, 15, 16, 17, 31, 32, 33, 59, 60, 61, 255, 256, 257, 4099, 65539, 1048579)
@@ -708,11 +720,166 @@ def build_cbor_pairs_profile():
     )
 
 
+IVAN = AuthenticatorSpec("ivan", "1fa40000-0000-4000-8000-000000000009", ("RSA_OAEP", "ECIES_X25519"))
+JUDY = AuthenticatorSpec("judy", "10d10000-0000-4000-8000-00000000000a", ("RSA_OAEP", "ECIES_X25519"))
+KEVIN = AuthenticatorSpec("kevin", "4e710000-0000-4000-8000-00000000000b", ("RSA_OAEP", "ECIES_X25519"))
+
+# Value of the "key_ciphertext_format" option of cryptainer specs, for cryptainers mixing both formats
+MIXED_KEY_CIPHERTEXT_FORMATS = "mixed"
+
+
+class MixedKeyCiphertextFormatsFlightBox(FlightBox):
+    """Flightbox core writing the key ciphertexts of the FIRST payload layer in Extended JSON, but those of its
+    symmetric key layers and of the other payload layers in WA-CBOR (the library uses one format per cryptainer)."""
+
+    def generate_cryptainer_base_and_secrets(self, *args, **kwargs):
+        self._payload_layer_count = 0
+        return super().generate_cryptainer_base_and_secrets(*args, **kwargs)
+
+    def _encrypt_payload_symkey(self, *, key_ciphertext_format, **kwargs):
+        self._payload_layer_count += 1
+        key_ciphertext_format = KEY_CIPHERTEXT_FORMAT_JSON if self._payload_layer_count == 1 else KEY_CIPHERTEXT_FORMAT_CBOR
+        super()._encrypt_payload_symkey(key_ciphertext_format=key_ciphertext_format, **kwargs)
+
+    def _encrypt_key_through_single_layer(self, *, key_cipher_layer, key_ciphertext_format, **kwargs):
+        if key_cipher_layer["key_cipher_algo"] in SUPPORTED_SYMMETRIC_KEY_ALGOS:
+            # Only the chain of the sub-symkey, stored in this layer, is affected
+            key_ciphertext_format = KEY_CIPHERTEXT_FORMAT_CBOR
+        return super()._encrypt_key_through_single_layer(
+            key_cipher_layer=key_cipher_layer, key_ciphertext_format=key_ciphertext_format, **kwargs
+        )
+
+
+def build_cbor_key_ciphertexts_profile():
+    authenticators = [IVAN, JUDY, KEVIN]
+    metadata_with_datetime_and_float = {
+        "compat_device": "compat-cbor-keys-camera",
+        "compat_recorded_at": datetime.datetime(2026, 11, 17, 8, 30, 15, 250000, tzinfo=datetime.timezone.utc),
+        "compat_exposure": 0.125,
+    }
+    cryptoconfs = {
+        "01_single_layer": dict(
+            level=1,
+            description="Single AES_CBC payload layer, its key wrapped with a local RSA_OAEP key",
+            cryptoconf=cryptoconf(payload_layer("AES_CBC", [local_key_layer("RSA_OAEP")])),
+        ),
+        "02_shared_secret": dict(
+            level=4,
+            description="AES_EAX payload layer whose key is wrapped by a local ECIES_X25519 key, then by a 2-of-3 "
+            "Shamir shared secret over authenticators (RSA_OAEP, ECIES_X25519, RSA_OAEP)",
+            cryptoconf=cryptoconf(
+                payload_layer(
+                    "AES_EAX",
+                    [
+                        local_key_layer("ECIES_X25519"),
+                        shared_secret_layer(
+                            2,
+                            [[IVAN.key_layer("RSA_OAEP")], [JUDY.key_layer("ECIES_X25519")], [KEVIN.key_layer("RSA_OAEP")]],
+                        ),
+                    ],
+                )
+            ),
+            authenticators=authenticators,
+        ),
+        "03_nested_symmetric": dict(
+            level=4,
+            description="AES_CBC payload layer whose key is wrapped by an AES_EAX key layer, itself wrapped by a "
+            "nested CHACHA20_POLY1305 key layer wrapped by a local ECIES_X25519 key, then a CHACHA20_POLY1305 "
+            "payload layer wrapped by a local RSA_OAEP key",
+            cryptoconf=cryptoconf(
+                payload_layer(
+                    "AES_CBC",
+                    [
+                        symmetric_key_layer(
+                            "AES_EAX",
+                            [symmetric_key_layer("CHACHA20_POLY1305", [local_key_layer("ECIES_X25519")])],
+                        )
+                    ],
+                ),
+                payload_layer("CHACHA20_POLY1305", [local_key_layer("RSA_OAEP", LOCAL_KEYCHAIN_UID2)]),
+            ),
+        ),
+        "04_post_quantum": dict(
+            level=3,
+            description="AES_EAX payload layer whose key is wrapped by a local ML_KEM_768 key, then by a local "
+            "ECIES_X25519 key",
+            cryptoconf=cryptoconf(
+                payload_layer("AES_EAX", [local_key_layer("ML_KEM_768"), local_key_layer("ECIES_X25519")])
+            ),
+        ),
+        "05_mixable": dict(
+            level=4,
+            description="AES_CBC payload layer whose key is wrapped by an AES_EAX key layer wrapped by a local "
+            "RSA_OAEP key, then by a local ECIES_X25519 key, and a CHACHA20_POLY1305 payload layer wrapped by a "
+            "local RSA_OAEP key",
+            cryptoconf=cryptoconf(
+                payload_layer(
+                    "AES_CBC",
+                    [symmetric_key_layer("AES_EAX", [local_key_layer("RSA_OAEP")]), local_key_layer("ECIES_X25519")],
+                ),
+                payload_layer("CHACHA20_POLY1305", [local_key_layer("RSA_OAEP")]),
+            ),
+        ),
+    }
+    cryptainers = {
+        "01_single_layer_cbor_keys_inline": dict(
+            cryptoconf="01_single_layer", plaintext_size=61, key_ciphertext_format=KEY_CIPHERTEXT_FORMAT_CBOR,
+            scenarios=NO_PASSPHRASE_SCENARIOS,
+            description="WA-CBOR key ciphertexts, small inline payload, without metadata",
+        ),
+        "01_single_layer_json_keys_inline": dict(
+            cryptoconf="01_single_layer", plaintext_size=61, key_ciphertext_format=KEY_CIPHERTEXT_FORMAT_JSON,
+            scenarios=NO_PASSPHRASE_SCENARIOS,
+            description="Extended JSON key ciphertexts, as a size reference for the previous fixture: same cryptoconf "
+            "and payload",
+        ),
+        "02_shared_secret_cbor_keys_offloaded": dict(
+            cryptoconf="02_shared_secret", plaintext_size=4099, offloaded=True,
+            key_ciphertext_format=KEY_CIPHERTEXT_FORMAT_CBOR,
+            scenarios=_shamir_scenarios(authenticators, threshold=2),
+            description="WA-CBOR key ciphertexts with a 2-of-3 Shamir shared secret over authenticators, offloaded",
+        ),
+        "03_nested_symmetric_cbor_keys_inline": dict(
+            cryptoconf="03_nested_symmetric", plaintext_size=257, key_ciphertext_format=KEY_CIPHERTEXT_FORMAT_CBOR,
+            scenarios=NO_PASSPHRASE_SCENARIOS, cryptainer_metadata=metadata_with_datetime_and_float,
+            description="WA-CBOR key ciphertexts, in two payload layers and nested symmetric key layers, inline, with "
+            "cryptainer metadata holding a datetime and a float",
+        ),
+        "04_post_quantum_cbor_keys_offloaded": dict(
+            cryptoconf="04_post_quantum", plaintext_size=65539, offloaded=True,
+            key_ciphertext_format=KEY_CIPHERTEXT_FORMAT_CBOR, scenarios=NO_PASSPHRASE_SCENARIOS,
+            description="WA-CBOR key ciphertexts wrapped by ML_KEM_768 then ECIES_X25519 keys, offloaded",
+        ),
+        "05_mixed_keys_inline": dict(
+            cryptoconf="05_mixable", plaintext_size=33, key_ciphertext_format=MIXED_KEY_CIPHERTEXT_FORMATS,
+            scenarios=NO_PASSPHRASE_SCENARIOS,
+            description="Key ciphertexts mixing formats: Extended JSON for the first payload layer, WA-CBOR for its "
+            "symmetric key layer and for the second payload layer, inline",
+        ),
+    }
+    return dict(
+        pool_name="cbor_key_ciphertexts_pool",
+        pool_description="Local keyfactory (RSA_OAEP, ECIES_X25519, ML_KEM_768 keys of three keychains, "
+        "unprotected) and three imported authenticators with passphrase-protected RSA_OAEP and ECIES_X25519 keys",
+        local_key_algos=("RSA_OAEP", "ECIES_X25519", "ML_KEM_768"),
+        authenticators=authenticators,
+        document_pairs=True,
+        cipher_algos=(),
+        signature_algos=(),
+        digest_list_vector=False,
+        tampered_signature_algo=None,
+        cryptoconfs=cryptoconfs,
+        invalid_cryptoconfs={},
+        cryptainers=cryptainers,
+    )
+
+
 PROFILES = dict(
     classic=build_classic_profile,
     post_quantum=build_post_quantum_profile,
     edge_cases=build_edge_cases_profile,
     cbor_pairs=build_cbor_pairs_profile,
+    cbor_key_ciphertexts=build_cbor_key_ciphertexts_profile,
 )
 
 DOCUMENT_FORMAT_LABELS = {DocumentFormat.JSON: "Extended JSON", DocumentFormat.CBOR: "WA-CBOR"}
@@ -1184,15 +1351,18 @@ class CurrentGenerationBuilder:
             staging_path = staging_paths[0]
             staging_path.parent.mkdir(parents=True, exist_ok=True)
             offloaded = spec.get("offloaded", False) or spec.get("streamed", False)
+            key_ciphertext_format = spec.get("key_ciphertext_format")  # Recorded in sidecars, if given
 
             if spec.get("streamed"):
                 assert len(staging_paths) == 1, "Streamed cryptainers are written in Extended JSON only"
+                assert key_ciphertext_format != MIXED_KEY_CIPHERTEXT_FORMATS, "Mixed cryptainers are not streamed"
                 encrypt_payload_and_stream_cryptainer_to_filesystem(
                     plaintext,
                     cryptainer_filepath=staging_path,
                     cryptoconf=conf,
                     cryptainer_metadata=cryptainer_metadata,
                     keystore_pool=self._get_pool_copy(),
+                    key_ciphertext_format=key_ciphertext_format or KEY_CIPHERTEXT_FORMAT_JSON,
                 )
                 leftovers = sorted(
                     p.name for p in staging_path.parent.iterdir() if p.name.startswith(staging_path.name)
@@ -1202,12 +1372,22 @@ class CurrentGenerationBuilder:
                 digest_list_context = (
                     _legacy_digest_list_rsa_oaep() if spec.get("digest_list_key_ciphertexts") else contextlib.nullcontext()
                 )
-                with digest_list_context:
+                encryption_kwargs = {}
+                if key_ciphertext_format == MIXED_KEY_CIPHERTEXT_FORMATS:
+                    flightbox_context = mock.patch(
+                        "wacryptolib.cryptainer._encryptor.FlightBox", MixedKeyCiphertextFormatsFlightBox
+                    )
+                else:
+                    flightbox_context = contextlib.nullcontext()
+                    if key_ciphertext_format:
+                        encryption_kwargs["key_ciphertext_format"] = key_ciphertext_format
+                with digest_list_context, flightbox_context:
                     cryptainer = encrypt_payload_into_cryptainer(
                         plaintext,
                         cryptoconf=conf,
                         cryptainer_metadata=cryptainer_metadata,
                         keystore_pool=self._get_pool_copy(),
+                        **encryption_kwargs
                     )
                 cryptainer = copy.deepcopy(cryptainer)
                 if spec.get("digest_list_key_ciphertexts"):
@@ -1245,6 +1425,8 @@ class CurrentGenerationBuilder:
                 ]
                 if spec.get(option)
             ]
+            if key_ciphertext_format == MIXED_KEY_CIPHERTEXT_FORMATS:
+                legacy_forms.append("mixed_key_ciphertext_formats")  # The library writes one format per cryptainer
             corruptions = [
                 corruption
                 for option, corruption in [
@@ -1262,11 +1444,14 @@ class CurrentGenerationBuilder:
                 plaintext=_corpus.to_relpath(plaintext_path, asset_path),
                 keystore_pool=_corpus.to_relpath(self.pool_path, asset_path),
                 cryptoconf=_corpus.to_relpath(cryptoconf_paths[spec["cryptoconf"]], asset_path),
-                cryptainer_metadata=cryptainer_metadata,
+                # Plain JSON sidecars record metadata in its relaxed Extended JSON form (e.g. {"$date": ...})
+                cryptainer_metadata=convert_to_extjson(cryptainer_metadata),
                 extjson_flavor="canonical" if spec.get("canonical") else "relaxed",
                 payload_offloaded=offloaded,
                 decryption_scenarios=spec["scenarios"],
             )
+            if key_ciphertext_format:
+                fields["key_ciphertext_format"] = key_ciphertext_format
             self._write_document_sidecars(
                 asset_paths,
                 fixture_kind="cryptainer",

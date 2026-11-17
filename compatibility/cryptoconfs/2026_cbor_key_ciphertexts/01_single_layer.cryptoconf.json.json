@@ -1,0 +1,31 @@
+{
+  "$schema": "../../_jsonschemas/cryptoconf.schema.json",
+  "fixture_kind": "cryptoconf",
+  "generation": "2026_cbor_key_ciphertexts",
+  "description": "Single AES_CBC payload layer, its key wrapped with a local RSA_OAEP key (Extended JSON asset of an Extended JSON / WA-CBOR pair)",
+  "provenance": {
+    "method": "genuine",
+    "library_version": "0.12+dev",
+    "library_commit": "6b57dfe5ee08451939b7ea8cbabcc5926ce78ff6",
+    "python_version": "3.14.3",
+    "crypto_backend": "pycryptodome",
+    "produced_on": "2026-11-17"
+  },
+  "requirements": {
+    "algorithms": [
+      "AES_CBC",
+      "RSA_OAEP"
+    ],
+    "pem_protections": []
+  },
+  "expected_valid": true,
+  "sophistication_level": 1,
+  "keystore_pool": "../../keystores/2026_cbor_key_ciphertexts/cbor_key_ciphertexts_pool",
+  "passphrase_mapper": {},
+  "min_library_version": "0.12",
+  "document_format": "json",
+  "equivalent_asset": "01_single_layer.cryptoconf.cbor",
+  "asset_sha256": {
+    "01_single_layer.cryptoconf.json": "9cadbab2f948b7f3a371eb2fd51ac8d2acf3636b9c94ef74adc0e27d96fd9d2b"
+  }
+}

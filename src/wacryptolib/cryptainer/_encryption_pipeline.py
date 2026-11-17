@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from wacryptolib.cryptainer import CRYPTAINER_TEMP_SUFFIX, CryptainerEncryptor, OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER, \
-    dump_cryptainer_to_filesystem, logger, _get_offloaded_file_path
+    dump_cryptainer_to_filesystem, logger, _get_offloaded_file_path, KEY_CIPHERTEXT_FORMAT_JSON, KEY_CIPHERTEXT_FORMATS
 from wacryptolib.keystore import KeystorePoolBase
 
 
@@ -17,6 +17,9 @@ class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionSt
     Helper which prebuilds a cryptainer without signatures nor payload,
     fills its OFFLOADED ciphertext file chunk by chunk, and then
     dumps the final cryptainer (with signatures) to disk.
+
+    :param key_ciphertext_format: document format ("json" or "cbor") of the structures serialized then encrypted
+        into the key ciphertexts, independent of the format of the cryptainer file
     """
 
     def __init__(
@@ -28,7 +31,10 @@ class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionSt
         signature_policy: Optional[str],
         keystore_pool: Optional[KeystorePoolBase] = None,
         dump_initial_cryptainer=True,
+        key_ciphertext_format: str = KEY_CIPHERTEXT_FORMAT_JSON,
     ):
+        if key_ciphertext_format not in KEY_CIPHERTEXT_FORMATS:  # Before the payload file gets created
+            raise ValueError("Unknown key ciphertext format %r" % (key_ciphertext_format,))
         self._cryptainer_filepath = cryptainer_filepath
         self._cryptainer_filepath_temp = cryptainer_filepath.with_name(  # Final filename + "~", in any format
             cryptainer_filepath.name + CRYPTAINER_TEMP_SUFFIX
@@ -39,7 +45,9 @@ class CryptainerEncryptionPipeline:  # Fixme normalize to CryptainerEncryptionSt
 
         try:
             self._cryptainer_encryptor = CryptainerEncryptor(
-                signature_policy=signature_policy, keystore_pool=keystore_pool
+                signature_policy=signature_policy,
+                keystore_pool=keystore_pool,
+                key_ciphertext_format=key_ciphertext_format,
             )
 
             (

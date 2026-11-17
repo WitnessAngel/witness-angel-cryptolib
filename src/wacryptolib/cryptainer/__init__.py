@@ -17,8 +17,10 @@ from ._base import (CRYPTAINER_SUFFIX, CRYPTAINER_JSON_SUFFIX, CRYPTAINER_CBOR_S
                           LOCAL_KEYFACTORY_TRUSTEE_MARKER, SIGNATURE_POLICIES)
 from ._base import get_cryptainer_suffix, split_cryptainer_suffix, get_cryptainer_file_format_from_filename
 from ._base import CryptainerBase, get_trustee_id, get_payload_ciphertext_signatures, get_trustee_proxy, _get_cryptainer_inline_ciphertext_value
+from ._base import get_key_ciphertext_format, load_key_structure_bytes, get_revelation_request_data
 
-from ._flightbox import CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, CRYPTAINER_STATES, FlightboxUtilitiesBase, FlightBox
+from ._flightbox import CRYPTAINER_FORMAT, SHARED_SECRET_ALGO_MARKER, CRYPTAINER_STATES, FlightboxUtilitiesBase, FlightBox, \
+    KEY_CIPHERTEXT_FORMAT_JSON, KEY_CIPHERTEXT_FORMAT_CBOR, KEY_CIPHERTEXT_FORMATS
 
 from ._authorization import request_decryption_authorizations
 

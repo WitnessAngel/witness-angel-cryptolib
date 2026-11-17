@@ -14,7 +14,8 @@ from wacryptolib.cryptainer import CRYPTAINER_SUFFIXES, CRYPTAINER_TEMP_SUFFIX, 
     CRYPTAINER_DATETIME_FORMAT, logger, get_cryptainer_size_on_filesystem, load_cryptainer_from_filesystem, \
     decrypt_payload_from_cryptainer, check_cryptainer_sanity, ensure_validated_cryptoconf, delete_cryptainer_from_filesystem, \
     encrypt_payload_and_stream_cryptainer_to_filesystem, encrypt_payload_into_cryptainer, dump_cryptainer_to_filesystem, \
-    is_cryptainer_cryptoconf_streamable, CryptainerEncryptionPipeline, _get_offloaded_file_path, split_cryptainer_suffix,     get_cryptainer_suffix
+    is_cryptainer_cryptoconf_streamable, CryptainerEncryptionPipeline, _get_offloaded_file_path, split_cryptainer_suffix,     get_cryptainer_suffix, \
+    KEY_CIPHERTEXT_FORMATS
 from wacryptolib.keystore import KeystorePoolBase
 from wacryptolib.utilities import get_utc_now_date, is_file_basename, catch_and_log_exception, synchronized,     DocumentFormat
 
@@ -218,6 +219,8 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
     :param cryptainer_file_format: document format of the cryptainers written by this storage, Extended JSON ("json",
         written as `<basename>.crypt.json`) or WA-CBOR ("cbor", written as `<basename>.crypt.cbor`); cryptainers of
         all formats are listed and read anyway
+    :param key_ciphertext_format: document format ("json" or "cbor") of the structures serialized then encrypted
+        into the key ciphertexts of written cryptainers; defaults to the cryptainer file format
     """
 
     def __init__(
@@ -231,10 +234,17 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         max_workers: int = 1,
         offload_payload_ciphertext=True,
         cryptainer_file_format: str = DocumentFormat.JSON,
+        key_ciphertext_format: Optional[str] = None,
     ):
         super().__init__(cryptainer_dir=cryptainer_dir, keystore_pool=keystore_pool)
         self._cryptainer_suffix = get_cryptainer_suffix(cryptainer_file_format)  # Raises if unknown format
         self._cryptainer_file_format = cryptainer_file_format
+        # A WA-CBOR cryptainer file already requires a reader supporting WA-CBOR key ciphertexts
+        if key_ciphertext_format is None:
+            key_ciphertext_format = cryptainer_file_format
+        if key_ciphertext_format not in KEY_CIPHERTEXT_FORMATS:
+            raise ValueError("Unknown key ciphertext format %r" % (key_ciphertext_format,))
+        self._key_ciphertext_format = key_ciphertext_format
         assert max_cryptainer_quota is None or max_cryptainer_quota >= 0, max_cryptainer_quota
         assert max_cryptainer_count is None or max_cryptainer_count >= 0, max_cryptainer_count
         assert max_cryptainer_age is None or max_cryptainer_age >= timedelta(seconds=0), max_cryptainer_age
@@ -327,6 +337,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             cryptoconf=cryptoconf,
             cryptainer_metadata=cryptainer_metadata,
             keystore_pool=self._keystore_pool,
+            key_ciphertext_format=self._key_ciphertext_format,
         )
 
     def _encrypt_payload_into_cryptainer(self, payload, cryptainer_metadata, cryptoconf):
@@ -336,6 +347,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             cryptoconf=cryptoconf,
             cryptainer_metadata=cryptainer_metadata,
             keystore_pool=self._keystore_pool,
+            key_ciphertext_format=self._key_ciphertext_format,
         )
 
     def _get_new_cryptainer_filepath(self, filename_base) -> Path:
@@ -459,6 +471,7 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             signature_policy=signature_policy,
             keystore_pool=self._keystore_pool,
             dump_initial_cryptainer=dump_initial_cryptainer,
+            key_ciphertext_format=self._key_ciphertext_format,
             **cryptainer_encryption_stream_extra_kwargs,
         )
         return cryptainer_encryption_stream

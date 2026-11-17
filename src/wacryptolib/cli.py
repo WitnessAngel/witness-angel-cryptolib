@@ -492,14 +492,22 @@ def delete_authenticator(ctx, authenticator_dir):
     help="File format of the cryptainer, written as <basename>.crypt.json (Extended JSON) or <basename>.crypt.cbor"
     " (WA-CBOR)",
 )
+@click.option(
+    "--key-ciphertext-format",
+    type=FILE_FORMAT_CHOICE,
+    default=None,
+    help="Format of the key structures (symmetric keys, shards, key cipherdicts...) serialized then encrypted"
+    " inside the cryptainer, independently of its file format  [default: the value of --format]",
+)
 @FORCE_OPTION
 @click.pass_context
-def encrypt(ctx, input_file, output_basename, cryptoconf, bundle, file_format, force):
+def encrypt(ctx, input_file, output_basename, cryptoconf, bundle, file_format, key_ciphertext_format, force):
     """Turn a media file into a secure container
 
     Existing cryptainer files are not overwritten, unless --force is used.
     """
     file_format = file_format.lower()
+    key_ciphertext_format = key_ciphertext_format.lower() if key_ciphertext_format else file_format
 
     offload_payload_ciphertext = not bundle
 
@@ -544,6 +552,7 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle, file_format, f
         keystore_pool=keystore_pool,
         offload_payload_ciphertext=offload_payload_ciphertext,
         cryptainer_file_format=file_format,
+        key_ciphertext_format=key_ciphertext_format,
     )
 
     with click.open_file(input_file, mode="rb") as payload_handle:  # Also handles "-" for STDIN
@@ -1200,6 +1209,7 @@ def convert_format(source, target, force):
 
     Any document (cryptoconf, cryptainer, cipherdict...) is converted, without validation of its structure.
     The offloaded payload file of a cryptainer is copied next to the target. Source files are never modified.
+    The encrypted key structures of a cryptainer are kept as they are, in their own key ciphertext format.
 
     Existing target files are not overwritten, unless --force is used.
     """

@@ -23,6 +23,7 @@ import _compatibility_corpus as corpus
 SIDECAR_PATHS = list(corpus.iter_sidecar_paths())
 
 _CBOR_PAIRS_GENERATION = "2026_cbor_pairs"
+_CBOR_KEY_CIPHERTEXTS_GENERATION = "2026_cbor_key_ciphertexts"
 
 
 def _get_fixture_id(sidecar_path):
@@ -103,6 +104,68 @@ def test_corpus_holds_document_format_pairs_and_invalid_cbor_documents():
         "extjson_keyword_map",
         "malformed_datetime",
     }
+
+
+def test_corpus_holds_cbor_key_ciphertexts():
+    from wacryptolib.cryptainer import SHARED_SECRET_ALGO_MARKER, load_cryptainer_from_filesystem
+    from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS
+    from wacryptolib.utilities import load_from_cbor_bytes, load_from_json_bytes
+
+    sidecars = {
+        corpus.get_asset_path(path).name: json.loads(path.read_text(encoding="utf8"))
+        for path in SIDECAR_PATHS
+        if _CBOR_KEY_CIPHERTEXTS_GENERATION in path.parts and "cryptainers" in path.parts
+    }
+    cbor_sidecars = {name: sidecar for name, sidecar in sidecars.items() if sidecar.get("key_ciphertext_format") == "cbor"}
+    assert {sidecar["document_format"] for sidecar in cbor_sidecars.values()} == {"json", "cbor"}
+    assert {sidecar["payload_offloaded"] for sidecar in cbor_sidecars.values()} == {True, False}
+    assert {"RSA_OAEP", "ECIES_X25519", "ML_KEM_768"} <= {
+        algo for sidecar in cbor_sidecars.values() for algo in sidecar["requirements"]["algorithms"]
+    }
+    assert any(
+        scenario["name"].startswith("below_threshold")
+        for sidecar in cbor_sidecars.values()
+        for scenario in sidecar["decryption_scenarios"]
+    )
+    assert any(
+        sidecar["cryptainer_metadata"] and any("$date" in value for value in sidecar["cryptainer_metadata"].values() if isinstance(value, dict))
+        and any(isinstance(value, float) for value in sidecar["cryptainer_metadata"].values())
+        for sidecar in cbor_sidecars.values()
+    )
+
+    cryptainers_dir = corpus.CORPUS_DIR / "cryptainers" / _CBOR_KEY_CIPHERTEXTS_GENERATION
+    cbor_algos = set()
+    for name in cbor_sidecars:
+        cryptainer = load_cryptainer_from_filesystem(cryptainers_dir / name)
+        for node in corpus._walk_data_tree(cryptainer["payload_cipher_layers"]):
+            cbor_algos.add(node.get("key_cipher_algo"))
+    assert SHARED_SECRET_ALGO_MARKER in cbor_algos
+    assert cbor_algos & set(SUPPORTED_SYMMETRIC_KEY_ALGOS)  # Nested symmetric key layers
+
+    # Synthesized mixed cryptainer: an Extended JSON payload layer whose symmetric key layer is WA-CBOR, and a WA-CBOR one
+    for name in ("05_mixed_keys_inline.crypt.json", "05_mixed_keys_inline.crypt.cbor"):
+        sidecar = sidecars[name]
+        assert sidecar["key_ciphertext_format"] == "mixed"
+        assert sidecar["provenance"]["method"] == "synthesized"
+        assert sidecar["provenance"]["legacy_forms"] == ["mixed_key_ciphertext_formats"]
+        first_layer, second_layer = load_cryptainer_from_filesystem(cryptainers_dir / name)["payload_cipher_layers"]
+        assert "key_ciphertext_format" not in first_layer
+        (symmetric_key_layer,) = [
+            layer for layer in first_layer["key_cipher_layers"] if layer["key_cipher_algo"] in SUPPORTED_SYMMETRIC_KEY_ALGOS
+        ]
+        assert symmetric_key_layer["key_ciphertext_format"] == "cbor"
+        assert second_layer["key_ciphertext_format"] == "cbor"
+
+    # Smaller key ciphertexts: one AES_CBC payload layer wrapped by one RSA_OAEP layer of a 2048-bit key, in both formats
+    chunk_counts = {}
+    for key_ciphertext_format, loader in (("cbor", load_from_cbor_bytes), ("json", load_from_json_bytes)):
+        name = "01_single_layer_%s_keys_inline.crypt.json" % key_ciphertext_format
+        assert sidecars[name].get("key_ciphertext_format") == key_ciphertext_format
+        (payload_cipher_layer,) = load_cryptainer_from_filesystem(cryptainers_dir / name)["payload_cipher_layers"]
+        assert payload_cipher_layer["payload_cipher_algo"] == "AES_CBC"
+        assert [layer["key_cipher_algo"] for layer in payload_cipher_layer["key_cipher_layers"]] == ["RSA_OAEP"]
+        chunk_counts[key_ciphertext_format] = len(loader(payload_cipher_layer["key_ciphertext"])["ciphertext_chunks"])
+    assert chunk_counts == {"cbor": 2, "json": 6}
 
 
 # SELF-TESTS OF THE CORPUS CHECKS, ON BROKEN COPIES OF A PART OF THE CORPUS #

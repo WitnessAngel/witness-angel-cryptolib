@@ -5,10 +5,10 @@
 from typing import Sequence
 
 from wacryptolib.cipher import STREAMABLE_CIPHER_ALGOS
-from wacryptolib.cryptainer import get_trustee_id, SHARED_SECRET_ALGO_MARKER, get_payload_ciphertext_signatures
+from wacryptolib.cryptainer import get_trustee_id, SHARED_SECRET_ALGO_MARKER, get_payload_ciphertext_signatures, \
+    get_key_ciphertext_format, load_key_structure_bytes, get_revelation_request_data
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.exceptions import SchemaValidationError
-from wacryptolib.utilities import load_from_json_bytes
 
 
 def is_cryptainer_cryptoconf_streamable(cryptoconf):  # FIXME rename and add to docs?
@@ -79,6 +79,9 @@ def gather_trustee_dependencies(cryptainers: Sequence) -> dict:
 def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TODO Update this name
     """Analyse a cryptainer and returns the symkeys/shards (and their corresponding trustee) needed for decryption.
 
+    The "symkey_decryption_request_data" of each request is the Extended JSON cipherdict of an asymmetric layer,
+    transcoded from WA-CBOR if needed (see get_revelation_request_data()), so that authenticators can parse it.
+
     :return: dict with a tuple of the cipher key and the symkey/shard by trustee id.
     """
     from wacryptolib.cryptainer import ensure_validated_cryptainer  # LAZY import, _validation is loaded after us
@@ -99,6 +102,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
         cryptainer_metadata,
         key_cipher_trustee,
         key_ciphertext,
+        key_ciphertext_format,
         keychain_uid_for_encryption,
         key_algo_for_encryption,
     ):
@@ -109,7 +113,9 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
             "cryptainer_name": str(cryptainer_name),  # No Pathlib object
             "cryptainer_uid": cryptainer_uid,
             "cryptainer_metadata": cryptainer_metadata,
-            "symkey_decryption_request_data": key_ciphertext,
+            "symkey_decryption_request_data": get_revelation_request_data(
+                key_ciphertext, key_ciphertext_format=key_ciphertext_format
+            ),
             "keychain_uid": keychain_uid_for_encryption,
             "key_algo": key_algo_for_encryption,
         }
@@ -119,7 +125,8 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
         _decryptable_symkeys.append(symkey_decryption_request)
 
     def _gather_decryptable_symkeys(
-        cryptainer_name, cryptainer_uid, cryptainer_metadata, key_cipher_layers: list, key_ciphertext
+        cryptainer_name, cryptainer_uid, cryptainer_metadata, key_cipher_layers: list, key_ciphertext,
+        key_ciphertext_format,
     ):
         assert isinstance(key_ciphertext, bytes), type(key_ciphertext)
 
@@ -130,7 +137,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
         if last_key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
             key_shared_secret_shards = last_key_cipher_layer["key_shared_secret_shards"]
             # This readable cipherdict, its shard ciphertexts and their count were validated along with the cryptainer
-            key_cipherdict = load_from_json_bytes(key_ciphertext)
+            key_cipherdict = load_key_structure_bytes(key_ciphertext, key_ciphertext_format=key_ciphertext_format)
             shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
 
             for shard_ciphertext, shard_conf in zip(shard_ciphertexts, key_shared_secret_shards):
@@ -140,6 +147,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
                     cryptainer_metadata,
                     shard_conf["key_cipher_layers"],
                     shard_ciphertext,
+                    key_ciphertext_format,  # Shard chains belong to the enclosing chain
                 )
 
         elif last_key_cipher_algo in SUPPORTED_SYMMETRIC_KEY_ALGOS:
@@ -150,6 +158,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
                 cryptainer_metadata,
                 last_key_cipher_layer["key_cipher_layers"],
                 subkey_ciphertext,
+                get_key_ciphertext_format(last_key_cipher_layer),  # This sub-chain has its own format
             )
 
         else:
@@ -165,6 +174,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
                 cryptainer_metadata=cryptainer_metadata,
                 key_cipher_trustee=key_cipher_trustee,
                 key_ciphertext=key_ciphertext,
+                key_ciphertext_format=key_ciphertext_format,
                 keychain_uid_for_encryption=keychain_uid_for_encryption,
                 key_algo_for_encryption=key_algo_for_encryption,
             )
@@ -183,6 +193,7 @@ def gather_decryptable_symkeys(cryptainers_with_names: Sequence) -> dict:  # TOD
                 cryptainer_metadata=cryptainer_metadata,
                 key_cipher_layers=payload_cipher_layer["key_cipher_layers"],
                 key_ciphertext=key_ciphertext,
+                key_ciphertext_format=get_key_ciphertext_format(payload_cipher_layer),
             )
 
     return decryptable_symkeys_per_trustee

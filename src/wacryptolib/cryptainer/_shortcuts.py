@@ -7,7 +7,8 @@ from urllib.parse import urlparse
 import uuid
 
 from wacryptolib.cryptainer import SHARED_SECRET_ALGO_MARKER, DEFAULT_DATA_CHUNK_SIZE, CryptainerEncryptionPipeline, \
-    CryptainerEncryptor, CryptainerDecryptor, CRYPTAINER_TRUSTEE_TYPES, get_payload_ciphertext_signatures
+    CryptainerEncryptor, CryptainerDecryptor, CRYPTAINER_TRUSTEE_TYPES, get_payload_ciphertext_signatures, \
+    KEY_CIPHERTEXT_FORMAT_JSON
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS, SUPPORTED_ASYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import KeystorePoolBase
 
@@ -37,12 +38,16 @@ def encrypt_payload_and_stream_cryptainer_to_filesystem(
     cryptainer_metadata: Optional[dict],
     keystore_pool: Optional[KeystorePoolBase] = None,
     signature_policy=None,
+    key_ciphertext_format: str = KEY_CIPHERTEXT_FORMAT_JSON,
 ) -> None:
     """
     Optimized version which directly streams encrypted payload to **offloaded** file,
     instead of creating a whole cryptainer and then dumping it to disk.
 
     The cryptoconf used must be streamable with an EncryptionPipeline!
+
+    :param key_ciphertext_format: document format ("json" or "cbor") of the structures serialized then encrypted
+        into key ciphertexts, independent of the cryptainer file format (given by the cryptainer filepath)
     """
     # No need to dump initial (signature-less) cryptainer here, this is all a quick operation...
     encryptor = CryptainerEncryptionPipeline(
@@ -52,6 +57,7 @@ def encrypt_payload_and_stream_cryptainer_to_filesystem(
         signature_policy=signature_policy,
         keystore_pool=keystore_pool,
         dump_initial_cryptainer=False,
+        key_ciphertext_format=key_ciphertext_format,
     )
 
     for chunk in _consume_io_byte_chunks(payload, chunk_size=DEFAULT_DATA_CHUNK_SIZE):
@@ -67,6 +73,7 @@ def encrypt_payload_into_cryptainer(
     cryptainer_metadata: Optional[dict],
     signature_policy: Optional[str] = None,
     keystore_pool: Optional[KeystorePoolBase] = None,
+    key_ciphertext_format: str = KEY_CIPHERTEXT_FORMAT_JSON,
 ) -> dict:
     """Turn a raw payload into a secure cryptainer, which can only be decrypted with
     the agreement of the owner and third-party trustees.
@@ -75,9 +82,13 @@ def encrypt_payload_into_cryptainer(
     :param cryptoconf: tree of specific encryption settings
     :param cryptainer_metadata: dict of metadata describing the payload (remains unencrypted in cryptainer)
     :param keystore_pool: optional key storage pool, might be required by cryptoconf
+    :param key_ciphertext_format: document format ("json" or "cbor") of the structures serialized then encrypted
+        into key ciphertexts ("cbor" gives smaller key ciphertexts, which only wacryptolib 0.12+ can read)
     :return: dict of cryptainer
     """
-    cryptainer_encryptor = CryptainerEncryptor(signature_policy=signature_policy, keystore_pool=keystore_pool)
+    cryptainer_encryptor = CryptainerEncryptor(
+        signature_policy=signature_policy, keystore_pool=keystore_pool, key_ciphertext_format=key_ciphertext_format
+    )
     cryptainer = cryptainer_encryptor.encrypt_data(
         payload, cryptoconf=cryptoconf, cryptainer_metadata=cryptainer_metadata
     )

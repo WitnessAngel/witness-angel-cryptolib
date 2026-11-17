@@ -38,7 +38,9 @@ The `key_ciphertext` of a symmetric key layer met in the chain SHALL follow the 
 
 #### Scenario: Format contradicting the content
 - **WHEN** the `key_ciphertext_format` of a JSON-mode payload layer is changed to `"cbor"` in a cryptainer
-- **THEN** decryption of that layer fails with a decryption error about an unparseable key ciphertext, and no attempt is made to parse it as Extended JSON
+- **THEN** cryptainer validation, which decryption performs first, fails with a validation error about a key cipherdict unparseable in format `"cbor"`
+- **AND** decrypting that layer without prior validation fails with a decryption error about an unparseable key ciphertext
+- **AND** no attempt is made to parse the key ciphertext as Extended JSON
 
 ### Requirement: Encryption with a chosen key ciphertext format
 The encryption functions, `CryptainerEncryptor`, `CryptainerEncryptionPipeline` and `CryptainerStorage` SHALL accept a `key_ciphertext_format` parameter, `"json"` or `"cbor"`. One format SHALL be used for a whole cryptainer. With `"cbor"`, every payload cipher layer and every symmetric key cipher layer SHALL get `key_ciphertext_format: "cbor"`. With `"json"`, no `key_ciphertext_format` field SHALL be written, so that the cryptainer has exactly the form produced before this change. The default SHALL be `"json"`, except for `CryptainerStorage`, where it SHALL be the storage's cryptainer file format. An unknown value SHALL raise an error before any key is generated. Metadata that the chosen format can't encode inside a key struct SHALL make encryption fail before anything is written.

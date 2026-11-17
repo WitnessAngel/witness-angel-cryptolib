@@ -757,6 +757,164 @@ def test_periodic_subprocess_stream_recorder_with_custom_encryption_stream(tmp_p
     _check_stream_recorder_cryptainer_name(cryptainer_names[0])
 
 
+class _RestartingStreamRecorderForTesting(TestStreamRecorderForTesting):
+    subprocess_restart_on_exit = True
+
+
+class _SlowRestartingStreamRecorderForTesting(TestStreamRecorderForTesting):
+    subprocess_restart_on_exit = True
+    subprocess_restart_delay_s = 5
+
+
+class _StallWatchingStreamRecorderForTesting(TestStreamRecorderForTesting):
+    subprocess_stdout_timeout_s = 1.5
+    subprocess_stall_kill_delay_s = 1
+
+
+_stalling_command_line = [
+    sys.executable,
+    "-u",
+    "-c",
+    "import time; print('Some data before a stall'); time.sleep(120)",
+]
+
+
+def test_periodic_subprocess_stream_recorder_restarts_exited_subprocess(tmp_path):
+    cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=True)
+
+    recorder = _RestartingStreamRecorderForTesting(
+        executable_command_line=oneshot_command_line,  # Quits immediately, like ffmpeg on a camera disconnection
+        interval_s=60,  # No periodic restart during this test
+        cryptainer_storage=cryptainer_storage,
+    )
+    with mock.patch("wacryptolib.sensor.logger") as logger_mock:
+        recorder.start()
+        time.sleep(3.5)  # Launches at ~0s, ~1s, ~2s and ~3s, since the subprocess outputs data before quitting
+        recorder.stop()
+        recorder.join()
+    assert "relaunching it in" in str(logger_mock.mock_calls)
+    assert recorder._next_restart_delay_s == 2  # Delay was reset after each subprocess having output data
+
+    cryptainer_names = cryptainer_storage.list_cryptainer_names()
+    assert 3 <= len(cryptainer_names) <= 4, cryptainer_names  # Each relaunch got its own cryptainer
+    for cryptainer_name in cryptainer_names:
+        _check_stream_recorder_cryptainer_name(cryptainer_name)
+        payload, _operation_report = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name)
+        assert payload.strip() == b"This is some test data output and then I quit immediately!"
+    assert not any(thread.is_alive() for thread in recorder._previous_stdio_threads)
+
+
+def test_periodic_subprocess_stream_recorder_restarts_failing_subprocess_with_backoff(tmp_path):
+    cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=True)
+
+    recorder = _RestartingStreamRecorderForTesting(
+        executable_command_line=[sys.executable, "-c", "import sys; sys.exit(1)"],  # Like an unreachable camera
+        interval_s=60,
+        cryptainer_storage=cryptainer_storage,
+    )
+    recorder.start()
+    time.sleep(4.5)  # Launches at ~0s, ~1s (after 1s delay) and ~3s (after 2s delay)
+    recorder.stop()
+    recorder.join()
+    assert recorder._next_restart_delay_s in (4, 8)  # Delay doubled at each exit without output
+
+    cryptainer_names = cryptainer_storage.list_cryptainer_names()
+    assert len(cryptainer_names) == 3, cryptainer_names
+    for cryptainer_name in cryptainer_names:
+        payload, _operation_report = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name)
+        assert payload == b""
+
+    # A new start() resets the restart delay
+    recorder.start()
+    assert recorder._next_restart_delay_s == 1
+    recorder.stop()
+    recorder.join()
+
+
+def test_periodic_subprocess_stream_recorder_doesnt_restart_stopped_subprocess(tmp_path):
+    cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=True)
+
+    recorder = _SlowRestartingStreamRecorderForTesting(
+        executable_command_line=oneshot_command_line, interval_s=60, cryptainer_storage=cryptainer_storage
+    )
+    recorder.start()
+    time.sleep(2)  # Subprocess has exited, its relaunch is pending
+    recorder.stop()  # Cancels the pending relaunch
+    recorder.join()
+    assert not any(thread.is_alive() for thread in recorder._previous_stdio_threads)
+    time.sleep(4)
+    assert recorder._subprocess is None
+    assert len(cryptainer_storage.list_cryptainer_names()) == 1
+
+    # A long-running subprocess, normally stopped, isn't relaunched either
+    recorder = _RestartingStreamRecorderForTesting(
+        executable_command_line=get_longrun_command_line("no_restart_on_stop"),
+        interval_s=60,
+        cryptainer_storage=cryptainer_storage,
+    )
+    with mock.patch("wacryptolib.sensor.logger") as logger_mock:
+        recorder.start()
+        time.sleep(1)
+        recorder.stop()
+        recorder.join()
+        time.sleep(1.5)
+    assert "relaunching it in" not in str(logger_mock.mock_calls)
+    assert recorder._subprocess is None
+
+
+@pytest.mark.parametrize("skip_quit_operation", [False, True])
+def test_periodic_subprocess_stream_recorder_terminates_stalled_subprocess(tmp_path, skip_quit_operation):
+    cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=True)
+
+    recorder = _StallWatchingStreamRecorderForTesting(
+        executable_command_line=_stalling_command_line,
+        skip_quit_operation=skip_quit_operation,  # Then the stalled subprocess must get killed
+        interval_s=60,
+        cryptainer_storage=cryptainer_storage,
+    )
+    with mock.patch("wacryptolib.sensor.logger") as logger_mock:
+        recorder.start()
+        subprocess = recorder._subprocess
+        try:
+            for _ in range(80):  # Beware of python launch time, on slow systems
+                if subprocess.poll() is not None:
+                    break
+                time.sleep(0.1)
+            assert subprocess.poll() is not None  # Stalled subprocess was terminated
+            assert recorder.is_running  # But the sensor itself keeps going
+            recorder.stop()
+            recorder.join()
+        finally:
+            if subprocess.poll() is None:
+                subprocess.kill()
+    log_calls = str(logger_mock.mock_calls)
+    assert "terminating it as stalled" in log_calls
+    assert ("Force-terminating stalled" in log_calls) == skip_quit_operation
+    assert "waiting for next periodic restart" in log_calls  # Not relaunched, since restart_on_exit is off
+
+    (cryptainer_name,) = cryptainer_storage.list_cryptainer_names()
+    payload, _operation_report = cryptainer_storage.decrypt_cryptainer_from_storage(cryptainer_name)
+    assert payload.strip() == b"Some data before a stall"  # Data output before the stall was kept
+
+
+def test_periodic_subprocess_stream_recorder_doesnt_terminate_active_subprocess(tmp_path):
+    cryptainer_storage = _build_real_cryptainer_storage_for_stream_recorder_testing(tmp_path, skip_signing=True)
+
+    recorder = _StallWatchingStreamRecorderForTesting(
+        executable_command_line=get_longrun_command_line("active_subprocess"),  # Outputs data every 0.33s
+        interval_s=60,
+        cryptainer_storage=cryptainer_storage,
+    )
+    with mock.patch("wacryptolib.sensor.logger") as logger_mock:
+        recorder.start()
+        subprocess = recorder._subprocess
+        time.sleep(4)
+        assert subprocess.poll() is None  # Still running, since stdout activity is seen before chunks are full
+        recorder.stop()
+        recorder.join()
+    assert "stalled" not in str(logger_mock.mock_calls)
+
+
 class _UppercaseTarfileRecordAggregator(TarfileRecordAggregator):
     tarfile_extension = ".TAR"
 

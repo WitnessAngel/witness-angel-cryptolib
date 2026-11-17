@@ -2,6 +2,12 @@
 Development
 =============
 
+* `PeriodicSubprocessStreamRecorder` can supervise its subprocess, through new class attributes left disabled by
+  default: `subprocess_stdout_timeout_s` terminates (then kills) a subprocess which outputs nothing for that long, and
+  `subprocess_restart_on_exit` relaunches a subprocess which exits by itself, in a new cryptainer, after a delay doubling
+  from `subprocess_restart_delay_s` to `subprocess_restart_max_delay_s` while subprocesses exit without any output
+* `PeriodicSubprocessStreamRecorder` reads subprocess output as soon as it's available, while still encrypting it in
+  chunks of `subprocess_data_chunk_size` bytes
 * **BREAKING**: `CryptainerStorage` and the flightbox CLI name new cryptainers `<basename>.crypt.json` (Extended JSON,
   the default) or `<basename>.crypt.cbor` (WA-CBOR), instead of `<basename>.crypt`; the offloaded payload file is still
   named after the whole cryptainer file name plus `.payload` (e.g. `<basename>.crypt.json.payload`)

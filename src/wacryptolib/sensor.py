@@ -8,6 +8,7 @@ import re
 import subprocess
 import tarfile
 import threading
+import time
 from datetime import datetime
 from subprocess import TimeoutExpired
 
@@ -360,6 +361,10 @@ class PeriodicSensorRestarter(PeriodicTaskHandler):
     @catch_and_log_exception("PeriodicSensorRestarter._offloaded_run_task")
     def _offloaded_run_task(self):
         assert self.is_running
+        self._rollover_recording()
+
+    def _rollover_recording(self):
+        """Close the current record and start a new one, MUST be called with self._lock held."""
         from_datetime = self._current_start_time
         to_datetime = get_utc_now_date()
         self._current_start_time = get_utc_now_date()  # RESET
@@ -414,6 +419,21 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
     # How much data to push to encryption stream at the same time
     subprocess_data_chunk_size = 2 * 1024**2
 
+    # If set, a subprocess which outputs no data on its stdout for this many seconds is considered
+    # stalled, and gets terminated (e.g. ffmpeg doesn't always notice a frozen RTSP camera)
+    subprocess_stdout_timeout_s = None
+
+    # If True, a subprocess which exits by itself (crash, camera disconnection...) is relaunched
+    # after a delay, in a new cryptainer, instead of waiting for the next periodic restart
+    subprocess_restart_on_exit = False
+    subprocess_restart_delay_s = 1  # Must stay >= 1s, since cryptainer names have a 1s resolution
+    # The delay doubles, up to this limit, after each subprocess which output nothing (e.g. unreachable camera),
+    # and gets back to its initial value after a subprocess which output data (e.g. camera closing the session)
+    subprocess_restart_max_delay_s = 60
+
+    # Grace period between the termination and the killing of a stalled subprocess
+    subprocess_stall_kill_delay_s = 10
+
     _subprocess = None
     _stdout_thread = None
     _stderr_thread = None
@@ -425,7 +445,13 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        assert self.subprocess_restart_delay_s >= 1, self.subprocess_restart_delay_s
         self._previous_stdio_threads = []  # To allow a proper join() at the end (for stdout+stderr streams)
+        self._next_restart_delay_s = self.subprocess_restart_delay_s
+
+    def start(self):
+        self._next_restart_delay_s = self.subprocess_restart_delay_s
+        super().start()
 
     def _build_subprocess_command_line(self) -> list:  # pragma: no cover
         raise NotImplementedError("%s -> _handle_post_stop_data" % self.sensor_name)
@@ -456,17 +482,32 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         # Do some cleanup to save memory
         self._previous_stdio_threads = [thread for thread in self._previous_stdio_threads if thread.is_alive()]
 
+        launch_time = time.monotonic()
+        stdout_activity = [launch_time]  # Monotonic time of the latest stdout output, for the stall watchdog
+
         @catch_and_log_exception("Subprocess stdout_reader_thread of sensor %s" % self.sensor_name)
         def _stdout_reader_thread(fh):
             # Backported from Popen._readerthread of Python3.8
+            chunk_size = self.subprocess_data_chunk_size
+            pending_data = bytearray()
+
+            def _encrypt_chunk(chunk):
+                logger.debug("Encrypting %s chunk of length %s", self.sensor_name, len(chunk))
+                cryptainer_encryption_stream.encrypt_chunk(chunk)
+
             while True:
-                chunk = fh.read(self.subprocess_data_chunk_size)
-                assert chunk is not None  # We're NOT in non-blocking mode!
-                if chunk:
-                    logger.debug("Encrypting %s chunk of length %s", self.sensor_name, len(chunk))
-                    cryptainer_encryption_stream.encrypt_chunk(chunk)
-                else:
+                # read1() returns as soon as SOME data is available, so that output activity can be monitored
+                data = fh.read1(chunk_size)
+                assert data is not None  # We're NOT in non-blocking mode!
+                if not data:
                     break  # End of subprocess
+                stdout_activity[0] = time.monotonic()
+                pending_data += data
+                while len(pending_data) >= chunk_size:  # Encrypted chunks keep the same size as before
+                    _encrypt_chunk(bytes(pending_data[:chunk_size]))
+                    del pending_data[:chunk_size]
+            if pending_data:
+                _encrypt_chunk(bytes(pending_data))
             logger.debug(
                 "Finalizing %s cryptainer encryption stream", cryptainer_encryption_stream._cryptainer_filepath.name
             )
@@ -495,6 +536,93 @@ class PeriodicSubprocessStreamRecorder(PeriodicEncryptionStreamMixin, PeriodicSe
         self._stderr_thread = threading.Thread(target=_sytderr_reader_thread, args=(self._subprocess.stderr,))
         self._stderr_thread.start()
         self._previous_stdio_threads.append(self._stderr_thread)
+
+        if self.subprocess_stdout_timeout_s or self.subprocess_restart_on_exit:
+            supervisor_thread = threading.Thread(
+                target=self._subprocess_supervisor_thread,
+                kwargs=dict(
+                    proc=self._subprocess,
+                    stdout_thread=self._stdout_thread,
+                    launch_time=launch_time,
+                    stdout_activity=stdout_activity,
+                ),
+                daemon=True,
+            )
+            supervisor_thread.start()
+            self._previous_stdio_threads.append(supervisor_thread)  # Joined at the end too
+
+    def _is_current_subprocess(self, proc):
+        """True if this subprocess was neither stopped nor replaced by the sensor in the meantime."""
+        return self.is_running and self._subprocess is proc
+
+    def _subprocess_supervisor_thread(self, proc, stdout_thread, launch_time, stdout_activity):
+        """Terminates the subprocess if it stalls, and relaunches it if it exits on its own."""
+        with catch_and_log_exception("Subprocess supervisor thread of sensor %s" % self.sensor_name):
+            stall_termination_time = None
+            while True:
+                try:
+                    proc.wait(timeout=0.5)
+                    break
+                except TimeoutExpired:
+                    pass
+                stdout_timeout_s = self.subprocess_stdout_timeout_s
+                now = time.monotonic()
+                if stall_termination_time is None:
+                    if stdout_timeout_s and now - stdout_activity[0] > stdout_timeout_s:
+                        with self._lock:
+                            if self._is_current_subprocess(proc):
+                                logger.warning(
+                                    "No output from %s subprocess for %ss, terminating it as stalled",
+                                    self.sensor_name,
+                                    stdout_timeout_s,
+                                )
+                                self._quit_subprocess(proc)
+                                stall_termination_time = now
+                elif now - stall_termination_time > self.subprocess_stall_kill_delay_s:
+                    with self._lock:
+                        if self._is_current_subprocess(proc):
+                            logger.warning("Force-terminating stalled %s subprocess", self.sensor_name)
+                            self._kill_subprocess(proc)
+                    stall_termination_time = float("inf")  # Only try killing once
+
+            if not self._is_current_subprocess(proc):
+                return  # Normal stop or periodic restart of the recording
+
+            run_duration_s = time.monotonic() - launch_time
+            stdout_thread.join(timeout=10)  # Let it consume the last output of the subprocess, and finalize its record
+            had_output = stdout_activity[0] != launch_time
+            if had_output:
+                self._next_restart_delay_s = self.subprocess_restart_delay_s
+            restart_delay_s = self._next_restart_delay_s
+
+            if not self.subprocess_restart_on_exit:
+                logger.warning(
+                    "Subprocess of sensor %s exited with return code %s after %ds, waiting for next periodic restart",
+                    self.sensor_name,
+                    proc.returncode,
+                    run_duration_s,
+                )
+                return
+
+            logger.warning(
+                "Subprocess of sensor %s exited with return code %s after %ds, relaunching it in %ss",
+                self.sensor_name,
+                proc.returncode,
+                run_duration_s,
+                restart_delay_s,
+            )
+            self._next_restart_delay_s = min(restart_delay_s * 2, self.subprocess_restart_max_delay_s)
+
+            restart_time = time.monotonic() + restart_delay_s
+            while time.monotonic() < restart_time:
+                if not self._is_current_subprocess(proc):
+                    return  # Sensor was stopped or restarted in the meantime
+                time.sleep(0.1)
+
+            with self._lock:
+                if not self._is_current_subprocess(proc):
+                    return
+                self._rollover_recording()  # Finishes the current cryptainer and starts a new subprocess
 
     def _do_start_recording(self):
         ##print(">>>>>>>>>> DO START RECORDING CALLED")

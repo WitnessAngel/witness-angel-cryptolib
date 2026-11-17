@@ -844,6 +844,32 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
 - Shamir via a vendored copy of pycryptodome's pure-Python `Shamir`;
 - no payload encryption, digests, signatures nor file output yet (steps 2 and 3).
 
+### 10.2 C profile
+
+`reimplementations/c-language/` is a portable C99 library implementing steps 1 to 3 for
+microcontrollers (its `README.md` documents its API, platform hooks, build options and measured
+footprint), with:
+
+- symmetric: `AES_CBC`, `AES_EAX` and `CHACHA20_POLY1305`, for payload encryption (inline or
+  offloaded, fed by chunks of any size) and as symmetric key cipher layers; asymmetric: `RSA_OAEP`
+  (SHA-512), `ECIES_X25519` and `ML_KEM_768` (both through HPKE seal, §3.5); Shamir shared secrets;
+  key cipher layers nested up to a compile-time depth (8 by default);
+- input: a **device profile**, a WA-CBOR document holding the cryptoconf and the raw public keys of
+  its trustees, decoded within a sub-profile of WA-CBOR and fully validated before any encryption
+  (`docs/flightbox_specifications/flightbox_device_profile_specification.md`); profiles are exported
+  from a cryptoconf and a keystore pool by `scripts/flightbox/export_device_profile.py`;
+- trustees `local_keyfactory`, `authenticator` and `jsonrpc_api`, all resolved to public keys of the
+  profile (the device never fetches keys), which makes the root `keychain_uid` of the cryptoconf
+  mandatory;
+- no signatures: cryptoconfs with non-empty signature lists are rejected, so §8 has no digest
+  to compute nor signature to inject;
+- two crypto backends producing identical output, Mbed TLS 3.6 (with the vendored mlkem-native for
+  `ML_KEM_768`) and wolfCrypt 5.8, all randomness coming from a platform hook;
+- document formats chosen at compile time (Extended JSON, WA-CBOR, or both), with one format per
+  cryptainer: the cryptainer file format and the key ciphertext format `F` of every layer are the
+  same, so WA-CBOR cryptainers carry `key_ciphertext_format: "cbor"` on every payload layer and
+  symmetric key layer (§2). A WA-CBOR-only build is a single-serialization device, as §2 allows.
+
 ---
 
 ## 11. Conformance checklist and pitfalls

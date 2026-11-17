@@ -157,9 +157,11 @@ The backend provides only bulk or costly primitives with no parameter ambiguity,
 | RSA raw public operation `m^e mod n` from raw (n, e) | `mbedtls_rsa_import_raw` + `mbedtls_rsa_public` | `wc_RsaPublicKeyDecodeRaw` + raw public encryption |
 | ML-KEM-768 deterministic encapsulation (32-byte coins) | mlkem-native `crypto_kem_enc_derand` | `wc_MlKemKey_EncapsulateWithRandom` |
 
-Required configuration, checked by `#if`/`#error` at the top of each adapter. These are the expected names, to be confirmed against the pinned versions in task 4:
-- Mbed TLS: `MBEDTLS_AES_C`, `MBEDTLS_CIPHER_MODE_CBC`, `MBEDTLS_CIPHER_MODE_CTR`, `MBEDTLS_CHACHAPOLY_C` (with `_CHACHA20_C`, `_POLY1305_C`), `MBEDTLS_SHA256_C`, `MBEDTLS_SHA512_C`, `MBEDTLS_MD_C`, `MBEDTLS_RSA_C`, `MBEDTLS_BIGNUM_C`, `MBEDTLS_ECP_C`, `MBEDTLS_ECP_DP_CURVE25519_ENABLED`, and **not** `MBEDTLS_AES_ONLY_128_BIT_KEY_LENGTH`. `MBEDTLS_MPI_MAX_SIZE` must be at least 512 bytes, for 4096-bit moduli.
-- wolfCrypt: `HAVE_AES_CBC`, `WOLFSSL_AES_COUNTER`, `HAVE_CHACHA`, `HAVE_POLY1305`, `WOLFSSL_SHA512`, HMAC enabled, RSA enabled with `WC_RSA_NO_PADDING` (and `WC_RSA_DIRECT` if the pinned version requires it), `HAVE_CURVE25519`, `WOLFSSL_HAVE_MLKEM` (which brings `WOLFSSL_SHA3`/`SHAKE128`/`SHAKE256`), and RSA maximum size at least 4096 bits. Raw RSA is listed by wolfSSL among "options that weaken security": it is only used inside our own OAEP encoding (D4), and the README says so.
+Required configuration, checked by `#if`/`#error` at the top of each adapter (names confirmed against Mbed TLS 3.6.8 and wolfSSL 5.8.4 in task 4):
+- Mbed TLS: `MBEDTLS_AES_C`, `MBEDTLS_CIPHER_MODE_CBC`, `MBEDTLS_CIPHER_MODE_CTR`, `MBEDTLS_CHACHAPOLY_C` (with `_CHACHA20_C`, `_POLY1305_C`), `MBEDTLS_SHA256_C`, `MBEDTLS_SHA512_C`, `MBEDTLS_MD_C`, `MBEDTLS_RSA_C`, `MBEDTLS_BIGNUM_C`, `MBEDTLS_ECP_C`, `MBEDTLS_ECP_DP_CURVE25519_ENABLED`, and **not** `MBEDTLS_AES_ONLY_128_BIT_KEY_LENGTH`. `MBEDTLS_MPI_MAX_SIZE` must be at least 512 bytes, for 4096-bit moduli, and cover `WA_MAX_RSA_MODULUS_BITS`.
+- wolfCrypt: AES (not `NO_AES`) with `HAVE_AES_CBC`, `WOLFSSL_AES_COUNTER` and `WOLFSSL_AES_256`; `HAVE_CHACHA`, `HAVE_POLY1305`; not `NO_SHA256`, and `WOLFSSL_SHA512`; not `NO_HMAC`; RSA (not `NO_RSA`) with `WC_RSA_NO_PADDING`, which alone enables `wc_RsaDirect()` in 5.8.4 (`WC_RSA_DIRECT` is not needed); `HAVE_CURVE25519` with `NO_CURVE25519_BLINDING` (D6); `WOLFSSL_HAVE_MLKEM` and `WOLFSSL_WC_MLKEM` (which bring SHA-3/SHAKE), neither `WOLFSSL_NO_ML_KEM_768` nor `WOLFSSL_MLKEM_NO_ENCAPSULATE`; and `SP_INT_BITS` at least 4096 and at least `WA_MAX_RSA_MODULUS_BITS`. Raw RSA is listed by wolfSSL among "options that weaken security": it is only used inside our own OAEP encoding (D4), and the README says so.
+
+Two wolfCrypt behaviours differ from Mbed TLS and are evened out in its adapter, as the conformance test showed: `wc_ChaCha20Poly1305_Final()` refuses a stream that received neither associated data nor data (an empty payload), so the adapter moves it to the equivalent empty-AAD state first; and `wc_RsaDirect()` accepts an input not below the modulus, so the adapter refuses it, as `mbedtls_rsa_public()` does.
 
 Selection: exactly one of `WA_CRYPTO_BACKEND_MBEDTLS` / `WA_CRYPTO_BACKEND_WOLFCRYPT` must be defined. CMake sets it from `WA_CRYPTO_BACKEND`, and device builds define it themselves. A misconfigured ESP-IDF menuconfig thus becomes a build error, not a runtime failure. Bulk CBC and CTR calls also mean that, on ESP32, the AES accelerator is taken once per slice, not once per 16-byte block.
 
@@ -190,7 +192,11 @@ All randomness is drawn by portable code from the platform random hook and passe
 - byte-identical outputs on both backends under a deterministic test hook, which makes the cross-backend and chunking tests exact;
 - no hidden fallback to a weak source. A hook failure is fatal.
 
-If a future wolfCrypt configuration requires an RNG for X25519 blinding (`WOLFSSL_CURVE25519_BLINDING`), the adapter will feed a `WC_RNG` seeded from the same hook (`wc_SetSeed_Cb`, `WC_RNG_SEED_CB`). This changes nothing outside the adapter. The blinding values don't affect the outputs, so determinism is kept.
+X25519 blinding is the one place where a backend wants randomness of its own. The device only multiplies single-use HPKE ephemeral scalars, so blinding (a countermeasure against multi-trace side-channel analysis) protects nothing there; it is handled without touching the hook, whose consumption must stay identical on both backends:
+- wolfCrypt 5.8 enables `WOLFSSL_CURVE25519_BLINDING` by default, under which `wc_curve25519_generic()` silently creates an OS-seeded `WC_RNG`. The flightbox settings define `NO_CURVE25519_BLINDING`, and the adapter has an `#error` check for it.
+- Mbed TLS's `mbedtls_ecp_mul()` requires an RNG. The adapter passes a generator deriving the blinding bytes by SHA-256, in counter mode, from the clamped scalar and the input point: unpredictable without the scalar, and without effect on the output.
+
+Mbed TLS's bignum and MD code allocate through `mbedtls_calloc()`, and wolfCrypt through `XMALLOC`, outside the platform hooks: the README says so, and how to route them on a device.
 
 The clock hook returns Unix time in units of 1/10000 s as a `uint64_t`, which UUID0 truncates to its low 48 bits, or reports that no clock is available.
 

@@ -154,6 +154,12 @@ Development
   protected like wacryptolib <= 0.12 did, tampered cipherdicts and cryptainers, and legacy field namings
 * Fix the JSON-schema validation (jsonschema_mode=True) of cryptainers with an empty payload, whose empty base64
   ciphertext was rejected
+* Add a portable C99 flightbox encryptor for microcontrollers (`reimplementations/c-language/`, see its README.md):
+  steps 1 to 3 of the encryptor specification, from a WA-CBOR device profile (cryptoconf plus raw trustee public keys,
+  specified in `docs/flightbox_specifications/flightbox_device_profile_specification.md` and exported by
+  `scripts/flightbox/export_device_profile.py`), with Mbed TLS (and mlkem-native) or wolfCrypt backends, Extended
+  JSON and/or WA-CBOR output selected at compile time, a host CLI, and unit, fuzz and interop tests against wacryptolib
+  (`tox -e c_flightbox`)
 
 
 Version 0.12

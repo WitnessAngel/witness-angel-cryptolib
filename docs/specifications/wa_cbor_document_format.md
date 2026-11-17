@@ -212,8 +212,9 @@ in any letter case. Tools creating a file from a name typed by a user SHOULD low
 
 ## 9. Relation to the C device profile
 
-The device profile of the C flightbox encryptor (change `add-c-flightbox-encryptor`) is a strict sub-profile of
-WA-CBOR: definite lengths only, no floats, and no tag other than 37. Every valid device profile is therefore a valid
+The device profile of the C flightbox encryptor (`docs/flightbox_specifications/flightbox_device_profile_specification.md`)
+is a strict sub-profile of WA-CBOR: definite lengths only, no floats, no tag other than 37 (not even tag 55799 around
+the top-level item), and integers within the signed 64-bit range. Every valid device profile is therefore a valid
 WA-CBOR document, and its specification only needs to list these restrictions on top of this document. As writers
 never emit tag 55799, the C decoder never meets it in files written by wacryptolib.
 

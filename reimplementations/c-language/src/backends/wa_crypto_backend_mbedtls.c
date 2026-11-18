@@ -159,6 +159,7 @@ void wa_crypto_backend_aes_256_destroy(wa_crypto_backend_aes_256_t *context_or_n
 struct wa_crypto_backend_chacha20_poly1305 {
     const wa_platform_hooks_t *platform_hooks;
     mbedtls_chachapoly_context chachapoly;
+    uint64_t data_length; /* Mbed TLS lets the block counter wrap: the RFC 8439 limit is checked here */
 };
 
 wa_status_t wa_crypto_backend_chacha20_poly1305_create(const wa_platform_hooks_t *platform_hooks,
@@ -174,6 +175,7 @@ wa_status_t wa_crypto_backend_chacha20_poly1305_create(const wa_platform_hooks_t
         return WA_STATUS_OUT_OF_MEMORY;
     }
     context->platform_hooks = platform_hooks;
+    context->data_length = 0;
     mbedtls_chachapoly_init(&context->chachapoly);
     if (mbedtls_chachapoly_setkey(&context->chachapoly, key) != 0 ||
         mbedtls_chachapoly_starts(&context->chachapoly, nonce, MBEDTLS_CHACHAPOLY_ENCRYPT) != 0 ||
@@ -192,9 +194,14 @@ wa_status_t wa_crypto_backend_chacha20_poly1305_encrypt(wa_crypto_backend_chacha
     if (length == 0) {
         return WA_STATUS_OK;
     }
-    return mbedtls_chachapoly_update(&context->chachapoly, length, input, output) == 0
-               ? WA_STATUS_OK
-               : WA_STATUS_CRYPTO_BACKEND_FAILURE;
+    if ((uint64_t)length > WA_CHACHA20_POLY1305_MAXIMUM_DATA_LENGTH - context->data_length) {
+        return WA_STATUS_INVALID_ARGUMENT;
+    }
+    if (mbedtls_chachapoly_update(&context->chachapoly, length, input, output) != 0) {
+        return WA_STATUS_CRYPTO_BACKEND_FAILURE;
+    }
+    context->data_length += (uint64_t)length;
+    return WA_STATUS_OK;
 }
 
 wa_status_t wa_crypto_backend_chacha20_poly1305_finish(wa_crypto_backend_chacha20_poly1305_t *context,

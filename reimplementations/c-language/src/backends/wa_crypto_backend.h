@@ -25,6 +25,8 @@
 #define WA_AES_BLOCK_SIZE 16u
 #define WA_CHACHA20_POLY1305_KEY_SIZE 32u
 #define WA_CHACHA20_POLY1305_NONCE_SIZE 12u
+/* RFC 8439: 2^32 - 1 blocks of 64 bytes after the Poly1305 key block (the 32-bit block counter must not wrap) */
+#define WA_CHACHA20_POLY1305_MAXIMUM_DATA_LENGTH ((uint64_t)0xFFFFFFFFu * 64u)
 #define WA_AEAD_TAG_SIZE 16u
 #define WA_SHA256_DIGEST_SIZE 32u
 #define WA_SHA512_DIGEST_SIZE 64u
@@ -74,7 +76,8 @@ wa_status_t wa_crypto_backend_chacha20_poly1305_create(const wa_platform_hooks_t
                                                        const uint8_t *associated_data, size_t associated_data_length,
                                                        wa_crypto_backend_chacha20_poly1305_t **context_out);
 
-/* Encrypt the next `length` bytes, any length (0 allowed). In-place allowed. */
+/* Encrypt the next `length` bytes, any length (0 allowed). In-place allowed. WA_STATUS_INVALID_ARGUMENT beyond
+ * WA_CHACHA20_POLY1305_MAXIMUM_DATA_LENGTH bytes in total (nothing encrypted by that call). */
 wa_status_t wa_crypto_backend_chacha20_poly1305_encrypt(wa_crypto_backend_chacha20_poly1305_t *context,
                                                         const uint8_t *input, uint8_t *output, size_t length);
 

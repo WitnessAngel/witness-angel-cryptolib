@@ -22,6 +22,91 @@ static size_t wa_get_bit_length_of_byte(uint8_t byte)
     return bit_length;
 }
 
+/* GREATEST COMMON DIVISOR, for gcd(n, e) = 1 */
+
+/* Little-endian 32-bit limbs, enough for any modulus or exponent accepted (e < n) */
+#define WA_RSA_LIMB_COUNT ((WA_MAX_RSA_MODULUS_BITS + 31u) / 32u)
+
+static void wa_load_limbs(uint32_t limbs[WA_RSA_LIMB_COUNT], const uint8_t *big_endian, size_t length)
+{
+    size_t index;
+    memset(limbs, 0, WA_RSA_LIMB_COUNT * sizeof(uint32_t));
+    for (index = 0; index < length; ++index) {
+        size_t bit_position = 8u * (length - 1u - index);
+        limbs[bit_position / 32u] |= (uint32_t)big_endian[index] << (bit_position % 32u);
+    }
+}
+
+static int wa_compare_limbs(const uint32_t *a, const uint32_t *b)
+{
+    size_t index = WA_RSA_LIMB_COUNT;
+    while (index-- > 0) {
+        if (a[index] != b[index]) {
+            return a[index] < b[index] ? -1 : 1;
+        }
+    }
+    return 0;
+}
+
+static void wa_subtract_limbs(uint32_t *a, const uint32_t *b) /* a -= b, with a >= b */
+{
+    uint64_t borrow = 0;
+    size_t index;
+    for (index = 0; index < WA_RSA_LIMB_COUNT; ++index) {
+        uint64_t difference = (uint64_t)a[index] - b[index] - borrow;
+        a[index] = (uint32_t)difference;
+        borrow = (difference >> 32) & 1u;
+    }
+}
+
+static void wa_remove_factors_of_two(uint32_t *limbs) /* limbs must be nonzero */
+{
+    while ((limbs[0] & 1u) == 0) {
+        size_t index;
+        for (index = 0; index + 1u < WA_RSA_LIMB_COUNT; ++index) {
+            limbs[index] = (limbs[index] >> 1) | (limbs[index + 1u] << 31);
+        }
+        limbs[WA_RSA_LIMB_COUNT - 1u] >>= 1;
+    }
+}
+
+/* Whether gcd(n, e) = 1, for an odd n and a nonzero e (binary GCD; both values are public) */
+static int wa_rsa_values_are_coprime(const uint8_t *modulus, size_t modulus_length, const uint8_t *public_exponent,
+                                     size_t public_exponent_length)
+{
+    uint32_t first_limbs[WA_RSA_LIMB_COUNT];
+    uint32_t second_limbs[WA_RSA_LIMB_COUNT];
+    uint32_t *odd_value = first_limbs;
+    uint32_t *other_value = second_limbs;
+    size_t index;
+    wa_load_limbs(odd_value, modulus, modulus_length);
+    wa_load_limbs(other_value, public_exponent, public_exponent_length);
+    /* n is odd, so factors of two of e are not common: gcd(n, e) = gcd(n, e / 2^k) */
+    wa_remove_factors_of_two(other_value);
+    for (;;) {
+        int comparison = wa_compare_limbs(odd_value, other_value);
+        if (comparison == 0) {
+            break;
+        }
+        if (comparison > 0) {
+            uint32_t *swapped = odd_value;
+            odd_value = other_value;
+            other_value = swapped;
+        }
+        wa_subtract_limbs(other_value, odd_value); /* Both odd: the difference is even and nonzero */
+        wa_remove_factors_of_two(other_value);
+    }
+    if (odd_value[0] != 1u) {
+        return 0;
+    }
+    for (index = 1; index < WA_RSA_LIMB_COUNT; ++index) {
+        if (odd_value[index] != 0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 wa_status_t wa_public_key_check_rsa(const uint8_t *modulus, size_t modulus_length, const uint8_t *public_exponent,
                                     size_t public_exponent_length)
 {
@@ -46,6 +131,9 @@ wa_status_t wa_public_key_check_rsa(const uint8_t *modulus, size_t modulus_lengt
     if (public_exponent_length > modulus_length ||
         (public_exponent_length == modulus_length && memcmp(public_exponent, modulus, modulus_length) >= 0)) {
         return WA_STATUS_KEY_CONSTRAINT_VIOLATION;
+    }
+    if (!wa_rsa_values_are_coprime(modulus, modulus_length, public_exponent, public_exponent_length)) {
+        return WA_STATUS_KEY_CONSTRAINT_VIOLATION; /* gcd(n, e) != 1 */
     }
     return WA_STATUS_OK;
 }

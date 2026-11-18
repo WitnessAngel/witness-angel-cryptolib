@@ -237,7 +237,7 @@ requesting a disabled format gives `WA_STATUS_UNSUPPORTED_FEATURE`. Device profi
 - **Big chips** (ESP32-S3 with PSRAM...): Extended JSON, readable everywhere; keeping both formats costs little.
 - **Small chips**: WA-CBOR only, which is more compact on disk and in RAM (no base64 expansion of the key
   ciphertexts nested inside each other): with the 5-level `nested_all_layer_kinds` profile, the peak heap use is
-  about 19 KB in WA-CBOR against 80 KB in Extended JSON.
+  about 21 KB in WA-CBOR against 82 KB in Extended JSON.
 
 ### Measured footprint
 
@@ -247,8 +247,8 @@ TLS backend), totals of `arm-none-eabi-size` over each static archive, before th
 
 | Build | `wa_flightbox` (text) | `wa_mlkem_native` (text) | `mbedcrypto` (minimal config of `config/`) |
 |---|---|---|---|
-| CBOR-only | 22,255 B | 8,042 B | 40,326 B text, 8,754 B bss |
-| JSON-only | 23,007 B | 8,042 B | same |
+| CBOR-only | 22,879 B | 8,042 B | 40,326 B text, 8,754 B bss |
+| JSON-only | 23,549 B | 8,042 B | same |
 
 Most of the Mbed TLS bss is its AES tables: `MBEDTLS_AES_ROM_TABLES` moves them to flash.
 
@@ -257,16 +257,19 @@ Peak heap use (counting allocator of the unit tests, offloaded payload, 64-bit h
 
 | Device profile | Extended JSON | WA-CBOR |
 |---|---|---|
-| `corpus_2026_cbor_key_ciphertexts_05` (RSA-OAEP and X25519 trustees) | 18.9 KB | 14.7 KB |
-| `nested_all_layer_kinds` (5 nested layer kinds, every asymmetric algorithm) | 80.1 KB | 19.5 KB |
+| `corpus_2026_cbor_key_ciphertexts_05` (RSA-OAEP and X25519 trustees) | 19.6 KB | 15.4 KB |
+| `nested_all_layer_kinds` (5 nested layer kinds, every asymmetric algorithm) | 81.8 KB | 20.5 KB |
 
-Stack (`-fstack-usage`, Cortex-M4, `-Os`): the largest frames are `wa_device_profile_load_from_cbor` (376 B),
-`wa_x25519_multiply` (320 B) and `wa_cmac_process_blocks` (296 B). The recursive functions, and their bounds:
+Stack (`-fstack-usage`, Cortex-M4, `-Os`): the largest frame is `wa_rsa_values_are_coprime` (1,048 B), which
+checks that the RSA exponent and modulus of each trustee key are coprime when the profile is loaded, on two
+`WA_MAX_RSA_MODULUS_BITS`-bit buffers (half of it with a 2048-bit maximum); then come `wa_device_profile_load_from_cbor`
+(376 B), `wa_x25519_multiply` (320 B) and `wa_cmac_process_blocks` (296 B). The recursive functions, and their
+bounds:
 
 | Function | Frame | Recursion bound |
 |---|---|---|
 | `wa_cbor_decode_item` (the array, map and tag decoders are inlined into it) | 112 B | `WA_MAX_CBOR_NESTING_DEPTH` (64 levels: about 7 KiB) |
-| `wa_cbor_write_node` / `wa_json_write_node` | 40 B / 64 B | depth of the cryptainer tree |
+| `wa_cbor_write_node` / `wa_json_write_node` | 48 B / 64 B | depth of the cryptainer tree |
 | `wa_document_tree_check_node` | 24 B | `WA_MAX_CBOR_NESTING_DEPTH` |
 | `wa_value_deep_copy` / `wa_value_destroy` | 64 B / 24 B | depth of the tree |
 | `wa_key_cipher_layers_encrypt_key` | 208 B | `WA_MAX_KEY_CIPHER_NESTING_DEPTH` (8 levels) |
@@ -281,6 +284,12 @@ Exactly one backend is compiled, by defining `WA_CRYPTO_BACKEND_MBEDTLS` or `WA_
 `-DWA_CRYPTO_BACKEND=MBEDTLS|WOLFCRYPT`). Both produce byte-identical cryptainers for identical random inputs
 (tested). Each adapter checks the options it needs with `#error`, so a misconfigured build fails at compile time,
 naming the missing option.
+
+Both backends enforce the RFC 8439 limit of a ChaCha20-Poly1305 message, 2^32 - 1 blocks of 64 bytes (about
+256 GiB, `WA_CHACHA20_POLY1305_MAXIMUM_DATA_LENGTH`): encrypting more data with one key gives
+`WA_STATUS_INVALID_ARGUMENT` rather than a reused keystream. The wolfCrypt adapter composes the AEAD from
+`wc_Chacha_*` and `wc_Poly1305*` calls, with 64-bit lengths, since wolfCrypt's own streaming ChaCha20-Poly1305
+counts the data length in 32 bits, which would break payloads beyond 4 GiB.
 
 ### Mbed TLS 3.6 (default)
 
@@ -364,6 +373,12 @@ build_mbedtls/wa_flightbox_encrypt_file_cli -p device_profile.cbor --format cbor
 # -> recording.bin.crypt.cbor and recording.bin.crypt.cbor.payload
 ```
 
+The CLI never overwrites an existing file unless `--force` is given, and then only replaces the old outputs once
+the new ones are complete (written to `<output>.tmp-NNN` files, renamed at the end): a failed run leaves the
+previous recording intact, and deletes whatever it created. An output that is one of the inputs (the same file
+under another path, or a hard link to it) is refused, stdin (`-`) can be only one of the input file, the profile
+and the metadata, and `--chunk-size` takes a decimal number of bytes, up to 1 GiB.
+
 Trustees decrypt these cryptainers like any other (with test cryptoconfs whose private keys are local,
 `flightbox cryptainer decrypt recording.bin.crypt.cbor` does it).
 
@@ -379,6 +394,10 @@ the tools:
 ```sh
 WA_FLIGHTBOX_C_BUILD_DIR=build_mbedtls:build_wolfcrypt pytest reimplementations/c-language/tests/interop
 ```
+
+Besides decrypting the C cryptainers (and the metadata of the key structs inside their key ciphertexts) with
+wacryptolib, they compare the C validation with wacryptolib's on seeded random mutations of the corpus
+cryptoconfs (whatever the C loader accepts, wacryptolib must accept), and check the CLI's file handling.
 
 Fuzzing (Clang): configure with `-DWA_BUILD_FUZZERS=ON -DBUILD_TESTING=OFF -DWA_BUILD_TOOLS=OFF`, generate the
 seeds with `python reimplementations/c-language/tests/fuzz/generate_fuzz_seed_corpora.py SEED_DIR`, then run

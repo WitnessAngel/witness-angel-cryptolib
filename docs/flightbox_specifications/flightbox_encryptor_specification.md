@@ -544,12 +544,14 @@ random draw and before any output is written: a rejected input leaves no file, n
 Implementations that resolve public keys from a fixed set (e.g. a device profile) SHOULD also resolve and
 check every key before encrypting anything.
 
-**Nesting depth.** wacryptolib has no limit on the nesting of key cipher layers. An implementation MAY
+**Nesting depth.** wacryptolib has no limit on the nesting of key cipher layers. An encryptor MAY
 cap it, to bound recursion or stack use, and MUST then reject deeper cryptoconfs at validation time, with a
 dedicated error (§5.5), never fail half-way. The depth unit is the **key cipher nesting level**: the
 `key_cipher_layers` list of a payload layer is at level 1, and the list inside a symmetric key layer or a
-shard is one level deeper than the list holding that layer. A cap SHOULD be at least 8 (the C
-implementation's default); the cryptoconfs of the compatibility corpus reach level 3.
+shard is one level deeper than the list holding that layer. A cap MUST be at least 8 (the C
+implementation's default); the cryptoconfs of the compatibility corpus reach level 3. Such a cap only
+restricts what an encryptor accepts to produce: decryptors and other readers of cryptainers MUST accept
+any nesting depth, within the item nesting limit of their document format (§5.4).
 
 ### 5.3 Trustee public key resolution
 
@@ -586,9 +588,8 @@ both formats and every reader handle:
 
 Encryptors MUST reject metadata containing a single-key map whose key is an Extended JSON keyword
 (`$binary`, `$uuid`, `$date`, `$numberInt`, `$numberLong`, `$numberDouble`, `$numberDecimal`,
-`$undefined`): it would be read back as a typed value, or fail to load. wacryptolib's WA-CBOR writer
-rejects them; its Extended JSON writer does not, and then produces a cryptainer that wacryptolib itself
-can't load.
+`$undefined`), at any depth: it would be read back as a typed value, or fail to load. wacryptolib
+rejects them at validation time, in both document formats.
 
 Metadata nesting counts against the WA-CBOR limit of 64 levels, with the metadata map at level 2 both in
 the cryptainer and in key structs: metadata itself MAY nest 63 levels, and an encryptor writing WA-CBOR

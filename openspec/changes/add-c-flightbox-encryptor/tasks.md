@@ -190,3 +190,12 @@
   - inline vs offloaded, supported host toolchains, and how to run the tests.
 - [x] 10.5 Add a "C profile" subsection to section 10 of `docs/flightbox_specifications/flightbox_encryptor_specification.md` next to the JSON-only MicroPython profile of §10.1 (supported algorithms, WA-CBOR device profile input, mandatory root keychain uid, no signatures, backends, compile-time document formats with one format per cryptainer, as §2 allows single-serialization devices), with a link to the device profile specification, and verify `tox -e doc` still builds
 - [x] 10.6 Run `openspec validate add-c-flightbox-encryptor --strict`, `tox -e py` and `tox -e c_flightbox`, and verify everything passes before marking the change complete
+
+## 11. Code review fixes
+
+- [x] 11.1 Reject RSA trustee keys whose exponent shares a factor with the modulus (binary GCD on stack buffers), with rejection samples (exponent 3 dividing the modulus, exponent sharing a large prime factor) and a valid sample with a large coprime exponent
+- [x] 11.2 Keep value-tree maps sorted at insertion (binary search, no quadratic sort in the writers), refuse appending a node that already has a parent or contains the container, take buffer blocks over without copying when their unused tail is small, and wipe released strings only if secret
+- [x] 11.3 Enforce the RFC 8439 ChaCha20-Poly1305 data limit in both backends, the wolfCrypt one composed from `wc_Chacha_*` and `wc_Poly1305*` calls with 64-bit lengths (its streaming AEAD counts 32-bit lengths)
+- [x] 11.4 Make the CLI replace forced outputs only once complete (temporary files renamed at the end), refuse outputs that are inputs (same file under any path), allow stdin once, and parse chunk sizes strictly (decimal, up to 1 GiB), with interop tests
+- [x] 11.5 Check the metadata of the key structs inside asymmetric key ciphertexts in the interop tests, and compare the C cryptoconf validation with wacryptolib's on seeded random mutations of the corpus cryptoconfs
+- [x] 11.6 State in the encryptor specification that a key cipher nesting cap is optional, encryptor-side and at least 8, readers accepting any depth; make wacryptolib reject Extended JSON keyword maps in metadata in both formats

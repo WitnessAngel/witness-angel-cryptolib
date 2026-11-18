@@ -5,6 +5,7 @@
 
 /* Unit tests of wa_value_tree.c and wa_document_tree_constraints.c (task 3.2). */
 
+#include <stdio.h>
 #include <string.h>
 
 #include "encoding/wa_document_tree_constraints.h"
@@ -48,12 +49,14 @@ static void test_builders_and_accessors(void)
     WA_REQUIRE_STATUS(wa_value_array_append(array, item), WA_STATUS_OK);
     WA_REQUIRE_STATUS(wa_value_map_add(map, "list", 4, array), WA_STATUS_OK);
 
-    /* Insertion order is kept */
+    /* Entries are sorted by key, bytewise: "a", "b\0c", "list", "z" */
     WA_CHECK_SIZE(wa_value_get_item_count(map), 4);
     WA_CHECK(wa_value_get_map_entry(map, 0, &key, &length, &entry_value) == 0);
-    WA_CHECK_TEXT(key, length, "z");
-    WA_CHECK(wa_value_get_map_entry(map, 2, &key, &length, &entry_value) == 0);
+    WA_CHECK_TEXT(key, length, "a");
+    WA_CHECK(wa_value_get_map_entry(map, 1, &key, &length, &entry_value) == 0);
     WA_CHECK(length == 3 && memcmp(key, "b\0c", 3) == 0);
+    WA_CHECK(wa_value_get_map_entry(map, 3, &key, &length, &entry_value) == 0);
+    WA_CHECK_TEXT(key, length, "z");
     WA_CHECK(wa_value_get_map_entry(map, 4, &key, &length, &entry_value) == -1);
 
     found = wa_value_find_map_value(map, "z");
@@ -301,9 +304,159 @@ static void test_out_of_memory_in_builders(void)
     wa_test_platform_destroy(platform);
 }
 
+static void test_shared_and_cyclic_children_rejected(void)
+{
+    wa_test_platform_t *platform = wa_test_platform_create(10);
+    const wa_platform_hooks_t *hooks = &platform->hooks;
+    wa_value_t *root = NULL;
+    wa_value_t *child = NULL;
+    wa_value_t *grandchild = NULL;
+    wa_value_t *other_map = NULL;
+    wa_value_t *taken;
+    wa_value_t borrowed_null;
+    WA_REQUIRE_STATUS(wa_value_create_map(hooks, &root), WA_STATUS_OK);
+    WA_REQUIRE_STATUS(wa_value_create_array(hooks, &child), WA_STATUS_OK);
+    WA_REQUIRE_STATUS(wa_value_create_map(hooks, &grandchild), WA_STATUS_OK);
+    WA_REQUIRE_STATUS(wa_value_create_map(hooks, &other_map), WA_STATUS_OK);
+    WA_REQUIRE_STATUS(wa_value_map_add(root, "child", 5, child), WA_STATUS_OK);
+    WA_REQUIRE_STATUS(wa_value_array_append(child, grandchild), WA_STATUS_OK);
+
+    /* A node already held by a container (a double release otherwise) */
+    WA_CHECK_STATUS(wa_value_array_append(child, grandchild), WA_STATUS_INVALID_ARGUMENT);
+    WA_CHECK_STATUS(wa_value_map_add(other_map, "again", 5, child), WA_STATUS_INVALID_ARGUMENT);
+    /* The container itself, or one of its ancestors (a cycle otherwise) */
+    WA_CHECK_STATUS(wa_value_array_append(child, child), WA_STATUS_INVALID_ARGUMENT);
+    WA_CHECK_STATUS(wa_value_map_add(grandchild, "root", 4, root), WA_STATUS_INVALID_ARGUMENT);
+    WA_CHECK_STATUS(wa_value_map_add(grandchild, "self", 4, grandchild), WA_STATUS_INVALID_ARGUMENT);
+    /* Borrowed nodes are never owned by a container */
+    wa_value_initialize_borrowed_null(&borrowed_null);
+    WA_CHECK_STATUS(wa_value_map_add(other_map, "borrowed", 8, &borrowed_null), WA_STATUS_INVALID_ARGUMENT);
+    WA_CHECK_SIZE(wa_value_get_item_count(child), 1);
+    WA_CHECK_SIZE(wa_value_get_item_count(grandchild), 0);
+    WA_CHECK_SIZE(wa_value_get_item_count(other_map), 0);
+
+    /* A taken value is a root again, which can be added elsewhere */
+    taken = wa_value_map_take_value(root, "child");
+    WA_REQUIRE(taken == child);
+    WA_CHECK_STATUS(wa_value_map_add(other_map, "moved", 5, taken), WA_STATUS_OK);
+
+    wa_value_destroy(root);
+    wa_value_destroy(other_map);
+    WA_CHECK(wa_test_allocator_is_clean(&platform->allocator));
+    wa_test_platform_destroy(platform);
+}
+
+static void test_null_node_accessors(void)
+{
+    const char *text = NULL;
+    size_t length = 0;
+    WA_CHECK(wa_value_get_type(NULL) == WA_VALUE_TYPE_INVALID);
+    WA_CHECK(wa_value_get_text(NULL, &text, &length) == -1);
+    WA_CHECK_SIZE(wa_value_get_item_count(NULL), 0);
+    WA_CHECK(wa_value_find_map_value(NULL, "key") == NULL);
+}
+
+static void test_allocated_block_taken_over_or_copied(void)
+{
+    wa_test_platform_t *platform = wa_test_platform_create(11);
+    static const uint8_t secret[16] = {0xca, 0xfe, 0xba, 0xbe, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+    wa_value_t *value = NULL;
+    const uint8_t *bytes;
+    size_t length;
+    size_t allocation_count;
+    size_t index;
+    uint8_t *block;
+    size_t expected_unwiped_count = 0;
+    /* 100 bytes used out of 112 (unused tail within 1/8): taken over; out of 113 or 4096: copied */
+    static const size_t allocation_sizes[] = {112, 113, 4096};
+    wa_test_allocator_register_secret_pattern(&platform->allocator, secret, sizeof(secret));
+    for (index = 0; index < 6u; ++index) {
+        int is_secret = index % 2u == 0;
+        size_t allocation_size = allocation_sizes[index / 2u];
+        int is_taken_over = allocation_size == 112;
+        block = (uint8_t *)platform->hooks.allocate(platform->hooks.allocator_context, allocation_size);
+        WA_REQUIRE(block != NULL);
+        memset(block, 0x5a, allocation_size);
+        memcpy(block, secret, sizeof(secret));
+        allocation_count = platform->allocator.allocation_count;
+        WA_REQUIRE_STATUS(wa_value_create_bytes_from_allocated_block(&platform->hooks, block, 100, allocation_size,
+                                                                     is_secret, &value),
+                          WA_STATUS_OK);
+        /* The node, plus the exact block of a copy (the original block being released at once) */
+        WA_CHECK_SIZE(platform->allocator.allocation_count, allocation_count + (is_taken_over ? 1u : 2u));
+        WA_REQUIRE(wa_value_get_bytes(value, &bytes, &length) == 0);
+        WA_CHECK(length == 100 && memcmp(bytes, secret, sizeof(secret)) == 0);
+        WA_CHECK((bytes == block) == is_taken_over);
+        wa_value_destroy(value);
+        /* Secret content is wiped on release, public content (ciphertexts) is not: an unwiped release per public
+         * block, plus one for the content copy */
+        if (!is_secret) {
+            expected_unwiped_count += is_taken_over ? 1u : 2u;
+        }
+        WA_CHECK_SIZE(platform->allocator.unwiped_secret_release_count, expected_unwiped_count);
+    }
+    /* Empty content: an empty node, the block being released */
+    block = (uint8_t *)platform->hooks.allocate(platform->hooks.allocator_context, 16);
+    WA_REQUIRE(block != NULL);
+    WA_REQUIRE_STATUS(wa_value_create_bytes_from_allocated_block(&platform->hooks, block, 0, 16, 1, &value),
+                      WA_STATUS_OK);
+    WA_REQUIRE(wa_value_get_bytes(value, &bytes, &length) == 0);
+    WA_CHECK(length == 0);
+    wa_value_destroy(value);
+    WA_CHECK_STATUS(wa_value_create_bytes_from_allocated_block(&platform->hooks, NULL, 0, 0, 1, &value),
+                    WA_STATUS_INVALID_ARGUMENT);
+    WA_CHECK(wa_test_allocator_is_clean(&platform->allocator));
+    wa_test_platform_destroy(platform);
+}
+
+static void test_many_keys_sorted(void)
+{
+    wa_test_platform_t *platform = wa_test_platform_create(12);
+    wa_value_t *map = NULL;
+    wa_value_t *value = NULL;
+    const wa_value_t *found;
+    const char *key;
+    const char *previous_key = NULL;
+    size_t key_length;
+    size_t previous_key_length = 0;
+    size_t index;
+    char key_text[8];
+    int64_t integer;
+    WA_REQUIRE_STATUS(wa_value_create_map(&platform->hooks, &map), WA_STATUS_OK);
+    /* Keys inserted in a scrambled order, of lengths 1 to 3 */
+    for (index = 0; index < 200u; ++index) {
+        size_t scrambled = (index * 7919u) % 200u;
+        size_t text_length = (size_t)sprintf(key_text, "%u", (unsigned)scrambled);
+        WA_REQUIRE_STATUS(wa_value_create_integer(&platform->hooks, (int64_t)scrambled, &value), WA_STATUS_OK);
+        WA_REQUIRE_STATUS(wa_value_map_add(map, key_text, text_length, value), WA_STATUS_OK);
+    }
+    for (index = 0; index < 200u; ++index) {
+        WA_REQUIRE(wa_value_get_map_entry(map, index, &key, &key_length, &found) == 0);
+        if (previous_key != NULL) {
+            WA_CHECK(wa_value_compare_keys(previous_key, previous_key_length, key, key_length) < 0);
+        }
+        previous_key = key;
+        previous_key_length = key_length;
+    }
+    found = wa_value_find_map_value(map, "137");
+    WA_CHECK(found != NULL && wa_value_get_integer(found, &integer) == 0 && integer == 137);
+    WA_CHECK(wa_value_find_map_value(map, "200") == NULL);
+    WA_CHECK(wa_value_map_has_key(map, "0", 1) && !wa_value_map_has_key(map, "", 0));
+    wa_value_destroy(wa_value_map_take_value(map, "99"));
+    WA_CHECK(wa_value_find_map_value(map, "99") == NULL && wa_value_find_map_value(map, "98") != NULL);
+    WA_CHECK_SIZE(wa_value_get_item_count(map), 199);
+    wa_value_destroy(map);
+    WA_CHECK(wa_test_allocator_is_clean(&platform->allocator));
+    wa_test_platform_destroy(platform);
+}
+
 int main(void)
 {
     WA_RUN_TEST(test_builders_and_accessors);
+    WA_RUN_TEST(test_shared_and_cyclic_children_rejected);
+    WA_RUN_TEST(test_null_node_accessors);
+    WA_RUN_TEST(test_allocated_block_taken_over_or_copied);
+    WA_RUN_TEST(test_many_keys_sorted);
     WA_RUN_TEST(test_invalid_utf8_rejected);
     WA_RUN_TEST(test_destroy_wipes_strings);
     WA_RUN_TEST(test_shared_subtree_deep_copy_has_no_aliasing);

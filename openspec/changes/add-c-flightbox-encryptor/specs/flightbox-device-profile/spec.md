@@ -97,13 +97,17 @@ The tuple (trustee identity, `keychain_uid`, `key_algo`) SHALL be unique within 
 
 ### Requirement: Public key sanity constraints
 A device profile SHALL only be accepted if every public key respects the constraints of section 11.2 of the encryptor specification, tightened so that all implementations accept exactly the same keys:
-- RSA: modulus at least 2048 bits and at most a configurable maximum, 4096 bits by default; modulus odd; `3 <= e < n` with `e` odd.
+- RSA: modulus at least 2048 bits and at most a configurable maximum, 4096 bits by default; modulus odd; `3 <= e < n` with `e` odd; `gcd(n, e) = 1`.
 - X25519: canonical u-coordinate, so the most significant bit of the last byte is clear and u < p = 2^255 - 19. It SHALL NOT be one of the low-order points (0, 1, the two order-8 points, p - 1).
 - ML-KEM-768: encapsulation key whose 768 decoded 12-bit coefficients are all below 3329 (the FIPS 203 modulus check).
 
 #### Scenario: RSA modulus too short or too long
 - **WHEN** an `RSA_OAEP` entry holds a 1024-bit modulus, or a modulus above the configured maximum
 - **THEN** the profile is rejected with a key-constraint error, and the error location identifies the entry
+
+#### Scenario: RSA exponent sharing a factor with the modulus
+- **WHEN** an `RSA_OAEP` entry holds an odd modulus divisible by its exponent 3, or sharing a large prime factor with its exponent
+- **THEN** the profile is rejected with a key-constraint error
 
 #### Scenario: Low-order X25519 point
 - **WHEN** an `ECIES_X25519` entry holds the all-zero u-coordinate, or `p - 1`

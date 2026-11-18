@@ -16,6 +16,7 @@ Run from the repository root, in the wacryptolib environment (pycryptodome backe
 """
 
 import copy
+import math
 import sys
 import uuid
 from pathlib import Path
@@ -184,11 +185,33 @@ def _add_valid_samples(collector):
         MINIMAL_CRYPTOCONF, raw_public_keys={"RSA_OAEP": helpers.make_rsa_public_key(4096)}))
     collector.add_valid("rsa_2048_bits_exponent_3", helpers.build_raw_device_profile(
         MINIMAL_CRYPTOCONF, raw_public_keys={"RSA_OAEP": helpers.make_rsa_public_key(2048, public_exponent=3)}))
+    # A 2047-bit exponent coprime with the modulus (gcd(n, n - 2) = gcd(n, 2) = 1 for an odd n)
+    modulus = int.from_bytes(helpers.make_rsa_public_key(2048)["modulus"], "big")
+    collector.add_valid("rsa_large_coprime_exponent", helpers.build_raw_device_profile(
+        MINIMAL_CRYPTOCONF, raw_public_keys={"RSA_OAEP": helpers.make_raw_rsa_public_key(modulus, modulus - 2)}))
     ml_kem_key = helpers.get_synthetic_raw_public_key("ML_KEM_768")
     collector.add_valid("ml_kem_coefficient_3328", helpers.build_raw_device_profile(
         ML_KEM_CRYPTOCONF, raw_public_keys={"ML_KEM_768": helpers.set_ml_kem_coefficient(ml_kem_key, 767, 3328)}))
 
     # Nesting of 64 CBOR levels is accepted by the decoder (the profile then fails on the public key structure)
+
+
+def _get_rsa_keys_with_common_factor():
+    """RSA public keys meeting every constraint but gcd(n, e) = 1: a small common factor, and a large one."""
+    modulus = int.from_bytes(helpers.make_rsa_public_key(2048)["modulus"], "big")
+    modulus_multiple_of_3 = modulus - (modulus - 3) % 6  # Odd, and a multiple of 3
+    large_factor = (1 << 1023) | 0x5A5A5A5A5A5A5A5A5A5A5A5A5A5A5A5A | 1  # Odd, 1024 bits
+    other_factor = (3 << 1023) | 1  # Odd: their product has 2048 bits
+    keys = [
+        ("rsa_exponent_3_dividing_modulus", helpers.make_raw_rsa_public_key(modulus_multiple_of_3, 3)),
+        ("rsa_exponent_sharing_large_factor",
+         helpers.make_raw_rsa_public_key(large_factor * other_factor, large_factor * 5)),
+    ]
+    for _name, key in keys:
+        modulus, exponent = (int.from_bytes(key[name], "big") for name in ("modulus", "public_exponent"))
+        assert modulus.bit_length() == 2048 and modulus & 1 and exponent & 1 and 3 <= exponent < modulus
+        assert math.gcd(modulus, exponent) != 1
+    return keys
 
 
 def _add_root_samples(collector):
@@ -404,7 +427,7 @@ def _add_constraint_samples(collector):
         ("rsa_exponent_equal_to_modulus", dict(modulus=rsa_key["modulus"], public_exponent=rsa_key["modulus"])),
         ("rsa_modulus_leading_zero", dict(modulus=b"\x00" + rsa_key["modulus"], public_exponent=b"\x01\x00\x01")),
         ("rsa_exponent_leading_zero", dict(modulus=rsa_key["modulus"], public_exponent=b"\x00\x01\x00\x01")),
-    ]
+    ] + _get_rsa_keys_with_common_factor()
     for name, key in rsa_keys:
         collector.add(name, helpers.mutate_public_key(profile, 0, key), "WA_STATUS_KEY_CONSTRAINT_VIOLATION", ENTRY_0)
     for index, key in enumerate(helpers.get_low_order_x25519_public_keys()):

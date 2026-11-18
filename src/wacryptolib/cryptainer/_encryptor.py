@@ -33,6 +33,26 @@ from wacryptolib.utilities import (
     dump_to_json_bytes,
     generate_uuid0,
 )
+from wacryptolib.utilities.wacbor import EXTJSON_KEYWORDS
+
+
+def _check_metadata_has_no_extjson_keyword_map(cryptainer_metadata) -> None:
+    """Reject metadata holding, at any depth, a single-key map whose key is an Extended JSON keyword (like
+    {"$uuid": "..."}), whatever the document format: Extended JSON readers would load it back as a typed value,
+    or fail to load the cryptainer, and WA-CBOR refuses it. Checked before any random draw or output."""
+    pending_items = [(cryptainer_metadata, "cryptainer_metadata")]
+    while pending_items:  # Iterative, so that deep metadata doesn't hit the recursion limit here
+        item, location = pending_items.pop()
+        if isinstance(item, dict):
+            if len(item) == 1:
+                (key,) = item
+                if key in EXTJSON_KEYWORDS:
+                    raise SchemaValidationError(
+                        "Cryptainer metadata can't hold an Extended JSON keyword map (%r) at %s" % (key, location)
+                    )
+            pending_items.extend((value, "%s.%s" % (location, key)) for key, value in item.items())
+        elif isinstance(item, (list, tuple)):
+            pending_items.extend((value, "%s[%d]" % (location, index)) for index, value in enumerate(item))
 from wacryptolib.hash import hash_message
 
 
@@ -245,6 +265,7 @@ class CryptainerEncryptor(CryptainerBase):
         cryptoconf = ensure_validated_cryptoconf(cryptoconf)  # Mandatory upfront validation of user input
         if cryptainer_metadata is not None and not isinstance(cryptainer_metadata, dict):  # Not an assert (python -O)
             raise SchemaValidationError("Cryptainer metadata must be a dict or None, not %s" % type(cryptainer_metadata).__name__)
+        _check_metadata_has_no_extjson_keyword_map(cryptainer_metadata)
         cryptainer_metadata = copy.deepcopy(cryptainer_metadata)  # The validated cryptainer must not alias caller data
 
         cryptainer, secrets = self._flightbox.generate_cryptainer_base_and_secrets(

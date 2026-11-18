@@ -13,12 +13,14 @@ random source and a fixed clock), from device profiles exported from:
 
 Each cryptainer must load from the filesystem, pass strict validation (Python and JSON-Schema modes), equal its
 re-encoding by wacryptolib's writer of its format, carry the key ciphertext formats of its format, have the tree shape
-of a cryptainer made by wacryptolib from the same cryptoconf, and be decrypted by wacryptolib with no report error.
+of a cryptainer made by wacryptolib from the same cryptoconf, and be decrypted by wacryptolib with no report error,
+the key structs inside its asymmetric key ciphertexts carrying the same metadata as the cryptainer.
 """
 
 import uuid
 import zlib
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -317,10 +319,13 @@ def get_reference_tree_shape(profile_name, document_format, metadata_kind, work_
     return _reference_shapes[cache_key]
 
 
-def decrypt_with_wacryptolib(cryptainer, profile_name, work_dir, withheld_keystore_uids=()):
+def decrypt_with_wacryptolib(cryptainer, profile_name, work_dir, withheld_keystore_uids=(), key_structs=None):
     """Decrypt with a fresh copy of the profile's keystore pool and its sidecar passphrases, private keys of the
-    withheld authenticator keystores being deleted; return (payload or None, set of report error types)."""
-    from wacryptolib.cryptainer import decrypt_payload_from_cryptainer
+    withheld authenticator keystores being deleted; return (payload or None, set of report error types).
+
+    If `key_structs` is a list, the key structs decrypted by asymmetric layers are appended to it (wacryptolib's
+    decryptor doesn't use their metadata itself)."""
+    from wacryptolib.cryptainer import _decryptor, decrypt_payload_from_cryptainer
     from wacryptolib.keystore import FilesystemKeystorePool
 
     _cryptoconf, pool_dir, passphrase_mapper, _profile_bytes = get_profile(profile_name)
@@ -333,11 +338,19 @@ def decrypt_with_wacryptolib(cryptainer, profile_name, work_dir, withheld_keysto
         assert private_key_paths, keystore_dir
         for private_key_path in private_key_paths:
             private_key_path.unlink()
-    payload, operation_report = decrypt_payload_from_cryptainer(
-        cryptainer,
-        keystore_pool=FilesystemKeystorePool(pool_copy_dir),
-        passphrase_mapper=corpus.parse_passphrase_mapper(passphrase_mapper),
-    )
+    original_check_key_struct_sanity = _decryptor._check_key_struct_sanity
+
+    def _check_and_capture_key_struct(key_struct):
+        original_check_key_struct_sanity(key_struct)
+        if key_structs is not None:
+            key_structs.append(key_struct)
+
+    with mock.patch.object(_decryptor, "_check_key_struct_sanity", _check_and_capture_key_struct):
+        payload, operation_report = decrypt_payload_from_cryptainer(
+            cryptainer,
+            keystore_pool=FilesystemKeystorePool(pool_copy_dir),
+            passphrase_mapper=corpus.parse_passphrase_mapper(passphrase_mapper),
+        )
     return payload, {entry["entry_type"] for entry in operation_report.get_error_entries()}
 
 
@@ -370,9 +383,16 @@ def check_c_cryptainer(cryptainer_path, profile_name, document_format, payload, 
     check_key_ciphertext_formats(cryptainer, document_format)
     assert get_tree_shape(cryptainer) == get_reference_tree_shape(profile_name, document_format, metadata_kind, work_dir)
 
-    decrypted_payload, error_types = decrypt_with_wacryptolib(cryptainer, profile_name, work_dir)
+    key_structs = []
+    decrypted_payload, error_types = decrypt_with_wacryptolib(cryptainer, profile_name, work_dir, key_structs=key_structs)
     assert decrypted_payload == payload, error_types
     assert not error_types
+
+    # The key structs inside asymmetric key ciphertexts carry the cryptainer metadata too, exactly
+    assert key_structs
+    for key_struct in key_structs:
+        assert sorted(key_struct) == ["cryptainer_metadata", "key_bytes"]
+        assert key_struct["cryptainer_metadata"] == METADATA_SAMPLES[metadata_kind]
     return cryptainer
 
 

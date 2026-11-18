@@ -21,11 +21,21 @@ const char *wa_tool_get_status_name(wa_status_t status);
 /* Read a whole file ("-" for stdin) into a malloc()'d buffer (at least 1 byte); NULL on failure */
 uint8_t *wa_tool_read_file(const char *path, size_t *length_out);
 
-/* 1 if a file exists at `path` */
+/* 1 if a file (or directory) exists at `path`, readable or not */
 int wa_tool_file_exists(const char *path);
+
+/* 1 if both paths exist and are the same file (whatever their spelling, links included) */
+int wa_tool_files_are_same(const char *path_a, const char *path_b);
 
 /* Open for binary writing: exclusive creation (failing if the file exists), or truncation with `force` */
 FILE *wa_tool_open_output_file(const char *path, int force);
+
+/* Exclusive creation of a new file next to `final_path`, named "<final_path>.tmp-NNN"; its malloc()'d name goes
+ * to `*temporary_path_out`. NULL on failure. */
+FILE *wa_tool_open_temporary_output_file(const char *final_path, char **temporary_path_out);
+
+/* Rename `source_path` to `destination_path`, replacing it if it exists (on the same file system); 0 or -1 */
+int wa_tool_replace_file(const char *source_path, const char *destination_path);
 
 /* A sink writing to an open FILE (context: the FILE) */
 wa_output_sink_t wa_tool_get_file_sink(FILE *file);

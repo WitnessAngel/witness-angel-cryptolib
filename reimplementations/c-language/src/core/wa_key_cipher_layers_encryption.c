@@ -39,7 +39,7 @@ wa_status_t wa_key_cipher_layers_serialize_symkey(const wa_key_cipher_context_t 
 {
     wa_value_t *symkey_tree = NULL;
     wa_status_t status;
-    wa_growable_byte_buffer_initialize(serialized_out, context->platform_hooks, 1);
+    /* serialized_out is initialized by wa_serialize_secret_tree(), and left to the caller on success only */
     WA_RETURN_IF_ERROR(wa_symkey_build_tree(context->platform_hooks, (const wa_symkey_t *)symkey, &symkey_tree));
     status = wa_serialize_secret_tree(context, symkey_tree, serialized_out);
     wa_value_destroy(symkey_tree);

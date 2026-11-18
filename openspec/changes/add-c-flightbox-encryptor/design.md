@@ -202,11 +202,12 @@ The clock hook returns Unix time in units of 1/10000 s as a `uint64_t`, which UU
 
 ### D7. Value tree as the data model
 
-The cryptoconf, metadata and cryptainer are held in a small generic tree: null, bool, int64, text, bytes, UUID, array, insertion-ordered map. This is the sub-profile's subset of the WA-CBOR data model. Nodes are allocated through the allocator hook.
+The cryptoconf, metadata and cryptainer are held in a small generic tree: null, bool, int64, text, bytes, UUID, array, map with keys kept sorted bytewise (binary search, duplicate detection for free). This is the sub-profile's subset of the WA-CBOR data model. Nodes are allocated through the allocator hook.
 - The CBOR decoder builds the tree.
 - Step 1 deep-copies the cryptoconf subtree into the cryptainer, with a fresh copy per node, so there is no aliasing, which satisfies spec §6.6 by construction.
 - The core then adds fields (`key_ciphertext`, `key_ciphertext_format`, `payload_macs`...) in place.
-- The writers serialize the tree with keys sorted at write time, each in its own order (D15).
+- The writers serialize the tree in their own key order (D15): the Extended JSON one in the stored order, the WA-CBOR one by key length, then in the stored order.
+- A node has a parent pointer: appending a node that already has a parent, or that contains the container, is refused, so the tree can't share or cycle.
 - Bytes nodes may be flagged secret, so they are wiped on release.
 
 Alternative considered: a single-pass writer emitting the cryptainer while walking the input (audit "single-pass C design"). Rejected: `payload_macs` arrive last and would need placeholders or a second section, it complicates every layer type, and a cryptainer tree without payload weighs a few KB.

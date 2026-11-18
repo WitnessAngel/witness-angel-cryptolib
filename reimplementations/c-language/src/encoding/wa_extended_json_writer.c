@@ -14,17 +14,6 @@
 
 static const char wa_json_hexadecimal_digits[] = "0123456789abcdef";
 
-/* Code point order of UTF-8 keys is their bytewise order */
-static int wa_json_compare_keys(const wa_value_map_entry_t *entry_a, const wa_value_map_entry_t *entry_b)
-{
-    size_t common_length = entry_a->key_length < entry_b->key_length ? entry_a->key_length : entry_b->key_length;
-    int comparison = common_length == 0 ? 0 : memcmp(entry_a->key, entry_b->key, common_length);
-    if (comparison != 0) {
-        return comparison;
-    }
-    return entry_a->key_length < entry_b->key_length ? -1 : (entry_a->key_length > entry_b->key_length ? 1 : 0);
-}
-
 static void wa_json_write_unicode_escape(wa_buffered_sink_writer_t *writer, uint32_t code_unit)
 {
     uint8_t escape[6];
@@ -146,31 +135,23 @@ static void wa_json_write_node(wa_buffered_sink_writer_t *writer, const wa_value
         }
         wa_buffered_sink_writer_write_byte(writer, (uint8_t)']');
         break;
-    case WA_VALUE_TYPE_MAP: {
-        /* Selection of the next key in order at each step: no allocation, maps are small */
-        const wa_value_map_entry_t *previous_entry = NULL;
-        size_t written_count;
+    case WA_VALUE_TYPE_MAP:
+        /* Entries are kept sorted bytewise, which is the code point order of sort_keys */
         wa_buffered_sink_writer_write_byte(writer, (uint8_t)'{');
-        for (written_count = 0; written_count < node->content.map.count; written_count++) {
-            const wa_value_map_entry_t *next_entry = NULL;
-            for (index = 0; index < node->content.map.count; index++) {
-                const wa_value_map_entry_t *candidate = &node->content.map.entries[index];
-                if ((previous_entry == NULL || wa_json_compare_keys(candidate, previous_entry) > 0) &&
-                    (next_entry == NULL || wa_json_compare_keys(candidate, next_entry) < 0)) {
-                    next_entry = candidate;
-                }
-            }
-            if (written_count != 0) {
+        for (index = 0; index < node->content.map.count; index++) {
+            const wa_value_map_entry_t *entry = &node->content.map.entries[index];
+            if (index != 0) {
                 wa_buffered_sink_writer_write_text(writer, ", ");
             }
-            wa_json_write_string(writer, (const uint8_t *)next_entry->key, next_entry->key_length);
+            wa_json_write_string(writer, (const uint8_t *)entry->key, entry->key_length);
             wa_buffered_sink_writer_write_text(writer, ": ");
-            wa_json_write_node(writer, next_entry->value);
-            previous_entry = next_entry;
+            wa_json_write_node(writer, entry->value);
         }
         wa_buffered_sink_writer_write_byte(writer, (uint8_t)'}');
         break;
-    }
+    case WA_VALUE_TYPE_INVALID:
+    default:
+        break; /* Never in a tree */
     }
 }
 

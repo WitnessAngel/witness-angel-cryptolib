@@ -6,7 +6,8 @@
 /* Value trees: the data model of cryptoconfs, cryptainers and cryptainer metadata.
  *
  * Node types are those of the device profile sub-profile of WA-CBOR: null, booleans, signed 64-bit integers, UTF-8
- * text, bytes, UUIDs, arrays and insertion-ordered maps with text keys. Writers sort map keys themselves.
+ * text, bytes, UUIDs, arrays and maps with text keys, kept sorted by key (bytewise UTF-8, which is the order of
+ * wa_value_get_map_entry()). Writers order map keys as their format requires.
  *
  * Every node is allocated through the platform hooks given at creation, which must outlive it. Container functions
  * taking a child node take its ownership on success only; on failure, the caller still owns (and must destroy) it. */
@@ -27,6 +28,7 @@ extern "C" {
 typedef struct wa_value wa_value_t;
 
 typedef enum wa_value_type {
+    WA_VALUE_TYPE_INVALID = 0, /* only returned by wa_value_get_type(NULL) */
     WA_VALUE_TYPE_NULL = 1,
     WA_VALUE_TYPE_BOOLEAN,
     WA_VALUE_TYPE_INTEGER,
@@ -54,11 +56,12 @@ wa_status_t wa_value_create_uuid(const wa_platform_hooks_t *platform_hooks, cons
 wa_status_t wa_value_create_array(const wa_platform_hooks_t *platform_hooks, wa_value_t **value_out);
 wa_status_t wa_value_create_map(const wa_platform_hooks_t *platform_hooks, wa_value_t **value_out);
 
-/* Append `item` to `array`, taking its ownership on success. */
+/* Append `item` to `array`, taking its ownership on success. `item` must be a root node (not already in a
+ * container) and must not be `array` nor one of its ancestors: WA_STATUS_INVALID_ARGUMENT otherwise. */
 wa_status_t wa_value_array_append(wa_value_t *array, wa_value_t *item);
 
 /* Add the entry `key` -> `value` to `map`, taking ownership of `value` on success. A key already present gives
- * WA_STATUS_INVALID_ARGUMENT. */
+ * WA_STATUS_INVALID_ARGUMENT, as does a `value` that wa_value_array_append() would refuse. */
 wa_status_t wa_value_map_add(wa_value_t *map, const char *key, size_t key_length, wa_value_t *value);
 
 /* Release a tree recursively, wiping the content of bytes and text nodes. NULL is a no-op. */
@@ -66,7 +69,7 @@ void wa_value_destroy(wa_value_t *value_or_null);
 
 /* Accessors (no allocation). Getters return 0 on success, -1 when the node has another type or an index is out of
  * range. Returned pointers are borrowed from the tree. */
-wa_value_type_t wa_value_get_type(const wa_value_t *value);
+wa_value_type_t wa_value_get_type(const wa_value_t *value); /* WA_VALUE_TYPE_INVALID for NULL */
 int wa_value_get_boolean(const wa_value_t *value, int *boolean_out);
 int wa_value_get_integer(const wa_value_t *value, int64_t *integer_out);
 int wa_value_get_text(const wa_value_t *value, const char **text_out, size_t *text_length_out);

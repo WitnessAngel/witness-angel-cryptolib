@@ -107,7 +107,9 @@ static void test_accepted_types(void)
                                  &tree),
                       WA_STATUS_OK);
     WA_CHECK(wa_value_get_type(tree) == WA_VALUE_TYPE_MAP && wa_value_get_item_count(tree) == 3);
-    WA_CHECK(wa_value_get_map_entry(tree, 0, &key, &length, &value) == 0); /* Insertion order kept */
+    WA_CHECK(wa_value_get_map_entry(tree, 0, &key, &length, &value) == 0); /* Entries sorted by key */
+    WA_CHECK_TEXT(key, length, "");
+    WA_CHECK(wa_value_get_map_entry(tree, 2, &key, &length, &value) == 0);
     WA_CHECK_TEXT(key, length, "b");
     value = wa_value_find_map_value(tree, "a");
     WA_REQUIRE(value != NULL && wa_value_get_item_count(value) == 8);

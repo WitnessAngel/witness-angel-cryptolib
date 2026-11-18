@@ -38,7 +38,7 @@ static wa_status_t wa_rsa_oaep_encrypt_chunk(const wa_platform_hooks_t *platform
     wa_secure_memory_wipe(encoded_message, modulus_length);
     if (status == WA_STATUS_OK) {
         status = wa_value_create_bytes_from_allocated_block(platform_hooks, ciphertext, modulus_length,
-                                                            modulus_length, chunk_out);
+                                                            modulus_length, 0, chunk_out);
     }
     if (status != WA_STATUS_OK) {
         wa_release_memory(platform_hooks, ciphertext, modulus_length);

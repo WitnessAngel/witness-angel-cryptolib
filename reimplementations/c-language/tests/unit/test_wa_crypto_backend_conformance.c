@@ -242,6 +242,25 @@ static void test_chacha20_poly1305(void)
     wa_crypto_backend_chacha20_poly1305_destroy(NULL);
     WA_CHECK_HEX(empty_tag, WA_AEAD_TAG_SIZE, WA_RFC8439_KEY_AND_NONCE_EMPTY_MESSAGE_TAG_HEX);
 
+#if SIZE_MAX > 0xFFFFFFFFu
+    /* Beyond the RFC 8439 limit (2^32 - 1 blocks after the key block, more than 4 GiB on both backends): refused
+     * before any byte is read or written, so the buffers given need not be that large */
+    {
+        uint8_t buffer[64] = {0};
+        size_t over_limit = (size_t)WA_CHACHA20_POLY1305_MAXIMUM_DATA_LENGTH + 1u;
+        WA_REQUIRE_STATUS(wa_crypto_backend_chacha20_poly1305_create(&platform->hooks, key, nonce, NULL, 0, &context),
+                          WA_STATUS_OK);
+        WA_CHECK_STATUS(wa_crypto_backend_chacha20_poly1305_encrypt(context, buffer, buffer, over_limit),
+                        WA_STATUS_INVALID_ARGUMENT);
+        WA_CHECK_STATUS(wa_crypto_backend_chacha20_poly1305_encrypt(context, buffer, buffer, sizeof(buffer)),
+                        WA_STATUS_OK);
+        WA_CHECK_STATUS(wa_crypto_backend_chacha20_poly1305_encrypt(
+                            context, buffer, buffer, (size_t)WA_CHACHA20_POLY1305_MAXIMUM_DATA_LENGTH - 63u),
+                        WA_STATUS_INVALID_ARGUMENT); /* The total counts */
+        wa_crypto_backend_chacha20_poly1305_destroy(context);
+    }
+#endif
+
     platform->allocator.fail_at_attempt_index = platform->allocator.attempted_allocation_count;
     context = (wa_crypto_backend_chacha20_poly1305_t *)platform;
     WA_CHECK_STATUS(wa_crypto_backend_chacha20_poly1305_create(&platform->hooks, key, nonce, NULL, 0, &context),

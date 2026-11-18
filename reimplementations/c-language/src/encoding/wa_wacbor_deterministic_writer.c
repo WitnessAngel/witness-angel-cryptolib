@@ -48,15 +48,6 @@ static void wa_cbor_write_head(wa_buffered_sink_writer_t *writer, unsigned int m
     wa_buffered_sink_writer_write(writer, head, 1 + argument_size);
 }
 
-/* Encoded text keys sort bytewise: shorter keys first (their heads are smaller), then by their UTF-8 bytes */
-static int wa_cbor_compare_keys(const wa_value_map_entry_t *entry_a, const wa_value_map_entry_t *entry_b)
-{
-    if (entry_a->key_length != entry_b->key_length) {
-        return entry_a->key_length < entry_b->key_length ? -1 : 1;
-    }
-    return entry_a->key_length == 0 ? 0 : memcmp(entry_a->key, entry_b->key, entry_a->key_length);
-}
-
 static void wa_cbor_write_node(wa_buffered_sink_writer_t *writer, const wa_value_t *node)
 {
     size_t index;
@@ -92,25 +83,37 @@ static void wa_cbor_write_node(wa_buffered_sink_writer_t *writer, const wa_value
         }
         break;
     case WA_VALUE_TYPE_MAP: {
-        const wa_value_map_entry_t *previous_entry = NULL;
-        size_t written_count;
+        /* Canonical order: by encoded length, then bytewise. Entries are kept sorted bytewise, so the keys of each
+         * length are written in their stored order, one pass per distinct key length (no allocation). */
+        size_t written_count = 0;
+        size_t previous_length = 0;
+        int is_first_pass = 1;
         wa_cbor_write_head(writer, WA_CBOR_MAJOR_MAP, (uint64_t)node->content.map.count);
-        for (written_count = 0; written_count < node->content.map.count; written_count++) {
-            const wa_value_map_entry_t *next_entry = NULL;
+        while (written_count < node->content.map.count) {
+            size_t current_length = SIZE_MAX;
             for (index = 0; index < node->content.map.count; index++) {
-                const wa_value_map_entry_t *candidate = &node->content.map.entries[index];
-                if ((previous_entry == NULL || wa_cbor_compare_keys(candidate, previous_entry) > 0) &&
-                    (next_entry == NULL || wa_cbor_compare_keys(candidate, next_entry) < 0)) {
-                    next_entry = candidate;
+                size_t key_length = node->content.map.entries[index].key_length;
+                if ((is_first_pass || key_length > previous_length) && key_length < current_length) {
+                    current_length = key_length;
                 }
             }
-            wa_cbor_write_head(writer, WA_CBOR_MAJOR_TEXT, (uint64_t)next_entry->key_length);
-            wa_buffered_sink_writer_write(writer, (const uint8_t *)next_entry->key, next_entry->key_length);
-            wa_cbor_write_node(writer, next_entry->value);
-            previous_entry = next_entry;
+            for (index = 0; index < node->content.map.count; index++) {
+                const wa_value_map_entry_t *entry = &node->content.map.entries[index];
+                if (entry->key_length == current_length) {
+                    wa_cbor_write_head(writer, WA_CBOR_MAJOR_TEXT, (uint64_t)entry->key_length);
+                    wa_buffered_sink_writer_write(writer, (const uint8_t *)entry->key, entry->key_length);
+                    wa_cbor_write_node(writer, entry->value);
+                    written_count++;
+                }
+            }
+            previous_length = current_length;
+            is_first_pass = 0;
         }
         break;
     }
+    case WA_VALUE_TYPE_INVALID:
+    default:
+        break; /* Never in a tree */
     }
 }
 

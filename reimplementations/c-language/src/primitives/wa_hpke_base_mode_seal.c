@@ -134,7 +134,7 @@ static wa_status_t wa_add_bytes_block_entry(const wa_platform_hooks_t *platform_
                                             const char *key, uint8_t **block, size_t length)
 {
     wa_value_t *value = NULL;
-    wa_status_t status = wa_value_create_bytes_from_allocated_block(platform_hooks, *block, length, length, &value);
+    wa_status_t status = wa_value_create_bytes_from_allocated_block(platform_hooks, *block, length, length, 0, &value);
     if (status != WA_STATUS_OK) {
         return status;
     }

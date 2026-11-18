@@ -19,7 +19,8 @@
 #define WA_MIN_RSA_MODULUS_BITS 2048u
 
 /* RSA: big-endian modulus and public exponent without leading zero bytes; modulus of 2048 to
- * WA_MAX_RSA_MODULUS_BITS bits, odd; 3 <= e < n, e odd. */
+ * WA_MAX_RSA_MODULUS_BITS bits, odd; 3 <= e < n, e odd; gcd(n, e) = 1 (binary GCD, with two buffers of
+ * WA_MAX_RSA_MODULUS_BITS bits on the stack). */
 wa_status_t wa_public_key_check_rsa(const uint8_t *modulus, size_t modulus_length, const uint8_t *public_exponent,
                                     size_t public_exponent_length);
 

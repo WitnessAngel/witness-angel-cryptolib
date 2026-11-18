@@ -487,12 +487,23 @@ def get_non_canonical_x25519_public_keys(valid_public_key: bytes):
 def make_rsa_public_key(modulus_bits, public_exponent=65537, even_modulus=False):
     """Raw RSA public key with a modulus of exactly `modulus_bits` bits, odd unless `even_modulus`.
 
-    The modulus is not a product of primes: key constraints only look at sizes and parities."""
+    The modulus is not a product of primes: key constraints only look at sizes, parities and gcd(n, e), which is 1
+    for an odd modulus."""
     modulus = (1 << (modulus_bits - 1)) | 0x5A5A5A5A5A5A5A5A5A5A5A5A5A5A5A5A
     modulus = modulus & ~1 if even_modulus else modulus | 1
+    while not even_modulus and public_exponent > 1 and math.gcd(modulus, public_exponent) != 1:
+        modulus += 2
     return dict(
         modulus=modulus.to_bytes((modulus_bits + 7) // 8, "big"),
         public_exponent=public_exponent.to_bytes(max(1, (public_exponent.bit_length() + 7) // 8), "big"),
+    )
+
+
+def make_raw_rsa_public_key(modulus: int, public_exponent: int) -> dict:
+    """Raw RSA public key with the given integers, as unsigned big-endian bytes without leading zero bytes."""
+    return dict(
+        modulus=modulus.to_bytes((modulus.bit_length() + 7) // 8, "big"),
+        public_exponent=public_exponent.to_bytes((public_exponent.bit_length() + 7) // 8, "big"),
     )
 
 

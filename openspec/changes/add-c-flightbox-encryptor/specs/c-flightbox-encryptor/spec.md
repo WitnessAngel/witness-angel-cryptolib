@@ -295,7 +295,7 @@ It SHALL name its outputs like `flightbox encrypt`:
 - a trailing `.crypt`, `.crypt.json` or `.crypt.cbor` suffix of the basename, in any letter case, is stripped;
 - the lowercase suffix of the chosen format is then appended, plus a `.payload` file named after the cryptainer when offloaded.
 
-It SHALL refuse to overwrite existing output files unless a `--force` option is given. It SHALL write the payload file before the cryptainer file. On error, it SHALL exit with a non-zero status, print the status description and error location, and leave no file it created behind.
+It SHALL refuse to overwrite existing output files unless a `--force` option is given; with `--force`, existing outputs SHALL only be replaced once the new ones are complete. It SHALL write the payload file before the cryptainer file. On error, it SHALL exit with a non-zero status, print the status description and error location, leave no file it created behind, and leave existing outputs unchanged. It SHALL refuse an output file that is one of its input files, whatever the path used, and SHALL read at most one of its inputs from stdin.
 
 #### Scenario: Encrypt a file from the command line
 - **WHEN** the tool is run with a device profile exported from the compatibility corpus and a payload file, in offloaded mode with 4096-byte chunks, once per document format
@@ -308,3 +308,11 @@ It SHALL refuse to overwrite existing output files unless a `--force` option is 
 #### Scenario: Existing output refused
 - **WHEN** `<output>.crypt.json` already exists and the tool is run without `--force`
 - **THEN** it exits with a non-zero status before encrypting anything, and leaves the existing file unchanged
+
+#### Scenario: Failed forced run
+- **WHEN** the outputs already exist and the tool, run with `--force`, fails while reading the payload
+- **THEN** the existing outputs are unchanged, and no temporary file is left
+
+#### Scenario: Output being an input
+- **WHEN** the payload output file is the input file, under another path or through a hard link, and `--force` is given
+- **THEN** the tool exits with a non-zero status, and the input file is unchanged

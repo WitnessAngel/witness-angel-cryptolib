@@ -62,7 +62,8 @@
 #endif
 
 #include "wolfssl/wolfcrypt/aes.h"
-#include "wolfssl/wolfcrypt/chacha20_poly1305.h"
+#include "wolfssl/wolfcrypt/chacha.h"
+#include "wolfssl/wolfcrypt/poly1305.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/hmac.h"
 #include "wolfssl/wolfcrypt/mlkem.h"
@@ -181,12 +182,25 @@ void wa_crypto_backend_aes_256_destroy(wa_crypto_backend_aes_256_t *context_or_n
     }
 }
 
-/* CHACHA20-POLY1305 */
+/* CHACHA20-POLY1305: composed from the public ChaCha20 and Poly1305 functions as in RFC 8439 section 2.8, rather
+ * than with ChaChaPoly_Aead, whose 32-bit data length stops at 4 GiB (where Mbed TLS and pycryptodome go up to the
+ * RFC 8439 limit) and whose Final() refuses an empty message without associated data. */
 
 struct wa_crypto_backend_chacha20_poly1305 {
     const wa_platform_hooks_t *platform_hooks;
-    ChaChaPoly_Aead aead;
+    ChaCha chacha;
+    Poly1305 poly1305;
+    uint64_t associated_data_length;
+    uint64_t data_length;
 };
+
+static void wa_wolfcrypt_store_le64(uint8_t output[8], uint64_t value)
+{
+    size_t index;
+    for (index = 0; index < 8u; ++index) {
+        output[index] = (uint8_t)(value >> (8u * index));
+    }
+}
 
 wa_status_t wa_crypto_backend_chacha20_poly1305_create(const wa_platform_hooks_t *platform_hooks,
                                                        const uint8_t key[WA_CHACHA20_POLY1305_KEY_SIZE],
@@ -195,6 +209,7 @@ wa_status_t wa_crypto_backend_chacha20_poly1305_create(const wa_platform_hooks_t
                                                        wa_crypto_backend_chacha20_poly1305_t **context_out)
 {
     wa_crypto_backend_chacha20_poly1305_t *context;
+    uint8_t poly1305_key[WA_CHACHA20_POLY1305_KEY_SIZE];
     int result;
     *context_out = NULL;
     if (associated_data_length > WA_WOLFCRYPT_MAXIMUM_CHUNK) {
@@ -204,11 +219,31 @@ wa_status_t wa_crypto_backend_chacha20_poly1305_create(const wa_platform_hooks_t
     if (context == NULL) {
         return WA_STATUS_OUT_OF_MEMORY;
     }
+    memset(context, 0, sizeof(*context));
     context->platform_hooks = platform_hooks;
-    result = wc_ChaCha20Poly1305_Init(&context->aead, key, nonce, CHACHA20_POLY1305_AEAD_ENCRYPT);
-    if (result == 0 && associated_data_length != 0) {
-        result = wc_ChaCha20Poly1305_UpdateAad(&context->aead, associated_data, (word32)associated_data_length);
+    context->associated_data_length = (uint64_t)associated_data_length;
+    /* The Poly1305 key is the first half of the keystream block 0; the payload starts at block 1 */
+    memset(poly1305_key, 0, sizeof(poly1305_key));
+    result = wc_Chacha_SetKey(&context->chacha, key, WA_CHACHA20_POLY1305_KEY_SIZE);
+    if (result == 0) {
+        result = wc_Chacha_SetIV(&context->chacha, nonce, 0);
     }
+    if (result == 0) {
+        result = wc_Chacha_Process(&context->chacha, poly1305_key, poly1305_key, (word32)sizeof(poly1305_key));
+    }
+    if (result == 0) {
+        result = wc_Poly1305SetKey(&context->poly1305, poly1305_key, (word32)sizeof(poly1305_key));
+    }
+    if (result == 0) {
+        result = wc_Chacha_SetIV(&context->chacha, nonce, 1); /* Also drops the rest of block 0 */
+    }
+    if (result == 0 && associated_data_length != 0) {
+        result = wc_Poly1305Update(&context->poly1305, associated_data, (word32)associated_data_length);
+    }
+    if (result == 0) {
+        result = wc_Poly1305_Pad(&context->poly1305, (word32)(associated_data_length % 16u));
+    }
+    wa_secure_memory_wipe(poly1305_key, sizeof(poly1305_key));
     if (result != 0) {
         wa_crypto_backend_chacha20_poly1305_destroy(context);
         return WA_STATUS_CRYPTO_BACKEND_FAILURE;
@@ -220,14 +255,19 @@ wa_status_t wa_crypto_backend_chacha20_poly1305_create(const wa_platform_hooks_t
 wa_status_t wa_crypto_backend_chacha20_poly1305_encrypt(wa_crypto_backend_chacha20_poly1305_t *context,
                                                         const uint8_t *input, uint8_t *output, size_t length)
 {
+    if ((uint64_t)length > WA_CHACHA20_POLY1305_MAXIMUM_DATA_LENGTH - context->data_length) {
+        return WA_STATUS_INVALID_ARGUMENT;
+    }
     while (length != 0) {
         word32 chunk = (word32)wa_wolfcrypt_chunk_length(length);
-        if (wc_ChaCha20Poly1305_UpdateData(&context->aead, input, output, chunk) != 0) {
+        if (wc_Chacha_Process(&context->chacha, output, input, chunk) != 0 ||
+            wc_Poly1305Update(&context->poly1305, output, chunk) != 0) {
             return WA_STATUS_CRYPTO_BACKEND_FAILURE;
         }
         input += chunk;
         output += chunk;
         length -= chunk;
+        context->data_length += chunk;
     }
     return WA_STATUS_OK;
 }
@@ -235,12 +275,16 @@ wa_status_t wa_crypto_backend_chacha20_poly1305_encrypt(wa_crypto_backend_chacha
 wa_status_t wa_crypto_backend_chacha20_poly1305_finish(wa_crypto_backend_chacha20_poly1305_t *context,
                                                        uint8_t tag[WA_AEAD_TAG_SIZE])
 {
-    /* wc_ChaCha20Poly1305_Final() refuses the READY state, left when neither associated data nor data was given;
-     * with both empty, the AAD state is equivalent (its padding is a no-op), and gives the RFC 8439 tag */
-    if (context->aead.state == CHACHA20_POLY1305_STATE_READY) {
-        context->aead.state = CHACHA20_POLY1305_STATE_AAD;
+    /* Padding of the ciphertext, then both lengths as 64-bit little-endian integers */
+    uint8_t lengths[16];
+    wa_wolfcrypt_store_le64(lengths, context->associated_data_length);
+    wa_wolfcrypt_store_le64(lengths + 8, context->data_length);
+    if (wc_Poly1305_Pad(&context->poly1305, (word32)(context->data_length % 16u)) != 0 ||
+        wc_Poly1305Update(&context->poly1305, lengths, (word32)sizeof(lengths)) != 0 ||
+        wc_Poly1305Final(&context->poly1305, tag) != 0) {
+        return WA_STATUS_CRYPTO_BACKEND_FAILURE;
     }
-    return wc_ChaCha20Poly1305_Final(&context->aead, tag) == 0 ? WA_STATUS_OK : WA_STATUS_CRYPTO_BACKEND_FAILURE;
+    return WA_STATUS_OK;
 }
 
 void wa_crypto_backend_chacha20_poly1305_destroy(wa_crypto_backend_chacha20_poly1305_t *context_or_null)

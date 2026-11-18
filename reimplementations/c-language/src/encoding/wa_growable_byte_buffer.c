@@ -113,12 +113,12 @@ wa_status_t wa_growable_byte_buffer_move_into_bytes_value(wa_growable_byte_buffe
         return wa_value_create_bytes(buffer->platform_hooks, NULL, 0, value_out);
     }
     status = wa_value_create_bytes_from_allocated_block(buffer->platform_hooks, buffer->data, buffer->length,
-                                                         buffer->capacity, value_out);
+                                                         buffer->capacity, buffer->is_secret, value_out);
     if (status != WA_STATUS_OK) {
         wa_growable_byte_buffer_release(buffer);
         return status;
     }
-    buffer->data = NULL; /* The node owns the block, and wipes it when destroyed */
+    buffer->data = NULL; /* The node owns the block, and wipes it when destroyed if it is secret */
     buffer->length = 0;
     buffer->capacity = 0;
     return WA_STATUS_OK;

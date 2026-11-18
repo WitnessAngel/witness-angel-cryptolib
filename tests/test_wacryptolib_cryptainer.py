@@ -6,6 +6,7 @@ import copy
 import logging
 import os
 import random
+import re
 import shutil
 import tempfile
 import textwrap
@@ -3303,6 +3304,28 @@ def test_cryptainer_without_keychain_uid_is_refused_upfront():
         check_cryptainer_sanity(convert_to_extjson(cryptainer), jsonschema_mode=True)
     check_cryptoconf_sanity(SIMPLE_CRYPTOCONF)  # Still optional in cryptoconfs
     assert "keychain_uid" not in SIMPLE_CRYPTOCONF
+
+
+@pytest.mark.parametrize("key_ciphertext_format", ["json", "cbor"])
+def test_metadata_with_extjson_keyword_map_is_refused_upfront(key_ciphertext_format):
+    for metadata, location in [
+        ({"$uuid": "zz"}, "cryptainer_metadata"),
+        ({"a": [1, {"$binary": {"base64": "", "subType": "00"}}]}, "cryptainer_metadata.a[1]"),
+        ({"a": {"b": {"$date": "x"}}}, "cryptainer_metadata.a.b"),
+    ]:
+        with pytest.raises(SchemaValidationError, match=r"Extended JSON keyword map \('\$\w+'\) at %s$" % re.escape(location)):
+            encrypt_payload_into_cryptainer(
+                payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=metadata,
+                key_ciphertext_format=key_ciphertext_format,
+            )
+    # Keywords in larger maps, or as values, are plain data, and round-trip
+    metadata = {"$uuid": "zz", "other": "$date", "nested": [{"$binary": 1, "x": None}]}
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=metadata,
+        key_ciphertext_format=key_ciphertext_format,
+    )
+    assert load_from_json_bytes(dump_to_json_bytes(cryptainer))["cryptainer_metadata"] == metadata
+    assert decrypt_payload_from_cryptainer(cryptainer)[0] == b"abc"
 
 
 def test_decrypt_non_dict_cryptainer_raises_schema_validation_error():

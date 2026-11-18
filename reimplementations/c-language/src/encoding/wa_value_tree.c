@@ -81,7 +81,15 @@ static wa_status_t wa_value_create_string(const wa_platform_hooks_t *platform_ho
     }
     (*value_out)->content.string.data = copy;
     (*value_out)->content.string.length = length;
+    (*value_out)->content.string.allocation_size = length;
+    (*value_out)->content.string.is_secret = 1;
     return WA_STATUS_OK;
+}
+
+wa_status_t wa_value_create_text_with_valid_utf8(const wa_platform_hooks_t *platform_hooks, const char *text,
+                                                 size_t text_length, wa_value_t **value_out)
+{
+    return wa_value_create_string(platform_hooks, WA_VALUE_TYPE_TEXT, (const uint8_t *)text, text_length, value_out);
 }
 
 wa_status_t wa_value_create_text(const wa_platform_hooks_t *platform_hooks, const char *text, size_t text_length,
@@ -103,20 +111,33 @@ wa_status_t wa_value_create_bytes(const wa_platform_hooks_t *platform_hooks, con
 }
 
 wa_status_t wa_value_create_bytes_from_allocated_block(const wa_platform_hooks_t *platform_hooks, uint8_t *data,
-                                                       size_t length, size_t allocation_size,
+                                                       size_t length, size_t allocation_size, int is_secret,
                                                        wa_value_t **value_out)
 {
-    if (length == 0 || length != allocation_size) {
-        /* Nodes release their content with its length as size: copy into an exact block otherwise */
-        wa_status_t status = wa_value_create_bytes(platform_hooks, data, length, value_out);
-        if (status == WA_STATUS_OK) {
-            wa_release_secret_memory(platform_hooks, data, allocation_size);
-        }
-        return status;
+    if (value_out != NULL) {
+        *value_out = NULL;
     }
+    if (data == NULL || length > allocation_size) {
+        return WA_STATUS_INVALID_ARGUMENT;
+    }
+    if (length == 0 || allocation_size - length > length / WA_VALUE_MAXIMUM_TAKEN_OVER_SLACK_DIVISOR) {
+        /* Too much unused tail (empty content included, which gets no block): an exact copy, so that the retained
+         * memory stays proportional to the content (key ciphertexts are kept until the cryptainer is written) */
+        WA_RETURN_IF_ERROR(wa_value_create_bytes(platform_hooks, length != 0 ? data : NULL, length, value_out));
+        (*value_out)->content.string.is_secret = is_secret ? 1 : 0;
+        if (is_secret) {
+            wa_release_secret_memory(platform_hooks, data, allocation_size);
+        } else {
+            wa_release_memory(platform_hooks, data, allocation_size);
+        }
+        return WA_STATUS_OK;
+    }
+    /* No copy: the node keeps the whole block, its small unused tail included */
     WA_RETURN_IF_ERROR(wa_value_allocate_node(platform_hooks, WA_VALUE_TYPE_BYTES, value_out));
     (*value_out)->content.string.data = data;
     (*value_out)->content.string.length = length;
+    (*value_out)->content.string.allocation_size = allocation_size;
+    (*value_out)->content.string.is_secret = is_secret ? 1 : 0;
     return WA_STATUS_OK;
 }
 
@@ -145,6 +166,22 @@ wa_status_t wa_value_create_map(const wa_platform_hooks_t *platform_hooks, wa_va
 }
 
 /* CONTAINERS */
+
+/* Whether `item` may be adopted by `container`: an owned root node (not already held by a container, which would
+ * give a double release), and not `container` itself nor one of its ancestors (which would give a cycle). */
+static int wa_value_can_be_adopted(const wa_value_t *container, const wa_value_t *item)
+{
+    const wa_value_t *ancestor;
+    if (item->is_borrowed || item->parent != NULL) {
+        return 0;
+    }
+    for (ancestor = container; ancestor != NULL; ancestor = ancestor->parent) {
+        if (ancestor == item) {
+            return 0;
+        }
+    }
+    return 1;
+}
 
 /* Grow a container block of `count` items of `item_size` bytes, by allocate/copy/release. */
 static wa_status_t wa_value_grow_container(const wa_platform_hooks_t *platform_hooks, void **items, size_t count,
@@ -176,7 +213,8 @@ static wa_status_t wa_value_grow_container(const wa_platform_hooks_t *platform_h
 wa_status_t wa_value_array_append(wa_value_t *array, wa_value_t *item)
 {
     void *items;
-    if (array == NULL || item == NULL || array->type != WA_VALUE_TYPE_ARRAY || array->is_borrowed || item == array) {
+    if (array == NULL || item == NULL || array->type != WA_VALUE_TYPE_ARRAY || array->is_borrowed ||
+        !wa_value_can_be_adopted(array, item)) {
         return WA_STATUS_INVALID_ARGUMENT;
     }
     items = array->content.array.items;
@@ -184,6 +222,7 @@ wa_status_t wa_value_array_append(wa_value_t *array, wa_value_t *item)
                                                &array->content.array.capacity, sizeof(wa_value_t *)));
     array->content.array.items = (wa_value_t **)items;
     array->content.array.items[array->content.array.count++] = item;
+    item->parent = array;
     return WA_STATUS_OK;
 }
 
@@ -192,31 +231,65 @@ int wa_value_keys_are_equal(const char *key_a, size_t length_a, const char *key_
     return length_a == length_b && (length_a == 0 || memcmp(key_a, key_b, length_a) == 0);
 }
 
+int wa_value_compare_keys(const char *key_a, size_t length_a, const char *key_b, size_t length_b)
+{
+    size_t common_length = length_a < length_b ? length_a : length_b;
+    int comparison = common_length == 0 ? 0 : memcmp(key_a, key_b, common_length);
+    if (comparison != 0) {
+        return comparison;
+    }
+    return length_a < length_b ? -1 : (length_a > length_b ? 1 : 0);
+}
+
+/* Binary search in the sorted entries of a map: 1 and the index of the entry if `key` is present, else 0 and the
+ * index where it would be inserted. */
+static int wa_value_search_map_entry(const wa_value_t *map, const char *key, size_t key_length, size_t *index_out)
+{
+    size_t low = 0;
+    size_t high = map->content.map.count;
+    while (low < high) {
+        size_t middle = low + (high - low) / 2u;
+        const wa_value_map_entry_t *entry = &map->content.map.entries[middle];
+        int comparison = wa_value_compare_keys(entry->key, entry->key_length, key, key_length);
+        if (comparison == 0) {
+            *index_out = middle;
+            return 1;
+        }
+        if (comparison < 0) {
+            low = middle + 1u;
+        } else {
+            high = middle;
+        }
+    }
+    *index_out = low;
+    return 0;
+}
+
 static const wa_value_map_entry_t *wa_value_find_map_entry(const wa_value_t *map, const char *key, size_t key_length)
 {
     size_t index;
-    if (map == NULL || map->type != WA_VALUE_TYPE_MAP) {
+    if (map == NULL || map->type != WA_VALUE_TYPE_MAP || (key == NULL && key_length != 0) ||
+        !wa_value_search_map_entry(map, key, key_length, &index)) {
         return NULL;
     }
-    for (index = 0; index < map->content.map.count; index++) {
-        const wa_value_map_entry_t *entry = &map->content.map.entries[index];
-        if (wa_value_keys_are_equal(entry->key, entry->key_length, key, key_length)) {
-            return entry;
-        }
-    }
-    return NULL;
+    return &map->content.map.entries[index];
 }
 
-wa_status_t wa_value_map_add(wa_value_t *map, const char *key, size_t key_length, wa_value_t *value)
+int wa_value_map_has_key(const wa_value_t *map, const char *key, size_t key_length)
+{
+    return wa_value_find_map_entry(map, key, key_length) != NULL;
+}
+
+wa_status_t wa_value_map_add_with_valid_key(wa_value_t *map, const char *key, size_t key_length, wa_value_t *value)
 {
     void *entries;
     char *key_copy = NULL;
     wa_value_map_entry_t *entry;
+    size_t insertion_index;
 
-    if (map == NULL || value == NULL || map->type != WA_VALUE_TYPE_MAP || map->is_borrowed || value == map ||
-        (key == NULL && key_length != 0) ||
-        (key_length != 0 && !wa_utf8_is_valid((const uint8_t *)key, key_length)) ||
-        wa_value_find_map_entry(map, key, key_length) != NULL) {
+    if (map == NULL || value == NULL || map->type != WA_VALUE_TYPE_MAP || map->is_borrowed ||
+        !wa_value_can_be_adopted(map, value) || (key == NULL && key_length != 0) ||
+        wa_value_search_map_entry(map, key, key_length, &insertion_index)) {
         return WA_STATUS_INVALID_ARGUMENT;
     }
     if (key_length != 0) {
@@ -233,11 +306,22 @@ wa_status_t wa_value_map_add(wa_value_t *map, const char *key, size_t key_length
         return WA_STATUS_OUT_OF_MEMORY;
     }
     map->content.map.entries = (wa_value_map_entry_t *)entries;
-    entry = &map->content.map.entries[map->content.map.count++];
+    entry = &map->content.map.entries[insertion_index];
+    memmove(entry + 1, entry, (map->content.map.count - insertion_index) * sizeof(*entry));
+    map->content.map.count++;
     entry->key = key_copy;
     entry->key_length = key_length;
     entry->value = value;
+    value->parent = map;
     return WA_STATUS_OK;
+}
+
+wa_status_t wa_value_map_add(wa_value_t *map, const char *key, size_t key_length, wa_value_t *value)
+{
+    if ((key == NULL && key_length != 0) || (key_length != 0 && !wa_utf8_is_valid((const uint8_t *)key, key_length))) {
+        return WA_STATUS_INVALID_ARGUMENT;
+    }
+    return wa_value_map_add_with_valid_key(map, key, key_length, value);
 }
 
 wa_status_t wa_value_map_add_consuming(wa_value_t *map, const char *key, wa_value_t *value)
@@ -255,22 +339,20 @@ wa_status_t wa_value_map_add_consuming(wa_value_t *map, const char *key, wa_valu
 
 wa_value_t *wa_value_map_take_value(wa_value_t *map, const char *key)
 {
-    size_t key_length = strlen(key);
     size_t index;
-    if (map == NULL || map->type != WA_VALUE_TYPE_MAP || map->is_borrowed) {
+    wa_value_map_entry_t *entry;
+    wa_value_t *value;
+    if (map == NULL || map->type != WA_VALUE_TYPE_MAP || map->is_borrowed ||
+        !wa_value_search_map_entry(map, key, strlen(key), &index)) {
         return NULL;
     }
-    for (index = 0; index < map->content.map.count; index++) {
-        wa_value_map_entry_t *entry = &map->content.map.entries[index];
-        if (wa_value_keys_are_equal(entry->key, entry->key_length, key, key_length)) {
-            wa_value_t *value = entry->value;
-            wa_release_memory(map->platform_hooks, entry->key, entry->key_length);
-            memmove(entry, entry + 1, (map->content.map.count - index - 1) * sizeof(*entry));
-            map->content.map.count--;
-            return value;
-        }
-    }
-    return NULL;
+    entry = &map->content.map.entries[index];
+    value = entry->value;
+    wa_release_secret_memory(map->platform_hooks, entry->key, entry->key_length);
+    memmove(entry, entry + 1, (map->content.map.count - index - 1) * sizeof(*entry));
+    map->content.map.count--;
+    value->parent = NULL;
+    return value;
 }
 
 /* RELEASE */
@@ -286,8 +368,13 @@ void wa_value_destroy(wa_value_t *value_or_null)
     switch (value_or_null->type) {
     case WA_VALUE_TYPE_TEXT:
     case WA_VALUE_TYPE_BYTES:
-        wa_release_secret_memory(platform_hooks, value_or_null->content.string.data,
-                                 value_or_null->content.string.length);
+        if (value_or_null->content.string.is_secret) {
+            wa_release_secret_memory(platform_hooks, value_or_null->content.string.data,
+                                     value_or_null->content.string.allocation_size);
+        } else {
+            wa_release_memory(platform_hooks, value_or_null->content.string.data,
+                              value_or_null->content.string.allocation_size);
+        }
         break;
     case WA_VALUE_TYPE_ARRAY:
         for (index = 0; index < value_or_null->content.array.count; index++) {
@@ -309,6 +396,7 @@ void wa_value_destroy(wa_value_t *value_or_null)
     case WA_VALUE_TYPE_NULL:
     case WA_VALUE_TYPE_BOOLEAN:
     case WA_VALUE_TYPE_INTEGER:
+    case WA_VALUE_TYPE_INVALID:
         break;
     }
     wa_release_secret_memory(platform_hooks, value_or_null, sizeof(*value_or_null));
@@ -401,6 +489,7 @@ void wa_value_initialize_borrowed_text(wa_value_t *node, const char *nul_termina
     wa_value_initialize_borrowed_node(node, WA_VALUE_TYPE_TEXT);
     node->content.string.data = (uint8_t *)(void *)(uintptr_t)nul_terminated_text;
     node->content.string.length = strlen(nul_terminated_text);
+    node->content.string.allocation_size = node->content.string.length;
 }
 
 void wa_value_initialize_borrowed_bytes(wa_value_t *node, const uint8_t *bytes, size_t length)
@@ -408,6 +497,7 @@ void wa_value_initialize_borrowed_bytes(wa_value_t *node, const uint8_t *bytes, 
     wa_value_initialize_borrowed_node(node, WA_VALUE_TYPE_BYTES);
     node->content.string.data = (uint8_t *)(uintptr_t)bytes;
     node->content.string.length = length;
+    node->content.string.allocation_size = length;
 }
 
 void wa_value_initialize_borrowed_array(wa_value_t *node, wa_value_t **items, size_t count)
@@ -438,7 +528,7 @@ void wa_value_initialize_borrowed_map_entry(wa_value_map_entry_t *entry, const c
 
 wa_value_type_t wa_value_get_type(const wa_value_t *value)
 {
-    return value->type;
+    return value == NULL ? WA_VALUE_TYPE_INVALID : value->type;
 }
 
 int wa_value_get_boolean(const wa_value_t *value, int *boolean_out)

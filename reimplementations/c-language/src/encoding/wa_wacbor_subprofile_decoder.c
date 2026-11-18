@@ -143,18 +143,6 @@ static wa_status_t wa_cbor_decode_array(wa_cbor_decoder_t *decoder, const wa_cbo
     return WA_STATUS_OK;
 }
 
-static int wa_cbor_map_has_key(const wa_value_t *map, const uint8_t *key, size_t key_length)
-{
-    size_t index;
-    for (index = 0; index < map->content.map.count; index++) {
-        const wa_value_map_entry_t *entry = &map->content.map.entries[index];
-        if (wa_value_keys_are_equal(entry->key, entry->key_length, (const char *)key, key_length)) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
 static wa_status_t wa_cbor_decode_map_entry(wa_cbor_decoder_t *decoder, wa_value_t *map, size_t depth)
 {
     wa_cbor_head_t key_head;
@@ -169,11 +157,12 @@ static wa_status_t wa_cbor_decode_map_entry(wa_cbor_decoder_t *decoder, wa_value
     }
     WA_RETURN_IF_ERROR(wa_cbor_read_head(decoder, &key_head));
     WA_RETURN_IF_ERROR(wa_cbor_read_string_content(decoder, &key_head, &key, &key_length));
-    if (wa_cbor_map_has_key(map, key, key_length)) {
+    if (wa_value_map_has_key(map, (const char *)key, key_length)) {
         return WA_STATUS_DECODING_ERROR; /* Duplicate map key */
     }
     WA_RETURN_IF_ERROR(wa_cbor_decode_item(decoder, depth, &value));
-    status = wa_value_map_add(map, (const char *)key, key_length, value);
+    /* The key is valid UTF-8 (read_string_content checked it) and new */
+    status = wa_value_map_add_with_valid_key(map, (const char *)key, key_length, value);
     if (status != WA_STATUS_OK) {
         wa_value_destroy(value);
         return WA_STATUS_OUT_OF_MEMORY; /* Keys were checked already, only allocation can fail */
@@ -297,7 +286,9 @@ static wa_status_t wa_cbor_decode_item(wa_cbor_decoder_t *decoder, size_t depth,
         return wa_value_create_bytes(decoder->platform_hooks, content, content_length, value_out);
     case WA_CBOR_MAJOR_TEXT:
         WA_RETURN_IF_ERROR(wa_cbor_read_string_content(decoder, &head, &content, &content_length));
-        return wa_value_create_text(decoder->platform_hooks, (const char *)content, content_length, value_out);
+        /* Valid UTF-8, checked by read_string_content */
+        return wa_value_create_text_with_valid_utf8(decoder->platform_hooks, (const char *)content, content_length,
+                                                    value_out);
     case WA_CBOR_MAJOR_ARRAY:
         return wa_cbor_decode_array(decoder, &head, depth + 1, value_out);
     case WA_CBOR_MAJOR_MAP:

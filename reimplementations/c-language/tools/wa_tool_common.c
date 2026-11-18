@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <io.h>
 #include <sys/stat.h>
+#include <windows.h>
 #else
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -92,12 +93,80 @@ uint8_t *wa_tool_read_file(const char *path, size_t *length_out)
 
 int wa_tool_file_exists(const char *path)
 {
-    FILE *file = fopen(path, "rb");
-    if (file == NULL) {
-        return 0;
+#if defined(_WIN32)
+    struct _stat64 file_status;
+    return _stat64(path, &file_status) == 0;
+#else
+    struct stat file_status;
+    return stat(path, &file_status) == 0;
+#endif
+}
+
+int wa_tool_files_are_same(const char *path_a, const char *path_b)
+{
+#if defined(_WIN32)
+    /* st_ino is always 0 on Windows: compare volume serial numbers and file indexes */
+    BY_HANDLE_FILE_INFORMATION informations[2];
+    const char *paths[2];
+    int index;
+    paths[0] = path_a;
+    paths[1] = path_b;
+    for (index = 0; index < 2; ++index) {
+        BOOL is_read;
+        HANDLE handle = CreateFileA(paths[index], 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                                    OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+        if (handle == INVALID_HANDLE_VALUE) {
+            return 0;
+        }
+        is_read = GetFileInformationByHandle(handle, &informations[index]);
+        (void)CloseHandle(handle);
+        if (!is_read) {
+            return 0;
+        }
     }
-    (void)fclose(file);
-    return 1;
+    return informations[0].dwVolumeSerialNumber == informations[1].dwVolumeSerialNumber &&
+           informations[0].nFileIndexHigh == informations[1].nFileIndexHigh &&
+           informations[0].nFileIndexLow == informations[1].nFileIndexLow;
+#else
+    struct stat status_a;
+    struct stat status_b;
+    return stat(path_a, &status_a) == 0 && stat(path_b, &status_b) == 0 && status_a.st_dev == status_b.st_dev &&
+           status_a.st_ino == status_b.st_ino;
+#endif
+}
+
+FILE *wa_tool_open_temporary_output_file(const char *final_path, char **temporary_path_out)
+{
+    size_t length = strlen(final_path);
+    char *temporary_path = (char *)malloc(length + sizeof(".tmp-000"));
+    unsigned int attempt;
+    *temporary_path_out = NULL;
+    if (temporary_path == NULL) {
+        return NULL;
+    }
+    for (attempt = 0; attempt < 1000u; ++attempt) {
+        FILE *file;
+        (void)sprintf(temporary_path, "%s.tmp-%03u", final_path, attempt);
+        file = wa_tool_open_output_file(temporary_path, 0);
+        if (file != NULL) {
+            *temporary_path_out = temporary_path;
+            return file;
+        }
+        if (!wa_tool_file_exists(temporary_path)) {
+            break; /* Not a name clash: the directory is not writable */
+        }
+    }
+    free(temporary_path);
+    return NULL;
+}
+
+int wa_tool_replace_file(const char *source_path, const char *destination_path)
+{
+#if defined(_WIN32)
+    return MoveFileExA(source_path, destination_path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) ? 0 : -1;
+#else
+    return rename(source_path, destination_path) == 0 ? 0 : -1;
+#endif
 }
 
 FILE *wa_tool_open_output_file(const char *path, int force)

@@ -85,10 +85,11 @@ wa_status_t wa_asymmetric_serialize_key_struct(const wa_platform_hooks_t *platfo
     }
     wa_value_initialize_borrowed_bytes(&key_bytes_node, key_bytes, key_bytes_length);
     wa_value_initialize_borrowed_null(&null_node);
-    wa_value_initialize_borrowed_map_entry(&entries[0], "key_bytes", &key_bytes_node);
-    wa_value_initialize_borrowed_map_entry(&entries[1], "cryptainer_metadata",
+    /* Entries sorted by key, like those of owned maps */
+    wa_value_initialize_borrowed_map_entry(&entries[0], "cryptainer_metadata",
                                            cryptainer_metadata_or_null != NULL ? cryptainer_metadata_or_null
                                                                                : &null_node);
+    wa_value_initialize_borrowed_map_entry(&entries[1], "key_bytes", &key_bytes_node);
     wa_value_initialize_borrowed_map(&key_struct, entries, 2);
     status = wa_document_serialize_to_buffer(&key_struct, resolved_format, serialized_out);
     if (status != WA_STATUS_OK) {

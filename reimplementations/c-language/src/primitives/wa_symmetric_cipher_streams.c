@@ -224,7 +224,7 @@ wa_status_t wa_symmetric_encrypt_to_cipherdict(const wa_platform_hooks_t *platfo
         status = wa_value_create_map(platform_hooks, &cipherdict);
     }
     if (status == WA_STATUS_OK) {
-        status = wa_value_create_bytes_from_allocated_block(platform_hooks, ciphertext, ciphertext_length, capacity,
+        status = wa_value_create_bytes_from_allocated_block(platform_hooks, ciphertext, ciphertext_length, capacity, 0,
                                                             &ciphertext_value);
         if (status == WA_STATUS_OK) {
             ciphertext = NULL; /* Owned by the node */

@@ -300,6 +300,31 @@ def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema])
         raise SchemaValidationError("Error validating data tree with json-schema: {}".format(summary))
 
 
+def _check_shared_secret_thresholds_of_extjson_tree(data_tree: dict) -> None:
+    """Check that no shared secret of a raw Extended JSON cryptoconf or cryptainer has a threshold greater than its
+    number of shards: JSON Schema can't express this cross-field rule, which python-schema validation enforces.
+
+    The tree must already have passed its JSON-schema validation."""
+    pending_key_cipher_layers = [
+        payload_cipher_layer["key_cipher_layers"] for payload_cipher_layer in data_tree["payload_cipher_layers"]
+    ]
+    while pending_key_cipher_layers:  # Iterative walk of the cipher layers only (metadata is free-form)
+        for key_cipher_layer in pending_key_cipher_layers.pop():
+            if key_cipher_layer["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER:
+                key_shared_secret_shards = key_cipher_layer["key_shared_secret_shards"]
+                threshold = key_cipher_layer["key_shared_secret_threshold"]
+                if isinstance(threshold, dict):  # {"$numberInt": "2"} or {"$numberLong": "2"}
+                    (threshold,) = threshold.values()
+                if int(threshold) > len(key_shared_secret_shards):
+                    raise SchemaValidationError(
+                        "Error validating data tree with json-schema: "
+                        "Shared secret threshold can't be greater than number of shards"
+                    )
+                pending_key_cipher_layers.extend(shard["key_cipher_layers"] for shard in key_shared_secret_shards)
+            elif "key_cipher_layers" in key_cipher_layer:  # Symmetric key cipher layer
+                pending_key_cipher_layers.append(key_cipher_layer["key_cipher_layers"])
+
+
 def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
     """Validate the format of an encryption config.
 
@@ -309,6 +334,8 @@ def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
 
     schema = CRYPTOCONF_SCHEMA_JSON if jsonschema_mode else CRYPTOCONF_SCHEMA_PYTHON
     _validate_data_tree(data_tree=cryptoconf, validation_schema=schema)
+    if jsonschema_mode:
+        _check_shared_secret_thresholds_of_extjson_tree(cryptoconf)
 
 
 MAX_CRYPTAINER_METADATA_NESTING_DEPTH = WACBOR_MAX_NESTING_DEPTH - 1  # Metadata is at level 2 of its holders
@@ -378,6 +405,7 @@ def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False, require_inl
     """
     if jsonschema_mode:
         _validate_data_tree(data_tree=cryptainer, validation_schema=CRYPTAINER_SCHEMA_JSON)
+        _check_shared_secret_thresholds_of_extjson_tree(cryptainer)
         return
 
     if not isinstance(cryptainer, dict):  # Not an assert, which vanishes under "python -O"

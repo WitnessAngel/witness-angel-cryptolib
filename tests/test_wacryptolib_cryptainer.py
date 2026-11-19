@@ -3464,6 +3464,46 @@ def test_shared_secret_threshold_lower_bound_via_json_schema(canonical):
 
 
 @pytest.mark.parametrize("canonical", [False, True])
+def test_shared_secret_threshold_upper_bound_via_json_schema(canonical):
+    cryptainer, shared_secret = _get_simple_shamir_cryptainer_and_shared_secret()
+    shard_count = len(shared_secret["key_shared_secret_shards"])
+    shared_secret["key_shared_secret_threshold"] = shard_count  # Still valid
+    check_cryptainer_sanity(convert_to_extjson(cryptainer, canonical=canonical), jsonschema_mode=True)
+    shared_secret["key_shared_secret_threshold"] = shard_count + 1
+    with pytest.raises(SchemaValidationError, match="threshold can't be greater than number of shards"):
+        check_cryptainer_sanity(convert_to_extjson(cryptainer, canonical=canonical), jsonschema_mode=True)
+
+    def _build_shared_secret(threshold, key_cipher_layers):
+        return dict(
+            key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+            key_shared_secret_threshold=threshold,
+            key_shared_secret_shards=[dict(key_cipher_layers=key_cipher_layers)],
+        )
+
+    asymmetric_layers = [dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)]
+    for threshold, is_valid in [(1, True), (2, False)]:
+        for key_cipher_layers in (
+            [_build_shared_secret(threshold, asymmetric_layers)],
+            # Nested in a shard, and in a symmetric key cipher layer
+            [_build_shared_secret(1, [_build_shared_secret(threshold, asymmetric_layers)])],
+            asymmetric_layers
+            + [dict(key_cipher_algo="AES_EAX", key_cipher_layers=[_build_shared_secret(threshold, asymmetric_layers)])],
+        ):
+            cryptoconf = dict(
+                payload_cipher_layers=[
+                    dict(payload_cipher_algo="AES_CBC", key_cipher_layers=key_cipher_layers, payload_ciphertext_signatures=[])
+                ]
+            )
+            cryptoconf_json = convert_to_extjson(cryptoconf, canonical=canonical)
+            for jsonschema_mode, checked_cryptoconf in [(False, cryptoconf), (True, cryptoconf_json)]:  # Both modes agree
+                if is_valid:
+                    check_cryptoconf_sanity(checked_cryptoconf, jsonschema_mode=jsonschema_mode)
+                else:
+                    with pytest.raises(SchemaValidationError, match="threshold"):
+                        check_cryptoconf_sanity(checked_cryptoconf, jsonschema_mode=jsonschema_mode)
+
+
+@pytest.mark.parametrize("canonical", [False, True])
 def test_empty_payload_cryptainer_validation_via_json_schema(canonical):
     cryptoconf = dict(  # A stream cipher, since AES_CBC would pad the empty payload
         payload_cipher_layers=[

@@ -2,7 +2,9 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-from datetime import datetime
+import os
+import time
+from datetime import datetime, timezone
 from unittest import mock
 
 import pytest
@@ -16,7 +18,7 @@ from wacryptolib.exceptions import SignatureVerificationError, SignatureCreation
 def _common_signature_checks(keypair, message, signature, signature_algo):
     assert isinstance(signature["signature_value"], bytes)
     assert isinstance(signature["signature_timestamp_utc"], int)
-    utcnow = datetime.utcnow().timestamp()
+    utcnow = datetime.now(timezone.utc).timestamp()  # Unix timestamp, whatever the local timezone
     assert utcnow - 10 <= signature["signature_timestamp_utc"] <= utcnow
 
     wacryptolib.signature.verify_message_signature(
@@ -47,6 +49,26 @@ def _common_signature_checks(keypair, message, signature, signature_algo):
             signature=signature_corrupted,
             signature_algo=signature_algo,
         )
+
+
+def test_signature_timestamp_is_unix_timestamp_whatever_the_local_timezone():
+    # A naive utcnow() datetime converted with .timestamp() is shifted by the local UTC offset
+    assert abs(wacryptolib.signature._get_utc_timestamp() - time.time()) <= 2
+
+    if not hasattr(time, "tzset"):
+        return  # Local timezone can't be changed on the fly (Windows), the check above is all we can do
+    old_tz = os.environ.get("TZ")
+    try:
+        for tz in ("Etc/GMT+8", "Etc/GMT-5", "UTC"):
+            os.environ["TZ"] = tz
+            time.tzset()
+            assert abs(wacryptolib.signature._get_utc_timestamp() - time.time()) <= 2
+    finally:
+        if old_tz is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = old_tz
+        time.tzset()
 
 
 def test_sign_and_verify_with_rsa_key():

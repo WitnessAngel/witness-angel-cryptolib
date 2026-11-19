@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import logging
-from datetime import datetime
+import time
 
 from wacryptolib import _crypto_backend
 from wacryptolib.exceptions import SignatureCreationError, SignatureVerificationError
@@ -79,11 +79,11 @@ def verify_message_signature(*, message: bytes, signature_algo: str, signature: 
 
 
 def _get_utc_timestamp() -> int:
-    """Get current UTC timestamp.
+    """Get current Unix timestamp (seconds since the epoch, which is timezone-independent).
 
     :return: timestamp as an integer
     """
-    timestamp_utc = int(datetime.utcnow().timestamp())
+    timestamp_utc = int(time.time())
     return timestamp_utc
 
 

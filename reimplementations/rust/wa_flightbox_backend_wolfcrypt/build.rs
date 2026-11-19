@@ -171,9 +171,7 @@ fn main() {
             println!("cargo:rerun-if-changed={}", default_settings.display());
             let directory = output_directory.join("wa_wolfssl_settings");
             fs::create_dir_all(&directory).expect("creating the settings directory");
-            // Windows canonical paths start with \\?\, which C compilers do not take
-            let include_path = to_c_path(&default_settings);
-            let include_path = include_path.strip_prefix("//?/").unwrap_or(&include_path);
+            let include_path = to_c_include_path(&default_settings);
             fs::write(
                 directory.join("user_settings.h"),
                 format!(
@@ -203,6 +201,10 @@ fn main() {
         );
     }
 
+    // Rebuilt when the wolfSSL tree changes, once any rerun-if-changed is printed: its headers, and its sources,
+    // including those that the compiled ones include (misc.c)
+    println!("cargo:rerun-if-changed={}", wolfssl_directory.join("wolfssl").display());
+    println!("cargo:rerun-if-changed={}", wolfcrypt_source_directory.display());
     let mut wolfcrypt = cc::Build::new();
     wolfcrypt
         .define("WOLFSSL_USER_SETTINGS", None)

@@ -219,6 +219,9 @@ static wa_status_t wa_validate_shared_secret_layer(const wa_value_t *layer, size
     WA_RETURN_IF_ERROR(wa_check_typed_value(layer, "key_shared_secret_shards", 1, WA_VALUE_TYPE_ARRAY, location));
     previous_length =
         wa_error_location_path_push_key(location, "key_shared_secret_shards", strlen("key_shared_secret_shards"));
+    if (wa_value_get_item_count(shards) == 0) {
+        return WA_STATUS_INVALID_PROFILE; /* An empty list is the fault, whatever the threshold */
+    }
     for (shard_index = 0; shard_index < wa_value_get_item_count(shards); ++shard_index) {
         const wa_value_t *shard = wa_value_get_array_item(shards, shard_index);
         size_t shard_previous_length = wa_error_location_path_push_index(location, shard_index);

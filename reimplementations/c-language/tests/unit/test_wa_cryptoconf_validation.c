@@ -212,8 +212,13 @@ static const cryptoconf_case_t cryptoconf_cases[] = {
      WA_STATUS_INVALID_PROFILE, KEY_LAYER_0 ".key_shared_secret_threshold"},
     {SIMPLE_CRYPTOCONF_WITH_KEY_LAYER(SHARED_SECRET_LAYER("'1'", SHARD(RSA_LAYER))), WA_STATUS_INVALID_PROFILE,
      KEY_LAYER_0 ".key_shared_secret_threshold"},
+    /* An empty shard list is located at the list, whatever the threshold */
     {SIMPLE_CRYPTOCONF_WITH_KEY_LAYER(SHARED_SECRET_LAYER("1", "")), WA_STATUS_INVALID_PROFILE,
-     KEY_LAYER_0 ".key_shared_secret_threshold"},
+     KEY_LAYER_0 ".key_shared_secret_shards"},
+    {SIMPLE_CRYPTOCONF_WITH_KEY_LAYER(SHARED_SECRET_LAYER("0", "")), WA_STATUS_INVALID_PROFILE,
+     KEY_LAYER_0 ".key_shared_secret_shards"},
+    {SIMPLE_CRYPTOCONF_WITH_KEY_LAYER("{'key_cipher_algo': '[SHARED_SECRET]', 'key_shared_secret_shards': []}"),
+     WA_STATUS_INVALID_PROFILE, KEY_LAYER_0 ".key_shared_secret_shards"},
     {SIMPLE_CRYPTOCONF_WITH_KEY_LAYER("{'key_cipher_algo': '[SHARED_SECRET]', 'key_shared_secret_shards': ["
                                       SHARD(RSA_LAYER) "]}"),
      WA_STATUS_INVALID_PROFILE, KEY_LAYER_0 ".key_shared_secret_threshold"},

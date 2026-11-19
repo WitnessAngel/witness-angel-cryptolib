@@ -279,3 +279,64 @@ fn bundle_run_failing_to_replace_the_cryptainer_keeps_the_existing_payload() {
         assert_eq!(directory.list(), files_before);
     }
 }
+
+/// RS-6: the payload file was created before the metadata was checked. The outputs going to a missing directory,
+/// their creation fails: the error reported tells what was done first.
+#[test]
+fn rejected_metadata_is_reported_before_any_output_is_created() {
+    for format_name in enabled_document_format_names() {
+        let directory = WorkDirectory::new("rejected_metadata", format_name);
+        // An empty array: well-formed WA-CBOR, but not a map
+        directory.write("metadata.cbor", &[0x80]);
+        let files_before = directory.list();
+        for force_arguments in [&[][..], &["--force"]] {
+            for output_basename in ["out", "missing_directory/out"] {
+                let mut arguments = vec!["-m", "metadata.cbor", "-o", output_basename];
+                arguments.extend_from_slice(force_arguments);
+                let output = directory.encrypt(format_name, INPUT_FILENAME, &arguments);
+                let stderr = stderr_of(&output);
+                assert_eq!(output.status.code(), Some(1), "{stderr}");
+                assert!(
+                    stderr.contains("Error: cryptainer creation failed")
+                        && stderr.contains("[WA_STATUS_INVALID_PROFILE]"),
+                    "{output_basename}: {stderr}"
+                );
+                assert!(!stderr.contains("cannot create"), "{output_basename}: {stderr}");
+                assert_eq!(directory.list(), files_before);
+            }
+        }
+
+        // Valid metadata: the outputs that cannot be created are reported
+        directory.write("metadata.cbor", &[0xa0]);
+        let output = directory.encrypt(
+            format_name,
+            INPUT_FILENAME,
+            &["-m", "metadata.cbor", "-o", "missing_directory/out"],
+        );
+        let stderr = stderr_of(&output);
+        assert_eq!(output.status.code(), Some(1), "{stderr}");
+        assert!(
+            stderr.contains("Error: cannot create missing_directory/out"),
+            "{stderr}"
+        );
+        assert_eq!(directory.list(), files_before);
+    }
+}
+
+/// An empty input gives an empty payload file with some ciphers: the file is created all the same.
+#[test]
+fn empty_input_gives_both_output_files() {
+    for format_name in enabled_document_format_names() {
+        let directory = WorkDirectory::new("empty_input", format_name);
+        let (cryptainer_name, payload_name) = output_names(format_name);
+        directory.write(INPUT_FILENAME, b"");
+        for extra_arguments in [&[][..], &["--force"]] {
+            let output = directory.encrypt(format_name, INPUT_FILENAME, extra_arguments);
+            assert!(output.status.success(), "{}", stderr_of(&output));
+            assert_eq!(
+                directory.list(),
+                sorted(&[INPUT_FILENAME, PROFILE_FILENAME, &cryptainer_name, &payload_name])
+            );
+        }
+    }
+}

@@ -6,21 +6,23 @@
 //! with a cryptoconf (encryptor specification, section 9), with the arguments, messages and exit statuses of the C
 //! tool of the same name. The payload ciphertext is offloaded into `<cryptainer file>.payload` unless `--bundle`
 //! is given; the payload file is written first and the cryptainer last, so that a cryptainer never refers to a
-//! missing payload, and the files created are deleted on failure. With `--force`, existing output files are only
-//! replaced (by renaming) once their new versions are complete and written to the storage device, and together:
-//! when one of them cannot be replaced, the other one is put back. A cryptainer file and the payload file named
-//! after it go together: `--bundle` refuses an existing payload file too, and removes it with `--force`. Output
-//! files that are one of the input files are always refused.
+//! missing payload, and the files created are deleted on failure; none is created before the profile, the metadata
+//! and the options are validated. With `--force`, existing output files are only replaced (by renaming) once their
+//! new versions are complete and written to the storage device, and together: when one of them cannot be replaced,
+//! the other one is put back. A cryptainer file and the payload file named after it go together: `--bundle` refuses
+//! an existing payload file too, and removes it with `--force`. Output files that are one of the input files are
+//! always refused.
 
 #![forbid(unsafe_code)]
 
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::Read;
 use std::process::ExitCode;
 
 use wa_flightbox::{
     CryptainerEncryptor, DeviceProfile, DocumentFormat, EncryptorLimits, EncryptorOptions, Error, ErrorKind,
-    FinishedCryptainer, OutputSink, PlatformHooks, Value, decode_document_from_cbor,
+    FinishedCryptainer, OutputSink, PlatformHooks, SinkError, Value, decode_document_from_cbor,
 };
 use wa_flightbox_host_tools::{
     FileSink, HostPlatformHooks, ToolBackend, build_cryptainer_path, build_payload_path, command_line_arguments,
@@ -276,9 +278,24 @@ fn read_chunk(input: &mut dyn Read, buffer: &mut [u8]) -> std::io::Result<usize>
     Ok(length)
 }
 
-/// Step 2 over the whole input, and its end; `None` after an error, already reported.
+/// The payload file as the sink of an encryptor created before the file is, the encryptor validating the metadata
+/// and the options: nothing is created for a rejected input. The file is opened once the encryptor exists.
+struct PayloadOutputSink<'a, 'b>(&'a RefCell<&'b mut CliOutput>);
+
+impl OutputSink for PayloadOutputSink<'_, '_> {
+    fn write(&mut self, bytes: &[u8]) -> Result<(), SinkError> {
+        match self.0.borrow_mut().sink.as_mut() {
+            Some(sink) => sink.write(bytes),
+            None => Err(SinkError::WriteFailure),
+        }
+    }
+}
+
+/// Step 2 over the whole input, and its end; `None` after an error, already reported. `open_payload_output` is
+/// called once the encryptor is known to be created, before anything is written to its sink; it reports its errors.
 fn encrypt_payload<S: OutputSink>(
     created_encryptor: wa_flightbox::Result<CryptainerEncryptor<ToolBackend, S>>,
+    open_payload_output: impl FnOnce() -> bool,
     input: &mut dyn Read,
     chunk: &mut [u8],
     input_path: &str,
@@ -290,6 +307,9 @@ fn encrypt_payload<S: OutputSink>(
             return None;
         }
     };
+    if !open_payload_output() {
+        return None;
+    }
     loop {
         let Ok(read_count) = read_chunk(input, chunk) else {
             eprintln!("Error: cannot read the input file {input_path}");
@@ -407,23 +427,31 @@ fn encrypt(
         ..EncryptorOptions::default()
     };
     let finished = if let Some(payload_output) = payload_output.as_deref_mut() {
-        if !payload_output.open(arguments.is_forced) {
-            return false;
-        }
-        let Some(payload_sink) = payload_output.sink.as_mut() else {
-            return false;
-        };
+        // The encryptor first: no output file is created for metadata or options that it rejects
+        let shared_payload_output = RefCell::new(payload_output);
         let created_encryptor = CryptainerEncryptor::<ToolBackend, _>::create_offloaded(
             device_profile,
             metadata,
             &options,
             hooks,
-            payload_sink,
+            PayloadOutputSink(&shared_payload_output),
         );
-        encrypt_payload(created_encryptor, &mut *input, &mut chunk, &arguments.input_path)
+        encrypt_payload(
+            created_encryptor,
+            || shared_payload_output.borrow_mut().open(arguments.is_forced),
+            &mut *input,
+            &mut chunk,
+            &arguments.input_path,
+        )
     } else {
         let created_encryptor = CryptainerEncryptor::<ToolBackend>::create(device_profile, metadata, &options, hooks);
-        encrypt_payload(created_encryptor, &mut *input, &mut chunk, &arguments.input_path)
+        encrypt_payload(
+            created_encryptor,
+            || true,
+            &mut *input,
+            &mut chunk,
+            &arguments.input_path,
+        )
     };
     let Some(finished) = finished else {
         return false;

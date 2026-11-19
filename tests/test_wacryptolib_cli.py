@@ -1475,6 +1475,28 @@ def test_cli_encrypt_refuses_overwriting_existing_cryptainers(tmp_path):
         assert result.exit_code == 0, result.stderr
         assert pathlib.Path("decrypted.txt").read_bytes() == b"second content"
 
+        # Forced bundled encryption removes the offloaded payload file of the overwritten cryptainer
+        assert payload_file.is_file()
+        pathlib.Path(data_file).write_bytes(b"third content")
+        result = runner.invoke(
+            cli, base_args + ["encrypt", data_file, "-o", "report", "--force", "--bundle"], catch_exceptions=False
+        )
+        assert result.exit_code == 0, result.stderr
+        assert "Deleting obsolete offloaded payload file" in result.stderr
+        assert cryptainer_file.is_file() and not payload_file.exists()
+        result = runner.invoke(
+            cli,
+            base_args + ["cryptainer", "decrypt", "report.crypt.json", "-o", "decrypted.txt", "--force"],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.stderr
+        assert pathlib.Path("decrypted.txt").read_bytes() == b"third content"
+        result = runner.invoke(  # The basename is thus not blocked by a leftover file
+            cli, base_args + ["encrypt", data_file, "-o", "report", "--force", "--bundle"], catch_exceptions=False
+        )
+        assert result.exit_code == 0, result.stderr
+        assert "Deleting obsolete" not in result.stderr
+
 
 def test_cli_cryptoconf_generate_simple_refuses_overwriting_existing_file(tmp_path):
     runner = _get_cli_runner()

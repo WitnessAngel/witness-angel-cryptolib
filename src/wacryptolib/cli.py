@@ -561,6 +561,12 @@ def encrypt(ctx, input_file, output_basename, cryptoconf, bundle, file_format, k
         )
         assert not payload_handle.closed, payload_handle  # We do not automatically alter the file handle
 
+    if bundle and os.path.lexists(offloaded_payload_filepath):
+        # Only possible with --force: this leftover of the overwritten cryptainer would be taken for the payload
+        # of the new one by size computations and deletions, and would block later encryptions
+        logger.info("Deleting obsolete offloaded payload file '%s'", offloaded_payload_filepath)
+        os.remove(offloaded_payload_filepath)
+
     # Redundant:
     # logger.info(
     #    "Encryption of file '%s' to storage cryptainer '%s' successfully finished"

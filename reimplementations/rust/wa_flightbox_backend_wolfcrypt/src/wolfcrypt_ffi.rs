@@ -11,7 +11,7 @@
 #![allow(unsafe_code)]
 
 use alloc::boxed::Box;
-use core::ffi::c_int;
+use core::ffi::{c_int, c_void};
 use core::mem::{MaybeUninit, size_of};
 use core::ptr;
 
@@ -286,13 +286,26 @@ impl ChaCha20Poly1305Context {
 
 // HASHES AND HMAC //
 
-pub(crate) fn compute_sha256(parts: &[&[u8]]) -> FfiResult<[u8; 32]> {
-    let mut sha256 = WipedBox::<bindings::wc_Sha256>::new_zeroed();
-    let mut digest = [0u8; 32];
-    // SAFETY: the structure is a zero-filled block that wc_InitSha256_ex initializes
+/// The functions of one wolfCrypt hash, whose state is a `T`.
+struct HashFunctions<T> {
+    init: unsafe extern "C" fn(*mut T, *mut c_void, c_int) -> c_int,
+    update: unsafe extern "C" fn(*mut T, *const u8, u32) -> c_int,
+    finalize: unsafe extern "C" fn(*mut T, *mut u8) -> c_int,
+    free: unsafe extern "C" fn(*mut T),
+}
+
+/// The hash of the concatenation of `parts`.
+///
+/// # Safety
+///
+/// `N` must be the digest size of the hash of `functions`, which `finalize` writes.
+unsafe fn compute_hash<T, const N: usize>(functions: &HashFunctions<T>, parts: &[&[u8]]) -> FfiResult<[u8; N]> {
+    let mut state = WipedBox::<T>::new_zeroed();
+    let mut digest = [0u8; N];
+    // SAFETY: the structure is a zero-filled block that the init function initializes
     check(unsafe {
-        bindings::wc_InitSha256_ex(
-            sha256.as_mut_ptr(),
+        (functions.init)(
+            state.as_mut_ptr(),
             ptr::null_mut(),
             bindings::WA_WOLFCRYPT_INVALID_DEVID as c_int,
         )
@@ -301,43 +314,37 @@ pub(crate) fn compute_sha256(parts: &[&[u8]]) -> FfiResult<[u8; 32]> {
     for chunk in parts.iter().flat_map(|part| part.chunks(MAXIMUM_CHUNK_LENGTH)) {
         // SAFETY: the hash is initialized, and `chunk` is valid for reads of its length
         result = result.and_then(|()| {
-            check(unsafe {
-                bindings::wc_Sha256Update(sha256.as_mut_ptr(), chunk.as_ptr(), word32_length(chunk.len())?)
-            })
+            check(unsafe { (functions.update)(state.as_mut_ptr(), chunk.as_ptr(), word32_length(chunk.len())?) })
         });
     }
-    // SAFETY: the hash is initialized, and `digest` is valid for writes of the 32 bytes of a digest
-    result = result.and_then(|()| check(unsafe { bindings::wc_Sha256Final(sha256.as_mut_ptr(), digest.as_mut_ptr()) }));
-    // SAFETY: the hash was initialized by wc_InitSha256_ex
-    unsafe { bindings::wc_Sha256Free(sha256.as_mut_ptr()) };
+    // SAFETY: the hash is initialized, and `digest` is valid for writes of the N bytes of a digest (caller's
+    // contract)
+    result = result.and_then(|()| check(unsafe { (functions.finalize)(state.as_mut_ptr(), digest.as_mut_ptr()) }));
+    // SAFETY: the hash was initialized by the init function
+    unsafe { (functions.free)(state.as_mut_ptr()) };
     result.map(|()| digest)
 }
 
+pub(crate) fn compute_sha256(parts: &[&[u8]]) -> FfiResult<[u8; 32]> {
+    let functions = HashFunctions {
+        init: bindings::wc_InitSha256_ex,
+        update: bindings::wc_Sha256Update,
+        finalize: bindings::wc_Sha256Final,
+        free: bindings::wc_Sha256Free,
+    };
+    // SAFETY: a SHA-256 digest has 32 bytes
+    unsafe { compute_hash(&functions, parts) }
+}
+
 pub(crate) fn compute_sha512(parts: &[&[u8]]) -> FfiResult<[u8; 64]> {
-    let mut sha512 = WipedBox::<bindings::wc_Sha512>::new_zeroed();
-    let mut digest = [0u8; 64];
-    // SAFETY: the structure is a zero-filled block that wc_InitSha512_ex initializes
-    check(unsafe {
-        bindings::wc_InitSha512_ex(
-            sha512.as_mut_ptr(),
-            ptr::null_mut(),
-            bindings::WA_WOLFCRYPT_INVALID_DEVID as c_int,
-        )
-    })?;
-    let mut result = Ok(());
-    for chunk in parts.iter().flat_map(|part| part.chunks(MAXIMUM_CHUNK_LENGTH)) {
-        // SAFETY: the hash is initialized, and `chunk` is valid for reads of its length
-        result = result.and_then(|()| {
-            check(unsafe {
-                bindings::wc_Sha512Update(sha512.as_mut_ptr(), chunk.as_ptr(), word32_length(chunk.len())?)
-            })
-        });
-    }
-    // SAFETY: the hash is initialized, and `digest` is valid for writes of the 64 bytes of a digest
-    result = result.and_then(|()| check(unsafe { bindings::wc_Sha512Final(sha512.as_mut_ptr(), digest.as_mut_ptr()) }));
-    // SAFETY: the hash was initialized by wc_InitSha512_ex
-    unsafe { bindings::wc_Sha512Free(sha512.as_mut_ptr()) };
-    result.map(|()| digest)
+    let functions = HashFunctions {
+        init: bindings::wc_InitSha512_ex,
+        update: bindings::wc_Sha512Update,
+        finalize: bindings::wc_Sha512Final,
+        free: bindings::wc_Sha512Free,
+    };
+    // SAFETY: a SHA-512 digest has 64 bytes
+    unsafe { compute_hash(&functions, parts) }
 }
 
 pub(crate) fn compute_hmac_sha256(key: &[u8], parts: &[&[u8]]) -> FfiResult<[u8; 32]> {

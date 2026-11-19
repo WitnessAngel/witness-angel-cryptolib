@@ -10,7 +10,7 @@
 use alloc::vec::Vec;
 
 use crate::core::cryptoconf_validation::{
-    KeyCipherLayerKind, trustee_identities_are_equal, validate_cryptoconf, validate_trustee,
+    KeyCipherLayerKind, check_allowed_keys, trustee_identities_are_equal, validate_cryptoconf, validate_trustee,
 };
 use crate::core::error_location_path::{ErrorLocationPath, Located};
 use crate::crypto_backend::{ML_KEM_768_PUBLIC_KEY_SIZE, X25519_KEY_SIZE};
@@ -236,12 +236,11 @@ fn check_root_structure(document: &Value, location: &mut ErrorLocationPath) -> L
     if root.get("device_profile_format").and_then(Value::as_text) != Some(DEVICE_PROFILE_FORMAT) {
         return location.fail_at_key("device_profile_format", ErrorKind::UnsupportedFormat);
     }
-    for (key, _) in root.iter() {
-        if !["device_profile_format", "cryptoconf", "trustee_public_keys"].contains(&key) {
-            return location.fail_at_key(key, ErrorKind::InvalidProfile);
-        }
-    }
-    Ok(())
+    check_allowed_keys(
+        document,
+        &["device_profile_format", "cryptoconf", "trustee_public_keys"],
+        location,
+    )
 }
 
 /// The index of the entry of this trustee identity, keychain uid and algorithm, among the decoded ones.
@@ -269,11 +268,11 @@ fn decode_key_entry(key_entry_map: &Value, location: &mut ErrorLocationPath) -> 
     let Some(entries) = key_entry_map.as_map() else {
         return Err(ErrorKind::InvalidProfile);
     };
-    for (key, _) in entries.iter() {
-        if !["trustee", "keychain_uid", "key_algo", "public_key"].contains(&key) {
-            return location.fail_at_key(key, ErrorKind::InvalidProfile);
-        }
-    }
+    check_allowed_keys(
+        key_entry_map,
+        &["trustee", "keychain_uid", "key_algo", "public_key"],
+        location,
+    )?;
     let previous_length = location.push_key("trustee");
     let trustee = entries.get("trustee").ok_or(ErrorKind::InvalidProfile)?;
     validate_trustee(trustee, location)?;
@@ -307,11 +306,7 @@ fn check_public_key_structure(
     match cipher_algo {
         AsymmetricCipherAlgo::RsaOaep => {
             let entries = public_key.as_map().ok_or(ErrorKind::InvalidProfile)?;
-            for (key, _) in entries.iter() {
-                if !["modulus", "public_exponent"].contains(&key) {
-                    return location.fail_at_key(key, ErrorKind::InvalidProfile);
-                }
-            }
+            check_allowed_keys(public_key, &["modulus", "public_exponent"], location)?;
             for key in ["modulus", "public_exponent"] {
                 if entries.get(key).and_then(Value::as_bytes).is_none() {
                     return location.fail_at_key(key, ErrorKind::InvalidProfile);

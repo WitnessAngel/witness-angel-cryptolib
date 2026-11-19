@@ -113,7 +113,9 @@ impl<B: CryptoBackend> CryptainerEncryptor<B, NoPayloadSink> {
     /// Step 1, for a cryptainer holding its payload ciphertext (inline location): the ciphertext accumulates in
     /// memory until finalization, so this suits small payloads.
     ///
-    /// `cryptainer_metadata`, if any, must be a map without Extended JSON keyword maps. All the randomness of the
+    /// `cryptainer_metadata`, if any, must be a map without Extended JSON keyword maps: `None` is the null metadata
+    /// of the specification, and `Some(&Value::Null)` is refused like any other node that is not a map (the C
+    /// library takes a map or a NULL pointer in the same way). All the randomness of the
     /// cryptainer is drawn here from `hooks`, which are not kept. Errors: `ErrorKind::InvalidArgument` for
     /// invalid options, `ErrorKind::UnsupportedFeature` for a document format that is not built in,
     /// `ErrorKind::InvalidProfile` or `ErrorKind::NestingTooDeep` for unusable metadata (all before any random

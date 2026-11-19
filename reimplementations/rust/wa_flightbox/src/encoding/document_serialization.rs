@@ -90,6 +90,10 @@ pub(crate) fn serialize_to_secret_buffer(tree: Node<'_>, format: ResolvedFormat)
 
 /// Write a value tree to `sink` in `format`, with the exact bytes of wacryptolib's default writer of that format.
 /// `ErrorKind::UnsupportedFeature` for a format that is not compiled in.
+///
+/// The tree is written as it is, without the checks applied to cryptainer metadata: a single-key map whose key is
+/// an Extended JSON keyword (`{"$uuid": ...}`) is written as a map, which readers of either format then refuse or
+/// read back as another type, and its nesting is not checked (the writers recurse once per level).
 pub fn write_document<S: OutputSink>(tree: &Value, format: DocumentFormat, sink: &mut S) -> Result<()> {
     serialize_to_sink(Node::Value(tree), format.resolve()?, sink)
 }

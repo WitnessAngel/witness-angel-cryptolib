@@ -292,9 +292,10 @@ pub(crate) fn decode_wacbor_subprofile_document(cbor: &[u8], maximum_depth: usiz
 /// arrays and maps with text keys) into a value tree, e.g. cryptainer metadata received as CBOR. The top-level
 /// item must be a map or an array, nested at most as deep as `limits` allow.
 ///
-/// Errors: `ErrorKind::DecodingError` for bytes that are not such a document, `ErrorKind::UnsupportedType` for
-/// valid WA-CBOR outside the sub-profile (floats, dates, big numbers...), `ErrorKind::NestingTooDeep`,
-/// `ErrorKind::InvalidProfile` for Extended JSON keyword maps, `ErrorKind::OutOfMemory`.
+/// Errors: `ErrorKind::DecodingError` for bytes that are not such a document (which includes single-key maps
+/// whose key is an Extended JSON keyword, as for any WA-CBOR reader), `ErrorKind::UnsupportedType` for valid
+/// WA-CBOR outside the sub-profile (floats, dates, big numbers...), `ErrorKind::NestingTooDeep`,
+/// `ErrorKind::OutOfMemory`.
 pub fn decode_document_from_cbor(cbor: &[u8], limits: &crate::limits::EncryptorLimits) -> Result<Value> {
     decode_wacbor_subprofile_document(cbor, limits.max_cbor_nesting_depth())
 }

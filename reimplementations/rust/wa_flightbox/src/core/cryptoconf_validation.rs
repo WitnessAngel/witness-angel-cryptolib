@@ -63,7 +63,7 @@ fn check_map(value: &Value) -> Located<()> {
 }
 
 /// `ErrorKind::InvalidProfile` at the first key of `map`, in key order, that is not in `allowed_keys`.
-fn check_allowed_keys(map: &Value, allowed_keys: &[&str], location: &mut ErrorLocationPath) -> Located<()> {
+pub(crate) fn check_allowed_keys(map: &Value, allowed_keys: &[&str], location: &mut ErrorLocationPath) -> Located<()> {
     let Some(map) = map.as_map() else {
         return Err(ErrorKind::InvalidProfile);
     };

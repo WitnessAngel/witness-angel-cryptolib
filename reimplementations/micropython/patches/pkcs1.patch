@@ -1,0 +1,42 @@
+--- a/pkcs1/defaults.py
++++ b/pkcs1/defaults.py
+@@ -1,4 +1,23 @@
+-import random
++try:
++    from random import SystemRandom, Random
++except ImportError:  # MicroPython: no SystemRandom, and its random module (if any) is a seedable pseudo-random one
+ 
+-default_crypto_random = random.SystemRandom()
+-default_pseudo_random = random.Random()
++    import os
++
++    class SystemRandom(object):
++        '''Cryptographic random generator drawing from os.urandom(), with the methods that pkcs1 uses'''
++
++        def getrandbits(self, k):
++            return int.from_bytes(os.urandom((k + 7) // 8), "big") >> (-k % 8)
++
++        def randint(self, a, b):
++            span = b - a
++            while True:  # Rejection sampling, to avoid modulo bias
++                candidate = self.getrandbits(len(bin(span)) - 2)
++                if candidate <= span:
++                    return a + candidate
++
++    Random = SystemRandom  # Only used by primality tests, which a cryptographic generator serves as well
++
++default_crypto_random = SystemRandom()
++default_pseudo_random = Random()
+--- a/pkcs1/primitives.py
++++ b/pkcs1/primitives.py
+@@ -132,9 +132,8 @@ def constant_time_cmp(a, b):
+         result &= (x == y)
+     return result
+ 
+-import textwrap
+-
+ def dump_hex(data):
++    import textwrap  # Lazily, since MicroPython has no textwrap
+     if isinstance(data, basestring):
+         print('length', len(data))
+         print(textwrap.fill(''.join(['%s ' % x.encode('hex') for x in data]), 72))

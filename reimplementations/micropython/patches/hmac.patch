@@ -1,0 +1,15 @@
+--- a/hmac.py
++++ b/hmac.py
+@@ -87,4 +87,12 @@ def new(key, msg=None, digestmod=None):
+     return HMAC(key, msg, digestmod)
+ 
+ 
++def compare_digest(a, b):
++    # Like CPython's, its duration only depends on the lengths of the byte strings, not on their contents
++    result = len(a) ^ len(b)
++    for x, y in zip(a, b):
++        result |= x ^ y
++    return result == 0
++
++
+ __version__ = '3.4.4'

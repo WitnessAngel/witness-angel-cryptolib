@@ -23,7 +23,7 @@ SRC_DIR = MICROPYTHON_DIR / "src"
 PACKAGES = ["extjson", "pkcs1", "pyaes"]
 
 MIP_INDEX = "https://micropython.org/pi/v2"
-MICROPYTHON_LIB_PACKAGES = ["__future__", "copy", "datetime", "hashlib", "hmac", "logging", "threading", "operator", "functools"]
+MICROPYTHON_LIB_PACKAGES = ["__future__", "copy", "datetime", "hashlib", "hmac", "logging", "operator", "functools"]
 
 SHARED_MODULES = [REPO_DIR / "src/wacryptolib/utilities/data_utils.py",
                   REPO_DIR / "src/wacryptolib/_crypto_backend/fallback/chacha20_poly1305.py",

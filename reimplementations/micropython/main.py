@@ -1,54 +1,26 @@
 import sys
 
-## MONKEY PATCHING
-IS_MICROPYTHON = (sys.implementation.name == "micropython")
-
-# Our own sources, and vendored dependencies (see vendor_dependencies.py)
-_BASE_DIR = sys.path[0] or "."
+# Our own sources, and vendored dependencies (see vendor_dependencies.py, whose patches and stubs make them run on
+# MicroPython), located from this script whatever the current directory and the interpreter's path options
+try:
+    _BASE_DIR = __file__.replace("\\", "/").rpartition("/")[0] or "."
+except NameError:  # MicroPython built without __file__
+    _BASE_DIR = "."
 sys.path.insert(0, _BASE_DIR + "/src")
 _LIB_DIR = _BASE_DIR + "/lib"
-if IS_MICROPYTHON:
+if sys.implementation.name == "micropython":
     sys.path.insert(1, _LIB_DIR)
 else:
-    sys.path.append(_LIB_DIR)  # Stdlib and installed packages take precedence over our stubs
+    # The stdlib takes precedence over the micropython-lib modules and stubs of lib/, but the vendored (and patched)
+    # packages take precedence over installed ones, so that CPython runs the same code as MicroPython
+    import os, site
+    _site_dirs = [os.path.normcase(os.path.abspath(path)) for path in site.getsitepackages() + [site.getusersitepackages()]]
+    _lib_index = next((index for index, path in enumerate(sys.path)
+                       if os.path.normcase(os.path.abspath(path)) in _site_dirs), len(sys.path))
+    sys.path.insert(_lib_index, _LIB_DIR)
 print("SYSPATHS", sys.path)
 
 import logging
-
-if IS_MICROPYTHON:
-    import typing
-    typing.TypeVar = lambda *args, **kwargs: None
-    typing.TYPE_CHECKING = False
-
-    import hmac
-    def _compare_digest(a, b) : return a == b  # No timing-attack protection
-    hmac.compare_digest = _compare_digest
-
-    import os, random as _builtin_random
-    class _SystemRandom:
-        # Builtin random is read-only and pseudo-random, so crypto randomness is taken from os.urandom()
-        def getrandbits(self, k):
-            return int.from_bytes(os.urandom((k + 7) // 8), "big") >> (-k % 8)
-        def randint(self, a, b):
-            span = b - a
-            while True:  # Rejection sampling, to avoid modulo bias
-                candidate = self.getrandbits(len(bin(span)) - 2)
-                if candidate <= span:
-                    return a + candidate
-    class _RandomModule:
-        SystemRandom = Random = _SystemRandom
-        def __getattr__(self, name):
-            return getattr(_builtin_random, name)
-    sys.modules["random"] = _RandomModule()
-
-    sys.modules["textwrap"] = dict(_msg="WRONGMODULEFAKED")
-
-    import threading
-    class _DummyLock:
-        # DUMMY LOCK, TO PLEASE RSA PACKAGE
-        pass
-    threading.Lock = _DummyLock
-###########
 
 from cryptainer._flightbox import FlightBox
 from cryptainer.flightbox_utilities_implementation import FlightboxUtilitiesImpl, AUTHENTICATOR_TRUSTEE

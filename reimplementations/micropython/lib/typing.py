@@ -5,7 +5,7 @@ class _Subscriptable:
 
 _SubSingleton = _Subscriptable()
 
-def TypeVar(new_type, *types):
+def TypeVar(new_type, *types, **kwargs):
     return None
 
 class Any: pass

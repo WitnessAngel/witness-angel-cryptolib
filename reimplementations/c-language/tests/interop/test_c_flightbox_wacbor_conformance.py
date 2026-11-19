@@ -18,7 +18,14 @@ import uuid
 
 import pytest
 
-from c_flightbox_interop_support import COMPATIBILITY_ROOT, C_UNIT_TESTS_DIR, REPOSITORY_ROOT, profile_helpers
+from c_flightbox_interop_support import (
+    COMPATIBILITY_ROOT,
+    C_UNIT_TESTS_DIR,
+    MAXIMUM_INLINE_BYTES_ARGUMENTS_LENGTH,
+    REPOSITORY_ROOT,
+    CBuild,
+    profile_helpers,
+)
 
 SPECIFICATION_PATH = REPOSITORY_ROOT / "docs" / "specifications" / "wa_cbor_document_format.md"
 
@@ -73,6 +80,37 @@ def _check_accepted_output(c_build, output, cbor_bytes):
     if "json" in c_build.document_formats:
         assert load_from_json_bytes(bytes.fromhex(output["json"])) == expected_tree
     return expected_tree
+
+
+WINDOWS_COMMAND_LINE_LIMIT = 32767  # Characters, for the whole command line (CreateProcess)
+
+
+@pytest.mark.parametrize("length", [1000, 8 * 1024, 8 * 1024 + 1, 16 * 1024, 60000])
+def test_bytes_arguments_of_any_length_reach_the_driver(c_build, length):
+    """Bytes go through the command line or through a file, depending on their length: whole in both cases (16 KiB
+    in hex is the limit of a Windows command line by itself)."""
+    from wacryptolib.utilities import dump_to_cbor_bytes
+
+    data_length = length - 9  # Map head, key, byte string head
+    tree = {"data": bytes(range(256)) * (data_length // 256) + bytes(data_length % 256)}
+    cbor_bytes = dump_to_cbor_bytes(tree)
+    assert len(cbor_bytes) == length
+    output = c_build.run_driver("cbor-decode", cbor_bytes)
+    assert output["status"] == "WA_STATUS_OK", output
+    assert _check_accepted_output(c_build, output, cbor_bytes) == tree
+
+
+def test_bytes_arguments_fit_the_command_line(tmp_path):
+    """The inline budget is for a whole command, whose line stays far below the limit of Windows."""
+    budget = MAXIMUM_INLINE_BYTES_ARGUMENTS_LENGTH
+    arguments = ["subcommand", bytes(budget // 2), "text", bytes(budget // 2), bytes(1), b"", tmp_path, bytes(budget)]
+    command_arguments = CBuild.get_driver_command_arguments(arguments, tmp_path)
+    assert command_arguments[:4] == ["subcommand", "00" * (budget // 2), "text", "00" * (budget // 2)]
+    assert command_arguments[4:7] == ["@" + str(tmp_path / "argument_4.bin"), "", str(tmp_path)]  # Budget spent
+    assert command_arguments[7] == "@" + str(tmp_path / "argument_7.bin")
+    assert (tmp_path / "argument_4.bin").read_bytes() == bytes(1)
+    assert (tmp_path / "argument_7.bin").read_bytes() == bytes(budget)
+    assert 2 * budget <= (WINDOWS_COMMAND_LINE_LIMIT + 1) // 2  # Hex characters: as much left for the rest
 
 
 @pytest.mark.parametrize("vector", SPECIFICATION_VECTORS["valid"], ids=lambda vector: vector["name"])
@@ -130,7 +168,7 @@ def test_invalid_corpus_documents_rejected_through_the_splicer(c_build, document
     with pytest.raises(WaCborError):
         load_from_cbor_bytes(document_bytes)  # Invalid for wacryptolib too
 
-    output = c_build.run_driver("cbor-decode", document_bytes.hex())
+    output = c_build.run_driver("cbor-decode", document_bytes)
     assert output["status"] in UNSUPPORTED_OR_INVALID_STATUSES, output
 
     profile_path = tmp_path / "spliced_profile.cbor"
@@ -203,7 +241,7 @@ def test_differential_acceptance(c_build):
     accepted_count = 0
     rejected_count = 0
     for name, cbor_bytes in _iter_differential_inputs():
-        output = c_build.run_driver("cbor-decode", cbor_bytes.hex())
+        output = c_build.run_driver("cbor-decode", cbor_bytes)
         if output["status"] == "WA_STATUS_OK":
             accepted_count += 1
             try:

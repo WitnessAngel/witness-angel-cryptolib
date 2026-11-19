@@ -46,9 +46,10 @@ DRIVER_NAME = "wa_flightbox_test_driver"
 CLI_NAME = "wa_flightbox_encrypt_file_cli"
 DOCUMENT_FORMATS = ("json", "cbor")
 
-# Bytes arguments of the driver are given in hex up to this length, else through a file (a single command line
-# argument is limited to 128 KiB on Linux)
-MAXIMUM_INLINE_BYTES_ARGUMENT_LENGTH = 16 * 1024
+# Bytes arguments of the driver are given in hex while they amount to this length at most in a command, else through
+# files: a whole command line is limited to 32,767 characters on Windows (and a single argument to 128 KiB on Linux),
+# which leaves about as much for the other arguments, paths included
+MAXIMUM_INLINE_BYTES_ARGUMENTS_LENGTH = 8 * 1024
 
 
 class CBuild:
@@ -91,22 +92,31 @@ class CBuild:
     def run_driver(self, *arguments) -> dict:
         """Run a driver subcommand, and return its JSON output (the subcommand ran, whatever its status).
 
-        Arguments are strings (hex ones included) or paths; bytes are passed in hex, or through a temporary file
-        ("@FILE") beyond the command line limits."""
+        Arguments are strings (short hex ones included) or paths; bytes are passed in hex, or through temporary
+        files ("@FILE") beyond the command line limits: what may be long is to be given as bytes."""
         with tempfile.TemporaryDirectory() as temporary_dir:
-            command = [str(self.driver_path)]
-            for index, argument in enumerate(arguments):
-                if isinstance(argument, bytes):
-                    if len(argument) <= MAXIMUM_INLINE_BYTES_ARGUMENT_LENGTH:
-                        argument = argument.hex()
-                    else:
-                        argument_path = Path(temporary_dir) / ("argument_%d.bin" % index)
-                        argument_path.write_bytes(argument)
-                        argument = "@" + str(argument_path)
-                command.append(str(argument))
+            command = [str(self.driver_path), *self.get_driver_command_arguments(arguments, temporary_dir)]
             process = subprocess.run(command, capture_output=True, timeout=600)
         assert process.returncode == 0, (command[1:4], process.returncode, process.stderr.decode(errors="replace"))
         return json.loads(process.stdout)
+
+    @staticmethod
+    def get_driver_command_arguments(arguments, temporary_dir) -> list:
+        """The command line arguments of a driver subcommand, bytes being in hex within the inline budget of the
+        command, and written to files of temporary_dir beyond."""
+        command_arguments = []
+        inline_length = 0
+        for index, argument in enumerate(arguments):
+            if isinstance(argument, bytes):
+                if inline_length + len(argument) <= MAXIMUM_INLINE_BYTES_ARGUMENTS_LENGTH:
+                    inline_length += len(argument)
+                    argument = argument.hex()
+                else:
+                    argument_path = Path(temporary_dir) / ("argument_%d.bin" % index)
+                    argument_path.write_bytes(argument)
+                    argument = "@" + str(argument_path)
+            command_arguments.append(str(argument))
+        return command_arguments
 
     def run_cli(self, *arguments, cwd=None, input_bytes=None) -> subprocess.CompletedProcess:
         return subprocess.run(

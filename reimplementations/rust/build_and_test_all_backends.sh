@@ -222,8 +222,12 @@ for target in "${EMBEDDED_TARGETS[@]}"; do
         if command -v arm-none-eabi-ld >/dev/null 2>&1 && command -v arm-none-eabi-size >/dev/null 2>&1; then
             # What an application calling the whole API links, the Rust runtime pieces it needs included
             linked_probe="$BUILD_ROOT/$build_name/$target/release/wa_flightbox_footprint_probe.elf"
-            arm-none-eabi-ld --gc-sections -e wa_flightbox_footprint_probe_run -o "$linked_probe" \
-                --whole-archive "$archive" --no-whole-archive 2>/dev/null
+            # Its diagnostics are kept: a failed link stops the script, and must say why
+            if ! arm-none-eabi-ld --gc-sections -e wa_flightbox_footprint_probe_run -o "$linked_probe" \
+                --whole-archive "$archive" --no-whole-archive; then
+                echo "error: linking the footprint probe failed ($target, $feature only)" >&2
+                exit 1
+            fi
             echo "$target $feature: $(arm-none-eabi-size "$linked_probe" | tail -n 1)"
         else
             skip_step "code size of the footprint probe: arm-none-eabi-ld or arm-none-eabi-size not found"
@@ -254,7 +258,11 @@ if cargo +nightly fuzz --version >/dev/null 2>&1; then
             echo "error: $target found a failure, see $artifact_dir" >&2
             exit 1
         }
-        grep -a "DONE\|stat::number_of_executed_units" "$FUZZ_DIR/$target.log"
+        if ! grep -a "DONE\|stat::number_of_executed_units" "$FUZZ_DIR/$target.log"; then
+            tail -n 60 "$FUZZ_DIR/$target.log"
+            echo "error: the $target run ended without its final statistics, see $FUZZ_DIR/$target.log" >&2
+            exit 1
+        fi
         if [ -n "$(ls -A "$artifact_dir")" ]; then
             echo "error: $target left artifacts in $artifact_dir" >&2
             exit 1

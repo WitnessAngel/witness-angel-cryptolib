@@ -174,6 +174,42 @@ def test_forced_run_keeps_previous_outputs_locked_on_windows(c_build, document_f
     assert _list_files(tmp_path) == files_before
 
 
+def test_bundle_refuses_or_deletes_previous_payload_file(c_build, document_format, tmp_path):
+    """A bundled cryptainer is not left next to the payload file of a previous offloaded cryptainer of that name."""
+    cryptainer_name, payload_name, old_cryptainer, old_payload, files_before = _prepare_previous_outputs(
+        c_build, document_format, tmp_path
+    )
+    os.remove(tmp_path / cryptainer_name)  # The payload file alone is refused too
+    process = _encrypt(c_build, document_format, tmp_path, "--bundle")
+    assert process.returncode == 1, process.stderr
+    assert payload_name.encode() + b" already exists" in process.stderr, process.stderr
+    assert (tmp_path / payload_name).read_bytes() == old_payload
+    assert _list_files(tmp_path) == sorted(set(files_before) - {cryptainer_name})
+
+    (tmp_path / cryptainer_name).write_bytes(old_cryptainer)
+    process = _encrypt(c_build, document_format, tmp_path, "--bundle", "--force")
+    assert process.returncode == 0, process.stderr
+    assert process.stdout.decode().split() == [cryptainer_name]
+    assert len((tmp_path / cryptainer_name).read_bytes()) > len(old_cryptainer) + len(old_payload)
+    assert _list_files(tmp_path) == sorted(set(files_before) - {payload_name})
+
+    process = _encrypt(c_build, document_format, tmp_path, "--bundle", "--force")  # Nothing to delete: fine
+    assert process.returncode == 0, process.stderr
+    assert _list_files(tmp_path) == sorted(set(files_before) - {payload_name})
+
+
+def test_bundle_never_deletes_an_input(c_build, document_format, tmp_path):
+    _prepare(tmp_path)
+    cryptainer_name, payload_name = _get_output_names("out", document_format)
+    original_input = (tmp_path / INPUT_FILENAME).read_bytes()
+    os.rename(tmp_path / INPUT_FILENAME, tmp_path / payload_name)
+    for extra_arguments in [("--bundle",), ("--bundle", "--force")]:
+        process = _encrypt(c_build, document_format, tmp_path, *extra_arguments, input_name=payload_name)
+        assert process.returncode == 1 and b"is the input file" in process.stderr, process.stderr
+        assert (tmp_path / payload_name).read_bytes() == original_input
+        assert _list_files(tmp_path) == sorted([PROFILE_FILENAME, payload_name])
+
+
 def test_outputs_being_inputs_refused(c_build, document_format, tmp_path):
     cryptainer_name, payload_name = _get_output_names("out", document_format)
     _prepare(tmp_path)

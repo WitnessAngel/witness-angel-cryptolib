@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import copy
+import pickle
 from unittest import mock
 
 import pytest
@@ -59,6 +60,28 @@ def test_tokens_are_dropped_by_copies_and_serialization():
 
     assert ValidatedCryptoconf() == {} and ValidatedCryptainer().inline_payload_checked is False  # Python-schema needs it
     assert type(copy.deepcopy(cryptoconf["payload_cipher_layers"])) is list
+
+    for token in (cryptoconf, cryptainer):  # E.g. caches and multiprocessing
+        for protocol in range(pickle.HIGHEST_PROTOCOL + 1):
+            unpickled = pickle.loads(pickle.dumps(token, protocol=protocol))
+            assert type(unpickled) is dict and unpickled == token
+
+
+def test_unpickled_or_mutated_cryptainer_tokens_never_return_ciphertext_as_plaintext(validation_counter, monkeypatch):
+    monkeypatch.delenv(_validation.DEBUG_TOKEN_DIGEST_ENV_VAR, raising=False)  # Production default: no mutation guard
+    cryptainer = encrypt_payload_into_cryptainer(b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None)
+    assert decrypt_payload_from_cryptainer(pickle.loads(pickle.dumps(cryptainer)))[0] == b"abc"
+    assert validation_counter["cryptainer"] == 1  # Unpickled data is validated again
+
+    unpickled_cryptainer = pickle.loads(pickle.dumps(cryptainer))
+    unpickled_cryptainer["payload_cipher_layers"] = []
+    with pytest.raises(SchemaValidationError):
+        decrypt_payload_from_cryptainer(unpickled_cryptainer)
+
+    # Mutating a token is a caller bug which is not detected by default, but the decryptor still refuses no layers
+    cryptainer["payload_cipher_layers"] = []
+    with pytest.raises(SchemaValidationError, match="no payload cipher layers"):
+        decrypt_payload_from_cryptainer(cryptainer)
 
 
 def test_ensure_validated_cryptoconf_is_idempotent_and_snapshots(validation_counter):

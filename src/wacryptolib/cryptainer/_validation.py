@@ -549,8 +549,8 @@ class _ValidatedToken(dict):
     """A dict which was validated when this object was built, so that later steps needn't validate it again.
 
     This is NOT a frozen tree and is not tamper-proof: mutating it afterwards is a caller bug (set the environment
-    variable WACRYPTOLIB_DEBUG_VALIDATED_TOKENS to detect it). The tag is dropped by copy(), deepcopy(), dict.copy()
-    and JSON serialization, so reloaded or derived data is always validated again.
+    variable WACRYPTOLIB_DEBUG_VALIDATED_TOKENS to detect it). The tag is dropped by copy(), deepcopy(), dict.copy(),
+    pickling and JSON serialization, so reloaded or derived data is always validated again.
     """
 
     _debug_digest = None
@@ -560,6 +560,9 @@ class _ValidatedToken(dict):
 
     def __copy__(self):
         return dict(self)  # Shallow copies are derived data too, they must not inherit the tag
+
+    def __reduce__(self):
+        return (dict, (dict(self),))  # Unpickled data (caches, multiprocessing...) is reloaded data, so a plain dict
 
     def _seal(self):
         """Record the digest of the tree, if the debug guard is enabled"""

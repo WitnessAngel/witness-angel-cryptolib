@@ -413,8 +413,11 @@ class CryptainerDecryptor(CryptainerBase):
 
         payload_current = _get_cryptainer_inline_ciphertext_value(cryptainer)
 
-        # Non-emptiness of this was checked by validator
+        # Non-emptiness of this was checked by validator, but a validated token may have been mutated since (a caller
+        # bug which is not detected by default), and no layer would return the ciphertext as plaintext: check it again
         payload_cipher_layer_count = len(cryptainer["payload_cipher_layers"])
+        if not payload_cipher_layer_count:
+            raise SchemaValidationError("Cryptainer has no payload cipher layers")
 
         for payload_cipher_layer_idx, payload_cipher_layer in enumerate(
             reversed(cryptainer["payload_cipher_layers"]), start=1

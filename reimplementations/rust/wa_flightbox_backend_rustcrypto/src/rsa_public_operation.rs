@@ -4,7 +4,9 @@
 
 //! The raw RSA public operation over `crypto-bigint`: a Montgomery exponentiation on heap-allocated integers of
 //! the size of the modulus. The modulus and the exponent are public; the input (an OAEP-encoded key) is not, and
-//! its copies are wiped.
+//! the copies made here are wiped. Those that `crypto-bigint` makes inside the exponentiation are not: its
+//! `BoxedUint` has no wiping `Drop`, even with its `zeroize` feature (0.7), so the table of powers of the input
+//! built by `pow_montgomery_form_amm` goes back to the allocator unwiped.
 
 use crypto_bigint::modular::{BoxedMontyForm, BoxedMontyParams};
 use crypto_bigint::{BoxedUint, Odd};

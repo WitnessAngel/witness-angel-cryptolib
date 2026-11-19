@@ -1,0 +1,32 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+[package]
+name = "wa_flightbox_footprint_probe"
+description = "Bare-metal build check and code size probe of the Witness Angel flightbox encryptor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["staticlib"]
+test = false
+doctest = false
+bench = false
+
+[features]
+default = ["extended-json", "wa-cbor"]
+extended-json = ["wa_flightbox/extended-json"]
+wa-cbor = ["wa_flightbox/wa-cbor"]
+
+[dependencies]
+wa_flightbox.workspace = true
+wa_flightbox_backend_rustcrypto.workspace = true
+
+[lints]
+workspace = true

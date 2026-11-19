@@ -1,0 +1,44 @@
+[
+ {
+  "name": "symkey_aes_cbc",
+  "unsorted_input_cbor": "a2636b65795820000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f626976506465666768696a6b6c6d6e6f70717273",
+  "expected_extended_json": "{\"iv\": {\"$binary\": {\"base64\": \"ZGVmZ2hpamtsbW5vcHFycw==\", \"subType\": \"00\"}}, \"key\": {\"$binary\": {\"base64\": \"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=\", \"subType\": \"00\"}}}",
+  "expected_wacbor": "a2626976506465666768696a6b6c6d6e6f70717273636b65795820000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+ },
+ {
+  "name": "key_struct_with_metadata",
+  "unsorted_input_cbor": "a2696b65795f62797465735840000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f73637279707461696e65725f6d65746164617461a469436166c3a920e298956b6e61c3af766520f09f988065636f756e7403636e65673a0001116f65666c61677383f5f4f6",
+  "expected_extended_json": "{\"cryptainer_metadata\": {\"Caf\\u00e9 \\u2615\": \"na\\u00efve \\ud83d\\ude00\", \"count\": 3, \"flags\": [true, false, null], \"neg\": -70000}, \"key_bytes\": {\"$binary\": {\"base64\": \"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+Pw==\", \"subType\": \"00\"}}}",
+  "expected_wacbor": "a2696b65795f62797465735840000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f73637279707461696e65725f6d65746164617461a4636e65673a0001116f65636f756e740365666c61677383f5f4f669436166c3a920e298956b6e61c3af766520f09f9880"
+ },
+ {
+  "name": "key_struct_without_metadata",
+  "unsorted_input_cbor": "a2696b65795f627974657345ffffffffff73637279707461696e65725f6d65746164617461f6",
+  "expected_extended_json": "{\"cryptainer_metadata\": null, \"key_bytes\": {\"$binary\": {\"base64\": \"//////8=\", \"subType\": \"00\"}}}",
+  "expected_wacbor": "a2696b65795f627974657345ffffffffff73637279707461696e65725f6d65746164617461f6"
+ },
+ {
+  "name": "nested_cipherdict",
+  "unsorted_input_cbor": "a46374616750010101010101010101010101010101016a636970686572746578745825000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021222324656e6f6e6365500202020202020202020202020202020265696e6e6572ae6b6469676573745f6c6973748243616263406475756964d825500f0e0d0c0b0a09080706050403020100636269671b7fffffffffffffff65736d616c6c3b7fffffffffffffff647a65726f0062753818ff6375313619ffff637533321affffffff637536341b00000001000000006273312063733234376373323538186369323317636932341818",
+  "expected_extended_json": "{\"ciphertext\": {\"$binary\": {\"base64\": \"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJA==\", \"subType\": \"00\"}}, \"inner\": {\"big\": 9223372036854775807, \"digest_list\": [{\"$binary\": {\"base64\": \"YWJj\", \"subType\": \"00\"}}, {\"$binary\": {\"base64\": \"\", \"subType\": \"00\"}}], \"i23\": 23, \"i24\": 24, \"s1\": -1, \"s24\": -24, \"s25\": -25, \"small\": -9223372036854775808, \"u16\": 65535, \"u32\": 4294967295, \"u64\": 4294967296, \"u8\": 255, \"uuid\": {\"$uuid\": \"0f0e0d0c0b0a09080706050403020100\"}, \"zero\": 0}, \"nonce\": {\"$binary\": {\"base64\": \"AgICAgICAgICAgICAgICAg==\", \"subType\": \"00\"}}, \"tag\": {\"$binary\": {\"base64\": \"AQEBAQEBAQEBAQEBAQEBAQ==\", \"subType\": \"00\"}}}",
+  "expected_wacbor": "a463746167500101010101010101010101010101010165696e6e6572ae6273312062753818ff636269671b7fffffffffffffff636932331763693234181863733234376373323538186375313619ffff637533321affffffff637536341b00000001000000006475756964d825500f0e0d0c0b0a09080706050403020100647a65726f0065736d616c6c3b7fffffffffffffff6b6469676573745f6c697374824361626340656e6f6e636550020202020202020202020202020202026a636970686572746578745825000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021222324"
+ },
+ {
+  "name": "shard_tuple",
+  "unsorted_input_cbor": "820350000102030405060708090a0b0c0d0e0f",
+  "expected_extended_json": "[3, {\"$binary\": {\"base64\": \"AAECAwQFBgcICQoLDA0ODw==\", \"subType\": \"00\"}}]",
+  "expected_wacbor": "820350000102030405060708090a0b0c0d0e0f"
+ },
+ {
+  "name": "text_escapes_and_key_orders",
+  "unsorted_input_cbor": "a7617a69436166c3a920e2989562616164f09f988068636f6e74726f6c736e00011f7fc280080c0a0d09225c2f6069656d707479206b657962c3a9016161606562f09f9880f5",
+  "expected_extended_json": "{\"\": \"empty key\", \"a\": \"\", \"aa\": \"\\ud83d\\ude00\", \"b\\ud83d\\ude00\": true, \"controls\": \"\\u0000\\u0001\\u001f\\u007f\\u0080\\b\\f\\n\\r\\t\\\"\\\\/\", \"z\": \"Caf\\u00e9 \\u2615\", \"\\u00e9\": 1}",
+  "expected_wacbor": "a76069656d707479206b6579616160617a69436166c3a920e2989562616164f09f988062c3a9016562f09f9880f568636f6e74726f6c736e00011f7fc280080c0a0d09225c2f"
+ },
+ {
+  "name": "empty_containers",
+  "unsorted_input_cbor": "a3616da0616c80616240",
+  "expected_extended_json": "{\"b\": {\"$binary\": {\"base64\": \"\", \"subType\": \"00\"}}, \"l\": [], \"m\": {}}",
+  "expected_wacbor": "a3616240616c80616da0"
+ }
+]

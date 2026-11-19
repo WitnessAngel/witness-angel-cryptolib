@@ -292,8 +292,10 @@ def encrypt_with_c_driver(c_build, profile_name, document_format, payload, metad
 
     output = c_build.run_driver(*arguments)
     assert output["status"] == "WA_STATUS_OK", output
-    assert output["leaked_block_count"] == 0, output
-    assert output["unwiped_secret_release_count"] == 0, output
+    # Allocator diagnostics of the C driver (the Rust one has no allocator hook to measure them with)
+    if c_build.is_c_implementation:
+        assert output["leaked_block_count"] == 0, output
+        assert output["unwiped_secret_release_count"] == 0, output
     return cryptainer_path
 
 

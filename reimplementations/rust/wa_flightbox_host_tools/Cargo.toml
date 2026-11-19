@@ -1,0 +1,35 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+[package]
+name = "wa_flightbox_host_tools"
+description = "Host tools of the Witness Angel flightbox encryptor: file encryption CLI, and test driver of the interoperability tests"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+default = ["backend-rustcrypto", "extended-json", "wa-cbor"]
+# Exactly one crypto backend
+backend-rustcrypto = ["dep:wa_flightbox_backend_rustcrypto"]
+backend-wolfcrypt = ["dep:wa_flightbox_backend_wolfcrypt"]
+# At least one document format
+extended-json = ["wa_flightbox/extended-json"]
+wa-cbor = ["wa_flightbox/wa-cbor"]
+
+[dependencies]
+wa_flightbox.workspace = true
+wa_flightbox_backend_rustcrypto = { workspace = true, optional = true }
+wa_flightbox_backend_wolfcrypt = { workspace = true, optional = true }
+# The deterministic and replayed hooks of the test driver
+wa_flightbox_backend_conformance.workspace = true
+getrandom = "0.4"
+same-file = "1"
+
+[lints]
+workspace = true

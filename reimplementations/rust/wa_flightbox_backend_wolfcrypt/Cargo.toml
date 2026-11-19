@@ -1,0 +1,30 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+[package]
+name = "wa_flightbox_backend_wolfcrypt"
+description = "wolfCrypt crypto backend of the Witness Angel flightbox encryptor, through FFI bindings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+build = "build.rs"
+links = "wa_flightbox_wolfcrypt"
+
+[dependencies]
+wa_flightbox.workspace = true
+zeroize.workspace = true
+
+[build-dependencies]
+cc = "1.2"
+bindgen = { version = "0.73", default-features = false, features = ["runtime"] }
+
+[dev-dependencies]
+wa_flightbox_backend_conformance.workspace = true
+
+[lints]
+workspace = true

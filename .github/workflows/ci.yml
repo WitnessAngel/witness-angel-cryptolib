@@ -59,3 +59,22 @@ jobs:
       - run: python -m tox -e c_flightbox
         env:
           WA_CLANG: clang-18
+
+  rust-flightbox:  # Flightbox Rust encryptor: both backends, single-format builds, fuzz smoke runs, Cortex-M builds, interop tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: sudo apt-get update && sudo apt-get install -y clang libclang-dev binutils-arm-none-eabi
+      # The stable toolchain and its embedded targets come from reimplementations/rust/rust-toolchain.toml
+      - run: rustup show active-toolchain || rustup toolchain install
+        working-directory: reimplementations/rust
+      - run: rustup toolchain install nightly --profile minimal
+      - run: cargo install --locked cargo-fuzz cargo-deny
+      - run: python -m pip install tox
+      - run: python -m tox -e rust_flightbox
+        env:
+          WA_REQUIRE_ALL_STEPS: "1"

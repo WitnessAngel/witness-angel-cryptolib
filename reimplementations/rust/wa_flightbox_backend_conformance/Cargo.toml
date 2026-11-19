@@ -1,0 +1,24 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+[package]
+name = "wa_flightbox_backend_conformance"
+description = "Conformance tests of the crypto backends of the Witness Angel flightbox encryptor, and test support shared by the workspace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+wa_flightbox.workspace = true
+serde_json = "1"
+
+[dev-dependencies]
+wa_flightbox_backend_rustcrypto.workspace = true
+
+[lints]
+workspace = true

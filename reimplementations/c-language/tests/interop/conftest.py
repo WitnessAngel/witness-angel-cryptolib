@@ -3,12 +3,14 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 """
-Interoperability tests of the C flightbox encryptor against wacryptolib (design D13).
+Interoperability tests of the flightbox encryptors, C and Rust, against wacryptolib (design D13).
 
-They drive the test driver (wa_flightbox_test_driver) and the CLI (wa_flightbox_encrypt_file_cli) of the C builds
-listed in WA_FLIGHTBOX_C_BUILD_DIR: one or more CMake build directories configured with -DWA_BUILD_TOOLS=ON,
-separated by os.pathsep (":" on POSIX). Each build reports its crypto backend and document formats ("build-info"
-driver subcommand). Every test is skipped when no build is given.
+They drive the test driver (wa_flightbox_test_driver) and the CLI (wa_flightbox_encrypt_file_cli) of the builds
+listed in WA_FLIGHTBOX_C_BUILD_DIR, separated by os.pathsep (":" on POSIX): CMake build directories of the C library
+configured with -DWA_BUILD_TOOLS=ON, and cargo output directories of the Rust host tools
+(reimplementations/rust/target/debug), which follow the same command-line protocol. Each build reports its
+implementation (C when absent), crypto backend and document formats ("build-info" driver subcommand). Every test is
+skipped when no build is given.
 
 Run from the repository root, e.g.:
     WA_FLIGHTBOX_C_BUILD_DIR=build_mbedtls:build_wolfcrypt pytest reimplementations/c-language/tests/interop

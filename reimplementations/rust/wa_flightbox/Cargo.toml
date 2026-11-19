@@ -1,0 +1,31 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+[package]
+name = "wa_flightbox"
+description = "Witness Angel flightbox encryptor: cryptainer creation from a device profile, over a pluggable crypto backend"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+default = ["extended-json", "wa-cbor"]
+# Document formats (at least one): relaxed Extended JSON, and the WA-CBOR deterministic encoding
+extended-json = []
+wa-cbor = []
+
+[dependencies]
+zeroize.workspace = true
+
+[dev-dependencies]
+wa_flightbox_backend_rustcrypto.workspace = true
+wa_flightbox_backend_conformance.workspace = true
+serde_json = "1"
+
+[lints]
+workspace = true

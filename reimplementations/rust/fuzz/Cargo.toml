@@ -1,0 +1,40 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+# libFuzzer targets of the flightbox encryptor, run with cargo-fuzz on a nightly toolchain (Linux):
+#   cargo +nightly fuzz run wacbor_subprofile_decoder <corpus dir> <seed dir> -- -max_total_time=60
+# Seeds come from reimplementations/c-language/tests/fuzz/generate_fuzz_seed_corpora.py, as for the C targets.
+# This package is its own workspace: libfuzzer-sys only builds for fuzzing.
+
+[package]
+name = "wa_flightbox_fuzz"
+description = "Fuzz targets of the Witness Angel flightbox encryptor"
+version = "0.0.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+wa_flightbox = { path = "../wa_flightbox" }
+wa_flightbox_backend_rustcrypto = { path = "../wa_flightbox_backend_rustcrypto" }
+
+[[bin]]
+name = "wacbor_subprofile_decoder"
+path = "fuzz_targets/wacbor_subprofile_decoder.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "device_profile_loader"
+path = "fuzz_targets/device_profile_loader.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

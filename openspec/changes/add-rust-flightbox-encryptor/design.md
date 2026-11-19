@@ -105,9 +105,9 @@ The core crate has one dependency, `zeroize`. Arithmetic on public sizes uses ch
 
 | Primitive | RustCrypto backend | wolfCrypt backend |
 |---|---|---|
-| AES-256-CBC encryption over whole blocks, streaming (also serves CMAC) | `aes` + `cbc` | `wc_AesCbcEncrypt` |
-| AES-256-CTR, streaming (for EAX) | `aes` + `ctr` | `wc_AesCtrEncrypt` |
-| ChaCha20-Poly1305 streaming encryption | `chacha20` + `poly1305`, composed per RFC 8439 in the adapter | `wc_ChaCha20Poly1305_Init/UpdateData/Final` |
+| AES-256-CBC encryption over whole blocks, streaming (also serves CMAC) | `aes`, the chaining written in the adapter | `wc_AesCbcEncrypt` |
+| AES-256-CTR, streaming (for EAX) | `aes`, the counter written in the adapter, one bulk block call per slice | `wc_AesCtrEncrypt` |
+| ChaCha20-Poly1305 streaming encryption | `chacha20` + `poly1305`, composed per RFC 8439 in the adapter | `wc_Chacha_*` + `wc_Poly1305*`, composed the same way, as the C adapter now does (wolfCrypt's streaming AEAD stops at 4 GiB) |
 | SHA-256, SHA-512, HMAC-SHA256 | `sha2`, `hmac` | `wc_Sha256*`, `wc_Sha512*`, `wc_Hmac*` |
 | X25519: public key from scalar; shared secret | `x25519-dalek`'s bare `x25519()` function | `wc_curve25519_*` |
 | RSA raw public operation from raw (n, e) | `crypto-bigint` Montgomery exponentiation | `wc_RsaDirect` |
@@ -157,16 +157,16 @@ Alternatives considered: `minicbor` or `ciborium` for decoding, `serde_json` for
 let limits = EncryptorLimits::default();                 // or ::new(...)?, refusing a CBOR depth above 64
 let profile = DeviceProfile::load_from_cbor(profile_bytes, &limits)?;   // immutable, reusable
 
-let encryptor = CryptainerEncryptor::<RustCryptoBackend, _, _>::create(
-    &profile, metadata.as_ref(), options, hooks, payload_sink)?;        // step 1
+let mut encryptor = CryptainerEncryptor::<RustCryptoBackend, _>::create_offloaded(
+    &profile, metadata.as_ref(), &options, &mut hooks, &mut payload_sink)?;   // step 1
 encryptor.encrypt_payload_chunk(chunk)?;                                // step 2, any number of times
 let finished = encryptor.finalize()?;                                   // end of step 2 + step 3, consumes self
 finished.write_cryptainer(&mut cryptainer_sink)?;
 
-DocumentFormat::Cbor.cryptainer_suffix();                               // ".crypt.cbor"
+DocumentFormat::Cbor.cryptainer_suffix();                               // Some(".crypt.cbor"), None for a disabled format
 ```
 
-- `options` holds the document format (`BuildDefault`, `ExtendedJson`, `Cbor`), the ciphertext location and the processing slice size (default 4096, a multiple of 16).
+- `options` holds the document format (`BuildDefault`, `ExtendedJson`, `Cbor`) and the processing slice size (default 4096, a multiple of 16). The ciphertext location is chosen by the constructor: `create()` for an inline ciphertext, `create_offloaded()` with a payload sink, so that an offloaded encryptor without sink cannot be written. The hooks are borrowed as `&mut dyn PlatformHooks` for the creation call only (every random draw happens in step 1), which keeps them out of the encryptor's type.
 - `finalize()` takes the encryptor by value and returns a `FinishedCryptainer`, so a chunk after finalization or a write before it does not compile; the wrong-state status of the C API has no equivalent. An error from `encrypt_payload_chunk()` puts the encryptor in a failed state, in which every call returns the failed-encryptor error.
 - `DocumentFormat` always has both variants; requesting one whose feature is disabled fails at creation with the unsupported-feature error, as in C, which also keeps the tools' protocol identical.
 - A one-shot convenience function wraps the sequence.
@@ -219,12 +219,12 @@ Alternative considered: moving the suite to a neutral `reimplementations/interop
 ### D12. Build, CI and supply chain
 
 - **Toolchain**: stable Rust pinned in `rust-toolchain.toml`, edition 2024, with the minimum supported version recorded in `Cargo.toml` as the highest one required by the locked dependencies. `cargo fmt --check` and `cargo clippy --workspace --all-targets -- -D warnings` are part of the checks.
-- **Document formats**: features `extended-json` and `wa-cbor` of the core crate, both default, re-exported by the tools crate; `compile_error!` when neither is set. Writers and the base64 encoder are behind `#[cfg(feature = ...)]`.
+- **Document formats**: features `extended-json` and `wa-cbor` of the core crate, both default, re-exported by the tools crate; `compile_error!` when neither is set, in the tools crate only: the core crate builds without a format and then refuses every creation (see D14). Writers and the base64 encoder are behind `#[cfg(feature = ...)]`.
 - **Build matrix** of `build_and_test_all_backends.sh`:
   - RustCrypto backend, both formats: conformance, unit tests, tools;
   - wolfCrypt backend, both formats: the same (Linux, WSL or MSYS2; skipped with a message when `WA_WOLFSSL_SOURCE_DIR` is unset and no fetch is allowed);
   - CBOR-only and JSON-only: unit tests on the RustCrypto backend, plus a check with `nm` that a debug build of the driver has no symbol of the disabled writer's module nor, in CBOR-only builds, of the base64 encoder;
-  - `wa_flightbox_footprint_probe` for `thumbv8m.main-none-eabihf` and `thumbv7em-none-eabihf`, CBOR-only and JSON-only, in release mode with `opt-level = "s"`, LTO and `panic = "abort"`; `arm-none-eabi-size` on the static library gives the code sizes recorded in the README, next to the C library's;
+  - `wa_flightbox_footprint_probe` for `thumbv8m.main-none-eabihf` and `thumbv7em-none-eabihf`, CBOR-only and JSON-only, in release mode with `opt-level = "s"`, LTO and `panic = "abort"`; the static library is linked alone from its entry point with `--gc-sections`, and `arm-none-eabi-size` on the result gives the code sizes recorded in the README (a Rust static library carries the whole `core` and `alloc`, so its archive totals mean nothing, and are not comparable with the C library's);
   - fuzz smoke runs, when a nightly toolchain is present;
   - `cargo deny check advisories licenses bans`.
 - **wolfSSL source**: the script clones the pinned wolfSSL tag into the build directory when `WA_WOLFSSL_SOURCE_DIR` is unset, as CMake's FetchContent does for the C tree. `build.rs` itself never accesses the network.
@@ -236,6 +236,25 @@ Alternative considered: moving the suite to a neutral `reimplementations/interop
 - `reimplementations/rust/README.md`: layout, an API walkthrough with a minimal example compiled as a doctest, the hook contracts with the RNG warnings of the C README, how to write a backend (with the hardware AES case), features and limits, the allocator and panic notes of D8, the wolfCrypt build variables and licence, measured code sizes and heap peaks, how to run the tests.
 - Encryptor specification, section 10: a "10.3 Rust profile" subsection after the C profile; the notes for new reimplementations become 10.4, their table gaining a "Rust choice" column and their mention of Rust as a future implementation being updated. References to §10.3 elsewhere in the repository are updated.
 - `CHANGELOG` entry.
+
+### D14. Notes from the implementation
+
+Choices made while implementing, where the text above was silent or turned out otherwise:
+
+- **A build without any document format** fails in the host tools crate only. Backend crates depend on the core with `default-features = false`, so that they never impose a format on a firmware (cargo features being additive); a `compile_error!` in the core would then stop a backend crate built or tested alone. The alternative, forwarding format features in each backend crate, would make a single-format firmware disable defaults in two places, a forgotten one silently bringing a format back. The core without a format builds and answers `UnsupportedFeature` to every creation; the requirement was reworded accordingly.
+- **Maps** keep their entries sorted at insertion (binary search), as the C library does since its code review, rather than at write time; each writer still orders keys its own way.
+- **Lints**: the clippy denials of D8 are attributes at the root of the core crate, under `cfg_attr(not(test))`, with the `primitives` module opting out for its fixed-size block arithmetic.
+- **Backend trait**: bulk calls take separate input and output slices; `finish(self)` consumes a ChaCha20-Poly1305 state; a low-order X25519 peer key may give zeros or a backend failure, the portable code checking for zeros. The RustCrypto adapter needs neither the `cbc` nor the `ctr` crate. EAX computes its OMACs in CBC calls of 16 blocks.
+- **`internals` module**: a hidden public module of the core crate exposes the primitives and codecs to the conformance crate and the test driver. It is not part of the supported API.
+- **Conformance crate**: it also hosts the shared test helpers (vector files, deterministic and replayed hooks, a test-only document reader) and the checks of the portable primitives over a backend, so that each backend crate runs them with a few one-line tests.
+- **Vector files** are generated from the generator modules of the C tree where they exist.
+- **Errors**: locations are `String`s of any length (the C library truncates to the caller's buffer); only buffers sized by an input use `try_reserve`; there is no out-of-memory sweep.
+- **`cryptainer_suffix()`** returns an `Option`, `None` for a format disabled in the build.
+- **Test driver**: it does not report `peak_allocated_bytes`, `leaked_block_count` nor `unwiped_secret_release_count`, which need a global allocator written with `unsafe` code, forbidden in the tools crate. The interop suite asserts those fields for C builds only; the library's own tests measure the same things. No test had to be skipped by name for Rust builds.
+- **Host tools**: arguments are Unicode strings (a non-Unicode argument is a usage error); the "output is an input" check uses the `same-file` crate.
+- **Footprint probe**: empty on hosted targets, so that workspace commands build it everywhere. It is the only crate beside the wolfCrypt backend with `unsafe` code (a bump allocator and a C entry point).
+- **wolfCrypt backend**: not one of the workspace's default members, since it needs wolfSSL sources and libclang; `--workspace` includes it.
+- **One difference with the C library** found by comparing the test drivers: `hpke-seal` called directly with an all-zero X25519 public key gives the key-constraint error in Rust (the portable all-zero check), and the backend-failure error in C with Mbed TLS, which refuses the key first. Profiles cannot carry such a key.
 
 ## Risks / Trade-offs
 

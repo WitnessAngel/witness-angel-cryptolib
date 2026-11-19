@@ -131,7 +131,7 @@ The library SHALL provide the lowercase cryptainer suffix of each document forma
 - **THEN** the Extended JSON cryptainer embeds the ciphertext as a `$binary` value, the WA-CBOR one as a byte string, and wacryptolib decrypts both
 
 ### Requirement: Document formats
-Each build SHALL enable the Extended JSON format, the WA-CBOR format, or both, through build-time options, both being enabled by default. A build with neither SHALL fail with an explicit message. The code of a disabled format, the base64 encoder included for Extended JSON, SHALL NOT be compiled. The caller SHALL choose one enabled format per cryptainer, the default being the only enabled format, or Extended JSON when both are. Requesting a format that is not enabled SHALL fail at creation with an unsupported-feature error. Device profiles SHALL be readable in every build.
+The Extended JSON format and the WA-CBOR format SHALL each be enabled through a build-time option, both being enabled by default. The library SHALL still build with neither, so that a crypto backend can be built and tested alone without imposing a format on applications, and SHALL then refuse every cryptainer creation; the host tools SHALL fail to build with neither, with an explicit message. The code of a disabled format, the base64 encoder included for Extended JSON, SHALL NOT be compiled. The caller SHALL choose one enabled format per cryptainer, the default being the only enabled format, or Extended JSON when both are. Requesting a format that is not enabled SHALL fail at creation with an unsupported-feature error. Device profiles SHALL be readable in every build.
 
 The chosen format SHALL govern both:
 - every structure serialized and then encrypted (symkeys, sub-symkeys, cipherdicts, shards, key structs), as defined by the `key-ciphertext-format` capability and by `S_F` in section 2 of the encryptor specification;
@@ -146,8 +146,8 @@ Every serialized structure, intermediate or cryptainer, SHALL be byte-identical 
 - **THEN** it contains no Extended JSON writer nor base64 encoder, its cryptainers carry `key_ciphertext_format: "cbor"` on every payload layer and symmetric key layer, and wacryptolib decrypts them
 
 #### Scenario: No format enabled
-- **WHEN** the library is built with both document formats disabled
-- **THEN** the build stops with an error explaining how to enable one
+- **WHEN** the library and the host tools are built with both document formats disabled
+- **THEN** the library builds and every cryptainer creation fails with an unsupported-feature error, whereas the build of the host tools stops with an error explaining how to enable a format
 
 #### Scenario: Disabled format requested
 - **WHEN** a JSON-only build is asked to create a WA-CBOR cryptainer

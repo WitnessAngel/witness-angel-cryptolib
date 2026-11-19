@@ -1,0 +1,436 @@
+[
+ {
+  "name": "empty_map",
+  "cbor": "a0",
+  "expectation": "accepted",
+  "is_deterministic": true,
+  "extjson": "{}"
+ },
+ {
+  "name": "empty_array",
+  "cbor": "80",
+  "expectation": "accepted",
+  "is_deterministic": true,
+  "extjson": "[]"
+ },
+ {
+  "name": "unsigned_integers",
+  "cbor": "8a0017181818ff19010019ffff1a000100001affffffff1b00000001000000001bffffffffffffffff",
+  "expectation": "unsupported",
+  "is_deterministic": true,
+  "extjson": "[0, 23, 24, 255, 256, 65535, 65536, 4294967295, 4294967296, 18446744073709551615]"
+ },
+ {
+  "name": "negative_integers",
+  "cbor": "862037381838ff3901003bffffffffffffffff",
+  "expectation": "unsupported",
+  "is_deterministic": true,
+  "extjson": "[-1, -24, -25, -256, -257, -18446744073709551616]"
+ },
+ {
+  "name": "bignums",
+  "cbor": "83c249010000000000000000c349010000000000000000c24d10000000000000000000000000",
+  "expectation": "unsupported",
+  "is_deterministic": true,
+  "extjson": "[18446744073709551616, -18446744073709551617, 1267650600228229401496703205376]"
+ },
+ {
+  "name": "floats_half_precision",
+  "cbor": "85f93e00f90000f98000f97bfff90001",
+  "expectation": "unsupported",
+  "is_deterministic": true,
+  "extjson": "[1.5, 0.0, -0.0, 65504.0, 5.960464477539063e-08]"
+ },
+ {
+  "name": "floats_single_and_double_precision",
+  "cbor": "84fa47c35000fa7f7ffffffb3ff199999999999afb7e37e43c8800759c",
+  "expectation": "unsupported",
+  "is_deterministic": true,
+  "extjson": "[100000.0, 3.4028234663852886e+38, 1.1, 1e+300]"
+ },
+ {
+  "name": "floats_special",
+  "cbor": "83f97e00f97c00f9fc00",
+  "expectation": "unsupported",
+  "is_deterministic": true,
+  "extjson": "[{\"$numberDouble\": \"NaN\"}, {\"$numberDouble\": \"Infinity\"}, {\"$numberDouble\": \"-Infinity\"}]"
+ },
+ {
+  "name": "simple_values",
+  "cbor": "83f4f5f6",
+  "expectation": "accepted",
+  "is_deterministic": true,
+  "extjson": "[false, true, null]"
+ },
+ {
+  "name": "text_strings",
+  "cbor": "8560616162c3a963e6b0b464f09f9880",
+  "expectation": "accepted",
+  "is_deterministic": true,
+  "extjson": "[\"\", \"a\", \"\\u00e9\", \"\\u6c34\", \"\\ud83d\\ude00\"]"
+ },
+ {
+  "name": "byte_strings",
+  "cbor": "824044000102ff",
+  "expectation": "accepted",
+  "is_deterministic": true,
+  "extjson": "[{\"$binary\": {\"base64\": \"\", \"subType\": \"00\"}}, {\"$binary\": {\"base64\": \"AAEC/w==\", \"subType\": \"00\"}}]"
+ },
+ {
+  "name": "uuid",
+  "cbor": "81d825500123456789abcdef0123456789abcdef",
+  "expectation": "accepted",
+  "is_deterministic": true,
+  "extjson": "[{\"$uuid\": \"0123456789abcdef0123456789abcdef\"}]"
+ },
+ {
+  "name": "datetime_utc_without_fraction",
+  "cbor": "81c074323032362d30312d30325430333a30343a30355a",
+  "expectation": "unsupported",
+  "is_deterministic": true,
+  "extjson": "[{\"$date\": \"2026-01-02T03:04:05Z\"}]"
+ },
+ {
+  "name": "datetime_with_offset",
+  "cbor": "81c0781d323032362d30312d30325430333a30343a30352e3132332b30323a3030",
+  "expectation": "unsupported",
+  "is_deterministic": true,
+  "extjson": "[{\"$date\": \"2026-01-02T03:04:05.123+02:00\"}]"
+ },
+ {
+  "name": "datetime_with_negative_offset",
+  "cbor": "81c0781d313939392d31322d33315432333a35393a35392e3939392d30353a3330",
+  "expectation": "unsupported",
+  "is_deterministic": true,
+  "extjson": "[{\"$date\": \"1999-12-31T23:59:59.999-05:30\"}]"
+ },
+ {
+  "name": "decimals",
+  "cbor": "86c482200ac482211864c48220387cc4820301c4820000c4822100",
+  "expectation": "unsupported",
+  "is_deterministic": true,
+  "extjson": "[{\"$numberDecimal\": \"1.0\"}, {\"$numberDecimal\": \"1.00\"}, {\"$numberDecimal\": \"-12.5\"}, {\"$numberDecimal\": \"1E+3\"}, {\"$numberDecimal\": \"0\"}, {\"$numberDecimal\": \"0.00\"}]"
+ },
+ {
+  "name": "decimal_with_bignum_mantissa",
+  "cbor": "81c48220c34d0f951a9fa3a286c94f0e766c38",
+  "expectation": "unsupported",
+  "is_deterministic": true,
+  "extjson": "[{\"$numberDecimal\": \"-123456789012345678901234567890.5\"}]"
+ },
+ {
+  "name": "map_keys_in_bytewise_order",
+  "cbor": "a4600461610261620162616103",
+  "expectation": "accepted",
+  "is_deterministic": true,
+  "extjson": "{\"\": 4, \"a\": 2, \"aa\": 3, \"b\": 1}"
+ },
+ {
+  "name": "maximal_nesting_depth",
+  "cbor": "81818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818180",
+  "expectation": "accepted",
+  "is_deterministic": true,
+  "extjson": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"
+ },
+ {
+  "name": "cryptainer_like_map",
+  "cbor": "a66c6b6579636861696e5f756964d8255006a0b5c41e2f7a8b9c0d0000000000016e637279707461696e65725f756964d8255006a0b5c41e2f7a8b9c0d1e2f3a4b5c6d71637279707461696e65725f666f726d61746e637279707461696e65725f312e3073637279707461696e65725f6d65746164617461a265726174696ff938006763726561746564c074323032362d31312d31315431383a34303a30305a757061796c6f61645f6369706865725f6c617965727381a36e6b65795f6369706865727465787443102030737061796c6f61645f6369706865725f616c676f674145535f434243781d7061796c6f61645f636970686572746578745f7369676e6174757265738078197061796c6f61645f636970686572746578745f737472756374a173636970686572746578745f6c6f636174696f6e696f66666c6f61646564",
+  "expectation": "unsupported",
+  "is_deterministic": true,
+  "extjson": "{\"cryptainer_format\": \"cryptainer_1.0\", \"cryptainer_metadata\": {\"created\": {\"$date\": \"2026-11-11T18:40:00Z\"}, \"ratio\": 0.5}, \"cryptainer_uid\": {\"$uuid\": \"06a0b5c41e2f7a8b9c0d1e2f3a4b5c6d\"}, \"keychain_uid\": {\"$uuid\": \"06a0b5c41e2f7a8b9c0d000000000001\"}, \"payload_cipher_layers\": [{\"key_ciphertext\": {\"$binary\": {\"base64\": \"ECAw\", \"subType\": \"00\"}}, \"payload_cipher_algo\": \"AES_CBC\", \"payload_ciphertext_signatures\": []}], \"payload_ciphertext_struct\": {\"ciphertext_location\": \"offloaded\"}}"
+ },
+ {
+  "name": "indefinite_map_with_unsorted_keys",
+  "cbor": "bf616201616102ff",
+  "expectation": "unsupported",
+  "is_deterministic": false,
+  "extjson": "{\"a\": 2, \"b\": 1}"
+ },
+ {
+  "name": "indefinite_array_and_chunked_strings",
+  "cbor": "9f5f41014102ff7f61616162ffff",
+  "expectation": "unsupported",
+  "is_deterministic": false,
+  "extjson": "[{\"$binary\": {\"base64\": \"AQI=\", \"subType\": \"00\"}}, \"ab\"]"
+ },
+ {
+  "name": "non_shortest_integer",
+  "cbor": "81190001",
+  "expectation": "accepted",
+  "is_deterministic": false,
+  "extjson": "[1]"
+ },
+ {
+  "name": "non_shortest_float",
+  "cbor": "81fb3ff8000000000000",
+  "expectation": "unsupported",
+  "is_deterministic": false,
+  "extjson": "[1.5]"
+ },
+ {
+  "name": "small_bignum",
+  "cbor": "81c24101",
+  "expectation": "unsupported",
+  "is_deterministic": false,
+  "extjson": "[1]"
+ },
+ {
+  "name": "self_described_cbor_tag_around_top_level_item",
+  "cbor": "d9d9f7a0",
+  "expectation": "unsupported",
+  "is_deterministic": false,
+  "extjson": "{}"
+ },
+ {
+  "name": "datetime_with_one_fraction_digit",
+  "cbor": "81c076323032362d30312d30325430333a30343a30352e315a",
+  "expectation": "unsupported",
+  "is_deterministic": false,
+  "extjson": "[{\"$date\": \"2026-01-02T03:04:05.100Z\"}]"
+ },
+ {
+  "name": "datetime_with_lowercase_letters",
+  "cbor": "81c074323032362d30312d30327430333a30343a30357a",
+  "expectation": "unsupported",
+  "is_deterministic": false,
+  "extjson": "[{\"$date\": \"2026-01-02T03:04:05Z\"}]"
+ },
+ {
+  "name": "datetime_with_negative_zero_offset",
+  "cbor": "81c07819323032362d30312d30325430333a30343a30352d30303a3030",
+  "expectation": "unsupported",
+  "is_deterministic": false,
+  "extjson": "[{\"$date\": \"2026-01-02T03:04:05Z\"}]"
+ },
+ {
+  "name": "indefinite_decimal_fraction_array",
+  "cbor": "81c49f2114ff",
+  "expectation": "unsupported",
+  "is_deterministic": false,
+  "extjson": "[{\"$numberDecimal\": \"0.20\"}]"
+ },
+ {
+  "name": "integer_map_key",
+  "cbor": "a10102",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "duplicate_map_key",
+  "cbor": "a2616101616102",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "extended_json_keyword_map",
+  "cbor": "81a16524757569646430313233",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "undefined",
+  "cbor": "81f7",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "simple_value_16",
+  "cbor": "81f0",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "simple_value_32",
+  "cbor": "81f820",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "epoch_datetime_tag_1",
+  "cbor": "81c11a5f5e1000",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "unknown_tag_258",
+  "cbor": "81d9010280",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "nested_self_described_cbor_tag",
+  "cbor": "81d9d9f701",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "uuid_of_15_bytes",
+  "cbor": "81d8254f000000000000000000000000000000",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "uuid_over_text",
+  "cbor": "81d8256430313233",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "datetime_over_integer",
+  "cbor": "81c001",
+  "expectation": "unsupported_or_decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "datetime_without_offset",
+  "cbor": "81c073323032362d30312d30325430333a30343a3035",
+  "expectation": "unsupported_or_decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "datetime_with_four_fraction_digits",
+  "cbor": "81c07819323032362d30312d30325430333a30343a30352e313233345a",
+  "expectation": "unsupported_or_decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "datetime_with_invalid_month",
+  "cbor": "81c074323032362d31332d30325430333a30343a30355a",
+  "expectation": "unsupported_or_decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "decimal_with_bignum_exponent",
+  "cbor": "81c482c2410101",
+  "expectation": "unsupported_or_decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "decimal_with_float_mantissa",
+  "cbor": "81c48221f93c00",
+  "expectation": "unsupported_or_decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "decimal_over_three_items",
+  "cbor": "81c483210101",
+  "expectation": "unsupported_or_decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "bignum_over_text",
+  "cbor": "81c26131",
+  "expectation": "unsupported_or_decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "invalid_utf8",
+  "cbor": "8162c328",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "utf8_encoded_surrogate",
+  "cbor": "8163eda080",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "chunk_of_another_type_in_indefinite_text",
+  "cbor": "817f4161ff",
+  "expectation": "unsupported_or_decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "indefinite_length_integer",
+  "cbor": "811f",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "reserved_additional_information",
+  "cbor": "811c",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "break_outside_indefinite_item",
+  "cbor": "81ff",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "array_count_beyond_data",
+  "cbor": "8201",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "truncated_float",
+  "cbor": "81fb3ff8",
+  "expectation": "unsupported_or_decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "bytes_after_top_level_item",
+  "cbor": "a000",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "scalar_top_level_item",
+  "cbor": "01",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "text_top_level_item",
+  "cbor": "6161",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "empty_data",
+  "cbor": "",
+  "expectation": "decoding_error",
+  "is_deterministic": false,
+  "extjson": null
+ },
+ {
+  "name": "excessive_nesting_depth",
+  "cbor": "8181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818180",
+  "expectation": "nesting_too_deep",
+  "is_deterministic": false,
+  "extjson": null
+ }
+]

@@ -1,0 +1,47 @@
+# This file is part of Witness Angel Cryptolib
+# SPDX-FileCopyrightText: Copyright Prolifik SARL
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+# Supply chain policy of the flightbox Rust workspace (design D12), checked by
+#   cargo deny check advisories licenses bans sources
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+# Licences compatible with the GPL-2.0-or-later of this workspace. Apache-2.0 alone is compatible with the GPL
+# from version 3 on, which "or later" allows.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unlicense",
+    "GPL-2.0-or-later",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Path dependencies between the crates of the workspace carry no version
+allow-wildcard-paths = true
+deny = [
+    # The library draws randomness from the platform hooks only (design D5): no generator crate in it. `getrandom`
+    # is the host tools' implementation of the hook, and `rand_core` a trait-only dependency of RustCrypto crates.
+    { crate = "rand", reason = "randomness comes from the platform hooks" },
+    { crate = "openssl-sys", reason = "the crypto backends are RustCrypto and wolfCrypt" },
+    { crate = "ring", reason = "the crypto backends are RustCrypto and wolfCrypt" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

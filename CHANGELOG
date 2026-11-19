@@ -163,6 +163,12 @@ Development
   `scripts/flightbox/export_device_profile.py`), with Mbed TLS (and mlkem-native) or wolfCrypt backends, Extended
   JSON and/or WA-CBOR output selected at compile time, a host CLI, and unit, fuzz and interop tests against wacryptolib
   (`tox -e c_flightbox`)
+* Add a memory-safe Rust flightbox encryptor (`reimplementations/rust/`, see its README.md), with the feature set of
+  the C one: a `no_std` core crate without `unsafe` code nor crypto dependency, over a public crypto backend trait;
+  a pure-Rust RustCrypto backend (default) and a wolfCrypt backend through FFI bindings; Extended JSON and/or WA-CBOR
+  output selected by cargo features; host tools following the command-line protocol of the C ones, so that the same
+  interop tests drive both implementations and compare their outputs, byte-identical under the same random bytes and
+  clock; conformance, unit and fuzz tests, Cortex-M33 and Cortex-M4 builds (`tox -e rust_flightbox`)
 
 
 Version 0.12

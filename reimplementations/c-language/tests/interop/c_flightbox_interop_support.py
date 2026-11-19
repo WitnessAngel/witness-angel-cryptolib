@@ -3,13 +3,15 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 """
-Support of the interoperability tests of the C flightbox encryptor against wacryptolib (design D13): C builds,
+Support of the interoperability tests of the flightbox encryptors against wacryptolib (design D13): builds,
 corpus helpers.
 
-They drive the test driver (wa_flightbox_test_driver) and the CLI (wa_flightbox_encrypt_file_cli) of the C builds
-listed in WA_FLIGHTBOX_C_BUILD_DIR: one or more CMake build directories configured with -DWA_BUILD_TOOLS=ON,
-separated by os.pathsep (":" on POSIX). Each build reports its crypto backend and document formats ("build-info"
-driver subcommand). Every test is skipped when no build is given.
+They drive the test driver (wa_flightbox_test_driver) and the CLI (wa_flightbox_encrypt_file_cli) of the builds
+listed in WA_FLIGHTBOX_C_BUILD_DIR, separated by os.pathsep (":" on POSIX): directories holding these two tools,
+that is CMake build directories of the C library configured with -DWA_BUILD_TOOLS=ON, and cargo target directories
+of the Rust tools (such as reimplementations/rust/target/debug). Each build reports its implementation ("c" when it
+does not say), its crypto backend and its document formats ("build-info" driver subcommand). Every test is skipped
+when no build is given.
 
 Run from the repository root, e.g.:
     WA_FLIGHTBOX_C_BUILD_DIR=build_mbedtls:build_wolfcrypt pytest reimplementations/c-language/tests/interop
@@ -50,13 +52,16 @@ MAXIMUM_INLINE_BYTES_ARGUMENT_LENGTH = 16 * 1024
 
 
 class CBuild:
-    """A C build directory, with its tools, crypto backend and enabled document formats."""
+    """A build directory of the C library or of the Rust tools, with its tools, implementation ("c" or "rust"),
+    crypto backend and enabled document formats."""
 
     def __init__(self, build_dir: Path):
         self.build_dir = build_dir
         self.driver_path = self._find_executable(DRIVER_NAME)
         self.cli_path = self._find_executable(CLI_NAME)
         build_info = self.run_driver("build-info")
+        # The C driver does not report its implementation
+        self.implementation = build_info.get("implementation", "c")
         self.backend = build_info["backend"]
         self.document_formats = tuple(build_info["document_formats"])
 
@@ -64,11 +69,24 @@ class CBuild:
         for candidate in (self.build_dir / name, self.build_dir / (name + ".exe")):
             if candidate.is_file():
                 return candidate
-        raise RuntimeError("%s not found in %s (configure with -DWA_BUILD_TOOLS=ON)" % (name, self.build_dir))
+        raise RuntimeError(
+            "%s not found in %s (C: configure with -DWA_BUILD_TOOLS=ON; Rust: build wa_flightbox_host_tools)"
+            % (name, self.build_dir)
+        )
+
+    @property
+    def identity(self):
+        """What two builds must differ by to be worth comparing: (implementation, backend)."""
+        return (self.implementation, self.backend)
+
+    @property
+    def is_c_implementation(self):
+        return self.implementation == "c"
 
     @property
     def name(self):
-        return "%s-%s" % (self.backend.lower(), "+".join(self.document_formats))
+        prefix = "" if self.is_c_implementation else self.implementation + "-"
+        return "%s%s-%s" % (prefix, self.backend.lower(), "+".join(self.document_formats))
 
     def run_driver(self, *arguments) -> dict:
         """Run a driver subcommand, and return its JSON output (the subcommand ran, whatever its status).
@@ -108,12 +126,12 @@ def get_c_builds() -> tuple:
     return tuple(CBuild(Path(build_dir).resolve()) for build_dir in value.split(os.pathsep) if build_dir.strip())
 
 
-def get_c_builds_by_backend() -> dict:
-    """The first build of each backend having both document formats."""
+def get_c_builds_by_identity() -> dict:
+    """The first build of each (implementation, backend) having both document formats."""
     builds = {}
     for c_build in get_c_builds():
         if set(c_build.document_formats) == set(DOCUMENT_FORMATS):
-            builds.setdefault(c_build.backend, c_build)
+            builds.setdefault(c_build.identity, c_build)
     return builds
 
 

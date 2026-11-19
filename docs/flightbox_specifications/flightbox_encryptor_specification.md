@@ -28,6 +28,7 @@ Sources of truth (in this repository):
 | Pure-Python HPKE X25519 seal | `src/wacryptolib/_crypto_backend/fallback/hpke_x25519_seal.py` (vendored in `reimplementations/micropython/lib/`) |
 | Device profile (input of embedded encryptors) | `docs/flightbox_specifications/flightbox_device_profile_specification.md` |
 | C reimplementation (steps 1 to 3, informative) | `reimplementations/c-language/` (`README.md`, unit test vector generators in `tests/unit/generate_*.py`, interop suites in `tests/interop/`) |
+| Rust reimplementation (steps 1 to 3, informative) | `reimplementations/rust/` (`README.md`, test vectors as JSON files in `test_vectors/`, checked by the interop suites of the C tree) |
 | Compatibility corpus (cryptoconfs, cryptainers, cipherdicts, keystores) | `compatibility/` (`README.md`, section "Using the corpus from another implementation") |
 
 The key words MUST, SHOULD and MAY are used in the RFC 2119 sense.
@@ -1153,30 +1154,52 @@ footprint), with:
   same, so WA-CBOR cryptainers carry `key_ciphertext_format: "cbor"` on every payload layer and
   symmetric key layer (§2). A WA-CBOR-only build is a single-serialization device, as §2 allows.
 
-### 10.3 Notes for new reimplementations
+### 10.3 Rust profile
 
-A new implementation (e.g. in Rust) can be written from this specification, the WA-CBOR specification
-and, for embedded inputs, the device profile specification. The table sums up what is fixed by the
-cryptainer format, what is left free, and what the C implementation chose (informative), for the points
+`reimplementations/rust/` is a cargo workspace implementing steps 1 to 3 in memory-safe Rust, for
+microcontrollers and hosts alike (its `README.md` documents its API, platform hooks, cargo features
+and measured footprint). It has the feature set of the C profile (§10.2), and the same input, a
+device profile, with the same validation rules and error names. What differs:
+
+- a `no_std` core crate, without `unsafe` code nor cryptographic dependency, holding the algorithm,
+  both codecs and the composite constructions (padding, CMAC, EAX, OAEP, HKDF, HPKE, Shamir) over a
+  public crypto backend trait, which products implement to drive a hardware AES;
+- two crypto backends producing identical output: the RustCrypto crates, in pure Rust (default), and
+  wolfCrypt 5.8 through FFI bindings; all randomness comes from a platform hook;
+- under the same random bytes and clock, cryptainers byte-identical to those of the C library, which
+  the interoperability tests check between every pair of builds;
+- document formats chosen by cargo features (Extended JSON, WA-CBOR, or both), with one format per
+  cryptainer as in the C profile;
+- lifecycle errors of the C API (a chunk after finalization, a missing payload sink) made impossible
+  at compile time; allocation failures of small internal buffers abort instead of being reported,
+  only caller-sized buffers (inline ciphertexts, decoded inputs) returning an out-of-memory error;
+- a key cipher nesting cap and an RSA size limit set at run time (8 and 4096 bits by default).
+
+### 10.4 Notes for new reimplementations
+
+A new implementation can be written from this specification, the WA-CBOR specification and, for
+embedded inputs, the device profile specification. The table sums up what is fixed by the cryptainer
+format, what is left free, and what the C and Rust implementations chose (informative), for the points
 where implementations have to decide:
 
-| Topic | Required | Allowed | C choice |
-|---|---|---|---|
-| Input | a cryptoconf valid per §5.1 and §5.2, validated before any random draw | any transport: Extended JSON or WA-CBOR file, device profile, built-in structure | device profile only |
-| Public keys | §11.2 constraints, lookup of §5.3 | stricter checks (e.g. a maximum RSA size) | device profile rules, RSA ≤ 4096 bits |
-| Subset | rejecting unsupported features at validation time (§5.5) | any subset of algos, trustee types, signatures, formats | no signatures, root `keychain_uid` mandatory |
-| Key ciphertext format `F` | §2 serializations; field written only for `"cbor"` | one or both of `J`, `C`; one `F` per cryptainer | `F` = file format |
-| Extended JSON bytes | decodable relaxed Extended JSON (§2) | any key order, any whitespace | byte-exact CPython output (§2.1) |
-| Key cipher nesting | rejecting too deep cryptoconfs at validation | any cap of at least 8 (§5.2) | 8 (compile-time option) |
-| Metadata | map or null, no keyword maps, WA-CBOR depth limit (§5.4) | refusing floats, datetimes, decimals, bignums | sub-profile types only |
-| Randomness | a CSPRNG for every draw (§3.1) | any draw order | §6.8 order, through one platform hook |
-| UUID0 prefix | 80 random bits | zero prefix without a clock (§3.2) | zero prefix when the clock hook is absent or fails |
-| Payload | inline or offloaded (§9.2), identical streamed and one-shot output | any chunk size, including 0 | both, chunks of any size |
-| Errors | no finished cryptainer, no partial file after a failure (§7.3) | any error representation and precedence | status codes of §5.5, failed state |
-| Secrets | in memory only (rule 12 of §11.1) | — | wiped through a platform hook |
+| Topic | Required | Allowed | C choice | Rust choice |
+|---|---|---|---|---|
+| Input | a cryptoconf valid per §5.1 and §5.2, validated before any random draw | any transport: Extended JSON or WA-CBOR file, device profile, built-in structure | device profile only | device profile only |
+| Public keys | §11.2 constraints, lookup of §5.3 | stricter checks (e.g. a maximum RSA size) | device profile rules, RSA ≤ 4096 bits | device profile rules, RSA ≤ 4096 bits (run-time limit) |
+| Subset | rejecting unsupported features at validation time (§5.5) | any subset of algos, trustee types, signatures, formats | no signatures, root `keychain_uid` mandatory | same as C |
+| Key ciphertext format `F` | §2 serializations; field written only for `"cbor"` | one or both of `J`, `C`; one `F` per cryptainer | `F` = file format | `F` = file format |
+| Extended JSON bytes | decodable relaxed Extended JSON (§2) | any key order, any whitespace | byte-exact CPython output (§2.1) | byte-exact CPython output (§2.1) |
+| Key cipher nesting | rejecting too deep cryptoconfs at validation | any cap of at least 8 (§5.2) | 8 (compile-time option) | 8 (run-time limit) |
+| Metadata | map or null, no keyword maps, WA-CBOR depth limit (§5.4) | refusing floats, datetimes, decimals, bignums | sub-profile types only | sub-profile types only |
+| Randomness | a CSPRNG for every draw (§3.1) | any draw order | §6.8 order, through one platform hook | §6.8 order with the draw sizes of C, through one platform hook |
+| UUID0 prefix | 80 random bits | zero prefix without a clock (§3.2) | zero prefix when the clock hook is absent or fails | zero prefix when the clock hook returns none |
+| Payload | inline or offloaded (§9.2), identical streamed and one-shot output | any chunk size, including 0 | both, chunks of any size | both, chunks of any size |
+| Errors | no finished cryptainer, no partial file after a failure (§7.3) | any error representation and precedence | status codes of §5.5, failed state | error kinds named after the C status codes, failed state |
+| Secrets | in memory only (rule 12 of §11.1) | — | wiped through a platform hook | wiped when dropped (`zeroize`) |
 
-Reading the C sources is not needed, but its test vector generators (§12) are written in Python
-against wacryptolib and give expected bytes for each primitive.
+Reading the C or Rust sources is not needed, but the test vector generators of the C tree (§12) are
+written in Python against wacryptolib and give expected bytes for each primitive; the Rust tree
+stores their output as JSON files (`reimplementations/rust/test_vectors/`).
 
 ---
 
@@ -1381,7 +1404,8 @@ be exported as device profiles with `scripts/flightbox/export_device_profile.py`
 
 ### 12.2 Cryptainer checklist
 
-The C interop suites (`reimplementations/c-language/tests/interop/`) check each produced cryptainer as
+The C interop suites (`reimplementations/c-language/tests/interop/`, also run against the Rust
+implementation) check each produced cryptainer as
 follows; a new implementation SHOULD run the same checks, in both file formats it writes:
 
 1. it loads with `load_cryptainer_from_filesystem()` (payload file included when offloaded) and passes

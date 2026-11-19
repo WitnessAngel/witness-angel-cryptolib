@@ -38,14 +38,19 @@ impl<'a> BufferedSinkWriter<'a> {
         }
     }
 
-    fn flush(&mut self) {
-        if self.failure.is_none()
-            && let Some(pending) = self.buffer.get(..self.length)
-            && !pending.is_empty()
-            && let Err(error) = self.sink.write(pending)
-        {
-            self.failure = Some(sink_error_kind(error));
+    /// Hand `bytes` to the sink, unless it failed already. No let chain here: they need Rust 1.88.
+    fn write_to_sink(sink: &mut dyn OutputSink, failure: &mut Option<ErrorKind>, bytes: &[u8]) {
+        if failure.is_some() || bytes.is_empty() {
+            return;
         }
+        if let Err(error) = sink.write(bytes) {
+            *failure = Some(sink_error_kind(error));
+        }
+    }
+
+    fn flush(&mut self) {
+        let pending = self.buffer.get(..self.length).unwrap_or_default();
+        Self::write_to_sink(self.sink, &mut self.failure, pending);
         self.length = 0;
     }
 
@@ -56,11 +61,7 @@ impl<'a> BufferedSinkWriter<'a> {
         if bytes.len() >= BUFFER_SIZE {
             // Large strings (an inline ciphertext in WA-CBOR) go straight to the sink
             self.flush();
-            if self.failure.is_none()
-                && let Err(error) = self.sink.write(bytes)
-            {
-                self.failure = Some(sink_error_kind(error));
-            }
+            Self::write_to_sink(self.sink, &mut self.failure, bytes);
             return;
         }
         let mut rest = bytes;

@@ -35,9 +35,11 @@ pub(crate) struct CryptainerBase {
 /// Legacy naming of old cryptoconfs: `payload_signatures` becomes `payload_ciphertext_signatures` (the validation
 /// allows only one of both names, so the new name never has precedence to apply here).
 fn rename_legacy_payload_signatures(payload_layer: &mut Map) {
-    if let Some(legacy_payload_signatures) = payload_layer.remove("payload_signatures")
-        && !payload_layer.contains_key("payload_ciphertext_signatures")
-    {
+    let Some(legacy_payload_signatures) = payload_layer.remove("payload_signatures") else {
+        return;
+    };
+    // Never both after validation: kept as in the C library, which drops the legacy value then
+    if !payload_layer.contains_key("payload_ciphertext_signatures") {
         payload_layer.set("payload_ciphertext_signatures", legacy_payload_signatures);
     }
 }

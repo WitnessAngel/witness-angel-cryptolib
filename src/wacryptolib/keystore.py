@@ -504,13 +504,22 @@ class ReadonlyFilesystemKeystore(KeystoreReadBase):
     def _private_key_exists(self, *, keychain_uid, key_algo):
         return self._get_existing_key_filepath(keychain_uid, key_algo=key_algo, is_public=False) is not None
 
+    def _read_existing_key_file(self, keychain_uid, key_algo, is_public):
+        """Read a key file, raising KeyDoesNotExist if it disappeared since the existence check of the caller
+        (e.g. an unplugged USB authenticator)."""
+        filepath = self._get_existing_key_filepath(keychain_uid, key_algo=key_algo, is_public=is_public)
+        try:
+            if filepath is not None:
+                return self._read_from_storage_file(filepath)
+        except FileNotFoundError:
+            pass
+        raise KeyDoesNotExist("%s key %s/%s not found" % ("Public" if is_public else "Private", key_algo, keychain_uid))
+
     def _get_public_key(self, *, keychain_uid, key_algo):
-        filepath = self._get_existing_key_filepath(keychain_uid, key_algo=key_algo, is_public=True)
-        return self._read_from_storage_file(filepath)
+        return self._read_existing_key_file(keychain_uid, key_algo=key_algo, is_public=True)
 
     def _get_private_key(self, *, keychain_uid, key_algo):
-        filepath = self._get_existing_key_filepath(keychain_uid, key_algo=key_algo, is_public=False)
-        return self._read_from_storage_file(filepath)
+        return self._read_existing_key_file(keychain_uid, key_algo=key_algo, is_public=False)
 
     def _list_unordered_keypair_identifiers(self):
         """

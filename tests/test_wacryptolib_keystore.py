@@ -858,6 +858,36 @@ def test_filesystem_keystore_writes_lowercase_names(tmp_path: Path):
     assert [p.name for p in (tmp_path / "free_keys").iterdir()] == ["rsa_oaep"]
 
 
+def test_filesystem_keystore_key_file_disappearing_after_existence_check(tmp_path: Path):
+    keystore = FilesystemKeystore(tmp_path)
+    keychain_uid = generate_uuid0()
+    keypair = _generate_pem_keypair("RSA_OAEP")
+    keystore.set_keypair(keychain_uid=keychain_uid, key_algo="RSA_OAEP", **keypair)
+    key_filepaths = {
+        is_public: keystore._get_existing_key_filepath(keychain_uid, key_algo="RSA_OAEP", is_public=is_public)
+        for is_public in (True, False)
+    }
+    for key_filepath in key_filepaths.values():
+        key_filepath.unlink()  # E.g. a USB authenticator unplugged just after the existence check
+
+    # The file is gone before its path is resolved for reading, or after it
+    with mock.patch.object(FilesystemKeystore, "_public_key_exists", return_value=True), mock.patch.object(
+        FilesystemKeystore, "_private_key_exists", return_value=True
+    ):
+        with pytest.raises(KeyDoesNotExist, match="Public key RSA_OAEP"):
+            keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP")
+        with pytest.raises(KeyDoesNotExist, match="Private key RSA_OAEP"):
+            keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP")
+
+        with mock.patch.object(
+            FilesystemKeystore, "_get_existing_key_filepath", side_effect=lambda *args, is_public, **kwargs: key_filepaths[is_public]
+        ):
+            with pytest.raises(KeyDoesNotExist, match="Public key RSA_OAEP"):
+                keystore.get_public_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP")
+            with pytest.raises(KeyDoesNotExist, match="Private key RSA_OAEP"):
+                keystore.get_private_key(keychain_uid=keychain_uid, key_algo="RSA_OAEP")
+
+
 def test_filesystem_keystore_legacy_uppercase_algo_keys_are_found(tmp_path: Path):
     keychain_uid = generate_uuid0()
     keypair = _generate_pem_keypair("RSA_OAEP")

@@ -35,9 +35,8 @@ static int wa_text_is_one_of(const wa_value_t *value, const char *const *names, 
     return 0;
 }
 
-/* WA_STATUS_INVALID_PROFILE at the first key of `map` not in `allowed_keys` */
-static wa_status_t wa_check_allowed_keys(const wa_value_t *map, const char *const *allowed_keys,
-                                         size_t allowed_key_count, wa_error_location_path_t *location)
+wa_status_t wa_check_allowed_keys(const wa_value_t *map, const char *const *allowed_keys, size_t allowed_key_count,
+                                  wa_error_location_path_t *location)
 {
     size_t entry_index;
     for (entry_index = 0; entry_index < wa_value_get_item_count(map); ++entry_index) {

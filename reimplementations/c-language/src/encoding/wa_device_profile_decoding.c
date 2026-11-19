@@ -83,21 +83,12 @@ static wa_status_t wa_decode_public_key(const wa_value_t *key_entry_map, wa_asym
         return WA_STATUS_INVALID_PROFILE;
     }
     if (public_key->cipher_algo == WA_ASYMMETRIC_CIPHER_RSA_OAEP) {
-        size_t entry_index;
         if (wa_value_get_type(public_key_value) != WA_VALUE_TYPE_MAP) {
             return WA_STATUS_INVALID_PROFILE;
         }
-        for (entry_index = 0; entry_index < wa_value_get_item_count(public_key_value); ++entry_index) {
-            const char *key = NULL;
-            size_t key_length = 0;
-            const wa_value_t *value = NULL;
-            (void)wa_value_get_map_entry(public_key_value, entry_index, &key, &key_length, &value);
-            if (!wa_value_keys_are_equal(key, key_length, rsa_public_key_keys[0], strlen(rsa_public_key_keys[0])) &&
-                !wa_value_keys_are_equal(key, key_length, rsa_public_key_keys[1], strlen(rsa_public_key_keys[1]))) {
-                (void)wa_error_location_path_push_key(location, key, key_length);
-                return WA_STATUS_INVALID_PROFILE;
-            }
-        }
+        WA_RETURN_IF_ERROR(wa_check_allowed_keys(public_key_value, rsa_public_key_keys,
+                                                 sizeof(rsa_public_key_keys) / sizeof(rsa_public_key_keys[0]),
+                                                 location));
         if (wa_value_get_bytes(wa_value_find_map_value(public_key_value, "modulus"), &public_key->modulus,
                                &public_key->modulus_length) != 0) {
             return wa_fail_at_key(location, "modulus", WA_STATUS_INVALID_PROFILE);
@@ -126,30 +117,13 @@ static wa_status_t wa_decode_key_entry(const wa_value_t *key_entry_map, wa_devic
     static const char *const key_entry_keys[] = {"trustee", "keychain_uid", "key_algo", "public_key"};
     const char *algo_name = NULL;
     size_t algo_name_length = 0;
-    size_t entry_index;
     size_t previous_length;
     memset(key_entry, 0, sizeof(*key_entry));
     if (wa_value_get_type(key_entry_map) != WA_VALUE_TYPE_MAP) {
         return WA_STATUS_INVALID_PROFILE;
     }
-    for (entry_index = 0; entry_index < wa_value_get_item_count(key_entry_map); ++entry_index) {
-        const char *key = NULL;
-        size_t key_length = 0;
-        const wa_value_t *value = NULL;
-        size_t allowed_index;
-        int is_allowed = 0;
-        (void)wa_value_get_map_entry(key_entry_map, entry_index, &key, &key_length, &value);
-        for (allowed_index = 0; allowed_index < sizeof(key_entry_keys) / sizeof(key_entry_keys[0]); ++allowed_index) {
-            if (wa_value_keys_are_equal(key, key_length, key_entry_keys[allowed_index],
-                                        strlen(key_entry_keys[allowed_index]))) {
-                is_allowed = 1;
-            }
-        }
-        if (!is_allowed) {
-            (void)wa_error_location_path_push_key(location, key, key_length);
-            return WA_STATUS_INVALID_PROFILE;
-        }
-    }
+    WA_RETURN_IF_ERROR(wa_check_allowed_keys(key_entry_map, key_entry_keys,
+                                             sizeof(key_entry_keys) / sizeof(key_entry_keys[0]), location));
     key_entry->trustee = wa_value_find_map_value(key_entry_map, "trustee");
     previous_length = wa_error_location_path_push_key(location, "trustee", strlen("trustee"));
     if (key_entry->trustee == NULL) {
@@ -297,7 +271,7 @@ static wa_status_t wa_resolve_all_layers(const wa_device_profile_t *device_profi
 
 static wa_status_t wa_check_root_structure(const wa_value_t *document, wa_error_location_path_t *location)
 {
-    size_t entry_index;
+    static const char *const root_keys[] = {"device_profile_format", "cryptoconf", "trustee_public_keys"};
     if (wa_value_get_type(document) != WA_VALUE_TYPE_MAP) {
         return WA_STATUS_INVALID_PROFILE;
     }
@@ -306,19 +280,7 @@ static wa_status_t wa_check_root_structure(const wa_value_t *document, wa_error_
                                    WA_DEVICE_PROFILE_FORMAT)) {
         return wa_fail_at_key(location, "device_profile_format", WA_STATUS_UNSUPPORTED_FORMAT);
     }
-    for (entry_index = 0; entry_index < wa_value_get_item_count(document); ++entry_index) {
-        const char *key = NULL;
-        size_t key_length = 0;
-        const wa_value_t *value = NULL;
-        (void)wa_value_get_map_entry(document, entry_index, &key, &key_length, &value);
-        if (!wa_value_keys_are_equal(key, key_length, "device_profile_format", strlen("device_profile_format")) &&
-            !wa_value_keys_are_equal(key, key_length, "cryptoconf", strlen("cryptoconf")) &&
-            !wa_value_keys_are_equal(key, key_length, "trustee_public_keys", strlen("trustee_public_keys"))) {
-            (void)wa_error_location_path_push_key(location, key, key_length);
-            return WA_STATUS_INVALID_PROFILE;
-        }
-    }
-    return WA_STATUS_OK;
+    return wa_check_allowed_keys(document, root_keys, sizeof(root_keys) / sizeof(root_keys[0]), location);
 }
 
 static wa_status_t wa_device_profile_load(wa_device_profile_t *device_profile, const uint8_t *cbor,

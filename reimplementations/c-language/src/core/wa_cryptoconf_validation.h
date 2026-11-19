@@ -26,6 +26,12 @@
 
 #define WA_SHARED_SECRET_ALGO_MARKER "[SHARED_SECRET]"
 
+/* Closed maps, of the cryptoconf and of the rest of the device profile: WA_STATUS_INVALID_PROFILE at the first key
+ * of `map` (in the order of its entries) which is not one of the NUL-terminated `allowed_keys`, this key being then
+ * pushed on `location`. */
+wa_status_t wa_check_allowed_keys(const wa_value_t *map, const char *const *allowed_keys, size_t allowed_key_count,
+                                  wa_error_location_path_t *location);
+
 /* Validate a cryptoconf, `location` holding the path of the cryptoconf itself (e.g. "cryptoconf"). */
 wa_status_t wa_cryptoconf_validate(const wa_value_t *cryptoconf, wa_error_location_path_t *location);
 

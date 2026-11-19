@@ -27,8 +27,8 @@
 #define NO_ERROR_STRINGS
 
 /* Windows hosts (MSYS2 MinGW-w64): with NO_FILESYSTEM, wolfSSL's MinGW branches use vsnprintf and size_t without
- * including their headers */
-#if defined(__MINGW32__)
+ * including their headers (C sources only: wolfSSL's assembly sources include the settings too) */
+#if defined(__MINGW32__) && !defined(__ASSEMBLER__)
 #include <stddef.h>
 #include <stdio.h>
 #endif

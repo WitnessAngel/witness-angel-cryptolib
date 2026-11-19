@@ -2146,6 +2146,65 @@ def test_cli_convert_format_failures_leave_no_output(tmp_path):
         assert _list_filenames() == before
 
 
+def test_cli_convert_format_forced_replacement_of_a_pair(tmp_path):
+    import stat
+    from wacryptolib.cryptainer import OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
+
+    runner = _get_cli_runner()
+
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        dump_to_json_file("x.crypt.json", {"payload_ciphertext_struct": OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER})
+        pathlib.Path("x.crypt.json.payload").write_bytes(b"new payload")
+        pathlib.Path("x.crypt.cbor").write_bytes(b"old cryptainer")
+        pathlib.Path("x.crypt.cbor.payload").write_bytes(b"old payload")
+        before = _list_filenames()
+
+        def _check_old_pair_intact():
+            assert pathlib.Path("x.crypt.cbor").read_bytes() == b"old cryptainer"
+            assert pathlib.Path("x.crypt.cbor.payload").read_bytes() == b"old payload"
+            assert _list_filenames() == before  # No temporary nor backup file left
+
+        # The payload replaced, then the document replacement failing (e.g. a file locked on Windows): the
+        # payload is put back, so that the old document doesn't point to a foreign payload
+        real_replace = os.replace
+
+        def _fail_on_document_replacement(source, target):
+            if os.fspath(target).endswith("x.crypt.cbor"):
+                raise PermissionError("file locked")
+            return real_replace(source, target)
+
+        with mock.patch("wacryptolib.cli.os.replace", side_effect=_fail_on_document_replacement):
+            result = _invoke_convert_format(runner, ["x.crypt.json", "--force"])
+        assert result.exit_code == 1, result.stderr
+        assert "file locked" in result.stderr
+        _check_old_pair_intact()
+
+        # A failure while writing the document comes before any replacement
+        with mock.patch("wacryptolib.cli.convert_document_tree_to_bytes", return_value=object()):  # Unwritable
+            result = _invoke_convert_format(runner, ["x.crypt.json", "--force"])
+        assert result.exit_code == 1
+        _check_old_pair_intact()
+
+        # Successful forced conversion
+        result = _invoke_convert_format(runner, ["x.crypt.json", "--force"], catch_exceptions=False)
+        assert result.exit_code == 0, result.stderr
+        assert pathlib.Path("x.crypt.cbor.payload").read_bytes() == b"new payload"
+        assert load_from_cbor_bytes(pathlib.Path("x.crypt.cbor").read_bytes()) == {
+            "payload_ciphertext_struct": OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
+        }
+        assert _list_filenames() == before
+
+        if os.name == "posix":  # Replaced files keep their permissions, others get those of new files, not 0600
+            os.chmod("x.crypt.cbor.payload", 0o640)
+            os.remove("x.crypt.cbor")
+            result = _invoke_convert_format(runner, ["x.crypt.json", "--force"], catch_exceptions=False)
+            assert result.exit_code == 0, result.stderr
+            umask = os.umask(0)
+            os.umask(umask)
+            assert stat.S_IMODE(os.stat("x.crypt.cbor").st_mode) == 0o666 & ~umask
+            assert stat.S_IMODE(os.stat("x.crypt.cbor.payload").st_mode) == 0o640
+
+
 def test_cli_convert_format_of_cryptainers(tmp_path):
     base_args, keystore_pool_path, cryptainer_storage = _get_cli_base_args_for_folder_isolation(tmp_path)
     runner = _get_cli_runner()

@@ -1178,21 +1178,67 @@ def _write_new_files_exclusively(file_writers):
         raise
 
 
+def _get_temporary_sibling_path(path):
+    return os.path.join(os.path.dirname(os.path.abspath(path)), ".convert-format-%s.tmp" % os.urandom(8).hex())
+
+
 def _replace_files_atomically(file_writers):
-    """Write each file to a temporary file of its target directory, then move it over the target, in order; on
-    failure, delete the temporary file, and re-raise (already replaced targets are kept)."""
-    for path, writer in file_writers:
-        file_descriptor, temporary_path = tempfile.mkstemp(
-            dir=os.path.dirname(os.path.abspath(path)), prefix=".convert-format-", suffix=".tmp"
-        )
-        try:
-            with os.fdopen(file_descriptor, "wb") as output_stream:
+    """Write each file to a temporary file of its target directory, then, once all of them are written, move them
+    over their targets, in order. On failure, delete the temporary files, put back the targets already replaced
+    (from hard links made beforehand, when the filesystem supports them), and re-raise.
+
+    Replaced files keep their permissions, and other files get those of new files (per the umask, not mkstemp's 0600).
+    """
+    temporary_paths = []
+    replacements = []  # (path, existed, backup_path) of each target about to be, or already, replaced
+    replaced_count = 0
+    try:
+        for path, writer in file_writers:
+            temporary_path = _get_temporary_sibling_path(path)
+            with open(temporary_path, "xb") as output_stream:
+                temporary_paths.append(temporary_path)
                 writer(output_stream)
+        for (path, _writer), temporary_path in zip(file_writers, temporary_paths):
+            existed, backup_path = os.path.lexists(path), None
+            if existed:
+                backup_path = _get_temporary_sibling_path(path)
+                try:
+                    os.link(path, backup_path)
+                except OSError:  # E.g. FAT filesystems, or hard links forbidden
+                    backup_path = None
+            replacements.append((path, existed, backup_path))
+            if existed:
+                with suppress(OSError):
+                    shutil.copymode(path, temporary_path)
             os.replace(temporary_path, path)
-        except BaseException:
+            replaced_count += 1
+    except BaseException:
+        kept_backup_paths = []
+        for path, existed, backup_path in reversed(replacements[:replaced_count]):
+            try:
+                if backup_path:
+                    os.replace(backup_path, path)
+                elif not existed:
+                    os.remove(path)
+                else:
+                    logger.error("Couldn't restore file '%s' after a failed conversion (no backup)", path)
+            except OSError as exc:
+                logger.error("Couldn't restore file '%s' after a failed conversion (%s)", path, exc)
+                if backup_path:
+                    logger.error("Its previous content is kept in '%s'", backup_path)
+                    kept_backup_paths.append(backup_path)
+        for _path, _existed, backup_path in replacements:
+            if backup_path and backup_path not in kept_backup_paths:
+                with suppress(OSError):
+                    os.remove(backup_path)
+        for temporary_path in temporary_paths:
             with suppress(OSError):
                 os.remove(temporary_path)
-            raise
+        raise
+    for _path, _existed, backup_path in replacements:
+        if backup_path:
+            with suppress(OSError):
+                os.remove(backup_path)
 
 
 @wacryptolib_cli.command("convert-format")

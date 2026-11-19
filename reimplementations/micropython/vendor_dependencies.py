@@ -1,8 +1,9 @@
 """
 Regenerate reimplementations/micropython/lib/ : PyPI packages at the exact versions of ../../poetry.lock (so that
 micropython and cpython code get cross-validated), plus micropython-lib stdlib modules (latest versions, as python
-sources, from the index used by "mip"), micropython patches, stubs and shared wacryptolib modules. Also refresh
-reimplementations/micropython/src/cryptainer/_flightbox.py, a verbatim copy of wacryptolib's portable flightbox core.
+sources, from the index used by "mip"), micropython patches, stubs and shared wacryptolib modules. Also refresh the
+verbatim copies of wacryptolib modules in reimplementations/micropython/src/cryptainer/ (the portable flightbox core
+and the Shamir module). tests/test_micropython_port_packaging.py checks that all these copies are up to date.
 
 Usage (from any directory, with CPython >= 3.11):  python reimplementations/micropython/vendor_dependencies.py
 
@@ -34,7 +35,11 @@ SHARED_MODULES = [REPO_DIR / "src/wacryptolib/utilities/data_utils.py",
                   REPO_DIR / "src/wacryptolib/_crypto_backend/fallback/hpke_x25519_seal.py"]
 
 # Verbatim copies of wacryptolib modules into micropython sources
-SHARED_SOURCES = {REPO_DIR / "src/wacryptolib/cryptainer/_flightbox.py": SRC_DIR / "cryptainer/_flightbox.py"}
+SHARED_SOURCES = {
+    REPO_DIR / "src/wacryptolib/cryptainer/_flightbox.py": SRC_DIR / "cryptainer/_flightbox.py",
+    REPO_DIR / "src/wacryptolib/_crypto_backend/pycryptodome_secret_sharing.py":
+        SRC_DIR / "cryptainer/pycryptodome_secret_sharing.py",
+}
 
 
 def install_from_mip_index(name):

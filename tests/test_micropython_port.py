@@ -5,11 +5,17 @@
 """Tests of the MicroPython flightbox port (reimplementations/micropython/), run with CPython: they cover the logic
 of its own modules, not what differs on a MicroPython interpreter (builtins, stdlib stubs of lib/, memory limits)."""
 
+import ast
+import importlib
 import importlib.util
+import logging
+import sys
 import uuid
 from pathlib import Path
 
 import pytest
+
+from wacryptolib.shared_secret import recombine_secret_from_shards
 
 REPOSITORY_DIR = Path(__file__).resolve().parents[1]
 MICROPYTHON_DIR = REPOSITORY_DIR / "reimplementations" / "micropython"
@@ -65,3 +71,53 @@ def test_micropython_uuid_stub_has_value_semantics(uuid_stub):
     for invalid_arguments in (dict(), dict(hex=reference.hex, int=reference.int)):
         with pytest.raises(TypeError):
             uuid_stub.UUID(**invalid_arguments)
+
+
+# PORT MODULES
+
+
+@pytest.fixture(scope="module")
+def port():
+    """The port's "cryptainer" package, imported like its main.py does on CPython: stdlib modules and installed
+    packages take precedence over the stubs and vendored copies of lib/."""
+    added_paths = [str(MICROPYTHON_DIR / "src"), str(MICROPYTHON_DIR / "lib")]
+    sys.path.extend(added_paths)
+    try:
+        yield importlib.import_module("cryptainer.flightbox_utilities_implementation")
+    finally:
+        for added_path in added_paths:
+            sys.path.remove(added_path)
+
+
+# SHAMIR SHARED SECRETS
+
+
+SHAMIR_SOURCE_PATH = REPOSITORY_DIR / "src" / "wacryptolib" / "_crypto_backend" / "pycryptodome_secret_sharing.py"
+SHAMIR_COPY_PATH = MICROPYTHON_DIR / "src" / "cryptainer" / "pycryptodome_secret_sharing.py"
+
+
+def test_micropython_shamir_module_is_a_verbatim_copy():
+    assert SHAMIR_COPY_PATH.read_bytes() == SHAMIR_SOURCE_PATH.read_bytes(), "Both Shamir modules must be kept equal"
+
+
+def test_shamir_module_calls_builtin_constructors_without_keywords():
+    # MicroPython's int(), bytes()... take no keyword arguments ("function doesn't take keyword arguments")
+    tree = ast.parse(SHAMIR_SOURCE_PATH.read_text(encoding="utf8"))
+    keyword_calls = [
+        "%s() at line %d" % (node.func.id, node.lineno)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in ("int", "bytes", "bytearray", "str", "bin", "range")
+        and node.keywords
+    ]
+    assert not keyword_calls, keyword_calls
+
+
+@pytest.mark.parametrize("shard_count, threshold_count", [(1, 1), (2, 1), (2, 2), (5, 3)])
+def test_micropython_shamir_shards_are_recombined_by_wacryptolib(port, shard_count, threshold_count):
+    utilities = port.FlightboxUtilitiesImpl(logger=logging.getLogger("micropython_port"), keystore_data={})
+    secret = b"A secret longer than a single chunk of 16 bytes"
+    shards = utilities.split_secret_into_shards(secret, shard_count=shard_count, threshold_count=threshold_count)
+    assert [shard[0] for shard in shards] == list(range(1, shard_count + 1))
+    assert recombine_secret_from_shards(shards[-threshold_count:]) == secret

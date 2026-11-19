@@ -50,7 +50,7 @@ FILE *wa_tool_open_temporary_output_file(const char *final_path, char **temporar
  * survive a power loss, the source is to be synchronized before, and the directory after. */
 int wa_tool_replace_file(const char *source_path, const char *destination_path);
 
-/* Rename the file at `path` to a name unused so far, "<path>.bak-NNN", returned malloc()'d; NULL on failure, the
+/* Rename the file at `path` to a new name next to it, "<path>.old-NNN", returned malloc()'d; NULL on failure, the
  * file being left in place */
 char *wa_tool_move_file_aside(const char *path);
 

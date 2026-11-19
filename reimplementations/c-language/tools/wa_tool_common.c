@@ -224,73 +224,68 @@ int wa_tool_files_are_same(const char *path_a, const char *path_b)
 #endif
 }
 
-FILE *wa_tool_open_temporary_output_file(const char *final_path, char **temporary_path_out)
+/* Exclusive creation of a new file next to `path`, named "<path>.<3-letter kind>-NNN"; its malloc()'d name goes to
+ * `*sibling_path_out`. NULL on failure. */
+static FILE *wa_tool_open_new_sibling_file(const char *path, const char *kind, char **sibling_path_out)
 {
-    size_t length = strlen(final_path);
-    char *temporary_path = (char *)malloc(length + sizeof(".tmp-000"));
+    char *sibling_path = (char *)malloc(strlen(path) + sizeof(".kkk-000"));
     unsigned int attempt;
-    *temporary_path_out = NULL;
-    if (temporary_path == NULL) {
+    *sibling_path_out = NULL;
+    if (sibling_path == NULL) {
         return NULL;
     }
     for (attempt = 0; attempt < 1000u; ++attempt) {
         FILE *file;
-        (void)sprintf(temporary_path, "%s.tmp-%03u", final_path, attempt);
-        file = wa_tool_open_output_file(temporary_path, 0);
+        (void)sprintf(sibling_path, "%s.%.3s-%03u", path, kind, attempt);
+        file = wa_tool_open_output_file(sibling_path, 0);
         if (file != NULL) {
-            *temporary_path_out = temporary_path;
+            *sibling_path_out = sibling_path;
             return file;
         }
-        if (!wa_tool_file_exists(temporary_path)) {
+        if (!wa_tool_file_exists(sibling_path)) {
             break; /* Not a name clash: the directory is not writable */
         }
     }
-    free(temporary_path);
+    free(sibling_path);
     return NULL;
 }
 
-/* Rename a file, replacing an existing destination or, on Windows only, failing then (POSIX renaming always
- * replaces: callers check before); 0 or -1 */
-static int wa_tool_move_file(const char *source_path, const char *destination_path, int replace)
+FILE *wa_tool_open_temporary_output_file(const char *final_path, char **temporary_path_out)
+{
+    return wa_tool_open_new_sibling_file(final_path, "tmp", temporary_path_out);
+}
+
+int wa_tool_replace_file(const char *source_path, const char *destination_path)
 {
 #if defined(_WIN32)
     wchar_t *wide_source_path = wa_tool_convert_path_to_wide(source_path);
     wchar_t *wide_destination_path = wa_tool_convert_path_to_wide(destination_path);
     BOOL is_moved = wide_source_path != NULL && wide_destination_path != NULL &&
                     MoveFileExW(wide_source_path, wide_destination_path,
-                                MOVEFILE_WRITE_THROUGH | (replace ? MOVEFILE_REPLACE_EXISTING : 0u));
+                                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
     free(wide_source_path);
     free(wide_destination_path);
     return is_moved ? 0 : -1;
 #else
-    (void)replace;
     return rename(source_path, destination_path) == 0 ? 0 : -1;
 #endif
 }
 
-int wa_tool_replace_file(const char *source_path, const char *destination_path)
-{
-    return wa_tool_move_file(source_path, destination_path, 1);
-}
-
 char *wa_tool_move_file_aside(const char *path)
 {
-    char *backup_path = (char *)malloc(strlen(path) + sizeof(".bak-000"));
-    unsigned int attempt;
-    if (backup_path == NULL) {
+    /* The name is reserved by an empty file, which the renaming replaces */
+    char *backup_path = NULL;
+    FILE *reserving_file = wa_tool_open_new_sibling_file(path, "old", &backup_path);
+    if (reserving_file == NULL) {
         return NULL;
     }
-    for (attempt = 0; attempt < 1000u; ++attempt) {
-        (void)sprintf(backup_path, "%s.bak-%03u", path, attempt);
-        if (!wa_tool_file_exists(backup_path)) {
-            if (wa_tool_move_file(path, backup_path, 0) == 0) {
-                return backup_path;
-            }
-            break;
-        }
+    (void)fclose(reserving_file);
+    if (wa_tool_replace_file(path, backup_path) != 0) {
+        (void)wa_tool_remove_file(backup_path);
+        free(backup_path);
+        return NULL;
     }
-    free(backup_path);
-    return NULL;
+    return backup_path;
 }
 
 int wa_tool_file_is_read_only(const char *path)

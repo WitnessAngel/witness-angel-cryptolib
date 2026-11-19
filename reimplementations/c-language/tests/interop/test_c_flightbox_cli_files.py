@@ -133,12 +133,15 @@ def test_forced_run_unable_to_replace_cryptainer_restores_payload(c_build, docum
     (tmp_path / cryptainer_name).mkdir()
     (tmp_path / cryptainer_name / "kept").write_bytes(b"kept")
 
-    process = _encrypt(c_build, document_format, tmp_path, "--force")
-    assert process.returncode == 1 and b"cannot replace " + cryptainer_name.encode() in process.stderr, process.stderr
-    assert process.stdout == b""
-    assert (tmp_path / payload_name).read_bytes() == old_payload
-    assert _list_files(tmp_path / cryptainer_name) == ["kept"]
-    assert _list_files(tmp_path) == files_before  # Neither temporary nor backup file left
+    # With --bundle too, what is at the path of the payload file belongs to the cryptainer being replaced
+    for extra_arguments in [("--force",), ("--force", "--bundle")]:
+        process = _encrypt(c_build, document_format, tmp_path, *extra_arguments)
+        assert process.returncode == 1, process.stderr
+        assert b"cannot replace " + cryptainer_name.encode() in process.stderr, process.stderr
+        assert process.stdout == b""
+        assert (tmp_path / payload_name).read_bytes() == old_payload
+        assert _list_files(tmp_path / cryptainer_name) == ["kept"]
+        assert _list_files(tmp_path) == files_before  # Neither temporary nor backup file left
 
     # Without a previous payload file, the new one does not stay next to what is not its cryptainer
     os.remove(tmp_path / payload_name)
@@ -151,6 +154,9 @@ def test_forced_run_unable_to_replace_cryptainer_restores_payload(c_build, docum
 @pytest.mark.parametrize("locked_output", ["cryptainer", "payload"])
 @pytest.mark.parametrize("lock", ["open", "read-only"])
 def test_forced_run_keeps_previous_outputs_locked_on_windows(c_build, document_format, tmp_path, locked_output, lock):
+    if (locked_output, lock) == ("payload", "read-only") and not c_build.is_c_implementation:
+        # The Rust CLI moves it aside and replaces it, then warns that it cannot delete it
+        pytest.skip("Only the C CLI refuses to replace a read-only payload file")
     cryptainer_name, payload_name, old_cryptainer, old_payload, files_before = _prepare_previous_outputs(
         c_build, document_format, tmp_path
     )

@@ -205,6 +205,145 @@ def test_exported_profile_matches_pool_keys(export_script):
     assert int.from_bytes(entry["public_key"]["public_exponent"], "big") == numbers.e
 
 
+def _encode_der_item(tag: int, content: bytes) -> bytes:
+    length = len(content)
+    if length < 0x80:
+        return bytes([tag, length]) + content
+    length_bytes = length.to_bytes((length.bit_length() + 7) // 8, "big")
+    return bytes([tag, 0x80 | len(length_bytes)]) + length_bytes + content
+
+
+def _encode_pem_public_key(algorithm_identifier: bytes, key_bytes: bytes) -> bytes:
+    import base64
+
+    spki = _encode_der_item(0x30, algorithm_identifier + _encode_der_item(0x03, b"\x00" + key_bytes))
+    return b"-----BEGIN PUBLIC KEY-----\n" + base64.encodebytes(spki) + b"-----END PUBLIC KEY-----\n"
+
+
+def _build_rsa_public_key_pem(raw_rsa_public_key: dict) -> bytes:
+    integers = []
+    for field in ("modulus", "public_exponent"):
+        value = raw_rsa_public_key[field]
+        integers.append(_encode_der_item(0x02, (b"\x00" if value[0] & 0x80 else b"") + value))  # Minimal, positive
+    rsa_encryption_identifier = bytes.fromhex("300d06092a864886f70d0101010500")
+    return _encode_pem_public_key(rsa_encryption_identifier, _encode_der_item(0x30, b"".join(integers)))
+
+
+def _build_x25519_public_key_pem(raw_public_key: bytes) -> bytes:
+    return _encode_pem_public_key(bytes.fromhex("300506032b656e"), raw_public_key)
+
+
+def test_raw_public_key_constraints_of_device_profiles(export_script, sample_device_profile):
+    # Section 5 of the device profile specification: exported keys must be accepted by every embedded encryptor
+    check = export_script.check_raw_public_key_constraints
+    error_class = export_script.DeviceProfileExportError
+
+    assert export_script.X25519_FIELD_PRIME == helpers.X25519_FIELD_PRIME
+    assert export_script.X25519_LOW_ORDER_U_COORDINATES == (
+        (0, 1) + helpers.X25519_ORDER_8_POINTS + (helpers.X25519_FIELD_PRIME - 1,)
+    )
+
+    for valid_rsa_key in (
+        helpers.make_rsa_public_key(2048),
+        helpers.make_rsa_public_key(4096),
+        helpers.make_rsa_public_key(3072, public_exponent=3),
+    ):
+        check(valid_rsa_key, "RSA_OAEP")
+    odd_modulus = int.from_bytes(helpers.make_rsa_public_key(2048)["modulus"], "big")
+    for invalid_rsa_key, error_regex in [
+        (helpers.make_rsa_public_key(1024), "modulus of 1024 bits"),
+        (helpers.make_rsa_public_key(2047), "modulus of 2047 bits"),
+        (helpers.make_rsa_public_key(4097), "modulus of 4097 bits"),
+        (helpers.make_rsa_public_key(8192), "modulus of 8192 bits"),
+        (helpers.make_rsa_public_key(2048, even_modulus=True), "even modulus"),
+        (helpers.make_rsa_public_key(2048, public_exponent=1), "public exponent"),
+        (helpers.make_rsa_public_key(2048, public_exponent=2), "public exponent"),
+        (helpers.make_rsa_public_key(2048, public_exponent=65536), "public exponent"),
+        (helpers.make_raw_rsa_public_key(odd_modulus, odd_modulus), "public exponent"),
+        (helpers.make_raw_rsa_public_key(odd_modulus, odd_modulus + 2), "public exponent"),
+        (helpers.make_raw_rsa_public_key(odd_modulus * 3, 3), "sharing a factor"),
+    ]:
+        with pytest.raises(error_class, match=error_regex):
+            check(invalid_rsa_key, "RSA_OAEP")
+
+    x25519_index = helpers.find_public_key_entry_index(sample_device_profile, "ECIES_X25519")
+    valid_x25519_key = sample_device_profile["trustee_public_keys"][x25519_index]["public_key"]
+    check(valid_x25519_key, "ECIES_X25519")
+    for low_order_key in helpers.get_low_order_x25519_public_keys():
+        with pytest.raises(error_class, match="low-order point"):
+            check(low_order_key, "ECIES_X25519")
+    non_canonical_keys = helpers.get_non_canonical_x25519_public_keys(valid_x25519_key)
+    non_canonical_keys.append(helpers.encode_x25519_public_key(helpers.X25519_FIELD_PRIME + 9))  # The base point
+    for non_canonical_key in non_canonical_keys:
+        with pytest.raises(error_class, match="non-canonical"):
+            check(non_canonical_key, "ECIES_X25519")
+    with pytest.raises(error_class, match="31 bytes instead of 32"):
+        check(valid_x25519_key[:31], "ECIES_X25519")
+
+    valid_ml_kem_key = helpers.set_ml_kem_coefficient(bytes(1184), 767, 3328)  # The last 32 bytes are a seed
+    valid_ml_kem_key = valid_ml_kem_key[:1152] + b"\xff" * 32
+    check(valid_ml_kem_key, "ML_KEM_768")
+    for coefficient_index in (0, 1, 766, 767):
+        for coefficient in (3329, 4095):
+            invalid_ml_kem_key = helpers.set_ml_kem_coefficient(valid_ml_kem_key, coefficient_index, coefficient)
+            with pytest.raises(error_class, match="coefficient which is not below 3329"):
+                check(invalid_ml_kem_key, "ML_KEM_768")
+    with pytest.raises(error_class, match="1183 bytes instead of 1184"):
+        check(valid_ml_kem_key[:-1], "ML_KEM_768")
+
+
+def test_export_refuses_keys_outside_device_profile_constraints(tmp_path, export_script, capsys):
+    import shutil
+    from wacryptolib import _crypto_backend
+
+    convert = export_script.convert_public_key_pem_to_raw
+    error_class = export_script.DeviceProfileExportError
+
+    # Keys that wacryptolib loads, but which embedded encryptors would refuse when loading the profile
+    weak_public_key, _private_key = _crypto_backend.generate_rsa_keypair(1024)
+    weak_public_key_pem = _crypto_backend.export_rsa_key_to_pem(weak_public_key)
+    with pytest.raises(error_class, match="modulus of 1024 bits"):
+        convert(weak_public_key_pem, "RSA_OAEP")
+    with pytest.raises(error_class, match="modulus of 8192 bits|Invalid RSA_OAEP public key"):  # Depends on backend
+        convert(_build_rsa_public_key_pem(helpers.make_rsa_public_key(8192)), "RSA_OAEP")
+    with pytest.raises(error_class, match="public exponent|Invalid RSA_OAEP public key"):
+        convert(_build_rsa_public_key_pem(helpers.make_rsa_public_key(2048, public_exponent=65536)), "RSA_OAEP")
+    valid_rsa_key = helpers.make_rsa_public_key(4096, public_exponent=3)
+    assert convert(_build_rsa_public_key_pem(valid_rsa_key), "RSA_OAEP") == valid_rsa_key
+
+    # Keys that wacryptolib itself refuses are reported as export errors too
+    with pytest.raises(error_class, match="RSA_OAEP public key"):
+        convert(_build_rsa_public_key_pem(helpers.make_rsa_public_key(2048, public_exponent=1)), "RSA_OAEP")
+
+    x25519_public_key_pem = (
+        CBOR_KEY_CIPHERTEXTS_POOL / "local_keyfactory" / "0c0c0c0c-0000-4000-8000-000000000001_ecies_x25519_public_key.pem"
+    ).read_bytes()
+    valid_x25519_key = convert(x25519_public_key_pem, "ECIES_X25519")
+    assert convert(_build_x25519_public_key_pem(valid_x25519_key), "ECIES_X25519") == valid_x25519_key
+    invalid_x25519_keys = (
+        helpers.get_low_order_x25519_public_keys()
+        + helpers.get_non_canonical_x25519_public_keys(valid_x25519_key)
+        + [helpers.encode_x25519_public_key(helpers.X25519_FIELD_PRIME + 9)]
+    )
+    for invalid_x25519_key in invalid_x25519_keys:
+        with pytest.raises(error_class, match="ECIES_X25519 public key"):
+            convert(_build_x25519_public_key_pem(invalid_x25519_key), "ECIES_X25519")
+
+    # The command reports the faulty key and writes nothing
+    cryptoconf_path = CRYPTOCONFS_DIR / "2026_cbor_pairs/01_single_layer.cryptoconf.json"
+    keystore_pool_dir = tmp_path / "pool"
+    shutil.copytree(CBOR_PAIRS_POOL, keystore_pool_dir)
+    (public_key_path,) = (keystore_pool_dir / "local_keyfactory").glob(
+        "%s_rsa_oaep_public_key.pem" % load_from_document_file(cryptoconf_path)["keychain_uid"]
+    )
+    public_key_path.write_bytes(weak_public_key_pem)
+    output_path = tmp_path / "profile.cbor"
+    assert export_script.main([str(cryptoconf_path), str(keystore_pool_dir), "-o", str(output_path)]) == 1
+    error_output = capsys.readouterr().err
+    assert "modulus of 1024 bits" in error_output and "in local keyfactory" in error_output
+    assert not output_path.exists()
+
+
 def test_export_cli_behaviour(tmp_path, export_script, capsys):
     cryptoconf_path = CRYPTOCONFS_DIR / "2026_cbor_pairs/01_single_layer.cryptoconf.json"
 

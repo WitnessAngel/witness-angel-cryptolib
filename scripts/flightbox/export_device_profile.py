@@ -11,11 +11,13 @@ which provisions an embedded encryptor (see docs/flightbox_specifications/flight
 
 The cryptoconf file may be in Extended JSON or WA-CBOR (recognized like wacryptolib's document loader does). Public
 keys are taken from the local keyfactory and the imported authenticator keystores of the filesystem keystore pool;
-jsonrpc_api trustees are not supported. On any error, the script exits with a non-zero status and writes nothing.
+jsonrpc_api trustees are not supported. Keys that embedded encryptors would refuse (section 5 of the device profile
+specification) are rejected. On any error, the script exits with a non-zero status and writes nothing.
 """
 
 import argparse
 import base64
+import math
 import os
 import sys
 import tempfile
@@ -42,6 +44,20 @@ _EXPECTED_SPKI_ALGORITHM_OIDS = {
 }
 X25519_PUBLIC_KEY_SIZE = 32
 ML_KEM_768_PUBLIC_KEY_SIZE = 1184
+
+# Public key constraints of device profiles (section 5 of their specification), tighter than those of wacryptolib
+RSA_MODULUS_MIN_BITS = 2048
+RSA_MODULUS_MAX_BITS = 4096  # Default maximum of embedded encryptors, and limit of the device profile grammar
+X25519_FIELD_PRIME = 2**255 - 19
+X25519_LOW_ORDER_U_COORDINATES = (
+    0,
+    1,
+    int.from_bytes(bytes.fromhex("e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800"), "little"),
+    int.from_bytes(bytes.fromhex("5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157"), "little"),
+    X25519_FIELD_PRIME - 1,
+)
+ML_KEM_MODULUS = 3329
+ML_KEM_768_COEFFICIENT_COUNT = 768  # 12-bit coefficients, packed at the start of the encapsulation key
 
 
 class DeviceProfileExportError(Exception):
@@ -104,15 +120,69 @@ def _strip_leading_zero_bytes(value: bytes) -> bytes:
     return stripped
 
 
+def check_raw_public_key_constraints(raw_public_key, key_algo: str) -> None:
+    """Raise DeviceProfileExportError if a raw public key breaks the constraints that embedded encryptors enforce
+    when they load a device profile, so that such a key is refused at export and not later in the field."""
+    if key_algo == "RSA_OAEP":
+        modulus = int.from_bytes(raw_public_key["modulus"], "big")
+        public_exponent = int.from_bytes(raw_public_key["public_exponent"], "big")
+        if not RSA_MODULUS_MIN_BITS <= modulus.bit_length() <= RSA_MODULUS_MAX_BITS:
+            raise DeviceProfileExportError(
+                "RSA_OAEP public key has a modulus of %d bits, outside the %d to %d bits of device profiles"
+                % (modulus.bit_length(), RSA_MODULUS_MIN_BITS, RSA_MODULUS_MAX_BITS)
+            )
+        if not modulus & 1:
+            raise DeviceProfileExportError("RSA_OAEP public key has an even modulus")
+        if not (3 <= public_exponent < modulus and public_exponent & 1):
+            raise DeviceProfileExportError(
+                "RSA_OAEP public key has a public exponent which is not odd, at least 3 and smaller than its modulus"
+            )
+        if math.gcd(modulus, public_exponent) != 1:
+            raise DeviceProfileExportError("RSA_OAEP public key has a public exponent sharing a factor with its modulus")
+    elif key_algo == "ECIES_X25519":
+        if len(raw_public_key) != X25519_PUBLIC_KEY_SIZE:
+            raise DeviceProfileExportError(
+                "ECIES_X25519 public key has %d bytes instead of %d" % (len(raw_public_key), X25519_PUBLIC_KEY_SIZE)
+            )
+        u_coordinate = int.from_bytes(raw_public_key, "little")
+        if u_coordinate >= X25519_FIELD_PRIME:  # Also when the unused most significant bit is set
+            raise DeviceProfileExportError("ECIES_X25519 public key has a non-canonical u-coordinate")
+        if u_coordinate in X25519_LOW_ORDER_U_COORDINATES:
+            raise DeviceProfileExportError("ECIES_X25519 public key is a low-order point")
+    else:
+        assert key_algo == "ML_KEM_768", key_algo
+        if len(raw_public_key) != ML_KEM_768_PUBLIC_KEY_SIZE:
+            raise DeviceProfileExportError(
+                "ML_KEM_768 public key has %d bytes instead of %d" % (len(raw_public_key), ML_KEM_768_PUBLIC_KEY_SIZE)
+            )
+        for offset in range(0, ML_KEM_768_COEFFICIENT_COUNT * 3 // 2, 3):  # 2 coefficients per 3 bytes
+            byte0, byte1, byte2 = raw_public_key[offset : offset + 3]
+            if (byte0 | (byte1 & 0x0F) << 8) >= ML_KEM_MODULUS or (byte1 >> 4 | byte2 << 4) >= ML_KEM_MODULUS:
+                raise DeviceProfileExportError(
+                    "ML_KEM_768 public key has a coefficient which is not below %d" % ML_KEM_MODULUS
+                )
+
+
 def convert_public_key_pem_to_raw(public_key_pem: bytes, key_algo: str):
     """Return the raw form of a PEM SubjectPublicKeyInfo public key, as stored in device profiles: a dict of
     unsigned big-endian "modulus" and "public_exponent" bytes for RSA_OAEP, else the raw key bytes.
 
-    The key is first loaded by wacryptolib, which checks that it is a valid key of that algorithm."""
+    The key is first loaded by wacryptolib, which checks that it is a valid key of that algorithm; then its raw form
+    is checked against the tighter constraints of device profiles."""
+    from wacryptolib.exceptions import KeyLoadingError
     from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring
 
-    load_asymmetric_key_from_pem_bytestring(public_key_pem, key_algo=key_algo)  # Validation only
+    try:
+        load_asymmetric_key_from_pem_bytestring(public_key_pem, key_algo=key_algo)  # Validation only
+    except KeyLoadingError as exc:
+        raise DeviceProfileExportError("Invalid %s public key: %s" % (key_algo, exc)) from exc
 
+    raw_public_key = _convert_checked_public_key_pem_to_raw(public_key_pem, key_algo=key_algo)
+    check_raw_public_key_constraints(raw_public_key, key_algo=key_algo)
+    return raw_public_key
+
+
+def _convert_checked_public_key_pem_to_raw(public_key_pem: bytes, key_algo: str):
     spki_tag, spki, _ = _read_der_tlv(_decode_pem_public_key(public_key_pem))
     spki_items = _read_der_sequence_items(spki) if spki_tag == 0x30 else []
     if len(spki_items) != 2 or spki_items[0][0] != 0x30 or spki_items[1][0] != 0x03:
@@ -237,13 +307,12 @@ def build_device_profile(cryptoconf: dict, keystore_pool_dir) -> dict:
             raise DeviceProfileExportError(
                 "Missing %s public key of keychain %s in %s" % (key_algo, keychain_uid, keystore_label)
             ) from exc
+        try:
+            raw_public_key = convert_public_key_pem_to_raw(public_key_pem, key_algo=key_algo)
+        except DeviceProfileExportError as exc:
+            raise DeviceProfileExportError("%s (keychain %s in %s)" % (exc, keychain_uid, keystore_label)) from exc
         trustee_public_keys.append(
-            dict(
-                trustee=dict(trustee),
-                keychain_uid=keychain_uid,
-                key_algo=key_algo,
-                public_key=convert_public_key_pem_to_raw(public_key_pem, key_algo=key_algo),
-            )
+            dict(trustee=dict(trustee), keychain_uid=keychain_uid, key_algo=key_algo, public_key=raw_public_key)
         )
 
     return dict(

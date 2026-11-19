@@ -9,8 +9,10 @@
  * wa_crypto_backend_wolfcrypt.c, selected with WA_CRYPTO_BACKEND_MBEDTLS / WA_CRYPTO_BACKEND_WOLFCRYPT.
  *
  * Contexts are opaque, allocated with the platform hooks, and wiped when destroyed. Backend errors map to
- * WA_STATUS_CRYPTO_BACKEND_FAILURE, allocation failures to WA_STATUS_OUT_OF_MEMORY. This header includes no
- * backend library header. */
+ * WA_STATUS_CRYPTO_BACKEND_FAILURE, allocation failures to WA_STATUS_OUT_OF_MEMORY, those of the allocator of the
+ * crypto library included when it tells them apart: both libraries allocate the working memory of some primitives
+ * with their own allocator, not with the platform hooks (Mbed TLS for HMAC, X25519 and RSA, wolfCrypt for RSA and
+ * ML-KEM: see the adapters). This header includes no backend library header. */
 
 #ifndef WA_CRYPTO_BACKEND_H
 #define WA_CRYPTO_BACKEND_H
@@ -121,5 +123,11 @@ wa_status_t wa_crypto_backend_ml_kem_768_encapsulate_derandomized(
     const wa_platform_hooks_t *platform_hooks, const uint8_t public_key[WA_ML_KEM_768_PUBLIC_KEY_SIZE],
     const uint8_t coins[WA_ML_KEM_768_COINS_SIZE], uint8_t ciphertext[WA_ML_KEM_768_CIPHERTEXT_SIZE],
     uint8_t shared_secret[WA_ML_KEM_768_SHARED_SECRET_SIZE]);
+
+#if defined(WA_CRYPTO_BACKEND_MBEDTLS)
+/* Mbed TLS adapter only, declared here for its unit test: status of an Mbed TLS return code, WA_STATUS_OK for 0,
+ * WA_STATUS_OUT_OF_MEMORY when its allocator has failed, else WA_STATUS_CRYPTO_BACKEND_FAILURE. */
+wa_status_t wa_crypto_backend_mbedtls_get_status_of_result(int mbedtls_result);
+#endif
 
 #endif /* WA_CRYPTO_BACKEND_H */

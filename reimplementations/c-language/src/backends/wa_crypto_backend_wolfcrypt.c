@@ -80,6 +80,31 @@
 #error "SP_INT_BITS is too small for WA_MAX_RSA_MODULUS_BITS"
 #endif
 
+/* ALLOCATIONS OF WOLFCRYPT
+ *
+ * The contexts of this adapter, RsaKey and MlKemKey included, are allocated with the platform hooks, but wolfCrypt
+ * allocates by itself, with its own allocator (the malloc()/free() of the C library, unless the wolfSSL build is
+ * told otherwise), the working memory of two primitives: the big numbers of the RSA public operation and the
+ * polynomials of the ML-KEM encapsulation. These blocks never reach the platform hooks: wolfCrypt has one allocator
+ * per process (XMALLOC_USER, wolfSSL_SetAllocators() or WOLFSSL_STATIC_MEMORY), whose release function doesn't get
+ * the size of blocks, and its big numbers are allocated without the heap hint of the key, when the hooks are given
+ * per call, with a context, and release with the size. An integrator whose only heap is the one of the hooks points
+ * the allocator of its wolfSSL build to it (see README.md).
+ *
+ * The allocation failures of wolfCrypt are reported as WA_STATUS_OUT_OF_MEMORY like those of the hooks, when
+ * wolfCrypt tells them apart: a failed allocation inside the modular exponentiation of RSA comes back as
+ * MP_EXPTMOD_E, like any other failure of it, hence as WA_STATUS_CRYPTO_BACKEND_FAILURE. */
+
+static wa_status_t wa_wolfcrypt_get_status_of_result(int wolfcrypt_result)
+{
+    if (wolfcrypt_result == 0) {
+        return WA_STATUS_OK;
+    }
+    /* MP_MEM is the code of the big number layer */
+    return (wolfcrypt_result == MEMORY_E || wolfcrypt_result == MP_MEM) ? WA_STATUS_OUT_OF_MEMORY
+                                                                         : WA_STATUS_CRYPTO_BACKEND_FAILURE;
+}
+
 /* wolfCrypt takes word32 lengths: longer inputs are processed in chunks */
 #define WA_WOLFCRYPT_MAXIMUM_CHUNK ((size_t)0x40000000u)
 
@@ -415,7 +440,8 @@ wa_status_t wa_crypto_backend_x25519_compute_shared_secret(const uint8_t private
     return wa_x25519_multiply(private_scalar, peer_public_key, shared_secret);
 }
 
-/* RAW RSA (RsaKey is large: allocated through the hooks) */
+/* RAW RSA (RsaKey is large: allocated through the hooks; the big numbers of the operation are allocated by
+ * wolfCrypt, see "ALLOCATIONS OF WOLFCRYPT" above) */
 
 wa_status_t wa_crypto_backend_rsa_compute_public_operation(const wa_platform_hooks_t *platform_hooks,
                                                            const uint8_t *modulus, size_t modulus_length,
@@ -441,7 +467,7 @@ wa_status_t wa_crypto_backend_rsa_compute_public_operation(const wa_platform_hoo
     result = wc_InitRsaKey_ex(rsa_key, NULL, INVALID_DEVID);
     if (result != 0) {
         wa_release_memory(platform_hooks, rsa_key, sizeof(*rsa_key));
-        return WA_STATUS_CRYPTO_BACKEND_FAILURE;
+        return wa_wolfcrypt_get_status_of_result(result);
     }
     result = wc_RsaPublicKeyDecodeRaw(modulus, (word32)modulus_length, public_exponent,
                                       (word32)public_exponent_length, rsa_key);
@@ -449,16 +475,20 @@ wa_status_t wa_crypto_backend_rsa_compute_public_operation(const wa_platform_hoo
         result = -1;
     }
     if (result == 0) {
+        /* The output length when positive, else an error code */
         result = wc_RsaDirect(input, (word32)modulus_length, output, &output_length, rsa_key, RSA_PUBLIC_ENCRYPT,
                               NULL);
-        result = (result == (int)modulus_length && output_length == (word32)modulus_length) ? 0 : -1;
+        if (result >= 0) {
+            result = (result == (int)modulus_length && output_length == (word32)modulus_length) ? 0 : -1;
+        }
     }
     wc_FreeRsaKey(rsa_key);
     wa_release_memory(platform_hooks, rsa_key, sizeof(*rsa_key)); /* Public material only */
-    return result == 0 ? WA_STATUS_OK : WA_STATUS_CRYPTO_BACKEND_FAILURE;
+    return wa_wolfcrypt_get_status_of_result(result);
 }
 
-/* ML-KEM-768 (MlKemKey is large: allocated through the hooks) */
+/* ML-KEM-768 (MlKemKey is large: allocated through the hooks; the polynomials of the encapsulation are allocated
+ * by wolfCrypt, see "ALLOCATIONS OF WOLFCRYPT" above) */
 
 wa_status_t wa_crypto_backend_ml_kem_768_encapsulate_derandomized(
     const wa_platform_hooks_t *platform_hooks, const uint8_t public_key[WA_ML_KEM_768_PUBLIC_KEY_SIZE],
@@ -474,7 +504,7 @@ wa_status_t wa_crypto_backend_ml_kem_768_encapsulate_derandomized(
     result = wc_MlKemKey_Init(ml_kem_key, WC_ML_KEM_768, NULL, INVALID_DEVID);
     if (result != 0) {
         wa_release_memory(platform_hooks, ml_kem_key, sizeof(*ml_kem_key));
-        return WA_STATUS_CRYPTO_BACKEND_FAILURE;
+        return wa_wolfcrypt_get_status_of_result(result);
     }
     result = wc_MlKemKey_DecodePublicKey(ml_kem_key, public_key, WA_ML_KEM_768_PUBLIC_KEY_SIZE);
     if (result == 0) {
@@ -483,7 +513,7 @@ wa_status_t wa_crypto_backend_ml_kem_768_encapsulate_derandomized(
     }
     wc_MlKemKey_Free(ml_kem_key);
     wa_release_secret_memory(platform_hooks, ml_kem_key, sizeof(*ml_kem_key));
-    return result == 0 ? WA_STATUS_OK : WA_STATUS_CRYPTO_BACKEND_FAILURE;
+    return wa_wolfcrypt_get_status_of_result(result);
 }
 
 #endif /* WA_CRYPTO_BACKEND_WOLFCRYPT */

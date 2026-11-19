@@ -10,6 +10,11 @@
  * (WC_NO_RNG): every random input comes from the platform random hook. The adapter
  * (src/backends/wa_crypto_backend_wolfcrypt.c) checks each required option with #error.
  *
+ * wolfCrypt allocates the working memory of RSA and ML-KEM with its own allocator, the malloc()/free() of the C
+ * library here, and not with the platform hooks of the flightbox library. A device whose only heap is the one of
+ * its hooks points wolfCrypt to that heap with XMALLOC_USER, wolfSSL_SetAllocators() or WOLFSSL_STATIC_MEMORY (see
+ * README.md).
+ *
  * WC_RSA_NO_PADDING is listed by wolfSSL among the options that weaken security: it exposes the raw RSA operation,
  * which the flightbox only uses inside its own OAEP encoding. */
 

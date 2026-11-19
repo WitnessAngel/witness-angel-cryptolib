@@ -8,7 +8,12 @@
  * Used by the host CMake build, and a reference for device integrators: on ESP-IDF, enable the same options in
  * menuconfig (see README.md). Only the legacy crypto API is used, without PSA nor any Mbed TLS RNG, since every
  * random input comes from the platform random hook. The adapter (src/backends/wa_crypto_backend_mbedtls.c)
- * checks each required option with #error. */
+ * checks each required option with #error.
+ *
+ * Mbed TLS allocates the working memory of HMAC, X25519 and RSA with its own allocator, the calloc()/free() of the
+ * C library here, and not with the platform hooks of the flightbox library. A device whose only heap is the one of
+ * its hooks defines MBEDTLS_PLATFORM_C and MBEDTLS_PLATFORM_MEMORY, and points Mbed TLS to that heap with
+ * MBEDTLS_PLATFORM_CALLOC_MACRO/MBEDTLS_PLATFORM_FREE_MACRO or mbedtls_platform_set_calloc_free() (see README.md). */
 
 #ifndef WA_MBEDTLS_CONFIG_FOR_FLIGHTBOX_H
 #define WA_MBEDTLS_CONFIG_FOR_FLIGHTBOX_H

@@ -13,6 +13,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(WA_CRYPTO_BACKEND_MBEDTLS)
+#include "mbedtls/bignum.h"
+#include "mbedtls/ecp.h"
+#include "mbedtls/md.h"
+#include "mbedtls/rsa.h"
+#endif
+#if defined(WA_CRYPTO_BACKEND_WOLFCRYPT)
+#include "wolfssl/wolfcrypt/settings.h"
+
+#include "wolfssl/wolfcrypt/memory.h"
+#endif
+
 #include "wa_backend_conformance_vectors.h"
 #include "wa_minimal_test_harness.h"
 #include "wa_test_support.h"
@@ -449,6 +461,114 @@ static void test_ml_kem_768_encapsulation(void)
     wa_test_platform_destroy(platform);
 }
 
+#if defined(WA_CRYPTO_BACKEND_MBEDTLS)
+/* Finding C-2: Mbed TLS allocates the working memory of HMAC, X25519 and RSA by itself, and the failures of its
+ * allocator are out-of-memory failures like those of the platform hooks */
+static void test_mbedtls_allocation_failures_are_out_of_memory(void)
+{
+    WA_CHECK_STATUS(wa_crypto_backend_mbedtls_get_status_of_result(0), WA_STATUS_OK);
+    /* As returned by the big number, elliptic curve and message digest modules */
+    WA_CHECK_STATUS(wa_crypto_backend_mbedtls_get_status_of_result(MBEDTLS_ERR_MPI_ALLOC_FAILED),
+                    WA_STATUS_OUT_OF_MEMORY);
+    WA_CHECK_STATUS(wa_crypto_backend_mbedtls_get_status_of_result(MBEDTLS_ERR_ECP_ALLOC_FAILED),
+                    WA_STATUS_OUT_OF_MEMORY);
+    WA_CHECK_STATUS(wa_crypto_backend_mbedtls_get_status_of_result(MBEDTLS_ERR_MD_ALLOC_FAILED),
+                    WA_STATUS_OUT_OF_MEMORY);
+    /* As returned by the RSA functions, which add their code to the one of the failed big number operation */
+    WA_CHECK_STATUS(
+        wa_crypto_backend_mbedtls_get_status_of_result(MBEDTLS_ERR_RSA_PUBLIC_FAILED + MBEDTLS_ERR_MPI_ALLOC_FAILED),
+        WA_STATUS_OUT_OF_MEMORY);
+    WA_CHECK_STATUS(
+        wa_crypto_backend_mbedtls_get_status_of_result(MBEDTLS_ERR_RSA_BAD_INPUT_DATA + MBEDTLS_ERR_MPI_ALLOC_FAILED),
+        WA_STATUS_OUT_OF_MEMORY);
+    /* Other failures */
+    WA_CHECK_STATUS(wa_crypto_backend_mbedtls_get_status_of_result(-1), WA_STATUS_CRYPTO_BACKEND_FAILURE);
+    WA_CHECK_STATUS(wa_crypto_backend_mbedtls_get_status_of_result(1), WA_STATUS_CRYPTO_BACKEND_FAILURE);
+    WA_CHECK_STATUS(wa_crypto_backend_mbedtls_get_status_of_result(MBEDTLS_ERR_MPI_BAD_INPUT_DATA),
+                    WA_STATUS_CRYPTO_BACKEND_FAILURE);
+    WA_CHECK_STATUS(wa_crypto_backend_mbedtls_get_status_of_result(MBEDTLS_ERR_MPI_NOT_ACCEPTABLE),
+                    WA_STATUS_CRYPTO_BACKEND_FAILURE);
+    WA_CHECK_STATUS(wa_crypto_backend_mbedtls_get_status_of_result(MBEDTLS_ERR_RSA_PUBLIC_FAILED),
+                    WA_STATUS_CRYPTO_BACKEND_FAILURE);
+    WA_CHECK_STATUS(
+        wa_crypto_backend_mbedtls_get_status_of_result(MBEDTLS_ERR_RSA_PUBLIC_FAILED + MBEDTLS_ERR_MPI_BAD_INPUT_DATA),
+        WA_STATUS_CRYPTO_BACKEND_FAILURE);
+    WA_CHECK_STATUS(wa_crypto_backend_mbedtls_get_status_of_result(MBEDTLS_ERR_ECP_BAD_INPUT_DATA),
+                    WA_STATUS_CRYPTO_BACKEND_FAILURE);
+    WA_CHECK_STATUS(wa_crypto_backend_mbedtls_get_status_of_result(MBEDTLS_ERR_MD_BAD_INPUT_DATA),
+                    WA_STATUS_CRYPTO_BACKEND_FAILURE);
+    WA_CHECK_STATUS(wa_crypto_backend_mbedtls_get_status_of_result(-0x7FFFFFFF - 1),
+                    WA_STATUS_CRYPTO_BACKEND_FAILURE);
+}
+#endif
+
+/* Finding C-2: wolfCrypt allocates the working memory of RSA and ML-KEM by itself, and the failures of its
+ * allocator are clean failures, out-of-memory ones like those of the platform hooks when wolfCrypt tells them apart
+ * (the test needs the plain allocator callbacks of wolfCrypt) */
+#if defined(WA_CRYPTO_BACKEND_WOLFCRYPT) && !defined(NO_WOLFSSL_MEMORY) && !defined(XMALLOC_USER) &&                 \
+    !defined(WOLFSSL_STATIC_MEMORY) && !defined(WOLFSSL_DEBUG_MEMORY) && !defined(WOLFSSL_MEM_FAIL_COUNT)
+#define WA_TEST_HAS_WOLFCRYPT_ALLOCATION_FAILURES
+
+static size_t wolfcrypt_refused_allocation_count;
+
+static void *refuse_wolfcrypt_allocation(size_t size)
+{
+    (void)size;
+    wolfcrypt_refused_allocation_count++;
+    return NULL;
+}
+
+static void test_wolfcrypt_allocation_failures_are_out_of_memory(void)
+{
+    wa_test_platform_t *platform = wa_test_platform_create(7);
+    wolfSSL_Malloc_cb malloc_function = NULL;
+    wolfSSL_Free_cb free_function = NULL;
+    wolfSSL_Realloc_cb realloc_function = NULL;
+    size_t modulus_length, exponent_length, input_length, public_key_length, coins_length;
+    uint8_t *modulus = decode(wa_raw_rsa_vectors[0].modulus_hex, &modulus_length);
+    uint8_t *exponent = decode(wa_raw_rsa_vectors[0].public_exponent_hex, &exponent_length);
+    uint8_t *input = decode(wa_raw_rsa_vectors[0].input_hex, &input_length);
+    uint8_t *public_key = decode(wa_ml_kem_768_public_key_hex, &public_key_length);
+    uint8_t *coins = decode(wa_ml_kem_768_coins_hex, &coins_length);
+    uint8_t *output = (uint8_t *)malloc(modulus_length);
+    uint8_t *ciphertext = (uint8_t *)malloc(WA_ML_KEM_768_CIPHERTEXT_SIZE);
+    uint8_t shared_secret[WA_ML_KEM_768_SHARED_SECRET_SIZE];
+    wa_status_t status;
+    WA_REQUIRE(output != NULL && ciphertext != NULL && input_length == modulus_length);
+    WA_REQUIRE(wolfSSL_GetAllocators(&malloc_function, &free_function, &realloc_function) == 0);
+    WA_REQUIRE(wolfSSL_SetAllocators(refuse_wolfcrypt_allocation, free_function, realloc_function) == 0);
+
+    /* A wolfCrypt build allocating nothing for a primitive (other settings) makes it succeed. wolfCrypt reports
+     * a failed allocation inside the modular exponentiation of RSA as MP_EXPTMOD_E, like its other failures */
+    wolfcrypt_refused_allocation_count = 0;
+    status = wa_crypto_backend_rsa_compute_public_operation(&platform->hooks, modulus, modulus_length, exponent,
+                                                            exponent_length, input, output);
+    if (wolfcrypt_refused_allocation_count != 0) {
+        WA_CHECK(status == WA_STATUS_OUT_OF_MEMORY || status == WA_STATUS_CRYPTO_BACKEND_FAILURE);
+    } else {
+        WA_CHECK_STATUS(status, WA_STATUS_OK);
+    }
+    wolfcrypt_refused_allocation_count = 0;
+    status = wa_crypto_backend_ml_kem_768_encapsulate_derandomized(&platform->hooks, public_key, coins, ciphertext,
+                                                                   shared_secret);
+    WA_CHECK_STATUS(status, wolfcrypt_refused_allocation_count != 0 ? WA_STATUS_OUT_OF_MEMORY : WA_STATUS_OK);
+
+    WA_REQUIRE(wolfSSL_SetAllocators(malloc_function, free_function, realloc_function) == 0);
+    WA_CHECK_STATUS(wa_crypto_backend_rsa_compute_public_operation(&platform->hooks, modulus, modulus_length,
+                                                                   exponent, exponent_length, input, output),
+                    WA_STATUS_OK);
+    WA_CHECK(wa_test_allocator_is_clean(&platform->allocator));
+    free(modulus);
+    free(exponent);
+    free(input);
+    free(public_key);
+    free(coins);
+    free(output);
+    free(ciphertext);
+    wa_test_platform_destroy(platform);
+}
+#endif
+
 int main(void)
 {
     WA_RUN_TEST(test_aes_256_cbc);
@@ -459,6 +579,12 @@ int main(void)
     WA_RUN_TEST(test_hmac_sha256);
     WA_RUN_TEST(test_x25519);
     WA_RUN_TEST(test_raw_rsa_public_operation);
+#if defined(WA_CRYPTO_BACKEND_MBEDTLS)
+    WA_RUN_TEST(test_mbedtls_allocation_failures_are_out_of_memory);
+#endif
     WA_RUN_TEST(test_ml_kem_768_encapsulation);
+#if defined(WA_TEST_HAS_WOLFCRYPT_ALLOCATION_FAILURES)
+    WA_RUN_TEST(test_wolfcrypt_allocation_failures_are_out_of_memory);
+#endif
     return wa_test_finish();
 }

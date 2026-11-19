@@ -198,7 +198,9 @@ host implementation (`malloc`, `getrandom`/`/dev/urandom` or `BCryptGenRandom`, 
 
 - **`allocate` / `release`**: blocks of any size, aligned for any type; `release` receives the requested size,
   which suits pool allocators. Blocks that held secrets are wiped before release. Returning NULL gives
-  `WA_STATUS_OUT_OF_MEMORY` and a clean failure (tested by out-of-memory sweeps).
+  `WA_STATUS_OUT_OF_MEMORY` and a clean failure (tested by out-of-memory sweeps). One exception: the crypto library
+  allocates by itself, with its own allocator and not with this hook, the working memory of some primitives (see
+  "The allocator of the crypto library" below).
 - **`fill_random`**: MUST be a cryptographically secure generator. Every secret comes from it: symmetric keys, IVs
   and nonces, Shamir coefficients, HPKE ephemeral keys, ML-KEM encapsulation randomness, OAEP seeds and the random
   bits of UUIDs; neither backend uses a generator of its own. A non-zero return aborts the operation
@@ -322,6 +324,26 @@ least `WA_MAX_RSA_MODULUS_BITS`. wolfCrypt's own ML-KEM is used.
 
 `NO_CURVE25519_BLINDING` is safe here: blinding protects the private scalar of a long-lived key, while the library
 only multiplies fresh ephemeral scalars, used once.
+
+### The allocator of the crypto library
+
+The contexts of the backend adapters are allocated with the `allocate`/`release` platform hooks, but both crypto
+libraries allocate by themselves the working memory of some primitives, with their own allocator, which is the one
+of the C library by default:
+
+- Mbed TLS: the HMAC pads, the big numbers of X25519 and those of the RSA public operation (`calloc`/`free`);
+- wolfCrypt: the big numbers of the RSA public operation (about 4 KB for a 4096-bit key) and the polynomials of
+  the ML-KEM-768 encapsulation (10.5 KB), with the reference configuration (`malloc`/`free`).
+
+The platform hooks neither see nor bound these blocks, and the peak heap figures above don't count them. Each
+library has a single allocator per process, whose functions get neither a context nor the size of the blocks they
+release, so the flightbox library can't route it to hooks given per call. If the heap of the hooks is the only one
+of the device, point the crypto library to it in its own configuration: `MBEDTLS_PLATFORM_C` and
+`MBEDTLS_PLATFORM_MEMORY`, then `MBEDTLS_PLATFORM_CALLOC_MACRO`/`MBEDTLS_PLATFORM_FREE_MACRO` or a call to
+`mbedtls_platform_set_calloc_free()` at startup (on ESP-IDF, the `CONFIG_MBEDTLS_MEM_ALLOC_MODE` options choose the
+heap of Mbed TLS); `XMALLOC_USER`, `wolfSSL_SetAllocators()` or `WOLFSSL_STATIC_MEMORY` for wolfCrypt. A failure of
+these allocators gives `WA_STATUS_OUT_OF_MEMORY` like one of the hooks, except in the RSA operation of wolfCrypt,
+which reports it like any other failure of its modular exponentiation (`WA_STATUS_CRYPTO_BACKEND_FAILURE`).
 
 ### The raw RSA note
 

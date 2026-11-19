@@ -80,6 +80,40 @@
 #include "mbedtls/sha512.h"
 
 #include "core/wa_platform_hooks_calls.h"
+
+/* ALLOCATIONS OF MBED TLS
+ *
+ * The contexts of this adapter are allocated with the platform hooks, but Mbed TLS allocates by itself, with its
+ * own allocator (the calloc()/free() of the C library, unless the Mbed TLS build is told otherwise), the working
+ * memory of three primitives: the HMAC pads (mbedtls_md_setup()), the big numbers of X25519 and those of the RSA
+ * public operation. These blocks never reach the platform hooks: Mbed TLS has one allocator per process
+ * (MBEDTLS_PLATFORM_MEMORY, with MBEDTLS_PLATFORM_CALLOC_MACRO/MBEDTLS_PLATFORM_FREE_MACRO or
+ * mbedtls_platform_set_calloc_free()), whose functions get neither a context nor the size of released blocks, when
+ * the hooks are given per call, with a context, and release with the size. An integrator whose only heap is the one
+ * of the hooks points the allocator of its Mbed TLS build to it (see README.md).
+ *
+ * The allocation failures of Mbed TLS are reported as WA_STATUS_OUT_OF_MEMORY like those of the hooks. */
+
+wa_status_t wa_crypto_backend_mbedtls_get_status_of_result(int mbedtls_result)
+{
+    if (mbedtls_result == 0) {
+        return WA_STATUS_OK;
+    }
+    /* Mbed TLS error codes are negative: a high-level module code (bits 7 to 14), a low-level one (bits 0 to 6), or
+     * their sum, as when the RSA functions report the failure of a big number operation. The big number module is
+     * the only low-level one of this adapter which allocates. */
+    if (mbedtls_result < 0 && mbedtls_result >= -0x7FFF) {
+        int positive_code = -mbedtls_result;
+        int low_level_code = positive_code & 0x7F;
+        int high_level_code = positive_code & 0x7F80;
+        if (low_level_code == -MBEDTLS_ERR_MPI_ALLOC_FAILED ||
+            (low_level_code == 0 &&
+             (high_level_code == -MBEDTLS_ERR_ECP_ALLOC_FAILED || high_level_code == -MBEDTLS_ERR_MD_ALLOC_FAILED))) {
+            return WA_STATUS_OUT_OF_MEMORY;
+        }
+    }
+    return WA_STATUS_CRYPTO_BACKEND_FAILURE;
+}
 #include "mlkem/mlkem_native.h"
 #include "wa_flightbox/wa_flightbox_config.h"
 
@@ -219,7 +253,8 @@ void wa_crypto_backend_chacha20_poly1305_destroy(wa_crypto_backend_chacha20_poly
     }
 }
 
-/* HASHES AND HMAC (sha256/sha512 contexts live on the stack: no allocation) */
+/* HASHES AND HMAC (sha256/sha512 contexts live on the stack, without allocation; the generic context of HMAC has
+ * its hash context and its pads allocated by Mbed TLS, see "ALLOCATIONS OF MBED TLS" above) */
 
 wa_status_t wa_crypto_backend_compute_sha256(const wa_byte_span_t *parts, size_t part_count,
                                              uint8_t digest[WA_SHA256_DIGEST_SIZE])
@@ -275,7 +310,7 @@ wa_status_t wa_crypto_backend_compute_hmac_sha256(const uint8_t *key, size_t key
         result = mbedtls_md_hmac_finish(&md, mac);
     }
     mbedtls_md_free(&md); /* Zeroizes the HMAC pads */
-    return result == 0 ? WA_STATUS_OK : WA_STATUS_CRYPTO_BACKEND_FAILURE;
+    return wa_crypto_backend_mbedtls_get_status_of_result(result);
 }
 
 /* X25519
@@ -374,7 +409,7 @@ static wa_status_t wa_x25519_multiply(const uint8_t private_scalar[WA_X25519_KEY
     mbedtls_ecp_group_free(&group);
     mbedtls_platform_zeroize(clamped_scalar, sizeof(clamped_scalar));
     mbedtls_platform_zeroize(&generator, sizeof(generator));
-    return result == 0 ? WA_STATUS_OK : WA_STATUS_CRYPTO_BACKEND_FAILURE;
+    return wa_crypto_backend_mbedtls_get_status_of_result(result);
 }
 
 wa_status_t wa_crypto_backend_x25519_compute_public_key(const uint8_t private_scalar[WA_X25519_KEY_SIZE],
@@ -401,7 +436,7 @@ wa_status_t wa_crypto_backend_rsa_compute_public_operation(const wa_platform_hoo
 {
     mbedtls_rsa_context rsa;
     int result;
-    (void)platform_hooks;
+    (void)platform_hooks; /* The big numbers are allocated by Mbed TLS, see "ALLOCATIONS OF MBED TLS" above */
     mbedtls_rsa_init(&rsa);
     result = mbedtls_rsa_import_raw(&rsa, modulus, modulus_length, NULL, 0, NULL, 0, NULL, 0, public_exponent,
                                     public_exponent_length);
@@ -415,7 +450,7 @@ wa_status_t wa_crypto_backend_rsa_compute_public_operation(const wa_platform_hoo
         result = mbedtls_rsa_public(&rsa, input, output);
     }
     mbedtls_rsa_free(&rsa);
-    return result == 0 ? WA_STATUS_OK : WA_STATUS_CRYPTO_BACKEND_FAILURE;
+    return wa_crypto_backend_mbedtls_get_status_of_result(result);
 }
 
 /* ML-KEM-768 (mlkem-native) */

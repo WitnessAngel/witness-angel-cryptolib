@@ -46,7 +46,8 @@ FILE *wa_tool_open_output_file(const char *path, int force);
  * to `*temporary_path_out`. NULL on failure. */
 FILE *wa_tool_open_temporary_output_file(const char *final_path, char **temporary_path_out);
 
-/* Rename `source_path` to `destination_path`, replacing it if it exists (on the same file system); 0 or -1 */
+/* Rename `source_path` to `destination_path`, replacing it if it exists (on the same file system); 0 or -1. To
+ * survive a power loss, the source is to be synchronized before, and the directory after. */
 int wa_tool_replace_file(const char *source_path, const char *destination_path);
 
 /* Rename the file at `path` to a name unused so far, "<path>.bak-NNN", returned malloc()'d; NULL on failure, the
@@ -59,6 +60,13 @@ int wa_tool_file_is_read_only(const char *path);
 
 /* Delete a file; 0 or -1 */
 int wa_tool_remove_file(const char *path);
+
+/* Flush an open output file down to its storage device; 0 or -1 */
+int wa_tool_sync_file(FILE *file);
+
+/* Make the creations, renamings and deletions done in the directory of `path` durable (POSIX systems; nothing to
+ * do on Windows, where renamings are written through); 0 or -1 */
+int wa_tool_sync_directory_of_file(const char *path);
 
 /* A sink writing to an open FILE (context: the FILE) */
 wa_output_sink_t wa_tool_get_file_sink(FILE *file);

@@ -179,11 +179,14 @@ static int wa_cli_output_open(wa_cli_output_t *output, int is_forced)
     return 1;
 }
 
+/* Close a complete output, once flushed down to its storage device: it is only renamed, or reported as written,
+ * when it would survive a power loss; 0 if it is not known to be whole there */
 static int wa_cli_output_close(wa_cli_output_t *output)
 {
+    int is_synced = wa_tool_sync_file(output->file) == 0;
     int close_result = fclose(output->file);
     output->file = NULL;
-    return close_result == 0;
+    return is_synced && close_result == 0;
 }
 
 /* Move the temporary file of a complete output to its final path, which becomes its write path */
@@ -203,7 +206,9 @@ static int wa_cli_output_move_to_final_path(wa_cli_output_t *output)
  * the new pair cannot be completed, so that the final paths hold either the previous outputs or the new ones,
  * never a cryptainer with the payload of another one. If it cannot even be put back, nothing is deleted, and the
  * files holding the previous payload and the new outputs are reported. With --bundle and --force, the payload file
- * of a previous offloaded cryptainer, `stale_payload_path_or_null`, is deleted once the cryptainer is replaced. */
+ * of a previous offloaded cryptainer, `stale_payload_path_or_null`, is deleted once the cryptainer is replaced.
+ * A failure once the outputs are at their final paths (deletions, synchronization of the directory) is reported
+ * too, the outputs being kept. */
 static int wa_cli_commit_outputs(wa_cli_output_t *cryptainer_output, wa_cli_output_t *payload_output_or_null,
                                  const char *stale_payload_path_or_null)
 {
@@ -266,6 +271,11 @@ static int wa_cli_commit_outputs(wa_cli_output_t *cryptainer_output, wa_cli_outp
     if (stale_payload_path_or_null != NULL && wa_tool_file_exists(stale_payload_path_or_null) &&
         wa_tool_remove_file(stale_payload_path_or_null) != 0) {
         fprintf(stderr, "Error: cannot delete %s (the previous payload file)\n", stale_payload_path_or_null);
+        is_successful = 0;
+    }
+    /* The files are synchronized already; their creation, renaming and deletion are with their directory */
+    if (wa_tool_sync_directory_of_file(cryptainer_output->final_path) != 0) {
+        fprintf(stderr, "Error: cannot synchronize the directory of %s\n", cryptainer_output->final_path);
         is_successful = 0;
     }
     return is_successful;

@@ -5,6 +5,7 @@
 
 #include "wa_tool_common.h"
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -315,6 +316,46 @@ int wa_tool_remove_file(const char *path)
     return result;
 #else
     return remove(path) == 0 ? 0 : -1;
+#endif
+}
+
+int wa_tool_sync_file(FILE *file)
+{
+    if (fflush(file) != 0) {
+        return -1;
+    }
+#if defined(_WIN32)
+    return _commit(_fileno(file)) == 0 ? 0 : -1;
+#else
+    return fsync(fileno(file)) == 0 ? 0 : -1;
+#endif
+}
+
+int wa_tool_sync_directory_of_file(const char *path)
+{
+#if defined(_WIN32)
+    (void)path; /* Directories cannot be flushed: files are, and renames are written through */
+    return 0;
+#else
+    const char *separator = strrchr(path, '/');
+    size_t length = separator == NULL || separator == path ? 1u : (size_t)(separator - path);
+    char *directory_path = (char *)malloc(length + 1u);
+    int file_descriptor;
+    int result;
+    if (directory_path == NULL) {
+        return -1;
+    }
+    memcpy(directory_path, separator == NULL ? "." : path, length);
+    directory_path[length] = '\0';
+    file_descriptor = open(directory_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    free(directory_path);
+    if (file_descriptor < 0) {
+        return -1;
+    }
+    /* EINVAL: a file system whose directories cannot be synchronized, having nothing to synchronize */
+    result = fsync(file_descriptor) == 0 || errno == EINVAL ? 0 : -1;
+    (void)close(file_descriptor);
+    return result;
 #endif
 }
 

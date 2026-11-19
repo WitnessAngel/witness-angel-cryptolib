@@ -48,7 +48,8 @@ _NAN_ENCODING = b"\xf9\x7e\x00"
 _POSITIVE_INFINITY_ENCODING = b"\xf9\x7c\x00"
 _NEGATIVE_INFINITY_ENCODING = b"\xf9\xfc\x00"
 
-# Same text as the RELAXED Extended JSON writer, but with exactly 3 or 0 fraction digits on read, ASCII digits only
+# Same text as the RELAXED Extended JSON writer, but with 1 to 3 or 0 fraction digits on read, ASCII digits only;
+# beware, "$" also matches before a trailing newline, so the whole match must be checked against the text
 _DATETIME_TEXT_REGEX = re.compile(
     r"^([0-9]{4})-([0-9]{2})-([0-9]{2})[Tt]([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]{1,3}))?([Zz]|[+-][0-9]{2}:[0-9]{2})$"
 )
@@ -168,7 +169,10 @@ def _encode_decimal(value, out):
     sign, digits, exponent = value.as_tuple()
     if not isinstance(exponent, int):  # 'n', 'N' or 'F'
         raise WaCborEncodingError("Unsupported decimal NaN or infinity: %s" % _describe_value(value))
-    mantissa = int("".join(str(digit) for digit in digits)) if digits else 0
+    try:
+        mantissa = int("".join(str(digit) for digit in digits)) if digits else 0
+    except ValueError:  # More digits than the integer string conversion limit of Python, see sys.set_int_max_str_digits()
+        raise WaCborEncodingError("Unsupported decimal of %d digits: %s" % (len(digits), _describe_value(value)))
     if sign:
         if not mantissa:
             raise WaCborEncodingError("Unsupported decimal negative zero: %s" % _describe_value(value))
@@ -465,13 +469,20 @@ class _Decoder:
                 self._fail("Invalid content of tag %d" % DECIMAL_FRACTION_TAG)
             self._position += 1
 
-        sign = 1 if mantissa < 0 else 0
-        digits = tuple(int(digit) for digit in str(abs(mantissa)))
-        return Decimal((sign, digits, exponent))
+        try:
+            sign = 1 if mantissa < 0 else 0
+            digits = tuple(int(digit) for digit in str(abs(mantissa)))
+            return Decimal((sign, digits, exponent))
+        except (ValueError, OverflowError, ArithmeticError):
+            # The mantissa exceeds the integer string conversion limit of Python (see sys.set_int_max_str_digits()),
+            # or the exponent the range of Python decimals (about +/- 10**18)
+            self._fail(
+                "Unsupported decimal fraction (exponent %d, mantissa of %d bits)" % (exponent, mantissa.bit_length())
+            )
 
     def _parse_datetime_text(self, text):
         match = _DATETIME_TEXT_REGEX.match(text)
-        if not match:
+        if not match or match.group(0) != text:  # No fullmatch() in MicroPython
             self._fail("Invalid datetime text %s" % _describe_value(text))
         year, month, day, hour, minute, second, fraction, offset = match.groups()
         microsecond = int(fraction.ljust(3, "0")) * 1000 if fraction else 0

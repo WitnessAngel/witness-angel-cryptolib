@@ -492,6 +492,39 @@ def test_wa_cbor_strict_decoding_scenarios():
         load_from_cbor_bytes(bytes.fromhex("9bffffffffffffffff"))
 
 
+def test_wa_cbor_datetime_text_with_trailing_newline_refused():
+    valid_text = b"2026-01-02T03:04:05Z"
+    assert load_from_cbor_bytes(bytes.fromhex("81c074") + valid_text) == [
+        datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+    ]
+    for invalid_text in [valid_text + b"\n", valid_text + b"\r\n", b"\n" + valid_text, valid_text + b" "]:
+        cbor_bytes = bytes.fromhex("81c0") + bytes([0x60 + len(invalid_text)]) + invalid_text
+        with pytest.raises(WaCborDecodingError, match="Invalid datetime text"):
+            load_from_cbor_bytes(cbor_bytes)
+
+
+def test_wa_cbor_decimal_fractions_beyond_python_limits_refused():
+    # Exponents of major type 0 or 1, but outside the range of Python decimals (about +/- 10**18)
+    for exponent_hex in ["1bffffffffffffffff", "1b0de0b6b3a7640000", "3bffffffffffffffff", "3b1bc16d674ec80000"]:
+        with pytest.raises(WaCborDecodingError, match="Unsupported decimal fraction"):
+            load_from_cbor_bytes(bytes.fromhex("81c482" + exponent_hex + "01"))
+    # The largest exponents of Python decimals still load
+    assert load_from_cbor_bytes(bytes.fromhex("81c4821b0de0b6b3a763ffff01")) == [Decimal("1E+999999999999999999")]
+
+    # Mantissa beyond the integer string conversion limit of Python
+    huge_mantissa_bytes = b"\x01" * 4000  # About 9600 decimal digits
+    cbor_bytes = bytes.fromhex("81c48200c2590fa0") + huge_mantissa_bytes
+    with pytest.raises(WaCborDecodingError, match="Unsupported decimal fraction"):
+        load_from_cbor_bytes(cbor_bytes)
+    assert load_from_cbor_bytes(bytes.fromhex("81c48200c25901f4") + b"\x01" * 500)  # 1200 digits are fine
+
+    huge_decimal = Decimal((0, (1,) * 5000, 0))
+    with pytest.raises(WaCborEncodingError, match="Unsupported decimal of 5000 digits"):
+        dump_to_cbor_bytes([huge_decimal])
+    with pytest.raises(WaCborEncodingError, match="Unsupported decimal of 5000 digits"):
+        check_document_tree([huge_decimal])
+
+
 def _generate_random_text(rnd):
     alphabet = "abcXYZ019 $_-.éà水\U0001f600\n\"\\"
     return "".join(rnd.choice(alphabet) for _ in range(rnd.randint(0, 8)))

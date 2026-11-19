@@ -102,6 +102,19 @@ fn to_c_path(path: &Path) -> String {
     path.display().to_string().replace('\\', "/")
 }
 
+/// A canonical path as C compilers take it: Windows canonical paths start with `\\?\` (`\\?\C:\...`, or
+/// `\\?\UNC\server\share\...` for a network share), which they do not understand.
+fn to_c_include_path(canonical_path: &Path) -> String {
+    let path = to_c_path(canonical_path);
+    if let Some(share_path) = path.strip_prefix("//?/UNC/") {
+        format!("//{share_path}")
+    } else if let Some(local_path) = path.strip_prefix("//?/") {
+        local_path.to_owned()
+    } else {
+        path
+    }
+}
+
 fn main() {
     let manifest_directory = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let output_directory = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));

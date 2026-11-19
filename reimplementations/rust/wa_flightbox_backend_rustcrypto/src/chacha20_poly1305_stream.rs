@@ -57,7 +57,8 @@ impl ChaCha20Poly1305Encryptor for RustCryptoChaCha20Poly1305 {
         nonce: &[u8; CHACHA20_POLY1305_NONCE_SIZE],
         associated_data: &[u8],
     ) -> Result<Self> {
-        let mut cipher = ChaCha20::new(&Array::from(*key), &Array::from(*nonce));
+        // The key is borrowed as an array of the crate, not copied into an unwiped temporary
+        let mut cipher = ChaCha20::new(key.into(), nonce.into());
         // The Poly1305 key is the first half of the keystream block of counter 0; data starts at counter 1
         let mut first_block = [0u8; 64];
         cipher.apply_keystream(&mut first_block);

@@ -7,7 +7,7 @@
 //! the mode crates keep in their own states.
 
 use aes::Aes256Enc;
-use aes::cipher::{Array, BlockCipherEncrypt, KeyInit};
+use aes::cipher::{BlockCipherEncrypt, KeyInit};
 use wa_flightbox::crypto_backend::{AES_256_KEY_SIZE, AES_BLOCK_SIZE, Aes256Encryptor};
 use wa_flightbox::{Error, ErrorKind, Result};
 
@@ -27,8 +27,9 @@ fn check_lengths(input: &[u8], output: &[u8]) -> Result<()> {
 
 impl Aes256Encryptor for RustCryptoAes256 {
     fn new(key: &[u8; AES_256_KEY_SIZE]) -> Result<Self> {
+        // The key is borrowed as an array of the crate, not copied into an unwiped temporary
         Ok(Self {
-            cipher: Aes256Enc::new(&Array::from(*key)),
+            cipher: Aes256Enc::new(key.into()),
         })
     }
 

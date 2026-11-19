@@ -28,7 +28,7 @@ mod chacha20_poly1305_stream;
 mod rsa_public_operation;
 
 use hmac::{Hmac, KeyInit, Mac};
-use ml_kem::{EncapsulationKey768, array::Array};
+use ml_kem::EncapsulationKey768;
 use sha2::{Digest, Sha256, Sha512};
 use wa_flightbox::crypto_backend::{
     CryptoBackend, ML_KEM_768_CIPHERTEXT_SIZE, ML_KEM_768_COINS_SIZE, ML_KEM_768_PUBLIC_KEY_SIZE,
@@ -74,18 +74,20 @@ impl CryptoBackend for RustCryptoBackend {
     }
 
     fn x25519_compute_public_key(private_scalar: &[u8; X25519_KEY_SIZE]) -> Result<[u8; X25519_KEY_SIZE]> {
-        Ok(x25519_dalek::x25519(
-            *private_scalar,
-            x25519_dalek::X25519_BASEPOINT_BYTES,
-        ))
+        Self::x25519_compute_shared_secret(private_scalar, &x25519_dalek::X25519_BASEPOINT_BYTES)
     }
 
     fn x25519_compute_shared_secret(
         private_scalar: &[u8; X25519_KEY_SIZE],
         peer_public_key: &[u8; X25519_KEY_SIZE],
     ) -> Result<[u8; X25519_KEY_SIZE]> {
-        // A low-order peer key gives zeros, which the caller checks
-        Ok(x25519_dalek::x25519(*private_scalar, *peer_public_key))
+        // The same Montgomery ladder as x25519_dalek::x25519(), with the scalar copied into a type wiped when dropped
+        // rather than passed by value (x25519-dalek still copies it internally, unwiped). A low-order peer key gives
+        // zeros, which the caller checks.
+        let secret = x25519_dalek::StaticSecret::from(*private_scalar);
+        Ok(secret
+            .diffie_hellman(&x25519_dalek::PublicKey::from(*peer_public_key))
+            .to_bytes())
     }
 
     fn rsa_compute_public_operation(
@@ -104,11 +106,10 @@ impl CryptoBackend for RustCryptoBackend {
         shared_secret: &mut [u8; ML_KEM_768_SHARED_SECRET_SIZE],
     ) -> Result<()> {
         // The key decoding includes the modulus check of FIPS 203
-        let encapsulation_key = EncapsulationKey768::new(&Array::from(*public_key))
-            .map_err(|_| Error::new(ErrorKind::KeyConstraintViolation))?;
-        let mut randomness = Array::from(*coins);
-        let (kem_ciphertext, mut kem_shared_secret) = encapsulation_key.encapsulate_deterministic(&randomness);
-        randomness.zeroize();
+        let encapsulation_key =
+            EncapsulationKey768::new(public_key.into()).map_err(|_| Error::new(ErrorKind::KeyConstraintViolation))?;
+        // The randomness is borrowed as an array of the crate, not copied
+        let (kem_ciphertext, mut kem_shared_secret) = encapsulation_key.encapsulate_deterministic(coins.into());
         ciphertext.copy_from_slice(kem_ciphertext.as_slice());
         shared_secret.copy_from_slice(kem_shared_secret.as_slice());
         kem_shared_secret.zeroize();

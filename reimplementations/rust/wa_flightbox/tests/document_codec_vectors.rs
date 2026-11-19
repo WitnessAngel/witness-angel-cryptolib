@@ -120,6 +120,49 @@ fn wacbor_specification_vectors() {
     }
 }
 
+/// A map of `entry_count` entries whose keys come in descending order.
+fn map_with_descending_keys(entry_count: u32) -> Vec<u8> {
+    let mut cbor = vec![0xBA];
+    cbor.extend_from_slice(&entry_count.to_be_bytes());
+    for index in (0..entry_count).rev() {
+        cbor.push(0x66);
+        cbor.extend_from_slice(format!("{index:06x}").as_bytes());
+        cbor.push(0x00);
+    }
+    cbor
+}
+
+/// Decoding time does not depend on the order of map keys: 200,000 keys in descending order took minutes when
+/// each entry was inserted at its sorted position, every insertion moving all the entries before it.
+#[test]
+fn a_large_map_with_descending_keys_is_decoded_quickly() {
+    let entry_count = 200_000;
+    let cbor = map_with_descending_keys(entry_count);
+    let start = std::time::Instant::now();
+    let document = decode_document_from_cbor(&cbor, &EncryptorLimits::default()).unwrap();
+    let elapsed = start.elapsed();
+    let map = document.as_map().unwrap();
+    assert_eq!(map.len(), entry_count as usize);
+    assert_eq!(map.entry_at(0).map(|(key, _)| key), Some("000000"));
+    assert_eq!(map.entry_at(199_999).map(|(key, _)| key), Some("030d3f"));
+    assert!(map.iter().zip(map.iter().skip(1)).all(|(left, right)| left.0 < right.0));
+    // A fraction of a second, even unoptimized: the bound only tells linearithmic time from quadratic time
+    assert!(elapsed.as_secs() < 5, "decoded in {elapsed:?}");
+
+    // With a duplicate of the first key at the end: refused as fast
+    let mut cbor = map_with_descending_keys(entry_count + 1);
+    let duplicate_position = cbor.len() - 8;
+    cbor.copy_within(5..13, duplicate_position);
+    let start = std::time::Instant::now();
+    assert_eq!(
+        decode_document_from_cbor(&cbor, &EncryptorLimits::default())
+            .unwrap_err()
+            .kind(),
+        ErrorKind::DecodingError
+    );
+    assert!(start.elapsed().as_secs() < 5, "refused in {:?}", start.elapsed());
+}
+
 /// The metadata decoding entry applies the configured depth limit.
 #[test]
 fn decoding_applies_the_depth_limit() {

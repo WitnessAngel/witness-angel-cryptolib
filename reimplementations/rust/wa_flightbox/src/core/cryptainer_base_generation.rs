@@ -74,8 +74,9 @@ pub(crate) fn generate_cryptainer_base<B: CryptoBackend>(
     is_offloaded: bool,
 ) -> Result<CryptainerBase> {
     let cryptainer_uid = generate_uuid0(hooks)?; // ALWAYS UNIQUE, drawn first
-    let mut cryptainer = device_profile.cryptoconf().clone();
-    let metadata_copy = cryptainer_metadata.cloned();
+    // Copies of trees whose sizes come from inputs: out of memory is an error there
+    let mut cryptainer = device_profile.cryptoconf().try_clone()?;
+    let metadata_copy = cryptainer_metadata.map(Value::try_clone).transpose()?;
     let mut context = KeyCipherContext::<B> {
         hooks,
         device_profile,

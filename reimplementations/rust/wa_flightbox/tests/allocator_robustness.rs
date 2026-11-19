@@ -20,7 +20,7 @@ use std::cell::Cell;
 
 use wa_flightbox::{
     CryptainerEncryptor, DeviceProfile, DocumentFormat, EncryptorLimits, EncryptorOptions, ErrorKind, Map, OutputSink,
-    SinkError, Value, internals,
+    SinkError, Value, decode_document_from_cbor, internals,
 };
 use wa_flightbox_backend_conformance::test_support::{
     DeterministicHooks, device_profile_sample, enabled_document_formats,
@@ -489,5 +489,129 @@ fn the_peak_allocation_of_offloaded_encryptions_does_not_depend_on_the_payload()
             // The peak is reached at creation, in the nested serializations of the key ciphertexts
             assert!(highest < 256 * 1024, "{sample_name}, {format:?}: peaks {peaks:?}");
         }
+    }
+}
+
+/// A map of `entry_count` entries `"<index>": [index, h'..', "text"]`, in descending key order.
+fn large_map_document(entry_count: u16) -> Vec<u8> {
+    let mut cbor = vec![0xB9];
+    cbor.extend_from_slice(&entry_count.to_be_bytes());
+    for index in (0..entry_count).rev() {
+        cbor.push(0x65);
+        cbor.extend_from_slice(format!("{index:05}").as_bytes());
+        cbor.push(0x83);
+        cbor.push(0x19);
+        cbor.extend_from_slice(&index.to_be_bytes());
+        cbor.extend_from_slice(b"\x43\x01\x02\x03\x64text");
+    }
+    cbor
+}
+
+#[test]
+fn decoding_beyond_the_allocator_limit_is_an_out_of_memory_error() {
+    let mut documents = vec![("large map".to_string(), large_map_document(600))];
+    for sample_name in SAMPLE_NAMES {
+        documents.push((sample_name.to_string(), device_profile_sample(sample_name)));
+    }
+    let limits = EncryptorLimits::default();
+    for (name, cbor) in documents {
+        let (result, tracking) = track(&[], None, || decode_document_from_cbor(&cbor, &limits).map(drop));
+        result.unwrap();
+        assert_eq!(tracking.leaked_bytes, 0, "{name}");
+        let peak = tracking.peak_live_bytes;
+        assert!(peak > 1000, "{name}: {tracking:?}");
+        // Every allocation of the decoder is refused in turn, somewhere in these runs: none aborts the process
+        let mut refused_run_count = 0;
+        for live_bytes_limit in (0..peak).step_by(usize::try_from(peak / 300).unwrap().max(1)) {
+            let (result, tracking) = track(&[], Some(live_bytes_limit), || {
+                decode_document_from_cbor(&cbor, &limits).map(drop)
+            });
+            let context = format!("{name}, limit {live_bytes_limit}: {tracking:?}");
+            assert_eq!(result.unwrap_err().kind(), ErrorKind::OutOfMemory, "{context}");
+            assert!(tracking.refused_allocation_count >= 1, "{context}");
+            assert_eq!(tracking.leaked_bytes, 0, "{context}");
+            refused_run_count += 1;
+        }
+        assert!(refused_run_count >= 300, "{name}");
+        let (result, _) = track(&[], Some(peak), || decode_document_from_cbor(&cbor, &limits).map(drop));
+        result.unwrap();
+    }
+}
+
+#[test]
+fn reservations_do_not_follow_the_counts_declared_by_the_input() {
+    // 60 nested arrays and maps, each declaring 65536 items (32768 entries for a map) and holding one, around a
+    // byte string of 64 KiB: every count passes the check against the length of what remains
+    const BYTE_STRING_LENGTH: usize = 65536;
+    const CONTAINER_COUNT: usize = 60;
+    let mut cbor = Vec::new();
+    for container_index in 0..CONTAINER_COUNT {
+        let is_map = container_index % 3 == 2;
+        // What follows this head: at least the byte string, whatever the heads in between
+        let remaining_length = BYTE_STRING_LENGTH;
+        if is_map {
+            cbor.push(0xBA);
+            cbor.extend_from_slice(&u32::try_from(remaining_length / 2).unwrap().to_be_bytes());
+            cbor.extend_from_slice(b"\x61k");
+        } else {
+            cbor.push(0x9A);
+            cbor.extend_from_slice(&u32::try_from(remaining_length).unwrap().to_be_bytes());
+        }
+    }
+    cbor.push(0x5A);
+    cbor.extend_from_slice(&u32::try_from(BYTE_STRING_LENGTH).unwrap().to_be_bytes());
+    cbor.extend_from_slice(&vec![0x5a; BYTE_STRING_LENGTH]);
+    let limits = EncryptorLimits::default();
+    let (result, tracking) = track(&[], None, || decode_document_from_cbor(&cbor, &limits).map(drop));
+    // The innermost container lacks its second item
+    assert_eq!(result.unwrap_err().kind(), ErrorKind::DecodingError);
+    assert_eq!(tracking.leaked_bytes, 0);
+    // The byte string, and a few items per container: it was 32 bytes per declared item, in each container
+    assert!(
+        tracking.peak_live_bytes < 2 * BYTE_STRING_LENGTH as isize,
+        "{} bytes of input: {tracking:?}",
+        cbor.len()
+    );
+}
+
+#[test]
+fn copies_of_trees_beyond_the_allocator_limit_are_out_of_memory_errors() {
+    let device_profile = DeviceProfile::load_from_cbor(
+        &device_profile_sample("nested_all_layer_kinds"),
+        &EncryptorLimits::default(),
+    )
+    .unwrap();
+    let large_metadata = Value::Map(
+        Map::from_entries([
+            ("device_id", Value::from("fb-07")),
+            ("recording", Value::Bytes(vec![0x5a; 200_000])),
+            (
+                "sensors",
+                Value::Array((0..2000).map(|index| Value::from(format!("sensor-{index}"))).collect()),
+            ),
+        ])
+        .unwrap(),
+    );
+    // (metadata, limit): the copy of the cryptoconf does not fit, then the copy of the metadata does not
+    for (metadata, live_bytes_limit) in [
+        (None, 64isize),
+        (Some(&large_metadata), 64),
+        (Some(&large_metadata), 100_000),
+        (Some(&large_metadata), 210_000),
+    ] {
+        let mut hooks = DeterministicHooks::new(94);
+        let (result, tracking) = track(&[], Some(live_bytes_limit), || {
+            CryptainerEncryptor::<RustCryptoBackend>::create(
+                &device_profile,
+                metadata,
+                &EncryptorOptions::default(),
+                &mut hooks,
+            )
+            .map(drop)
+        });
+        let context = format!("limit {live_bytes_limit}: {tracking:?}");
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::OutOfMemory, "{context}");
+        assert!(tracking.refused_allocation_count >= 1, "{context}");
+        assert_eq!(tracking.leaked_bytes, 0, "{context}");
     }
 }

@@ -120,6 +120,51 @@ impl Value {
     pub fn get(&self, key: &str) -> Option<&Value> {
         self.as_map().and_then(|map| map.get(key))
     }
+
+    /// A deep copy, like `clone()`, whose allocations are fallible: `ErrorKind::OutOfMemory` when one is refused.
+    /// For trees whose size comes from an input (a cryptoconf, metadata), and whose nesting was checked.
+    pub(crate) fn try_clone(&self) -> Result<Self> {
+        Ok(match self {
+            Value::Null => Value::Null,
+            Value::Bool(boolean) => Value::Bool(*boolean),
+            Value::Integer(integer) => Value::Integer(*integer),
+            Value::Text(text) => Value::Text(try_clone_text(text)?),
+            Value::Bytes(bytes) => {
+                let mut copy = Vec::new();
+                copy.try_reserve_exact(bytes.len())
+                    .map_err(|_| ErrorKind::OutOfMemory)?;
+                copy.extend_from_slice(bytes);
+                Value::Bytes(copy)
+            }
+            Value::Uuid(uuid) => Value::Uuid(*uuid),
+            Value::Array(items) => {
+                let mut copy = Vec::new();
+                copy.try_reserve_exact(items.len())
+                    .map_err(|_| ErrorKind::OutOfMemory)?;
+                for item in items {
+                    copy.push(item.try_clone()?);
+                }
+                Value::Array(copy)
+            }
+            Value::Map(map) => {
+                let mut entries = Vec::new();
+                entries
+                    .try_reserve_exact(map.entries.len())
+                    .map_err(|_| ErrorKind::OutOfMemory)?;
+                for (key, value) in &map.entries {
+                    entries.push((try_clone_text(key)?, value.try_clone()?));
+                }
+                Value::Map(Map { entries })
+            }
+        })
+    }
+}
+
+fn try_clone_text(text: &str) -> Result<String> {
+    let mut copy = String::new();
+    copy.try_reserve_exact(text.len()).map_err(|_| ErrorKind::OutOfMemory)?;
+    copy.push_str(text);
+    Ok(copy)
 }
 
 impl From<bool> for Value {
@@ -263,6 +308,24 @@ impl Map {
         self.entries.get(index).map(|(key, value)| (key.as_str(), value))
     }
 
+    /// Sort `entries` by key, and tell whether two of them have the same key. Without allocation.
+    pub(crate) fn sort_entries_and_find_duplicate_key(entries: &mut [(String, Value)]) -> bool {
+        // Unstable: the order of equal keys does not matter, since they are refused
+        entries.sort_unstable_by(|(left_key, _), (right_key, _)| left_key.as_bytes().cmp(right_key.as_bytes()));
+        entries
+            .windows(2)
+            .any(|pair| matches!(pair, [(left_key, _), (right_key, _)] if left_key == right_key))
+    }
+
+    /// A map from entries in any order, sorted here at once (adding them one by one takes quadratic time when they
+    /// do not come in key order). `None` when two entries have the same key.
+    pub(crate) fn from_unsorted_entries(mut entries: Vec<(String, Value)>) -> Option<Self> {
+        if Self::sort_entries_and_find_duplicate_key(&mut entries) {
+            return None;
+        }
+        Some(Self { entries })
+    }
+
     /// A map from entries. A duplicate key gives `ErrorKind::InvalidArgument`.
     pub fn from_entries<K: Into<String>, V: Into<Value>>(entries: impl IntoIterator<Item = (K, V)>) -> Result<Self> {
         let mut map = Self::new();
@@ -375,6 +438,70 @@ mod tests {
             Some(&[1u8, 2, 3][..])
         );
         assert_eq!(source_map.len(), 1);
+    }
+
+    #[test]
+    fn a_fallible_copy_is_a_clone() {
+        let inner = Map::from_entries([
+            ("bytes", Value::Bytes(vec![1, 2, 3])),
+            ("uuid", Value::Uuid([7; 16])),
+            ("empty", Value::Map(Map::new())),
+        ])
+        .unwrap();
+        let source = Value::Array(vec![
+            Value::Map(inner),
+            Value::Text("text".into()),
+            Value::Null,
+            Value::Bool(true),
+            Value::Integer(-5),
+            Value::Array(vec![]),
+        ]);
+        let mut copy = source.try_clone().unwrap();
+        assert_eq!(copy, source);
+        assert_eq!(copy, source.clone());
+        if let Some(Value::Map(map)) = copy.as_array_mut().and_then(|items| items.first_mut()) {
+            map.set("bytes", Value::Bytes(vec![9]));
+        }
+        assert_ne!(copy, source);
+        assert_eq!(
+            source
+                .as_array()
+                .and_then(|items| items.first())
+                .and_then(|map| map.get("bytes")),
+            Some(&Value::Bytes(vec![1, 2, 3]))
+        );
+    }
+
+    #[test]
+    fn unsorted_entries_are_sorted_at_once_and_duplicates_found() {
+        let entries = |keys: &[&str]| -> Vec<(String, Value)> {
+            keys.iter()
+                .zip(0i64..)
+                .map(|(key, index)| (String::from(*key), Value::Integer(index)))
+                .collect()
+        };
+        let map = Map::from_unsorted_entries(entries(&["b", "a", "aa", "\u{e9}", "Z", ""])).unwrap();
+        let sorted: Vec<_> = map.iter().collect();
+        assert_eq!(
+            sorted,
+            [
+                ("", &Value::Integer(5)),
+                ("Z", &Value::Integer(4)),
+                ("a", &Value::Integer(1)),
+                ("aa", &Value::Integer(2)),
+                ("b", &Value::Integer(0)),
+                ("\u{e9}", &Value::Integer(3)),
+            ]
+        );
+        assert_eq!(
+            map,
+            Map::from_entries(entries(&["b", "a", "aa", "\u{e9}", "Z", ""])).unwrap()
+        );
+        assert_eq!(Map::from_unsorted_entries(Vec::new()), Some(Map::new()));
+        assert_eq!(Map::from_unsorted_entries(entries(&["b", "a", "c", "a"])), None);
+        assert_eq!(Map::from_unsorted_entries(entries(&["a", "a"])), None);
+        assert!(!Map::sort_entries_and_find_duplicate_key(&mut entries(&["b", "a"])));
+        assert!(Map::sort_entries_and_find_duplicate_key(&mut entries(&["b", "a", "b"])));
     }
 
     #[test]

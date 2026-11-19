@@ -12,7 +12,10 @@
 //! - `ErrorKind::NestingTooDeep`: arrays and maps nested beyond the limit;
 //! - `ErrorKind::DecodingError`: everything else.
 //!
-//! No input makes it panic: every read is bounds-checked, and the recursion is bounded by the depth limit.
+//! No input makes it panic: every read is bounds-checked, and the recursion is bounded by the depth limit. Every
+//! allocation is fallible (`ErrorKind::OutOfMemory`), and what is reserved ahead of the items of an array or of a
+//! map does not follow the count that the input declares beyond a few items. The entries of a map are gathered in
+//! input order, then sorted at once: decoding time stays linearithmic whatever the order of the keys.
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -36,6 +39,9 @@ const NEGATIVE_BIGNUM_TAG: u64 = 3;
 const DECIMAL_FRACTION_TAG: u64 = 4;
 const UUID_TAG: u64 = 37;
 const SELF_DESCRIBED_TAG: u64 = 55799;
+/// Arrays and maps reserve at most this many items from their declared count, then grow as items are decoded: a
+/// count is only bounded by the bytes that remain, which each nested container would multiply otherwise.
+const MAXIMUM_PRERESERVED_ITEM_COUNT: usize = 16;
 
 fn decoding_error() -> Error {
     Error::new(ErrorKind::DecodingError)
@@ -43,6 +49,10 @@ fn decoding_error() -> Error {
 
 fn unsupported_type() -> Error {
     Error::new(ErrorKind::UnsupportedType)
+}
+
+fn out_of_memory() -> Error {
+    Error::new(ErrorKind::OutOfMemory)
 }
 
 #[derive(Clone, Copy)]
@@ -94,26 +104,20 @@ impl<'a> Decoder<'a> {
         probe.read_head()
     }
 
-    /// Definite-length byte or text string content, bounds-checked
+    /// Definite-length byte or text string content, bounds-checked. The UTF-8 of a text is checked by `read_text`.
     fn read_string_content(&mut self, head: &Head) -> Result<&'a [u8]> {
         if head.additional_information == INDEFINITE_LENGTH {
             return Err(unsupported_type());
         }
         let length = usize::try_from(head.argument).map_err(|_| decoding_error())?;
-        let content = self.take(length)?;
-        if head.major_type == MAJOR_TEXT && core::str::from_utf8(content).is_err() {
-            return Err(decoding_error());
-        }
-        Ok(content)
+        self.take(length)
     }
 
     fn read_text(&mut self, head: &Head) -> Result<String> {
         let content = self.read_string_content(head)?;
         let text = core::str::from_utf8(content).map_err(|_| decoding_error())?;
         let mut owned = String::new();
-        owned
-            .try_reserve_exact(text.len())
-            .map_err(|_| Error::new(ErrorKind::OutOfMemory))?;
+        owned.try_reserve_exact(text.len()).map_err(|_| out_of_memory())?;
         owned.push_str(text);
         Ok(owned)
     }
@@ -132,26 +136,32 @@ impl<'a> Decoder<'a> {
         let count = count.ok_or_else(decoding_error)?;
         let mut items = Vec::new();
         items
-            .try_reserve_exact(count)
-            .map_err(|_| Error::new(ErrorKind::OutOfMemory))?;
+            .try_reserve_exact(count.min(MAXIMUM_PRERESERVED_ITEM_COUNT))
+            .map_err(|_| out_of_memory())?;
         for _ in 0..count {
-            items.push(self.decode_item(depth)?);
+            let item = self.decode_item(depth)?;
+            items.try_reserve(1).map_err(|_| out_of_memory())?;
+            items.push(item);
         }
         Ok(Value::Array(items))
     }
 
-    fn decode_map_entry(&mut self, map: &mut Map, depth: usize) -> Result<()> {
+    /// Decode the next entry at the end of `entries`, which are in input order. The key is stored before its value
+    /// is decoded, so that a failure leaves in `entries` every key read so far.
+    fn decode_map_entry(&mut self, entries: &mut Vec<(String, Value)>, depth: usize) -> Result<()> {
         let key_head = self.peek_head()?;
         if key_head.major_type != MAJOR_TEXT {
             return Err(decoding_error()); // Map key is not a text string
         }
         let key_head = self.read_head()?;
         let key = self.read_text(&key_head)?;
-        if map.contains_key(&key) {
-            return Err(decoding_error()); // Duplicate map key
-        }
+        entries.try_reserve(1).map_err(|_| out_of_memory())?;
+        entries.push((key, Value::Null));
         let value = self.decode_item(depth)?;
-        map.insert(key, value).map_err(|_| Error::new(ErrorKind::InternalError))
+        if let Some((_, value_slot)) = entries.last_mut() {
+            *value_slot = value;
+        }
+        Ok(())
     }
 
     fn decode_map(&mut self, head: &Head, depth: usize) -> Result<Value> {
@@ -166,10 +176,22 @@ impl<'a> Decoder<'a> {
             .ok()
             .filter(|count| *count <= self.data.len() / 2);
         let count = count.ok_or_else(decoding_error)?;
-        let mut map = Map::new();
+        let mut entries = Vec::new();
+        entries
+            .try_reserve_exact(count.min(MAXIMUM_PRERESERVED_ITEM_COUNT))
+            .map_err(|_| out_of_memory())?;
         for _ in 0..count {
-            self.decode_map_entry(&mut map, depth)?;
+            if let Err(error) = self.decode_map_entry(&mut entries, depth) {
+                // A duplicate key is a fault found where that key is read: before the faults of its value and of
+                // what follows, whose error may be of another kind (the verdict of the C decoder)
+                return Err(if Map::sort_entries_and_find_duplicate_key(&mut entries) {
+                    decoding_error()
+                } else {
+                    error
+                });
+            }
         }
+        let map = Map::from_unsorted_entries(entries).ok_or_else(decoding_error)?; // Duplicate map key
         if map.len() == 1 && map.iter().any(|(key, _)| is_extended_json_keyword(key)) {
             return Err(decoding_error()); // Extended JSON keyword map
         }
@@ -224,9 +246,7 @@ impl<'a> Decoder<'a> {
             MAJOR_BYTES => {
                 let content = self.read_string_content(&head)?;
                 let mut bytes = Vec::new();
-                bytes
-                    .try_reserve_exact(content.len())
-                    .map_err(|_| Error::new(ErrorKind::OutOfMemory))?;
+                bytes.try_reserve_exact(content.len()).map_err(|_| out_of_memory())?;
                 bytes.extend_from_slice(content);
                 Ok(Value::Bytes(bytes))
             }
@@ -390,6 +410,102 @@ mod tests {
         // Extended JSON keyword map
         assert_eq!(decode(&[0xA1, 0x65, b'$', b'u', b'u', b'i', b'd', 0x60]), invalid);
         assert!(decode(&[0xA2, 0x65, b'$', b'u', b'u', b'i', b'd', 0x60, 0x61, b'a', 0x60]).is_ok());
+    }
+
+    #[test]
+    fn duplicate_keys_are_found_in_any_key_order() {
+        let invalid = Err(ErrorKind::DecodingError);
+        // {"b": 0, "a": 0, "b": 0}, {"c": 0, "a": 0, "b": 0, "a": 0}, {"a": 0, "b": 0, "c": 0, "c": 0}
+        assert_eq!(decode(b"\xA3\x61b\x00\x61a\x00\x61b\x00"), invalid);
+        assert_eq!(decode(b"\xA4\x61c\x00\x61a\x00\x61b\x00\x61a\x00"), invalid);
+        assert_eq!(decode(b"\xA4\x61a\x00\x61b\x00\x61c\x00\x61c\x00"), invalid);
+        // A key and one of its prefixes are different keys
+        let document = decode(b"\xA3\x62ab\x00\x61a\x01\x60\x02").unwrap();
+        let keys: Vec<_> = document.as_map().unwrap().iter().collect();
+        assert_eq!(
+            keys,
+            [
+                ("", &Value::Integer(2)),
+                ("a", &Value::Integer(1)),
+                ("ab", &Value::Integer(0))
+            ]
+        );
+    }
+
+    /// A duplicate key is the fault reported when it is read before another fault, whatever the kind of the latter:
+    /// the order of the checks is part of the verdicts shared with the C decoder.
+    #[test]
+    fn a_duplicate_key_is_reported_before_the_faults_that_follow_it() {
+        let invalid = Err(ErrorKind::DecodingError);
+        let unsupported = Err(ErrorKind::UnsupportedType);
+        let half_float = b"\xF9\x3C\x00";
+        let document = |pieces: &[&[u8]]| decode(&pieces.concat());
+        // {"a": 0, "a": 1.0}: the value of the duplicate is not looked at
+        assert_eq!(document(&[b"\xA2\x61a\x00\x61a", half_float]), invalid);
+        // {"a": 0, "b": 0, "a": 0, "c": 1.0}, and with an indefinite-length key after the duplicate
+        assert_eq!(
+            document(&[b"\xA4\x61a\x00\x61b\x00\x61a\x00\x61c", half_float]),
+            invalid
+        );
+        assert_eq!(
+            document(&[b"\xA4\x61a\x00\x61b\x00\x61a\x00\x7F\x61c\xFF\x00"]),
+            invalid
+        );
+        // {"a": 0, "a": {"x": 1.0}}, and the duplicate above a too deep value
+        assert_eq!(document(&[b"\xA2\x61a\x00\x61a\xA1\x61x", half_float]), invalid);
+        assert_eq!(document(&[b"\xA2\x61a\x00\x61a", &[0x81; 70]]), invalid);
+        // {"a": 0, "a": 0} cut after its second key, and declaring a third entry that is missing
+        assert_eq!(document(&[b"\xA2\x61a\x00\x61a"]), invalid);
+        assert_eq!(document(&[b"\xA3\x61a\x00\x61a\x00"]), invalid);
+        // The other way round: {"a": 0, "b": 1.0, "a": 0}, {"a": 0, "b": {"x": 1.0}, "a": 0}
+        assert_eq!(
+            document(&[b"\xA3\x61a\x00\x61b", half_float, b"\x61a\x00"]),
+            unsupported
+        );
+        assert_eq!(
+            document(&[b"\xA3\x61a\x00\x61b\xA1\x61x", half_float, b"\x61a\x00"]),
+            unsupported
+        );
+        assert_eq!(
+            document(&[b"\xA3\x61a\x00\x61b", &[0x81; 70], b"\x61a\x00"]),
+            Err(ErrorKind::NestingTooDeep)
+        );
+        // An indefinite-length key is unsupported, when no duplicate precedes it
+        assert_eq!(document(&[b"\xA2\x61a\x00\x7F\x61c\xFF\x00"]), unsupported);
+        // Inside an inner map: {"m": {"a": 0, "a": 1.0}, "z": 1.0}
+        assert_eq!(
+            document(&[b"\xA2\x61m\xA2\x61a\x00\x61a", half_float, b"\x61z", half_float]),
+            invalid
+        );
+    }
+
+    #[test]
+    fn large_arrays_and_maps_grow_beyond_their_first_reservation() {
+        let item_count = 1000u16;
+        let mut array = vec![0x99];
+        array.extend_from_slice(&item_count.to_be_bytes());
+        let mut map = vec![0xB9];
+        map.extend_from_slice(&item_count.to_be_bytes());
+        for index in (0..item_count).rev() {
+            array.extend_from_slice(&[0x19]);
+            array.extend_from_slice(&index.to_be_bytes());
+            // Keys "000" to "999", in descending order
+            map.extend_from_slice(&[0x63]);
+            map.extend_from_slice(&[index / 100, index / 10 % 10, index % 10].map(|digit| b'0' + digit as u8));
+            map.extend_from_slice(&[0x19]);
+            map.extend_from_slice(&index.to_be_bytes());
+        }
+        let array = decode(&array).unwrap();
+        let items = array.as_array().unwrap();
+        assert_eq!(items.len(), 1000);
+        assert_eq!(items.first(), Some(&Value::Integer(999)));
+        assert_eq!(items.last(), Some(&Value::Integer(0)));
+        let map = decode(&map).unwrap();
+        let map = map.as_map().unwrap();
+        assert_eq!(map.len(), 1000);
+        assert_eq!(map.entry_at(0), Some(("000", &Value::Integer(0))));
+        assert_eq!(map.entry_at(457), Some(("457", &Value::Integer(457))));
+        assert_eq!(map.get("999"), Some(&Value::Integer(999)));
     }
 
     #[test]

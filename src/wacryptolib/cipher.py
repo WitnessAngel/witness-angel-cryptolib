@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import logging
+import math
 from typing import BinaryIO
 
 from schema import Schema, Or, Forbidden
@@ -224,6 +225,21 @@ def _decrypt_via_chacha20_poly1305(cipherdict: dict, key_dict: dict, verify_inte
     return plaintext
 
 
+def _check_rsa_encryption_key(key):
+    """Check the size and the public numbers of an RSA key before encrypting with it, the same way for all crypto
+    backends, whose key imports differ (e.g. pycryptodome imports public keys with an even exponent, although
+    what they encrypt can never be decrypted)."""
+    _key_length_bits = key.size_in_bits() if hasattr(key, "size_in_bits") else key.bit_size
+    _check_asymmetric_key_length_bits(_key_length_bits)
+    n, e = int(key.n), int(key.e)
+    if not n & 1:
+        raise ValueError("The RSA modulus must be odd")
+    if not (3 <= e < n and e & 1):
+        raise ValueError("The RSA public exponent must be odd, at least 3 and smaller than the modulus")
+    if math.gcd(n, e) != 1:
+        raise ValueError("The RSA public exponent and modulus must be coprime")
+
+
 def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
     """Encrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 
@@ -232,8 +248,7 @@ def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
 
     :return: a dict with field `digest_list`, containing bytestring chunks of variable width."""
     key = key_dict["key"]
-    _key_length_bits = key.size_in_bits() if hasattr(key, "size_in_bits") else key.bit_size
-    _check_asymmetric_key_length_bits(_key_length_bits)
+    _check_rsa_encryption_key(key)
 
     plaintext_chunks = split_as_chunks(plaintext, chunk_size=RSA_OAEP_CHUNKS_SIZE,
                                        must_pad=False, accept_incomplete_chunk=True)

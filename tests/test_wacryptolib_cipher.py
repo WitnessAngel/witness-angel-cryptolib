@@ -200,6 +200,51 @@ def test_rsa_oaep_asymmetric_encryption_and_decryption():
         )
 
 
+def test_rsa_oaep_encryption_refuses_invalid_public_numbers():
+    from types import SimpleNamespace
+
+    public_key = wacryptolib.keygen.generate_keypair(key_algo="RSA_OAEP", serialize=False)["public_key"]
+    n, e = int(public_key.n), int(public_key.e)
+    assert e == 65537
+
+    def _encrypt(key):
+        return wacryptolib.cipher.encrypt_bytestring(key_dict=dict(key=key), plaintext=b"abc", cipher_algo="RSA_OAEP")
+
+    assert _encrypt(public_key)["ciphertext_chunks"]
+
+    # Backends import some of these keys (e.g. pycryptodome accepts even exponents), so wacryptolib checks them itself
+    for wrong_n, wrong_e, error_regex in [
+        (n, 0, "public exponent"),
+        (n, 1, "public exponent"),  # Would leave the padded plaintext unencrypted
+        (n, 2, "public exponent"),  # Even exponents can't be inverted, so nothing could decrypt
+        (n, 4, "public exponent"),
+        (n, 65536, "public exponent"),
+        (n, n, "public exponent"),
+        (n, n + 2, "public exponent"),
+        (n - 1, e, "modulus must be odd"),
+        (n * 3, 3, "coprime"),
+        (n >> 1 | 1, e, "asymmetric key length"),  # 2047 bits
+    ]:
+        fake_key = SimpleNamespace(n=wrong_n, e=wrong_e, bit_size=wrong_n.bit_length())  # Rejected before any backend use
+        with pytest.raises(EncryptionError, match=error_regex):
+            _encrypt(fake_key)
+    for valid_e in (3, 17, 65537, n - 2):
+        wacryptolib.cipher._check_rsa_encryption_key(SimpleNamespace(n=n, e=valid_e, bit_size=n.bit_length()))
+
+
+@pytest.mark.requires_pycryptodome
+def test_rsa_oaep_encryption_refuses_imported_key_with_even_exponent():
+    skip_if_fallback_backend("Building RSA keys with arbitrary public numbers")
+    from Crypto.PublicKey import RSA
+
+    public_key = wacryptolib.keygen.generate_keypair(key_algo="RSA_OAEP", serialize=False)["public_key"]
+    for wrong_e in (2, 4, 65536):
+        key_pem = RSA.construct((public_key.n, wrong_e), consistency_check=False).export_key()
+        key = load_asymmetric_key_from_pem_bytestring(key_pem, key_algo="RSA_OAEP")  # Imported by pycryptodome
+        with pytest.raises(EncryptionError, match="public exponent must be odd"):
+            wacryptolib.cipher.encrypt_bytestring(key_dict=dict(key=key), plaintext=b"abc", cipher_algo="RSA_OAEP")
+
+
 @pytest.mark.parametrize("plaintext_length", [0, 10, 61, 500])
 def test_ecies_x25519_asymmetric_encryption_and_decryption(plaintext_length):
     cipher_algo = "ECIES_X25519"

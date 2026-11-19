@@ -120,7 +120,12 @@ class CryptainerEncryptor(CryptainerBase):
         super().__init__(**kwargs)
         if signature_policy is None:
             signature_policy = SIGNATURE_POLICIES.ATTEMPT_SIGNING  # Sensible default
-        assert getattr(SIGNATURE_POLICIES, signature_policy), signature_policy
+        if signature_policy not in (
+            SIGNATURE_POLICIES.SKIP_SIGNING,
+            SIGNATURE_POLICIES.ATTEMPT_SIGNING,
+            SIGNATURE_POLICIES.REQUIRE_SIGNING,
+        ):  # Not an assert (python -O), nor a getattr() which accepts any attribute name of the class
+            raise ValueError("Unknown signature policy %r" % (signature_policy,))
         self._signature_policy = signature_policy
         if key_ciphertext_format not in KEY_CIPHERTEXT_FORMATS:  # Not an assert (python -O)
             raise ValueError("Unknown key ciphertext format %r" % (key_ciphertext_format,))
@@ -208,7 +213,8 @@ class CryptainerEncryptor(CryptainerBase):
             payload_stream = payload
             payload = payload_stream.read()
             # DO NOT delete the file, e.g. it might come from CLI!
-        assert isinstance(payload, bytes), type(payload)
+        if not isinstance(payload, bytes):  # Not an assert (python -O)
+            raise TypeError("Payload must be bytes or a readable binary file object, not %s" % type(payload).__name__)
         ## FIXME LATER ADD THIS - assert payload, payload  # No encryption must be launched if we have no payload to process!
         return payload
 

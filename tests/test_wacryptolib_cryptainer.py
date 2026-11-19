@@ -80,8 +80,10 @@ from wacryptolib.cryptainer import (
 from wacryptolib.exceptions import (
     DecryptionError,
     DecryptionIntegrityError,
+    EncryptionError,
     ValidationError,
     SchemaValidationError,
+    SignatureCreationError,
     SignatureVerificationError,
     KeyDoesNotExist,
     KeystoreDoesNotExist,
@@ -848,6 +850,342 @@ def test_cryptainer_encryption_pipeline_autocleanup(tmp_path):
     assert not output_data_stream2.closed
     del pipeline2
     assert output_data_stream2.closed  # Autoclosed in __del__()
+
+def _create_streamed_cryptainer_with_savegame(cryptainer_filepath):
+    """Returns the paths and contents of an existing offloaded cryptainer, and of an unrelated leftover savegame"""
+    encrypt_payload_and_stream_cryptainer_to_filesystem(
+        payload=b"precious" * 100,
+        cryptainer_filepath=cryptainer_filepath,
+        cryptoconf=SIMPLE_CRYPTOCONF,
+        cryptainer_metadata=None,
+        keystore_pool=InMemoryKeystorePool(),
+    )
+    savegame_filepath = cryptainer_filepath.with_name(cryptainer_filepath.name + CRYPTAINER_TEMP_SUFFIX)
+    savegame_filepath.write_bytes(b"savegame of an earlier interrupted recording")
+    payload_filepath = cryptainer_filepath.with_name(cryptainer_filepath.name + ".payload")
+    file_contents = {
+        filepath: filepath.read_bytes() for filepath in (cryptainer_filepath, payload_filepath, savegame_filepath)
+    }
+    assert all(file_contents.values())
+    return file_contents
+
+
+@pytest.mark.parametrize("cryptainer_filename", ["existing.crypt.json", "existing.crypt.cbor"])
+def test_cryptainer_encryption_pipeline_rejected_inputs_leave_existing_files_untouched(tmp_path, cryptainer_filename):
+    from wacryptolib.cryptainer._encryptor import FlightboxUtilitiesImpl
+
+    cryptainer_filepath = tmp_path / cryptainer_filename
+    file_contents = _create_streamed_cryptainer_with_savegame(cryptainer_filepath)
+
+    def _check_files_are_untouched():
+        assert {filepath: filepath.read_bytes() for filepath in tmp_path.iterdir()} == file_contents
+
+    invalid_cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    invalid_cryptoconf["payload_cipher_layers"][0]["key_cipher_layers"][0]["comment"] = "unexpected"
+
+    missing_keystore_cryptoconf = copy.deepcopy(SIMPLE_CRYPTOCONF)
+    missing_keystore_cryptoconf["payload_cipher_layers"][0]["key_cipher_layers"] = [
+        dict(
+            key_cipher_algo="RSA_OAEP",
+            key_cipher_trustee=dict(trustee_type="authenticator", keystore_uid=generate_uuid0()),
+        )
+    ]
+
+    for dump_initial_cryptainer in (True, False):
+        common_kwargs = dict(
+            cryptainer_metadata=None,
+            signature_policy=None,
+            keystore_pool=InMemoryKeystorePool(),
+            dump_initial_cryptainer=dump_initial_cryptainer,
+        )
+
+        with pytest.raises(SchemaValidationError):
+            CryptainerEncryptionPipeline(cryptainer_filepath, cryptoconf=invalid_cryptoconf, **common_kwargs)
+        _check_files_are_untouched()
+
+        with pytest.raises(ValueError, match="Unknown signature policy"):
+            CryptainerEncryptionPipeline(
+                cryptainer_filepath, cryptoconf=SIMPLE_CRYPTOCONF, **{**common_kwargs, "signature_policy": "BOGUS"}
+            )
+        _check_files_are_untouched()
+
+        with pytest.raises(KeystoreDoesNotExist):  # Failure when building the cryptainer base
+            CryptainerEncryptionPipeline(cryptainer_filepath, cryptoconf=missing_keystore_cryptoconf, **common_kwargs)
+        _check_files_are_untouched()
+
+        with patch.object(FlightboxUtilitiesImpl, "generate_symkey", side_effect=RuntimeError("No entropy")):
+            with pytest.raises(RuntimeError, match="No entropy"):
+                CryptainerEncryptionPipeline(cryptainer_filepath, cryptoconf=SIMPLE_CRYPTOCONF, **common_kwargs)
+        _check_files_are_untouched()
+
+    with pytest.raises(SchemaValidationError):
+        encrypt_payload_and_stream_cryptainer_to_filesystem(
+            payload=b"stuffs",
+            cryptainer_filepath=cryptainer_filepath,
+            cryptoconf=invalid_cryptoconf,
+            cryptainer_metadata=None,
+            keystore_pool=InMemoryKeystorePool(),
+        )
+    _check_files_are_untouched()
+
+    # A cryptainer which can't be serialized in its file format is detected before any file creation too
+
+    with pytest.raises(ValueError):
+        encrypt_payload_and_stream_cryptainer_to_filesystem(
+            payload=b"stuffs",
+            cryptainer_filepath=tmp_path / "fresh.crypt.cbor",
+            cryptoconf=SIMPLE_CRYPTOCONF,
+            cryptainer_metadata={1: "integer key"},
+            keystore_pool=InMemoryKeystorePool(),
+        )
+    _check_files_are_untouched()
+
+    # Valid inputs do replace the existing cryptainer, and the leftover savegame
+
+    encrypt_payload_and_stream_cryptainer_to_filesystem(
+        payload=b"new content",
+        cryptainer_filepath=cryptainer_filepath,
+        cryptoconf=SIMPLE_CRYPTOCONF,
+        cryptainer_metadata=None,
+        keystore_pool=InMemoryKeystorePool(),
+    )
+    assert sorted(filepath.name for filepath in tmp_path.iterdir()) == [
+        cryptainer_filename,
+        cryptainer_filename + ".payload",
+    ]
+    assert cryptainer_filepath.read_bytes() != file_contents[cryptainer_filepath]
+
+
+def test_cryptainer_encryption_pipeline_early_failures(tmp_path):
+    cryptainer_filepath = tmp_path / "early.crypt.json"
+    common_kwargs = dict(cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None, signature_policy=None)
+
+    # No AttributeError in __del__() when creation failed before the payload file was opened
+    pipeline = CryptainerEncryptionPipeline.__new__(CryptainerEncryptionPipeline)
+    pipeline.__del__()
+    with pytest.raises(ValueError, match="Unknown key ciphertext format"):
+        pipeline.__init__(cryptainer_filepath, key_ciphertext_format="yaml", **common_kwargs)
+    pipeline.__del__()
+
+    # A final cryptainer filename looking like a temporary one would share the payload file of another cryptainer
+    with pytest.raises(ValueError, match="must not end with the temporary suffix"):
+        CryptainerEncryptionPipeline(tmp_path / "early.crypt.json~", **common_kwargs)
+    assert not list(tmp_path.iterdir())
+
+    # An existing payload file which can't be opened is neither deleted nor truncated
+    payload_filepath = tmp_path / "early.crypt.json.payload"
+    payload_filepath.write_bytes(b"existing payload")
+    with patch("wacryptolib.cryptainer._encryption_pipeline.open", side_effect=PermissionError("locked"), create=True):
+        with pytest.raises(PermissionError, match="locked"):
+            CryptainerEncryptionPipeline(cryptainer_filepath, **common_kwargs)
+    assert [filepath.name for filepath in tmp_path.iterdir()] == ["early.crypt.json.payload"]
+    assert payload_filepath.read_bytes() == b"existing payload"
+
+    # A failed dump of the initial cryptainer leaves no file, not even on a KeyboardInterrupt
+    payload_filepath.unlink()
+    for exception_class in (OSError, KeyboardInterrupt):
+        pipeline = CryptainerEncryptionPipeline.__new__(CryptainerEncryptionPipeline)
+        with patch(
+            "wacryptolib.cryptainer._encryption_pipeline.dump_cryptainer_to_filesystem", side_effect=exception_class()
+        ):
+            with pytest.raises(exception_class):
+                pipeline.__init__(cryptainer_filepath, **common_kwargs)
+        assert pipeline._output_data_stream.closed
+        assert not list(tmp_path.iterdir())
+        with pytest.raises(EncryptionError, match="has failed"):
+            pipeline.encrypt_chunk(b"abc")
+
+
+@pytest.mark.parametrize("dump_initial_cryptainer", [True, False])
+def test_cryptainer_encryption_pipeline_failed_state(tmp_path, dump_initial_cryptainer):
+    cryptainer_filepath = tmp_path / "failing.crypt.json"
+    payload_filepath = tmp_path / "failing.crypt.json.payload"
+    savegame_filepath = tmp_path / "failing.crypt.json~"
+
+    def _build_pipeline():
+        return CryptainerEncryptionPipeline(
+            cryptainer_filepath,
+            cryptoconf=SIMPLE_CRYPTOCONF,
+            cryptainer_metadata=None,
+            signature_policy=None,
+            keystore_pool=InMemoryKeystorePool(),
+            dump_initial_cryptainer=dump_initial_cryptainer,
+        )
+
+    def _check_failed_pipeline(pipeline):
+        for _ in range(2):  # No finished cryptainer can be obtained anymore
+            with pytest.raises(EncryptionError, match="has failed"):
+                pipeline.encrypt_chunk(b"abc")
+            with pytest.raises(EncryptionError, match="has failed"):
+                pipeline.finalize()
+            pipeline.abort()  # No-op
+        assert pipeline._output_data_stream.closed
+        assert not cryptainer_filepath.exists()
+        if dump_initial_cryptainer:  # Savegame and partial payload are kept for recovery, like after a crash
+            assert sorted(tmp_path.iterdir()) == [payload_filepath, savegame_filepath]
+            cryptainer = load_cryptainer_from_filesystem(savegame_filepath, include_payload_ciphertext=False)
+            assert cryptainer["cryptainer_state"] == CRYPTAINER_STATES.STARTED
+            payload_filepath.unlink()
+            savegame_filepath.unlink()
+        else:
+            assert not list(tmp_path.iterdir())  # No orphan payload file
+
+    # Failure of a chunk
+
+    pipeline = _build_pipeline()
+    pipeline.encrypt_chunk(b"a" * 100)
+    with patch.object(pipeline._encryption_pipeline, "_output_stream") as output_stream_mock:
+        output_stream_mock.write.side_effect = OSError(28, "No space left on device")
+        with pytest.raises(OSError, match="No space left"):
+            pipeline.encrypt_chunk(b"b" * 100)
+    _check_failed_pipeline(pipeline)
+
+    # Failure of the finalization, here when signing
+
+    pipeline = _build_pipeline()
+    pipeline.encrypt_chunk(b"a" * 100)
+    with patch.object(
+        CryptainerEncryptor, "add_authentication_data_to_cryptainer", side_effect=SignatureCreationError("No signer")
+    ):
+        with pytest.raises(SignatureCreationError, match="No signer"):
+            pipeline.finalize()
+    _check_failed_pipeline(pipeline)
+
+    # Failure of the dump of the final cryptainer
+
+    pipeline = _build_pipeline()
+    cryptainer_filepath.mkdir()
+    with pytest.raises(OSError):
+        pipeline.finalize()
+    cryptainer_filepath.rmdir()
+    _check_failed_pipeline(pipeline)
+
+    # Explicit abort
+
+    pipeline = _build_pipeline()
+    pipeline.encrypt_chunk(b"a" * 100)
+    pipeline.abort()
+    _check_failed_pipeline(pipeline)
+
+    # Read error of the payload source, in the shortcut function (which dumps no initial cryptainer)
+
+    class _BrokenPayloadStream:
+        read_count = 0
+
+        def read(self, size):
+            self.read_count += 1
+            if self.read_count >= 2:
+                raise OSError(5, "Input/output error")
+            return b"a" * 100
+
+    with pytest.raises(OSError, match="Input/output error"):
+        encrypt_payload_and_stream_cryptainer_to_filesystem(
+            payload=_BrokenPayloadStream(),
+            cryptainer_filepath=cryptainer_filepath,
+            cryptoconf=SIMPLE_CRYPTOCONF,
+            cryptainer_metadata=None,
+            keystore_pool=InMemoryKeystorePool(),
+        )
+    assert not list(tmp_path.iterdir())
+
+    # A successful pipeline refuses further calls without becoming failed, and without touching its files
+
+    pipeline = _build_pipeline()
+    pipeline.encrypt_chunk(b"a" * 100)
+    pipeline.finalize()
+    file_contents = {filepath: filepath.read_bytes() for filepath in tmp_path.iterdir()}
+    assert sorted(file_contents) == [cryptainer_filepath, payload_filepath]
+    for _ in range(2):
+        with pytest.raises(EncryptionError, match="already finalized"):
+            pipeline.encrypt_chunk(b"b" * 100)
+        with pytest.raises(EncryptionError, match="already finalized"):
+            pipeline.finalize()
+        pipeline.abort()  # No-op
+    assert {filepath: filepath.read_bytes() for filepath in tmp_path.iterdir()} == file_contents
+    cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath)
+    assert cryptainer["cryptainer_state"] == CRYPTAINER_STATES.FINISHED
+
+
+def test_cryptainer_encryptor_rejects_unknown_signature_policies_and_payload_types():
+    for signature_policy in ("BOGUS", "skip_signing", "__module__", "__doc__", "", 33):
+        with pytest.raises(ValueError, match="Unknown signature policy"):
+            CryptainerEncryptor(signature_policy=signature_policy)
+        with pytest.raises(ValueError, match="Unknown signature policy"):
+            encrypt_payload_into_cryptainer(
+                payload=b"stuffs",
+                cryptoconf=SIMPLE_CRYPTOCONF,
+                cryptainer_metadata=None,
+                signature_policy=signature_policy,
+            )
+    for signature_policy in (
+        None,
+        SIGNATURE_POLICIES.SKIP_SIGNING,
+        SIGNATURE_POLICIES.ATTEMPT_SIGNING,
+        SIGNATURE_POLICIES.REQUIRE_SIGNING,
+    ):
+        CryptainerEncryptor(signature_policy=signature_policy)
+
+    for payload in (bytearray(b"stuffs"), memoryview(b"stuffs"), "stuffs", None):
+        with pytest.raises(TypeError, match="Payload must be bytes"):
+            encrypt_payload_into_cryptainer(
+                payload=payload,
+                cryptoconf=SIMPLE_CRYPTOCONF,
+                cryptainer_metadata=None,
+                keystore_pool=InMemoryKeystorePool(),
+            )
+
+
+def test_dump_cryptainer_to_filesystem_leaves_no_partial_files(tmp_path):
+    from wacryptolib.cryptainer._filesystem import _write_bytes_or_delete_file
+
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"stuffs", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=None, keystore_pool=InMemoryKeystorePool()
+    )
+    cryptainer_filepath = tmp_path / "broken.crypt.json"
+    payload_filepath = tmp_path / "broken.crypt.json.payload"
+
+    # A cryptainer file which can't be opened for writing gets no orphan payload file
+
+    cryptainer_filepath.mkdir()
+    with pytest.raises(OSError):
+        dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=True)
+    assert list(tmp_path.iterdir()) == [cryptainer_filepath]  # The blocking entry itself is left as is
+    cryptainer_filepath.rmdir()
+
+    # A partially written file is deleted, but not an existing file which couldn't be opened for writing
+
+    for filepath in (cryptainer_filepath, payload_filepath):
+        with pytest.raises(TypeError):
+            _write_bytes_or_delete_file(filepath, "not bytes")  # Fails once the file is created
+        assert not list(tmp_path.iterdir())
+
+    cryptainer_filepath.write_bytes(b"existing content")
+    with patch("wacryptolib.cryptainer._filesystem.open", side_effect=PermissionError("read-only"), create=True):
+        with pytest.raises(PermissionError, match="read-only"):
+            _write_bytes_or_delete_file(cryptainer_filepath, b"new content")
+        with pytest.raises(PermissionError, match="read-only"):
+            dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer, offload_payload_ciphertext=False)
+    assert cryptainer_filepath.read_bytes() == b"existing content"
+    assert list(tmp_path.iterdir()) == [cryptainer_filepath]
+
+    # Nothing is written when the cryptainer can't be serialized
+
+    with pytest.raises(ValueError):
+        dump_cryptainer_to_filesystem(
+            tmp_path / "broken.crypt.cbor", cryptainer={**cryptainer, "cryptainer_metadata": {1: "integer key"}}
+        )
+    assert list(tmp_path.iterdir()) == [cryptainer_filepath]
+
+
+def test_final_cryptainer_filename_strips_a_single_temporary_suffix(tmp_path):
+    from wacryptolib.cryptainer._filesystem import _get_final_cryptainer_filename, _get_offloaded_file_path
+
+    assert _get_final_cryptainer_filename(tmp_path / "g.crypt.json") == "g.crypt.json"
+    assert _get_final_cryptainer_filename(tmp_path / "g.crypt.json~") == "g.crypt.json"
+    assert _get_final_cryptainer_filename("g.crypt.json~~") == "g.crypt.json~"
+    assert _get_final_cryptainer_filename("g~.crypt.json") == "g~.crypt.json"
+    assert _get_offloaded_file_path(tmp_path / "g.crypt.json~") == tmp_path / "g.crypt.json.payload"
+    assert _get_offloaded_file_path(tmp_path / "g.crypt.json~~") == tmp_path / "g.crypt.json~.payload"
 
 
 def test_is_cryptainer_cryptoconf_streamable():

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import logging
-from typing import BinaryIO
+from typing import BinaryIO, Optional
 
 from schema import Schema, Or, Forbidden
 
@@ -370,7 +370,8 @@ class EncryptionNodeBase:
 
         return : a ciphertext
         """
-        assert not self._is_finished
+        if self._is_finished:  # Not an assert (python -O)
+            raise EncryptionError("Encryption node is already finalized, it can't encrypt more data")
         if self.BLOCK_SIZE != 1:
             formatted_plaintext, self._remainder = _gather_bytes_as_blocks(
                 self._remainder, plaintext, block_size=self.BLOCK_SIZE
@@ -386,7 +387,8 @@ class EncryptionNodeBase:
 
         : return : a ciphertext
         """
-        assert not self._is_finished
+        if self._is_finished:  # Not an assert (python -O)
+            raise EncryptionError("Encryption node is already finalized")
         self._is_finished = True
 
         ciphertext = b""
@@ -400,7 +402,8 @@ class EncryptionNodeBase:
         return ciphertext
 
     def get_ciphertext_integrity_tags(self) -> dict:
-        assert self._is_finished
+        if not self._is_finished:  # Not an assert (python -O)
+            raise EncryptionError("Encryption node must be finalized before its integrity tags are read")
         return dict(payload_macs=self._get_payload_macs(), payload_digests=self._get_payload_digests())
 
     def _get_payload_digests(self) -> dict:
@@ -454,11 +457,20 @@ class PayloadEncryptionPipeline:
 
     Pipeline to encrypt data through several encryption nodes, and stream it to an output
     binary stream (e.g. file or ByteIO)
+
+    The output stream may be None at creation, and be provided with `set_output_stream()` before the first chunk,
+    so that an output file only gets created once the whole pipeline is successfully built.
+
+    Chunks are refused after finalization, and finalization happens once. Any exception raised while encrypting
+    a chunk or finalizing (e.g. a write error of the output stream) puts the pipeline in a failed state, where
+    every further call raises an EncryptionError: the output is then partial, so no integrity tags can be
+    obtained for it.
     """
 
     _finalized = False
+    _failed = False
 
-    def __init__(self, output_stream: BinaryIO, secrets: dict):
+    def __init__(self, output_stream: Optional[BinaryIO], secrets: dict):
         self._output_stream = output_stream
         self._cipher_streams = []
 
@@ -480,28 +492,52 @@ class PayloadEncryptionPipeline:
 
             self._cipher_streams.append(encryption_class(key_dict=symkey, ciphertext_hash_algos=payload_hash_algos))
 
+    def set_output_stream(self, output_stream: BinaryIO):
+        """Provide the output stream of a pipeline created without it."""
+        if self._output_stream is not None:
+            raise EncryptionError("Payload encryption pipeline already has an output stream")
+        self._output_stream = output_stream
+
+    def _ensure_not_failed(self):
+        if self._failed:
+            raise EncryptionError("Payload encryption pipeline has failed, it can't be used anymore")
+
+    def _ensure_still_open(self):  # Not asserts (python -O)
+        self._ensure_not_failed()
+        if self._finalized:
+            raise EncryptionError("Payload encryption pipeline is already finalized")
+        if self._output_stream is None:
+            raise EncryptionError("Payload encryption pipeline has no output stream yet")
+
     def encrypt_chunk(self, chunk):
-        assert not self._finalized
+        self._ensure_still_open()
+        try:
+            _update_hashers_dict(self._plaintext_hashers_dict, chunk=chunk)
 
-        _update_hashers_dict(self._plaintext_hashers_dict, chunk=chunk)
-
-        for cipher in self._cipher_streams:
-            ciphertext = cipher.encrypt(chunk)
-            chunk = ciphertext
-        self._output_stream.write(ciphertext)
+            for cipher in self._cipher_streams:
+                ciphertext = cipher.encrypt(chunk)
+                chunk = ciphertext
+            self._output_stream.write(ciphertext)
+        except BaseException:  # Hashers, ciphers and output are now out of sync
+            self._failed = True
+            raise
 
     def finalize(self):
         logger.debug("Finalizing payload encryption pipeline with %d encryption nodes", len(self._cipher_streams))
-        assert not self._finalized
-        current_plaintext = b""
-        for cipher in self._cipher_streams:
-            ciphertext = b""
-            if current_plaintext:
-                ciphertext = cipher.encrypt(current_plaintext)
-            ciphertext += cipher.finalize()
-            current_plaintext = ciphertext
-        self._output_stream.write(ciphertext)
-        self._output_stream.flush()
+        self._ensure_still_open()
+        try:
+            current_plaintext = b""
+            for cipher in self._cipher_streams:
+                ciphertext = b""
+                if current_plaintext:
+                    ciphertext = cipher.encrypt(current_plaintext)
+                ciphertext += cipher.finalize()
+                current_plaintext = ciphertext
+            self._output_stream.write(ciphertext)
+            self._output_stream.flush()
+        except BaseException:
+            self._failed = True
+            raise
         self._finalized = True
 
     def get_payload_integrity_tags(self) -> list:
@@ -509,6 +545,9 @@ class PayloadEncryptionPipeline:
             "Getting payload integrity tags of payload encryption pipeline with %d encryption nodes",
             len(self._cipher_streams),
         )
+        self._ensure_not_failed()
+        if not self._finalized:  # Else tags of a partial payload
+            raise EncryptionError("Payload encryption pipeline must be finalized before its integrity tags are read")
 
         plaintext_digests = _get_hashers_dict_digests(self._plaintext_hashers_dict)
 

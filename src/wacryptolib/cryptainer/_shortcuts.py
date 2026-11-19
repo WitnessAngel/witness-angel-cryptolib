@@ -60,8 +60,12 @@ def encrypt_payload_and_stream_cryptainer_to_filesystem(
         key_ciphertext_format=key_ciphertext_format,
     )
 
-    for chunk in _consume_io_byte_chunks(payload, chunk_size=DEFAULT_DATA_CHUNK_SIZE):
-        encryptor.encrypt_chunk(chunk)
+    try:
+        for chunk in _consume_io_byte_chunks(payload, chunk_size=DEFAULT_DATA_CHUNK_SIZE):
+            encryptor.encrypt_chunk(chunk)
+    except BaseException:
+        encryptor.abort()  # E.g. on a read error of the payload, else open and orphan payload file
+        raise
 
     encryptor.finalize()  # Handles the dumping to disk
 

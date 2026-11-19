@@ -373,6 +373,99 @@ def test_payload_encryption_pipeline_lowercase_cipher_algo():
     encryption_pipeline.encrypt_chunk(b"abc")
     encryption_pipeline.finalize()
 
+class _FailingOutputStream(io.BytesIO):
+    """Stream whose writes fail from the second one"""
+
+    write_count = 0
+
+    def write(self, data):
+        self.write_count += 1
+        if self.write_count >= 2:
+            raise OSError(28, "No space left on device")
+        return super().write(data)
+
+
+@pytest.mark.parametrize("cipher_algo", STREAMABLE_CIPHER_ALGOS)
+def test_payload_encryption_pipeline_lifecycle_and_failed_state(cipher_algo):
+    def _build_pipeline(output_stream):
+        secrets = dict(
+            payload_plaintext_hash_algos=[SUPPORTED_HASH_ALGOS[0]],
+            payload_cipher_layer_extracts=[
+                {"cipher_algo": cipher_algo, "symkey": generate_symkey(cipher_algo), "hash_algos": []}
+            ],
+        )
+        return PayloadEncryptionPipeline(output_stream=output_stream, secrets=secrets)
+
+    # Chunks are refused after finalization, and finalization happens once (real exceptions, not asserts)
+
+    output_stream = io.BytesIO()
+    encryption_pipeline = _build_pipeline(output_stream)
+    encryption_pipeline.encrypt_chunk(b"a" * 64)
+    with pytest.raises(EncryptionError, match="must be finalized"):
+        encryption_pipeline.get_payload_integrity_tags()
+    encryption_pipeline.finalize()
+    ciphertext = output_stream.getvalue()
+    with pytest.raises(EncryptionError, match="already finalized"):
+        encryption_pipeline.encrypt_chunk(b"b" * 32)
+    with pytest.raises(EncryptionError, match="already finalized"):
+        encryption_pipeline.finalize()
+    assert output_stream.getvalue() == ciphertext
+    assert encryption_pipeline.get_payload_integrity_tags()  # Not a failure, so still available
+
+    # A failed chunk makes the pipeline unusable, instead of giving integrity tags for a partial payload
+
+    encryption_pipeline = _build_pipeline(_FailingOutputStream())
+    encryption_pipeline.encrypt_chunk(b"a" * 64)
+    with pytest.raises(OSError, match="No space left"):
+        encryption_pipeline.encrypt_chunk(b"b" * 64)
+    for _ in range(2):
+        with pytest.raises(EncryptionError, match="has failed"):
+            encryption_pipeline.encrypt_chunk(b"c" * 64)
+        with pytest.raises(EncryptionError, match="has failed"):
+            encryption_pipeline.finalize()
+        with pytest.raises(EncryptionError, match="has failed"):
+            encryption_pipeline.get_payload_integrity_tags()
+
+    # Same for a failed finalization
+
+    output_stream = _FailingOutputStream()
+    output_stream.write_count = 1
+    encryption_pipeline = _build_pipeline(output_stream)
+    with pytest.raises(OSError, match="No space left"):
+        encryption_pipeline.finalize()
+    with pytest.raises(EncryptionError, match="has failed"):
+        encryption_pipeline.finalize()
+    with pytest.raises(EncryptionError, match="has failed"):
+        encryption_pipeline.get_payload_integrity_tags()
+
+    # The output stream can be provided after creation, but only once and before any chunk
+
+    output_stream = io.BytesIO()
+    encryption_pipeline = _build_pipeline(None)
+    with pytest.raises(EncryptionError, match="no output stream"):
+        encryption_pipeline.encrypt_chunk(b"abc")
+    with pytest.raises(EncryptionError, match="no output stream"):
+        encryption_pipeline.finalize()
+    encryption_pipeline.set_output_stream(output_stream)
+    with pytest.raises(EncryptionError, match="already has an output stream"):
+        encryption_pipeline.set_output_stream(io.BytesIO())
+    encryption_pipeline.encrypt_chunk(b"abc")
+    encryption_pipeline.finalize()
+    assert output_stream.getvalue()
+
+    # Encryption nodes refuse lifecycle violations by themselves too
+
+    encryption_node = _build_pipeline(io.BytesIO())._cipher_streams[0]
+    with pytest.raises(EncryptionError, match="must be finalized"):
+        encryption_node.get_ciphertext_integrity_tags()
+    encryption_node.encrypt(b"abc")
+    encryption_node.finalize()
+    with pytest.raises(EncryptionError, match="already finalized"):
+        encryption_node.encrypt(b"abc")
+    with pytest.raises(EncryptionError, match="already finalized"):
+        encryption_node.finalize()
+    assert encryption_node.get_ciphertext_integrity_tags()
+
 
 @pytest.mark.parametrize("cipher_algo", SUPPORTED_SYMMETRIC_KEY_ALGOS)
 def test_symmetric_decryption_verify(cipher_algo):

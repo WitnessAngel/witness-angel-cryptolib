@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: Copyright Prolifik SARL
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+from contextlib import suppress
 import os
 from pathlib import Path
 
@@ -19,8 +20,28 @@ def _get_offloaded_file_path(cryptainer_filepath: Path):
 
 
 def _get_final_cryptainer_filename(cryptainer_filepath) -> str:
-    """Return the filename of a cryptainer, without its potential temporary suffix."""
-    return Path(cryptainer_filepath).name.rstrip(CRYPTAINER_TEMP_SUFFIX)
+    """Return the filename of a cryptainer, without its potential temporary suffix.
+
+    A single temporary suffix is removed, so "x.crypt.json~~" is the temporary file of "x.crypt.json~"; but since
+    such a final filename would itself be taken for a temporary one, it must not be used for cryptainers."""
+    filename = Path(cryptainer_filepath).name
+    if filename.endswith(CRYPTAINER_TEMP_SUFFIX):
+        filename = filename[: -len(CRYPTAINER_TEMP_SUFFIX)]
+    return filename
+
+
+def _write_bytes_or_delete_file(filepath: Path, data: bytes) -> None:
+    """Write a whole file, and delete it if this write fails, so that no partial file remains.
+
+    A file which couldn't even be opened for writing (e.g. a read-only existing one) is left untouched."""
+    output_stream = open(filepath, mode="wb")
+    try:
+        with output_stream:  # Its closing may fail too (e.g. disk full when flushing)
+            output_stream.write(data)
+    except BaseException:
+        with suppress(OSError):  # A cleanup failure must not replace the original error
+            filepath.unlink(missing_ok=True)
+        raise
 
 
 def _get_written_cryptainer_file_format(cryptainer_filepath) -> str:
@@ -40,6 +61,10 @@ def dump_cryptainer_to_filesystem(cryptainer_filepath: Path, cryptainer: dict, o
     ".cbor" (in any letter case), else in Extended JSON; it is written at the exact path given.
 
     If `offload_payload_ciphertext`, actual encrypted payload is dumped to a separate bytes file nearby the cryptainer.
+
+    The payload file is written first, so that a cryptainer file never points to a missing or partial payload.
+    If a write fails, the partial file and the payload file just written are deleted; but this is not an atomic
+    replacement, so cryptainer files overwritten until then are lost.
     """
     cryptainer_filepath = Path(cryptainer_filepath)
     cryptainer_file_format = _get_written_cryptainer_file_format(cryptainer_filepath)
@@ -48,10 +73,17 @@ def dump_cryptainer_to_filesystem(cryptainer_filepath: Path, cryptainer: dict, o
         cryptainer = cryptainer.copy()  # Shallow copy, since we DO NOT touch original dict here!
         cryptainer["payload_ciphertext_struct"] = OFFLOADED_PAYLOAD_CIPHERTEXT_MARKER
     cryptainer_bytes = dump_to_document_bytes(cryptainer, format=cryptainer_file_format)  # Fails before any write
+    offloaded_file_path = None
     if offload_payload_ciphertext:
         offloaded_file_path = _get_offloaded_file_path(cryptainer_filepath)
-        offloaded_file_path.write_bytes(payload_ciphertext)
-    cryptainer_filepath.write_bytes(cryptainer_bytes)
+        _write_bytes_or_delete_file(offloaded_file_path, payload_ciphertext)
+    try:
+        _write_bytes_or_delete_file(cryptainer_filepath, cryptainer_bytes)
+    except BaseException:
+        if offloaded_file_path:  # Else orphan, since storage only lists cryptainer files
+            with suppress(OSError):
+                offloaded_file_path.unlink(missing_ok=True)
+        raise
 
 
 def load_cryptainer_from_filesystem(cryptainer_filepath: Path, include_payload_ciphertext=True) -> dict:

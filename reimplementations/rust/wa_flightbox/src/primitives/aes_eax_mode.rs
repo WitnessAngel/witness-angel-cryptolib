@@ -10,11 +10,16 @@ use zeroize::Zeroize;
 
 use crate::crypto_backend::{AEAD_TAG_SIZE, AES_256_KEY_SIZE, AES_BLOCK_SIZE, Aes256Encryptor};
 use crate::error::Result;
-use crate::primitives::aes_cmac_omac1::{AES_CMAC_SIZE, AesCmac};
+use crate::primitives::aes_cmac_omac1::{AES_CMAC_SIZE, AesCmac, AesCmacSubkeys};
 
 /// OMAC^t of a whole message.
-fn compute_omac<A: Aes256Encryptor>(aes: &mut A, tweak: u8, data: &[u8]) -> Result<[u8; AES_CMAC_SIZE]> {
-    let mut cmac = AesCmac::start_omac_with_tweak(aes, tweak)?;
+fn compute_omac<A: Aes256Encryptor>(
+    aes: &mut A,
+    subkeys: AesCmacSubkeys,
+    tweak: u8,
+    data: &[u8],
+) -> Result<[u8; AES_CMAC_SIZE]> {
+    let mut cmac = AesCmac::start_omac_with_tweak(aes, subkeys, tweak)?;
     cmac.update(aes, data)?;
     cmac.finish(aes)
 }
@@ -34,16 +39,18 @@ pub(crate) struct AesEaxEncryption<A: Aes256Encryptor> {
 impl<A: Aes256Encryptor> AesEaxEncryption<A> {
     pub(crate) fn start(key: &[u8; AES_256_KEY_SIZE], nonce: &[u8]) -> Result<Self> {
         let mut aes = A::new(key)?;
+        // The three OMACs share the subkeys of the key
+        let subkeys = AesCmacSubkeys::derive(&mut aes)?;
         // N = OMAC0(nonce), the initial counter
-        let counter_block = compute_omac(&mut aes, 0, nonce)?;
+        let counter_block = compute_omac(&mut aes, subkeys.clone(), 0, nonce)?;
         // H = OMAC1(empty header)
-        let mut header_omac = compute_omac(&mut aes, 1, &[])?;
+        let mut header_omac = compute_omac(&mut aes, subkeys.clone(), 1, &[])?;
         let mut nonce_and_header_omacs = [0u8; AES_CMAC_SIZE];
         for index in 0..AES_CMAC_SIZE {
             nonce_and_header_omacs[index] = counter_block[index] ^ header_omac[index];
         }
         header_omac.zeroize();
-        let ciphertext_omac = AesCmac::start_omac_with_tweak(&mut aes, 2)?;
+        let ciphertext_omac = AesCmac::start_omac_with_tweak(&mut aes, subkeys, 2)?;
         Ok(Self {
             aes,
             counter_block,

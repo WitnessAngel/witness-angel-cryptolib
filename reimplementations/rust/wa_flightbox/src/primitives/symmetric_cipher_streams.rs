@@ -105,10 +105,11 @@ impl<B: CryptoBackend> SymmetricCipherStream<B> {
         match self {
             Self::AesCbc(stream) => {
                 pkcs7_pad_final_block(&mut stream.pending_block, stream.pending_length);
-                let pending_block = stream.pending_block;
-                let result = stream
-                    .aes
-                    .encrypt_cbc_blocks(&mut stream.chaining_value, &pending_block, final_output);
+                // Borrowed in place, not copied: the block holds plaintext
+                let result =
+                    stream
+                        .aes
+                        .encrypt_cbc_blocks(&mut stream.chaining_value, &stream.pending_block, final_output);
                 stream.pending_block.zeroize();
                 stream.pending_length = 0;
                 result.map(|()| (AES_BLOCK_SIZE, None))
@@ -135,9 +136,8 @@ impl<A: Aes256Encryptor> AesCbcStream<A> {
                 return Ok(0);
             }
             let block_output = output.get_mut(..AES_BLOCK_SIZE).ok_or(ErrorKind::InternalError)?;
-            let pending_block = self.pending_block;
             self.aes
-                .encrypt_cbc_blocks(&mut self.chaining_value, &pending_block, block_output)?;
+                .encrypt_cbc_blocks(&mut self.chaining_value, &self.pending_block, block_output)?;
             self.pending_length = 0;
             output_length = AES_BLOCK_SIZE;
         }

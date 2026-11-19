@@ -5,6 +5,8 @@
 //! Standard base64 with padding (RFC 4648, section 4), written to a buffered sink writer without building the
 //! encoded string in memory.
 
+use zeroize::Zeroize;
+
 use crate::encoding::buffered_sink_writer::BufferedSinkWriter;
 
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -15,24 +17,30 @@ fn symbol(six_bits: u32) -> u8 {
 }
 
 pub(crate) fn write_base64(writer: &mut BufferedSinkWriter<'_>, bytes: &[u8]) {
+    // Serialized key material goes through here: the encoded group is built in one buffer, wiped at the end
+    let mut symbols = [0u8; 4];
     let mut groups = bytes.chunks_exact(3);
     for group in &mut groups {
         if let &[first, second, third] = group {
             let bits = (u32::from(first) << 16) | (u32::from(second) << 8) | u32::from(third);
-            writer.write(&[symbol(bits >> 18), symbol(bits >> 12), symbol(bits >> 6), symbol(bits)]);
+            symbols = [symbol(bits >> 18), symbol(bits >> 12), symbol(bits >> 6), symbol(bits)];
+            writer.write(&symbols);
         }
     }
     match *groups.remainder() {
         [first] => {
             let bits = u32::from(first) << 16;
-            writer.write(&[symbol(bits >> 18), symbol(bits >> 12), b'=', b'=']);
+            symbols = [symbol(bits >> 18), symbol(bits >> 12), b'=', b'='];
+            writer.write(&symbols);
         }
         [first, second] => {
             let bits = (u32::from(first) << 16) | (u32::from(second) << 8);
-            writer.write(&[symbol(bits >> 18), symbol(bits >> 12), symbol(bits >> 6), b'=']);
+            symbols = [symbol(bits >> 18), symbol(bits >> 12), symbol(bits >> 6), b'='];
+            writer.write(&symbols);
         }
         _ => {}
     }
+    symbols.zeroize();
 }
 
 #[cfg(test)]

@@ -45,7 +45,7 @@ use wa_flightbox::crypto_backend::{
     ML_KEM_768_SHARED_SECRET_SIZE,
 };
 use wa_flightbox::{
-    CryptainerEncryptor, DeviceProfile, DocumentFormat, EncryptorLimits, EncryptorOptions, Value,
+    CryptainerEncryptor, DeviceProfile, DocumentFormat, EncryptorLimits, EncryptorOptions, OutputSink, Value,
     decode_document_from_cbor, internals, write_document,
 };
 use wa_flightbox_backend_conformance::test_support::{DeterministicHooks, ReplayedRandomHooks};
@@ -481,6 +481,20 @@ fn parse_encryption_arguments(arguments: &[String]) -> Result<EncryptionArgument
     }
 }
 
+/// Steps 2 and 3: the serialized cryptainer of the chunks of a payload, or of one empty chunk if there is none.
+fn encrypt_chunks<S: OutputSink>(
+    mut encryptor: CryptainerEncryptor<ToolBackend, S>,
+    mut chunks: std::slice::Chunks<'_, u8>,
+) -> wa_flightbox::Result<Vec<u8>> {
+    encryptor.encrypt_payload_chunk(chunks.next().unwrap_or(&[]))?;
+    for chunk in chunks {
+        encryptor.encrypt_payload_chunk(chunk)?;
+    }
+    let mut cryptainer = Vec::new();
+    encryptor.finalize()?.write_cryptainer(&mut cryptainer)?;
+    Ok(cryptainer)
+}
+
 /// The cryptainer and, when offloaded, the payload ciphertext; a profile loading error keeps its location.
 fn encrypt_deterministically(
     arguments: &EncryptionArguments,
@@ -506,33 +520,22 @@ fn encrypt_deterministically(
         Ok(chunk_size) if chunk_size != 0 && chunk_size <= payload.len() => chunk_size,
         _ => payload.len().max(1),
     };
-    let mut chunks = payload.chunks(chunk_size);
-    let first_chunk = chunks.next().unwrap_or(&[]);
-    let mut cryptainer = Vec::new();
+    let chunks = payload.chunks(chunk_size);
     if arguments.payload_path.is_some() {
         let mut payload_ciphertext = Vec::new();
-        let mut encryptor = CryptainerEncryptor::<ToolBackend, _>::create_offloaded(
+        let encryptor = CryptainerEncryptor::<ToolBackend, _>::create_offloaded(
             &device_profile,
             metadata.as_ref(),
             &options,
             hooks,
             &mut payload_ciphertext,
         )?;
-        encryptor.encrypt_payload_chunk(first_chunk)?;
-        for chunk in chunks {
-            encryptor.encrypt_payload_chunk(chunk)?;
-        }
-        encryptor.finalize()?.write_cryptainer(&mut cryptainer)?;
+        let cryptainer = encrypt_chunks(encryptor, chunks)?;
         Ok((cryptainer, Some(payload_ciphertext)))
     } else {
-        let mut encryptor =
+        let encryptor =
             CryptainerEncryptor::<ToolBackend>::create(&device_profile, metadata.as_ref(), &options, hooks)?;
-        encryptor.encrypt_payload_chunk(first_chunk)?;
-        for chunk in chunks {
-            encryptor.encrypt_payload_chunk(chunk)?;
-        }
-        encryptor.finalize()?.write_cryptainer(&mut cryptainer)?;
-        Ok((cryptainer, None))
+        Ok((encrypt_chunks(encryptor, chunks)?, None))
     }
 }
 

@@ -34,6 +34,9 @@ use std::io::{BufWriter, Read, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use wa_flightbox::{DocumentFormat, OFFLOADED_PAYLOAD_SUFFIX, OutputSink, PlatformHooks, RandomFailure, SinkError};
+/// Hexadecimal conversions of the test driver: bytes from digits of any case (`None` for anything else), and
+/// lowercase digits of bytes.
+pub use wa_flightbox_backend_conformance::test_support::{encode_hex, try_decode_hex as decode_hex};
 
 /// The crypto backend of this build.
 #[cfg(feature = "backend-rustcrypto")]
@@ -216,33 +219,6 @@ pub fn enabled_document_format_names() -> Vec<&'static str> {
         names.push("cbor");
     }
     names
-}
-
-/// Bytes from hexadecimal digits of any case, `None` for anything else.
-pub fn decode_hex(hex: &str) -> Option<Vec<u8>> {
-    let digits = hex.as_bytes();
-    if !digits.len().is_multiple_of(2) {
-        return None;
-    }
-    let digit_value = |digit: u8| {
-        char::from(digit)
-            .to_digit(16)
-            .and_then(|value| u8::try_from(value).ok())
-    };
-    digits
-        .chunks_exact(2)
-        .map(|pair| Some((digit_value(pair[0])? << 4) | digit_value(pair[1])?))
-        .collect()
-}
-
-/// Lowercase hexadecimal digits.
-pub fn encode_hex(bytes: &[u8]) -> String {
-    use std::fmt::Write as _;
-    let mut hex = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        let _ = write!(hex, "{byte:02x}");
-    }
-    hex
 }
 
 /// The command line arguments after the program name, `None` if one of them is not valid Unicode.

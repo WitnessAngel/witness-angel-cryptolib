@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import copy
+import functools
 import logging
 import os
 import random
@@ -3807,6 +3808,67 @@ def test_pq_hybrid_cryptainer_with_corrupted_ml_dsa_signature():
         exception_class=SignatureVerificationError,
     )
     assert operation_report.get_error_count() == 1
+
+
+@pytest.mark.requires_pycryptodome
+def test_post_quantum_branches_are_only_lost_on_fallback_crypto_backend():
+    """A backend lacking post-quantum algorithms (the fallback one) only loses the shards and signatures using them."""
+    from conftest import import_crypto_backend
+    import wacryptolib.keygen
+
+    skip_if_fallback_backend("ML-KEM/ML-DSA")  # To build the cryptainer
+    fallback = import_crypto_backend("fallback")
+    keystore_pool = InMemoryKeystorePool()
+
+    def _shard(key_cipher_algo):
+        return dict(key_cipher_layers=[dict(key_cipher_algo=key_cipher_algo, key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)])
+
+    cryptoconf = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_CBC",
+                key_cipher_layers=[
+                    dict(
+                        key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                        key_shared_secret_threshold=2,
+                        key_shared_secret_shards=[_shard("ML_KEM_768"), _shard("RSA_OAEP"), _shard("RSA_OAEP")],
+                    )
+                ],
+                payload_signatures=[
+                    dict(
+                        payload_digest_algo="SHA256",
+                        payload_signature_algo="ML_DSA_65",
+                        payload_signature_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                    )
+                ],
+            )
+        ]
+    )
+    cryptainer = encrypt_payload_into_cryptainer(
+        b"abc", cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
+    )
+    keychain_uid = cryptainer["keychain_uid"]
+
+    registry = wacryptolib.keygen.ASYMMETRIC_KEY_ALGOS_REGISTRY
+    with mock.patch.dict(
+        registry["ML_KEM_768"], pem_import_function=functools.partial(fallback.import_pq_key_from_pem, "ML_KEM_768")
+    ), mock.patch.dict(
+        registry["ML_DSA_65"], pem_import_function=functools.partial(fallback.import_pq_key_from_pem, "ML_DSA_65")
+    ):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)
+        assert result_payload == b"abc"  # The 2 RSA shards suffice
+        error_messages = [entry["entry_message"] for entry in operation_report.get_error_entries()]
+        assert "Algorithm not supported by trustee (ML_KEM_768)" in error_messages
+        assert "Failed loading signature key from pem bytestring (ML_DSA_65)" in error_messages
+
+        trustee_api = TrusteeApi(keystore=keystore_pool.get_local_keyfactory())
+        keypair_identifiers = [
+            dict(keychain_uid=keychain_uid, key_algo="ML_KEM_768"),
+            dict(keychain_uid=keychain_uid, key_algo="RSA_OAEP"),
+        ]
+        result = trustee_api.request_decryption_authorization(keypair_identifiers, request_message="")
+        assert result["keypair_statuses"]["missing_private_key"] == keypair_identifiers[:1]
+        assert result["keypair_statuses"]["accepted"] == keypair_identifiers[1:]
 
 
 def test_cryptainer_suffix_helpers():

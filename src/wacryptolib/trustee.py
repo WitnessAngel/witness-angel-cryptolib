@@ -190,6 +190,9 @@ class TrusteeApi:  # TODO rename this?
             except KeyLoadingError:
                 missing_passphrase.append(keypair_identifier)
                 continue
+            except AlgorithmNotSupported:  # Key type unusable by this crypto backend (e.g. ML_KEM_768 on the fallback)
+                missing_private_key.append(keypair_identifier)
+                continue
 
             accepted.append(keypair_identifier)  # Check is OVER for this keypair!
 

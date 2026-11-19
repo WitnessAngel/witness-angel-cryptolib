@@ -7,6 +7,7 @@ import os
 import pytest
 
 from conftest import import_crypto_backend
+from wacryptolib.exceptions import AlgorithmNotSupported
 
 NIST_P256_PUBLIC_KEY_PEM = b"""-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEsW6pf1Fi5sKalrspUNpMs+tXSw6K
@@ -52,6 +53,12 @@ def test_fallback_rejects_unsupported_parameters_explicitly():
         fallback.encrypt_via_hpke(b"abc", nist_public_key, aead_id=0x0003)
     with pytest.raises(NotImplementedError, match="HPKE with KEM over curve NIST256p requires pycryptodome"):
         fallback.decrypt_via_hpke(b"enc", b"ciphertext", nist_private_key, aead_id=0x0003)
+
+    # Post-quantum algorithms are "unsupported algorithms", so that decryption only loses the branches needing them
+    with pytest.raises(AlgorithmNotSupported, match="Post-quantum key import requires pycryptodome"):
+        fallback.import_pq_key_from_pem("ML_KEM_768", b"-----BEGIN PRIVATE KEY-----")
+    with pytest.raises(AlgorithmNotSupported, match="ML-DSA requires pycryptodome"):
+        fallback.verify_with_mldsa()
 
     public_key, private_key = fallback.generate_ecc_keypair("curve25519")
     hasher = fallback.get_hasher_instance("SHA512")

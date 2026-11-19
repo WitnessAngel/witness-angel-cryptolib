@@ -815,8 +815,12 @@ def export_ecc_key_to_pem(private_key, passphrase=None):
 
 
 def _build_post_quantum_stub(name, operation):
+    from ...exceptions import AlgorithmNotSupported
+
     def _post_quantum_stub(*args, **kwargs):
-        raise _requires_pycryptodome(operation)
+        # Not a NotImplementedError: like for an algo unknown to a trustee, decryption then only loses the branches
+        # (shards, signatures) needing this algo, and JSON-RPC trustee servers report it as a regular error
+        raise AlgorithmNotSupported(str(_requires_pycryptodome(operation)))
 
     _post_quantum_stub.__name__ = name
     return _post_quantum_stub

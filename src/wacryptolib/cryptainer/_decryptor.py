@@ -990,7 +990,7 @@ class CryptainerDecryptor(CryptainerBase):
             public_key = load_asymmetric_key_from_pem_bytestring(
                 key_pem=public_key_pem, key_algo=payload_signature_algo
             )
-        except KeyLoadingError as exc:
+        except (KeyLoadingError, AlgorithmNotSupported) as exc:  # E.g. ML_DSA_65 on the fallback crypto backend
             message = "Failed loading signature key from pem bytestring (%s)" % payload_signature_algo
             operation_report.add_entry(
                 entry_type=DecryptionErrorType.SIGNATURE_ERROR,

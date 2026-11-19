@@ -280,18 +280,21 @@ int wa_value_map_has_key(const wa_value_t *map, const char *key, size_t key_leng
     return wa_value_find_map_entry(map, key, key_length) != NULL;
 }
 
-wa_status_t wa_value_map_add_with_valid_key(wa_value_t *map, const char *key, size_t key_length, wa_value_t *value)
+static int wa_value_map_can_adopt_entry(const wa_value_t *map, const char *key, size_t key_length,
+                                        const wa_value_t *value)
+{
+    return map != NULL && value != NULL && map->type == WA_VALUE_TYPE_MAP && !map->is_borrowed &&
+           wa_value_can_be_adopted(map, value) && (key != NULL || key_length == 0);
+}
+
+/* Insert an entry, with a copy of the key, before the one at `insertion_index` (the entry count, to append it) */
+static wa_status_t wa_value_map_insert_entry(wa_value_t *map, const char *key, size_t key_length, wa_value_t *value,
+                                             size_t insertion_index)
 {
     void *entries;
     char *key_copy = NULL;
     wa_value_map_entry_t *entry;
-    size_t insertion_index;
 
-    if (map == NULL || value == NULL || map->type != WA_VALUE_TYPE_MAP || map->is_borrowed ||
-        !wa_value_can_be_adopted(map, value) || (key == NULL && key_length != 0) ||
-        wa_value_search_map_entry(map, key, key_length, &insertion_index)) {
-        return WA_STATUS_INVALID_ARGUMENT;
-    }
     if (key_length != 0) {
         key_copy = (char *)wa_allocate_memory(map->platform_hooks, key_length);
         if (key_copy == NULL) {
@@ -314,6 +317,83 @@ wa_status_t wa_value_map_add_with_valid_key(wa_value_t *map, const char *key, si
     entry->value = value;
     value->parent = map;
     return WA_STATUS_OK;
+}
+
+wa_status_t wa_value_map_add_with_valid_key(wa_value_t *map, const char *key, size_t key_length, wa_value_t *value)
+{
+    size_t insertion_index;
+    if (!wa_value_map_can_adopt_entry(map, key, key_length, value) ||
+        wa_value_search_map_entry(map, key, key_length, &insertion_index)) {
+        return WA_STATUS_INVALID_ARGUMENT;
+    }
+    return wa_value_map_insert_entry(map, key, key_length, value, insertion_index);
+}
+
+wa_status_t wa_value_map_append_unsorted_with_valid_key(wa_value_t *map, const char *key, size_t key_length,
+                                                        wa_value_t *value)
+{
+    if (!wa_value_map_can_adopt_entry(map, key, key_length, value)) {
+        return WA_STATUS_INVALID_ARGUMENT;
+    }
+    return wa_value_map_insert_entry(map, key, key_length, value, map->content.map.count);
+}
+
+static int wa_value_compare_map_entries(const wa_value_map_entry_t *entry_a, const wa_value_map_entry_t *entry_b)
+{
+    return wa_value_compare_keys(entry_a->key, entry_a->key_length, entry_b->key, entry_b->key_length);
+}
+
+/* Heapsort step: move the entry at `root` down the binary heap made of the first `count` entries */
+static void wa_value_sift_map_entry_down(wa_value_map_entry_t *entries, size_t root, size_t count)
+{
+    wa_value_map_entry_t moved_entry = entries[root];
+    while (root < count / 2u) { /* The root has at least one child */
+        size_t child = 2u * root + 1u;
+        if (child + 1u < count && wa_value_compare_map_entries(&entries[child], &entries[child + 1u]) < 0) {
+            child++;
+        }
+        if (wa_value_compare_map_entries(&moved_entry, &entries[child]) >= 0) {
+            break;
+        }
+        entries[root] = entries[child];
+        root = child;
+    }
+    entries[root] = moved_entry;
+}
+
+int wa_value_map_sort_entries(wa_value_t *map)
+{
+    wa_value_map_entry_t *entries;
+    size_t count;
+    size_t index;
+    int is_strictly_ascending = 1;
+    if (map == NULL || map->type != WA_VALUE_TYPE_MAP || map->is_borrowed) {
+        return 0;
+    }
+    entries = map->content.map.entries;
+    count = map->content.map.count;
+    for (index = 1; is_strictly_ascending && index < count; ++index) {
+        is_strictly_ascending = wa_value_compare_map_entries(&entries[index - 1u], &entries[index]) < 0;
+    }
+    if (is_strictly_ascending) {
+        return 1; /* Canonical documents come sorted: a linear pass for them */
+    }
+    /* Heapsort: in place, without recursion, in O(n log n) comparisons whatever the input */
+    for (index = count / 2u; index > 0; --index) {
+        wa_value_sift_map_entry_down(entries, index - 1u, count);
+    }
+    for (index = count - 1u; index > 0; --index) {
+        wa_value_map_entry_t largest_entry = entries[0];
+        entries[0] = entries[index];
+        entries[index] = largest_entry;
+        wa_value_sift_map_entry_down(entries, 0, index);
+    }
+    for (index = 1; index < count; ++index) {
+        if (wa_value_compare_map_entries(&entries[index - 1u], &entries[index]) == 0) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 wa_status_t wa_value_map_add(wa_value_t *map, const char *key, size_t key_length, wa_value_t *value)

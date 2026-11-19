@@ -215,6 +215,114 @@ static void test_invalid_classes(void)
     check_decoding(too_deep, WA_STATUS_NESTING_TOO_DEEP);
 }
 
+/* Finding C-7: entries are sorted once per map, a duplicate key remaining the fault reported when it is read before
+ * another fault, whatever the kind of the latter (the order of the checks is part of the verdicts shared with the
+ * Rust decoder, whose unit tests hold the same documents) */
+static void test_duplicate_key_reported_before_later_faults(void)
+{
+#define HALF_FLOAT "f93c00"
+#define TOO_DEEP_ARRAYS                                                                                              \
+    "8181818181818181818181818181818181818181818181818181818181818181818181"                                        \
+    "8181818181818181818181818181818181818181818181818181818181818181818181"
+    /* {"a": 0, "a": 1.0}: the value of the duplicate is not looked at */
+    check_decoding("a2" "616100" "6161" HALF_FLOAT, WA_STATUS_DECODING_ERROR);
+    /* {"a": 0, "b": 0, "a": 0, "c": 1.0}, and with an indefinite-length key after the duplicate */
+    check_decoding("a4" "616100" "616200" "616100" "6163" HALF_FLOAT, WA_STATUS_DECODING_ERROR);
+    check_decoding("a4" "616100" "616200" "616100" "7f6163ff" "00", WA_STATUS_DECODING_ERROR);
+    /* {"a": 0, "a": {"x": 1.0}}, and the duplicate above a too deep value */
+    check_decoding("a2" "616100" "6161" "a16178" HALF_FLOAT, WA_STATUS_DECODING_ERROR);
+    check_decoding("a2" "616100" "6161" TOO_DEEP_ARRAYS, WA_STATUS_DECODING_ERROR);
+    /* {"a": 0, "a": 0} cut after its second key, and declaring a third entry that is missing */
+    check_decoding("a2" "616100" "6161", WA_STATUS_DECODING_ERROR);
+    check_decoding("a3" "616100" "616100", WA_STATUS_DECODING_ERROR);
+    /* The other way round: {"a": 0, "b": 1.0, "a": 0}, {"a": 0, "b": {"x": 1.0}, "a": 0} */
+    check_decoding("a3" "616100" "6162" HALF_FLOAT "616100", WA_STATUS_UNSUPPORTED_TYPE);
+    check_decoding("a3" "616100" "6162" "a16178" HALF_FLOAT "616100", WA_STATUS_UNSUPPORTED_TYPE);
+    check_decoding("a3" "616100" "6162" TOO_DEEP_ARRAYS "616100", WA_STATUS_NESTING_TOO_DEEP);
+    /* An indefinite-length key is unsupported, when no duplicate precedes it */
+    check_decoding("a2" "616100" "7f6163ff" "00", WA_STATUS_UNSUPPORTED_TYPE);
+    /* Inside an inner map: {"m": {"a": 0, "a": 1.0}, "z": 1.0} */
+    check_decoding("a2" "616d" "a2" "616100" "6161" HALF_FLOAT "617a" HALF_FLOAT, WA_STATUS_DECODING_ERROR);
+    /* Duplicates among keys in descending and mixed orders, the duplicate being first, in the middle or last */
+    check_decoding("a4" "616400" "616300" "616200" "616400", WA_STATUS_DECODING_ERROR);
+    check_decoding("a4" "616400" "616200" "616200" "616100", WA_STATUS_DECODING_ERROR);
+    check_decoding("a5" "616200" "616500" "616100" "616300" "616100", WA_STATUS_DECODING_ERROR);
+    check_decoding("a3" "616200" "616100" "616200" , WA_STATUS_DECODING_ERROR);
+    check_decoding("a3" "616200" "616100" "6162" HALF_FLOAT, WA_STATUS_DECODING_ERROR);
+    check_decoding("a3" "616200" "616100" "6163" HALF_FLOAT, WA_STATUS_UNSUPPORTED_TYPE);
+    /* A keyword map is still looked for after the duplicates: {"$uuid": 0, "$uuid": 0} has two entries */
+    check_decoding("81" "a2" "652475756964" "00" "652475756964" "00", WA_STATUS_DECODING_ERROR);
+#undef HALF_FLOAT
+#undef TOO_DEEP_ARRAYS
+}
+
+#define LARGE_MAP_ENTRY_COUNT 3000u
+
+/* Finding C-7: maps of many keys, in descending and scrambled orders, come out sorted; with one duplicate key, they
+ * are invalid */
+static void test_large_maps_in_any_order(void)
+{
+    size_t order_index;
+    size_t duplicate_index;
+    for (order_index = 0; order_index < 3; ++order_index) {
+        for (duplicate_index = 0; duplicate_index < 2; ++duplicate_index) {
+            wa_test_platform_t *platform = wa_test_platform_create(6);
+            uint8_t *cbor = (uint8_t *)malloc(3u + LARGE_MAP_ENTRY_COUNT * 8u);
+            wa_value_t *tree = NULL;
+            size_t length = 0;
+            size_t index;
+            wa_status_t status;
+            WA_REQUIRE(platform != NULL && cbor != NULL);
+            cbor[length++] = 0xb9u;
+            cbor[length++] = (uint8_t)(LARGE_MAP_ENTRY_COUNT >> 8);
+            cbor[length++] = (uint8_t)(LARGE_MAP_ENTRY_COUNT & 0xffu);
+            for (index = 0; index < LARGE_MAP_ENTRY_COUNT; ++index) {
+                /* Ascending, descending, scrambled (7919 is prime with the entry count) */
+                size_t number = order_index == 0 ? index
+                                : (order_index == 1 ? LARGE_MAP_ENTRY_COUNT - 1u - index
+                                                    : (index * 7919u) % LARGE_MAP_ENTRY_COUNT);
+                if (duplicate_index == 1 && index == LARGE_MAP_ENTRY_COUNT - 1u) {
+                    /* The first key (the second one, in the scrambled order) */
+                    number = order_index == 0 ? 0 : (order_index == 1 ? LARGE_MAP_ENTRY_COUNT - 1u : 1919u);
+                }
+                cbor[length++] = 0x64u;
+                cbor[length++] = (uint8_t)('0' + number / 1000u);
+                cbor[length++] = (uint8_t)('0' + number / 100u % 10u);
+                cbor[length++] = (uint8_t)('0' + number / 10u % 10u);
+                cbor[length++] = (uint8_t)('0' + number % 10u);
+                cbor[length++] = 0x19u;
+                cbor[length++] = (uint8_t)(number >> 8);
+                cbor[length++] = (uint8_t)(number & 0xffu);
+            }
+            status = wa_value_tree_decode_from_cbor(cbor, length, &platform->hooks, &tree);
+            if (duplicate_index == 1) {
+                WA_CHECK_STATUS(status, WA_STATUS_DECODING_ERROR);
+                WA_CHECK(tree == NULL);
+            } else {
+                WA_REQUIRE_STATUS(status, WA_STATUS_OK);
+                WA_CHECK_SIZE(wa_value_get_item_count(tree), LARGE_MAP_ENTRY_COUNT);
+                for (index = 0; index < LARGE_MAP_ENTRY_COUNT; ++index) {
+                    const char *key = NULL;
+                    size_t key_length = 0;
+                    const wa_value_t *value = NULL;
+                    int64_t integer = -1;
+                    char expected_key[8];
+                    sprintf(expected_key, "%04u", (unsigned)index);
+                    WA_REQUIRE(wa_value_get_map_entry(tree, index, &key, &key_length, &value) == 0);
+                    WA_CHECK(key_length == 4 && memcmp(key, expected_key, 4) == 0);
+                    WA_CHECK(wa_value_get_integer(value, &integer) == 0 && integer == (int64_t)index);
+                }
+                WA_CHECK(wa_value_find_map_value(tree, "2999") != NULL);
+                WA_CHECK(wa_value_find_map_value(tree, "3000") == NULL);
+            }
+            wa_value_destroy(tree);
+            free(cbor);
+            WA_CHECK(wa_test_allocator_is_clean(&platform->allocator));
+            wa_test_platform_destroy(platform);
+        }
+    }
+}
+
 static void test_out_of_memory_sweep(void)
 {
     static const char *const document_hex =
@@ -257,6 +365,8 @@ int main(void)
     WA_RUN_TEST(test_accepted_types);
     WA_RUN_TEST(test_unsupported_classes);
     WA_RUN_TEST(test_invalid_classes);
+    WA_RUN_TEST(test_duplicate_key_reported_before_later_faults);
+    WA_RUN_TEST(test_large_maps_in_any_order);
     WA_RUN_TEST(test_out_of_memory_sweep);
     WA_RUN_TEST(test_invalid_arguments);
     return wa_test_finish();

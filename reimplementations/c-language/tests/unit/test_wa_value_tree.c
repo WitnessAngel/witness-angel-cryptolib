@@ -450,6 +450,62 @@ static void test_many_keys_sorted(void)
     wa_test_platform_destroy(platform);
 }
 
+/* Finding C-7: entries appended in any order, then sorted once */
+static void test_unsorted_append_then_sort(void)
+{
+    static const char *const key_sets[][6] = {
+        {NULL},                          /* Empty map */
+        {"a", NULL},                     /* One entry */
+        {"a", "b", "c", NULL},           /* Sorted already */
+        {"c", "b", "a", NULL},           /* Descending */
+        {"b", "", "ab", "a", "c", NULL}, /* Any order, with a prefix and the empty key */
+        {"b", "a", "b", NULL},           /* Duplicates */
+        {"a", "a", NULL},
+        {"c", "a", "b", "", "a", NULL},
+        {"", "b", "", NULL},
+    };
+    static const int expected_results[] = {1, 1, 1, 1, 1, 0, 0, 0, 0};
+    size_t set_index;
+    for (set_index = 0; set_index < sizeof(key_sets) / sizeof(key_sets[0]); ++set_index) {
+        wa_test_platform_t *platform = wa_test_platform_create(13);
+        wa_value_t *map = NULL;
+        wa_value_t *value = NULL;
+        size_t count = 0;
+        size_t index;
+        WA_REQUIRE_STATUS(wa_value_create_map(&platform->hooks, &map), WA_STATUS_OK);
+        for (index = 0; key_sets[set_index][index] != NULL; ++index) {
+            const char *key = key_sets[set_index][index];
+            WA_REQUIRE_STATUS(wa_value_create_integer(&platform->hooks, (int64_t)index, &value), WA_STATUS_OK);
+            WA_REQUIRE_STATUS(wa_value_map_append_unsorted_with_valid_key(map, key, strlen(key), value), WA_STATUS_OK);
+            /* A node is adopted once, here too */
+            WA_CHECK_STATUS(wa_value_map_append_unsorted_with_valid_key(map, "other", 5, value),
+                            WA_STATUS_INVALID_ARGUMENT);
+            count++;
+        }
+        WA_CHECK(wa_value_map_sort_entries(map) == expected_results[set_index]);
+        WA_CHECK_SIZE(wa_value_get_item_count(map), count);
+        for (index = 0; index < count; ++index) {
+            const wa_value_map_entry_t *entry = &map->content.map.entries[index];
+            int64_t original_index = -1;
+            /* Sorted, each value still under its key */
+            WA_REQUIRE(wa_value_get_integer(entry->value, &original_index) == 0);
+            WA_CHECK(wa_value_keys_are_equal(entry->key, entry->key_length, key_sets[set_index][original_index],
+                                             strlen(key_sets[set_index][original_index])));
+            if (index > 0) {
+                int comparison =
+                    wa_value_compare_keys(entry[-1].key, entry[-1].key_length, entry->key, entry->key_length);
+                WA_CHECK(expected_results[set_index] ? comparison < 0 : comparison <= 0);
+            }
+            WA_CHECK(wa_value_map_has_key(map, entry->key, entry->key_length));
+        }
+        WA_CHECK(wa_value_map_sort_entries(map) == expected_results[set_index]); /* Idempotent */
+        wa_value_destroy(map);
+        WA_CHECK(wa_test_allocator_is_clean(&platform->allocator));
+        wa_test_platform_destroy(platform);
+    }
+    WA_CHECK(wa_value_map_sort_entries(NULL) == 0);
+}
+
 int main(void)
 {
     WA_RUN_TEST(test_builders_and_accessors);
@@ -457,6 +513,7 @@ int main(void)
     WA_RUN_TEST(test_null_node_accessors);
     WA_RUN_TEST(test_allocated_block_taken_over_or_copied);
     WA_RUN_TEST(test_many_keys_sorted);
+    WA_RUN_TEST(test_unsorted_append_then_sort);
     WA_RUN_TEST(test_invalid_utf8_rejected);
     WA_RUN_TEST(test_destroy_wipes_strings);
     WA_RUN_TEST(test_shared_subtree_deep_copy_has_no_aliasing);

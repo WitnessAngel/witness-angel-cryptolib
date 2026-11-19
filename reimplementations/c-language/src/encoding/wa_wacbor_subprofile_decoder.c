@@ -157,17 +157,21 @@ static wa_status_t wa_cbor_decode_map_entry(wa_cbor_decoder_t *decoder, wa_value
     }
     WA_RETURN_IF_ERROR(wa_cbor_read_head(decoder, &key_head));
     WA_RETURN_IF_ERROR(wa_cbor_read_string_content(decoder, &key_head, &key, &key_length));
-    if (wa_value_map_has_key(map, (const char *)key, key_length)) {
-        return WA_STATUS_DECODING_ERROR; /* Duplicate map key */
+    status = wa_cbor_decode_item(decoder, depth, &value);
+    if (status == WA_STATUS_OK) {
+        /* The key is valid UTF-8 (read_string_content checked it); entries are sorted, and duplicate keys looked
+         * for, once per map: keeping the entries sorted takes a quadratic time when keys come in descending order */
+        status = wa_value_map_append_unsorted_with_valid_key(map, (const char *)key, key_length, value);
+        if (status != WA_STATUS_OK) {
+            wa_value_destroy(value);
+            status = WA_STATUS_OUT_OF_MEMORY; /* The key was checked already, only allocation can fail */
+        }
     }
-    WA_RETURN_IF_ERROR(wa_cbor_decode_item(decoder, depth, &value));
-    /* The key is valid UTF-8 (read_string_content checked it) and new */
-    status = wa_value_map_add_with_valid_key(map, (const char *)key, key_length, value);
-    if (status != WA_STATUS_OK) {
-        wa_value_destroy(value);
-        return WA_STATUS_OUT_OF_MEMORY; /* Keys were checked already, only allocation can fail */
+    if (status != WA_STATUS_OK && wa_value_map_sort_entries(map) &&
+        wa_value_map_has_key(map, (const char *)key, key_length)) {
+        return WA_STATUS_DECODING_ERROR; /* Duplicate map key, which comes before the fault of its value */
     }
-    return WA_STATUS_OK;
+    return status;
 }
 
 static wa_status_t wa_cbor_decode_map(wa_cbor_decoder_t *decoder, const wa_cbor_head_t *head, size_t depth,
@@ -188,9 +192,17 @@ static wa_status_t wa_cbor_decode_map(wa_cbor_decoder_t *decoder, const wa_cbor_
     for (index = 0; index < head->argument; index++) {
         wa_status_t status = wa_cbor_decode_map_entry(decoder, map, depth);
         if (status != WA_STATUS_OK) {
+            /* A duplicate key is a fault of its own, whatever the fault found after it in the document */
+            if (!wa_value_map_sort_entries(map)) {
+                status = WA_STATUS_DECODING_ERROR;
+            }
             wa_value_destroy(map);
             return status;
         }
+    }
+    if (!wa_value_map_sort_entries(map)) {
+        wa_value_destroy(map);
+        return WA_STATUS_DECODING_ERROR; /* Duplicate map key */
     }
     if (map->content.map.count == 1 &&
         wa_document_tree_is_extended_json_keyword(map->content.map.entries[0].key,

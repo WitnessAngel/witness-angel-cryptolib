@@ -85,6 +85,18 @@ wa_status_t wa_value_create_text_with_valid_utf8(const wa_platform_hooks_t *plat
 /* Like wa_value_map_add(), for a key already known to be valid UTF-8 (not checked again). */
 wa_status_t wa_value_map_add_with_valid_key(wa_value_t *map, const char *key, size_t key_length, wa_value_t *value);
 
+/* For decoders, whose input gives entries in any order, possibly with duplicate keys: append an entry without
+ * looking for its place nor for its key among the entries (in constant time, when inserting each entry at its place
+ * would take a quadratic time on hostile inputs). The map is then unsorted: before anything else than more of these
+ * calls and its destruction, it must go through wa_value_map_sort_entries(). */
+wa_status_t wa_value_map_append_unsorted_with_valid_key(wa_value_t *map, const char *key, size_t key_length,
+                                                        wa_value_t *value);
+
+/* Sort the entries of an owned map filled by wa_value_map_append_unsorted_with_valid_key(), in place and in
+ * O(n log n) (O(n) when they are sorted already): 1 if its keys are distinct, the map being then usable like any
+ * other; 0 if some are equal (wa_value_map_has_key() works on such a map, which is else only fit for destruction). */
+int wa_value_map_sort_entries(wa_value_t *map);
+
 /* 1 if `map` has the entry `key`, else 0 (binary search). */
 int wa_value_map_has_key(const wa_value_t *map, const char *key, size_t key_length);
 

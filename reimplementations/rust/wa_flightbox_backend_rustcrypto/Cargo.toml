@@ -26,6 +26,8 @@ crypto-bigint = { version = "0.7", default-features = false, features = ["alloc"
 ml-kem = { version = "0.3", default-features = false, features = ["hazmat", "zeroize"] }
 
 [dev-dependencies]
+# A document format, so that the conformance suite also checks encryptors over the backend
+wa_flightbox = { workspace = true, features = ["wa-cbor"] }
 wa_flightbox_backend_conformance.workspace = true
 
 [lints]

@@ -163,6 +163,10 @@ impl<B: CryptoBackend, S: OutputSink> CryptainerEncryptor<B, S> {
         output: PayloadCiphertextOutput<S>,
     ) -> Result<Self> {
         let format = check_options(options)?;
+        // Every RSA key that the profile may hold must be within the reach of the backend
+        if device_profile.limits().max_rsa_modulus_bits() > B::maximum_rsa_modulus_bits() {
+            return Err(Error::new(ErrorKind::InvalidArgument));
+        }
         check_cryptainer_metadata(device_profile, cryptainer_metadata)?; // Before any key generation
         let is_offloaded = matches!(output, PayloadCiphertextOutput::Offloaded(_));
         let base = generate_cryptainer_base::<B>(hooks, device_profile, cryptainer_metadata, format, is_offloaded)?;

@@ -24,6 +24,8 @@ cc = "1.2"
 bindgen = { version = "0.73", default-features = false, features = ["runtime"] }
 
 [dev-dependencies]
+# A document format, so that the conformance suite also checks encryptors over the backend
+wa_flightbox = { workspace = true, features = ["wa-cbor"] }
 wa_flightbox_backend_conformance.workspace = true
 
 [lints]

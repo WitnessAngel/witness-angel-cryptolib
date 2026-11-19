@@ -43,6 +43,11 @@ fn rsa_public_operation() {
 }
 
 #[test]
+fn maximum_rsa_modulus_size() {
+    conformance::check_maximum_rsa_modulus_size::<RustCryptoBackend>();
+}
+
+#[test]
 fn ml_kem_768_encapsulation() {
     conformance::check_ml_kem_768_encapsulation::<RustCryptoBackend>();
 }

@@ -227,6 +227,15 @@ pub trait CryptoBackend {
         output: &mut [u8],
     ) -> Result<()>;
 
+    /// The size in bits of the largest modulus that [`Self::rsa_compute_public_operation`] computes with (a larger
+    /// one may give `ErrorKind::InvalidArgument`): 8192 by default, the largest `max_rsa_modulus_bits` of
+    /// [`EncryptorLimits`](crate::EncryptorLimits). Encryptors refuse a device profile loaded with a larger
+    /// `max_rsa_modulus_bits`, with `ErrorKind::InvalidArgument` before any random draw, rather than fail at the
+    /// RSA operation of a larger key.
+    fn maximum_rsa_modulus_bits() -> usize {
+        8192
+    }
+
     /// ML-KEM-768 encapsulation with the given randomness (FIPS 203, `ML-KEM.Encaps_internal`). The modulus check
     /// of the encapsulation key is done by the portable profile loader: backends may repeat it or not, so a key
     /// failing it is either encapsulated or refused with `ErrorKind::CryptoBackendFailure`.

@@ -25,13 +25,16 @@
 pub mod portable_primitive_checks;
 pub mod test_support;
 
-use wa_flightbox::ErrorKind;
 use wa_flightbox::crypto_backend::{
     AES_BLOCK_SIZE, Aes256Encryptor, ChaCha20Poly1305Encryptor, CryptoBackend, ML_KEM_768_CIPHERTEXT_SIZE,
     ML_KEM_768_SHARED_SECRET_SIZE,
 };
+use wa_flightbox::{CryptainerEncryptor, DeviceProfile, EncryptorLimits, EncryptorOptions, ErrorKind};
 
-use crate::test_support::{encode_hex, hex_array_field, hex_field, items, vectors};
+use crate::test_support::{
+    DeterministicHooks, device_profile_sample, enabled_document_formats, encode_hex, hex_array_field, hex_field, items,
+    vectors,
+};
 
 /// Hex in messages: differences are readable, and long values do not flood the output with byte lists.
 fn assert_bytes_eq(actual: &[u8], expected: &[u8], what: &str) {
@@ -52,6 +55,7 @@ pub fn check_all<B: CryptoBackend>() {
     check_hmac_sha256::<B>();
     check_x25519::<B>();
     check_rsa_public_operation::<B>();
+    check_maximum_rsa_modulus_size::<B>();
     check_ml_kem_768_encapsulation::<B>();
 }
 
@@ -375,6 +379,56 @@ pub fn check_rsa_public_operation<B: CryptoBackend>() {
             ErrorKind::InvalidArgument,
             "RSA public operation into a short output"
         );
+    }
+}
+
+/// The largest RSA modulus that the backend declares: at least the 4096 bits of the vectors above, and computed with
+/// (the inputs 0 and 1 of an all-ones modulus of that size). An encryptor accepts a device profile loaded with that
+/// `max_rsa_modulus_bits`, and refuses one loaded with a larger value, before any random draw.
+pub fn check_maximum_rsa_modulus_size<B: CryptoBackend>() {
+    let maximum_bits = B::maximum_rsa_modulus_bits();
+    assert!(maximum_bits >= 4096, "largest RSA modulus of {maximum_bits} bits");
+    let modulus = vec![0xffu8; maximum_bits / 8];
+    for small_input in [0u8, 1] {
+        let mut input = vec![0u8; modulus.len()];
+        *input.last_mut().expect("a modulus of some bytes") = small_input;
+        let mut output = vec![0xa5u8; modulus.len()];
+        B::rsa_compute_public_operation(&modulus, &[1, 0, 1], &input, &mut output)
+            .expect("RSA public operation with the largest modulus");
+        assert_bytes_eq(
+            &output,
+            &input,
+            "RSA public operation on 0 or 1 with the largest modulus",
+        );
+    }
+
+    let Some(&document_format) = enabled_document_formats().first() else {
+        return; // No encryptor without a document format
+    };
+    let options = EncryptorOptions {
+        document_format,
+        ..EncryptorOptions::default()
+    };
+    let profile_bytes = device_profile_sample("minimal_rsa_authenticator");
+    let create = |max_rsa_modulus_bits: usize, hooks: &mut DeterministicHooks| {
+        let limits = EncryptorLimits::new(
+            EncryptorLimits::DEFAULT_MAX_KEY_CIPHER_NESTING_DEPTH,
+            EncryptorLimits::DEFAULT_MAX_CBOR_NESTING_DEPTH,
+            max_rsa_modulus_bits,
+        )
+        .expect("limits");
+        let profile = DeviceProfile::load_from_cbor(&profile_bytes, &limits).expect("device profile");
+        CryptainerEncryptor::<B>::create(&profile, None, &options, hooks).map(drop)
+    };
+    // EncryptorLimits takes multiples of 8 up to 8192 bits
+    let mut hooks = DeterministicHooks::new(1);
+    create(maximum_bits.min(8192) / 8 * 8, &mut hooks).expect("an encryptor within the backend's RSA size");
+    if maximum_bits < 8192 {
+        let mut hooks = DeterministicHooks::new(1);
+        let error = create(maximum_bits / 8 * 8 + 8, &mut hooks)
+            .expect_err("a profile allowing RSA keys beyond the backend's must be refused");
+        assert_eq!(error.kind(), ErrorKind::InvalidArgument);
+        assert_eq!(hooks.random_call_count, 0, "refused before any random draw");
     }
 }
 

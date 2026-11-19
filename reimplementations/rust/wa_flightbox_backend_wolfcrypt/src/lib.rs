@@ -211,6 +211,11 @@ impl CryptoBackend for WolfCryptBackend {
         wolfcrypt_ffi::rsa_compute_public_operation(modulus, public_exponent, input, output).map_err(backend_failure)
     }
 
+    /// `SP_INT_BITS` of the wolfSSL settings (4096 in the default ones).
+    fn maximum_rsa_modulus_bits() -> usize {
+        wolfcrypt_ffi::MAXIMUM_RSA_MODULUS_LENGTH * 8
+    }
+
     fn ml_kem_768_encapsulate_derandomized(
         public_key: &[u8; ML_KEM_768_PUBLIC_KEY_SIZE],
         coins: &[u8; ML_KEM_768_COINS_SIZE],

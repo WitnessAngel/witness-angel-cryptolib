@@ -143,6 +143,44 @@ def test_outputs_being_inputs_refused(c_build, document_format, tmp_path):
     assert _list_files(tmp_path) == sorted([INPUT_FILENAME, PROFILE_FILENAME, cryptainer_name, "linked_input.bin"])
 
 
+def test_non_ascii_paths(c_build, document_format, tmp_path):
+    """Every file is reachable under names outside ASCII, and outside the ANSI code page of Windows."""
+    directory_name = "répertoire 日本"
+    input_name = directory_name + "/enregistrement 日本 Ж.bin"
+    profile_name = directory_name + "/profil é日.cbor"
+    metadata_name = directory_name + "/métadonnées 本.cbor"
+    cryptainer_name, payload_name = _get_output_names(directory_name + "/sortie 日本 è", document_format)
+    try:
+        (tmp_path / directory_name).mkdir()
+        (tmp_path / input_name).write_bytes(b"first recording " * 100)
+    except (OSError, UnicodeError):
+        pytest.skip("File system without such names")
+    (tmp_path / profile_name).write_bytes(VALID_PROFILE_BYTES)
+    (tmp_path / metadata_name).write_bytes(bytes.fromhex("a1616101"))  # {"a": 1}
+    arguments = [input_name, "-p", profile_name, "-m", metadata_name, "--format", document_format]
+    arguments += ["-o", cryptainer_name[: -len(CRYPTAINER_SUFFIXES[document_format])]]
+
+    process = c_build.run_cli(*arguments, cwd=tmp_path)
+    assert process.returncode == 0, process.stderr
+    assert process.stdout.decode("utf-8").splitlines() == [cryptainer_name, payload_name]
+    old_payload = (tmp_path / payload_name).read_bytes()
+    assert (tmp_path / cryptainer_name).is_file() and old_payload
+
+    process = c_build.run_cli(*arguments, cwd=tmp_path)  # Existing outputs are seen
+    assert process.returncode == 1 and b"already exists" in process.stderr, process.stderr
+    process = c_build.run_cli(payload_name, *arguments[1:], "--force", cwd=tmp_path)  # An output is the input
+    assert process.returncode == 1 and b"is the input file" in process.stderr, process.stderr
+    assert (tmp_path / payload_name).read_bytes() == old_payload
+
+    (tmp_path / input_name).write_bytes(b"second recording, longer " * 300)
+    process = c_build.run_cli(*arguments, "--force", cwd=tmp_path)  # And replaced
+    assert process.returncode == 0, process.stderr
+    assert len((tmp_path / payload_name).read_bytes()) > len(old_payload)
+    assert _list_files(tmp_path / directory_name) == sorted(
+        name.split("/")[1] for name in [input_name, profile_name, metadata_name, cryptainer_name, payload_name]
+    )
+
+
 def test_stdin_usable_once(c_build, tmp_path):
     _prepare(tmp_path)
     for arguments in [("-", "-p", "-", "-o", "out"), (INPUT_FILENAME, "-p", "-", "-m", "-")]:

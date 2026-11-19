@@ -208,7 +208,7 @@ static void wa_cli_output_discard(wa_cli_output_t *output)
         output->file = NULL;
     }
     if (output->is_created) {
-        (void)remove(wa_cli_output_get_write_path(output));
+        (void)wa_tool_remove_file(wa_cli_output_get_write_path(output));
         output->is_created = 0;
     }
     free(output->temporary_path);
@@ -236,7 +236,7 @@ static int wa_cli_encrypt(const wa_cli_arguments_t *arguments, const wa_platform
         (void)_setmode(_fileno(stdin), _O_BINARY);
     }
 #endif
-    input_file = is_stdin ? stdin : fopen(arguments->input_path, "rb");
+    input_file = is_stdin ? stdin : wa_tool_open_input_file(arguments->input_path);
     if (input_file == NULL) {
         fprintf(stderr, "Error: cannot open the input file %s\n", arguments->input_path);
         return 1;
@@ -361,6 +361,11 @@ int main(int argument_count, char **arguments)
 
     memset(&cryptainer_output, 0, sizeof(cryptainer_output));
     memset(&payload_output, 0, sizeof(payload_output));
+    /* On Windows, main()'s arguments are in the ANSI code page, which cannot name every file */
+    if (!wa_tool_get_utf8_arguments(&argument_count, &arguments)) {
+        fprintf(stderr, "Error: cannot read the command line\n");
+        return 1;
+    }
     switch (wa_cli_parse_arguments(argument_count, arguments, &parsed)) {
     case 0:
         break;

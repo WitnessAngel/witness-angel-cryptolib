@@ -4,7 +4,10 @@
  */
 
 /* Helpers shared by the host CLI and the test driver: whole-file reading, exclusive file creation, file sinks,
- * cryptainer output naming (design D14), hex, status names. */
+ * cryptainer output naming (design D14), hex, status names.
+ *
+ * Paths are those of main()'s arguments: in the ANSI code page on Windows, unless wa_tool_get_utf8_arguments() is
+ * called first. */
 
 #ifndef WA_TOOL_COMMON_H
 #define WA_TOOL_COMMON_H
@@ -17,6 +20,15 @@
 
 /* "WA_STATUS_OK", "WA_STATUS_INVALID_PROFILE"... or "WA_STATUS_<unknown>" */
 const char *wa_tool_get_status_name(wa_status_t status);
+
+/* On Windows, replace main()'s arguments by the UTF-8 conversion of the wide-character command line (kept for the
+ * life of the process), every path given to the functions below being UTF-8 from then on: files are reachable
+ * whatever their name, which the ANSI code page of main()'s arguments does not allow. Unlike main()'s, these
+ * arguments have no wildcard expanded. Nothing to do elsewhere. 1, or 0 on failure (arguments unchanged). */
+int wa_tool_get_utf8_arguments(int *argument_count, char ***arguments);
+
+/* Open for binary reading; NULL on failure */
+FILE *wa_tool_open_input_file(const char *path);
 
 /* Read a whole file ("-" for stdin) into a malloc()'d buffer (at least 1 byte); NULL on failure */
 uint8_t *wa_tool_read_file(const char *path, size_t *length_out);
@@ -36,6 +48,9 @@ FILE *wa_tool_open_temporary_output_file(const char *final_path, char **temporar
 
 /* Rename `source_path` to `destination_path`, replacing it if it exists (on the same file system); 0 or -1 */
 int wa_tool_replace_file(const char *source_path, const char *destination_path);
+
+/* Delete a file; 0 or -1 */
+int wa_tool_remove_file(const char *path);
 
 /* A sink writing to an open FILE (context: the FILE) */
 wa_output_sink_t wa_tool_get_file_sink(FILE *file);

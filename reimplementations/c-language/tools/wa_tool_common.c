@@ -12,12 +12,93 @@
 #include <fcntl.h>
 #include <io.h>
 #include <sys/stat.h>
+#include <wchar.h>
 #include <windows.h>
+
+#include <shellapi.h>
 #else
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
+
+#if defined(_WIN32)
+/* Code page of the paths given to the functions of this file, all going through the wide-character APIs: the ANSI
+ * one, that of main()'s arguments, or UTF-8 once wa_tool_get_utf8_arguments() has replaced these arguments */
+static UINT wa_tool_path_code_page = CP_ACP;
+
+/* malloc()'d wide-character path; NULL on failure (invalid UTF-8 included) */
+static wchar_t *wa_tool_convert_path_to_wide(const char *path)
+{
+    DWORD flags = wa_tool_path_code_page == CP_UTF8 ? MB_ERR_INVALID_CHARS : 0;
+    int length = MultiByteToWideChar(wa_tool_path_code_page, flags, path, -1, NULL, 0);
+    wchar_t *wide_path;
+    if (length <= 0) {
+        return NULL;
+    }
+    wide_path = (wchar_t *)malloc((size_t)length * sizeof(wchar_t));
+    if (wide_path != NULL &&
+        MultiByteToWideChar(wa_tool_path_code_page, flags, path, -1, wide_path, length) != length) {
+        free(wide_path);
+        wide_path = NULL;
+    }
+    return wide_path;
+}
+#endif
+
+int wa_tool_get_utf8_arguments(int *argument_count, char ***arguments)
+{
+#if defined(_WIN32)
+    int wide_count = 0;
+    wchar_t **wide_arguments = CommandLineToArgvW(GetCommandLineW(), &wide_count);
+    char **utf8_arguments = NULL;
+    int index = 0;
+    if (wide_arguments != NULL && wide_count > 0) {
+        utf8_arguments = (char **)calloc((size_t)wide_count + 1u, sizeof(char *));
+    }
+    for (; utf8_arguments != NULL && index < wide_count; ++index) {
+        /* Unpaired surrogates are refused: they would name another file once converted */
+        int length =
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_arguments[index], -1, NULL, 0, NULL, NULL);
+        utf8_arguments[index] = length > 0 ? (char *)malloc((size_t)length) : NULL;
+        if (utf8_arguments[index] == NULL ||
+            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide_arguments[index], -1, utf8_arguments[index],
+                                length, NULL, NULL) != length) {
+            break;
+        }
+    }
+    if (wide_arguments != NULL) {
+        (void)LocalFree(wide_arguments);
+    }
+    if (utf8_arguments == NULL || index < wide_count) {
+        for (; utf8_arguments != NULL && index >= 0; --index) {
+            free(utf8_arguments[index]);
+        }
+        free(utf8_arguments);
+        return 0;
+    }
+    wa_tool_path_code_page = CP_UTF8;
+    *argument_count = wide_count;
+    *arguments = utf8_arguments;
+    return 1;
+#else
+    (void)argument_count;
+    (void)arguments;
+    return 1;
+#endif
+}
+
+FILE *wa_tool_open_input_file(const char *path)
+{
+#if defined(_WIN32)
+    wchar_t *wide_path = wa_tool_convert_path_to_wide(path);
+    FILE *file = wide_path != NULL ? _wfopen(wide_path, L"rb") : NULL;
+    free(wide_path);
+    return file;
+#else
+    return fopen(path, "rb");
+#endif
+}
 
 const char *wa_tool_get_status_name(wa_status_t status)
 {
@@ -57,7 +138,7 @@ uint8_t *wa_tool_read_file(const char *path, size_t *length_out)
         (void)_setmode(_fileno(stdin), _O_BINARY);
     }
 #endif
-    file = is_stdin ? stdin : fopen(path, "rb");
+    file = is_stdin ? stdin : wa_tool_open_input_file(path);
     if (file == NULL) {
         return NULL;
     }
@@ -95,7 +176,10 @@ int wa_tool_file_exists(const char *path)
 {
 #if defined(_WIN32)
     struct _stat64 file_status;
-    return _stat64(path, &file_status) == 0;
+    wchar_t *wide_path = wa_tool_convert_path_to_wide(path);
+    int is_existing = wide_path != NULL && _wstat64(wide_path, &file_status) == 0;
+    free(wide_path);
+    return is_existing;
 #else
     struct stat file_status;
     return stat(path, &file_status) == 0;
@@ -113,8 +197,12 @@ int wa_tool_files_are_same(const char *path_a, const char *path_b)
     paths[1] = path_b;
     for (index = 0; index < 2; ++index) {
         BOOL is_read;
-        HANDLE handle = CreateFileA(paths[index], 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
-                                    OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+        wchar_t *wide_path = wa_tool_convert_path_to_wide(paths[index]);
+        HANDLE handle = wide_path == NULL
+                            ? INVALID_HANDLE_VALUE
+                            : CreateFileW(wide_path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                                          OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+        free(wide_path);
         if (handle == INVALID_HANDLE_VALUE) {
             return 0;
         }
@@ -163,18 +251,42 @@ FILE *wa_tool_open_temporary_output_file(const char *final_path, char **temporar
 int wa_tool_replace_file(const char *source_path, const char *destination_path)
 {
 #if defined(_WIN32)
-    return MoveFileExA(source_path, destination_path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) ? 0 : -1;
+    wchar_t *wide_source_path = wa_tool_convert_path_to_wide(source_path);
+    wchar_t *wide_destination_path = wa_tool_convert_path_to_wide(destination_path);
+    BOOL is_moved = wide_source_path != NULL && wide_destination_path != NULL &&
+                    MoveFileExW(wide_source_path, wide_destination_path,
+                                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+    free(wide_source_path);
+    free(wide_destination_path);
+    return is_moved ? 0 : -1;
 #else
     return rename(source_path, destination_path) == 0 ? 0 : -1;
+#endif
+}
+
+int wa_tool_remove_file(const char *path)
+{
+#if defined(_WIN32)
+    wchar_t *wide_path = wa_tool_convert_path_to_wide(path);
+    int result = wide_path != NULL && _wremove(wide_path) == 0 ? 0 : -1;
+    free(wide_path);
+    return result;
+#else
+    return remove(path) == 0 ? 0 : -1;
 #endif
 }
 
 FILE *wa_tool_open_output_file(const char *path, int force)
 {
 #if defined(_WIN32)
-    int file_descriptor = _open(path, _O_WRONLY | _O_CREAT | _O_BINARY | (force ? _O_TRUNC : _O_EXCL),
-                                _S_IREAD | _S_IWRITE);
+    wchar_t *wide_path = wa_tool_convert_path_to_wide(path);
+    int file_descriptor = -1;
     FILE *file;
+    if (wide_path != NULL) {
+        file_descriptor = _wopen(wide_path, _O_WRONLY | _O_CREAT | _O_BINARY | (force ? _O_TRUNC : _O_EXCL),
+                                 _S_IREAD | _S_IWRITE);
+        free(wide_path);
+    }
     if (file_descriptor < 0) {
         return NULL;
     }

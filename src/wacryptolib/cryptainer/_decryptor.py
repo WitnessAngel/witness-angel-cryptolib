@@ -888,11 +888,13 @@ class CryptainerDecryptor(CryptainerBase):
         trustee_id = get_trustee_id(trustee)
         passphrases = self._get_passphrases(trustee_id)
         common_passphrases = self._get_passphrases(None)
+        common_passphrases_withheld = False
 
         if trustee.get("trustee_type") == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE:
             if common_passphrases:
                 # COMMON passphrases are NEVER sent over the network, since they might protect unrelated keys
                 logger.debug("Common passphrases are not sent to remote trustee %s", trustee_id)
+                common_passphrases_withheld = True
         else:
             passphrases += common_passphrases
 
@@ -950,8 +952,14 @@ class CryptainerDecryptor(CryptainerBase):
             except KeyLoadingError as exc:
                 operation_report.add_entry(
                     entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
-                    entry_message="Could not load private key %s/%s (missing passphrase?)"
-                    % (cipher_algo, keychain_uid),
+                    entry_message="Could not load private key %s/%s (missing passphrase?%s)"
+                    % (
+                        cipher_algo,
+                        keychain_uid,
+                        " common passphrases are not sent to remote trustees, give them for this trustee ID"
+                        if common_passphrases_withheld
+                        else "",
+                    ),
                     entry_exception=exc,
                 )
 

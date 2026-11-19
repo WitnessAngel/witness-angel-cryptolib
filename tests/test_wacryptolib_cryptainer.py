@@ -1823,6 +1823,32 @@ def test_common_passphrases_are_not_sent_to_jsonrpc_trustees():
 
     assert sent_passphrases == [["remote_pass"], ["local_pass", "common_pass"]]
 
+    # The report of a passphrase failure tells why common passphrases didn't help, only when they were withheld
+    class FakeProxyWithProtectedKeys:
+        def decrypt_with_private_key(self, **kwargs):
+            raise KeyLoadingError("fake")
+
+    for trustee, passphrase_mapper, withheld in [
+        (jsonrpc_trustee, mapper, True),
+        (jsonrpc_trustee, {get_trustee_id(jsonrpc_trustee): ["remote_pass"]}, False),
+        (local_trustee, mapper, False),
+    ]:
+        decryptor = CryptainerDecryptor(keystore_pool=InMemoryKeystorePool(), passphrase_mapper=passphrase_mapper)
+        operation_report = OperationReport()
+        with patch("wacryptolib.cryptainer._decryptor.get_trustee_proxy", return_value=FakeProxyWithProtectedKeys()):
+            decryptor._decrypt_with_asymmetric_cipher(
+                cipher_algo="RSA_OAEP",
+                keychain_uid=uuid.uuid4(),
+                cipherdict={},
+                trustee=trustee,
+                cryptainer_metadata=None,
+                operation_report=operation_report,
+                key_ciphertext_format="json",
+            )
+        (error_entry,) = operation_report.get_error_entries()
+        assert "missing passphrase?" in error_entry["entry_message"]
+        assert ("common passphrases are not sent to remote trustees" in error_entry["entry_message"]) == withheld
+
 
 # Cryptoconf with 1 payload_cipher_layer containing 1 key_cipher_layer managed by an authenticator
 def test_cryptainer_decryption_with_passphrases_and_mock_authenticator_from_simplecryptoconf(tmp_path):

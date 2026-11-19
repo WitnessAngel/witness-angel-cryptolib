@@ -105,9 +105,9 @@ impl CryptoBackend for RustCryptoBackend {
         ciphertext: &mut [u8; ML_KEM_768_CIPHERTEXT_SIZE],
         shared_secret: &mut [u8; ML_KEM_768_SHARED_SECRET_SIZE],
     ) -> Result<()> {
-        // The key decoding includes the modulus check of FIPS 203
+        // The key decoding includes the modulus check of FIPS 203: a refusal of the library, as in the C adapters
         let encapsulation_key =
-            EncapsulationKey768::new(public_key.into()).map_err(|_| Error::new(ErrorKind::KeyConstraintViolation))?;
+            EncapsulationKey768::new(public_key.into()).map_err(|_| Error::new(ErrorKind::CryptoBackendFailure))?;
         // The randomness is borrowed as an array of the crate, not copied
         let (kem_ciphertext, mut kem_shared_secret) = encapsulation_key.encapsulate_deterministic(coins.into());
         ciphertext.copy_from_slice(kem_ciphertext.as_slice());

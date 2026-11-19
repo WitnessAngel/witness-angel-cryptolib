@@ -379,7 +379,8 @@ pub fn check_rsa_public_operation<B: CryptoBackend>() {
 }
 
 /// ML-KEM-768 encapsulation from given randomness: a known answer of pycryptodome (FIPS 203). The modulus check of
-/// encapsulation keys belongs to the portable profile loader, so it is not tested here.
+/// encapsulation keys belongs to the portable profile loader: a key failing it may be encapsulated or refused, but
+/// only with `ErrorKind::CryptoBackendFailure`.
 pub fn check_ml_kem_768_encapsulation<B: CryptoBackend>() {
     let vector = &vectors::backend_conformance()["ml_kem_768"];
     let public_key = hex_array_field(vector, "public_key");
@@ -394,4 +395,18 @@ pub fn check_ml_kem_768_encapsulation<B: CryptoBackend>() {
         &hex_field(vector, "shared_secret"),
         "ML-KEM-768 shared secret",
     );
+
+    // The first 12-bit coefficient set to 4095, not below q = 3329
+    let mut unreduced_public_key = public_key;
+    unreduced_public_key[0] = 0xff;
+    unreduced_public_key[1] |= 0x0f;
+    if let Err(error) =
+        B::ml_kem_768_encapsulate_derandomized(&unreduced_public_key, &coins, &mut ciphertext, &mut shared_secret)
+    {
+        assert_eq!(
+            error.kind(),
+            ErrorKind::CryptoBackendFailure,
+            "ML-KEM-768 encapsulation key failing the modulus check"
+        );
+    }
 }

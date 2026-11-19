@@ -228,7 +228,8 @@ pub trait CryptoBackend {
     ) -> Result<()>;
 
     /// ML-KEM-768 encapsulation with the given randomness (FIPS 203, `ML-KEM.Encaps_internal`). The modulus check
-    /// of the encapsulation key is done by the portable profile loader: backends may repeat it or not.
+    /// of the encapsulation key is done by the portable profile loader: backends may repeat it or not, so a key
+    /// failing it is either encapsulated or refused with `ErrorKind::CryptoBackendFailure`.
     fn ml_kem_768_encapsulate_derandomized(
         public_key: &[u8; ML_KEM_768_PUBLIC_KEY_SIZE],
         coins: &[u8; ML_KEM_768_COINS_SIZE],

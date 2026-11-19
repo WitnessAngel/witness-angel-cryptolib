@@ -240,6 +240,23 @@ def _check_rsa_encryption_key(key):
         raise ValueError("The RSA public exponent and modulus must be coprime")
 
 
+def check_asymmetric_encryption_key_sanity(key, *, cipher_algo: str) -> None:
+    """Check that a key object satisfies the constraints of an asymmetric cipher algo, like encrypt_bytestring()
+    does, but without encrypting anything: this allows to reject a key as soon as it is resolved.
+
+    :raises EncryptionError: if the key must not be used for encryption"""
+    key_checkers = dict(
+        RSA_OAEP=_check_rsa_encryption_key, ECIES_X25519=_check_x25519_key, ML_KEM_768=_check_ml_kem_key
+    )
+    cipher_algo = cipher_algo.upper()
+    if cipher_algo not in key_checkers:
+        raise ValueError("Unknown asymmetric cipher type '%s'" % cipher_algo)
+    try:
+        key_checkers[cipher_algo](key)
+    except ValueError as exc:
+        raise EncryptionError("Invalid %s encryption key (%s)" % (cipher_algo, exc)) from exc
+
+
 def _encrypt_via_rsa_oaep(plaintext: bytes, key_dict: dict) -> dict:
     """Encrypt a bytestring with PKCS#1 RSA OAEP (asymmetric algo).
 

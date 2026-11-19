@@ -3403,6 +3403,146 @@ def test_invalid_metadata_is_refused_before_any_random_draw_or_output(tmp_path, 
     assert decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)[0] == b"abc"
 
 
+def test_locally_available_public_keys_are_checked_before_any_random_draw_or_output(tmp_path):
+    from wacryptolib import _crypto_backend
+    from wacryptolib.cryptainer._encryptor import FlightboxUtilitiesImpl
+    from wacryptolib.exceptions import EncryptionError
+
+    keystore_uid = generate_uuid0()
+    root_keychain_uid = generate_uuid0()
+    own_keychain_uid = generate_uuid0()
+    authenticator_trustee = dict(trustee_type=CRYPTAINER_TRUSTEE_TYPES.AUTHENTICATOR_TRUSTEE, keystore_uid=keystore_uid)
+
+    def _build_cryptoconf(**extra_fields):
+        return dict(
+            payload_cipher_layers=[
+                dict(  # This first layer makes the local keyfactory generate a keypair on demand
+                    payload_cipher_algo="AES_CBC",
+                    key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)],
+                    payload_ciphertext_signatures=[],
+                ),
+                dict(
+                    payload_cipher_algo="AES_EAX",
+                    key_cipher_layers=[
+                        dict(
+                            key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                            key_shared_secret_threshold=1,
+                            key_shared_secret_shards=[
+                                dict(key_cipher_layers=[
+                                    dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+                                ]),
+                                dict(key_cipher_layers=[
+                                    dict(key_cipher_algo="AES_EAX", key_cipher_layers=[  # Authenticator key used twice
+                                        dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=authenticator_trustee)
+                                    ]),
+                                    dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=authenticator_trustee),
+                                    dict(
+                                        key_cipher_algo="RSA_OAEP",
+                                        key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER,
+                                        keychain_uid=own_keychain_uid,
+                                    ),
+                                ]),
+                            ],
+                        )
+                    ],
+                    payload_ciphertext_signatures=[],
+                ),
+            ],
+            **extra_fields
+        )
+
+    cryptoconf = _build_cryptoconf(keychain_uid=root_keychain_uid)
+    check_cryptoconf_sanity(cryptoconf)
+    cryptainer_filepath = tmp_path / "bad_keys.crypt.json"
+
+    def _generate_rsa_keypair_pems(key_length_bits):
+        public_key, private_key = _crypto_backend.generate_rsa_keypair(key_length_bits)
+        return dict(
+            public_key=_crypto_backend.export_rsa_key_to_pem(public_key),
+            private_key=_crypto_backend.export_rsa_key_to_pem(private_key),
+        )
+
+    weak_keypair = _generate_rsa_keypair_pems(1024)
+
+    def _check_rejection_without_side_effect(keystore_pool, exception_class, error_regex, cryptoconf=cryptoconf):
+        initial_keypair_count = len(keystore_pool.get_local_keyfactory().list_keypair_identifiers())
+        with patch("wacryptolib.cryptainer._encryptor.generate_uuid0") as generate_uuid0_mock, patch(
+            "wacryptolib.cryptainer._encryptor.generate_symkey"
+        ) as generate_symkey_mock:
+            with pytest.raises(exception_class, match=error_regex):
+                encrypt_payload_into_cryptainer(
+                    payload=b"abc", cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
+                )
+            with pytest.raises(exception_class, match=error_regex):
+                encrypt_payload_and_stream_cryptainer_to_filesystem(
+                    b"abc", cryptainer_filepath=cryptainer_filepath, cryptoconf=cryptoconf,
+                    cryptainer_metadata=None, keystore_pool=keystore_pool,
+                )
+        assert not generate_uuid0_mock.called and not generate_symkey_mock.called
+        assert not cryptainer_filepath.exists()
+        assert len(keystore_pool.get_local_keyfactory().list_keypair_identifiers()) == initial_keypair_count
+
+    # Missing authenticator keystore
+    keystore_pool = InMemoryKeystorePool()
+    _check_rejection_without_side_effect(keystore_pool, KeystoreDoesNotExist, "not found")
+
+    # Missing authenticator key
+    keystore_pool._register_fake_imported_storage_uids(storage_uids=[keystore_uid])
+    foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+    _check_rejection_without_side_effect(keystore_pool, KeyDoesNotExist, "not found")
+
+    # Authenticator key violating the RSA_OAEP constraints
+    foreign_keystore.set_keypair(keychain_uid=root_keychain_uid, key_algo="RSA_OAEP", **weak_keypair)
+    _check_rejection_without_side_effect(keystore_pool, EncryptionError, "asymmetric key length")
+
+    # Valid authenticator key, but a key already present in the local keyfactory violates the constraints
+    keystore_pool = InMemoryKeystorePool()
+    keystore_pool._register_fake_imported_storage_uids(storage_uids=[keystore_uid])
+    foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+    generate_keypair_for_storage(
+        key_algo="RSA_OAEP", keystore=foreign_keystore, keychain_uid=root_keychain_uid, passphrase=None
+    )
+    keystore_pool.get_local_keyfactory().set_keypair(keychain_uid=own_keychain_uid, key_algo="RSA_OAEP", **weak_keypair)
+    _check_rejection_without_side_effect(keystore_pool, EncryptionError, "asymmetric key length")
+
+    # Valid keys: each locally available key is fetched once, missing local ones are generated during encryption
+    keystore_pool = InMemoryKeystorePool()
+    keystore_pool._register_fake_imported_storage_uids(storage_uids=[keystore_uid])
+    foreign_keystore = keystore_pool.get_foreign_keystore(keystore_uid)
+    generate_keypair_for_storage(
+        key_algo="RSA_OAEP", keystore=foreign_keystore, keychain_uid=root_keychain_uid, passphrase=None
+    )
+    fetch_calls = []
+    original_fetch = FlightboxUtilitiesImpl._fetch_asymmetric_key_pem_from_trustee
+
+    def _recording_fetch(self, trustee, key_algo, keychain_uid, must_exist=False):
+        fetch_calls.append((trustee["trustee_type"], keychain_uid, must_exist))
+        return original_fetch(self, trustee, key_algo=key_algo, keychain_uid=keychain_uid, must_exist=must_exist)
+
+    with patch.object(FlightboxUtilitiesImpl, "_fetch_asymmetric_key_pem_from_trustee", _recording_fetch):
+        cryptainer = encrypt_payload_into_cryptainer(
+            payload=b"abc", cryptoconf=cryptoconf, cryptainer_metadata=None, keystore_pool=keystore_pool
+        )
+    assert sorted(fetch_calls, key=repr) == sorted(
+        [
+            ("authenticator", root_keychain_uid, True),  # Upfront, and reused by both layers
+            ("local_keyfactory", root_keychain_uid, True),  # Upfront attempt, without generation
+            ("local_keyfactory", own_keychain_uid, True),
+            ("local_keyfactory", root_keychain_uid, False),  # On-demand generations during encryption
+            ("local_keyfactory", root_keychain_uid, False),
+            ("local_keyfactory", own_keychain_uid, False),
+        ],
+        key=repr,
+    )
+    assert decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)[0] == b"abc"
+
+    # Without any keychain uid known upfront, keys are only resolved during encryption, like those of remote trustees
+    with pytest.raises(KeyDoesNotExist):
+        encrypt_payload_into_cryptainer(
+            payload=b"abc", cryptoconf=_build_cryptoconf(), cryptainer_metadata=None, keystore_pool=keystore_pool
+        )
+
+
 def test_decrypt_non_dict_cryptainer_raises_schema_validation_error():
     for wrong_cryptainer in (None, 42, [{}]):
         with pytest.raises(SchemaValidationError, match="must be a dict"):

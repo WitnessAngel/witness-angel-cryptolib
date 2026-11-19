@@ -8,16 +8,18 @@ from typing import Union, BinaryIO
 import uuid
 
 from wacryptolib.cryptainer import CryptainerBase, SIGNATURE_POLICIES, PAYLOAD_CIPHERTEXT_LOCATIONS, logger, \
-    CRYPTAINER_STATES, get_trustee_proxy, \
+    CRYPTAINER_STATES, CRYPTAINER_TRUSTEE_TYPES, SHARED_SECRET_ALGO_MARKER, get_trustee_proxy, get_trustee_id, \
     _inject_payload_digests_and_signatures, FlightboxUtilitiesBase, FlightBox, ensure_validated_cryptoconf, ValidatedCryptainer, \
     KEY_CIPHERTEXT_FORMAT_JSON, KEY_CIPHERTEXT_FORMATS, check_cryptainer_metadata_sanity
 
 from wacryptolib.cipher import (
+    check_asymmetric_encryption_key_sanity,
     encrypt_bytestring,
     PayloadEncryptionPipeline,
     SUPPORTED_CIPHER_ALGOS,
 )
 from wacryptolib.exceptions import (
+    KeyDoesNotExist,
     SchemaValidationError,
 )
 from wacryptolib.keygen import (
@@ -36,6 +38,23 @@ from wacryptolib.utilities import (
 from wacryptolib.hash import hash_message
 
 
+def _iter_asymmetric_key_cipher_layers(cryptoconf: dict):
+    """Yield the asymmetric key cipher layers of a validated cryptoconf, whatever their nesting."""
+    pending_key_cipher_layers = [
+        payload_cipher_layer["key_cipher_layers"] for payload_cipher_layer in cryptoconf["payload_cipher_layers"]
+    ]
+    while pending_key_cipher_layers:
+        for key_cipher_layer in pending_key_cipher_layers.pop():
+            if key_cipher_layer["key_cipher_algo"] == SHARED_SECRET_ALGO_MARKER:
+                pending_key_cipher_layers.extend(
+                    shard["key_cipher_layers"] for shard in key_cipher_layer["key_shared_secret_shards"]
+                )
+            elif "key_cipher_layers" in key_cipher_layer:  # Symmetric layer, its sub-key has its own layers
+                pending_key_cipher_layers.append(key_cipher_layer["key_cipher_layers"])
+            else:
+                yield key_cipher_layer
+
+
 class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
     """
     THIS CLASS IS PRIVATE API
@@ -50,6 +69,7 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
     def __init__(self, logger: logging.Logger, keystore_pool: KeystorePoolBase) -> None:
         self.logger = logger
         self._keystore_pool = keystore_pool
+        self._prefetched_public_keys = {}  # Only filled during a cryptainer creation
 
     def raise_validation_error(self, msg: str) -> None:
         raise SchemaValidationError(msg)
@@ -69,18 +89,64 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
     def generate_symkey(self, cipher_algo: str):
         return generate_symkey(cipher_algo)
 
-    def _fetch_asymmetric_key_pem_from_trustee(self, trustee, key_algo, keychain_uid):
+    def _fetch_asymmetric_key_pem_from_trustee(self, trustee, key_algo, keychain_uid, must_exist=False):
         """Method meant to be easily replaced by a mockup in tests"""
         trustee_proxy = get_trustee_proxy(trustee=trustee, keystore_pool=self._keystore_pool)
         self.logger.debug("Fetching asymmetric key %s %r", key_algo, keychain_uid)
-        public_key_pem = trustee_proxy.fetch_public_key(keychain_uid=keychain_uid, key_algo=key_algo)
+        public_key_pem = trustee_proxy.fetch_public_key(
+            keychain_uid=keychain_uid, key_algo=key_algo, must_exist=must_exist
+        )
         return public_key_pem
 
-    def get_public_key(self, trustee: dict, key_algo: str, keychain_uid: uuid.UUID) -> dict:
-        public_key_pem = self._fetch_asymmetric_key_pem_from_trustee(trustee, key_algo=key_algo, keychain_uid=keychain_uid)
+    def _fetch_and_check_public_key(self, trustee: dict, key_algo: str, keychain_uid: uuid.UUID, must_exist=False):
+        public_key_pem = self._fetch_asymmetric_key_pem_from_trustee(
+            trustee, key_algo=key_algo, keychain_uid=keychain_uid, must_exist=must_exist
+        )
         self.logger.debug("Fetching asymmetric keypair %s/%s to encrypt symmetric key struct", key_algo, keychain_uid)
         public_key = load_asymmetric_key_from_pem_bytestring(key_pem=public_key_pem, key_algo=key_algo)
+        check_asymmetric_encryption_key_sanity(public_key, cipher_algo=key_algo)  # Before any use
         return public_key
+
+    def get_public_key(self, trustee: dict, key_algo: str, keychain_uid: uuid.UUID) -> dict:
+        public_key = self._prefetched_public_keys.get((get_trustee_id(trustee), key_algo, keychain_uid))
+        if public_key is None:
+            public_key = self._fetch_and_check_public_key(trustee, key_algo=key_algo, keychain_uid=keychain_uid)
+        return public_key
+
+    def prefetch_local_public_keys(self, cryptoconf: dict) -> None:
+        """Resolve and check, before any random draw, the public keys of a validated cryptoconf which are
+        available locally and without side effect: those of authenticator trustees, whose imported keystores are
+        read-only (a missing keystore or key is then an error), and those already present in the local keyfactory.
+        They are kept until clear_prefetched_public_keys() is called, so that encryption uses the checked keys.
+
+        Other keys are still resolved and checked when their layer gets encrypted: those of jsonrpc_api trustees,
+        those that the local keyfactory will generate on demand, and those of layers falling back to a root
+        keychain uid which is absent from the cryptoconf (it is then drawn during encryption)."""
+        root_keychain_uid = cryptoconf.get("keychain_uid")
+        seen_cache_keys = set()
+        for key_cipher_layer in _iter_asymmetric_key_cipher_layers(cryptoconf):
+            trustee = key_cipher_layer["key_cipher_trustee"]
+            trustee_type = trustee["trustee_type"]
+            key_algo = key_cipher_layer["key_cipher_algo"]
+            keychain_uid = key_cipher_layer.get("keychain_uid") or root_keychain_uid  # Like the flightbox core
+            if not keychain_uid or trustee_type == CRYPTAINER_TRUSTEE_TYPES.JSONRPC_API_TRUSTEE:
+                continue
+            cache_key = (get_trustee_id(trustee), key_algo, keychain_uid)
+            if cache_key in seen_cache_keys:
+                continue
+            seen_cache_keys.add(cache_key)
+            try:
+                public_key = self._fetch_and_check_public_key(
+                    trustee, key_algo=key_algo, keychain_uid=keychain_uid, must_exist=True
+                )
+            except KeyDoesNotExist:
+                if trustee_type != CRYPTAINER_TRUSTEE_TYPES.LOCAL_KEYFACTORY_TRUSTEE:
+                    raise
+                continue  # Will be generated on demand
+            self._prefetched_public_keys[cache_key] = public_key
+
+    def clear_prefetched_public_keys(self) -> None:
+        self._prefetched_public_keys.clear()
 
     def encrypt_bytestring(self, plaintext: bytes, *, cipher_algo: str, key_dict: dict) -> dict:
         return encrypt_bytestring(plaintext=plaintext, cipher_algo=cipher_algo, key_dict=key_dict)
@@ -106,8 +172,8 @@ class CryptainerEncryptor(CryptainerBase):
             raise ValueError("Unknown key ciphertext format %r" % (key_ciphertext_format,))
         self._key_ciphertext_format = key_ciphertext_format
 
-        _flightbox_utilities = FlightboxUtilitiesImpl(logger=logger, keystore_pool=self._keystore_pool)
-        self._flightbox = FlightBox(_flightbox_utilities)
+        self._flightbox_utilities = FlightboxUtilitiesImpl(logger=logger, keystore_pool=self._keystore_pool)
+        self._flightbox = FlightBox(self._flightbox_utilities)
 
     def build_cryptainer_and_encryption_pipeline(
         self,
@@ -246,11 +312,15 @@ class CryptainerEncryptor(CryptainerBase):
         check_cryptainer_metadata_sanity(cryptainer_metadata)  # Before any random draw, key generation or output
         cryptainer_metadata = copy.deepcopy(cryptainer_metadata)  # The validated cryptainer must not alias caller data
 
-        cryptainer, secrets = self._flightbox.generate_cryptainer_base_and_secrets(
-            cryptoconf=cryptoconf,
-            cryptainer_metadata=cryptainer_metadata,
-            key_ciphertext_format=self._key_ciphertext_format,
-        )
+        try:
+            self._flightbox_utilities.prefetch_local_public_keys(cryptoconf)  # Still before any random draw
+            cryptainer, secrets = self._flightbox.generate_cryptainer_base_and_secrets(
+                cryptoconf=cryptoconf,
+                cryptainer_metadata=cryptainer_metadata,
+                key_ciphertext_format=self._key_ciphertext_format,
+            )
+        finally:
+            self._flightbox_utilities.clear_prefetched_public_keys()  # Keys may change before the next cryptainer
         return cryptainer, secrets
 
     def add_authentication_data_to_cryptainer(self, cryptainer: dict, payload_integrity_tags: dict):

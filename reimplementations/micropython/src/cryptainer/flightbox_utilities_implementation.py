@@ -26,10 +26,27 @@ def _get_random_bytes(nbytes):
     return os.urandom(nbytes)
 
 
+_EPOCH_2000_UNIX_TIME = 946684800  # Seconds from 1970-01-01 to 2000-01-01 (UTC)
+
+
+def _get_unix_time_in_ten_thousandths_of_second() -> int:
+    """Current UNIX time, in 1/10000 s, on any MicroPython port: most bare-metal ports return integer seconds from
+    time.time() but have time.time_ns(), and some count from 2000-01-01 instead of 1970-01-01. 0 without a clock."""
+    try:
+        if hasattr(time, "time_ns"):
+            tsi = time.time_ns() // 100000
+        else:
+            tsi = int(time.time() * 10000)
+        if hasattr(time, "gmtime") and time.gmtime(0)[0] == 2000:
+            tsi += _EPOCH_2000_UNIX_TIME * 10000
+    except (AttributeError, OSError):  # No usable clock: a zero time prefix is allowed
+        return 0
+    return tsi
+
+
 def _generate_uuid0() -> UUID:  # Adapted from "uuid0" MIT package
-    """Generate a new UUID. If the UNIX timestamp 'ts' is not given, the current time is used"""
-    ts = time.time()
-    tsi = int(ts * 10000)
+    """Generate a new UUID, prefixed by the current UNIX time in 1/10000 s, then made of 80 random bits"""
+    tsi = _get_unix_time_in_ten_thousandths_of_second()
     # Pack as an 8-byte uint and drop the first 2 bytes:
     t_bytes = struct.pack('>Q', tsi)[2:]
     r_bytes = os.urandom(10)

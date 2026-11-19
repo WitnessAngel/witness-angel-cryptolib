@@ -206,6 +206,9 @@ impl ChaCha20Poly1305Context {
         };
         let chacha = context.chacha.as_mut_ptr();
         let mut poly1305_key = [0u8; 32];
+        // One pointer for both the input and the output of the in-place keystream call: a shared borrow taken
+        // beside it would be invalidated by the first write
+        let poly1305_key_pointer = poly1305_key.as_mut_ptr();
         // SAFETY: the structures are zero-filled blocks that these functions initialize; `key`, `nonce` and
         // `poly1305_key` are valid for the lengths given. wc_Chacha_Process works in place.
         let result = unsafe {
@@ -214,15 +217,15 @@ impl ChaCha20Poly1305Context {
                 .and_then(|()| {
                     check(bindings::wc_Chacha_Process(
                         chacha,
-                        poly1305_key.as_mut_ptr(),
-                        poly1305_key.as_ptr(),
+                        poly1305_key_pointer,
+                        poly1305_key_pointer.cast_const(),
                         32,
                     ))
                 })
                 .and_then(|()| {
                     check(bindings::wc_Poly1305SetKey(
                         context.poly1305.as_mut_ptr(),
-                        poly1305_key.as_ptr(),
+                        poly1305_key_pointer.cast_const(),
                         32,
                     ))
                 })

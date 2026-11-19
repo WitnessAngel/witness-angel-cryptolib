@@ -397,7 +397,7 @@ static void test_error_location_path_escapes_keys(void)
                                                   "cryptoconf.k\\xC3\\xA9\\xC3\\xA9"};
     wa_error_location_path_t path;
     char buffer[32];
-    char long_key[400];
+    char long_key[5 + 2 * 199];
     size_t length_after_root;
     size_t index;
     wa_error_location_path_initialize(&path);
@@ -442,7 +442,8 @@ static void test_error_location_path_escapes_keys(void)
         (void)wa_error_location_path_push_key(&path, long_key, key_length);
         WA_CHECK_SIZE(path.logical_length, 10u + 1u + (index + 1u) + 199u * 8u);
         text_length = strlen(path.text);
-        WA_CHECK(text_length < WA_ERROR_LOCATION_PATH_CAPACITY && text_length + 4u >= WA_ERROR_LOCATION_PATH_CAPACITY);
+        WA_CHECK(text_length < WA_ERROR_LOCATION_PATH_CAPACITY);
+        WA_CHECK(text_length + 4u >= WA_ERROR_LOCATION_PATH_CAPACITY);
         WA_CHECK_SIZE((text_length - (11u + index + 1u)) % 4u, 0);
         WA_CHECK(path.text[text_length - 4u] == '\\' && path.text[text_length - 3u] == 'x');
         for (position = 0; position < text_length; ++position) {

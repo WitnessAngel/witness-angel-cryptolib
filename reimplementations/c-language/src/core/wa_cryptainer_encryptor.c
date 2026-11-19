@@ -33,8 +33,25 @@ struct wa_cryptainer_encryptor {
     wa_cryptainer_base_t base;                      /* Cryptainer tree and payload symkeys */
     wa_payload_encryption_pipeline_t pipeline;
     wa_growable_byte_buffer_t inline_ciphertext;    /* Inline location only */
-    wa_output_sink_t inline_ciphertext_sink;        /* Appends to inline_ciphertext */
+    /* Where the pipeline writes: a sink appending to inline_ciphertext, or a copy of the caller's offloaded sink (so
+     * that the caller's wa_output_sink_t and options need not outlive the creation call) */
+    wa_output_sink_t payload_ciphertext_sink;
 };
+
+/* Wipe and release what was only needed to encrypt the payload: the cipher contexts and scratch buffers of the
+ * pipeline, and the payload symkeys (a second call is a no-op) */
+static void wa_release_payload_encryption_secrets(wa_cryptainer_encryptor_t *encryptor)
+{
+    wa_payload_encryption_pipeline_release(&encryptor->pipeline);
+    wa_cryptainer_base_release_payload_symkeys(&encryptor->base);
+}
+
+/* Enter the FAILED state, which only accepts destroy: its payload secrets are of no use anymore */
+static void wa_fail_encryptor(wa_cryptainer_encryptor_t *encryptor)
+{
+    wa_release_payload_encryption_secrets(encryptor);
+    encryptor->state = WA_CRYPTAINER_ENCRYPTOR_STATE_FAILED;
+}
 
 /* Metadata goes at depth 2 of cryptainers and key structs: one level less than the CBOR nesting limit */
 static wa_status_t wa_check_cryptainer_metadata(const wa_value_t *cryptainer_metadata_or_null)
@@ -78,7 +95,6 @@ wa_status_t wa_cryptainer_encryptor_create(const wa_device_profile_t *device_pro
 {
     wa_cryptainer_encryptor_t *encryptor;
     wa_document_format_t resolved_format = WA_DOCUMENT_FORMAT_BUILD_DEFAULT;
-    const wa_output_sink_t *payload_ciphertext_sink;
     wa_status_t status;
 
     if (encryptor_out == NULL) {
@@ -101,17 +117,16 @@ wa_status_t wa_cryptainer_encryptor_create(const wa_device_profile_t *device_pro
     encryptor->resolved_format = resolved_format;
     encryptor->ciphertext_location = options->ciphertext_location;
     wa_growable_byte_buffer_initialize(&encryptor->inline_ciphertext, options->platform_hooks, 0);
-    encryptor->inline_ciphertext_sink = wa_growable_byte_buffer_get_sink(&encryptor->inline_ciphertext);
-    payload_ciphertext_sink = options->ciphertext_location == WA_CIPHERTEXT_LOCATION_INLINE
-                                  ? &encryptor->inline_ciphertext_sink
-                                  : options->payload_ciphertext_sink;
+    encryptor->payload_ciphertext_sink = options->ciphertext_location == WA_CIPHERTEXT_LOCATION_INLINE
+                                             ? wa_growable_byte_buffer_get_sink(&encryptor->inline_ciphertext)
+                                             : *options->payload_ciphertext_sink;
 
     status = wa_cryptainer_base_generate(options->platform_hooks, device_profile, cryptainer_metadata_or_null,
                                          resolved_format, options->ciphertext_location, &encryptor->base);
     if (status == WA_STATUS_OK) {
         status = wa_payload_encryption_pipeline_start(options->platform_hooks, encryptor->base.payload_symkeys,
-                                                      encryptor->base.payload_layer_count, payload_ciphertext_sink,
-                                                      &encryptor->pipeline);
+                                                      encryptor->base.payload_layer_count,
+                                                      &encryptor->payload_ciphertext_sink, &encryptor->pipeline);
     }
     if (status != WA_STATUS_OK) {
         wa_cryptainer_encryptor_destroy(encryptor);
@@ -134,13 +149,16 @@ wa_status_t wa_cryptainer_encryptor_encrypt_payload_chunk(wa_cryptainer_encrypto
         return WA_STATUS_WRONG_STATE;
     }
     if (chunk == NULL && chunk_length > 0) {
-        encryptor->state = WA_CRYPTAINER_ENCRYPTOR_STATE_FAILED;
+        wa_fail_encryptor(encryptor);
         return WA_STATUS_INVALID_ARGUMENT;
     }
     status = wa_payload_encryption_pipeline_encrypt_chunk(&encryptor->pipeline, chunk, chunk_length);
-    encryptor->state = status == WA_STATUS_OK ? WA_CRYPTAINER_ENCRYPTOR_STATE_STREAMING
-                                              : WA_CRYPTAINER_ENCRYPTOR_STATE_FAILED;
-    return status;
+    if (status != WA_STATUS_OK) {
+        wa_fail_encryptor(encryptor);
+        return status;
+    }
+    encryptor->state = WA_CRYPTAINER_ENCRYPTOR_STATE_STREAMING;
+    return WA_STATUS_OK;
 }
 
 wa_status_t wa_cryptainer_encryptor_finalize(wa_cryptainer_encryptor_t *encryptor)
@@ -160,8 +178,9 @@ wa_status_t wa_cryptainer_encryptor_finalize(wa_cryptainer_encryptor_t *encrypto
             &encryptor->base, &encryptor->pipeline,
             encryptor->ciphertext_location == WA_CIPHERTEXT_LOCATION_INLINE ? &encryptor->inline_ciphertext : NULL);
     }
-    /* The cipher contexts and scratch buffers are not needed anymore */
-    wa_payload_encryption_pipeline_release(&encryptor->pipeline);
+    /* The cipher contexts, the scratch buffers and the payload symkeys are not needed anymore, whatever the outcome:
+     * they are wiped now rather than when the encryptor is destroyed (section 11.1, rule 12) */
+    wa_release_payload_encryption_secrets(encryptor);
     encryptor->state =
         status == WA_STATUS_OK ? WA_CRYPTAINER_ENCRYPTOR_STATE_FINISHED : WA_CRYPTAINER_ENCRYPTOR_STATE_FAILED;
     return status;

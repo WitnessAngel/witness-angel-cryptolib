@@ -33,17 +33,21 @@ typedef enum wa_ciphertext_location {
     WA_CIPHERTEXT_LOCATION_OFFLOADED = 2
 } wa_ciphertext_location_t;
 
+/* Lifetimes: the options struct is only read during the creation call, and so is the wa_output_sink_t that
+ * `payload_ciphertext_sink` points to, which is copied into the encryptor. The hooks struct is NOT copied: like for
+ * every object of the library, it must outlive the encryptor (see wa_platform_hooks.h). So must whatever the
+ * `sink_context` of the payload sink designates, until the encryptor is finalized or destroyed. */
 typedef struct wa_cryptainer_encryptor_options {
-    const wa_platform_hooks_t *platform_hooks;
+    const wa_platform_hooks_t *platform_hooks;        /* not copied: must outlive the encryptor */
     /* Format of the cryptainer AND of every structure serialized into its key ciphertexts. */
     wa_document_format_t document_format;
     wa_ciphertext_location_t ciphertext_location;
-    const wa_output_sink_t *payload_ciphertext_sink;  /* offloaded location only, else NULL */
+    const wa_output_sink_t *payload_ciphertext_sink;  /* offloaded location only, else NULL; copied at creation */
 } wa_cryptainer_encryptor_options_t;
 
 /* Step 1: create the cryptainer base and its secrets (every key ciphertext). Metadata, a map or NULL, is checked
  * against the document tree constraints and deep-copied, before any key is generated. `*encryptor_out` is NULL
- * on failure. */
+ * on failure. The device profile is only read during this call. */
 wa_status_t wa_cryptainer_encryptor_create(const wa_device_profile_t *device_profile,
                                            const wa_value_t *cryptainer_metadata_or_null,
                                            const wa_cryptainer_encryptor_options_t *options,
@@ -53,7 +57,8 @@ wa_status_t wa_cryptainer_encryptor_create(const wa_device_profile_t *device_pro
 wa_status_t wa_cryptainer_encryptor_encrypt_payload_chunk(wa_cryptainer_encryptor_t *encryptor,
                                                           const uint8_t *chunk, size_t chunk_length);
 
-/* End of step 2 (padding, flushes, tags) and step 3: the cryptainer becomes FINISHED. */
+/* End of step 2 (padding, flushes, tags) and step 3: the cryptainer becomes FINISHED. The payload symkeys and
+ * cipher contexts are wiped and released here, whatever the outcome (and as soon as a chunk fails). */
 wa_status_t wa_cryptainer_encryptor_finalize(wa_cryptainer_encryptor_t *encryptor);
 
 /* Serialize the FINISHED cryptainer to a sink, in the document format chosen at creation. May be called several

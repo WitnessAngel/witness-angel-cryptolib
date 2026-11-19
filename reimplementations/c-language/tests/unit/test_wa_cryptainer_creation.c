@@ -1223,6 +1223,199 @@ static void test_state_machine(void)
     wa_test_platform_destroy(platform);
 }
 
+/* Finding C-5: the options and the payload sink struct may be gone once the encryptor is created */
+static wa_status_t create_encryptor_from_temporaries(const wa_device_profile_t *device_profile,
+                                                     const wa_platform_hooks_t *platform_hooks,
+                                                     wa_test_memory_sink_t *payload_sink,
+                                                     wa_cryptainer_encryptor_t **encryptor_out)
+{
+    wa_cryptainer_encryptor_options_t options;
+    wa_output_sink_t temporary_sink = payload_sink->sink;
+    wa_status_t status;
+    initialize_options(&options, platform_hooks);
+    options.ciphertext_location = WA_CIPHERTEXT_LOCATION_OFFLOADED;
+    options.payload_ciphertext_sink = &temporary_sink;
+    status = wa_cryptainer_encryptor_create(device_profile, NULL, &options, encryptor_out);
+    memset(&temporary_sink, 0, sizeof(temporary_sink));
+    memset(&options, 0, sizeof(options));
+    return status;
+}
+
+static void test_payload_sink_struct_is_copied(void)
+{
+    wa_test_platform_t *platform = wa_test_platform_create(83u);
+    wa_device_profile_t *device_profile = NULL;
+    wa_cryptainer_encryptor_t *encryptor = NULL;
+    wa_test_memory_sink_t payload_sink;
+    wa_test_memory_sink_t sink;
+    uint8_t *payload = build_payload(10000);
+    WA_REQUIRE(platform != NULL && payload != NULL);
+    wa_test_memory_sink_initialize(&payload_sink);
+    wa_test_memory_sink_initialize(&sink);
+    WA_REQUIRE_STATUS(wa_test_load_device_profile_sample("minimal_rsa_authenticator", &platform->hooks, &device_profile),
+                      WA_STATUS_OK);
+    WA_REQUIRE_STATUS(create_encryptor_from_temporaries(device_profile, &platform->hooks, &payload_sink, &encryptor),
+                      WA_STATUS_OK);
+    /* The profile is only read at creation */
+    wa_device_profile_destroy(device_profile);
+    WA_CHECK_STATUS(wa_cryptainer_encryptor_encrypt_payload_chunk(encryptor, payload, 10000), WA_STATUS_OK);
+    WA_CHECK_STATUS(wa_cryptainer_encryptor_finalize(encryptor), WA_STATUS_OK);
+    WA_CHECK_SIZE(payload_sink.length, (10000u / 16u + 1u) * 16u);
+    WA_CHECK_STATUS(wa_cryptainer_encryptor_write_cryptainer(encryptor, &sink.sink), WA_STATUS_OK);
+    WA_CHECK(sink.length > 0);
+    wa_cryptainer_encryptor_destroy(encryptor);
+    wa_test_memory_sink_release(&payload_sink);
+    wa_test_memory_sink_release(&sink);
+    free(payload);
+    WA_CHECK(wa_test_allocator_is_clean(&platform->allocator));
+    wa_test_platform_destroy(platform);
+}
+
+/* Finding C-8: a test allocator wrapper knowing its live blocks, to look for secrets in them */
+
+#define LIVE_BLOCK_CAPACITY 4096u
+
+typedef struct live_block_tracker {
+    wa_test_allocator_t *allocator;
+    void *blocks[LIVE_BLOCK_CAPACITY];
+    size_t sizes[LIVE_BLOCK_CAPACITY];
+    size_t count;
+    int has_overflowed;
+} live_block_tracker_t;
+
+static void *allocate_tracked(void *allocator_context, size_t size)
+{
+    live_block_tracker_t *tracker = (live_block_tracker_t *)allocator_context;
+    void *block = wa_test_allocate(tracker->allocator, size);
+    if (block != NULL) {
+        if (tracker->count < LIVE_BLOCK_CAPACITY) {
+            tracker->blocks[tracker->count] = block;
+            tracker->sizes[tracker->count] = size;
+            tracker->count++;
+        } else {
+            tracker->has_overflowed = 1;
+        }
+    }
+    return block;
+}
+
+static void release_tracked(void *allocator_context, void *pointer, size_t size)
+{
+    live_block_tracker_t *tracker = (live_block_tracker_t *)allocator_context;
+    size_t index;
+    for (index = 0; index < tracker->count; ++index) {
+        if (tracker->blocks[index] == pointer) {
+            tracker->count--;
+            tracker->blocks[index] = tracker->blocks[tracker->count];
+            tracker->sizes[index] = tracker->sizes[tracker->count];
+            break;
+        }
+    }
+    wa_test_release(tracker->allocator, pointer, size);
+}
+
+/* Number of live blocks holding one of the secret patterns registered by the random hook (payload symkeys...) */
+static size_t count_live_blocks_with_secrets(const live_block_tracker_t *tracker)
+{
+    size_t block_count = 0;
+    size_t index;
+    for (index = 0; index < tracker->count; ++index) {
+        const uint8_t *block = (const uint8_t *)tracker->blocks[index];
+        size_t size = tracker->sizes[index];
+        size_t pattern_index;
+        int is_found = 0;
+        for (pattern_index = 0; !is_found && pattern_index < tracker->allocator->secret_pattern_count;
+             ++pattern_index) {
+            size_t position;
+            for (position = 0; !is_found && position + WA_TEST_SECRET_PATTERN_LENGTH <= size; ++position) {
+                is_found = memcmp(block + position, tracker->allocator->secret_patterns[pattern_index],
+                                  WA_TEST_SECRET_PATTERN_LENGTH) == 0;
+            }
+        }
+        block_count += is_found ? 1u : 0u;
+    }
+    return block_count;
+}
+
+static void test_payload_secrets_are_wiped_once_used(void)
+{
+    static const char *const profile_names[] = {"minimal_rsa_authenticator", "nested_all_layer_kinds"};
+    size_t profile_index;
+    size_t scenario_index;
+    for (profile_index = 0; profile_index < 2; ++profile_index) {
+        /* Scenarios: finalized, failed chunk (sink), failed chunk (argument), failed finalization (sink) */
+        for (scenario_index = 0; scenario_index < 4; ++scenario_index) {
+            wa_test_platform_t *platform = wa_test_platform_create(84u + scenario_index);
+            live_block_tracker_t *tracker = (live_block_tracker_t *)calloc(1, sizeof(*tracker));
+            wa_device_profile_t *device_profile = NULL;
+            wa_cryptainer_encryptor_t *encryptor = NULL;
+            wa_cryptainer_encryptor_options_t options;
+            wa_test_memory_sink_t payload_sink;
+            wa_test_memory_sink_t sink;
+            uint8_t *payload = build_payload(5000);
+            wa_status_t expected_write_status = scenario_index == 0 ? WA_STATUS_OK : WA_STATUS_WRONG_STATE;
+            WA_REQUIRE(platform != NULL && tracker != NULL && payload != NULL);
+            tracker->allocator = &platform->allocator;
+            platform->hooks.allocate = allocate_tracked;
+            platform->hooks.release = release_tracked;
+            platform->hooks.allocator_context = tracker;
+            wa_test_memory_sink_initialize(&payload_sink);
+            wa_test_memory_sink_initialize(&sink);
+            WA_REQUIRE_STATUS(
+                wa_test_load_device_profile_sample(profile_names[profile_index], &platform->hooks, &device_profile),
+                WA_STATUS_OK);
+            initialize_options(&options, &platform->hooks);
+            options.ciphertext_location = WA_CIPHERTEXT_LOCATION_OFFLOADED;
+            options.payload_ciphertext_sink = &payload_sink.sink;
+            WA_REQUIRE_STATUS(wa_cryptainer_encryptor_create(device_profile, NULL, &options, &encryptor),
+                              WA_STATUS_OK);
+            WA_CHECK_STATUS(wa_cryptainer_encryptor_encrypt_payload_chunk(encryptor, payload, 100), WA_STATUS_OK);
+            /* While streaming, the payload symkeys and the cipher contexts are there */
+            WA_CHECK(count_live_blocks_with_secrets(tracker) >= 1);
+            switch (scenario_index) {
+            case 0:
+                WA_CHECK_STATUS(wa_cryptainer_encryptor_finalize(encryptor), WA_STATUS_OK);
+                break;
+            case 1:
+                payload_sink.fail_after_byte_count = payload_sink.length;
+                WA_CHECK_STATUS(wa_cryptainer_encryptor_encrypt_payload_chunk(encryptor, payload, 5000),
+                                WA_STATUS_SINK_WRITE_FAILURE);
+                break;
+            case 2:
+                WA_CHECK_STATUS(wa_cryptainer_encryptor_encrypt_payload_chunk(encryptor, NULL, 1),
+                                WA_STATUS_INVALID_ARGUMENT);
+                break;
+            default:
+                payload_sink.fail_after_byte_count = payload_sink.length;
+                if (profile_index == 0) {
+                    /* The padding block of AES_CBC goes to the failing sink */
+                    WA_CHECK_STATUS(wa_cryptainer_encryptor_finalize(encryptor), WA_STATUS_SINK_WRITE_FAILURE);
+                } else {
+                    /* The last payload cipher is a stream cipher: nothing is left to write */
+                    WA_CHECK_STATUS(wa_cryptainer_encryptor_finalize(encryptor), WA_STATUS_OK);
+                    expected_write_status = WA_STATUS_OK;
+                }
+                break;
+            }
+            /* Finished or failed: no secret is left in memory, although the encryptor is still alive */
+            WA_CHECK_SIZE(count_live_blocks_with_secrets(tracker), 0);
+            WA_CHECK(!tracker->has_overflowed);
+            WA_CHECK_SIZE(platform->allocator.unwiped_secret_release_count, 0);
+            WA_CHECK_STATUS(wa_cryptainer_encryptor_write_cryptainer(encryptor, &sink.sink), expected_write_status);
+            wa_cryptainer_encryptor_destroy(encryptor);
+            wa_device_profile_destroy(device_profile);
+            wa_test_memory_sink_release(&payload_sink);
+            wa_test_memory_sink_release(&sink);
+            free(payload);
+            WA_CHECK_SIZE(tracker->count, 0);
+            WA_CHECK(wa_test_allocator_is_clean(&platform->allocator));
+            platform->hooks.allocator_context = &platform->allocator; /* For the destruction of the platform */
+            wa_test_platform_destroy(platform);
+            free(tracker);
+        }
+    }
+}
+
 static void test_one_call_helper_and_suffixes(void)
 {
     wa_test_platform_t *platform = wa_test_platform_create(80u);
@@ -1337,6 +1530,8 @@ int main(void)
     WA_RUN_TEST(test_creation_arguments_and_options);
     WA_RUN_TEST(test_metadata_checks);
     WA_RUN_TEST(test_state_machine);
+    WA_RUN_TEST(test_payload_sink_struct_is_copied);
+    WA_RUN_TEST(test_payload_secrets_are_wiped_once_used);
     WA_RUN_TEST(test_one_call_helper_and_suffixes);
     return wa_test_finish();
 }

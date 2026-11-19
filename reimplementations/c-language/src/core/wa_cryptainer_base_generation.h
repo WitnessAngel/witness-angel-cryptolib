@@ -28,7 +28,7 @@
 typedef struct wa_cryptainer_base {
     const wa_platform_hooks_t *platform_hooks;
     wa_value_t *cryptainer;          /* The cryptainer tree, state STARTED */
-    wa_symkey_t *payload_symkeys;    /* One per payload cipher layer, in order: SECRET */
+    wa_symkey_t *payload_symkeys;    /* One per payload cipher layer, in order: SECRET; NULL once released */
     size_t payload_layer_count;
 } wa_cryptainer_base_t;
 
@@ -41,6 +41,10 @@ wa_status_t wa_cryptainer_base_generate(const wa_platform_hooks_t *platform_hook
                                         const wa_value_t *cryptainer_metadata_or_null,
                                         wa_document_format_t resolved_format,
                                         wa_ciphertext_location_t ciphertext_location, wa_cryptainer_base_t *base_out);
+
+/* Wipe and release the payload symkeys alone, once the payload is encrypted and its MACs are built (a no-op when
+ * they are released already). */
+void wa_cryptainer_base_release_payload_symkeys(wa_cryptainer_base_t *base);
 
 /* Wipe the secrets and release everything (an empty or zeroed base is accepted). */
 void wa_cryptainer_base_release(wa_cryptainer_base_t *base);

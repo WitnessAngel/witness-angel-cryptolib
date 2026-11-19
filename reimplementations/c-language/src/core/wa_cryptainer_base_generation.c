@@ -111,12 +111,18 @@ static wa_status_t wa_set_root_fields(const wa_platform_hooks_t *platform_hooks,
     return WA_STATUS_OK;
 }
 
-void wa_cryptainer_base_release(wa_cryptainer_base_t *base)
+void wa_cryptainer_base_release_payload_symkeys(wa_cryptainer_base_t *base)
 {
     if (base->payload_symkeys != NULL) {
         wa_release_secret_memory(base->platform_hooks, base->payload_symkeys,
                                  base->payload_layer_count * sizeof(wa_symkey_t));
+        base->payload_symkeys = NULL;
     }
+}
+
+void wa_cryptainer_base_release(wa_cryptainer_base_t *base)
+{
+    wa_cryptainer_base_release_payload_symkeys(base);
     wa_value_destroy(base->cryptainer);
     memset(base, 0, sizeof(*base));
 }

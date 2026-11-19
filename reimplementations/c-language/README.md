@@ -362,6 +362,11 @@ cmake --build build_mbedtls
 ctest --test-dir build_mbedtls --output-on-failure
 ```
 
+On Windows, from an MSYS2 UCRT64 shell with `mingw-w64-ucrt-x86_64-{gcc,cmake,ninja}` installed, the same commands
+work (add `-G Ninja`, and drop the sanitizers, which MinGW lacks); the config headers enable what Mbed TLS and
+wolfSSL need under MinGW. The interop tests then run with the Windows Python, `WA_FLIGHTBOX_C_BUILD_DIR` being
+`;`-separated there, which exercises the Windows file handling of the CLI.
+
 CMake options: `WA_CRYPTO_BACKEND` (`MBEDTLS` or `WOLFCRYPT`, required), `WA_DOCUMENT_FORMATS` (`JSON;CBOR`,
 `JSON` or `CBOR`), `WA_ENABLE_SANITIZERS` (ASan/UBSan), `WA_BUILD_TOOLS` (CLI and test driver, ON),
 `WA_BUILD_FUZZERS` (Clang, libFuzzer), `WA_LIBRARY_ONLY` (cross-compilation checks), `WA_USE_SYSTEM_CRYPTO_LIBRARIES`.

@@ -16,6 +16,12 @@
 /* System support */
 #define MBEDTLS_HAVE_ASM
 
+/* Windows hosts (MSYS2 MinGW-w64): Mbed TLS replaces snprintf there, which needs its platform layer (check_config.h
+ * requires it); embedded targets don't need it */
+#if defined(__MINGW32__) || (defined(_MSC_VER) && _MSC_VER <= 1900)
+#define MBEDTLS_PLATFORM_C
+#endif
+
 /* AES-256: bulk CBC (payload, CMAC/OMAC) and CTR (EAX) */
 #define MBEDTLS_AES_C
 #define MBEDTLS_CIPHER_MODE_CBC

@@ -26,6 +26,13 @@
 #define WC_NO_RNG
 #define NO_ERROR_STRINGS
 
+/* Windows hosts (MSYS2 MinGW-w64): with NO_FILESYSTEM, wolfSSL's MinGW branches use vsnprintf and size_t without
+ * including their headers */
+#if defined(__MINGW32__)
+#include <stddef.h>
+#include <stdio.h>
+#endif
+
 /* AES-256: bulk CBC (payload, CMAC/OMAC) and CTR (EAX) */
 #define HAVE_AES_CBC
 #define WOLFSSL_AES_COUNTER

@@ -100,23 +100,43 @@ pub fn open_output_file(path: &str, force: bool) -> std::io::Result<File> {
     options.open(path)
 }
 
-/// Create a new file next to `final_path`, to be renamed over it once complete: the file and its path.
-pub fn open_temporary_output_file(final_path: &str) -> Option<(File, String)> {
+/// Create a new file next to `final_path`, named after it with `label` and a number: the file and its path.
+fn open_new_sibling_file(final_path: &str, label: &str) -> Option<(File, String)> {
     for attempt in 0..1000u32 {
-        let temporary_path = format!("{final_path}.tmp-{attempt:03}");
-        match open_output_file(&temporary_path, false) {
-            Ok(file) => return Some((file, temporary_path)),
+        let sibling_path = format!("{final_path}.{label}-{attempt:03}");
+        match open_output_file(&sibling_path, false) {
+            Ok(file) => return Some((file, sibling_path)),
             // Not a name clash: the directory is not writable
-            Err(_) if !file_exists(&temporary_path) => return None,
+            Err(_) if !file_exists(&sibling_path) => return None,
             Err(_) => {}
         }
     }
     None
 }
 
+/// Create a new file next to `final_path`, to be renamed over it once complete: the file and its path.
+pub fn open_temporary_output_file(final_path: &str) -> Option<(File, String)> {
+    open_new_sibling_file(final_path, "tmp")
+}
+
 /// Move a complete file to its final path, replacing what is there.
 pub fn replace_file(source_path: &str, destination_path: &str) -> std::io::Result<()> {
     std::fs::rename(source_path, destination_path)
+}
+
+/// Move the file at `path` to a new name next to it (`path.old-NNN`), leaving nothing at `path`: the new path, to
+/// be given to [`replace_file`] to put the file back.
+pub fn move_file_aside(path: &str) -> std::io::Result<String> {
+    // The name is reserved by an empty file, which the renaming replaces
+    let Some((reserving_file, backup_path)) = open_new_sibling_file(path, "old") else {
+        return Err(std::io::ErrorKind::AlreadyExists.into());
+    };
+    drop(reserving_file);
+    if let Err(error) = replace_file(path, &backup_path) {
+        let _ = std::fs::remove_file(&backup_path);
+        return Err(error);
+    }
+    Ok(backup_path)
 }
 
 /// A buffered file, as an output sink of the library.
@@ -133,9 +153,11 @@ impl FileSink {
         }
     }
 
-    /// Write what is still buffered, and close the file.
-    pub fn close(mut self) -> std::io::Result<()> {
-        self.writer.flush()
+    /// Write what is still buffered, have the operating system write the file to its storage device, and close
+    /// it: after a success, the content survives a power loss, and so does a renaming of the file made afterwards.
+    pub fn close(self) -> std::io::Result<()> {
+        let file = self.writer.into_inner().map_err(std::io::IntoInnerError::into_error)?;
+        file.sync_all()
     }
 }
 
@@ -315,6 +337,20 @@ mod tests {
         assert!(!files_are_same(&path, &format!("{path}.missing")));
         replace_file(&temporary_path, &path).unwrap();
         assert_eq!(read_file(&path).unwrap(), b"second");
+
+        // Moved aside under a new name, and back
+        let backup_path = move_file_aside(&path).unwrap();
+        assert_eq!(backup_path, format!("{path}.old-000"));
+        assert!(!file_exists(&path));
+        assert_eq!(read_file(&backup_path).unwrap(), b"second");
+        std::fs::write(&path, b"third").unwrap();
+        assert_eq!(move_file_aside(&path).unwrap(), format!("{path}.old-001"));
+        replace_file(&backup_path, &path).unwrap();
+        assert_eq!(read_file(&path).unwrap(), b"second");
+        assert!(!file_exists(&backup_path));
+        // Nothing to move: no name stays reserved
+        assert!(move_file_aside(&format!("{path}.missing")).is_err());
+        assert!(!file_exists(&format!("{path}.missing.old-000")));
         drop(_second_file);
         std::fs::remove_dir_all(&directory).unwrap();
     }

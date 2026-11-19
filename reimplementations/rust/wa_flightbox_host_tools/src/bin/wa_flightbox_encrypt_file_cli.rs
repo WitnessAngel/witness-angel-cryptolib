@@ -7,8 +7,10 @@
 //! tool of the same name. The payload ciphertext is offloaded into `<cryptainer file>.payload` unless `--bundle`
 //! is given; the payload file is written first and the cryptainer last, so that a cryptainer never refers to a
 //! missing payload, and the files created are deleted on failure. With `--force`, existing output files are only
-//! replaced (by renaming) once their new versions are complete; output files that are one of the input files are
-//! always refused.
+//! replaced (by renaming) once their new versions are complete and written to the storage device, and together:
+//! when one of them cannot be replaced, the other one is put back. A cryptainer file and the payload file named
+//! after it go together: `--bundle` refuses an existing payload file too, and removes it with `--force`. Output
+//! files that are one of the input files are always refused.
 
 #![forbid(unsafe_code)]
 
@@ -22,8 +24,8 @@ use wa_flightbox::{
 };
 use wa_flightbox_host_tools::{
     FileSink, HostPlatformHooks, ToolBackend, build_cryptainer_path, build_payload_path, command_line_arguments,
-    enabled_document_format_names, file_exists, files_are_same, open_output_file, open_temporary_output_file,
-    parse_document_format, read_file, replace_file,
+    enabled_document_format_names, file_exists, files_are_same, move_file_aside, open_output_file,
+    open_temporary_output_file, parse_document_format, read_file, replace_file,
 };
 
 const DEFAULT_CHUNK_SIZE: usize = 1024 * 1024;
@@ -64,9 +66,10 @@ fn usage() -> String {
          \x20 -m, --metadata FILE         cryptainer metadata, a WA-CBOR map (default: none)\n\
          \x20 --format json|cbor          cryptainer format, also used for its key ciphertexts (default: {})\n\
          \x20 --bundle                    embed the payload ciphertext in the cryptainer (default: offloaded\n\
-         \x20                             into <cryptainer file>.payload)\n\
+         \x20                             into <cryptainer file>.payload, which must not exist then either)\n\
          \x20 --chunk-size N              bytes read from the input at a time, at most 1 GiB (default: {})\n\
-         \x20 --force                     replace existing output files, once the new ones are complete\n\
+         \x20 --force                     replace existing output files, once the new ones are complete (with\n\
+         \x20                             --bundle, an existing payload file is removed)\n\
          \x20 -h, --help                  show this help\n\
          \n\
          Formats of this build:{}\n",
@@ -177,8 +180,8 @@ fn print_status_error(context: &str, error: &Error, location: Option<&str>) {
 }
 
 /// An output file. Without `--force` it is created exclusively at its final path; with `--force` it is written to
-/// a new temporary file next to it, renamed over the final path only once complete, so that a failure never loses
-/// the existing file.
+/// a new temporary file next to it, renamed over the final path only once complete (see `commit_outputs`), so that
+/// a failure never loses the existing file.
 struct CliOutput {
     final_path: String,
     /// With `--force` only
@@ -241,6 +244,11 @@ impl CliOutput {
         // Now at its final path, where it may have replaced an existing file
         self.is_created = false;
         true
+    }
+
+    /// Leave the file written by this run where it is, under its temporary name if not committed.
+    fn keep(&mut self) {
+        self.is_created = false;
     }
 
     /// Close, and delete if created by this run and not committed.
@@ -306,8 +314,67 @@ fn encrypt_payload<S: OutputSink>(
     }
 }
 
+/// Move the complete outputs to their final paths, the payload file first and the cryptainer last. With `--force`,
+/// what is at the path of the payload file belongs to the cryptainer being replaced, even when the new one is
+/// inline: it is moved aside first, put back if an output cannot be moved, and deleted once both are. So a failure
+/// leaves the existing files as they were; if they cannot be put back, nothing is deleted and the paths of the
+/// previous and new files are reported. Whether it succeeded.
+fn commit_outputs(
+    arguments: &CliArguments,
+    cryptainer_output: &mut CliOutput,
+    mut payload_output: Option<&mut CliOutput>,
+    payload_path: &str,
+) -> bool {
+    let mut backup_path = None;
+    if arguments.is_forced && file_exists(payload_path) {
+        let Ok(path) = move_file_aside(payload_path) else {
+            eprintln!("Error: cannot replace {payload_path}");
+            return false;
+        };
+        backup_path = Some(path);
+    }
+    let mut is_payload_committed = false;
+    let mut is_committed = true;
+    if let Some(payload_output) = payload_output.as_deref_mut() {
+        is_payload_committed = payload_output.commit();
+        is_committed = is_payload_committed;
+    }
+    is_committed = is_committed && cryptainer_output.commit();
+
+    if is_committed {
+        if let Some(backup_path) = backup_path {
+            if std::fs::remove_file(&backup_path).is_err() {
+                eprintln!("Warning: cannot delete {backup_path}, the previous version of {payload_path}");
+            }
+        }
+        return true;
+    }
+    if !arguments.is_forced {
+        return false; // Nothing was replaced, and the files created are deleted
+    }
+    // Back to the existing files: the previous payload file, or none
+    let is_restored = match &backup_path {
+        Some(backup_path) => replace_file(backup_path, payload_path).is_ok(),
+        None => !is_payload_committed || std::fs::remove_file(payload_path).is_ok(),
+    };
+    if !is_restored {
+        eprintln!("Error: cannot restore the previous state of {payload_path}; nothing was deleted:");
+        if let Some(backup_path) = &backup_path {
+            eprintln!("  the previous payload file is {backup_path}");
+        }
+        if let Some(payload_output) = payload_output {
+            eprintln!("  the new payload file is {}", payload_output.write_path());
+            payload_output.keep();
+        }
+        eprintln!("  the new cryptainer file is {}", cryptainer_output.write_path());
+        cryptainer_output.keep();
+    }
+    false
+}
+
 /// Run the encryption proper: the payload file first and the cryptainer last (also renamed in that order with
-/// `--force`), so that a new cryptainer never refers to a missing payload. Whether it succeeded.
+/// `--force`), so that a new cryptainer never refers to a missing payload. `payload_path` is where the payload
+/// file of this cryptainer file goes, or would go if it were not inline. Whether it succeeded.
 fn encrypt(
     arguments: &CliArguments,
     hooks: &mut dyn PlatformHooks,
@@ -315,6 +382,7 @@ fn encrypt(
     metadata: Option<&Value>,
     cryptainer_output: &mut CliOutput,
     mut payload_output: Option<&mut CliOutput>,
+    payload_path: &str,
 ) -> bool {
     let mut input: Box<dyn Read> = if arguments.input_path == "-" {
         Box::new(std::io::stdin().lock())
@@ -381,12 +449,12 @@ fn encrypt(
         print_status_error("cryptainer writing failed", &error, None);
         return false;
     }
-    if let Some(payload_output) = payload_output.as_deref_mut() {
-        if !payload_output.commit() {
-            return false;
-        }
-    }
-    if !cryptainer_output.commit() {
+    if !commit_outputs(
+        arguments,
+        cryptainer_output,
+        payload_output.as_deref_mut(),
+        payload_path,
+    ) {
         return false;
     }
     println!("{}", cryptainer_output.final_path);
@@ -396,8 +464,8 @@ fn encrypt(
     true
 }
 
-/// Refuse an output path that is one of the input files: with `--force`, that input would be replaced (and the
-/// input file read while being replaced). Only an existing output can be such a file.
+/// Refuse an output path that is one of the input files: with `--force`, that input would be replaced or removed
+/// (and the input file read while being replaced). Only an existing output can be such a file.
 fn check_output_is_not_an_input(arguments: &CliArguments, output_path: &str) -> bool {
     let inputs = [
         ("input file", Some(&arguments.input_path)),
@@ -420,21 +488,19 @@ fn run(arguments: &CliArguments, cryptainer_output: &mut CliOutput, payload_outp
     let limits = EncryptorLimits::default();
     let mut hooks = HostPlatformHooks;
 
-    // Output names, refused early (nothing is generated then) when existing, or when one of the input files
-    if !check_output_is_not_an_input(arguments, &cryptainer_output.final_path) {
+    // Output names, refused early (nothing is generated then) when existing, or when one of the input files. The
+    // payload file too when the cryptainer is inline: a file there would pass for the payload of the cryptainer,
+    // so it is refused, or removed with `--force`
+    let payload_path = build_payload_path(&cryptainer_output.final_path);
+    let output_paths = [cryptainer_output.final_path.as_str(), payload_path.as_str()];
+    if !output_paths
+        .iter()
+        .all(|output_path| check_output_is_not_an_input(arguments, output_path))
+    {
         return false;
     }
-    if let Some(payload_output) = payload_output.as_ref() {
-        if !check_output_is_not_an_input(arguments, &payload_output.final_path) {
-            return false;
-        }
-    }
     if !arguments.is_forced {
-        let existing_path = [Some(&*cryptainer_output), payload_output.as_ref()]
-            .into_iter()
-            .flatten()
-            .map(|output| output.final_path.as_str())
-            .find(|path| file_exists(path));
+        let existing_path = output_paths.iter().find(|path| file_exists(path));
         if let Some(existing_path) = existing_path {
             eprintln!("Error: {existing_path} already exists (use --force to overwrite it)");
             return false;
@@ -476,6 +542,7 @@ fn run(arguments: &CliArguments, cryptainer_output: &mut CliOutput, payload_outp
         metadata.as_ref(),
         cryptainer_output,
         payload_output.as_mut(),
+        &payload_path,
     )
 }
 

@@ -180,6 +180,34 @@ def test_forced_run_keeps_previous_outputs_locked_on_windows(c_build, document_f
     assert _list_files(tmp_path) == files_before
 
 
+@pytest.mark.skipif(os.name == "nt", reason="No permission bits on Windows")
+@pytest.mark.parametrize("permissions", [0o600, 0o640, 0o664])
+def test_forced_run_keeps_permissions_of_replaced_outputs(c_build, document_format, tmp_path, permissions):
+    """A private output does not become readable by others when replaced, whatever the umask."""
+    if not c_build.is_c_implementation:
+        pytest.skip("Only the C CLI gives the permissions of a replaced output to its replacement")
+    cryptainer_name, payload_name, old_cryptainer, old_payload, files_before = _prepare_previous_outputs(
+        c_build, document_format, tmp_path
+    )
+    default_permissions = stat.S_IMODE(os.stat(tmp_path / cryptainer_name).st_mode)
+    os.chmod(tmp_path / cryptainer_name, permissions)
+    os.chmod(tmp_path / payload_name, permissions)
+
+    process = _encrypt(c_build, document_format, tmp_path, "--force")
+    assert process.returncode == 0, process.stderr
+    assert (tmp_path / cryptainer_name).read_bytes() != old_cryptainer
+    assert (tmp_path / payload_name).read_bytes() != old_payload
+    assert stat.S_IMODE(os.stat(tmp_path / cryptainer_name).st_mode) == permissions
+    assert stat.S_IMODE(os.stat(tmp_path / payload_name).st_mode) == permissions
+
+    os.remove(tmp_path / payload_name)  # A file which replaces nothing has the default permissions
+    process = _encrypt(c_build, document_format, tmp_path, "--force")
+    assert process.returncode == 0, process.stderr
+    assert stat.S_IMODE(os.stat(tmp_path / cryptainer_name).st_mode) == permissions
+    assert stat.S_IMODE(os.stat(tmp_path / payload_name).st_mode) == default_permissions
+    assert _list_files(tmp_path) == files_before
+
+
 def test_bundle_refuses_or_deletes_previous_payload_file(c_build, document_format, tmp_path):
     """A bundled cryptainer is not left next to the payload file of a previous offloaded cryptainer of that name."""
     cryptainer_name, payload_name, old_cryptainer, old_payload, files_before = _prepare_previous_outputs(

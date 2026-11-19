@@ -43,7 +43,8 @@ int wa_tool_files_are_same(const char *path_a, const char *path_b);
 FILE *wa_tool_open_output_file(const char *path, int force);
 
 /* Exclusive creation of a new file next to `final_path`, named "<final_path>.tmp-NNN"; its malloc()'d name goes
- * to `*temporary_path_out`. NULL on failure. */
+ * to `*temporary_path_out`. On POSIX systems it has the permission bits of `final_path`, when that is an existing
+ * regular file, which it is meant to replace. NULL on failure. */
 FILE *wa_tool_open_temporary_output_file(const char *final_path, char **temporary_path_out);
 
 /* Rename `source_path` to `destination_path`, replacing it if it exists (on the same file system); 0 or -1. To

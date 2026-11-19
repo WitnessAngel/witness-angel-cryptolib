@@ -224,9 +224,16 @@ int wa_tool_files_are_same(const char *path_a, const char *path_b)
 #endif
 }
 
+#define WA_TOOL_DEFAULT_OUTPUT_PERMISSIONS 0644u
+
+/* Like wa_tool_open_output_file(), with the permission bits of a created file (POSIX systems; the umask narrows
+ * them) */
+static FILE *wa_tool_open_output_file_with_permissions(const char *path, int force, unsigned int permissions);
+
 /* Exclusive creation of a new file next to `path`, named "<path>.<3-letter kind>-NNN"; its malloc()'d name goes to
  * `*sibling_path_out`. NULL on failure. */
-static FILE *wa_tool_open_new_sibling_file(const char *path, const char *kind, char **sibling_path_out)
+static FILE *wa_tool_open_new_sibling_file(const char *path, const char *kind, unsigned int permissions,
+                                           char **sibling_path_out)
 {
     char *sibling_path = (char *)malloc(strlen(path) + sizeof(".kkk-000"));
     unsigned int attempt;
@@ -237,7 +244,7 @@ static FILE *wa_tool_open_new_sibling_file(const char *path, const char *kind, c
     for (attempt = 0; attempt < 1000u; ++attempt) {
         FILE *file;
         (void)sprintf(sibling_path, "%s.%.3s-%03u", path, kind, attempt);
-        file = wa_tool_open_output_file(sibling_path, 0);
+        file = wa_tool_open_output_file_with_permissions(sibling_path, 0, permissions);
         if (file != NULL) {
             *sibling_path_out = sibling_path;
             return file;
@@ -252,7 +259,25 @@ static FILE *wa_tool_open_new_sibling_file(const char *path, const char *kind, c
 
 FILE *wa_tool_open_temporary_output_file(const char *final_path, char **temporary_path_out)
 {
-    return wa_tool_open_new_sibling_file(final_path, "tmp", temporary_path_out);
+#if defined(_WIN32)
+    return wa_tool_open_new_sibling_file(final_path, "tmp", WA_TOOL_DEFAULT_OUTPUT_PERMISSIONS, temporary_path_out);
+#else
+    /* The file which replaces an existing one keeps its permissions (not its owner): a private file must not become
+     * readable by others. It is created with them at most, the umask narrowing them, then given exactly them. */
+    struct stat final_status;
+    int is_replacing = stat(final_path, &final_status) == 0 && S_ISREG(final_status.st_mode);
+    unsigned int permissions =
+        is_replacing ? (unsigned int)final_status.st_mode & 0777u : WA_TOOL_DEFAULT_OUTPUT_PERMISSIONS;
+    FILE *file = wa_tool_open_new_sibling_file(final_path, "tmp", permissions, temporary_path_out);
+    if (file != NULL && is_replacing && fchmod(fileno(file), (mode_t)permissions) != 0) {
+        (void)fclose(file);
+        (void)remove(*temporary_path_out);
+        free(*temporary_path_out);
+        *temporary_path_out = NULL;
+        return NULL;
+    }
+    return file;
+#endif
 }
 
 int wa_tool_replace_file(const char *source_path, const char *destination_path)
@@ -275,7 +300,8 @@ char *wa_tool_move_file_aside(const char *path)
 {
     /* The name is reserved by an empty file, which the renaming replaces */
     char *backup_path = NULL;
-    FILE *reserving_file = wa_tool_open_new_sibling_file(path, "old", &backup_path);
+    FILE *reserving_file =
+        wa_tool_open_new_sibling_file(path, "old", WA_TOOL_DEFAULT_OUTPUT_PERMISSIONS, &backup_path);
     if (reserving_file == NULL) {
         return NULL;
     }
@@ -356,10 +382,16 @@ int wa_tool_sync_directory_of_file(const char *path)
 
 FILE *wa_tool_open_output_file(const char *path, int force)
 {
+    return wa_tool_open_output_file_with_permissions(path, force, WA_TOOL_DEFAULT_OUTPUT_PERMISSIONS);
+}
+
+static FILE *wa_tool_open_output_file_with_permissions(const char *path, int force, unsigned int permissions)
+{
 #if defined(_WIN32)
     wchar_t *wide_path = wa_tool_convert_path_to_wide(path);
     int file_descriptor = -1;
     FILE *file;
+    (void)permissions;
     if (wide_path != NULL) {
         file_descriptor = _wopen(wide_path, _O_WRONLY | _O_CREAT | _O_BINARY | (force ? _O_TRUNC : _O_EXCL),
                                  _S_IREAD | _S_IWRITE);
@@ -374,7 +406,8 @@ FILE *wa_tool_open_output_file(const char *path, int force)
     }
     return file;
 #else
-    int file_descriptor = open(path, O_WRONLY | O_CREAT | O_CLOEXEC | (force ? O_TRUNC : O_EXCL), 0644);
+    int file_descriptor =
+        open(path, O_WRONLY | O_CREAT | O_CLOEXEC | (force ? O_TRUNC : O_EXCL), (mode_t)permissions);
     FILE *file;
     if (file_descriptor < 0) {
         return NULL;

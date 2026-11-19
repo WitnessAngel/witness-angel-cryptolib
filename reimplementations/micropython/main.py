@@ -104,4 +104,6 @@ except ImportError:
 print("CRYPTAINER:\n")
 pprint(cryptainer, width=120)
 print()
-print("SECRETS:\n", secrets)
+# Secrets stay in memory, for payload encryption: never print them, stdout of a board being often logged
+print("SECRETS: symmetric keys generated for",
+      [extract["cipher_algo"] for extract in secrets["payload_cipher_layer_extracts"]])

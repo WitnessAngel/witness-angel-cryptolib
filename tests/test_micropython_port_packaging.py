@@ -4,7 +4,8 @@
 
 """Tests of the packaging of the MicroPython flightbox port (reimplementations/micropython/): its vendored copies and
 patches, its platform utilities, and a smoke run of the port whose cryptainers wacryptolib decrypts. The smoke run uses
-CPython, plus the MicroPython interpreter of the WA_MICROPYTHON environment variable (or "micropython" in PATH) if any."""
+CPython, plus the MicroPython interpreter of the WA_MICROPYTHON environment variable (or "micropython" in PATH), if
+any: e.g. WA_MICROPYTHON=/path/to/micropython (a command line, split on whitespace)."""
 
 import importlib
 import importlib.util

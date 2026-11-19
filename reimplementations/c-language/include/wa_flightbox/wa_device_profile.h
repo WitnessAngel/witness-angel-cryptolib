@@ -28,7 +28,9 @@ typedef struct wa_device_profile wa_device_profile_t;
  *
  * On failure, `*device_profile_out` is NULL, and when a buffer is given, it receives the NUL-terminated location
  * of the faulty item (e.g. "cryptoconf.payload_cipher_layers[0].key_cipher_layers[1]", possibly truncated), or an
- * empty string when there is none. */
+ * empty string when there is none. A location is printable ASCII without spaces, whatever the profile holds: in an
+ * unexpected key, the bytes other than printable ASCII characters, and the space, '.', '[', ']' and backslash
+ * characters, are written as \xNN (two uppercase hexadecimal digits). */
 wa_status_t wa_device_profile_load_from_cbor(const uint8_t *cbor, size_t cbor_length,
                                              const wa_platform_hooks_t *platform_hooks,
                                              wa_device_profile_t **device_profile_out,

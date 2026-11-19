@@ -387,6 +387,89 @@ static void test_error_location_path(void)
     WA_CHECK(strcmp(path.text, "cryptoconf[3]") == 0);
 }
 
+/* Finding C-3: keys come from the profile, and may hold anything */
+static void test_error_location_path_escapes_keys(void)
+{
+    static const char plain_key[] =
+        "!\"#$%&'()*+,-/0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ^_`abcdefghijklmnopqrstuvwxyz{|}~";
+    static const char *const truncated_texts[] = {"cryptoconf.k", "cryptoconf.k\\xC3", "cryptoconf.k\\xC3\\xA9",
+                                                  "cryptoconf.k\\xC3\\xA9\\xC3",
+                                                  "cryptoconf.k\\xC3\\xA9\\xC3\\xA9"};
+    wa_error_location_path_t path;
+    char buffer[32];
+    char long_key[400];
+    size_t length_after_root;
+    size_t index;
+    wa_error_location_path_initialize(&path);
+    (void)wa_error_location_path_push_key(&path, "cryptoconf", 10);
+    length_after_root = path.logical_length;
+
+    /* Every printable ASCII character other than those of the path syntax is written as is */
+    (void)wa_error_location_path_push_key(&path, plain_key, strlen(plain_key));
+    WA_CHECK(strncmp(path.text, "cryptoconf.", 11) == 0 && strcmp(path.text + 11, plain_key) == 0);
+    wa_error_location_path_pop(&path, length_after_root);
+    /* The path syntax, the backslash and the space */
+    (void)wa_error_location_path_push_key(&path, "a.b[0] c\\d", 10);
+    WA_CHECK(strcmp(path.text, "cryptoconf.a\\x2Eb\\x5B0\\x5D\\x20c\\x5Cd") == 0);
+    wa_error_location_path_pop(&path, length_after_root);
+    /* An embedded NUL does not shorten the key */
+    (void)wa_error_location_path_push_key(&path, "ab\0cd", 5);
+    WA_CHECK(strcmp(path.text, "cryptoconf.ab\\x00cd") == 0);
+    wa_error_location_path_pop(&path, length_after_root);
+    /* Control characters (a terminal escape sequence), DEL, and non-ASCII characters (U+2028) */
+    (void)wa_error_location_path_push_key(&path, "x\x1b[31m\x7f\xe2\x80\xa8\n", 11);
+    WA_CHECK(strcmp(path.text, "cryptoconf.x\\x1B\\x5B31m\\x7F\\xE2\\x80\\xA8\\x0A") == 0);
+    wa_error_location_path_pop(&path, length_after_root);
+    WA_CHECK(strcmp(path.text, "cryptoconf") == 0);
+    /* An empty key */
+    (void)wa_error_location_path_push_key(&path, NULL, 0);
+    WA_CHECK(strcmp(path.text, "cryptoconf.") == 0);
+    wa_error_location_path_pop(&path, length_after_root);
+
+    /* Truncation at the capacity: never inside an escape sequence, so never inside a UTF-8 sequence either,
+     * whatever the offset at which the non-ASCII characters start (1 to 5 times "a", then 199 times U+00E9) */
+    for (index = 0; index < 5; ++index) {
+        size_t position;
+        size_t key_length = 0;
+        size_t text_length;
+        for (position = 0; position < index + 1u; ++position) {
+            long_key[key_length++] = 'a';
+        }
+        for (position = 0; position < 199u; ++position) {
+            long_key[key_length++] = (char)0xC3;
+            long_key[key_length++] = (char)0xA9;
+        }
+        (void)wa_error_location_path_push_key(&path, long_key, key_length);
+        WA_CHECK_SIZE(path.logical_length, 10u + 1u + (index + 1u) + 199u * 8u);
+        text_length = strlen(path.text);
+        WA_CHECK(text_length < WA_ERROR_LOCATION_PATH_CAPACITY && text_length + 4u >= WA_ERROR_LOCATION_PATH_CAPACITY);
+        WA_CHECK_SIZE((text_length - (11u + index + 1u)) % 4u, 0);
+        WA_CHECK(path.text[text_length - 4u] == '\\' && path.text[text_length - 3u] == 'x');
+        for (position = 0; position < text_length; ++position) {
+            WA_CHECK(path.text[position] > 0x20 && path.text[position] < 0x7F);
+        }
+        /* Components pushed beyond the capacity leave the text as it is, and pops restore the prefix */
+        (void)wa_error_location_path_push_key(&path, "next", 4);
+        WA_CHECK_SIZE(strlen(path.text), text_length);
+        wa_error_location_path_pop(&path, length_after_root);
+        WA_CHECK(strcmp(path.text, "cryptoconf") == 0);
+    }
+
+    /* Truncation by the caller's buffer: not inside an escape sequence either */
+    (void)wa_error_location_path_push_key(&path, "k\xc3\xa9\xc3\xa9", 5);
+    WA_CHECK(strcmp(path.text, truncated_texts[4]) == 0);
+    for (index = 1; index <= sizeof(buffer); ++index) {
+        memset(buffer, 'z', sizeof(buffer));
+        wa_error_location_path_copy_to_buffer(&path, buffer, index);
+        if (index <= 12u) {
+            WA_CHECK(strlen(buffer) == index - 1u && strncmp(buffer, "cryptoconf.k", index - 1u) == 0);
+        } else {
+            size_t escape_count = (index - 1u - 12u) / 4u;
+            WA_CHECK(strcmp(buffer, truncated_texts[escape_count > 4u ? 4u : escape_count]) == 0);
+        }
+    }
+}
+
 /* TRUSTEES */
 
 static void test_trustee_validation_and_identities(void)
@@ -475,6 +558,7 @@ int main(void)
     WA_RUN_TEST(test_cryptoconf_cases);
     WA_RUN_TEST(test_key_cipher_nesting_depth);
     WA_RUN_TEST(test_error_location_path);
+    WA_RUN_TEST(test_error_location_path_escapes_keys);
     WA_RUN_TEST(test_trustee_validation_and_identities);
     return wa_test_finish();
 }

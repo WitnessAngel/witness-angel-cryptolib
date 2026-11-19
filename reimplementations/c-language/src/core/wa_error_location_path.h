@@ -7,7 +7,11 @@
  * "cryptoconf.payload_cipher_layers[0].key_cipher_layers[1]" (design D10). Validators push a component when they
  * enter a map value or an array item, and pop it when they leave it successfully: on error they return at once, so
  * the path then names the faulty item. Paths longer than the fixed capacity are truncated, while pushes and pops
- * keep working on their logical length. */
+ * keep working on their logical length.
+ *
+ * A path is printable ASCII without spaces: in a key, the bytes other than printable ASCII characters, and the
+ * space, '.', '[', ']' and backslash characters, are written as \xNN (two uppercase hexadecimal digits), and a
+ * truncation never ends inside such a sequence. The keys of the profile grammar are thus written as they are. */
 
 #ifndef WA_ERROR_LOCATION_PATH_H
 #define WA_ERROR_LOCATION_PATH_H
@@ -23,7 +27,8 @@ typedef struct wa_error_location_path {
 
 void wa_error_location_path_initialize(wa_error_location_path_t *path);
 
-/* Append ".key" ("key" at the start of the path) and return the previous logical length, to give to pop(). */
+/* Append ".key" ("key" at the start of the path), escaped as said above, and return the previous logical length,
+ * to give to pop(). The key needs not be NUL-terminated, and may hold any byte. */
 size_t wa_error_location_path_push_key(wa_error_location_path_t *path, const char *key, size_t key_length);
 
 /* Append "[index]" and return the previous logical length. */

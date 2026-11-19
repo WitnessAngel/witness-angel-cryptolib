@@ -53,6 +53,9 @@ static wa_status_t wa_aes_cbc_stream_encrypt(wa_symmetric_cipher_stream_t *strea
     size_t bulk_length;
     wa_status_t status;
     *output_length = 0;
+    if (length == 0) {
+        return WA_STATUS_OK; /* Nothing to do, and `input` may then be NULL, which memcpy() does not accept */
+    }
     /* Complete the pending block first */
     if (stream->state.aes_cbc.pending_length > 0) {
         fill_length = WA_AES_BLOCK_SIZE - stream->state.aes_cbc.pending_length;

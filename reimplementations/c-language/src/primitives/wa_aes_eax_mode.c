@@ -64,6 +64,9 @@ wa_status_t wa_aes_eax_encryption_update(wa_aes_eax_encryption_t *encryption, co
     size_t bulk_length;
     size_t offset = 0;
     wa_status_t status;
+    if (length == 0) {
+        return WA_STATUS_OK; /* Nothing to do, and `input` may then be NULL */
+    }
     /* Rest of the previous keystream block */
     while (offset < length && encryption->keystream_used_length < WA_AES_BLOCK_SIZE) {
         output[offset] = (uint8_t)(input[offset] ^ encryption->keystream_block[encryption->keystream_used_length++]);

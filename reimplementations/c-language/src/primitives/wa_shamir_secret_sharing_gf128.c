@@ -92,7 +92,9 @@ wa_status_t wa_shamir_split_secret_into_shards(const wa_platform_hooks_t *platfo
         if (chunk_offset >= secret_length) {
             data_length = 0;
         }
-        memcpy(chunk, secret + chunk_offset, data_length);
+        if (data_length != 0) { /* An empty `secret` may be NULL, which memcpy() does not accept */
+            memcpy(chunk, secret + chunk_offset, data_length);
+        }
         if (data_length < WA_GF128_ELEMENT_SIZE) {
             wa_pkcs7_pad_final_block(chunk, data_length);
         }

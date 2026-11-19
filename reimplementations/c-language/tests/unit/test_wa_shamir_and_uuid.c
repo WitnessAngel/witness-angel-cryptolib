@@ -257,8 +257,10 @@ static void test_shamir_recombination(void)
             for (index = 0; index < secret_length; ++index) {
                 secret[index] = (uint8_t)(index * 31 + secret_length);
             }
-            WA_REQUIRE_STATUS(wa_shamir_split_secret_into_shards(&platform->hooks, secret, secret_length, shard_count,
-                                                                 threshold_count, &shards, &shard_length),
+            /* An empty secret may be given as NULL */
+            WA_REQUIRE_STATUS(wa_shamir_split_secret_into_shards(&platform->hooks, secret_length == 0 ? NULL : secret,
+                                                                 secret_length, shard_count, threshold_count, &shards,
+                                                                 &shard_length),
                               WA_STATUS_OK);
             WA_CHECK_SIZE(shard_length, (secret_length / 16 + 1) * 16);
             WA_CHECK_SIZE(platform->random_generator.call_count, (shard_length / 16) * (threshold_count - 1));

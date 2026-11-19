@@ -277,6 +277,11 @@ static void check_stream(const wa_test_platform_t *platform, const wa_symkey_t *
         if (chunk > plaintext_length - offset) {
             chunk = plaintext_length - offset;
         }
+        /* An empty input, even NULL, is a no-op at any point of the stream */
+        written = 99;
+        WA_CHECK_STATUS(wa_symmetric_cipher_stream_encrypt(&stream, NULL, 0, output + output_length, &written),
+                        WA_STATUS_OK);
+        WA_CHECK_SIZE(written, 0);
         WA_CHECK_STATUS(
             wa_symmetric_cipher_stream_encrypt(&stream, plaintext + offset, chunk, output + output_length, &written),
             WA_STATUS_OK);
@@ -289,6 +294,10 @@ static void check_stream(const wa_test_platform_t *platform, const wa_symkey_t *
         output_length += written;
         offset += chunk;
     }
+    written = 99;
+    WA_CHECK_STATUS(wa_symmetric_cipher_stream_encrypt(&stream, NULL, 0, output + output_length, &written),
+                    WA_STATUS_OK);
+    WA_CHECK_SIZE(written, 0);
     WA_CHECK_STATUS(wa_symmetric_cipher_stream_finish(&stream, output + output_length, &written, tag, &tag_length),
                     WA_STATUS_OK);
     output_length += written;

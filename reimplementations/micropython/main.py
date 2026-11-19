@@ -57,8 +57,11 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
 
 
-TRUSTEE_UID_1 = "5e840838-7532-4b32-ba72-ccd17f7c923a"
-KEYCHAIN_UID_1 = "acd7f9f7-849b-44af-9765-9d4913b7f8dd"
+from uuid import UUID
+
+# UUID values (not strings), as required by the cryptoconf and cryptainer schemas
+TRUSTEE_UID_1 = UUID("5e840838-7532-4b32-ba72-ccd17f7c923a")
+KEYCHAIN_UID_1 = UUID("acd7f9f7-849b-44af-9765-9d4913b7f8dd")
 
 
 # Used as fallback when no proper cryptoconf is provided

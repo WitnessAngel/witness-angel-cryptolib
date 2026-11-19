@@ -4,9 +4,10 @@
 
 """
 Output file handling of the C CLI: --force replaces existing outputs only once the new ones are complete (an
-existing recording is never lost on failure), files created by a failed run are deleted, outputs that are one of
-the input files are refused (whatever the spelling of their path), stdin is usable once, and chunk sizes are
-strict decimal numbers.
+existing recording is never lost on failure, a replaced payload file being put back when its cryptainer cannot be
+replaced), files created by a failed run are deleted, outputs that are one of the input files are refused (whatever
+the spelling of their path), files of any name are reachable, stdin is usable once, and chunk sizes are strict
+decimal numbers.
 
 Encryption failures after the outputs are created are provoked with a directory as input file, which opens but
 cannot be read on POSIX systems.
@@ -14,6 +15,7 @@ cannot be read on POSIX systems.
 
 import importlib.util
 import os
+import stat
 
 import pytest
 
@@ -107,6 +109,69 @@ def test_successful_forced_run_replaces_outputs(c_build, document_format, tmp_pa
     new_payload = (tmp_path / payload_name).read_bytes()
     assert new_payload != old_payload and len(new_payload) > len(old_payload)
     assert _list_files(tmp_path) == sorted([INPUT_FILENAME, PROFILE_FILENAME, cryptainer_name, payload_name])
+
+
+def _prepare_previous_outputs(c_build, document_format, work_dir):
+    """Outputs of a first run, then another input: (cryptainer name, payload name, their bytes, the files)."""
+    _prepare(work_dir)
+    cryptainer_name, payload_name = _get_output_names("out", document_format)
+    process = _encrypt(c_build, document_format, work_dir)
+    assert process.returncode == 0, process.stderr
+    (work_dir / INPUT_FILENAME).write_bytes(b"second recording, longer " * 300)
+    old_cryptainer = (work_dir / cryptainer_name).read_bytes()
+    old_payload = (work_dir / payload_name).read_bytes()
+    return cryptainer_name, payload_name, old_cryptainer, old_payload, _list_files(work_dir)
+
+
+def test_forced_run_unable_to_replace_cryptainer_restores_payload(c_build, document_format, tmp_path):
+    """The cryptainer is replaced after its payload: when it cannot be, the previous payload file is back."""
+    cryptainer_name, payload_name, _old_cryptainer, old_payload, files_before = _prepare_previous_outputs(
+        c_build, document_format, tmp_path
+    )
+    # A file cannot be renamed over a directory, on any system
+    os.remove(tmp_path / cryptainer_name)
+    (tmp_path / cryptainer_name).mkdir()
+    (tmp_path / cryptainer_name / "kept").write_bytes(b"kept")
+
+    process = _encrypt(c_build, document_format, tmp_path, "--force")
+    assert process.returncode == 1 and b"cannot replace " + cryptainer_name.encode() in process.stderr, process.stderr
+    assert process.stdout == b""
+    assert (tmp_path / payload_name).read_bytes() == old_payload
+    assert _list_files(tmp_path / cryptainer_name) == ["kept"]
+    assert _list_files(tmp_path) == files_before  # Neither temporary nor backup file left
+
+    # Without a previous payload file, the new one does not stay next to what is not its cryptainer
+    os.remove(tmp_path / payload_name)
+    process = _encrypt(c_build, document_format, tmp_path, "--force")
+    assert process.returncode == 1 and b"cannot replace " + cryptainer_name.encode() in process.stderr, process.stderr
+    assert _list_files(tmp_path) == sorted(set(files_before) - {payload_name})
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Open files and read-only files can be replaced on POSIX systems")
+@pytest.mark.parametrize("locked_output", ["cryptainer", "payload"])
+@pytest.mark.parametrize("lock", ["open", "read-only"])
+def test_forced_run_keeps_previous_outputs_locked_on_windows(c_build, document_format, tmp_path, locked_output, lock):
+    cryptainer_name, payload_name, old_cryptainer, old_payload, files_before = _prepare_previous_outputs(
+        c_build, document_format, tmp_path
+    )
+    locked_path = tmp_path / (cryptainer_name if locked_output == "cryptainer" else payload_name)
+    if lock == "open":
+        with open(locked_path, "rb"):  # Not shared for deletion: the file can be neither renamed nor replaced
+            process = _encrypt(c_build, document_format, tmp_path, "--force")
+    else:
+        os.chmod(locked_path, stat.S_IREAD)
+        process = _encrypt(c_build, document_format, tmp_path, "--force")
+        os.chmod(locked_path, stat.S_IREAD | stat.S_IWRITE)
+    assert process.returncode == 1 and b"cannot replace " + locked_path.name.encode() in process.stderr, process.stderr
+    assert (tmp_path / cryptainer_name).read_bytes() == old_cryptainer
+    assert (tmp_path / payload_name).read_bytes() == old_payload
+    assert _list_files(tmp_path) == files_before
+
+    process = _encrypt(c_build, document_format, tmp_path, "--force")  # Replaceable once unlocked
+    assert process.returncode == 0, process.stderr
+    assert (tmp_path / cryptainer_name).read_bytes() != old_cryptainer
+    assert len((tmp_path / payload_name).read_bytes()) > len(old_payload)
+    assert _list_files(tmp_path) == files_before
 
 
 def test_outputs_being_inputs_refused(c_build, document_format, tmp_path):

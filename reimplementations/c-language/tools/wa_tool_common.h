@@ -49,6 +49,14 @@ FILE *wa_tool_open_temporary_output_file(const char *final_path, char **temporar
 /* Rename `source_path` to `destination_path`, replacing it if it exists (on the same file system); 0 or -1 */
 int wa_tool_replace_file(const char *source_path, const char *destination_path);
 
+/* Rename the file at `path` to a name unused so far, "<path>.bak-NNN", returned malloc()'d; NULL on failure, the
+ * file being left in place */
+char *wa_tool_move_file_aside(const char *path);
+
+/* 1 if `path` is an existing file that the system refuses to replace or delete because of its read-only attribute
+ * (Windows; always 0 on POSIX systems, where this only depends on the directory) */
+int wa_tool_file_is_read_only(const char *path);
+
 /* Delete a file; 0 or -1 */
 int wa_tool_remove_file(const char *path);
 

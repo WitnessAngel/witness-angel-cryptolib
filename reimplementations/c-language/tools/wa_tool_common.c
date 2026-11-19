@@ -248,19 +248,61 @@ FILE *wa_tool_open_temporary_output_file(const char *final_path, char **temporar
     return NULL;
 }
 
-int wa_tool_replace_file(const char *source_path, const char *destination_path)
+/* Rename a file, replacing an existing destination or, on Windows only, failing then (POSIX renaming always
+ * replaces: callers check before); 0 or -1 */
+static int wa_tool_move_file(const char *source_path, const char *destination_path, int replace)
 {
 #if defined(_WIN32)
     wchar_t *wide_source_path = wa_tool_convert_path_to_wide(source_path);
     wchar_t *wide_destination_path = wa_tool_convert_path_to_wide(destination_path);
     BOOL is_moved = wide_source_path != NULL && wide_destination_path != NULL &&
                     MoveFileExW(wide_source_path, wide_destination_path,
-                                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+                                MOVEFILE_WRITE_THROUGH | (replace ? MOVEFILE_REPLACE_EXISTING : 0u));
     free(wide_source_path);
     free(wide_destination_path);
     return is_moved ? 0 : -1;
 #else
+    (void)replace;
     return rename(source_path, destination_path) == 0 ? 0 : -1;
+#endif
+}
+
+int wa_tool_replace_file(const char *source_path, const char *destination_path)
+{
+    return wa_tool_move_file(source_path, destination_path, 1);
+}
+
+char *wa_tool_move_file_aside(const char *path)
+{
+    char *backup_path = (char *)malloc(strlen(path) + sizeof(".bak-000"));
+    unsigned int attempt;
+    if (backup_path == NULL) {
+        return NULL;
+    }
+    for (attempt = 0; attempt < 1000u; ++attempt) {
+        (void)sprintf(backup_path, "%s.bak-%03u", path, attempt);
+        if (!wa_tool_file_exists(backup_path)) {
+            if (wa_tool_move_file(path, backup_path, 0) == 0) {
+                return backup_path;
+            }
+            break;
+        }
+    }
+    free(backup_path);
+    return NULL;
+}
+
+int wa_tool_file_is_read_only(const char *path)
+{
+#if defined(_WIN32)
+    wchar_t *wide_path = wa_tool_convert_path_to_wide(path);
+    DWORD attributes = wide_path != NULL ? GetFileAttributesW(wide_path) : INVALID_FILE_ATTRIBUTES;
+    free(wide_path);
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 &&
+           (attributes & FILE_ATTRIBUTE_READONLY) != 0;
+#else
+    (void)path; /* Replacing or deleting a file only needs a writable directory */
+    return 0;
 #endif
 }
 

@@ -7,8 +7,9 @@
  * with a cryptoconf (output naming of design D14, spec section 9). The payload ciphertext is offloaded into
  * "<cryptainer file>.payload" unless --bundle is given; the payload file is written first and the cryptainer last,
  * so that a cryptainer never refers to a missing payload, and the files created are deleted on failure. With
- * --force, existing output files are only replaced (by renaming) once their new versions are complete; output files
- * that are one of the input files are always refused. */
+ * --force, existing output files are only replaced (by renaming) once their new versions are complete, and a
+ * replaced payload file is put back if its cryptainer cannot be replaced too; output files that are one of the
+ * input files are always refused. */
 
 #include <errno.h>
 #include <stdio.h>
@@ -183,21 +184,81 @@ static int wa_cli_output_close(wa_cli_output_t *output)
     return close_result == 0;
 }
 
-/* Keep a complete output: move its temporary file to its final path (already there without --force) */
-static int wa_cli_output_commit(wa_cli_output_t *output)
+/* Move the temporary file of a complete output to its final path, which becomes its write path */
+static int wa_cli_output_move_to_final_path(wa_cli_output_t *output)
 {
-    if (output->temporary_path == NULL) {
-        output->is_created = 0;
-        return 1;
-    }
     if (wa_tool_replace_file(output->temporary_path, output->final_path) != 0) {
         fprintf(stderr, "Error: cannot replace %s\n", output->final_path);
         return 0;
     }
     free(output->temporary_path);
     output->temporary_path = NULL;
-    output->is_created = 0; /* Now at its final path, where it may have replaced an existing file */
     return 1;
+}
+
+/* Keep complete outputs. Without --force they are at their final paths already. With --force their temporary files
+ * are renamed to the final paths, payload first; an existing payload file is moved aside before, and put back if
+ * the new pair cannot be completed, so that the final paths hold either the previous outputs or the new ones,
+ * never a cryptainer with the payload of another one. If it cannot even be put back, nothing is deleted, and the
+ * files holding the previous payload and the new outputs are reported. */
+static int wa_cli_commit_outputs(wa_cli_output_t *cryptainer_output, wa_cli_output_t *payload_output_or_null)
+{
+    const char *payload_path = payload_output_or_null != NULL ? payload_output_or_null->final_path : NULL;
+    char *payload_backup_path = NULL;
+    int is_successful = 1;
+
+    if (cryptainer_output->temporary_path != NULL) {
+        /* What a read-only attribute forbids (Windows) is refused before anything is moved */
+        const char *read_only_path = wa_tool_file_is_read_only(cryptainer_output->final_path)
+                                         ? cryptainer_output->final_path
+                                     : payload_path != NULL && wa_tool_file_is_read_only(payload_path) ? payload_path
+                                                                                                       : NULL;
+        if (read_only_path != NULL) {
+            fprintf(stderr, "Error: cannot replace %s (read-only file)\n", read_only_path);
+            return 0;
+        }
+        if (payload_path != NULL && wa_tool_file_exists(payload_path)) {
+            payload_backup_path = wa_tool_move_file_aside(payload_path);
+            if (payload_backup_path == NULL) {
+                fprintf(stderr, "Error: cannot replace %s\n", payload_path);
+                return 0;
+            }
+        }
+        /* Once at its final path, a new payload file is still deleted from there on failure */
+        is_successful =
+            (payload_output_or_null == NULL || wa_cli_output_move_to_final_path(payload_output_or_null)) &&
+            wa_cli_output_move_to_final_path(cryptainer_output);
+        if (!is_successful && payload_backup_path != NULL) {
+            if (wa_tool_replace_file(payload_backup_path, payload_path) == 0) {
+                if (payload_output_or_null->temporary_path == NULL) {
+                    payload_output_or_null->is_created = 0; /* Replaced by the previous payload file */
+                }
+            } else {
+                fprintf(stderr,
+                        "Error: cannot restore %s: nothing is deleted, the previous payload being in %s, the new "
+                        "payload in %s and the new cryptainer in %s\n",
+                        payload_path, payload_backup_path, wa_cli_output_get_write_path(payload_output_or_null),
+                        wa_cli_output_get_write_path(cryptainer_output));
+                payload_output_or_null->is_created = 0;
+                cryptainer_output->is_created = 0;
+            }
+        }
+        if (!is_successful) {
+            free(payload_backup_path);
+            return 0;
+        }
+    }
+    /* The outputs are at their final paths, where they may have replaced existing files */
+    cryptainer_output->is_created = 0;
+    if (payload_output_or_null != NULL) {
+        payload_output_or_null->is_created = 0;
+    }
+    if (payload_backup_path != NULL && wa_tool_remove_file(payload_backup_path) != 0) {
+        fprintf(stderr, "Error: cannot delete %s (the previous payload file)\n", payload_backup_path);
+        is_successful = 0;
+    }
+    free(payload_backup_path);
+    return is_successful;
 }
 
 /* Close, delete if created by this run and not committed, and release */
@@ -304,8 +365,7 @@ static int wa_cli_encrypt(const wa_cli_arguments_t *arguments, const wa_platform
         wa_cli_print_status_error("cryptainer writing failed", status, NULL);
         goto cleanup;
     }
-    if ((payload_output_or_null != NULL && !wa_cli_output_commit(payload_output_or_null)) ||
-        !wa_cli_output_commit(cryptainer_output)) {
+    if (!wa_cli_commit_outputs(cryptainer_output, payload_output_or_null)) {
         goto cleanup;
     }
     printf("%s\n", cryptainer_output->final_path);

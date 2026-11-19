@@ -35,10 +35,11 @@ class CRYPTAINER_STATES:
 def _copy_data_tree(data_tree):
     """Deep-copy the dicts and lists of a data tree WITHOUT preserving aliasing (unlike copy.deepcopy()), so that a
     sub-tree reused at several places of a cryptoconf gets its own copy in the cryptainer, where encryption results
-    (e.g. the "key_ciphertext" of symmetric key cipher layers) are stored."""
+    (e.g. the "key_ciphertext" of symmetric key cipher layers) are stored. Tuples are copied as lists, else the dicts
+    they hold would be shared with the cryptoconf, on platforms whose validation lets them through."""
     if isinstance(data_tree, dict):
         return {key: _copy_data_tree(value) for key, value in data_tree.items()}
-    if isinstance(data_tree, list):
+    if isinstance(data_tree, (list, tuple)):
         return [_copy_data_tree(item) for item in data_tree]
     return data_tree  # Leaves (str, bytes, int, UUID...) are immutable
 
@@ -113,9 +114,15 @@ class FlightBox:
         keys 'cipher_algo', 'symmetric_key' and 'payload_hash_algos'.
         """
 
-        assert cryptainer_metadata is None or isinstance(cryptainer_metadata, dict), type(cryptainer_metadata)
-        if key_ciphertext_format not in KEY_CIPHERTEXT_FORMATS:  # Before any key generation
+        # These checks come before any key generation, and are no assertions since these can be stripped (python -O)
+        if key_ciphertext_format not in KEY_CIPHERTEXT_FORMATS:
             raise ValueError("Unknown key ciphertext format %r" % (key_ciphertext_format,))
+        if not (cryptainer_metadata is None or isinstance(cryptainer_metadata, dict)):
+            raise self._fbu.raise_validation_error(
+                "Cryptainer metadata must be a dict or None, not %s" % type(cryptainer_metadata).__name__
+            )
+        if not isinstance(cryptoconf, dict):
+            raise self._fbu.raise_validation_error("Cryptoconf must be a dict, not %s" % type(cryptoconf).__name__)
         cryptainer_format = CRYPTAINER_FORMAT
         cryptainer_uid = self._fbu.generate_uuid0()  # ALWAYS UNIQUE!
 
@@ -123,7 +130,6 @@ class FlightBox:
             cryptoconf.get("keychain_uid") or self._fbu.generate_uuid0()
         )  # Might be shared by lots of cryptainers
 
-        assert isinstance(cryptoconf, dict), type(cryptoconf)
         cryptainer = _copy_data_tree(cryptoconf)  # So that we can manipulate it as new cryptainer
         del cryptoconf
         if not cryptainer["payload_cipher_layers"]:
@@ -332,7 +338,10 @@ class FlightBox:
             # We do not need to separate ciphertext from integrity/authentication data here, since key encryption is atomic
 
         else:  # Using asymmetric algorithm
-            assert key_cipher_algo in self._fbu.SUPPORTED_ASYMMETRIC_CIPHER_ALGOS, repr(key_cipher_algo)
+            if key_cipher_algo not in self._fbu.SUPPORTED_ASYMMETRIC_CIPHER_ALGOS:  # No assertion, see above
+                raise self._fbu.raise_validation_error(
+                    "Unsupported key cipher algo %r in cryptoconf" % (key_cipher_algo,)
+                )
 
             keychain_uid = key_cipher_layer.get("keychain_uid") or default_keychain_uid
             key_cipherdict = self._encrypt_key_with_asymmetric_cipher(

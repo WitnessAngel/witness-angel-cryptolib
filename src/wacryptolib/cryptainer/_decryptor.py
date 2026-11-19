@@ -626,11 +626,22 @@ class CryptainerDecryptor(CryptainerBase):
 
             shard_ciphertexts = key_cipherdict["shard_ciphertexts"]
 
+            # The cryptainer validation only checked the shard count of readable cipherdicts, not of those revealed by
+            # the decryption of outer layers, and zip() would pair ciphertexts with wrong confs, or drop some
+            if len(shard_ciphertexts) != len(key_shared_secret_shards):
+                operation_report.add_entry(
+                    entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,  # Like the other shared secret errors
+                    entry_message="Shared secret has %d shard ciphertexts for %d configured shards"
+                    % (len(shard_ciphertexts), len(key_shared_secret_shards)),
+                    entry_criticity=DecryptionErrorCriticity.ERROR,
+                    entry_exception=None,
+                )
+                return None
+
             with operation_report.operation_section(
                 "Deciphering %d shards of shared secret (threshold: %d)"
                 % (len(shard_ciphertexts), key_shared_secret_threshold)
             ):
-                # Shard counts were checked by the cryptainer validation, since shard ciphertexts are readable
                 for shard_idx, (shard_ciphertext, key_shared_secret_shard_conf) in enumerate(
                     zip(shard_ciphertexts, key_shared_secret_shards), start=1
                 ):

@@ -1312,6 +1312,52 @@ def test_cryptainer_decryption_with_malformed_revealed_key_cipherdicts():
         )
 
 
+def test_cryptainer_decryption_with_revealed_shared_secret_of_wrong_shard_count():
+    # The shared secret cipherdict is only revealed by the decryption of the outer RSA_OAEP layer
+    rsa_layer = dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)
+    cryptoconf = dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_CBC",
+                key_cipher_layers=[
+                    dict(
+                        key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                        key_shared_secret_threshold=1,
+                        key_shared_secret_shards=[dict(key_cipher_layers=[rsa_layer])] * 2,
+                    ),
+                    rsa_layer,
+                ],
+                payload_ciphertext_signatures=[],
+            )
+        ]
+    )
+    payload = b"some secret payload"
+    cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=None)
+    assert decrypt_payload_from_cryptainer(cryptainer)[0] == payload
+
+    for alter_shard_ciphertexts, expected_counts in [
+        (lambda shard_ciphertexts: shard_ciphertexts[:1], (1, 2)),  # zip() would just decrypt the first shard
+        (lambda shard_ciphertexts: shard_ciphertexts + shard_ciphertexts[:1], (3, 2)),  # Or ignore the extra one
+    ]:
+
+        def _alter_shared_secret_cipherdict(key_struct_bytes):
+            key_struct = load_from_json_bytes(key_struct_bytes)
+            key_cipherdict = load_from_json_bytes(key_struct["key_bytes"])
+            key_cipherdict["shard_ciphertexts"] = alter_shard_ciphertexts(key_cipherdict["shard_ciphertexts"])
+            return _forge_key_struct_bytes(dump_to_json_bytes(key_cipherdict))
+
+        with _patch_trustee_decryption_results({1: _alter_shared_secret_cipherdict}):
+            result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+        assert result_payload is None
+        _check_operation_report_entry(
+            operation_report=operation_report,
+            entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+            entry_criticity=DecryptionErrorCriticity.ERROR,
+            entry_msg_match="Shared secret has %d shard ciphertexts for %d configured shards" % expected_counts,
+            exception_class=None,
+        )
+
+
 def _forge_key_struct_bytes(key_bytes):
     return dump_to_json_bytes(dict(key_bytes=key_bytes, cryptainer_metadata=None))
 

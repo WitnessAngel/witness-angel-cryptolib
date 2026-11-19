@@ -153,13 +153,20 @@ def _get_click_file_name(file):
     return name
 
 
+# What load_from_document_bytes() raises on malformed content: DocumentFormatError and WaCborError (both ValueErrors)
+# but also, for Extended JSON, JSONDecodeError and UnicodeDecodeError (ValueErrors), TypeError on wrongly-typed
+# wrappers, OverflowError and decimal.InvalidOperation (ArithmeticErrors), and RecursionError on deep nesting
+_DOCUMENT_LOADING_ERRORS = (ValueError, TypeError, ArithmeticError, RecursionError)
+
+
 def _load_document_from_click_file(file):
     """Load an Extended JSON or WA-CBOR document from a file opened by click.File (or from STDIN), recognizing
     its format from its name, else from its content."""
     filename = _get_click_file_name(file)
+    document_bytes = file.read()
     try:
-        return load_from_document_bytes(file.read(), filename=os.path.basename(filename) if filename else None)
-    except (DocumentFormatError, WaCborError) as exc:
+        return load_from_document_bytes(document_bytes, filename=os.path.basename(filename) if filename else None)
+    except _DOCUMENT_LOADING_ERRORS as exc:
         raise click.UsageError("Couldn't load document file '%s': %s" % (filename or "-", exc))
 
 
@@ -1236,7 +1243,7 @@ def convert_format(source, target, force):
 
     try:
         document = load_from_document_bytes(source_bytes, format=source_format)
-    except ValueError as exc:  # Including malformed Extended JSON and WA-CBOR
+    except _DOCUMENT_LOADING_ERRORS as exc:  # Malformed Extended JSON or WA-CBOR
         raise click.ClickException("Couldn't load document file '%s': %s" % (source, exc))
 
     target_paths = [target]

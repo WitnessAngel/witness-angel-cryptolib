@@ -627,13 +627,15 @@ def test_cli_encryption_and_summarize_with_custom_cryptoconf(tmp_path):
             cli,
             base_args + ["cryptoconf", "summarize", cryptoconf_file],
         )
-        assert result.exit_code == 1  # Wrong JSON content
+        assert result.exit_code == 2  # Wrong JSON content, as a clean usage error
+        assert "Couldn't load document file 'mycryptoconf.json'" in result.stderr
 
         result = runner.invoke(
             cli,
             base_args + ["encrypt", data_file, "-o", "specialconf.crypt", "-c", cryptoconf_file],
         )
-        assert result.exit_code == 1
+        assert result.exit_code == 2
+        assert "Couldn't load document file 'mycryptoconf.json'" in result.stderr
         assert not os.path.exists("specialconf.crypt")
 
         simple_cryptoconf_tree = dict(
@@ -935,6 +937,36 @@ def test_cli_cryptoconf_validate(tmp_path):
     result = runner.invoke(cli, ["cryptoconf", "validate", str(cryptoconf_file)], catch_exceptions=False)
     assert result.exit_code == 0
     assert "is valid" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "malformed_content",
+    [
+        b'{"payload_cipher_layers": [',  # Truncated (JSONDecodeError)
+        b'{"x": "\xff"}',  # Not UTF-8 (UnicodeDecodeError)
+        b'{"x": {"$uuid": "zz"}}',  # Bad UUID (ValueError)
+        b'{"x": {"$binary": "AAAA"}}',  # Wrongly-typed wrapper (TypeError)
+        b'{"x": {"$date": "2020-01-01T00:00:00"}}',  # Naive datetime (TypeError)
+        b'{"x": {"$date": {"$numberLong": "99999999999999999"}}}',  # Out of range datetime (OverflowError)
+        b'{"x": {"$numberDecimal": "abc"}}',  # Bad decimal (decimal.InvalidOperation)
+        b"[" * 100000 + b"]" * 100000,  # Deep nesting (RecursionError)
+    ],
+    ids=["truncated", "not_utf8", "bad_uuid", "bad_binary", "naive_date", "huge_date", "bad_decimal", "deep"],
+)
+def test_cli_malformed_extended_json_documents_give_clean_errors(malformed_content, tmp_path):
+    malformed_file = tmp_path / "malformed.json"
+    malformed_file.write_bytes(malformed_content)
+    runner = _get_cli_runner()
+
+    for command in (["cryptoconf", "validate"], ["cryptoconf", "summarize"]):
+        result = runner.invoke(cli, command + [str(malformed_file)], catch_exceptions=False)
+        assert result.exit_code == 2, result.stderr
+        assert "Couldn't load document file" in result.stderr and "malformed.json" in result.stderr
+
+    result = runner.invoke(cli, ["convert-format", str(malformed_file)], catch_exceptions=False)
+    assert result.exit_code == 1, result.stderr
+    assert "Couldn't load document file" in result.stderr and "malformed.json" in result.stderr
+    assert sorted(os.listdir(tmp_path)) == ["malformed.json"]
 
 
 def test_cli_subprocess_invocation():

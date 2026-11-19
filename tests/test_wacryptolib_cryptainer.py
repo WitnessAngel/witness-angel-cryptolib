@@ -3328,6 +3328,81 @@ def test_metadata_with_extjson_keyword_map_is_refused_upfront(key_ciphertext_for
     assert decrypt_payload_from_cryptainer(cryptainer)[0] == b"abc"
 
 
+def _get_nested_metadata(depth, container_type=dict):
+    metadata = current = {}
+    for _ in range(depth - 1):
+        child = {} if container_type is dict else []
+        if isinstance(current, dict):
+            current["x"] = child
+        else:
+            current.append(child)
+        current = child
+    return metadata
+
+
+@pytest.mark.parametrize("key_ciphertext_format", ["json", "cbor"])
+def test_invalid_metadata_is_refused_before_any_random_draw_or_output(tmp_path, key_ciphertext_format):
+    import decimal
+    from datetime import timezone
+
+    cyclic_metadata = {"a": []}
+    cyclic_metadata["a"].append(cyclic_metadata)
+
+    invalid_metadata_cases = [
+        (["a"], "must be a dict or None, not list"),
+        (_get_nested_metadata(64), "deeper than 63 levels"),  # The WA-CBOR limit, also applied in Extended JSON mode
+        (_get_nested_metadata(64, container_type=list), "deeper than 63 levels"),
+        (_get_nested_metadata(5000), "deeper than 63 levels"),  # No RecursionError
+        (cyclic_metadata, "deeper than 63 levels"),
+        ({1: "a"}, "non-text map key"),  # Extended JSON would silently turn this key into "1"
+        ({"a": {None: 1}}, "non-text map key"),
+        ({1: "a", "b": 2}, "non-text map key"),  # Extended JSON would raise a TypeError when sorting keys
+        ({"a": {1, 2}}, "type set"),
+        ({"a": [bytearray(b"x")]}, "type bytearray"),
+        ({"a": datetime(2020, 1, 1)}, "naive datetime"),
+        ({"a": decimal.Decimal("NaN")}, "decimal NaN"),
+        ({"a": "\ud800"}, "lone surrogates"),
+    ]
+
+    keystore_pool = InMemoryKeystorePool()
+    cryptainer_filepath = tmp_path / "bad_metadata.crypt.json"
+    with patch("wacryptolib.cryptainer._encryptor.generate_uuid0") as generate_uuid0_mock, patch(
+        "wacryptolib.cryptainer._encryptor.generate_symkey"
+    ) as generate_symkey_mock:
+        for metadata, error_regex in invalid_metadata_cases:
+            with pytest.raises(SchemaValidationError, match=error_regex):
+                encrypt_payload_into_cryptainer(
+                    payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=metadata,
+                    keystore_pool=keystore_pool, key_ciphertext_format=key_ciphertext_format,
+                )
+            with pytest.raises(SchemaValidationError, match=error_regex):
+                encrypt_payload_and_stream_cryptainer_to_filesystem(
+                    b"abc", cryptainer_filepath=cryptainer_filepath, cryptoconf=SIMPLE_CRYPTOCONF,
+                    cryptainer_metadata=metadata, keystore_pool=keystore_pool,
+                    key_ciphertext_format=key_ciphertext_format,
+                )
+            assert not cryptainer_filepath.exists()
+    assert not generate_uuid0_mock.called and not generate_symkey_mock.called
+    assert not keystore_pool.get_local_keyfactory().list_keypair_identifiers()  # No keypair generated on demand
+
+    # Every document type is accepted, at the maximal depth, and such cryptainers can be stored in both formats
+    aware_datetime = datetime(2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+    metadata = _get_nested_metadata(63)
+    metadata["values"] = ["text", 12, -(2**70), 1.5, True, None, b"\x00", uuid.UUID(int=3), aware_datetime, decimal.Decimal("1.5")]
+    metadata["tuple"] = (1, 2)
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=b"abc", cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=metadata,
+        keystore_pool=keystore_pool, key_ciphertext_format=key_ciphertext_format,
+    )
+    assert cryptainer["cryptainer_metadata"] == metadata
+    for document_format in DOCUMENT_FORMATS:
+        other_cryptainer_filepath = tmp_path / ("good_metadata.crypt." + document_format)
+        dump_cryptainer_to_filesystem(other_cryptainer_filepath, cryptainer=copy.deepcopy(cryptainer))
+        reloaded_metadata = load_cryptainer_from_filesystem(other_cryptainer_filepath)["cryptainer_metadata"]
+        assert reloaded_metadata == dict(metadata, tuple=[1, 2])
+    assert decrypt_payload_from_cryptainer(cryptainer, keystore_pool=keystore_pool)[0] == b"abc"
+
+
 def test_decrypt_non_dict_cryptainer_raises_schema_validation_error():
     for wrong_cryptainer in (None, 42, [{}]):
         with pytest.raises(SchemaValidationError, match="must be a dict"):

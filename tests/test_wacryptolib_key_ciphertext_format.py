@@ -484,7 +484,7 @@ def test_metadata_unencodable_in_wacbor_fails_encryption_before_writing(tmp_path
     for _ in range(63):  # The key struct adds one level, beyond the WA-CBOR nesting limit of 64
         current["x"] = current = {}
     cryptainer_filepath = tmp_path / "deep.crypt.json"
-    with pytest.raises(WaCborError):
+    with pytest.raises(SchemaValidationError, match="deeper than 63 levels"):  # At upfront validation
         encrypt_payload_and_stream_cryptainer_to_filesystem(
             b"data",
             cryptainer_filepath=cryptainer_filepath,

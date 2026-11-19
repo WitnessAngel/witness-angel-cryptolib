@@ -20,6 +20,8 @@ from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
 from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema
 from wacryptolib.utilities.validation_utils import summarize_validation_error_lines
+from wacryptolib.utilities.wacbor import EXTJSON_KEYWORDS, MAX_NESTING_DEPTH as WACBOR_MAX_NESTING_DEPTH, \
+    WaCborEncodingError, check_document_tree
 
 
 def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, extended_json_format: bool):
@@ -307,6 +309,62 @@ def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
 
     schema = CRYPTOCONF_SCHEMA_JSON if jsonschema_mode else CRYPTOCONF_SCHEMA_PYTHON
     _validate_data_tree(data_tree=cryptoconf, validation_schema=schema)
+
+
+MAX_CRYPTAINER_METADATA_NESTING_DEPTH = WACBOR_MAX_NESTING_DEPTH - 1  # Metadata is at level 2 of its holders
+
+
+def _check_metadata_nesting_and_extjson_keyword_maps(cryptainer_metadata: dict) -> None:
+    """Reject metadata nested deeper than what WA-CBOR documents can hold, or holding, at any depth, a single-key
+    map whose key is an Extended JSON keyword (like {"$uuid": "..."}): Extended JSON readers would load it back as
+    a typed value, or fail to load the cryptainer, and WA-CBOR refuses it."""
+    pending_items = [(cryptainer_metadata, "cryptainer_metadata", 1)]
+    while pending_items:  # Iterative and bounded, so that deep or cyclic metadata doesn't hit the recursion limit
+        item, location, depth = pending_items.pop()
+        if not isinstance(item, (dict, list, tuple)):
+            continue
+        if depth > MAX_CRYPTAINER_METADATA_NESTING_DEPTH:
+            raise SchemaValidationError(
+                "Cryptainer metadata can't nest maps and arrays deeper than %d levels"
+                % MAX_CRYPTAINER_METADATA_NESTING_DEPTH
+            )
+        if isinstance(item, dict):
+            if len(item) == 1:
+                (key,) = item
+                if isinstance(key, str) and key in EXTJSON_KEYWORDS:
+                    raise SchemaValidationError(
+                        "Cryptainer metadata can't hold an Extended JSON keyword map (%r) at %s" % (key, location)
+                    )
+            pending_items.extend((value, "%s.%s" % (location, key), depth + 1) for key, value in item.items())
+        else:
+            pending_items.extend((value, "%s[%d]" % (location, index), depth + 1) for index, value in enumerate(item))
+
+
+def check_cryptainer_metadata_sanity(cryptainer_metadata: Optional[dict]) -> None:
+    """Validate the metadata given to an encryptor, which copies it into the cryptainer and into every key struct.
+
+    This must be called before any random draw, key generation or output. Metadata must be None, or a dict forming
+    a document tree that both Extended JSON and WA-CBOR carry faithfully, whatever the formats actually used (so
+    that a cryptainer can always be converted between them): maps with text keys, arrays, and values of the document
+    types (str, int, float, bool, None, bytes, UUID, timezone-aware datetime, Decimal), nested at most 63 levels,
+    and without Extended JSON keyword maps.
+
+    :raises SchemaValidationError: if the metadata is invalid
+    """
+    if cryptainer_metadata is None:
+        return
+    if not isinstance(cryptainer_metadata, dict):  # Not an assert, which vanishes under "python -O"
+        raise SchemaValidationError(
+            "Cryptainer metadata must be a dict or None, not %s" % type(cryptainer_metadata).__name__
+        )
+    _check_metadata_nesting_and_extjson_keyword_maps(cryptainer_metadata)
+    try:
+        check_document_tree(cryptainer_metadata)  # Types of keys and values, now that the depth is bounded
+    except WaCborEncodingError as exc:
+        error_message = str(exc)
+    else:
+        return
+    raise SchemaValidationError("Invalid cryptainer metadata: %s" % error_message)
 
 
 def check_cryptainer_sanity(cryptainer: dict, jsonschema_mode=False, require_inline_payload=True):

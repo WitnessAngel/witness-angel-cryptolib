@@ -28,7 +28,8 @@ from ._analysis import gather_trustee_dependencies, gather_decryptable_symkeys, 
 
 from ._validation import (_validate_data_tree, check_cryptoconf_sanity, check_cryptainer_sanity,
                           check_sigconf_sanity, check_sigainer_sanity, ValidatedCryptoconf, ValidatedCryptainer,
-                          ensure_validated_cryptoconf, ensure_validated_cryptainer, check_key_cipherdict_sanity)
+                          ensure_validated_cryptoconf, ensure_validated_cryptainer, check_key_cipherdict_sanity,
+                          check_cryptainer_metadata_sanity)
 
 from ._signing import _do_get_message_signature, _inject_payload_digests_and_signatures
 

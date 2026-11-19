@@ -194,6 +194,37 @@ static void test_specification_vectors_rewritten(void)
     wa_test_platform_destroy(platform);
 }
 
+/* Finding C-14: once the sink has failed, the buffered writer stages and delivers nothing more */
+static void test_buffered_writer_stops_after_a_sink_failure(void)
+{
+    wa_buffered_sink_writer_t writer;
+    wa_test_memory_sink_t memory_sink;
+    uint8_t bytes[200];
+    memset(bytes, 0x5A, sizeof(bytes));
+    wa_test_memory_sink_initialize(&memory_sink);
+    memory_sink.fail_after_byte_count = 150;
+    wa_buffered_sink_writer_initialize(&writer, &memory_sink.sink);
+    wa_buffered_sink_writer_write(&writer, bytes, 100);
+    WA_CHECK(!wa_buffered_sink_writer_has_failed(&writer));
+    WA_CHECK_SIZE(writer.length, 100);
+    wa_buffered_sink_writer_write(&writer, bytes, 100); /* Flushes the first 100 bytes, stages 100 more */
+    WA_CHECK(!wa_buffered_sink_writer_has_failed(&writer));
+    WA_CHECK_SIZE(memory_sink.length, 100);
+    wa_buffered_sink_writer_write(&writer, bytes, 100); /* The flush goes beyond the budget of the sink */
+    WA_CHECK(wa_buffered_sink_writer_has_failed(&writer));
+    WA_CHECK_SIZE(memory_sink.write_call_count, 2);
+    WA_CHECK_SIZE(writer.length, 0);
+    wa_buffered_sink_writer_write(&writer, bytes, 10);
+    wa_buffered_sink_writer_write_byte(&writer, 0x5Au);
+    wa_buffered_sink_writer_write_text(&writer, "text");
+    wa_buffered_sink_writer_write(&writer, bytes, sizeof(bytes)); /* Large items would go straight to the sink */
+    WA_CHECK_SIZE(writer.length, 0);
+    WA_CHECK_STATUS(wa_buffered_sink_writer_finish(&writer), WA_STATUS_SINK_WRITE_FAILURE);
+    WA_CHECK_SIZE(memory_sink.write_call_count, 2);
+    WA_CHECK_SIZE(memory_sink.length, 100);
+    wa_test_memory_sink_release(&memory_sink);
+}
+
 /* A large document reaches the sink in several writes, and a failing sink fails the writers */
 static void test_streaming_and_sink_failures(void)
 {
@@ -216,6 +247,7 @@ static void test_streaming_and_sink_failures(void)
     wa_test_memory_sink_initialize(&memory_sink);
     memory_sink.fail_after_byte_count = 1000;
     WA_CHECK_STATUS(wa_extended_json_writer_write_document(map, &memory_sink.sink), WA_STATUS_SINK_WRITE_FAILURE);
+    WA_CHECK(memory_sink.length <= 1000); /* Nothing is written after the failure */
     wa_test_memory_sink_release(&memory_sink);
     wa_test_memory_sink_initialize(&memory_sink);
     memory_sink.fail_after_byte_count = 0;
@@ -248,6 +280,7 @@ int main(void)
     WA_RUN_TEST(test_wacryptolib_samples);
     WA_RUN_TEST(test_manually_built_non_ascii_text);
     WA_RUN_TEST(test_specification_vectors_rewritten);
+    WA_RUN_TEST(test_buffered_writer_stops_after_a_sink_failure);
     WA_RUN_TEST(test_streaming_and_sink_failures);
     return wa_test_finish();
 }

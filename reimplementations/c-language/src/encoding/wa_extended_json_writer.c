@@ -95,6 +95,9 @@ static void wa_json_write_integer(wa_buffered_sink_writer_t *writer, int64_t int
 static void wa_json_write_node(wa_buffered_sink_writer_t *writer, const wa_value_t *node)
 {
     size_t index;
+    if (wa_buffered_sink_writer_has_failed(writer)) {
+        return; /* The sink has failed: the rest of the tree is not encoded */
+    }
     switch (node->type) {
     case WA_VALUE_TYPE_NULL:
         wa_buffered_sink_writer_write_text(writer, "null");

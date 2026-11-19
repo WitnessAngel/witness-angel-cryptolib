@@ -51,6 +51,9 @@ static void wa_cbor_write_head(wa_buffered_sink_writer_t *writer, unsigned int m
 static void wa_cbor_write_node(wa_buffered_sink_writer_t *writer, const wa_value_t *node)
 {
     size_t index;
+    if (wa_buffered_sink_writer_has_failed(writer)) {
+        return; /* The sink has failed: the rest of the tree is not encoded */
+    }
     switch (node->type) {
     case WA_VALUE_TYPE_NULL:
         wa_buffered_sink_writer_write_byte(writer, 0xF6u);

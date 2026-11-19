@@ -43,6 +43,9 @@ void wa_base64_encoder_update(wa_base64_encoder_t *encoder, const uint8_t *bytes
         encoder->pending_length = 0;
     }
     while (length - position >= 3) {
+        if (wa_buffered_sink_writer_has_failed(encoder->writer)) {
+            return; /* The rest of a large content would be encoded for nothing */
+        }
         wa_base64_encoder_write_group(encoder, bytes + position, 3);
         position += 3;
     }

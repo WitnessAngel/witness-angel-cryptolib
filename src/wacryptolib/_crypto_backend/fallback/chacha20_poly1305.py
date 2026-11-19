@@ -84,7 +84,10 @@ class ChaCha20Poly1305Cipher:
         if missing_length > 0:
             block_count = -(-missing_length // 64)
             if self._counter + block_count - 1 > _MASK32:  # Last block used is counter + block_count - 1
-                raise OverflowError("Too much data for a single ChaCha20 nonce")
+                # A ValueError like pycryptodome's MessageTooLongError (which is an OverflowError too, but micropython
+                # doesn't support multiple inheritance from builtin exceptions), so that callers turn it into an
+                # EncryptionError or DecryptionError
+                raise ValueError("Too much data for a single ChaCha20 nonce (RFC 8439 limit)")
             self._keystream += b"".join(
                 _chacha20_block(self._key_words, self._counter + i, self._nonce_words) for i in range(block_count)
             )

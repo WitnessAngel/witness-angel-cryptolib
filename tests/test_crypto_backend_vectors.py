@@ -151,8 +151,14 @@ def test_vendored_chacha20_counter_may_reach_but_not_exceed_32_bits():
     cipher = ChaCha20Poly1305Cipher(bytes(32), bytes(12))
     cipher._counter = 0xFFFFFFFF  # Last valid block counter
     cipher.encrypt(bytes(64))
-    with pytest.raises(OverflowError):
+    with pytest.raises(ValueError, match="Too much data"):  # Like pycryptodome, so that it becomes an EncryptionError
         cipher.encrypt(b"x")
+
+    # Same for decryption
+    cipher = ChaCha20Poly1305Cipher(bytes(32), bytes(12))
+    cipher._counter = 0xFFFFFFFF
+    with pytest.raises(ValueError, match="Too much data"):
+        cipher.decrypt(bytes(65))
 
 def test_x25519_rfc7748():
     # Section 5.2, scalar multiplication

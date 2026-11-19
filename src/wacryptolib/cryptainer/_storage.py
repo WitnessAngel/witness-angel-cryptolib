@@ -15,7 +15,7 @@ from wacryptolib.cryptainer import CRYPTAINER_SUFFIXES, CRYPTAINER_TEMP_SUFFIX, 
     decrypt_payload_from_cryptainer, check_cryptainer_sanity, ensure_validated_cryptoconf, delete_cryptainer_from_filesystem, \
     encrypt_payload_and_stream_cryptainer_to_filesystem, encrypt_payload_into_cryptainer, dump_cryptainer_to_filesystem, \
     is_cryptainer_cryptoconf_streamable, CryptainerEncryptionPipeline, _get_offloaded_file_path, split_cryptainer_suffix,     get_cryptainer_suffix, \
-    KEY_CIPHERTEXT_FORMATS
+    KEY_CIPHERTEXT_FORMATS, KEY_CIPHERTEXT_FORMAT_JSON
 from wacryptolib.keystore import KeystorePoolBase
 from wacryptolib.utilities import get_utc_now_date, is_file_basename, catch_and_log_exception, synchronized,     DocumentFormat
 
@@ -464,6 +464,13 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
         self._cleanup_before_new_record_encryption()
         cryptainer_filepath = self._get_new_cryptainer_filepath(filename_base)
 
+        # Custom stream classes written before this parameter existed keep working for the default format, and fail
+        # loudly instead of silently writing Extended JSON key ciphertexts for the other one
+        if self._key_ciphertext_format != KEY_CIPHERTEXT_FORMAT_JSON:
+            cryptainer_encryption_stream_extra_kwargs = dict(
+                cryptainer_encryption_stream_extra_kwargs, key_ciphertext_format=self._key_ciphertext_format
+            )
+
         cryptainer_encryption_stream = cryptainer_encryption_stream_class(
             cryptainer_filepath,
             cryptoconf=cryptoconf,
@@ -471,7 +478,6 @@ class CryptainerStorage(ReadonlyCryptainerStorage):
             signature_policy=signature_policy,
             keystore_pool=self._keystore_pool,
             dump_initial_cryptainer=dump_initial_cryptainer,
-            key_ciphertext_format=self._key_ciphertext_format,
             **cryptainer_encryption_stream_extra_kwargs,
         )
         return cryptainer_encryption_stream

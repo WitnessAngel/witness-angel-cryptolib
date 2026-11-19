@@ -6,6 +6,7 @@
 Extended JSON (default, field absent) or WA-CBOR (field "cbor"), see the key-ciphertext-format specification."""
 
 import copy
+import functools
 import hashlib
 import itertools
 import logging
@@ -459,6 +460,46 @@ def test_cryptainer_storage_key_ciphertext_format(
     _check_key_ciphertext_formats(
         storage.load_cryptainer_from_storage("stream.mp4.crypt." + cryptainer_file_format), expected_format
     )
+
+
+def test_cryptainer_storage_with_stream_class_unaware_of_key_ciphertext_format(tmp_path):
+    class LegacyCryptainerEncryptionPipeline(CryptainerEncryptionPipeline):
+        def __init__(  # Explicit signature of older releases
+            self, cryptainer_filepath, *, cryptoconf, cryptainer_metadata, signature_policy, keystore_pool=None,
+            dump_initial_cryptainer=True
+        ):
+            super().__init__(
+                cryptainer_filepath,
+                cryptoconf=cryptoconf,
+                cryptainer_metadata=cryptainer_metadata,
+                signature_policy=signature_policy,
+                keystore_pool=keystore_pool,
+                dump_initial_cryptainer=dump_initial_cryptainer,
+            )
+
+    for key_ciphertext_format in ("json", "cbor"):
+        (tmp_path / key_ciphertext_format).mkdir()
+        storage = CryptainerStorage(
+            tmp_path / key_ciphertext_format,
+            keystore_pool=InMemoryKeystorePool(),
+            default_cryptoconf=COMPLEX_LOCAL_CRYPTOCONF,
+            key_ciphertext_format=key_ciphertext_format,
+        )
+        create_stream = functools.partial(
+            storage.create_cryptainer_encryption_stream,
+            "stream.mp4",
+            cryptainer_metadata=None,
+            signature_policy=None,
+            cryptainer_encryption_stream_class=LegacyCryptainerEncryptionPipeline,
+        )
+        if key_ciphertext_format == "json":  # The default format, which such a stream class writes
+            stream = create_stream()
+            stream.encrypt_chunk(b"streamed video")
+            stream.finalize()
+            _check_key_ciphertext_formats(storage.load_cryptainer_from_storage("stream.mp4.crypt.json"), "json")
+        else:  # Not silently written in the wrong format
+            with pytest.raises(TypeError, match="key_ciphertext_format"):
+                create_stream()
 
 
 def test_cbor_key_ciphertexts_are_smaller():

@@ -4571,3 +4571,105 @@ def test_cryptainer_storage_purge_of_legacy_cryptainer_of_corpus(tmp_path, purge
     assert (cryptainer_dir / "old.crypt").stat().st_size + (cryptainer_dir / "old.crypt.payload").stat().st_size > 20000
     assert storage.purge_exceeding_cryptainers() == 1
     assert _get_sorted_filenames(cryptainer_dir) == ["recent.crypt.json", "recent.crypt.json.payload"]
+
+
+def _get_nested_key_cipher_layers(levels, shared_secrets=False):
+    key_cipher_layers = [dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)]
+    for _ in range(levels - 1):
+        if shared_secrets:
+            key_cipher_layer = dict(
+                key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                key_shared_secret_threshold=1,
+                key_shared_secret_shards=[dict(key_cipher_layers=key_cipher_layers)],
+            )
+        else:
+            key_cipher_layer = dict(key_cipher_algo="AES_EAX", key_cipher_layers=key_cipher_layers)
+        key_cipher_layers = [key_cipher_layer]
+    return key_cipher_layers
+
+
+def _get_cryptoconf_with_nested_key_cipher_layers(levels, shared_secrets=False):
+    return dict(
+        payload_cipher_layers=[
+            dict(
+                payload_cipher_algo="AES_CBC",
+                payload_ciphertext_signatures=[],
+                key_cipher_layers=_get_nested_key_cipher_layers(levels, shared_secrets=shared_secrets),
+            )
+        ]
+    )
+
+
+@pytest.mark.parametrize("shared_secrets, max_wacbor_levels", [(False, 30), (True, 15)])
+def test_cryptoconf_too_deep_for_cryptainer_file_format_is_refused_upfront(shared_secrets, max_wacbor_levels):
+    from wacryptolib.cryptainer import check_cryptoconf_fits_cryptainer_file_format
+    import io
+    from wacryptolib.utilities.wacbor import WaCborEncodingError, dump_to_cbor_bytes
+
+    storable_cryptoconf = _get_cryptoconf_with_nested_key_cipher_layers(max_wacbor_levels, shared_secrets)
+    too_deep_cryptoconf = _get_cryptoconf_with_nested_key_cipher_layers(max_wacbor_levels + 1, shared_secrets)
+    check_cryptoconf_sanity(storable_cryptoconf)
+    check_cryptoconf_sanity(too_deep_cryptoconf)  # Extended JSON files can hold it
+
+    for cryptoconf in (storable_cryptoconf, too_deep_cryptoconf):
+        check_cryptoconf_fits_cryptainer_file_format(cryptoconf, "json")
+    check_cryptoconf_fits_cryptainer_file_format(storable_cryptoconf, "cbor")
+    with pytest.raises(SchemaValidationError, match="can't be stored in a WA-CBOR cryptainer file"):
+        check_cryptoconf_fits_cryptainer_file_format(too_deep_cryptoconf, "cbor")
+    with pytest.raises(ValueError, match="Unknown cryptainer file format"):
+        check_cryptoconf_fits_cryptainer_file_format(storable_cryptoconf, "yaml")
+    with pytest.raises(ValueError, match="Unknown cryptainer file format"):
+        CryptainerEncryptor(signature_policy=None, cryptainer_file_format="yaml")
+
+    # The check is the exact bound of the WA-CBOR encoder, for cryptainers as for their cryptoconfs
+    keystore_pool = InMemoryKeystorePool()
+    encryptor = CryptainerEncryptor(
+        signature_policy=None, keystore_pool=keystore_pool, key_ciphertext_format="cbor", cryptainer_file_format="cbor"
+    )
+    cryptainer = encryptor.encrypt_data(b"abc", cryptoconf=storable_cryptoconf, cryptainer_metadata={"a": 1})
+    assert load_from_cbor_bytes(dump_to_cbor_bytes(cryptainer)) == cryptainer
+    dump_to_cbor_bytes(storable_cryptoconf)
+    with pytest.raises(WaCborEncodingError):
+        dump_to_cbor_bytes(too_deep_cryptoconf)
+
+    # An encryptor knowing its target file format refuses the cryptoconf before any random draw or key generation
+    keystore_pool = InMemoryKeystorePool()
+    with patch("wacryptolib.cryptainer._encryptor.generate_uuid0") as generate_uuid0_mock, patch(
+        "wacryptolib.cryptainer._encryptor.generate_symkey"
+    ) as generate_symkey_mock:
+        encryptor = CryptainerEncryptor(
+            signature_policy=None,
+            keystore_pool=keystore_pool,
+            key_ciphertext_format="cbor",
+            cryptainer_file_format="cbor",
+        )
+        with pytest.raises(SchemaValidationError, match="can't be stored in a WA-CBOR cryptainer file"):
+            encryptor.encrypt_data(b"abc", cryptoconf=too_deep_cryptoconf, cryptainer_metadata=None)
+        with pytest.raises(SchemaValidationError, match="can't be stored in a WA-CBOR cryptainer file"):
+            encryptor.build_cryptainer_and_encryption_pipeline(
+                cryptoconf=too_deep_cryptoconf, output_stream=io.BytesIO(), cryptainer_metadata=None
+            )
+    assert not generate_uuid0_mock.called and not generate_symkey_mock.called
+    assert not keystore_pool.get_local_keyfactory().list_keypair_identifiers()
+
+    # Without a target file format, or for Extended JSON files, the cryptoconf is still accepted
+    for cryptainer_file_format in (None, "json"):
+        encryptor = CryptainerEncryptor(
+            signature_policy=None,
+            keystore_pool=keystore_pool,
+            key_ciphertext_format="cbor",
+            cryptainer_file_format=cryptainer_file_format,
+        )
+        cryptainer = encryptor.encrypt_data(b"abc", cryptoconf=too_deep_cryptoconf, cryptainer_metadata=None)
+        with pytest.raises(WaCborEncodingError):
+            dump_to_cbor_bytes(cryptainer)
+        dump_to_json_bytes(cryptainer)
+
+
+def test_too_deeply_nested_cryptoconf_is_a_validation_error_via_json_schema():
+    # No raw RecursionError, as with python-schema
+    cryptoconf = _get_cryptoconf_with_nested_key_cipher_layers(1500)
+    with pytest.raises(SchemaValidationError):
+        check_cryptoconf_sanity(cryptoconf)
+    with pytest.raises(SchemaValidationError, match="nested too deeply"):
+        check_cryptoconf_sanity(cryptoconf, jsonschema_mode=True)  # No Extended JSON specific value in this tree

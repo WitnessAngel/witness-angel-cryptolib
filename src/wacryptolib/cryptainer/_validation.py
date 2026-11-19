@@ -18,7 +18,8 @@ from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
-from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema
+from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema, \
+    DocumentFormat, DOCUMENT_FORMATS
 from wacryptolib.utilities.validation_utils import summarize_validation_error_lines
 from wacryptolib.utilities.wacbor import EXTJSON_KEYWORDS, MAX_NESTING_DEPTH as WACBOR_MAX_NESTING_DEPTH, \
     WaCborEncodingError, check_document_tree
@@ -281,7 +282,14 @@ def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema])
     # Error messages are summarized and NOT chained, since validator errors embed the (maybe huge) data tree
     if isinstance(validation_schema, Schema):
         # We use the python-schema module
-        validate_data_against_schema(data_tree, schema=validation_schema)
+        try:
+            validate_data_against_schema(data_tree, schema=validation_schema)
+        except RecursionError:
+            pass
+        else:
+            return
+        # Raised outside the except block, to drop the huge chain of contexts
+        raise SchemaValidationError("Error validating data tree: it is nested too deeply to be validated")
 
     else:
         # We use the json-schema module, LAZILY LOADED
@@ -294,6 +302,8 @@ def _validate_data_tree(data_tree: dict, validation_schema: Union[dict, Schema])
             summary = summarize_validation_error_lines(
                 ["Field '%s' failed '%s' check:" % (field_path, exc.validator), exc.message]
             )
+        except RecursionError:
+            summary = "Data tree is nested too deeply to be validated"
         else:
             return
         # Raised outside the except block, else the raw error (holding the whole data tree) would stay in __context__
@@ -336,6 +346,32 @@ def check_cryptoconf_sanity(cryptoconf: dict, jsonschema_mode=False):
     _validate_data_tree(data_tree=cryptoconf, validation_schema=schema)
     if jsonschema_mode:
         _check_shared_secret_thresholds_of_extjson_tree(cryptoconf)
+
+
+def check_cryptoconf_fits_cryptainer_file_format(cryptoconf: dict, cryptainer_file_format: str) -> None:
+    """Check that the cryptainers created from a cryptoconf can be stored in files of the given document format.
+
+    This must be called before any random draw, key generation or output. WA-CBOR documents nest maps and arrays at
+    most 64 levels deep, which bounds the key cipher nesting of a cryptoconf to 30 levels (29 symmetric key ciphers
+    above an asymmetric one), or to 15 levels when each of them but the last is a shared secret; a cryptainer nests
+    its key cipher layers exactly as its cryptoconf does. Extended JSON documents have no such limit.
+
+    :param cryptoconf: cryptoconf in loaded form (not raw Extended JSON), already valid
+    :param cryptainer_file_format: "json" or "cbor"
+
+    :raises SchemaValidationError: if the cryptoconf is nested too deeply for that format
+    """
+    if cryptainer_file_format not in DOCUMENT_FORMATS:  # Not an assert, which vanishes under "python -O"
+        raise ValueError("Unknown cryptainer file format %r" % (cryptainer_file_format,))
+    if cryptainer_file_format != DocumentFormat.CBOR:
+        return
+    try:
+        check_document_tree(cryptoconf)
+    except WaCborEncodingError as exc:
+        error_message = str(exc)
+    else:
+        return
+    raise SchemaValidationError("Cryptoconf can't be stored in a WA-CBOR cryptainer file: %s" % error_message)
 
 
 MAX_CRYPTAINER_METADATA_NESTING_DEPTH = WACBOR_MAX_NESTING_DEPTH - 1  # Metadata is at level 2 of its holders

@@ -4,13 +4,14 @@
 
 import copy
 import logging
-from typing import Union, BinaryIO
+from typing import Union, BinaryIO, Optional
 import uuid
 
 from wacryptolib.cryptainer import CryptainerBase, SIGNATURE_POLICIES, PAYLOAD_CIPHERTEXT_LOCATIONS, logger, \
     CRYPTAINER_STATES, CRYPTAINER_TRUSTEE_TYPES, SHARED_SECRET_ALGO_MARKER, get_trustee_proxy, get_trustee_id, \
     _inject_payload_digests_and_signatures, FlightboxUtilitiesBase, FlightBox, ensure_validated_cryptoconf, ValidatedCryptainer, \
-    KEY_CIPHERTEXT_FORMAT_JSON, KEY_CIPHERTEXT_FORMATS, check_cryptainer_metadata_sanity
+    KEY_CIPHERTEXT_FORMAT_JSON, KEY_CIPHERTEXT_FORMATS, check_cryptainer_metadata_sanity, \
+    check_cryptoconf_fits_cryptainer_file_format
 
 from wacryptolib.cipher import (
     check_asymmetric_encryption_key_sanity,
@@ -34,6 +35,7 @@ from wacryptolib.utilities import (
     dump_to_cbor_bytes,
     dump_to_json_bytes,
     generate_uuid0,
+    DOCUMENT_FORMATS,
 )
 from wacryptolib.hash import hash_message
 
@@ -160,9 +162,17 @@ class CryptainerEncryptor(CryptainerBase):
 
     :param key_ciphertext_format: document format ("json" or "cbor") of the structures serialized then encrypted
         into the key ciphertexts of produced cryptainers
+    :param cryptainer_file_format: document format ("json" or "cbor") of the files which will store the produced
+        cryptainers, if known: cryptoconfs nested too deeply for that format are then refused upfront
     """
 
-    def __init__(self, signature_policy, key_ciphertext_format: str = KEY_CIPHERTEXT_FORMAT_JSON, **kwargs):
+    def __init__(
+        self,
+        signature_policy,
+        key_ciphertext_format: str = KEY_CIPHERTEXT_FORMAT_JSON,
+        cryptainer_file_format: Optional[str] = None,
+        **kwargs
+    ):
         super().__init__(**kwargs)
         if signature_policy is None:
             signature_policy = SIGNATURE_POLICIES.ATTEMPT_SIGNING  # Sensible default
@@ -171,6 +181,9 @@ class CryptainerEncryptor(CryptainerBase):
         if key_ciphertext_format not in KEY_CIPHERTEXT_FORMATS:  # Not an assert (python -O)
             raise ValueError("Unknown key ciphertext format %r" % (key_ciphertext_format,))
         self._key_ciphertext_format = key_ciphertext_format
+        if cryptainer_file_format is not None and cryptainer_file_format not in DOCUMENT_FORMATS:
+            raise ValueError("Unknown cryptainer file format %r" % (cryptainer_file_format,))
+        self._cryptainer_file_format = cryptainer_file_format
 
         self._flightbox_utilities = FlightboxUtilitiesImpl(logger=logger, keystore_pool=self._keystore_pool)
         self._flightbox = FlightBox(self._flightbox_utilities)
@@ -309,6 +322,8 @@ class CryptainerEncryptor(CryptainerBase):
         keys 'cipher_algo', 'symmetric_key' and 'payload_hash_algos'.
         """
         cryptoconf = ensure_validated_cryptoconf(cryptoconf)  # Mandatory upfront validation of user input
+        if self._cryptainer_file_format is not None:  # Else a too deep cryptoconf only fails when dumping the result
+            check_cryptoconf_fits_cryptainer_file_format(cryptoconf, self._cryptainer_file_format)
         check_cryptainer_metadata_sanity(cryptainer_metadata)  # Before any random draw, key generation or output
         cryptainer_metadata = copy.deepcopy(cryptainer_metadata)  # The validated cryptainer must not alias caller data
 

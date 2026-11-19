@@ -5,6 +5,10 @@ sources, from the index used by "mip"), micropython patches, stubs and shared wa
 reimplementations/micropython/src/cryptainer/_flightbox.py, a verbatim copy of wacryptolib's portable flightbox core.
 
 Usage (from any directory, with CPython >= 3.11):  python reimplementations/micropython/vendor_dependencies.py
+
+On a microcontroller, freeze lib/ and src/ into the firmware (or at least precompile them with mpy-cross): as python
+sources, the demo needs about 384 KB of heap on the 64-bit unix port of MicroPython 1.22, mostly to compile them, and
+their imported bytecode and tables (pyaes's, datetime for extjson, pkcs1) still take about 200 KB of it when not frozen.
 """
 
 import json

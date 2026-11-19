@@ -14,7 +14,8 @@ else:
     # The stdlib takes precedence over the micropython-lib modules and stubs of lib/, but the vendored (and patched)
     # packages take precedence over installed ones, so that CPython runs the same code as MicroPython
     import os, site
-    _site_dirs = [os.path.normcase(os.path.abspath(path)) for path in site.getsitepackages() + [site.getusersitepackages()]]
+    _site_dirs = [os.path.normcase(os.path.abspath(path))
+                  for path in site.getsitepackages() + [site.getusersitepackages()]]
     _lib_index = next((index for index, path in enumerate(sys.path)
                        if os.path.normcase(os.path.abspath(path)) in _site_dirs), len(sys.path))
     sys.path.insert(_lib_index, _LIB_DIR)

@@ -1,7 +1,5 @@
-from . import rsassa_pkcs1_v15
-from . import rsassa_pss
+# Only what the flightbox port uses (RSA-OAEP encryption): signatures and PKCS#1 v1.5 modules would waste RAM
 from . import rsaes_oaep
-from . import rsaes_pkcs1_v15
 from . import keys
 from . import primitives
 

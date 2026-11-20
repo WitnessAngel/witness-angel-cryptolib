@@ -116,7 +116,8 @@ Formatting:
 
 - CPython: `json.dumps(..., sort_keys=True)` with default separators (`", "` and `": "`),
   `ensure_ascii=True`.
-- MicroPython: same but **keys are not sorted** (and non-ASCII characters may be emitted raw).
+- MicroPython: same but **keys are not sorted** (and non-ASCII characters may be emitted raw);
+  this is an accepted deviation of the port, see §10.1.
 
 **Byte-exactness is NOT required for interoperability**: every serialized structure is either
 encrypted (then decrypted and parsed back) or stored as-is, and the decoder only needs valid
@@ -1125,6 +1126,14 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
   `{keystore_uid: {keychain_uid: {"n": int, "e": int, "x25519": bytes(32)}}}`;
 - validation errors raised as `RuntimeError`; no upfront schema validation;
 - key ciphertexts in Extended JSON only (`F = json`, no `dump_to_cbor_bytes`);
+- Extended JSON which is **not byte-exact** (accepted deviation from the SHOULD of §2 and from §2.1):
+  MicroPython's `json.dumps()` can neither sort keys nor escape non-ASCII characters, so that on
+  MicroPython object keys come in the order of the dicts, and non-ASCII characters are written as raw
+  UTF-8. The documents remain valid relaxed Extended JSON, read by every decoder, and decryption is not
+  affected; only byte comparisons with the output of other implementations are (check 2 of §12.2 does
+  not apply to this port, the other checks do). Run on CPython, the same code sorts keys and escapes
+  non-ASCII characters. Byte-exact output would take a pure-Python JSON writer, deemed not worth its
+  size and slowness on a microcontroller;
 - Shamir via a vendored copy of pycryptodome's pure-Python `Shamir`;
 - no payload encryption, digests, signatures nor file output yet (steps 2 and 3).
 
@@ -1411,7 +1420,7 @@ follows; a new implementation SHOULD run the same checks, in both file formats i
 1. it loads with `load_cryptainer_from_filesystem()` (payload file included when offloaded) and passes
    `check_cryptainer_sanity()` in both Python and JSON-Schema modes (`jsonschema_mode=True`);
 2. re-encoding the loaded tree with wacryptolib in the same format gives the same bytes (meaningful for
-   `J` only if §2.1 is followed);
+   `J` only if §2.1 is followed, which the MicroPython port does not do, see §10.1);
 3. every `key_ciphertext` parses in the format of its `key_ciphertext_format` field
    (`check_key_ciphertext_formats()` of `tests/_compatibility_corpus.py`), and the cryptainer has the
    same tree shape as one created by wacryptolib from the same cryptoconf and `F`;

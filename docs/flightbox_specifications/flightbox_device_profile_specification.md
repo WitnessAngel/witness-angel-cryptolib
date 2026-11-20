@@ -58,7 +58,8 @@ way. Decoders MAY accept the non-shortest heads and unsorted map keys that WA-CB
 conforming decoder accepts therefore loads with wacryptolib's `load_from_cbor_bytes()`, to the same tree.
 
 Decoders MAY use a lower nesting limit than 64, to save stack, as long as it accepts the profiles they are provisioned
-with (the profiles exported from the compatibility corpus nest 11 to 13 levels deep).
+with (the profiles exported from the compatibility corpus nest 11 to 13 levels deep). Items nested deeper than the
+decoder's limit, be it 64 or lower, are reported as nesting too deep, not as a decoding error (section 9).
 
 ## 2. Root map
 
@@ -310,7 +311,8 @@ public-key-entry-identity = (
 
 A device profile MUST be fully checked when it is loaded, before any cryptainer is created: every rule of sections 1
 to 5 applies to the whole profile, unused key entries included. The error categories are those of section 5.5 of the
-encryptor specification: decoding errors for the rules of section 1 that WA-CBOR readers share, unsupported types for
+encryptor specification: decoding errors for the rules of section 1 that WA-CBOR readers share, except items nested
+beyond the decoder's limit, which are reported as nesting too deep like too many key cipher levels, unsupported types for
 the valid items outside the sub-profile, unsupported format for `device_profile_format`, invalid input for the rules
 of sections 2 to 4, unsupported feature for valid cryptoconfs outside the encryptor's subset, missing public key for
 an asymmetric layer without a matching entry, and key constraint violations for section 5.

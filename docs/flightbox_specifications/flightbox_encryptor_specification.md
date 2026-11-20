@@ -607,14 +607,14 @@ implementation uses (status names in parentheses, informative) and which its int
 
 | Category | Raised for | C status |
 |---|---|---|
-| decoding error | input bytes that are not a well-formed document (WA-CBOR rules, Extended JSON keyword maps, excessive item nesting) | `DECODING_ERROR` |
+| decoding error | input bytes that are not a well-formed document (WA-CBOR rules, Extended JSON keyword maps), excessive item nesting excepted | `DECODING_ERROR` |
 | unsupported format | unknown or missing format marker (e.g. `device_profile_format`) | `UNSUPPORTED_FORMAT` |
 | unsupported type | valid document items the implementation doesn't handle (floats, datetimes, bignums...) | `UNSUPPORTED_TYPE` |
 | invalid input | any schema violation of §5.1 and §5.2: unknown or missing keys, wrong types, unknown algo names, empty lists, bad threshold, both signature keys, metadata that is not a map or null, duplicate key entries | `INVALID_PROFILE` |
 | unsupported feature | valid input outside the implemented subset: signatures, a disabled document format, an algorithm not built in | `UNSUPPORTED_SIGNATURE`, `UNSUPPORTED_FEATURE`, `UNSUPPORTED_ALGORITHM` |
 | missing public key | an asymmetric layer resolving to no key (§5.3) | `MISSING_PUBLIC_KEY` |
 | key constraint violation | a public key outside §11.2 (or the stricter device profile rules), an all-zero X25519 shared secret | `KEY_CONSTRAINT_VIOLATION` |
-| nesting too deep | key cipher layers or metadata beyond the limits above | `NESTING_TOO_DEEP` |
+| nesting too deep | key cipher layers or metadata beyond the limits above, and document items nested deeper than the decoder's item nesting limit (64 levels at most in WA-CBOR), although such bytes are not a well-formed document either | `NESTING_TOO_DEEP` |
 | platform failure | out of memory, randomness source failure, crypto library failure, output write failure | `OUT_OF_MEMORY`, `RANDOMNESS_FAILURE`, `CRYPTO_BACKEND_FAILURE`, `SINK_WRITE_FAILURE` |
 | usage error | invalid arguments, calls in the wrong state (e.g. a chunk after finalization) | `INVALID_ARGUMENT`, `WRONG_STATE` |
 

@@ -29,7 +29,7 @@ A device profile SHALL only use the following items:
 
 Every UUID (`keychain_uid`, `keystore_uid`) SHALL be such a tag 37 item, and every binary value a byte string, never base64 text.
 
-Decoders SHALL reject a profile that WA-CBOR readers reject, for the same reasons: non-text or duplicate map keys, other tags or simple values, invalid UTF-8, malformed or truncated items, a single-key map whose key is an Extended JSON keyword, nesting deeper than 64 levels, and bytes after the top-level item. They SHALL also reject, as unsupported, valid WA-CBOR items outside the sub-profile:
+Decoders SHALL reject a profile that WA-CBOR readers reject, for the same reasons: non-text or duplicate map keys, other tags or simple values, invalid UTF-8, malformed or truncated items, a single-key map whose key is an Extended JSON keyword, nesting deeper than 64 levels, and bytes after the top-level item. These SHALL be reported as decoding errors, except items nested deeper than the decoder's limit, which SHALL be reported as nesting too deep. They SHALL also reject, as unsupported, valid WA-CBOR items outside the sub-profile:
 - floats;
 - tags 0, 2, 3 and 4;
 - indefinite lengths;

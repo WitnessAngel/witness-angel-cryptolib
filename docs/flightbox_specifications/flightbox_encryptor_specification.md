@@ -549,8 +549,10 @@ check every key before encrypting anything.
 cap it, to bound recursion or stack use, and MUST then reject deeper cryptoconfs at validation time, with a
 dedicated error (§5.5), never fail half-way. The depth unit is the **key cipher nesting level**: the
 `key_cipher_layers` list of a payload layer is at level 1, and the list inside a symmetric key layer or a
-shard is one level deeper than the list holding that layer. A cap MUST be at least 8 (the C
-implementation's default); the cryptoconfs of the compatibility corpus reach level 3. Such a cap only
+shard is one level deeper than the list holding that layer. A cap SHOULD be at least 8 (the default
+of the C and Rust implementations, which both accept caps from 1 to 64): an encryptor with a lower cap
+remains conformant, but refuses cryptoconfs which other encryptors accept, so that its cap SHOULD be
+documented. The cryptoconfs of the compatibility corpus reach level 3. Such a cap only
 restricts what an encryptor accepts to produce: decryptors and other readers of cryptainers MUST accept
 any nesting depth, within the item nesting limit of their document format (§5.4).
 
@@ -1189,7 +1191,7 @@ where implementations have to decide:
 | Subset | rejecting unsupported features at validation time (§5.5) | any subset of algos, trustee types, signatures, formats | no signatures, root `keychain_uid` mandatory | same as C |
 | Key ciphertext format `F` | §2 serializations; field written only for `"cbor"` | one or both of `J`, `C`; one `F` per cryptainer | `F` = file format | `F` = file format |
 | Extended JSON bytes | decodable relaxed Extended JSON (§2) | any key order, any whitespace | byte-exact CPython output (§2.1) | byte-exact CPython output (§2.1) |
-| Key cipher nesting | rejecting too deep cryptoconfs at validation | any cap of at least 8 (§5.2) | 8 (compile-time option) | 8 (run-time limit) |
+| Key cipher nesting | rejecting too deep cryptoconfs at validation | any cap, at least 8 recommended (§5.2) | 8 (compile-time option) | 8 (run-time limit) |
 | Metadata | map or null, no keyword maps, WA-CBOR depth limit (§5.4) | refusing floats, datetimes, decimals, bignums | sub-profile types only | sub-profile types only |
 | Randomness | a CSPRNG for every draw (§3.1) | any draw order | §6.8 order, through one platform hook | §6.8 order with the draw sizes of C, through one platform hook |
 | UUID0 prefix | 80 random bits | zero prefix without a clock (§3.2) | zero prefix when the clock hook is absent or fails | zero prefix when the clock hook returns none |

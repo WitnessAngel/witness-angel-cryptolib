@@ -1171,18 +1171,17 @@ static void test_state_machine(void)
     WA_CHECK_STATUS(wa_cryptainer_encryptor_write_cryptainer(encryptor, &sink.sink), WA_STATUS_OK);
     WA_CHECK(sink.length == 2u * first_length &&
              memcmp(sink.bytes, sink.bytes + first_length, first_length) == 0);
-    /* Wrong-state calls: then only destroy is accepted */
+    /* Finalizing or encrypting again is refused, but the finished cryptainer is kept, and written identically */
     WA_CHECK_STATUS(wa_cryptainer_encryptor_finalize(encryptor), WA_STATUS_WRONG_STATE);
-    WA_CHECK_STATUS(wa_cryptainer_encryptor_write_cryptainer(encryptor, &sink.sink), WA_STATUS_WRONG_STATE);
     WA_CHECK_STATUS(wa_cryptainer_encryptor_encrypt_payload_chunk(encryptor, NULL, 0), WA_STATUS_WRONG_STATE);
-    wa_cryptainer_encryptor_destroy(encryptor);
-
-    /* Encrypting after finalization fails, and so does everything afterwards */
-    WA_REQUIRE_STATUS(wa_cryptainer_encryptor_create(device_profile, NULL, &options, &encryptor), WA_STATUS_OK);
-    WA_CHECK_STATUS(wa_cryptainer_encryptor_finalize(encryptor), WA_STATUS_OK);
     WA_CHECK_STATUS(wa_cryptainer_encryptor_encrypt_payload_chunk(encryptor, (const uint8_t *)"abc", 3),
                     WA_STATUS_WRONG_STATE);
-    WA_CHECK_STATUS(wa_cryptainer_encryptor_write_cryptainer(encryptor, &sink.sink), WA_STATUS_WRONG_STATE);
+    WA_CHECK_STATUS(wa_cryptainer_encryptor_encrypt_payload_chunk(encryptor, NULL, 3), WA_STATUS_WRONG_STATE);
+    WA_CHECK_STATUS(wa_cryptainer_encryptor_finalize(encryptor), WA_STATUS_WRONG_STATE);
+    sink.length = first_length;
+    WA_CHECK_STATUS(wa_cryptainer_encryptor_write_cryptainer(encryptor, &sink.sink), WA_STATUS_OK);
+    WA_CHECK(sink.length == 2u * first_length &&
+             memcmp(sink.bytes, sink.bytes + first_length, first_length) == 0);
     wa_cryptainer_encryptor_destroy(encryptor);
 
     /* A NULL chunk with a length is an argument error, which fails the encryptor */

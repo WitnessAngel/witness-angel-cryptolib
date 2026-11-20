@@ -283,6 +283,10 @@ A failed creation SHALL return no instance, and destroying a null instance SHALL
 
 #### Scenario: Wrong state
 - **WHEN** a payload chunk is submitted after finalization
+- **THEN** the call returns the wrong-state status, nothing more is written to the payload sink, and the finished cryptainer can still be written
+
+#### Scenario: Wrong state after a failure
+- **WHEN** a payload chunk is submitted, or finalization is requested, after a call of the instance failed
 - **THEN** the call returns the wrong-state status, and the instance can only be destroyed
 
 ### Requirement: Host command-line tool

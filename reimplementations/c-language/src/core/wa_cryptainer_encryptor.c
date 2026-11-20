@@ -145,7 +145,7 @@ wa_status_t wa_cryptainer_encryptor_encrypt_payload_chunk(wa_cryptainer_encrypto
     }
     if (encryptor->state != WA_CRYPTAINER_ENCRYPTOR_STATE_CREATED &&
         encryptor->state != WA_CRYPTAINER_ENCRYPTOR_STATE_STREAMING) {
-        encryptor->state = WA_CRYPTAINER_ENCRYPTOR_STATE_FAILED;
+        /* A FINISHED encryptor stays so: its cryptainer is complete, and can still be written */
         return WA_STATUS_WRONG_STATE;
     }
     if (chunk == NULL && chunk_length > 0) {
@@ -169,7 +169,7 @@ wa_status_t wa_cryptainer_encryptor_finalize(wa_cryptainer_encryptor_t *encrypto
     }
     if (encryptor->state != WA_CRYPTAINER_ENCRYPTOR_STATE_CREATED &&
         encryptor->state != WA_CRYPTAINER_ENCRYPTOR_STATE_STREAMING) {
-        encryptor->state = WA_CRYPTAINER_ENCRYPTOR_STATE_FAILED;
+        /* A FINISHED encryptor stays so: its cryptainer is complete, and can still be written */
         return WA_STATUS_WRONG_STATE;
     }
     status = wa_payload_encryption_pipeline_finalize(&encryptor->pipeline);

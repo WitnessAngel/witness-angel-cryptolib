@@ -5,7 +5,9 @@
 
 /* Cryptainer encryptor: steps 1, 2 and 3 of docs/flightbox_specifications/flightbox_encryptor_specification.md.
  *
- * States: CREATED -> STREAMING -> FINISHED, plus FAILED after any error, which only accepts destroy. */
+ * States: CREATED -> STREAMING -> FINISHED, plus FAILED after any error, which only accepts destroy. A chunk or a
+ * finalization requested on a FINISHED encryptor is refused with WA_STATUS_WRONG_STATE without failing it: its
+ * cryptainer can still be written. */
 
 #ifndef WA_CRYPTAINER_ENCRYPTOR_H
 #define WA_CRYPTAINER_ENCRYPTOR_H
@@ -62,7 +64,7 @@ wa_status_t wa_cryptainer_encryptor_encrypt_payload_chunk(wa_cryptainer_encrypto
 wa_status_t wa_cryptainer_encryptor_finalize(wa_cryptainer_encryptor_t *encryptor);
 
 /* Serialize the FINISHED cryptainer to a sink, in the document format chosen at creation. May be called several
- * times. */
+ * times, also after a chunk or a finalization refused because the encryptor was FINISHED. */
 wa_status_t wa_cryptainer_encryptor_write_cryptainer(const wa_cryptainer_encryptor_t *encryptor,
                                                      const wa_output_sink_t *cryptainer_sink);
 

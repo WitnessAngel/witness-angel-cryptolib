@@ -946,7 +946,9 @@ the stream is interrupted before finalization.
 - An inline empty ciphertext is written as an empty byte string (`"base64": ""` in Extended JSON).
 - Chunks are refused after finalization, and finalization happens once. After any failure, the
   encryptor MUST NOT produce a finished cryptainer (the C one enters a failed state, rejecting every
-  further call).
+  further call). A chunk or a finalization refused because the cryptainer is already finished is not
+  such a failure: it SHOULD leave the finished cryptainer usable (the C encryptor reports a wrong
+  state and can still write it), since its payload ciphertext may already be stored.
 - **Offloaded output**: the payload file is named after the **final** cryptainer file name (§9.2). The
   final cryptainer file MUST be written only once the payload file is complete, so that a listed
   cryptainer never points to a partial payload. CPython creates the payload file first, writes an

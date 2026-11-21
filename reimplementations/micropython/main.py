@@ -65,7 +65,7 @@ KEYCHAIN_UID_1 = "acd7f9f7-849b-44af-9765-9d4913b7f8dd"
 SIMPLE_CRYPTOCONF = dict(
     payload_cipher_layers=[
         dict(
-            payload_cipher_algo="AES_CBC",
+            payload_cipher_algo="CHACHA20_POLY1305",  # An AEAD: AES_CBC payloads can be altered undetected
             key_cipher_layers=[
                 dict(key_cipher_algo="RSA_OAEP",
                     key_cipher_trustee=dict(

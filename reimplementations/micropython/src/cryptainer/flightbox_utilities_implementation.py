@@ -14,6 +14,7 @@ from uuid import UUID
 
 
 AES_BLOCK_SIZE = 16
+CHACHA20_POLY1305_NONCE_SIZE = 12
 AUTHENTICATOR_TRUSTEE = "authenticator"
 
 
@@ -63,6 +64,20 @@ def _encrypt_via_aes_cbc(plaintext: bytes, key_dict: dict) -> dict:
     return {"ciphertext": ciphertext}
 
 
+def _encrypt_via_chacha20_poly1305(plaintext: bytes, key_dict: dict) -> dict:
+    """Encrypt a bytestring with the ChaCha20-Poly1305 AEAD of RFC 8439 (empty associated data).
+
+    :param plaintext: the bytes to cipher
+    :param key_dict: dict with a 32 bytes key and a 12 bytes nonce
+
+    :return: dict with fields "ciphertext" and "tag" as bytestrings"""
+    import chacha20_poly1305  # Lazy, to spare RAM on deployments without it
+    key = key_dict["key"]
+    _check_symmetric_key_length_bytes(len(key))
+    ciphertext, tag = chacha20_poly1305.ChaCha20Poly1305Cipher(key, key_dict["nonce"]).encrypt_and_digest(plaintext)
+    return {"ciphertext": ciphertext, "tag": tag}
+
+
 def _check_asymmetric_key_length_bits(key_length_bits):
     """Asymmetric ciphers usually talk in bits: 1024, 2048, 3072..."""
     if key_length_bits < 2048:
@@ -95,7 +110,10 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
     cryptography, and other primitives required for Flightbox to operate.
     """
 
-    SUPPORTED_SYMMETRIC_CIPHER_ALGOS = ["AES_CBC"]
+    # For payload cipher layers and symmetric key cipher layers alike. CHACHA20_POLY1305 SHOULD be preferred for
+    # payloads: without signatures (which this port can't carry), an AES_CBC-only payload chain can be altered
+    # without detection, AES_CBC having no integrity tag
+    SUPPORTED_SYMMETRIC_CIPHER_ALGOS = ["CHACHA20_POLY1305", "AES_CBC"]
 
     SUPPORTED_ASYMMETRIC_CIPHER_ALGOS = ["RSA_OAEP", "ECIES_X25519"]
 
@@ -118,11 +136,18 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
                                            shamir_128b_split_func=_shamir_128b_split_func)
 
     def generate_symkey(self, cipher_algo: str):
-        assert cipher_algo == "AES_CBC", cipher_algo
-        return dict(
-            key=_get_random_bytes(32),
-            iv=_get_random_bytes(AES_BLOCK_SIZE)
-        )
+        # Key first, then IV or nonce, like wacryptolib
+        if cipher_algo == "AES_CBC":
+            return dict(
+                key=_get_random_bytes(32),
+                iv=_get_random_bytes(AES_BLOCK_SIZE)
+            )
+        if cipher_algo == "CHACHA20_POLY1305":
+            return dict(
+                key=_get_random_bytes(32),
+                nonce=_get_random_bytes(CHACHA20_POLY1305_NONCE_SIZE)
+            )
+        raise RuntimeError("Unsupported symmetric cipher algo %r" % (cipher_algo,))
 
     def get_public_key(self, trustee: dict, key_algo: str, keychain_uid: UUID) -> dict:  # FIXME
         trustee_type = trustee["trustee_type"]
@@ -151,6 +176,8 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
             import hpke_x25519_seal  # Lazy, to spare RAM on RSA-only deployments
             kem_ciphertext, ciphertext = hpke_x25519_seal.seal(key_dict["key"], plaintext)
             return dict(kem_ciphertext=kem_ciphertext, ciphertext=ciphertext)
+        elif cipher_algo == "CHACHA20_POLY1305":
+            return _encrypt_via_chacha20_poly1305(plaintext=plaintext, key_dict=key_dict)
         elif cipher_algo == "AES_CBC":
             return _encrypt_via_aes_cbc(plaintext=plaintext, key_dict=key_dict)
         else:

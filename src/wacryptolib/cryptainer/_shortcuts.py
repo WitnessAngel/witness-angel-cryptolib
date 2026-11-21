@@ -126,7 +126,8 @@ def decrypt_payload_from_cryptainer(
 def extract_metadata_from_cryptainer(cryptainer: dict) -> Optional[dict]:
     """Read the metadata tree (possibly None) from a cryptainer.
 
-    CURRENTLY CRYPTAINER METADATA ARE NEITHER ENCRYPTED NOR AUTHENTIFIED.
+    CURRENTLY CRYPTAINER METADATA ARE NEITHER ENCRYPTED NOR AUTHENTIFIED. Only decryption checks them against the
+    copies stored inside asymmetric key structs (METADATA_INTEGRITY_ERROR entries of the operation report).
 
     :param cryptainer: the cryptainer tree, which also holds cryptainer_metadata about encrypted content
 

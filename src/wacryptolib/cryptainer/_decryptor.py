@@ -24,7 +24,7 @@ from wacryptolib.keygen import load_asymmetric_key_from_pem_bytestring, SUPPORTE
     SUPPORTED_ASYMMETRIC_KEY_ALGOS, check_symkey_dict_sanity
 from wacryptolib.shared_secret import recombine_secret_from_shards
 from wacryptolib.signature import verify_message_signature
-from wacryptolib.utilities import DocumentFormat
+from wacryptolib.utilities import DocumentFormat, dump_to_json_bytes
 from wacryptolib.hash import hash_message
 from wacryptolib.exceptions import AlgorithmNotSupported
 
@@ -51,6 +51,34 @@ def _check_key_struct_sanity(key_struct):
     _validate_data_tree(data_tree=key_struct, validation_schema=KEY_STRUCT_SCHEMA)
 
 
+def _get_comparable_metadata_bytes(cryptainer_metadata) -> Optional[bytes]:
+    """Return the canonical (sorted keys) Extended JSON of cryptainer metadata, so that copies read from different
+    document formats compare equal, NaN floats included (unlike with "=="), or None if it can't be serialized."""
+    try:
+        return dump_to_json_bytes(cryptainer_metadata)
+    except (TypeError, ValueError):  # E.g. a naive datetime put into an in-memory cryptainer
+        return None
+
+
+def _check_key_struct_metadata(
+    key_struct: dict, cryptainer_metadata: Optional[dict], key_cipher_algo: str, operation_report: "OperationReport"
+):
+    """Report an error if the cleartext metadata of the cryptainer differs from the copy that the encryptor put into
+    this decrypted key struct. The root metadata is authenticated by nothing, whereas the key struct copy is
+    protected by the asymmetric key cipher (except against chunk splicing for RSA_OAEP, and against a whole new
+    cryptainer forged with the trustees' public keys)."""
+    key_struct_metadata_bytes = _get_comparable_metadata_bytes(key_struct["cryptainer_metadata"])
+    if key_struct_metadata_bytes is None or key_struct_metadata_bytes != _get_comparable_metadata_bytes(
+        cryptainer_metadata
+    ):
+        operation_report.add_entry(
+            entry_type=DecryptionErrorType.METADATA_INTEGRITY_ERROR,
+            entry_message="Cryptainer metadata differs from the copy stored in the key struct decrypted with %s, "
+            "so it may have been tampered with" % key_cipher_algo,
+            entry_criticity=DecryptionErrorCriticity.ERROR,
+        )
+
+
 def _load_key_cipherdict(key_ciphertext: bytes, key_cipher_algo: str, key_ciphertext_format: str) -> dict:
     """Deserialize and validate the cipherdict of a key cipher layer, raising DecryptionError if it is malformed.
 
@@ -69,6 +97,7 @@ class DecryptionErrorType:  # FIXME RENAME THIS
     SIGNATURE_ERROR = "SIGNATURE_ERROR"
     SYMMETRIC_DECRYPTION_ERROR = "SYMMETRIC_DECRYPTION_ERROR"
     ASYMMETRIC_DECRYPTION_ERROR = "ASYMMETRIC_DECRYPTION_ERROR"
+    METADATA_INTEGRITY_ERROR = "METADATA_INTEGRITY_ERROR"  # Cleartext metadata not matching a decrypted key struct
 
 
 class DecryptionErrorCriticity:  # FIXME rename that
@@ -85,6 +114,7 @@ OPERATION_REPORT_ENTRY_SCHEMA = Schema(
             DecryptionErrorType.SYMMETRIC_DECRYPTION_ERROR,
             DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
             DecryptionErrorType.SIGNATURE_ERROR,
+            DecryptionErrorType.METADATA_INTEGRITY_ERROR,
         ),
         "entry_criticity": Or(
             DecryptionErrorCriticity.INFO,
@@ -755,6 +785,7 @@ class CryptainerDecryptor(CryptainerBase):
                     key_cipher_algo=key_cipher_algo,
                     predecrypted_symkey_mapper=predecrypted_symkey_mapper,
                     operation_report=operation_report,
+                    cryptainer_metadata=cryptainer_metadata,
                 )
                 if predecrypted_symmetric_key:
                     operation_report.add_information(
@@ -784,9 +815,11 @@ class CryptainerDecryptor(CryptainerBase):
         key_cipher_algo: str,
         predecrypted_symkey_mapper: Optional[dict],
         operation_report: OperationReport,
+        cryptainer_metadata: Optional[dict],
     ) -> Optional[bytes]:
         """Return the key bytes of the first remotely decrypted key struct which matches this asymmetric layer, and
-        which is valid in the format of its key ciphertext chain, or None."""
+        which is valid in the format of its key ciphertext chain, or None. The metadata of that key struct is checked
+        against `cryptainer_metadata`, the cleartext one."""
         if not predecrypted_symkey_mapper:
             return None
 
@@ -809,6 +842,12 @@ class CryptainerDecryptor(CryptainerBase):
                     entry_exception=exc,
                 )
                 continue
+            _check_key_struct_metadata(
+                key_struct,
+                cryptainer_metadata=cryptainer_metadata,
+                key_cipher_algo=key_cipher_algo,
+                operation_report=operation_report,
+            )
             return key_struct["key_bytes"]
 
         return None
@@ -914,10 +953,12 @@ class CryptainerDecryptor(CryptainerBase):
                 key_bytes = key_struct["key_bytes"]
                 assert isinstance(key_bytes, bytes), type(key_bytes)
 
-                actual_cryptainer_metadata = key_struct[
-                    "cryptainer_metadata"
-                ]  # Metadata stored along the encrypted key!
-                del actual_cryptainer_metadata  # No use for now
+                _check_key_struct_metadata(  # Metadata stored along the encrypted key!
+                    key_struct,
+                    cryptainer_metadata=cryptainer_metadata,
+                    key_cipher_algo=cipher_algo,
+                    operation_report=operation_report,
+                )
 
             except KeyDoesNotExist as exc:
                 operation_report.add_entry(

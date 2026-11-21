@@ -6,6 +6,7 @@
 Extended JSON (default, field absent) or WA-CBOR (field "cbor"), see the key-ciphertext-format specification."""
 
 import copy
+import datetime
 import hashlib
 import itertools
 import logging
@@ -28,6 +29,7 @@ from wacryptolib.cryptainer import (
     check_cryptainer_sanity,
     check_cryptoconf_sanity,
     decrypt_payload_from_cryptainer,
+    dump_cryptainer_to_filesystem,
     encrypt_payload_and_stream_cryptainer_to_filesystem,
     encrypt_payload_into_cryptainer,
     gather_decryptable_symkeys,
@@ -798,6 +800,7 @@ def test_predecrypted_key_struct_lookup_honors_the_key_ciphertext_format():
             key_cipher_algo="RSA_OAEP",
             predecrypted_symkey_mapper={request_data: key_struct_list},
             operation_report=operation_report,
+            cryptainer_metadata=None,
         )
         return key_bytes, operation_report
 
@@ -818,3 +821,84 @@ def test_predecrypted_key_struct_lookup_honors_the_key_ciphertext_format():
 
     # Request data of Extended JSON chains is the key ciphertext itself, as before
     assert get_revelation_request_data(b'{"a": 1}', key_ciphertext_format="json") == b'{"a": 1}'
+
+
+def test_predecrypted_key_struct_metadata_is_checked_against_cryptainer_metadata():
+    key_ciphertext = dump_to_json_bytes({"ciphertext_chunks": [b"x" * 256]})
+    request_data = get_revelation_request_data(key_ciphertext, key_ciphertext_format="json")
+    key_struct = dump_to_json_bytes(dict(key_bytes=b"symkey", cryptainer_metadata={"device": "cam1"}))
+
+    for cryptainer_metadata, expected_error_count in [({"device": "cam1"}, 0), ({"device": "cam9"}, 1), (None, 1)]:
+        operation_report = OperationReport()
+        key_bytes = CryptainerDecryptor._get_predecrypted_symkey_or_none(
+            key_ciphertext,
+            key_ciphertext_format="json",
+            key_cipher_algo="RSA_OAEP",
+            predecrypted_symkey_mapper={request_data: [key_struct]},
+            operation_report=operation_report,
+            cryptainer_metadata=cryptainer_metadata,
+        )
+        assert key_bytes == b"symkey"  # The key itself is still usable
+        _check_operation_report_entry(
+            operation_report=operation_report,
+            entry_type=DecryptionErrorType.METADATA_INTEGRITY_ERROR,
+            entry_criticity=DecryptionErrorCriticity.ERROR,
+            entry_msg_match="Cryptainer metadata differs from the copy stored in the key struct decrypted with RSA_OAEP",
+            occurrence_count=expected_error_count,
+        )
+
+
+@pytest.mark.parametrize("cryptainer_file_suffix", [".crypt.json", ".crypt.cbor"])
+@pytest.mark.parametrize("key_ciphertext_format", ["json", "cbor"])
+def test_cryptainer_metadata_is_checked_against_key_structs(tmp_path, key_ciphertext_format, cryptainer_file_suffix):
+    # Code review finding MPY2-1 (item 2), CPY2-1: the root metadata is authenticated by nothing, the decryptor compares
+    # it with the copy which the encryptor put into each asymmetric key struct
+    keystore_pool = InMemoryKeystorePool()
+    payload = b"some payload"
+    cryptainer_metadata = {
+        "device": "cam1",
+        "recorded_at": datetime.datetime(2026, 11, 22, 10, 0, 0, 123456, tzinfo=datetime.timezone(datetime.timedelta(hours=2))),
+        "gps": [48.85, 2.35],
+        "nan": float("nan"),  # Different from itself with "=="
+        "flags": {"armed": True, "count": 1, "nothing": None},
+        "blob": b"\x00\xff",
+        "uid": uuid.UUID("5e840838-7532-4b32-ba72-ccd17f7c923a"),
+        "big": 2**70,
+        "text": "é\U0001f600",
+    }
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload,
+        cryptoconf=COMPLEX_LOCAL_CRYPTOCONF,
+        cryptainer_metadata=cryptainer_metadata,
+        keystore_pool=keystore_pool,
+        key_ciphertext_format=key_ciphertext_format,
+    )
+    cryptainer_filepath = tmp_path / ("cryptainer" + cryptainer_file_suffix)
+    dump_cryptainer_to_filesystem(cryptainer_filepath, cryptainer=cryptainer)
+    loaded_cryptainer = load_cryptainer_from_filesystem(cryptainer_filepath)
+
+    # In memory (datetime microseconds not truncated yet, unlike in key structs), and as read back from a file
+    for genuine_cryptainer in (cryptainer, loaded_cryptainer):
+        result, operation_report = decrypt_payload_from_cryptainer(genuine_cryptainer, keystore_pool=keystore_pool)
+        assert result == payload
+        assert not operation_report.has_errors(), operation_report.format_entries()
+
+    tampered_metadata_list = [
+        dict(loaded_cryptainer["cryptainer_metadata"], device="cam9"),
+        dict(loaded_cryptainer["cryptainer_metadata"], flags={"armed": 1, "count": 1, "nothing": None}),  # 1 == True
+        {"device": "cam1"},
+        None,
+    ]
+    for tampered_metadata in tampered_metadata_list:
+        tampered_cryptainer = copy.deepcopy(loaded_cryptainer)
+        tampered_cryptainer["cryptainer_metadata"] = tampered_metadata
+        result, operation_report = decrypt_payload_from_cryptainer(tampered_cryptainer, keystore_pool=keystore_pool)
+        assert result == payload  # The payload itself is genuine, as far as its key structs are
+        assert {entry["entry_type"] for entry in operation_report.get_error_entries()} == {
+            DecryptionErrorType.METADATA_INTEGRITY_ERROR
+        }
+        # One error per decrypted key struct: RSA_OAEP of both payload layers, and the 2 shards of the threshold
+        assert operation_report.get_error_count() == 4
+        assert all(
+            entry["entry_criticity"] == DecryptionErrorCriticity.ERROR for entry in operation_report.get_error_entries()
+        )

@@ -88,6 +88,38 @@ written with **dependency injection** only: every platform-specific operation go
 `FlightboxUtilities` object (§10). Steps 2 and 3 are currently implemented by
 `CryptainerEncryptor` (CPython only); the MicroPython port currently stops after step 1.
 
+### 1.3 Security properties (threat model)
+
+What a finished cryptainer at rest gives, against someone who can read and rewrite its files:
+
+- **Confidentiality**: the payload and its keys can only be decrypted with the private keys of the
+  trustees (or a threshold of them, for shared secrets).
+- **No authenticity without signatures**: trustee public keys are not secret, so anyone holding them can
+  build a complete new cryptainer, with any payload, metadata and `cryptainer_uid`, that readers decrypt
+  without any error. Only payload signatures (§4), verified against signers that the verifier knows out of
+  band (the signer description itself is in the cryptainer), tell a genuine cryptainer from a forged one.
+  Implementations without signatures (MicroPython, C and Rust profiles, §10) produce cryptainers that are
+  confidential but not authentic.
+- **Payload integrity comes from AEAD layers only**: the tag of an `AES_EAX` or `CHACHA20_POLY1305` payload
+  layer (§3.4) covers the ciphertext it produced, and since each layer encrypts the output of the previous
+  one, a single AEAD layer at any position of the chain makes any change of the payload ciphertext fail
+  decryption. `AES_CBC` has no tag: a chain made of `AES_CBC` layers only is malleable, e.g. flipping bits
+  of ciphertext block *i* flips the same bits of plaintext block *i + 1* (block *i* comes out garbled), and
+  leading blocks can be dropped, while readers decrypt the result without any error. Cryptoconfs SHOULD
+  have at least one AEAD payload layer, and `AES_CBC` SHOULD NOT be the only payload cipher of a chain
+  unless the cryptainer is signed and its signatures are verified as above. (As symmetric key cipher,
+  `AES_CBC` is less exposed: tampering with key ciphertexts gives unparseable structures or wrong keys,
+  which an AEAD payload layer then detects.)
+- **Cleartext fields are not authenticated**: `cryptainer_metadata`, `cryptainer_uid`, `keychain_uid` and
+  the cipher layer descriptions can be rewritten, and key ciphertexts can be moved to another cryptainer.
+  Each asymmetric key struct holds the metadata given at encryption time (§6.5): with `ECIES_X25519` and
+  `ML_KEM_768` it is sealed by an AEAD with the key bytes; with `RSA_OAEP` each 60-byte chunk is protected
+  on its own, so that someone holding the public key can splice chunks of their own. Readers SHOULD compare
+  the root `cryptainer_metadata` with the metadata of every key struct they decrypt, as canonical Extended
+  JSON (§2.1) so that both document formats compare equal, and report any difference as an integrity error;
+  wacryptolib then adds a `METADATA_INTEGRITY_ERROR` entry to the operation report, the payload being still
+  returned. Matching root metadata is only as trustworthy as these key structs.
+
 ---
 
 ## 2. Extended JSON serialization (`dump_to_json_bytes`)
@@ -279,6 +311,9 @@ EAX header) is ever used.
 | `CHACHA20_POLY1305` | ChaCha20-Poly1305 AEAD of RFC 8439 (12-byte nonce), empty AAD, 16-byte tag | `{"ciphertext": bytes, "tag": bytes(16)}` | `{"tag": bytes(16)}` |
 
 Streaming (§7.2) MUST produce exactly the same ciphertext and tag as the one-shot form.
+
+`AES_CBC` gives confidentiality only: a payload chain without any `AES_EAX` or `CHACHA20_POLY1305` layer can
+be altered without detection (§1.3).
 
 `AES_EAX` details, for libraries without an EAX mode (it is easily built from AES-ECB and
 CMAC): with `OMAC_t(M) = CMAC-AES-256(key, [t]_16 || M)`, where `[t]_16` is the 16-byte block holding
@@ -777,7 +812,8 @@ With `F = cbor`, metadata that WA-CBOR can't encode (e.g. nested deeper than its
 encryption fail before anything is written.
 
 The key struct embeds the (unencrypted) cryptainer metadata inside every asymmetric
-encryption, so that a trustee can see what it is asked to decrypt. Its exact format is
+encryption, so that a trustee can see what it is asked to decrypt, and so that readers can detect a
+rewritten root `cryptainer_metadata` (§1.3). Its exact format is
 mandatory (`KEY_STRUCT_SCHEMA`): a dict with `key_bytes` (bytes) and `cryptainer_metadata`
 (dict or null), e.g. with `F = json` (sorted keys):
 
@@ -1056,7 +1092,7 @@ fields unchanged. `key_ciphertext_format` is not allowed in cryptoconfs.
 
 ### 9.3 Abridged example
 
-Output of `reimplementations/micropython/main.py` (single `AES_CBC` layer wrapped with `RSA_OAEP` by an
+Output of `reimplementations/micropython/main.py` (single `CHACHA20_POLY1305` layer wrapped with `RSA_OAEP` by an
 `authenticator` trustee), before payload encryption, with base64 shortened and the generated
 UUIDs replaced by illustrative values:
 
@@ -1075,7 +1111,7 @@ UUIDs replaced by illustrative values:
          "keychain_uid": "acd7f9f7-849b-44af-9765-9d4913b7f8dd"}
       ],
       "key_ciphertext": {"$binary": {"base64": "eyJjaXBoZXJ0ZXh0X2NodW5rcyI6IFt7IiRiaW5hcnkiOi...", "subType": "00"}},
-      "payload_cipher_algo": "AES_CBC",
+      "payload_cipher_algo": "CHACHA20_POLY1305",
       "payload_ciphertext_signatures": [],
       "payload_macs": null
     }
@@ -1088,7 +1124,7 @@ UUIDs replaced by illustrative values:
 as `{"$uuid": ...}`.) Decoding the base64 of `key_ciphertext` yields
 `{"ciphertext_chunks": [{"$binary": ...}, ... 256-byte chunks ...]}`.
 
-After step 2 and 3: `cryptainer_state` becomes `"FINISHED"`, `payload_macs` becomes `{}`, and
+After step 2 and 3: `cryptainer_state` becomes `"FINISHED"`, `payload_macs` becomes `{"tag": <16 bytes>}`, and
 `payload_ciphertext_struct` holds the inline or offloaded struct.
 
 ---
@@ -1118,9 +1154,13 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
 
 `reimplementations/micropython/` implements step 1 only, with:
 
-- symmetric: `AES_CBC` (via `pyaes`), as a symmetric key cipher layer, and for payload
-  encryption once step 2 is implemented; asymmetric: `RSA_OAEP` (via `pkcs1`, SHA-512) and
+- symmetric: `CHACHA20_POLY1305` (pure-Python RFC 8439 AEAD, vendored from wacryptolib) and `AES_CBC`
+  (via `pyaes`), as symmetric key cipher layers, and as payload ciphers, for which step 1 only generates
+  the symkeys; no `AES_EAX`; asymmetric: `RSA_OAEP` (via `pkcs1`, SHA-512) and
   `ECIES_X25519` (pure-Python HPKE seal);
+- since the port can't carry signatures, its cryptainers are never authentic (§1.3), and an
+  `AES_CBC`-only payload chain would not even be integrity-protected: cryptoconfs of the port SHOULD
+  use `CHACHA20_POLY1305` for payloads, as its demo `main.py` does;
 - trustees: `authenticator` only, public keys provided as an in-memory dict
   `{keystore_uid: {keychain_uid: {"n": int, "e": int, "x25519": bytes(32)}}}`;
 - validation errors raised as `RuntimeError`; no upfront schema validation;

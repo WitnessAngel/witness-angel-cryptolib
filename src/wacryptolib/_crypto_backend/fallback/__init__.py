@@ -543,8 +543,11 @@ def generate_ecc_keypair(curve):
 
 
 def _check_hpke_parameters(key, aead_id):
-    if not isinstance(key, X25519Key):  # Pycryptodome also has DHKEM over NIST curves
-        raise _requires_pycryptodome("HPKE with KEM over curve %s" % key.curve.name)
+    if not isinstance(key, X25519Key):
+        curve = getattr(key, "curve", None)
+        if curve is None:  # E.g. an RSA or DSA key, which no DHKEM uses
+            raise TypeError("HPKE requires an ECC key, not a %s" % type(key).__name__)  # Like pycryptodome
+        raise _requires_pycryptodome("HPKE with KEM over curve %s" % curve.name)  # Pycryptodome has NIST DHKEMs
     if aead_id != hpke_x25519_seal.AEAD_ID:
         raise _requires_pycryptodome("HPKE with AEAD %#06x" % aead_id)
 

@@ -52,6 +52,11 @@ def test_fallback_rejects_unsupported_parameters_explicitly():
         fallback.encrypt_via_hpke(b"abc", nist_public_key, aead_id=0x0003)
     with pytest.raises(NotImplementedError, match="HPKE with KEM over curve NIST256p requires pycryptodome"):
         fallback.decrypt_via_hpke(b"enc", b"ciphertext", nist_private_key, aead_id=0x0003)
+    rsa_public_key, rsa_private_key = fallback.generate_rsa_keypair(2048)
+    with pytest.raises(TypeError, match="HPKE requires an ECC key, not a "):
+        fallback.encrypt_via_hpke(b"abc", rsa_public_key, aead_id=0x0003)
+    with pytest.raises(TypeError, match="HPKE requires an ECC key, not a "):
+        fallback.decrypt_via_hpke(b"enc", b"ciphertext", rsa_private_key, aead_id=0x0003)
 
     public_key, private_key = fallback.generate_ecc_keypair("curve25519")
     hasher = fallback.get_hasher_instance("SHA512")

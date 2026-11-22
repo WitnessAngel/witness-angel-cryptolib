@@ -393,8 +393,14 @@ MicroPython's `hashlib` lacks SHA3); it MUST then refuse cryptoconfs requiring o
 
 ### 3.7 Shamir secret sharing (`split_secret_into_shards`)
 
-Input: `secret` (bytes, any length), `shard_count` n ≥ 1, `threshold_count` k with
+Input: `secret` (bytes, any length), `shard_count` n with `1 ≤ n ≤ 30`, `threshold_count` k with
 `1 ≤ k ≤ n`. Output: a list of n tuples `(index, shard_bytes)`, index from 1 to n.
+
+**Shard count limit.** A shared secret has at most **30 shards** (`MAX_SHARED_SECRET_SHARD_COUNT`).
+Encryptors MUST reject, at validation time (§5.2), a cryptoconf or device profile with more shards in any
+shared secret layer. Readers MUST reject a shard whose index is not an integer (booleans excluded) in
+`1..30`, and duplicate indices within one shared secret, before any Shamir recombination; such a shard can
+only come from tampering, since no conforming writer emits it.
 
 ```
 padded  = PKCS7_pad(secret, block_size=16)        # always adds 1..16 bytes
@@ -490,7 +496,7 @@ symmetric_layer := {                                           # wrap with a fre
 shared_secret_layer := {
     "key_cipher_algo": "[SHARED_SECRET]",
     "key_shared_secret_threshold": int,                        # 1 <= threshold <= number of shards
-    "key_shared_secret_shards": [ { "key_cipher_layers": [ key_cipher_layer, ... ] }, ... ]  # each NON-EMPTY
+    "key_shared_secret_shards": [ { "key_cipher_layers": [ key_cipher_layer, ... ] }, ... ]  # 1 to 30 shards, each NON-EMPTY
 }
 
 signature_conf := {
@@ -536,7 +542,8 @@ error when:
 
 - `payload_cipher_layers` is empty;
 - any `key_cipher_layers` list is empty;
-- a shared secret threshold is not in `1..len(key_shared_secret_shards)`.
+- a shared secret threshold is not in `1..len(key_shared_secret_shards)`;
+- a shared secret has more than 30 shards (§3.7).
 
 `cryptainer_metadata` MUST be a dict (JSON-serializable with §2 types) or null (§5.4).
 
@@ -1353,10 +1360,10 @@ Other parameters:
 
 #### Shared secrets
 
-- `key_shared_secret_shards` MUST be non-empty, and `1 ≤ key_shared_secret_threshold ≤ len(key_shared_secret_shards)`.
+- `key_shared_secret_shards` MUST hold 1 to 30 shards, and `1 ≤ key_shared_secret_threshold ≤ len(key_shared_secret_shards)`.
 - Shamir operates on 16-byte chunks; each shard's byte length equals the PKCS#7-padded
   secret length (a multiple of 16, at least 16).
-- Shard indices are the integers 1..n, all distinct.
+- Shard indices are the integers 1..n, all distinct; readers reject indices outside 1..30 and duplicates (§3.7).
 
 ---
 

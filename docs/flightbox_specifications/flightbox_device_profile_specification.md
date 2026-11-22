@@ -78,7 +78,7 @@ key MUST be rejected as invalid. Later versions of the format will use another `
 `cryptoconf` follows the cryptoconf grammar of section 5.1 of the encryptor specification, with the same text-string
 keys and the same case-sensitive algorithm names, and is validated by the rules of its section 5.2 (the cryptoconf
 schema of wacryptolib: unknown keys rejected, non-empty `payload_cipher_layers` and `key_cipher_layers` lists,
-`1 <= key_shared_secret_threshold <= len(key_shared_secret_shards)`, the legacy `payload_signatures` key accepted as
+`1 <= key_shared_secret_threshold <= len(key_shared_secret_shards) <= 30`, the legacy `payload_signatures` key accepted as
 an alias of `payload_ciphertext_signatures`, a payload layer with both keys rejected). On top of these rules:
 
 - the cryptoconf MUST have a root `keychain_uid`. A device can't use keys provisioned in advance for a keychain uid
@@ -241,7 +241,7 @@ symmetric-key-cipher-layer = {
 shared-secret-key-cipher-layer = {
   "key_cipher_algo": "[SHARED_SECRET]",
   "key_shared_secret_threshold": uint .ge 1,   ; and at most the number of shards
-  "key_shared_secret_shards": [+ shared-secret-shard],
+  "key_shared_secret_shards": [1*30 shared-secret-shard],   ; at most 30 shards
 }
 
 shared-secret-shard = {

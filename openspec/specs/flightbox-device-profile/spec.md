@@ -125,7 +125,7 @@ A device profile SHALL only be accepted if every public key respects the constra
 The cryptoconf of a device profile SHALL be validated when the profile is loaded, before any key is generated. The rules SHALL match the cryptoconf schema of the reference library (wacryptolib):
 - unknown keys are rejected and algorithm names are checked;
 - `payload_cipher_layers` and every `key_cipher_layers` list are non-empty;
-- `1 <= key_shared_secret_threshold <= len(key_shared_secret_shards)`.
+- `1 <= key_shared_secret_threshold <= len(key_shared_secret_shards) <= 30` (at most 30 shards per shared secret).
 
 The legacy `payload_signatures` key SHALL be accepted as an alias of `payload_ciphertext_signatures`. A payload layer carrying both keys SHALL be rejected. On top of these rules:
 - the cryptoconf SHALL have a root `keychain_uid`, so that every asymmetric layer resolves to a keychain uid that is known when the profile is provisioned;
@@ -142,6 +142,10 @@ The legacy `payload_signatures` key SHALL be accepted as an alias of `payload_ci
 #### Scenario: Invalid threshold
 - **WHEN** a shared secret layer has threshold 0, or a threshold above its number of shards
 - **THEN** the profile is rejected with a validation error
+
+#### Scenario: Too many shards
+- **WHEN** a shared secret layer has 31 shards or more
+- **THEN** the profile is rejected with a validation error, before any key is generated
 
 #### Scenario: Both signature list keys
 - **WHEN** a payload layer has both `payload_signatures` and `payload_ciphertext_signatures`

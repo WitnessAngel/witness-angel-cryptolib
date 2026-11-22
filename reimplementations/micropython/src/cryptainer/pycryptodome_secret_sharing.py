@@ -249,11 +249,11 @@ class _Element(object):
         v, z = f1, 0
         while f2:
             # if f2 ^ 1: z ^= v
-            mask2 = int(bin(f2 & 1)[2:] * 128, base=2)
+            mask2 = int(bin(f2 & 1)[2:] * 128, 2)  # Positional base: MicroPython int() takes no keyword argument
             z = (mask2 & (z ^ v)) | ((mask1 - mask2 - 1) & z)
             v <<= 1
             # if v & mask1: v ^= self.irr_poly
-            mask3 = int(bin((v >> 128) & 1)[2:] * 128, base=2)
+            mask3 = int(bin((v >> 128) & 1)[2:] * 128, 2)  # Positional base: MicroPython int() takes no keyword argument
             v = (mask3 & (v ^ self.irr_poly)) | ((mask1 - mask3 - 1) & v)
             f2 >>= 1
         return _Element(z)

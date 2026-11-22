@@ -118,6 +118,13 @@ Formatting:
   `ensure_ascii=True`.
 - MicroPython: same but **keys are not sorted** (and non-ASCII characters may be emitted raw).
 
+Text strings, dict keys included, MUST be sequences of Unicode scalar values, as in WA-CBOR: no lone
+surrogate (a code point of U+D800..U+DFFF, raw or as a `\uXXXX` escape that is not half of a pair), and the
+output MUST be well-formed UTF-8 (no encoded surrogate, no overlong form, nothing above U+10FFFF). JSON
+libraries don't ensure it: MicroPython's `json` writes the bytes of its `str` as they are, and these may be
+ill-formed, while CPython's `json` escapes lone surrogates as `\udXXX`. Encryptors MUST therefore check their
+input text (§5.4).
+
 **Byte-exactness is NOT required for interoperability**: every serialized structure is either
 encrypted (then decrypted and parsed back) or stored as-is, and the decoder only needs valid
 JSON with the wrappers above. Reimplementations SHOULD nevertheless sort keys and use the
@@ -592,6 +599,21 @@ Encryptors MUST reject metadata containing a single-key map whose key is an Exte
 `$undefined`), at any depth: it would be read back as a typed value, or fail to load. wacryptolib
 rejects them at validation time, in both document formats.
 
+Text strings written to cryptainers MUST be sequences of Unicode scalar values, so without lone surrogates
+(§2, as WA-CBOR already requires): the keys and values of the metadata at any depth, and every other text
+that the encryptor copies into the cryptainer, that is all the text of the cryptoconf (algo names, trustee
+fields like `keystore_owner` or `jsonrpc_url`, uids given as text, and any other field an encryptor lets
+through). Encryptors MUST reject anything else as an invalid input (§5.5), before any random draw (§5.2),
+rather than leave it to their serializer: readers refuse ill-formed UTF-8 (wacryptolib's loader raises
+`UnicodeDecodeError`), and since the metadata is also sealed inside every asymmetric key struct (§6.5), no
+repair of the cleartext root would make such a cryptainer decryptable. Such text comes from strings built
+from outside data (a device or file name, a line read from a UART...) on platforms whose strings don't
+enforce it, like MicroPython, whose `str` accepts `chr(0xD800)` and, from `bytes.decode()`, encoded
+surrogates, overlong forms and code points above U+10FFFF. Checking the UTF-8 bytes of each string strictly
+(table 3-7 of the Unicode standard) works on every platform. wacryptolib currently does so in WA-CBOR mode
+only: in Extended JSON mode it writes a lone surrogate as a `\udXXX` escape, which CPython reads back but
+which can't be converted to WA-CBOR.
+
 Metadata nesting counts against the WA-CBOR limit of 64 levels, with the metadata map at level 2 both in
 the cryptainer and in key structs: metadata itself MAY nest 63 levels, and an encryptor writing WA-CBOR
 MUST reject deeper metadata before any random draw. These checks SHOULD be applied in Extended JSON mode
@@ -608,7 +630,7 @@ implementation uses (status names in parentheses, informative) and which its int
 | decoding error | input bytes that are not a well-formed document (WA-CBOR rules, Extended JSON keyword maps, excessive item nesting) | `DECODING_ERROR` |
 | unsupported format | unknown or missing format marker (e.g. `device_profile_format`) | `UNSUPPORTED_FORMAT` |
 | unsupported type | valid document items the implementation doesn't handle (floats, datetimes, bignums...) | `UNSUPPORTED_TYPE` |
-| invalid input | any schema violation of §5.1 and §5.2: unknown or missing keys, wrong types, unknown algo names, empty lists, bad threshold, both signature keys, metadata that is not a map or null, duplicate key entries | `INVALID_PROFILE` |
+| invalid input | any schema violation of §5.1 and §5.2: unknown or missing keys, wrong types, unknown algo names, empty lists, bad threshold, both signature keys, metadata that is not a map or null, duplicate key entries, text that is not a sequence of Unicode scalar values (§5.4) | `INVALID_PROFILE` |
 | unsupported feature | valid input outside the implemented subset: signatures, a disabled document format, an algorithm not built in | `UNSUPPORTED_SIGNATURE`, `UNSUPPORTED_FEATURE`, `UNSUPPORTED_ALGORITHM` |
 | missing public key | an asymmetric layer resolving to no key (§5.3) | `MISSING_PUBLIC_KEY` |
 | key constraint violation | a public key outside §11.2 (or the stricter device profile rules), an all-zero X25519 shared secret | `KEY_CONSTRAINT_VIOLATION` |
@@ -1124,6 +1146,11 @@ core, and a platform layer for crypto, JSON, randomness and key retrieval.
 - trustees: `authenticator` only, public keys provided as an in-memory dict
   `{keystore_uid: {keychain_uid: {"n": int, "e": int, "x25519": bytes(32)}}}`;
 - validation errors raised as `RuntimeError`; no upfront schema validation;
+- every text string of the cryptoconf and of the metadata (keys and values, at any depth) checked to be a
+  sequence of Unicode scalar values (§5.4) by `ValidatingFlightBox`, before any random draw, by validating
+  the UTF-8 bytes of `str.encode()` strictly, since MicroPython's `str` doesn't ensure it; integrators MUST
+  use it rather than a bare `FlightBox`, after which `FlightboxUtilitiesImpl.dump_to_json_bytes()` refuses
+  ill-formed metadata in key structs only, after some random draws, and nothing checks the cryptoconf;
 - key ciphertexts in Extended JSON only (`F = json`, no `dump_to_cbor_bytes`);
 - Shamir via a vendored copy of pycryptodome's pure-Python `Shamir`;
 - no payload encryption, digests, signatures nor file output yet (steps 2 and 3).
@@ -1190,7 +1217,7 @@ where implementations have to decide:
 | Key ciphertext format `F` | §2 serializations; field written only for `"cbor"` | one or both of `J`, `C`; one `F` per cryptainer | `F` = file format | `F` = file format |
 | Extended JSON bytes | decodable relaxed Extended JSON (§2) | any key order, any whitespace | byte-exact CPython output (§2.1) | byte-exact CPython output (§2.1) |
 | Key cipher nesting | rejecting too deep cryptoconfs at validation | any cap of at least 8 (§5.2) | 8 (compile-time option) | 8 (run-time limit) |
-| Metadata | map or null, no keyword maps, WA-CBOR depth limit (§5.4) | refusing floats, datetimes, decimals, bignums | sub-profile types only | sub-profile types only |
+| Metadata | map or null, no keyword maps, WA-CBOR depth limit, Unicode scalar values only (§5.4) | refusing floats, datetimes, decimals, bignums | sub-profile types only | sub-profile types only |
 | Randomness | a CSPRNG for every draw (§3.1) | any draw order | §6.8 order, through one platform hook | §6.8 order with the draw sizes of C, through one platform hook |
 | UUID0 prefix | 80 random bits | zero prefix without a clock (§3.2) | zero prefix when the clock hook is absent or fails | zero prefix when the clock hook returns none |
 | Payload | inline or offloaded (§9.2), identical streamed and one-shot output | any chunk size, including 0 | both, chunks of any size | both, chunks of any size |

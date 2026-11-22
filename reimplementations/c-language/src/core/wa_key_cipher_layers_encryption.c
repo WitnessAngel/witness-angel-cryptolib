@@ -93,7 +93,8 @@ static wa_status_t wa_encrypt_key_with_shared_secret(const wa_key_cipher_context
     wa_status_t status;
     size_t shard_index;
     if (wa_value_get_integer(wa_value_find_map_value(layer, "key_shared_secret_threshold"), &threshold_count) != 0 ||
-        threshold_count < 1 || (uint64_t)threshold_count > (uint64_t)shard_count) {
+        threshold_count < 1 || (uint64_t)threshold_count > (uint64_t)shard_count ||
+        shard_count > WA_MAX_SHARED_SECRET_SHARD_COUNT) {
         return WA_STATUS_INVALID_PROFILE; /* Section 5.2: the core checks it again */
     }
     WA_RETURN_IF_ERROR(wa_shamir_split_secret_into_shards(context->platform_hooks, key_bytes, key_bytes_length,

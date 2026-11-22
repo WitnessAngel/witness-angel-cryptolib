@@ -12,6 +12,7 @@
 
 #include "core/wa_cryptoconf_validation.h"
 #include "core/wa_error_location_path.h"
+#include "primitives/wa_shamir_secret_sharing_gf128.h"
 #include "wa_flightbox/wa_flightbox_config.h"
 #include "wa_minimal_test_harness.h"
 #include "wa_test_support.h"
@@ -333,6 +334,98 @@ static void test_key_cipher_nesting_depth(void)
     wa_test_platform_destroy(platform);
 }
 
+/* SHARD COUNT LIMIT */
+
+/* A cryptoconf whose payload layer's key layer is `key_layer_prefix`, then a shared secret layer of `shard_count`
+ * RSA shards, then `key_layer_suffix`, written into `notation` */
+static void build_shard_count_cryptoconf(const char *key_layer_prefix, const char *threshold, size_t shard_count,
+                                         const char *key_layer_suffix, char *notation, size_t notation_size)
+{
+    size_t shard_index;
+    notation[0] = '\0';
+    strncat(notation,
+            "{'keychain_uid': " UID ", 'payload_cipher_layers': [{'payload_cipher_algo': 'AES_CBC', "
+            "'payload_ciphertext_signatures': [], 'key_cipher_layers': [",
+            notation_size - 1u);
+    strncat(notation, key_layer_prefix, notation_size - strlen(notation) - 1u);
+    strncat(notation, "{'key_cipher_algo': '[SHARED_SECRET]', 'key_shared_secret_threshold': ",
+            notation_size - strlen(notation) - 1u);
+    strncat(notation, threshold, notation_size - strlen(notation) - 1u);
+    strncat(notation, ", 'key_shared_secret_shards': [", notation_size - strlen(notation) - 1u);
+    for (shard_index = 0; shard_index < shard_count; ++shard_index) {
+        strncat(notation, shard_index > 0 ? ", " SHARD(RSA_LAYER) : SHARD(RSA_LAYER),
+                notation_size - strlen(notation) - 1u);
+    }
+    strncat(notation, "]}", notation_size - strlen(notation) - 1u);
+    strncat(notation, key_layer_suffix, notation_size - strlen(notation) - 1u);
+    strncat(notation, "]}]}", notation_size - strlen(notation) - 1u);
+}
+
+static void test_shared_secret_shard_count_limit(void)
+{
+    /* The shared secret layer as the key layer of the payload layer, in a shard of another shared secret, or
+     * under a symmetric key layer */
+    static const struct {
+        const char *key_layer_prefix;
+        const char *key_layer_suffix;
+        const char *shard_list_location;
+    } placements[] = {
+        {"", "", KEY_LAYER_0 ".key_shared_secret_shards"},
+        {"{'key_cipher_algo': '[SHARED_SECRET]', 'key_shared_secret_threshold': 1, 'key_shared_secret_shards': ["
+         SHARD(RSA_LAYER) ", {'key_cipher_layers': [",
+         "]}]}", KEY_LAYER_0 ".key_shared_secret_shards[1].key_cipher_layers[0].key_shared_secret_shards"},
+        {"{'key_cipher_algo': 'AES_EAX', 'key_cipher_layers': [" RSA_LAYER ", ", "]}",
+         KEY_LAYER_0 ".key_cipher_layers[1].key_shared_secret_shards"},
+    };
+    static const struct {
+        const char *threshold;
+        size_t shard_count;
+        int is_valid;
+    } shard_lists[] = {
+        {"1", 30, 1},
+        {"30", 30, 1},
+        {"2", 31, 0},
+        {"31", 31, 0},
+        {"0", 31, 0}, /* The shard count is checked first */
+        {"2", 300, 0}, /* Shard indices above 255 otherwise */
+    };
+    static char notation[65536];
+    size_t placement_index;
+    size_t list_index;
+    wa_test_platform_t *platform = wa_test_platform_create(3);
+    WA_REQUIRE(platform != NULL);
+    WA_CHECK_SIZE(WA_MAX_SHARED_SECRET_SHARD_COUNT, 30);
+    for (placement_index = 0; placement_index < sizeof(placements) / sizeof(placements[0]); ++placement_index) {
+        for (list_index = 0; list_index < sizeof(shard_lists) / sizeof(shard_lists[0]); ++list_index) {
+            wa_value_t *cryptoconf = NULL;
+            wa_error_location_path_t location;
+            wa_status_t status;
+            const char *expected_location = shard_lists[list_index].is_valid
+                                                ? "cryptoconf"
+                                                : placements[placement_index].shard_list_location;
+            build_shard_count_cryptoconf(placements[placement_index].key_layer_prefix,
+                                         shard_lists[list_index].threshold, shard_lists[list_index].shard_count,
+                                         placements[placement_index].key_layer_suffix, notation, sizeof(notation));
+            WA_REQUIRE(strlen(notation) + 1u < sizeof(notation));
+            WA_REQUIRE_STATUS(wa_test_build_value_tree(&platform->hooks, notation, &cryptoconf), WA_STATUS_OK);
+            wa_error_location_path_initialize(&location);
+            (void)wa_error_location_path_push_key(&location, "cryptoconf", strlen("cryptoconf"));
+            status = wa_cryptoconf_validate(cryptoconf, &location);
+            if ((status == WA_STATUS_OK) != shard_lists[list_index].is_valid ||
+                strcmp(location.text, expected_location) != 0) {
+                fprintf(stderr, "placement %lu, %lu shards (threshold %s): status %d at '%s'\n",
+                        (unsigned long)placement_index, (unsigned long)shard_lists[list_index].shard_count,
+                        shard_lists[list_index].threshold, (int)status, location.text);
+            }
+            WA_CHECK_STATUS(status, shard_lists[list_index].is_valid ? WA_STATUS_OK : WA_STATUS_INVALID_PROFILE);
+            WA_CHECK(strcmp(location.text, expected_location) == 0);
+            wa_value_destroy(cryptoconf);
+        }
+    }
+    WA_CHECK(wa_test_allocator_is_clean(&platform->allocator));
+    wa_test_platform_destroy(platform);
+}
+
 /* ERROR LOCATION PATH */
 
 static void test_error_location_path(void)
@@ -469,6 +562,7 @@ int main(void)
     WA_RUN_TEST(test_value_notation);
     WA_RUN_TEST(test_cryptoconf_cases);
     WA_RUN_TEST(test_key_cipher_nesting_depth);
+    WA_RUN_TEST(test_shared_secret_shard_count_limit);
     WA_RUN_TEST(test_error_location_path);
     WA_RUN_TEST(test_trustee_validation_and_identities);
     return wa_test_finish();

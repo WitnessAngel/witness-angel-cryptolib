@@ -498,6 +498,23 @@ def _add_cryptoconf_samples(collector):
         collector.add(name, helpers.encode_cbor_item(helpers.build_raw_device_profile(cryptoconf)),
                       "WA_STATUS_INVALID_PROFILE", KEY_LAYER_0 + ".key_shared_secret_threshold")
 
+    # Shard count: at most 30 shards per shared secret (encryptor specification, section 3.7), at any depth
+    def _shared_secret_of(shard_count, threshold=2):
+        return _shared_secret_layer(threshold, *[[_asymmetric_layer("ECIES_X25519", LOCAL_TRUSTEE)]] * shard_count)
+
+    collector.add_valid("shard_count_30", helpers.build_raw_device_profile(
+        _cryptoconf(_payload_layer([_shared_secret_of(30)]))))
+    collector.add("shard_count_31", helpers.encode_cbor_item(helpers.build_raw_device_profile(
+        _cryptoconf(_payload_layer([_shared_secret_of(31)])))),
+        "WA_STATUS_INVALID_PROFILE", KEY_LAYER_0 + ".key_shared_secret_shards")
+    nested_shared_secret = _shared_secret_layer(
+        1, [_asymmetric_layer("ECIES_X25519", LOCAL_TRUSTEE)],
+        [dict(key_cipher_algo="AES_EAX", key_cipher_layers=[_shared_secret_of(31)])])
+    collector.add("shard_count_31_nested", helpers.encode_cbor_item(helpers.build_raw_device_profile(
+        _cryptoconf(_payload_layer([nested_shared_secret])))),
+        "WA_STATUS_INVALID_PROFILE",
+        KEY_LAYER_0 + ".key_shared_secret_shards[1].key_cipher_layers[0].key_cipher_layers[0].key_shared_secret_shards")
+
     # Signatures
     both_keys = copy.deepcopy(X25519_CRYPTOCONF)
     both_keys["payload_cipher_layers"][0]["payload_signatures"] = []

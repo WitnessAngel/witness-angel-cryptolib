@@ -10,6 +10,7 @@
 #include "core/wa_platform_hooks_calls.h"
 #include "encoding/wa_value_tree_internal.h"
 #include "primitives/wa_asymmetric_key_wrapping.h"
+#include "primitives/wa_shamir_secret_sharing_gf128.h"
 #include "primitives/wa_symmetric_key_generation.h"
 #include "wa_flightbox/wa_flightbox_config.h"
 
@@ -219,6 +220,10 @@ static wa_status_t wa_validate_shared_secret_layer(const wa_value_t *layer, size
     WA_RETURN_IF_ERROR(wa_check_typed_value(layer, "key_shared_secret_shards", 1, WA_VALUE_TYPE_ARRAY, location));
     previous_length =
         wa_error_location_path_push_key(location, "key_shared_secret_shards", strlen("key_shared_secret_shards"));
+    /* Section 3.7: at most 30 shards, checked before the shards themselves */
+    if (wa_value_get_item_count(shards) > WA_MAX_SHARED_SECRET_SHARD_COUNT) {
+        return WA_STATUS_INVALID_PROFILE;
+    }
     for (shard_index = 0; shard_index < wa_value_get_item_count(shards); ++shard_index) {
         const wa_value_t *shard = wa_value_get_array_item(shards, shard_index);
         size_t shard_previous_length = wa_error_location_path_push_index(location, shard_index);

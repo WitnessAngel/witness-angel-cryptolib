@@ -313,6 +313,24 @@ static void test_shamir_errors(void)
     WA_CHECK_STATUS(
         wa_shamir_split_secret_into_shards(&platform->hooks, secret, 20, (size_t)-1 / 16, 2, &shards, &shard_length),
         WA_STATUS_INVALID_ARGUMENT);
+    /* At most 30 shards (section 3.7), refused before any allocation or random draw */
+    platform->random_generator.call_count = 0;
+    attempt_index = platform->allocator.attempted_allocation_count;
+    WA_CHECK_STATUS(wa_shamir_split_secret_into_shards(&platform->hooks, secret, 20,
+                                                       WA_MAX_SHARED_SECRET_SHARD_COUNT + 1u, 2, &shards,
+                                                       &shard_length),
+                    WA_STATUS_INVALID_ARGUMENT);
+    WA_CHECK(shards == NULL && shard_length == 0);
+    WA_CHECK_SIZE(platform->random_generator.call_count, 0);
+    WA_CHECK_SIZE(platform->allocator.attempted_allocation_count, attempt_index);
+    WA_REQUIRE_STATUS(wa_shamir_split_secret_into_shards(&platform->hooks, secret, 20,
+                                                         WA_MAX_SHARED_SECRET_SHARD_COUNT,
+                                                         WA_MAX_SHARED_SECRET_SHARD_COUNT, &shards, &shard_length),
+                      WA_STATUS_OK);
+    WA_CHECK_SIZE(shard_length, 32);
+    platform->hooks.release(platform->hooks.allocator_context, shards,
+                            WA_MAX_SHARED_SECRET_SHARD_COUNT * shard_length);
+    shards = (uint8_t *)1;
     /* Allocation failure */
     platform->allocator.fail_at_attempt_index = platform->allocator.attempted_allocation_count;
     WA_CHECK_STATUS(wa_shamir_split_secret_into_shards(&platform->hooks, secret, 20, 3, 2, &shards, &shard_length),

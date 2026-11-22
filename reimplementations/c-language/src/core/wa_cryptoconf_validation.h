@@ -10,6 +10,8 @@
  * key_ciphertext_format and payload_macs too), algorithm names, trustee grammar, UUID and integer types, non-empty
  * payload_cipher_layers and key_cipher_layers lists, 1 <= key_shared_secret_threshold <= len(shards), the legacy
  * payload_signatures alias (one of the two keys, never both) and the signature conf grammar.
+ * Specification rule (section 3.7): at most WA_MAX_SHARED_SECRET_SHARD_COUNT (30) shards per shared secret, at any
+ * depth (WA_STATUS_INVALID_PROFILE, located at the key_shared_secret_shards list, before its shards are checked).
  * C rules: a mandatory root keychain_uid (WA_STATUS_INVALID_PROFILE), non-empty signature lists
  * (WA_STATUS_UNSUPPORTED_SIGNATURE, once their items are found well-formed), and the key cipher nesting depth
  * (WA_STATUS_NESTING_TOO_DEEP beyond WA_MAX_KEY_CIPHER_NESTING_DEPTH, a payload layer's key_cipher_layers list

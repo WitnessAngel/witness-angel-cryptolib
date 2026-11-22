@@ -7,7 +7,7 @@ Rejections by the C CLI (task 9.6): each case gives an expected status and error
 and no output file.
 
 Device profiles are the samples of the profile loading unit tests (generate_device_profile_samples.py, built with
-the device profile test helpers): signature confs, missing keys, missing root keychain uid, bad thresholds, both
+the device profile test helpers): signature confs, missing keys, missing root keychain uid, bad thresholds, too many shards, both
 signature alias keys, output fields in the cryptoconf, excessive key cipher nesting, mutated profiles, every
 valid corpus cryptoconf without a root keychain uid (2022 generations), and every invalid corpus cryptoconf (WA-CBOR ones spliced into a profile, Extended JSON ones through the raw converter). The
 valid samples are encrypted successfully, as a counterpart. Metadata cases cover floats, datetimes, out-of-range
@@ -71,6 +71,8 @@ def test_samples_cover_the_specified_rejections():
         "missing_root_keychain_uid",
         "threshold_zero",
         "threshold_above_shard_count",
+        "shard_count_31",
+        "shard_count_31_nested",
         "both_signature_list_keys",
         "layer_key_ciphertext_format",
         "key_cipher_nesting_9_levels",

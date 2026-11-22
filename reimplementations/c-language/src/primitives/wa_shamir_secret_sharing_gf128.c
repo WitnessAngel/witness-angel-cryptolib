@@ -69,7 +69,7 @@ wa_status_t wa_shamir_split_secret_into_shards(const wa_platform_hooks_t *platfo
     wa_status_t status = WA_STATUS_OK;
     *shards_out = NULL;
     *shard_length_out = 0;
-    if (threshold_count < 1 || threshold_count > shard_count ||
+    if (threshold_count < 1 || threshold_count > shard_count || shard_count > WA_MAX_SHARED_SECRET_SHARD_COUNT ||
         secret_length > (size_t)-1 - WA_PKCS7_BLOCK_SIZE) {
         return WA_STATUS_INVALID_ARGUMENT;
     }

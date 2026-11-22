@@ -8,13 +8,16 @@ from typing import Sequence
 
 SHAMIR_CHUNK_LENGTH = 16
 
+# A shared secret has at most this count of shards (encryptors reject cryptoconfs with more, at validation time)
+MAX_SHARED_SECRET_SHARD_COUNT = 30
+
 
 def do_split_secret_into_shards(secret: bytes, *, shard_count: int, threshold_count: int, shamir_128b_split_func) -> list:
     """Generate a Shamir shared secret of `shard_count` subkeys, with `threshold_count`
     of them required to recompute the initial `bytestring`.
 
     :param secret: bytestring to separate as shards, whatever its length
-    :param shard_count: the number of shards to be created for the secret
+    :param shard_count: the number of shards to be created for the secret (at most MAX_SHARED_SECRET_SHARD_COUNT)
     :param threshold_count: the minimal number of shards needed to recombine the key
     :param shamir_128b_split_func: the crypto utility to split a 16-bytes number into shards
 
@@ -22,6 +25,9 @@ def do_split_secret_into_shards(secret: bytes, *, shard_count: int, threshold_co
 
     if not shard_count:
         raise ValueError("Shards count must be strictly positive")
+
+    if shard_count > MAX_SHARED_SECRET_SHARD_COUNT:
+        raise ValueError("Shards count %s can't be higher than %s" % (shard_count, MAX_SHARED_SECRET_SHARD_COUNT))
 
     if threshold_count > shard_count:
         raise ValueError("Threshold count %s can't be higher than shared count %s" % (threshold_count, shard_count))

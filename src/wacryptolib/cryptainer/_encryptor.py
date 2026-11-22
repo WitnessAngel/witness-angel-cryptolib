@@ -29,6 +29,7 @@ from wacryptolib.keygen import (
 from wacryptolib.keystore import KeystorePoolBase
 from wacryptolib.shared_secret import split_secret_into_shards
 from wacryptolib.utilities import (
+    MAX_SHARED_SECRET_SHARD_COUNT,
     dump_to_cbor_bytes,
     dump_to_json_bytes,
     generate_uuid0,
@@ -66,6 +67,8 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
 
     SUPPORTED_SYMMETRIC_CIPHER_ALGOS = sorted(set(SUPPORTED_SYMMETRIC_KEY_ALGOS) & set(SUPPORTED_CIPHER_ALGOS))
     SUPPORTED_ASYMMETRIC_CIPHER_ALGOS = sorted(set(SUPPORTED_ASYMMETRIC_KEY_ALGOS) & set(SUPPORTED_CIPHER_ALGOS))
+
+    MAX_SHARED_SECRET_SHARD_COUNT = MAX_SHARED_SECRET_SHARD_COUNT
 
     def __init__(self, logger: logging.Logger, keystore_pool: KeystorePoolBase) -> None:
         self.logger = logger

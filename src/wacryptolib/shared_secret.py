@@ -6,7 +6,7 @@ import logging
 from typing import Sequence
 
 from wacryptolib import _crypto_backend
-from wacryptolib.utilities import do_recombine_secret_from_shards, do_split_secret_into_shards
+from wacryptolib.utilities import MAX_SHARED_SECRET_SHARD_COUNT, do_recombine_secret_from_shards, do_split_secret_into_shards
 
 logger = logging.getLogger(__name__)
 

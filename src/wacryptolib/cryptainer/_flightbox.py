@@ -56,6 +56,8 @@ class FlightboxUtilitiesBase:
     SUPPORTED_SYMMETRIC_CIPHER_ALGOS: typing.Sequence[str]
     SUPPORTED_ASYMMETRIC_CIPHER_ALGOS: typing.Sequence[str]
 
+    MAX_SHARED_SECRET_SHARD_COUNT: int  # Maximum number of shards of a shared secret
+
     def raise_validation_error(self, msg: str) -> None:
         raise NotImplementedError
 
@@ -116,6 +118,8 @@ class FlightBox:
         assert cryptainer_metadata is None or isinstance(cryptainer_metadata, dict), type(cryptainer_metadata)
         if key_ciphertext_format not in KEY_CIPHERTEXT_FORMATS:  # Before any key generation
             raise ValueError("Unknown key ciphertext format %r" % (key_ciphertext_format,))
+        assert isinstance(cryptoconf, dict), type(cryptoconf)
+        self._check_cryptoconf(cryptoconf)  # Before any random draw
         cryptainer_format = CRYPTAINER_FORMAT
         cryptainer_uid = self._fbu.generate_uuid0()  # ALWAYS UNIQUE!
 
@@ -123,11 +127,8 @@ class FlightBox:
             cryptoconf.get("keychain_uid") or self._fbu.generate_uuid0()
         )  # Might be shared by lots of cryptainers
 
-        assert isinstance(cryptoconf, dict), type(cryptoconf)
         cryptainer = _copy_data_tree(cryptoconf)  # So that we can manipulate it as new cryptainer
         del cryptoconf
-        if not cryptainer["payload_cipher_layers"]:
-            raise self._fbu.raise_validation_error("Empty payload_cipher_layers list is forbidden in cryptoconf")
 
         payload_plaintext_hash_algos = [
             signature["payload_digest_algo"] for signature in cryptainer.get("payload_plaintext_signatures", ())
@@ -180,6 +181,38 @@ class FlightBox:
         )
 
         return cryptainer, secrets
+
+    def _check_cryptoconf(self, cryptoconf: dict):
+        """Check the rules that the flightbox core enforces by itself, whatever the upfront validation of the
+        platform: non-empty lists of cipher layers, shared secret thresholds and shard counts in range."""
+        if not cryptoconf["payload_cipher_layers"]:
+            raise self._fbu.raise_validation_error("Empty payload_cipher_layers list is forbidden in cryptoconf")
+        for payload_cipher_layer in cryptoconf["payload_cipher_layers"]:
+            self._check_key_cipher_layers(payload_cipher_layer["key_cipher_layers"])
+
+    def _check_key_cipher_layers(self, key_cipher_layers: list):
+        if not key_cipher_layers:
+            raise self._fbu.raise_validation_error("Empty key_cipher_layers list is forbidden in cryptoconf")
+        for key_cipher_layer in key_cipher_layers:
+            key_cipher_algo = key_cipher_layer["key_cipher_algo"]
+            if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
+                self._check_shared_secret_layer(key_cipher_layer)
+                for key_shared_secret_shard_conf in key_cipher_layer["key_shared_secret_shards"]:
+                    self._check_key_cipher_layers(key_shared_secret_shard_conf["key_cipher_layers"])  # Recursive
+            elif key_cipher_algo in self._fbu.SUPPORTED_SYMMETRIC_CIPHER_ALGOS:
+                self._check_key_cipher_layers(key_cipher_layer["key_cipher_layers"])  # Recursive
+
+    def _check_shared_secret_layer(self, key_cipher_layer: dict):
+        shard_count = len(key_cipher_layer["key_shared_secret_shards"])
+        threshold_count = key_cipher_layer["key_shared_secret_threshold"]
+        if not (0 < threshold_count <= shard_count):
+            raise self._fbu.raise_validation_error(
+                "Shared secret threshold must be strictly positive and not greater than shard count, in cryptoconf"
+            )
+        if shard_count > self._fbu.MAX_SHARED_SECRET_SHARD_COUNT:
+            raise self._fbu.raise_validation_error(
+                "Shared secret can't have more than %d shards, in cryptoconf" % self._fbu.MAX_SHARED_SECRET_SHARD_COUNT
+            )
 
     def _encrypt_payload_symkey(
         self,
@@ -276,14 +309,10 @@ class FlightBox:
         key_cipher_algo = key_cipher_layer["key_cipher_algo"]
 
         if key_cipher_algo == SHARED_SECRET_ALGO_MARKER:
+            self._check_shared_secret_layer(key_cipher_layer)  # Already checked upfront, but cheap
             key_shared_secret_shards = key_cipher_layer["key_shared_secret_shards"]
             shard_count = len(key_shared_secret_shards)
-
             threshold_count = key_cipher_layer["key_shared_secret_threshold"]
-            if not (0 < threshold_count <= shard_count):
-                raise self._fbu.raise_validation_error(
-                    "Shared secret threshold must be strictly positive and not greater than shard count, in cryptoconf"
-                )
 
             shards = self._fbu.split_secret_into_shards(
                 secret=key_bytes, shard_count=shard_count, threshold_count=threshold_count

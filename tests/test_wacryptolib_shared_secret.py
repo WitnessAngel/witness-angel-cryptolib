@@ -72,3 +72,20 @@ def test_shared_secret_corner_cases():
         pass
     else:
         assert secret_reconstructed != secret  # We MIGHT get a wrong bytestring unknowingly
+
+
+def test_shared_secret_shard_count_upper_bound():
+    secret = get_random_bytes(50)
+    max_shard_count = wacryptolib.shared_secret.MAX_SHARED_SECRET_SHARD_COUNT
+    assert max_shard_count == 30
+
+    shards = wacryptolib.shared_secret.split_secret_into_shards(
+        secret=secret, shard_count=max_shard_count, threshold_count=3
+    )
+    assert [shard[0] for shard in shards] == list(range(1, max_shard_count + 1))
+    assert wacryptolib.shared_secret.recombine_secret_from_shards(shards[-3:]) == secret
+
+    with pytest.raises(ValueError, match="can't be higher than 30"):
+        wacryptolib.shared_secret.split_secret_into_shards(
+            secret=secret, shard_count=max_shard_count + 1, threshold_count=3
+        )

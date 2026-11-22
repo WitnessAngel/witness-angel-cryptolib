@@ -42,6 +42,7 @@ from wacryptolib.exceptions import DecryptionError, SchemaValidationError
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.keystore import InMemoryKeystorePool, generate_keypair_for_storage
 from wacryptolib.utilities import (
+    MAX_SHARED_SECRET_SHARD_COUNT,
     WaCborError,
     convert_to_extjson,
     dump_to_cbor_bytes,
@@ -151,6 +152,8 @@ class DeterministicFlightboxUtilities:
 
     SUPPORTED_SYMMETRIC_CIPHER_ALGOS = ["AES_CBC", "AES_EAX", "CHACHA20_POLY1305"]
     SUPPORTED_ASYMMETRIC_CIPHER_ALGOS = ["ECIES_X25519", "ML_KEM_768", "RSA_OAEP"]
+
+    MAX_SHARED_SECRET_SHARD_COUNT = MAX_SHARED_SECRET_SHARD_COUNT
 
     def __init__(self):
         self._counter = 0
@@ -322,6 +325,40 @@ def test_flightbox_rejects_unknown_key_ciphertext_format_before_key_generation()
     utilities = DeterministicFlightboxUtilities()
     with pytest.raises(ValueError, match="Unknown key ciphertext format 'yaml'"):
         _generate_deterministic_cryptainer(utilities, key_ciphertext_format="yaml")
+    assert utilities._counter == 0  # Neither UUIDs nor keys were generated
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_flightbox_rejects_too_many_shards_before_any_random_draw(nested):
+    def _get_cryptoconf(shard_count):
+        shared_secret = dict(
+            key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+            key_shared_secret_threshold=1,
+            key_shared_secret_shards=[dict(key_cipher_layers=[_local_layer()])] * shard_count,
+        )
+        if nested:  # In a symmetric layer, itself in a shard of an outer shared secret, in the second payload layer
+            shared_secret = dict(
+                key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+                key_shared_secret_threshold=1,
+                key_shared_secret_shards=[
+                    dict(key_cipher_layers=[_local_layer()]),
+                    dict(key_cipher_layers=[dict(key_cipher_algo="AES_EAX", key_cipher_layers=[shared_secret])]),
+                ],
+            )
+            return dict(
+                payload_cipher_layers=[
+                    _payload_layer("AES_CBC", [_local_layer()]), _payload_layer("AES_CBC", [shared_secret])
+                ]
+            )
+        return dict(payload_cipher_layers=[_payload_layer("AES_CBC", [shared_secret])])
+
+    utilities = DeterministicFlightboxUtilities()
+    FlightBox(utilities).generate_cryptainer_base_and_secrets(cryptoconf=_get_cryptoconf(30))
+    assert utilities._counter  # UUIDs and keys were generated
+
+    utilities = DeterministicFlightboxUtilities()
+    with pytest.raises(ValueError, match="Shared secret can't have more than 30 shards"):
+        FlightBox(utilities).generate_cryptainer_base_and_secrets(cryptoconf=_get_cryptoconf(31))
     assert utilities._counter == 0  # Neither UUIDs nor keys were generated
 
 

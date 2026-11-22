@@ -97,8 +97,10 @@ from wacryptolib.keystore import (
     InMemoryKeystorePool,
     generate_keypair_for_storage,
 )
+from wacryptolib.cryptainer._encryptor import FlightboxUtilitiesImpl
 from wacryptolib.trustee import TrusteeApi
 from wacryptolib.utilities import (
+    MAX_SHARED_SECRET_SHARD_COUNT,
     load_from_json_bytes,
     dump_to_json_bytes,
     generate_uuid0,
@@ -3386,6 +3388,64 @@ def test_shared_secret_threshold_lower_bound_via_json_schema(canonical):
         shared_secret["key_shared_secret_threshold"] = threshold
         with pytest.raises(SchemaValidationError):
             check_cryptainer_sanity(convert_to_extjson(cryptainer, canonical=canonical), jsonschema_mode=True)
+
+
+def _get_shamir_cryptoconf_with_shard_count(shard_count, nested):
+    shard_conf = dict(key_cipher_layers=[dict(key_cipher_algo="RSA_OAEP", key_cipher_trustee=LOCAL_KEYFACTORY_TRUSTEE_MARKER)])
+    shared_secret = dict(
+        key_cipher_algo=SHARED_SECRET_ALGO_MARKER, key_shared_secret_threshold=1, key_shared_secret_shards=[shard_conf] * shard_count
+    )
+    if nested:  # In a symmetric layer, itself in the second shard of an outer shared secret
+        shared_secret = dict(
+            key_cipher_algo=SHARED_SECRET_ALGO_MARKER,
+            key_shared_secret_threshold=2,
+            key_shared_secret_shards=[
+                shard_conf,
+                dict(key_cipher_layers=[dict(key_cipher_algo="AES_EAX", key_cipher_layers=[shared_secret])]),
+            ],
+        )
+    return dict(
+        payload_cipher_layers=[
+            dict(payload_cipher_algo="AES_CBC", key_cipher_layers=[shared_secret], payload_ciphertext_signatures=[])
+        ]
+    )
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_shared_secret_shard_count_upper_bound(nested):
+    assert MAX_SHARED_SECRET_SHARD_COUNT == 30
+
+    cryptoconf = _get_shamir_cryptoconf_with_shard_count(MAX_SHARED_SECRET_SHARD_COUNT, nested=nested)
+    check_cryptoconf_sanity(cryptoconf)
+    check_cryptoconf_sanity(convert_to_extjson(cryptoconf), jsonschema_mode=True)
+    payload = b"some payload"
+    cryptainer = encrypt_payload_into_cryptainer(payload=payload, cryptoconf=cryptoconf, cryptainer_metadata=None)
+    check_cryptainer_sanity(cryptainer)
+    check_cryptainer_sanity(convert_to_extjson(cryptainer), jsonschema_mode=True)
+    assert decrypt_payload_from_cryptainer(cryptainer)[0] == payload
+
+    too_many_shards_cryptoconf = _get_shamir_cryptoconf_with_shard_count(MAX_SHARED_SECRET_SHARD_COUNT + 1, nested=nested)
+    with pytest.raises(SchemaValidationError, match="more than 30 shards"):
+        check_cryptoconf_sanity(too_many_shards_cryptoconf)
+    with pytest.raises(SchemaValidationError, match="with json-schema"):
+        check_cryptoconf_sanity(convert_to_extjson(too_many_shards_cryptoconf), jsonschema_mode=True)
+    with patch.object(FlightboxUtilitiesImpl, "generate_uuid0", side_effect=AssertionError("UUID generated")), \
+            patch.object(FlightboxUtilitiesImpl, "generate_symkey", side_effect=AssertionError("Key generated")):
+        with pytest.raises(SchemaValidationError, match="more than 30 shards"):
+            encrypt_payload_into_cryptainer(payload=payload, cryptoconf=too_many_shards_cryptoconf, cryptainer_metadata=None)
+
+    # Cryptainers can't have more shards either, conforming writers never produce them
+    cryptainer = copy.deepcopy(cryptainer)  # A plain dict, no more a validated cryptainer
+    shared_secret = cryptainer["payload_cipher_layers"][0]["key_cipher_layers"][0]
+    if nested:
+        shared_secret = shared_secret["key_shared_secret_shards"][1]["key_cipher_layers"][0]["key_cipher_layers"][0]
+    shared_secret["key_shared_secret_shards"].append(shared_secret["key_shared_secret_shards"][0])
+    with pytest.raises(SchemaValidationError, match="more than 30 shards"):
+        check_cryptainer_sanity(cryptainer)
+    with pytest.raises(SchemaValidationError, match="with json-schema"):
+        check_cryptainer_sanity(convert_to_extjson(cryptainer), jsonschema_mode=True)
+    with pytest.raises(SchemaValidationError, match="more than 30 shards"):
+        decrypt_payload_from_cryptainer(cryptainer)
 
 
 @pytest.mark.parametrize("canonical", [False, True])

@@ -18,7 +18,7 @@ from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
-from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema
+from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema,     MAX_SHARED_SECRET_SHARD_COUNT
 from wacryptolib.utilities.validation_utils import summarize_validation_error_lines
 
 
@@ -124,6 +124,8 @@ def _create_cryptostructure_schema(for_cryptainer: bool, for_cryptosig: bool, ex
             raise ValueError("Shared secret threshold must be strictly positive")
         if threshold > len(shared_secret_struct["key_shared_secret_shards"]):
             raise ValueError("Shared secret threshold can't be greater than number of shards")
+        if len(shared_secret_struct["key_shared_secret_shards"]) > MAX_SHARED_SECRET_SHARD_COUNT:
+            raise ValueError("Shared secret can't have more than %d shards" % MAX_SHARED_SECRET_SHARD_COUNT)
         return True
 
     SHARED_SECRET_CRYPTAINER_BLOCK = Schema(
@@ -193,8 +195,8 @@ def _restrict_json_schema_int_to_positive(int_schema):
 def _add_json_schema_constraints(json_schema, non_empty_fields):
     """Re-inject the constraints that the json_schema() export drops along with "len" and threshold callables.
 
-    Only the threshold lower bound is restored, "threshold <= number of shards" can't be expressed in JSON Schema,
-    only python-schema checks it.
+    Only the threshold lower bound and the maximum number of shards are restored, "threshold <= number of shards"
+    can't be expressed in JSON Schema, only python-schema checks it.
     """
     patched_fields = set()
     expected_patched_fields = set(non_empty_fields)
@@ -210,6 +212,8 @@ def _add_json_schema_constraints(json_schema, non_empty_fields):
                             if field_schema.get("type") != "array":
                                 raise RuntimeError("Can't add minItems to JSON schema of %s" % field_name)
                             field_schema["minItems"] = 1
+                            if field_name == "key_shared_secret_shards":
+                                field_schema["maxItems"] = MAX_SHARED_SECRET_SHARD_COUNT
                             patched_fields.add(field_name)
                         elif field_name == "key_shared_secret_threshold":
                             _restrict_json_schema_int_to_positive(field_schema)

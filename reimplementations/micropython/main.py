@@ -50,8 +50,7 @@ if IS_MICROPYTHON:
     threading.Lock = _DummyLock
 ###########
 
-from cryptainer._flightbox import FlightBox
-from cryptainer.flightbox_utilities_implementation import FlightboxUtilitiesImpl, AUTHENTICATOR_TRUSTEE
+from cryptainer.flightbox_utilities_implementation import FlightboxUtilitiesImpl, ValidatingFlightBox, AUTHENTICATOR_TRUSTEE
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
@@ -117,7 +116,7 @@ KEYSTORE_DATA = {
 }
 
 _fbutils = FlightboxUtilitiesImpl(logger=logger, keystore_data=KEYSTORE_DATA)
-flightbox = FlightBox(flightbox_utilities=_fbutils)
+flightbox = ValidatingFlightBox(flightbox_utilities=_fbutils)  # Refuses ill-formed text before any random draw
 
 cryptainer, secrets = flightbox.generate_cryptainer_base_and_secrets(
             cryptoconf=SIMPLE_CRYPTOCONF, cryptainer_metadata=dict(SOME_METADATA=2726562425242)

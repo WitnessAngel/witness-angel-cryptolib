@@ -1,4 +1,5 @@
-from ._flightbox import FlightboxUtilitiesBase
+from ._flightbox import FlightBox, FlightboxUtilitiesBase, KEY_CIPHERTEXT_FORMAT_JSON
+from .text_validation import find_ill_formed_text, get_ill_formed_text_message, is_well_formed_utf8
 
 import os
 import logging
@@ -108,7 +109,12 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
         raise RuntimeError(msg)
 
     def dump_to_json_bytes(self, data):
-        return dump_to_json_bytes(data)
+        json_bytes = dump_to_json_bytes(data)
+        # Last resort for the strings that ValidatingFlightBox would have refused, e.g. with a bare FlightBox: the
+        # key struct holding them is then refused before any output, if only after some random draws
+        if not is_well_formed_utf8(json_bytes):
+            self.raise_validation_error(get_ill_formed_text_message("cryptainer_metadata", " (in a key struct)"))
+        return json_bytes
 
     def generate_uuid0(self) -> UUID:
         return _generate_uuid0()
@@ -155,3 +161,25 @@ class FlightboxUtilitiesImpl(FlightboxUtilitiesBase):
             return _encrypt_via_aes_cbc(plaintext=plaintext, key_dict=key_dict)
         else:
             raise RuntimeError(f"Abnormal cipher algo {cipher_algo}")
+
+
+class ValidatingFlightBox(FlightBox):
+    """
+    Flightbox core which first checks, before any random draw, that every text string of its inputs is a sequence
+    of Unicode scalar values (see text_validation.py): the keys and values of the cryptainer metadata, and of the
+    cryptoconf (algo names, trustee fields like keystore_owner, uids given as text...), at any depth, since all of
+    them are copied into the cryptainer. Else MicroPython would write ill-formed UTF-8, which wacryptolib can't load.
+
+    It must be given a FlightboxUtilitiesImpl, and be preferred to a bare FlightBox.
+    """
+
+    def generate_cryptainer_base_and_secrets(
+        self, cryptoconf: dict, cryptainer_metadata=None, key_ciphertext_format=KEY_CIPHERTEXT_FORMAT_JSON
+    ) -> tuple:
+        for label, tree in (("cryptoconf", cryptoconf), ("cryptainer_metadata", cryptainer_metadata)):
+            location = find_ill_formed_text(tree)
+            if location is not None:
+                self._fbu.raise_validation_error(get_ill_formed_text_message(label, location))
+        return FlightBox.generate_cryptainer_base_and_secrets(
+            self, cryptoconf, cryptainer_metadata=cryptainer_metadata, key_ciphertext_format=key_ciphertext_format
+        )

@@ -2,6 +2,13 @@
 Development
 =============
 
+* A shared secret has at most 30 shards (`MAX_SHARED_SECRET_SHARD_COUNT`): cryptoconfs and cryptainers with more shards
+  in any `[SHARED_SECRET]` layer, at any nesting depth, are rejected by validation (python-schema, and `maxItems` in the
+  JSON schema exports), the flightbox core checks it before any random draw, and `split_secret_into_shards()` refuses it
+* Decryption rejects, before any Shamir recombination, a decrypted shard whose index is not an int (bools excluded)
+  from 1 to 30, which made the GF(2^128) arithmetic loop forever for a forged index -1; a shard repeating the index of a
+  previous shard of the same shared secret is reported and skipped, the next shards possibly reaching the threshold;
+  `recombine_secret_from_shards()` raises `ValueError` for such indices too
 * **BREAKING**: `CryptainerStorage` and the flightbox CLI name new cryptainers `<basename>.crypt.json` (Extended JSON,
   the default) or `<basename>.crypt.cbor` (WA-CBOR), instead of `<basename>.crypt`; the offloaded payload file is still
   named after the whole cryptainer file name plus `.payload` (e.g. `<basename>.crypt.json.payload`)

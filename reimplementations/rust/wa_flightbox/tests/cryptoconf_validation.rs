@@ -625,6 +625,55 @@ fn key_cipher_nesting_depth_is_limited() {
 }
 
 #[test]
+fn shared_secrets_have_at_most_30_shards() {
+    assert_eq!(wa_flightbox::MAX_SHARED_SECRET_SHARD_COUNT, 30);
+    let rsa = rsa_layer();
+    let limits = EncryptorLimits::default();
+    // The shared secret layer as the key layer of the payload layer, in a shard of another shared secret, or under
+    // a symmetric key layer: (prefix, suffix, location of its shard list)
+    let placements = [
+        (String::new(), "", format!("{KEY_LAYER_0}.key_shared_secret_shards")),
+        (
+            format!(
+                "{{'key_cipher_algo': '[SHARED_SECRET]', 'key_shared_secret_threshold': 1, \
+                 'key_shared_secret_shards': [{}, {{'key_cipher_layers': [",
+                shard(&rsa)
+            ),
+            "]}]}",
+            format!("{KEY_LAYER_0}.key_shared_secret_shards[1].key_cipher_layers[0].key_shared_secret_shards"),
+        ),
+        (
+            format!("{{'key_cipher_algo': 'AES_EAX', 'key_cipher_layers': [{rsa}, "),
+            "]}",
+            format!("{KEY_LAYER_0}.key_cipher_layers[1].key_shared_secret_shards"),
+        ),
+    ];
+    // (threshold, shard count, accepted); the shard count is checked first, and 300 shards would give indices
+    // above 255
+    let shard_lists = [
+        ("1", 30usize, true),
+        ("30", 30, true),
+        ("2", 31, false),
+        ("31", 31, false),
+        ("0", 31, false),
+        ("2", 300, false),
+    ];
+    for (prefix, suffix, shard_list_location) in &placements {
+        for (threshold, shard_count, is_accepted) in shard_lists {
+            let shards = vec![shard(&rsa); shard_count].join(", ");
+            let notation = simple_cryptoconf(&format!("{prefix}{}{suffix}", shared_secret_layer(threshold, &shards)));
+            let result = internals::validate_cryptoconf(&build_tree(&notation), &limits);
+            let actual = result.err().map(|error| (error.kind(), error.location().to_owned()));
+            let expected = (!is_accepted).then(|| (ErrorKind::InvalidProfile, shard_list_location.clone()));
+            assert_eq!(
+                actual, expected,
+                "{shard_count} shards, threshold {threshold}, at {shard_list_location}"
+            );
+        }
+    }
+}
+
+#[test]
 fn trustees_are_validated_and_compared_by_identity() {
     let authenticator = authenticator_trustee();
     let trustees: [(String, u8); 7] = [

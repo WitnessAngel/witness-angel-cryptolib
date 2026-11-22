@@ -11,6 +11,7 @@ use alloc::vec::Vec;
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::error::{Error, ErrorKind, Result};
+use crate::limits::MAX_SHARED_SECRET_SHARD_COUNT;
 use crate::platform_hooks::PlatformHooks;
 use crate::primitives::aes_cbc_pkcs7_padding::{PKCS7_BLOCK_SIZE, pkcs7_pad_final_block, pkcs7_padding_length};
 use crate::primitives::{fill_random_bytes, try_zeroed_vec};
@@ -45,16 +46,17 @@ impl ShamirShards {
     }
 }
 
-/// Split `secret` into `shard_count` shards, `threshold_count` of which recover it (1 <= threshold <= count,
-/// `ErrorKind::InvalidArgument` otherwise). For each 16-byte chunk of the padded secret, threshold - 1
-/// coefficients of 16 bytes are drawn from the random hook, from the highest degree down.
+/// Split `secret` into `shard_count` shards, `threshold_count` of which recover it
+/// (1 <= threshold <= count <= `MAX_SHARED_SECRET_SHARD_COUNT`, `ErrorKind::InvalidArgument` otherwise). For each
+/// 16-byte chunk of the padded secret, threshold - 1 coefficients of 16 bytes are drawn from the random hook, from
+/// the highest degree down.
 pub(crate) fn shamir_split_secret_into_shards(
     hooks: &mut dyn PlatformHooks,
     secret: &[u8],
     shard_count: usize,
     threshold_count: usize,
 ) -> Result<ShamirShards> {
-    if threshold_count < 1 || threshold_count > shard_count {
+    if threshold_count < 1 || threshold_count > shard_count || shard_count > MAX_SHARED_SECRET_SHARD_COUNT {
         return Err(Error::new(ErrorKind::InvalidArgument));
     }
     let padded_length = secret

@@ -216,7 +216,7 @@ fn shamir_shards_recombine_from_any_threshold_of_them() {
     for secret_length in [0usize, 1, 15, 16, 17, 32, 43, 60] {
         let secret: Vec<u8> = (0..secret_length).map(|index| (index * 7 + 3) as u8).collect();
         let padded_length = secret_length / 16 * 16 + 16;
-        for (shard_count, threshold_count) in [(1usize, 1usize), (3, 1), (3, 3), (5, 3), (5, 2), (255, 4)] {
+        for (shard_count, threshold_count) in [(1usize, 1usize), (3, 1), (3, 3), (5, 3), (5, 2), (30, 4)] {
             let mut hooks = DeterministicHooks::new(11);
             let shards =
                 internals::shamir_split_secret_into_shards(&mut hooks, &secret, shard_count, threshold_count).unwrap();
@@ -253,13 +253,18 @@ fn shamir_shards_recombine_from_any_threshold_of_them() {
 
 #[test]
 fn shamir_refuses_invalid_counts_and_reports_random_failures() {
-    for (shard_count, threshold_count) in [(0usize, 0usize), (3, 0), (3, 4), (0, 1)] {
+    // At most 30 shards (section 3.7)
+    for (shard_count, threshold_count) in [(0usize, 0usize), (3, 0), (3, 4), (0, 1), (31, 2), (31, 31), (300, 2)] {
         let mut hooks = DeterministicHooks::new(1);
         let error = internals::shamir_split_secret_into_shards(&mut hooks, b"secret", shard_count, threshold_count)
             .unwrap_err();
         assert_eq!(error.kind(), ErrorKind::InvalidArgument);
         assert_eq!(hooks.random_call_count, 0);
     }
+    assert_eq!(wa_flightbox::MAX_SHARED_SECRET_SHARD_COUNT, 30);
+    let mut hooks = DeterministicHooks::new(1);
+    let shards = internals::shamir_split_secret_into_shards(&mut hooks, b"secret", 30, 30).unwrap();
+    assert_eq!(shards.len(), 30);
     let mut hooks = DeterministicHooks::new(1);
     hooks.failing_random_call_index = Some(1);
     let error = internals::shamir_split_secret_into_shards(&mut hooks, b"secret", 3, 3).unwrap_err();

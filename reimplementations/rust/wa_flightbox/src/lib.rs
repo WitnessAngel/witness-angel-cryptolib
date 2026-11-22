@@ -70,5 +70,5 @@ pub use crate::encoding::document_serialization::{DocumentFormat, OFFLOADED_PAYL
 pub use crate::encoding::value_tree::{Map, UUID_SIZE, Value};
 pub use crate::encoding::wacbor_subprofile_decoder::decode_document_from_cbor;
 pub use crate::error::{Error, ErrorKind, Result};
-pub use crate::limits::{EncryptorLimits, WA_CBOR_MAXIMUM_NESTING_DEPTH};
+pub use crate::limits::{EncryptorLimits, MAX_SHARED_SECRET_SHARD_COUNT, WA_CBOR_MAXIMUM_NESTING_DEPTH};
 pub use crate::platform_hooks::{NoPayloadSink, OutputSink, PlatformHooks, RandomFailure, SinkError};

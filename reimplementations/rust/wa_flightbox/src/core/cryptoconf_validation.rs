@@ -4,13 +4,13 @@
 
 //! Cryptoconf validation: a mirror of `CRYPTOCONF_SCHEMA_PYTHON` of wacryptolib (closed maps, known algorithms,
 //! trustee grammar), plus the rules of devices: a mandatory root keychain uid, no signature, and a cap on the
-//! nesting of key cipher layers. Checks run in the order of the C library, so that both report the same fault at
+//! nesting of key cipher layers; and the specification's cap of 30 shards per shared secret (section 3.7). Checks run in the order of the C library, so that both report the same fault at
 //! the same location.
 
 use crate::core::error_location_path::{ErrorLocationPath, Located};
 use crate::encoding::value_tree::Value;
 use crate::error::ErrorKind;
-use crate::limits::EncryptorLimits;
+use crate::limits::{EncryptorLimits, MAX_SHARED_SECRET_SHARD_COUNT};
 use crate::primitives::asymmetric_key_wrapping::AsymmetricCipherAlgo;
 use crate::primitives::symmetric_key_generation::SymmetricCipherAlgo;
 
@@ -217,6 +217,10 @@ fn validate_shared_secret_layer(
         .and_then(Value::as_array)
         .ok_or(ErrorKind::InternalError)?;
     let previous_length = location.push_key("key_shared_secret_shards");
+    // Section 3.7: at most 30 shards, checked before the shards themselves
+    if shards.len() > MAX_SHARED_SECRET_SHARD_COUNT {
+        return Err(ErrorKind::InvalidProfile);
+    }
     for (shard_index, shard) in shards.iter().enumerate() {
         let shard_previous_length = location.push_index(shard_index);
         check_map(shard)?;

@@ -9,6 +9,10 @@ use crate::error::{Error, ErrorKind, Result};
 /// The largest CBOR nesting depth of WA-CBOR documents.
 pub const WA_CBOR_MAXIMUM_NESTING_DEPTH: usize = 64;
 
+/// The largest number of shards of a shared secret (encryptor specification, section 3.7): a format limit,
+/// readers rejecting shard indices above it, hence not configurable. Cryptoconf validation enforces it.
+pub const MAX_SHARED_SECRET_SHARD_COUNT: usize = 30;
+
 /// Limits of an encryptor: inputs beyond them are rejected with an error when they are loaded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EncryptorLimits {

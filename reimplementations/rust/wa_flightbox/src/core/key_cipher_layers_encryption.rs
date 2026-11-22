@@ -17,6 +17,7 @@ use crate::encoding::document_serialization::{ResolvedFormat, serialize_to_secre
 use crate::encoding::secret_byte_buffer::SecretByteBuffer;
 use crate::encoding::value_tree::{Node, Value};
 use crate::error::{Error, ErrorKind, Result};
+use crate::limits::MAX_SHARED_SECRET_SHARD_COUNT;
 use crate::platform_hooks::PlatformHooks;
 use crate::primitives::asymmetric_key_wrapping::asymmetric_wrap_key_struct;
 use crate::primitives::shamir_secret_sharing_gf128::shamir_split_secret_into_shards;
@@ -126,7 +127,10 @@ impl<B: CryptoBackend> KeyCipherContext<'_, B> {
             .and_then(|map| map.get_mut("key_shared_secret_shards"))
             .and_then(Value::as_array_mut)
             .ok_or(ErrorKind::InvalidProfile)?;
-        // Section 5.2: the core checks the threshold again
+        // Section 5.2: the core checks the threshold and the shard count (section 3.7) again
+        if shard_confs.len() > MAX_SHARED_SECRET_SHARD_COUNT {
+            return Err(Error::new(ErrorKind::InvalidProfile));
+        }
         let threshold_count = threshold_count
             .and_then(|threshold_count| usize::try_from(threshold_count).ok())
             .filter(|threshold_count| (1..=shard_confs.len()).contains(threshold_count))

@@ -13,8 +13,9 @@ from .document_utils import (DocumentFormat, DOCUMENT_FORMATS, RECOGNIZED_EXTENS
                              detect_document_format, load_from_document_bytes, load_from_document_file,
                              dump_to_document_bytes, dump_to_document_file, convert_document_tree_to_bytes,
                              convert_document_bytes)
-from .data_utils import (split_as_chunks, recombine_chunks, MAX_SHARED_SECRET_SHARD_COUNT, do_split_secret_into_shards,
-                         do_recombine_secret_from_shards, pad_bytes_pkcs7, unpad_bytes_pkcs7)
+from .data_utils import (split_as_chunks, recombine_chunks, MAX_SHARED_SECRET_SHARD_COUNT, is_valid_shard_index,
+                         do_split_secret_into_shards, do_recombine_secret_from_shards, pad_bytes_pkcs7,
+                         unpad_bytes_pkcs7)
 from .os_utils import is_file_basename, get_memory_rss_bytes, get_nice_size
 from .time_utils import generate_uuid0, get_utc_now_date, is_datetime_tz_aware, check_datetime_is_tz_aware
 from .validation_utils import validate_data_against_schema, get_validation_micro_schemas

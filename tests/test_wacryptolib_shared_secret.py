@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import random
+from unittest import mock
 
 import pytest
 
 import wacryptolib.shared_secret
+from wacryptolib import _crypto_backend
 from wacryptolib._crypto_backend import get_random_bytes
 
 
@@ -89,3 +91,22 @@ def test_shared_secret_shard_count_upper_bound():
         wacryptolib.shared_secret.split_secret_into_shards(
             secret=secret, shard_count=max_shard_count + 1, threshold_count=3
         )
+
+
+@pytest.mark.parametrize("shard_index", [-1, 0, 31, True, False, 2**200, 1.0, "1", None])
+def test_shared_secret_recombination_rejects_invalid_shard_indices(shard_index):
+    secret = get_random_bytes(50)
+    shards = wacryptolib.shared_secret.split_secret_into_shards(secret=secret, shard_count=3, threshold_count=2)
+    forged_shards = [(shard_index, shards[0][1]), shards[1]]
+    with mock.patch.object(_crypto_backend, "shamir_128b_combine_func", side_effect=AssertionError("Recombined")):
+        with pytest.raises(ValueError, match="indices must be integers from 1 to 30"):
+            wacryptolib.shared_secret.recombine_secret_from_shards(forged_shards)
+
+
+def test_shared_secret_recombination_rejects_duplicate_shard_indices():
+    secret = get_random_bytes(50)
+    shards = wacryptolib.shared_secret.split_secret_into_shards(secret=secret, shard_count=30, threshold_count=2)
+    with mock.patch.object(_crypto_backend, "shamir_128b_combine_func", side_effect=AssertionError("Recombined")):
+        with pytest.raises(ValueError, match="unique indices"):
+            wacryptolib.shared_secret.recombine_secret_from_shards([shards[29], (30, shards[0][1])])
+    assert wacryptolib.shared_secret.recombine_secret_from_shards([shards[29], shards[0]]) == secret

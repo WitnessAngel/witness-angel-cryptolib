@@ -8,8 +8,19 @@ from typing import Sequence
 
 SHAMIR_CHUNK_LENGTH = 16
 
-# A shared secret has at most this count of shards (encryptors reject cryptoconfs with more, at validation time)
+# A shared secret has at most this count of shards (encryptors reject cryptoconfs with more, at validation time), so
+# shard indices are integers in 1..30; readers reject other indices, which can only come from tampering (e.g. -1 would
+# make the GF(2^128) multiplication loop forever)
 MAX_SHARED_SECRET_SHARD_COUNT = 30
+
+
+def is_valid_shard_index(shard_index) -> bool:
+    """Return True if `shard_index` is an int (not a bool) from 1 to MAX_SHARED_SECRET_SHARD_COUNT."""
+    return (
+        isinstance(shard_index, int)
+        and not isinstance(shard_index, bool)
+        and 1 <= shard_index <= MAX_SHARED_SECRET_SHARD_COUNT
+    )
 
 
 def do_split_secret_into_shards(secret: bytes, *, shard_count: int, threshold_count: int, shamir_128b_split_func) -> list:
@@ -68,6 +79,10 @@ def do_recombine_secret_from_shards(shards: Sequence, shamir_128b_recombine_func
     :return: the key reconstructed as bytes"""
 
     shards_per_secret = []  # List of lists of same-index 16-bytes shards
+
+    for shard in shards:  # Before any Shamir arithmetic
+        if not is_valid_shard_index(shard[0]):
+            raise ValueError("Shared secret shard indices must be integers from 1 to %d" % MAX_SHARED_SECRET_SHARD_COUNT)
 
     if len(set(shard[0] for shard in shards)) != len(shards):
         raise ValueError("Shared secret shards must have unique indices")

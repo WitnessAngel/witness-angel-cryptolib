@@ -661,7 +661,15 @@ class CryptainerDecryptor(CryptainerBase):
                                 entry_exception=exc,
                             )
                         else:
-                            decrypted_shards.append(shard)
+                            if any(shard[0] == decrypted_shard[0] for decrypted_shard in decrypted_shards):
+                                operation_report.add_entry(  # Forged, since a writer emits distinct indices
+                                    entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+                                    entry_message="Duplicate shared secret shard index %d" % shard[0],
+                                    entry_criticity=DecryptionErrorCriticity.ERROR,
+                                    entry_exception=None,
+                                )
+                            else:
+                                decrypted_shards.append(shard)
                     else:
                         operation_report.add_entry(
                             entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,

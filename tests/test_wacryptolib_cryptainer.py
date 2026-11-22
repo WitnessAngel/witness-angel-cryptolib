@@ -26,6 +26,7 @@ import responses
 from jsonrpc_requests import TransportError
 
 from _test_mockups import FakeTestCryptainerStorage, random_bool, skip_if_fallback_backend
+from wacryptolib import _crypto_backend
 from wacryptolib._crypto_backend import get_random_bytes
 from wacryptolib.cipher import SUPPORTED_CIPHER_ALGOS, encrypt_bytestring
 from wacryptolib.cryptainer import (
@@ -1359,15 +1360,10 @@ def test_cryptainer_decryption_with_forged_decrypted_structures():
         exception_class=DecryptionError,
     )
 
-    # Shards which can't be recombined (here, duplicates) are reported too
-    first_key_struct_bytes = None
-
-    def _replay_first_key_struct(key_struct_bytes):
-        nonlocal first_key_struct_bytes
-        first_key_struct_bytes = first_key_struct_bytes or key_struct_bytes
-        return first_key_struct_bytes
-
-    forged_results = {1: _replay_first_key_struct, 2: _replay_first_key_struct, 3: _replay_first_key_struct}
+    # Shards which can't be recombined (here, of inconsistent lengths) are reported too
+    forged_results = {
+        2: _forge_key_struct_bytes(dump_to_json_bytes([2, b"x" * 16])),  # Shorter than the real shards
+    }
     with _patch_trustee_decryption_results(forged_results):
         result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
     assert result_payload is None
@@ -1390,6 +1386,119 @@ def test_cryptainer_decryption_with_forged_decrypted_structures():
         entry_criticity=DecryptionErrorCriticity.ERROR,
         entry_msg_match="Failed symmetric decryption (AES_CBC)",
         exception_class=DecryptionError,
+    )
+
+
+def _forge_shard_index(shard_index_json: bytes):
+    """Return a trustee decryption result forger, replacing the index of the real shard with raw JSON."""
+
+    def _forge(key_struct_bytes):
+        key_struct = load_from_json_bytes(key_struct_bytes)
+        real_index, shard_bytes = load_from_json_bytes(key_struct["key_bytes"])
+        forged_shard = re.sub(rb"^\[%d," % real_index, b"[" + shard_index_json + b",", key_struct["key_bytes"])
+        assert forged_shard != key_struct["key_bytes"]
+        return _forge_key_struct_bytes(forged_shard)
+
+    return _forge
+
+
+@pytest.mark.parametrize("shard_index_json", [b"-1", b"0", b"31", b"true", str(2**200).encode("ascii"), b"1.0"])
+def test_cryptainer_decryption_with_forged_shard_index(shard_index_json):
+    payload = b"some secret payload"
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload, cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
+    )
+
+    # The first shard is rejected before any recombination, the next 3 shards are enough
+    with _patch_trustee_decryption_results({1: _forge_shard_index(shard_index_json)}), \
+            patch("wacryptolib._crypto_backend.shamir_128b_combine_func", wraps=_crypto_backend.shamir_128b_combine_func) \
+            as shamir_combine_func:
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload == payload
+    assert all(index in (2, 3, 4) for call in shamir_combine_func.call_args_list for (index, _chunk) in call.args[0])
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Malformed shared secret shard",
+        exception_class=DecryptionError,
+    )
+    (entry,) = [e for e in operation_report.get_error_entries() if "shard" in e["entry_message"]]
+    assert "Invalid shared secret shard" in str(entry["entry_exception"])  # Parsed, but rejected by the schema
+
+    # Without enough other shards, nothing is recombined
+    forged_results = {idx: _forge_shard_index(shard_index_json) for idx in (1, 2, 3)}
+    with _patch_trustee_decryption_results(forged_results), \
+            patch("wacryptolib._crypto_backend.shamir_128b_combine_func", side_effect=AssertionError("Recombined")):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload is None
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Malformed shared secret shard",
+        exception_class=DecryptionError,
+        occurrence_count=3,
+    )
+
+
+def test_cryptainer_decryption_with_duplicate_shard_indices():
+    payload = b"some secret payload"
+    cryptainer = encrypt_payload_into_cryptainer(
+        payload=payload, cryptoconf=SIMPLE_SHAMIR_CRYPTOCONF, cryptainer_metadata=None
+    )
+    first_key_struct_bytes = None
+
+    def _replay_first_key_struct(key_struct_bytes):
+        nonlocal first_key_struct_bytes
+        first_key_struct_bytes = first_key_struct_bytes or key_struct_bytes
+        return first_key_struct_bytes
+
+    # Replayed shards are rejected before any recombination, the 2 last shards complete the threshold
+    forged_results = {1: _replay_first_key_struct, 2: _replay_first_key_struct, 3: _replay_first_key_struct}
+    with _patch_trustee_decryption_results(forged_results):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload == payload
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Duplicate shared secret shard index 1",
+        occurrence_count=2,
+    )
+
+    # Same index, different shard bytes (e.g. forged by someone knowing the public key of a trustee)
+    first_key_struct_bytes = None
+    forged_results = {1: _replay_first_key_struct, 2: _forge_shard_index(b"1")}
+    with _patch_trustee_decryption_results(forged_results):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload == payload
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Duplicate shared secret shard index 1",
+    )
+
+    # Without enough distinct shards, nothing is recombined
+    first_key_struct_bytes = None
+    forged_results = {idx: _replay_first_key_struct for idx in range(1, 6)}
+    with _patch_trustee_decryption_results(forged_results), \
+            patch("wacryptolib._crypto_backend.shamir_128b_combine_func", side_effect=AssertionError("Recombined")):
+        result_payload, operation_report = decrypt_payload_from_cryptainer(cryptainer)
+    assert result_payload is None
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.ERROR,
+        entry_msg_match="Duplicate shared secret shard index 1",
+        occurrence_count=4,
+    )
+    _check_operation_report_entry(
+        operation_report=operation_report,
+        entry_type=DecryptionErrorType.ASYMMETRIC_DECRYPTION_ERROR,
+        entry_criticity=DecryptionErrorCriticity.WARNING,
+        entry_msg_match="2 valid shard(s) missing",
     )
 
 
@@ -1691,7 +1800,14 @@ def test_key_cipherdict_sanity_checks():
     check_key_cipherdict_sanity(
         {"shard_ciphertexts": [b"abc"], "unused_field": 1}, key_cipher_algo=SHARED_SECRET_ALGO_MARKER
     )
-    for invalid_cipherdict in [{"shard_ciphertexts": []}, {"shard_ciphertexts": [None]}, [b"abc"], None]:
+    check_key_cipherdict_sanity({"shard_ciphertexts": [b"abc"] * 30}, key_cipher_algo=SHARED_SECRET_ALGO_MARKER)
+    for invalid_cipherdict in [
+        {"shard_ciphertexts": []},
+        {"shard_ciphertexts": [None]},
+        {"shard_ciphertexts": [b"abc"] * 31},  # At most 30 shards
+        [b"abc"],
+        None,
+    ]:
         with pytest.raises(SchemaValidationError):
             check_key_cipherdict_sanity(invalid_cipherdict, key_cipher_algo=SHARED_SECRET_ALGO_MARKER)
 

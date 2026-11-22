@@ -18,7 +18,7 @@ from wacryptolib.exceptions import SchemaValidationError
 from wacryptolib.hash import SUPPORTED_HASH_ALGOS
 from wacryptolib.keygen import SUPPORTED_SYMMETRIC_KEY_ALGOS
 from wacryptolib.signature import SUPPORTED_SIGNATURE_ALGOS
-from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema,     MAX_SHARED_SECRET_SHARD_COUNT
+from wacryptolib.utilities import get_validation_micro_schemas, convert_from_extjson, validate_data_against_schema,     MAX_SHARED_SECRET_SHARD_COUNT, is_valid_shard_index
 from wacryptolib.utilities.validation_utils import summarize_validation_error_lines
 
 
@@ -418,12 +418,15 @@ def check_sigainer_sanity(cryptoconf: dict, jsonschema_mode=False):
 
 # KEY CIPHERDICTS: the cryptainer schema can't check them, since they are only revealed layer after layer on decryption
 
-SHARED_SECRET_CIPHERDICT_SCHEMA = Schema({"shard_ciphertexts": And([bytes], len)}, ignore_extra_keys=True)
+SHARED_SECRET_CIPHERDICT_SCHEMA = Schema(
+    {"shard_ciphertexts": And([bytes], lambda shard_ciphertexts: 1 <= len(shard_ciphertexts) <= MAX_SHARED_SECRET_SHARD_COUNT)},
+    ignore_extra_keys=True,
+)
 
 # DECRYPTED STRUCTURES: they may be forged too, since anyone can encrypt data with the public key of a trustee
 
-SHARED_SECRET_SHARD_SCHEMA = Schema(  # An (index, bytes) tuple, serialized as a list
-    And(list, lambda shard: len(shard) == 2 and isinstance(shard[0], int) and isinstance(shard[1], bytes))
+SHARED_SECRET_SHARD_SCHEMA = Schema(  # An (index, bytes) tuple, serialized as a list, its index being in 1..30
+    And(list, lambda shard: len(shard) == 2 and is_valid_shard_index(shard[0]) and isinstance(shard[1], bytes))
 )
 
 KEY_STRUCT_SCHEMA = Schema({"key_bytes": bytes, "cryptainer_metadata": Or(dict, None)}, ignore_extra_keys=True)

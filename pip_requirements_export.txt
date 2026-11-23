@@ -1,6 +1,6 @@
 alabaster==1.0.0 ; python_version >= "3.11" and python_version < "4.0"
 annotated-types==0.7.0 ; python_version >= "3.11" and python_version < "4.0"
-anyio==4.12.0 ; python_version >= "3.11" and python_version < "4.0"
+anyio==4.14.2 ; python_version >= "3.11" and python_version < "4.0"
 astroid==4.0.2 ; python_version >= "3.11" and python_version < "4.0"
 attrs==25.4.0 ; python_version >= "3.11" and python_version < "4.0"
 authlib==1.6.6 ; python_version >= "3.11" and python_version < "4.0"
